@@ -351,8 +351,8 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 
 | Phase | Duration | Status | Description |
 |-------|----------|--------|-------------|
-| 1 | Week 1-2 | **In Progress** | Project Foundation |
-| 2 | Week 3-4 | Pending | File Upload Module |
+| 1 | Week 1-2 | ✅ Complete | Project Foundation |
+| 2 | Week 3-4 | ✅ Complete | File Upload Module |
 | 3 | Week 5-6 | Pending | Certificate Validation |
 | 4 | Week 7 | Pending | LDAP Integration |
 | 5 | Week 8-9 | Pending | Passive Authentication |
@@ -480,3 +480,57 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 - `ccedf23`: feat: Add OpenLDAP MMR configuration and initialization script
 
 **Phase 1 Status**: ✅ COMPLETE
+
+### 2025-12-29: Phase 2 - File Upload Module (Session 3)
+
+**Objective**: Implement File Upload and File Parsing bounded contexts
+
+**Completed Tasks**:
+1. Database Schema (`docker/init-scripts/01-schema.sql`)
+   - 8 tables: uploaded_file, certificate, crl, master_list, pa_verification, pa_data_group, revoked_certificate, audit_log
+   - 3 views: v_upload_statistics, v_certificate_by_country, v_pa_statistics
+   - Applied to PostgreSQL successfully
+
+2. File Upload Bounded Context (`src/fileupload/`)
+   - Domain Models:
+     - UploadedFile (Aggregate Root) with UploadStatistics
+     - Value Objects: UploadId, FileName, FileHash, FileSize
+     - Enums: FileFormat (LDIF, ML), UploadStatus
+     - Events: FileUploadedEvent, FileProcessingCompletedEvent
+   - Application Layer:
+     - UseCases: UploadLdifFileUseCase, UploadMasterListUseCase
+     - UseCases: GetUploadHistoryUseCase, GetUploadDetailUseCase, GetUploadStatisticsUseCase
+     - Commands: UploadFileCommand
+     - Responses: UploadResponse, UploadDetailResponse, UploadHistoryResponse
+   - Infrastructure Layer:
+     - PostgresUploadedFileRepository (IUploadedFileRepository implementation)
+     - LocalFileStorageAdapter (IFileStoragePort implementation)
+     - UploadController (REST API with Drogon)
+
+3. File Parsing Bounded Context (`src/fileparsing/`)
+   - Domain Models:
+     - CertificateType: CSCA, DSC, DSC_NC
+     - CertificateData: Builder pattern with all certificate fields
+     - CrlData: CRL with revoked certificates list
+     - ParsedFile: Aggregate root for parsing results
+   - Infrastructure Adapters:
+     - OpenSslCertificateParser: X.509 parsing with OpenSSL 3.x
+     - LdifParser: LDIF file parsing with base64 decoding
+     - MasterListParser: CMS SignedData parsing for Master Lists
+
+4. API Endpoints Implemented:
+   - POST /api/upload/ldif - Upload LDIF file
+   - POST /api/upload/masterlist - Upload Master List
+   - GET /api/upload/history - Paginated upload history
+   - GET /api/upload/{uploadId} - Upload details
+   - GET /api/upload/statistics - Upload statistics
+
+**Git Commits**:
+- `7077f5f`: feat: Add File Upload module - Phase 2 implementation
+- `56523cd`: feat: Add File Parsing module with LDIF and Master List parsers
+
+**Phase 2 Status**: ✅ COMPLETE (Core Implementation)
+
+**Next Steps**:
+- Phase 3: Certificate Validation Module
+- Phase 4: LDAP Integration Module
