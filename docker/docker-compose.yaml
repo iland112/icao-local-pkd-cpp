@@ -81,7 +81,10 @@ services:
   # OpenLDAP Node 1 (MMR Master)
   # ---------------------------------------------------------------------------
   openldap1:
-    image: osixia/openldap:1.5.0
+    build:
+      context: ../openldap
+      dockerfile: Dockerfile
+    image: icao-local-pkd-openldap:1.5.0
     container_name: icao-local-pkd-openldap1
     ports:
       - "3891:389"
@@ -103,7 +106,10 @@ services:
   # OpenLDAP Node 2 (MMR Master)
   # ---------------------------------------------------------------------------
   openldap2:
-    image: osixia/openldap:1.5.0
+    build:
+      context: ../openldap
+      dockerfile: Dockerfile
+    image: icao-local-pkd-openldap:1.5.0
     container_name: icao-local-pkd-openldap2
     ports:
       - "3892:389"
