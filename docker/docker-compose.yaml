@@ -1,5 +1,3 @@
-version: '3.8'
-
 # =============================================================================
 # ICAO Local PKD - Docker Compose Configuration
 # =============================================================================
@@ -62,25 +60,6 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # pgAdmin (Database Management UI)
-  # ---------------------------------------------------------------------------
-  pgadmin:
-    image: dpage/pgadmin4:latest
-    container_name: icao-local-pkd-pgadmin
-    ports:
-      - "5050:80"
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=admin@smartcoreinc.com
-      - PGADMIN_DEFAULT_PASSWORD=admin
-    volumes:
-      - pgadmin-data:/var/lib/pgadmin
-    networks:
-      - pkd-network
-    depends_on:
-      - postgres
-    restart: unless-stopped
-
-  # ---------------------------------------------------------------------------
   # HAProxy (LDAP Load Balancer)
   # ---------------------------------------------------------------------------
   haproxy:
@@ -116,7 +95,6 @@ services:
     volumes:
       - ldap1-data:/var/lib/ldap
       - ldap1-config:/etc/ldap/slapd.d
-      - ../openldap/schemas:/container/service/slapd/assets/config/bootstrap/schema/custom
     networks:
       - pkd-network
     restart: unless-stopped
@@ -139,24 +117,6 @@ services:
     volumes:
       - ldap2-data:/var/lib/ldap
       - ldap2-config:/etc/ldap/slapd.d
-      - ../openldap/schemas:/container/service/slapd/assets/config/bootstrap/schema/custom
-    networks:
-      - pkd-network
-    restart: unless-stopped
-
-  # ---------------------------------------------------------------------------
-  # phpLDAPadmin (LDAP Management UI)
-  # ---------------------------------------------------------------------------
-  phpldapadmin:
-    image: osixia/phpldapadmin:latest
-    container_name: icao-local-pkd-phpldapadmin
-    ports:
-      - "8080:80"
-    environment:
-      - PHPLDAPADMIN_LDAP_HOSTS=openldap1
-      - PHPLDAPADMIN_HTTPS=false
-    depends_on:
-      - openldap1
     networks:
       - pkd-network
     restart: unless-stopped
@@ -166,7 +126,6 @@ services:
 # =============================================================================
 volumes:
   postgres-data:
-  pgadmin-data:
   ldap1-data:
   ldap1-config:
   ldap2-data:

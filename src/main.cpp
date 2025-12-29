@@ -10,6 +10,7 @@
  */
 
 #include <drogon/drogon.h>
+#include <trantor/utils/Date.h>
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
@@ -83,7 +84,7 @@ void registerRoutes() {
             result["status"] = "UP";
             result["service"] = "icao-local-pkd";
             result["version"] = "1.0.0";
-            result["timestamp"] = drogon::trantor::Date::now().toFormattedString(false);
+            result["timestamp"] = trantor::Date::now().toFormattedString(false);
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);
