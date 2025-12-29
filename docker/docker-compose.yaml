@@ -86,20 +86,30 @@ services:
       dockerfile: Dockerfile
     image: icao-local-pkd-openldap:1.5.0
     container_name: icao-local-pkd-openldap1
+    hostname: openldap1
+    command: --copy-service
     ports:
       - "3891:389"
     environment:
       - LDAP_ORGANISATION=SmartCore Inc
       - LDAP_DOMAIN=ldap.smartcoreinc.com
+      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_ADMIN_PASSWORD=admin
       - LDAP_CONFIG_PASSWORD=config
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
+      - LDAP_REPLICATION=true
+      - LDAP_REPLICATION_HOSTS=#DIFFHOST ldap://openldap1 ldap://openldap2
     volumes:
       - ldap1-data:/var/lib/ldap
       - ldap1-config:/etc/ldap/slapd.d
     networks:
       - pkd-network
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -111,20 +121,30 @@ services:
       dockerfile: Dockerfile
     image: icao-local-pkd-openldap:1.5.0
     container_name: icao-local-pkd-openldap2
+    hostname: openldap2
+    command: --copy-service
     ports:
       - "3892:389"
     environment:
       - LDAP_ORGANISATION=SmartCore Inc
       - LDAP_DOMAIN=ldap.smartcoreinc.com
+      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_ADMIN_PASSWORD=admin
       - LDAP_CONFIG_PASSWORD=config
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
+      - LDAP_REPLICATION=true
+      - LDAP_REPLICATION_HOSTS=#DIFFHOST ldap://openldap1 ldap://openldap2
     volumes:
       - ldap2-data:/var/lib/ldap
       - ldap2-config:/etc/ldap/slapd.d
     networks:
       - pkd-network
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 # =============================================================================
