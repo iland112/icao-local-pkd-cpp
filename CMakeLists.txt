@@ -44,6 +44,9 @@ find_package(fmt CONFIG REQUIRED)
 find_library(LDAP_LIBRARY ldap REQUIRED)
 find_library(LBER_LIBRARY lber REQUIRED)
 
+# UUID (system library)
+find_library(UUID_LIBRARY uuid REQUIRED)
+
 # =============================================================================
 # Source Files
 # =============================================================================
@@ -154,6 +157,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${PostgreSQL_LIBRARIES}
     ${LDAP_LIBRARY}
     ${LBER_LIBRARY}
+    ${UUID_LIBRARY}
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     fmt::fmt
