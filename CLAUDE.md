@@ -2,7 +2,7 @@
 
 **Version**: 1.0
 **Last Updated**: 2025-12-29
-**Status**: Phase 4 - LDAP Integration
+**Status**: Phase 5 - Passive Authentication
 
 ---
 
@@ -17,7 +17,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 | **PKD Upload** | LDIF/Master List 파일 업로드, 파싱, 검증 | ✅ Complete |
 | **Certificate Validation** | CSCA/DSC Trust Chain, CRL 검증 | ✅ Complete |
 | **LDAP Integration** | OpenLDAP 연동 (ICAO PKD DIT) | ✅ Complete |
-| **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | Planning |
+| **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | ✅ Complete |
 | **React.js Frontend** | CSR 기반 웹 UI | Planning |
 
 ### Technology Stack
@@ -355,7 +355,7 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 | 2 | Week 3-4 | ✅ Complete | File Upload Module |
 | 3 | Week 5-6 | ✅ Complete | Certificate Validation |
 | 4 | Week 7 | ✅ Complete | LDAP Integration |
-| 5 | Week 8-9 | Pending | Passive Authentication |
+| 5 | Week 8-9 | ✅ Complete | Passive Authentication |
 | 6 | Week 10-11 | Pending | React.js Frontend |
 | 7 | Week 12 | Pending | Integration & Testing |
 
@@ -690,5 +690,88 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 
 **Phase 4 Status**: ✅ COMPLETE
 
+### 2025-12-29: Phase 5 - Passive Authentication Module (Session 6)
+
+**Objective**: Implement Passive Authentication bounded context with ICAO 9303 compliance
+
+**Completed Tasks**:
+1. Domain Layer (`src/passiveauthentication/domain/`)
+   - Value Objects:
+     - DataGroupNumber: DG1-DG16 enum with conversion utilities
+     - PassiveAuthenticationStatus: VALID, INVALID, ERROR states
+     - DataGroupHash: SHA-256/384/512 hash with OpenSSL EVP
+     - PassportDataId: UUID-based identifier
+     - SecurityObjectDocument: SOD with Tag 0x30/0x77 validation
+     - PassiveAuthenticationError: Error with severity levels
+     - RequestMetadata: IP/UserAgent/RequestedBy audit info
+     - CrlCheckStatus: CRL verification status enum
+     - CrlCheckResult: Full CRL check result
+     - PassiveAuthenticationResult: Aggregated PA result
+   - Entities:
+     - DataGroup: DG content with hash verification
+     - PassportData: Aggregate root for PA verification
+   - Port Interfaces:
+     - SodParserPort: SOD parsing with OpenSSL types
+     - LdapCscaPort: CSCA certificate lookup
+     - CrlLdapPort: CRL operations
+   - Repository Interface:
+     - PassportDataRepository: PA data persistence
+
+2. Application Layer (`src/passiveauthentication/application/`)
+   - Commands:
+     - PerformPassiveAuthenticationCommand: PA verification request
+   - Response DTOs:
+     - CertificateChainValidationDto: Trust chain result
+     - SodSignatureValidationDto: SOD signature result
+     - DataGroupValidationDto: DG hash validation result
+     - PassiveAuthenticationResponse: Complete PA response
+   - Use Cases:
+     - PerformPassiveAuthenticationUseCase: Main PA orchestrator
+
+3. Infrastructure Layer (`src/passiveauthentication/infrastructure/`)
+   - Adapters:
+     - OpenSslSodParserAdapter: OpenSSL CMS/ASN.1 parsing
+       - Tag 0x77 unwrapping for ICAO EF.SOD
+       - CMS SignedData extraction
+       - LDSSecurityObject parsing
+       - DSC certificate extraction
+       - Data group hash extraction
+     - LdapCscaAdapter: CSCA lookup via LDAP integration
+     - CrlLdapAdapter: CRL operations via LDAP integration
+   - Controller:
+     - PassiveAuthenticationController: Drogon REST API
+       - POST /api/pa/verify - Perform PA verification
+       - GET /api/pa/history - PA verification history
+       - GET /api/pa/{id} - PA result details
+   - Repository:
+     - PostgresPassportDataRepository: PostgreSQL persistence
+
+4. Shared Utilities Added:
+   - Base64Util: OpenSSL-based Base64 encoding/decoding
+   - UuidUtil: UUID v4 generation
+
+5. LDAP Integration Extended:
+   - ILdapConnectionPort: Added PA support methods
+     - searchCertificateBySubjectDn()
+     - searchCertificatesByCountry()
+     - certificateExistsBySubjectDn()
+     - searchCrlByIssuer()
+   - OpenLdapAdapter: Implemented PA support methods
+
+6. Build & Test:
+   - All PA header-only modules
+   - 16 unit tests passing (including 8 new PA tests)
+   - Build successful with CMake/vcpkg
+
+**API Endpoints Implemented**:
+- POST /api/pa/verify - Perform Passive Authentication
+- GET /api/pa/history - Get PA verification history
+- GET /api/pa/{id} - Get PA result by ID
+
+**Git Commits**:
+- `76cd2f7`: feat: Add Passive Authentication module - Phase 5 implementation
+
+**Phase 5 Status**: ✅ COMPLETE
+
 **Next Steps**:
-- Phase 5: Passive Authentication Module
+- Phase 6: React.js Frontend

@@ -85,13 +85,93 @@ TEST_CASE("DomainException can be caught as std::exception", "[exception]") {
 }
 
 // =============================================================================
-// Placeholder tests for future modules
+// Passive Authentication Tests
 // =============================================================================
 
-TEST_CASE("Placeholder: SOD parsing", "[pa][placeholder]") {
-    // TODO: Implement SOD parsing tests
-    REQUIRE(true);
+#include "passiveauthentication/domain/model/DataGroupNumber.hpp"
+#include "passiveauthentication/domain/model/PassiveAuthenticationStatus.hpp"
+#include "passiveauthentication/domain/model/DataGroupHash.hpp"
+#include "passiveauthentication/domain/model/PassportDataId.hpp"
+#include "passiveauthentication/domain/model/SecurityObjectDocument.hpp"
+#include "passiveauthentication/domain/model/DataGroup.hpp"
+#include "passiveauthentication/domain/model/CrlCheckStatus.hpp"
+
+using namespace pa::domain::model;
+
+TEST_CASE("DataGroupNumber conversion", "[pa][domain]") {
+    // toInt and dataGroupNumberFromInt
+    REQUIRE(toInt(DataGroupNumber::DG1) == 1);
+    REQUIRE(toInt(DataGroupNumber::DG2) == 2);
+    REQUIRE(toInt(DataGroupNumber::DG14) == 14);
+
+    REQUIRE(dataGroupNumberFromInt(1) == DataGroupNumber::DG1);
+    REQUIRE(dataGroupNumberFromInt(16) == DataGroupNumber::DG16);
+    REQUIRE_THROWS(dataGroupNumberFromInt(0));
+    REQUIRE_THROWS(dataGroupNumberFromInt(17));
 }
+
+TEST_CASE("DataGroupNumber string conversion", "[pa][domain]") {
+    // toString and dataGroupNumberFromString
+    REQUIRE(toString(DataGroupNumber::DG1) == "DG1");
+    REQUIRE(toString(DataGroupNumber::DG2) == "DG2");
+
+    REQUIRE(dataGroupNumberFromString("DG1") == DataGroupNumber::DG1);
+    REQUIRE(dataGroupNumberFromString("DG16") == DataGroupNumber::DG16);
+    REQUIRE_THROWS(dataGroupNumberFromString("INVALID"));
+}
+
+TEST_CASE("PassiveAuthenticationStatus enum", "[pa][domain]") {
+    REQUIRE(toString(PassiveAuthenticationStatus::VALID) == "VALID");
+    REQUIRE(toString(PassiveAuthenticationStatus::INVALID) == "INVALID");
+    REQUIRE(toString(PassiveAuthenticationStatus::ERROR) == "ERROR");
+}
+
+TEST_CASE("DataGroupHash creation from bytes", "[pa][domain]") {
+    // SHA-256 hash is 32 bytes = 64 hex chars
+    std::vector<uint8_t> hashData(32, 0xAB);  // 32 bytes of 0xAB
+    auto hash = DataGroupHash::of(hashData);
+
+    REQUIRE(hash.getValue().length() == 64);  // 32 bytes = 64 hex chars
+    REQUIRE(hash.getBytes() == hashData);
+}
+
+TEST_CASE("PassportDataId generation", "[pa][domain]") {
+    auto id1 = PassportDataId::generate();
+    auto id2 = PassportDataId::generate();
+
+    REQUIRE_FALSE(id1.getId().empty());
+    REQUIRE(id1 != id2);  // UUIDs should be unique
+}
+
+TEST_CASE("CrlCheckStatus enum values", "[pa][domain]") {
+    REQUIRE(toString(CrlCheckStatus::VALID) == "VALID");
+    REQUIRE(toString(CrlCheckStatus::REVOKED) == "REVOKED");
+    REQUIRE(toString(CrlCheckStatus::CRL_UNAVAILABLE) == "CRL_UNAVAILABLE");
+    REQUIRE(toString(CrlCheckStatus::CRL_EXPIRED) == "CRL_EXPIRED");
+}
+
+TEST_CASE("SecurityObjectDocument Tag detection", "[pa][domain]") {
+    // Tag 0x30 (SEQUENCE) - valid SOD start
+    std::vector<uint8_t> validSod = {0x30, 0x82, 0x01, 0x00};
+    REQUIRE_NOTHROW(SecurityObjectDocument::of(validSod));
+
+    // Empty data should throw
+    std::vector<uint8_t> emptyData;
+    REQUIRE_THROWS(SecurityObjectDocument::of(emptyData));
+}
+
+TEST_CASE("DataGroup creation and access", "[pa][domain]") {
+    std::vector<uint8_t> content = {0x01, 0x02, 0x03};
+    auto dg = DataGroup::of(DataGroupNumber::DG1, content);
+
+    REQUIRE(dg.getNumber() == DataGroupNumber::DG1);
+    REQUIRE(dg.getContent() == content);
+    REQUIRE(dg.getNumberValue() == 1);
+}
+
+// =============================================================================
+// Placeholder tests for future modules
+// =============================================================================
 
 TEST_CASE("Placeholder: Certificate validation", "[cert][placeholder]") {
     // TODO: Implement certificate validation tests

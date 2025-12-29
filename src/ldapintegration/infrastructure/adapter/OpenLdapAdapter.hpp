@@ -1059,6 +1059,114 @@ private:
             0   // certificateCount
         );
     }
+
+public:
+    // ========== Passive Authentication Support ==========
+
+    std::vector<uint8_t> searchCertificateBySubjectDn(
+        const std::string& subjectDn,
+        const std::string& certType
+    ) override {
+        spdlog::debug("Searching certificate by subject DN: {}, type: {}", subjectDn, certType);
+
+        // Determine search base based on cert type
+        std::string ouPath = (certType == "csca") ? "o=csca" : "o=dsc";
+
+        // Build search filter - search by description containing the DN
+        std::string filter = "(&(objectClass=inetOrgPerson)(description=*" +
+                            escapeLdapFilter(subjectDn) + "*))";
+
+        // Search in all country branches
+        LdapSearchFilter searchFilter = LdapSearchFilter::subtree(
+            "dc=data,dc=download,dc=pkd," + config_.baseDn,
+            filter,
+            {"userCertificate;binary"}
+        );
+
+        auto results = search(searchFilter);
+
+        for (const auto& entry : results) {
+            // Check if this entry is in the correct OU
+            if (entry.dn.find(ouPath) != std::string::npos) {
+                auto certBinary = entry.getBinaryValue("userCertificate;binary");
+                if (certBinary) {
+                    spdlog::debug("Found certificate for DN: {}", subjectDn);
+                    return *certBinary;
+                }
+            }
+        }
+
+        spdlog::debug("Certificate not found for DN: {}", subjectDn);
+        return {};
+    }
+
+    std::vector<std::vector<uint8_t>> searchCertificatesByCountry(
+        const std::string& countryCode,
+        const std::string& certType
+    ) override {
+        spdlog::debug("Searching certificates by country: {}, type: {}", countryCode, certType);
+
+        std::string ouPath = (certType == "csca") ? "o=csca" : "o=dsc";
+        std::string baseDn = ouPath + ",c=" + countryCode +
+                            ",dc=data,dc=download,dc=pkd," + config_.baseDn;
+
+        LdapSearchFilter searchFilter = LdapSearchFilter::oneLevel(
+            baseDn,
+            "(objectClass=inetOrgPerson)",
+            {"userCertificate;binary"}
+        );
+
+        auto results = search(searchFilter);
+        std::vector<std::vector<uint8_t>> certificates;
+
+        for (const auto& entry : results) {
+            auto certBinary = entry.getBinaryValue("userCertificate;binary");
+            if (certBinary) {
+                certificates.push_back(*certBinary);
+            }
+        }
+
+        spdlog::debug("Found {} certificates for country: {}", certificates.size(), countryCode);
+        return certificates;
+    }
+
+    bool certificateExistsBySubjectDn(
+        const std::string& subjectDn,
+        const std::string& certType
+    ) override {
+        auto cert = searchCertificateBySubjectDn(subjectDn, certType);
+        return !cert.empty();
+    }
+
+    std::vector<uint8_t> searchCrlByIssuer(
+        const std::string& issuerDn,
+        const std::string& countryCode
+    ) override {
+        spdlog::debug("Searching CRL by issuer: {}, country: {}", issuerDn, countryCode);
+
+        std::string baseDn = "o=crl,c=" + countryCode +
+                            ",dc=data,dc=download,dc=pkd," + config_.baseDn;
+
+        // Search for CRL with matching issuer
+        LdapSearchFilter searchFilter = LdapSearchFilter::oneLevel(
+            baseDn,
+            "(objectClass=cRLDistributionPoint)",
+            {"certificateRevocationList;binary"}
+        );
+
+        auto results = search(searchFilter);
+
+        for (const auto& entry : results) {
+            auto crlBinary = entry.getBinaryValue("certificateRevocationList;binary");
+            if (crlBinary) {
+                spdlog::debug("Found CRL for issuer: {}", issuerDn);
+                return *crlBinary;
+            }
+        }
+
+        spdlog::debug("CRL not found for issuer: {}", issuerDn);
+        return {};
+    }
 };
 
 } // namespace ldapintegration::infrastructure::adapter

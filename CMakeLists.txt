@@ -51,83 +51,13 @@ find_library(UUID_LIBRARY uuid REQUIRED)
 # Source Files
 # =============================================================================
 
-# Shared Kernel
-set(SHARED_SOURCES
-    src/shared/domain/ValueObject.cpp
-    src/shared/domain/Entity.cpp
-    src/shared/domain/AggregateRoot.cpp
-    src/shared/exception/DomainException.cpp
-    src/shared/exception/ApplicationException.cpp
-    src/shared/exception/InfrastructureException.cpp
-    src/shared/util/HashUtil.cpp
-    src/shared/util/Base64Util.cpp
-    src/shared/util/UuidUtil.cpp
-    src/shared/progress/ProgressService.cpp
-)
+# =============================================================================
+# NOTE: This project uses header-only implementation (.hpp files)
+# The source lists below are kept for reference and future use if needed
+# =============================================================================
 
-# Configuration
-set(CONFIG_SOURCES
-    src/config/AppConfig.cpp
-    src/config/DatabaseConfig.cpp
-    src/config/LdapConfig.cpp
-)
-
-# File Upload Context
-set(FILEUPLOAD_SOURCES
-    src/fileupload/domain/model/UploadedFile.cpp
-    src/fileupload/domain/model/UploadId.cpp
-    src/fileupload/domain/model/FileHash.cpp
-    src/fileupload/application/usecase/UploadLdifFileUseCase.cpp
-    src/fileupload/application/usecase/UploadMasterListUseCase.cpp
-    src/fileupload/infrastructure/controller/FileUploadController.cpp
-    src/fileupload/infrastructure/repository/PostgresUploadedFileRepository.cpp
-    src/fileupload/infrastructure/adapter/LocalFileStorageAdapter.cpp
-)
-
-# File Parsing Context
-set(FILEPARSING_SOURCES
-    src/fileparsing/domain/model/ParsedCertificate.cpp
-    src/fileparsing/domain/model/CrlData.cpp
-    src/fileparsing/application/usecase/ParseLdifUseCase.cpp
-    src/fileparsing/application/usecase/ParseMasterListUseCase.cpp
-    src/fileparsing/infrastructure/adapter/OpenSslLdifParser.cpp
-    src/fileparsing/infrastructure/adapter/OpenSslMasterListParser.cpp
-)
-
-# Certificate Validation Context
-set(CERTVALIDATION_SOURCES
-    src/certificatevalidation/domain/model/Certificate.cpp
-    src/certificatevalidation/domain/model/ValidationResult.cpp
-    src/certificatevalidation/domain/service/TrustChainValidator.cpp
-    src/certificatevalidation/domain/service/CrlChecker.cpp
-    src/certificatevalidation/application/usecase/ValidateCertificatesUseCase.cpp
-    src/certificatevalidation/infrastructure/repository/PostgresCertificateRepository.cpp
-    src/certificatevalidation/infrastructure/adapter/OpenSslValidationAdapter.cpp
-)
-
-# LDAP Integration Context
-set(LDAP_SOURCES
-    src/ldapintegration/application/usecase/LdapUseCases.cpp
-    src/ldapintegration/infrastructure/adapter/OpenLdapAdapter.cpp
-    src/ldapintegration/infrastructure/controller/LdapController.cpp
-)
-
-# Passive Authentication Context
-set(PA_SOURCES
-    src/passiveauthentication/domain/model/PassportData.cpp
-    src/passiveauthentication/domain/model/SecurityObjectDocument.cpp
-    src/passiveauthentication/domain/model/DataGroup.cpp
-    src/passiveauthentication/domain/model/CrlCheckResult.cpp
-    src/passiveauthentication/domain/service/CrlVerificationService.cpp
-    src/passiveauthentication/application/usecase/PerformPassiveAuthenticationUseCase.cpp
-    src/passiveauthentication/application/usecase/GetPaHistoryUseCase.cpp
-    src/passiveauthentication/infrastructure/controller/PassiveAuthenticationController.cpp
-    src/passiveauthentication/infrastructure/repository/PostgresPassportDataRepository.cpp
-    src/passiveauthentication/infrastructure/adapter/OpenSslSodParser.cpp
-    src/passiveauthentication/infrastructure/adapter/Dg1MrzParser.cpp
-    src/passiveauthentication/infrastructure/adapter/Dg2FaceImageParser.cpp
-    src/passiveauthentication/infrastructure/cache/CrlCacheService.cpp
-)
+# Header-only modules - no .cpp files needed for compilation
+# All implementation is in .hpp files under src/
 
 # All sources (for future - currently just main.cpp for hello world)
 set(ALL_SOURCES

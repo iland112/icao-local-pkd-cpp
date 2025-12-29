@@ -277,6 +277,49 @@ public:
      * @brief Set progress callback for batch operations
      */
     virtual void setProgressCallback(ProgressCallback callback) = 0;
+
+    // ========== Passive Authentication Support ==========
+
+    /**
+     * @brief Search certificate by subject DN (for PA CSCA lookup)
+     * @param subjectDn Subject DN to search
+     * @param certType Certificate type (csca, dsc, dsc_nc)
+     * @return DER-encoded certificate bytes if found
+     */
+    virtual std::vector<uint8_t> searchCertificateBySubjectDn(
+        const std::string& subjectDn,
+        const std::string& certType
+    ) = 0;
+
+    /**
+     * @brief Search all certificates by country (for PA)
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @param certType Certificate type (csca, dsc, dsc_nc)
+     * @return Vector of DER-encoded certificates
+     */
+    virtual std::vector<std::vector<uint8_t>> searchCertificatesByCountry(
+        const std::string& countryCode,
+        const std::string& certType
+    ) = 0;
+
+    /**
+     * @brief Check if certificate exists by subject DN
+     */
+    virtual bool certificateExistsBySubjectDn(
+        const std::string& subjectDn,
+        const std::string& certType
+    ) = 0;
+
+    /**
+     * @brief Search CRL by issuer DN (for PA revocation check)
+     * @param issuerDn Issuer DN of CRL
+     * @param countryCode Country code
+     * @return DER-encoded CRL bytes if found
+     */
+    virtual std::vector<uint8_t> searchCrlByIssuer(
+        const std::string& issuerDn,
+        const std::string& countryCode
+    ) = 0;
 };
 
 } // namespace ldapintegration::domain::port
