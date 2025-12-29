@@ -1,0 +1,48 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "icao-local-pkd",
+  "version": "1.0.0",
+  "description": "ICAO Local PKD Management and Passive Authentication System",
+  "homepage": "https://github.com/smartcoreinc/icao-local-pkd",
+  "license": "MIT",
+  "dependencies": [
+    {
+      "name": "drogon",
+      "version>=": "1.9.0"
+    },
+    {
+      "name": "openssl",
+      "version>=": "3.0.0"
+    },
+    {
+      "name": "libpq",
+      "version>=": "15.0"
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.0"
+    },
+    {
+      "name": "spdlog",
+      "version>=": "1.12.0"
+    },
+    {
+      "name": "fmt",
+      "version>=": "10.0.0"
+    },
+    {
+      "name": "catch2",
+      "version>=": "3.4.0"
+    }
+  ],
+  "builtin-baseline": "2024.01.12",
+  "overrides": [],
+  "features": {
+    "tests": {
+      "description": "Build unit and integration tests",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
+}

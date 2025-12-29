@@ -1,0 +1,182 @@
+version: '3.8'
+
+# =============================================================================
+# ICAO Local PKD - Docker Compose Configuration
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Application
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: icao-local-pkd-app
+    ports:
+      - "8081:8081"
+    environment:
+      - TZ=Asia/Seoul
+      - DATABASE_URL=postgresql://pkd:pkd@postgres:5432/localpkd
+      - LDAP_WRITE_URL=ldap://openldap1:389
+      - LDAP_READ_URL=ldap://haproxy:389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
+    depends_on:
+      postgres:
+        condition: service_healthy
+      haproxy:
+        condition: service_started
+    volumes:
+      - app-logs:/app/logs
+      - app-uploads:/app/uploads
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15
+    container_name: icao-local-pkd-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=pkd
+      - POSTGRES_PASSWORD=pkd
+      - POSTGRES_DB=localpkd
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pkd -d localpkd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # pgAdmin (Database Management UI)
+  # ---------------------------------------------------------------------------
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: icao-local-pkd-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@smartcoreinc.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - pkd-network
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # HAProxy (LDAP Load Balancer)
+  # ---------------------------------------------------------------------------
+  haproxy:
+    image: haproxy:2.8
+    container_name: icao-local-pkd-haproxy
+    ports:
+      - "389:389"
+      - "8404:8404"
+    volumes:
+      - ../haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - openldap1
+      - openldap2
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenLDAP Node 1 (MMR Master)
+  # ---------------------------------------------------------------------------
+  openldap1:
+    image: osixia/openldap:1.5.0
+    container_name: icao-local-pkd-openldap1
+    ports:
+      - "3891:389"
+    environment:
+      - LDAP_ORGANISATION=SmartCore Inc
+      - LDAP_DOMAIN=ldap.smartcoreinc.com
+      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_CONFIG_PASSWORD=config
+      - LDAP_READONLY_USER=false
+      - LDAP_TLS=false
+    volumes:
+      - ldap1-data:/var/lib/ldap
+      - ldap1-config:/etc/ldap/slapd.d
+      - ../openldap/schemas:/container/service/slapd/assets/config/bootstrap/schema/custom
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenLDAP Node 2 (MMR Master)
+  # ---------------------------------------------------------------------------
+  openldap2:
+    image: osixia/openldap:1.5.0
+    container_name: icao-local-pkd-openldap2
+    ports:
+      - "3892:389"
+    environment:
+      - LDAP_ORGANISATION=SmartCore Inc
+      - LDAP_DOMAIN=ldap.smartcoreinc.com
+      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_CONFIG_PASSWORD=config
+      - LDAP_READONLY_USER=false
+      - LDAP_TLS=false
+    volumes:
+      - ldap2-data:/var/lib/ldap
+      - ldap2-config:/etc/ldap/slapd.d
+      - ../openldap/schemas:/container/service/slapd/assets/config/bootstrap/schema/custom
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # phpLDAPadmin (LDAP Management UI)
+  # ---------------------------------------------------------------------------
+  phpldapadmin:
+    image: osixia/phpldapadmin:latest
+    container_name: icao-local-pkd-phpldapadmin
+    ports:
+      - "8080:80"
+    environment:
+      - PHPLDAPADMIN_LDAP_HOSTS=openldap1
+      - PHPLDAPADMIN_HTTPS=false
+    depends_on:
+      - openldap1
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  postgres-data:
+  pgadmin-data:
+  ldap1-data:
+  ldap1-config:
+  ldap2-data:
+  ldap2-config:
+  app-logs:
+  app-uploads:
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  pkd-network:
+    driver: bridge

@@ -1,0 +1,397 @@
+# ICAO Local PKD - C++ Implementation
+
+**Version**: 1.0
+**Last Updated**: 2025-12-29
+**Status**: Phase 1 - Project Foundation
+
+---
+
+## Project Overview
+
+C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검증 시스템입니다.
+
+### Core Features
+
+| Module | Description | Status |
+|--------|-------------|--------|
+| **PKD Upload** | LDIF/Master List 파일 업로드, 파싱, 검증 | Planning |
+| **Certificate Validation** | CSCA/DSC Trust Chain, CRL 검증 | Planning |
+| **LDAP Integration** | OpenLDAP 연동 (ICAO PKD DIT) | Planning |
+| **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | Planning |
+| **React.js Frontend** | CSR 기반 웹 UI | Planning |
+
+### Technology Stack
+
+| Category | Technology |
+|----------|------------|
+| **Language** | C++20 |
+| **Web Framework** | Drogon 1.9+ |
+| **Database** | PostgreSQL 15 + Drogon ORM |
+| **LDAP** | OpenLDAP C API (libldap) |
+| **Crypto** | OpenSSL 3.x |
+| **JSON** | nlohmann/json |
+| **Logging** | spdlog |
+| **Build** | CMake 3.20+ |
+| **Package Manager** | vcpkg |
+| **Testing** | Catch2 |
+| **Frontend** | React.js 18 + TypeScript + Vite |
+
+---
+
+## System Architecture
+
+### High-Level Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         React.js Frontend                                │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
+│  │ PKD Upload  │  │ PA Verify   │  │ History     │  │ Dashboard   │    │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ↓ REST API
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      C++ Backend (Drogon)                                │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │                    REST API Controllers                            │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │                    Application Layer (Use Cases)                   │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │                    Domain Layer (Business Logic)                   │  │
+│  ├───────────────────────────────────────────────────────────────────┤  │
+│  │                    Infrastructure Layer (Adapters)                 │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+         │                              │
+         ↓                              ↓
+┌─────────────────┐          ┌─────────────────────────────────────────┐
+│   PostgreSQL    │          │         OpenLDAP MMR Cluster            │
+│     :5432       │          │  ┌───────────┐      ┌───────────┐       │
+│                 │          │  │ OpenLDAP1 │◄────►│ OpenLDAP2 │       │
+│ - certificate   │          │  └─────┬─────┘      └─────┬─────┘       │
+│ - crl           │          │        └──────┬──────────┘              │
+│ - passport_data │          │               ↓                         │
+│ - audit_log     │          │        ┌───────────┐                    │
+└─────────────────┘          │        │  HAProxy  │ :389               │
+                             │        └───────────┘                    │
+                             └─────────────────────────────────────────┘
+```
+
+### DDD Bounded Contexts (5개)
+
+```
+src/
+├── shared/                    # Shared Kernel
+├── fileupload/                # File Upload Context
+├── fileparsing/               # File Parsing Context
+├── certificatevalidation/     # Certificate Validation Context
+├── ldapintegration/           # LDAP Integration Context
+└── passiveauthentication/     # Passive Authentication Context
+```
+
+---
+
+## LDAP DIT Structure (ICAO PKD)
+
+```
+dc=ldap,dc=smartcoreinc,dc=com
+└── dc=download
+    └── dc=pkd
+        ├── dc=data
+        │   └── c={COUNTRY}
+        │       ├── o=csca    (CSCA certificates)
+        │       ├── o=dsc     (DSC certificates)
+        │       ├── o=crl     (CRL)
+        │       └── o=ml      (Master Lists)
+        └── dc=nc-data
+            └── c={COUNTRY}
+                └── o=dsc     (DSC_NC - Non-Conformant)
+```
+
+---
+
+## Directory Structure
+
+```
+icao-local-pkd/
+├── CMakeLists.txt              # Main CMake configuration
+├── vcpkg.json                  # vcpkg dependencies
+├── CLAUDE.md                   # This file
+│
+├── src/
+│   ├── main.cpp                # Application entry point
+│   ├── config/                 # Configuration classes
+│   ├── shared/                 # Shared Kernel
+│   │   ├── domain/             # Base classes (Entity, ValueObject, AggregateRoot)
+│   │   ├── exception/          # Exception classes
+│   │   ├── util/               # Utilities (Hash, Base64, UUID)
+│   │   └── progress/           # SSE Progress service
+│   ├── fileupload/             # File Upload Bounded Context
+│   ├── fileparsing/            # File Parsing Bounded Context
+│   ├── certificatevalidation/  # Certificate Validation Context
+│   ├── ldapintegration/        # LDAP Integration Context
+│   └── passiveauthentication/  # Passive Authentication Context
+│
+├── include/                    # Public headers
+├── tests/                      # Unit & Integration tests
+├── docker/                     # Docker configurations
+├── scripts/                    # Build & run scripts
+└── docs/                       # Documentation
+```
+
+---
+
+## Coding Standards
+
+### 1. Naming Conventions
+
+```cpp
+// Classes: PascalCase
+class SecurityObjectDocument { };
+class PassiveAuthenticationUseCase { };
+
+// Methods: camelCase
+void parseDataGroupHashes();
+bool verifySignature();
+
+// Variables: camelCase
+std::string subjectDn;
+int certificateCount;
+
+// Constants: UPPER_SNAKE_CASE
+const int MAX_BATCH_SIZE = 1000;
+constexpr auto DEFAULT_TIMEOUT = std::chrono::seconds(30);
+
+// Namespaces: lowercase with :: separator
+namespace pa::domain::model { }
+namespace shared::exception { }
+
+// File names: PascalCase.hpp / PascalCase.cpp
+// SecurityObjectDocument.hpp
+// OpenSslSodParser.cpp
+```
+
+### 2. Value Object Pattern
+
+```cpp
+// Value Objects are immutable with factory methods
+class SubjectDn {
+private:
+    std::string value_;
+
+    explicit SubjectDn(std::string value) : value_(std::move(value)) {
+        validate();
+    }
+
+    void validate() const {
+        if (value_.empty()) {
+            throw DomainException("INVALID_SUBJECT_DN", "Subject DN cannot be empty");
+        }
+    }
+
+public:
+    static SubjectDn of(const std::string& value) {
+        return SubjectDn(value);
+    }
+
+    const std::string& getValue() const { return value_; }
+
+    bool operator==(const SubjectDn& other) const {
+        return value_ == other.value_;
+    }
+};
+```
+
+### 3. Exception Handling
+
+```cpp
+// Domain Layer
+throw DomainException("INVALID_SOD", "SOD data cannot be empty");
+
+// Application Layer
+throw ApplicationException("CSCA_NOT_FOUND", "CSCA not found in LDAP");
+
+// Infrastructure Layer
+throw InfrastructureException("LDAP_CONNECTION_ERROR", "Failed to connect to LDAP");
+```
+
+### 4. Async/Coroutine Pattern (Drogon)
+
+```cpp
+// Use Drogon coroutines for async operations
+drogon::Task<HttpResponsePtr> uploadFile(HttpRequestPtr req) {
+    auto result = co_await processFileAsync(req);
+    co_return HttpResponse::newHttpJsonResponse(result);
+}
+```
+
+---
+
+## Build & Run
+
+### Prerequisites
+
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    libssl-dev \
+    libpq-dev \
+    libldap2-dev \
+    uuid-dev
+
+# vcpkg installation
+git clone https://github.com/microsoft/vcpkg.git
+cd vcpkg && ./bootstrap-vcpkg.sh
+export VCPKG_ROOT=$(pwd)
+```
+
+### Build
+
+```bash
+# Configure
+cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
+
+# Build
+cmake --build build -j$(nproc)
+
+# Run tests
+cd build && ctest --output-on-failure
+```
+
+### Run
+
+```bash
+# Development
+./build/icao-local-pkd
+
+# Docker
+docker-compose up -d
+```
+
+---
+
+## API Endpoints
+
+### File Upload
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/upload/ldif` | Upload LDIF file |
+| POST | `/api/upload/masterlist` | Upload Master List file |
+| GET | `/api/upload/history` | Get upload history |
+| GET | `/api/upload/{id}/progress` | SSE progress stream |
+
+### Passive Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/pa/verify` | Perform PA verification |
+| GET | `/api/pa/history` | Get PA history |
+| GET | `/api/pa/{id}` | Get PA result details |
+| POST | `/api/pa/parse-dg1` | Parse DG1 (MRZ) |
+| POST | `/api/pa/parse-dg2` | Parse DG2 (Face image) |
+
+### Health Check
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Application health |
+| GET | `/api/health/ldap` | LDAP connection status |
+| GET | `/api/health/database` | Database connection status |
+
+---
+
+## ICAO 9303 Standards Reference
+
+### Passive Authentication Workflow
+
+```
+1. Extract SOD from ePassport chip
+2. Unwrap ICAO Tag 0x77 (if present)
+3. Extract DSC from SOD certificates[0]
+4. Lookup CSCA from LDAP using DSC Issuer DN
+5. Verify Trust Chain: DSC.verify(CSCA.publicKey)
+6. Verify SOD Signature: CMS_verify(SOD, DSC)
+7. Verify Data Group Hashes: compare SOD hashes with actual DG hashes
+8. Check CRL for DSC revocation status
+9. Return verification result
+```
+
+### SOD Structure
+
+```
+Tag 0x77 (Application 23) - EF.SOD wrapper
+  └─ CMS SignedData (Tag 0x30)
+       ├─ encapContentInfo (LDSSecurityObject)
+       │   └─ dataGroupHashValues (DG1, DG2, ... hashes)
+       ├─ certificates [0]
+       │   └─ DSC certificate (X.509)
+       └─ signerInfos
+           └─ signature
+```
+
+### CRL Status Values
+
+| Status | Description |
+|--------|-------------|
+| VALID | Certificate is valid and not revoked |
+| REVOKED | Certificate has been revoked |
+| CRL_UNAVAILABLE | CRL not available in LDAP |
+| CRL_EXPIRED | CRL has expired |
+| CRL_INVALID | CRL signature verification failed |
+
+---
+
+## Development Phases
+
+| Phase | Duration | Status | Description |
+|-------|----------|--------|-------------|
+| 1 | Week 1-2 | **In Progress** | Project Foundation |
+| 2 | Week 3-4 | Pending | File Upload Module |
+| 3 | Week 5-6 | Pending | Certificate Validation |
+| 4 | Week 7 | Pending | LDAP Integration |
+| 5 | Week 8-9 | Pending | Passive Authentication |
+| 6 | Week 10-11 | Pending | React.js Frontend |
+| 7 | Week 12 | Pending | Integration & Testing |
+
+### Phase 1 Tasks (Current)
+
+- [x] Project directory structure
+- [x] CLAUDE.md creation
+- [ ] Git repository initialization
+- [ ] CMakeLists.txt configuration
+- [ ] vcpkg dependencies setup
+- [ ] Drogon hello world API
+- [ ] PostgreSQL connection test
+- [ ] Docker development environment
+
+---
+
+## Key Documents
+
+| Document | Location | Description |
+|----------|----------|-------------|
+| Implementation Plan | `docs/ICAO_LOCAL_PKD_CPP_IMPLEMENTATION_PLAN.md` | Detailed implementation plan |
+| API Documentation | `docs/API.md` | REST API specification |
+| Architecture | `docs/ARCHITECTURE.md` | System architecture details |
+| Deployment | `docs/DEPLOYMENT.md` | Deployment guide |
+
+---
+
+## Reference Projects
+
+- **Java Spring Boot Original**: `/home/kbjung/projects/java/smartcore/local-pkd`
+- **ICAO Doc 9303 Part 11**: Security Mechanisms for MRTDs
+- **ICAO Doc 9303 Part 12**: PKI for MRTDs
+- **RFC 5280**: X.509 PKI Certificate and CRL Profile
+- **RFC 5652**: Cryptographic Message Syntax (CMS)
+
+---
+
+**Project Owner**: kbjung
+**Organization**: SmartCore Inc.
