@@ -2,7 +2,7 @@
 
 **Version**: 1.0
 **Last Updated**: 2025-12-29
-**Status**: Phase 1 - Project Foundation
+**Status**: Phase 4 - LDAP Integration
 
 ---
 
@@ -14,9 +14,9 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 
 | Module | Description | Status |
 |--------|-------------|--------|
-| **PKD Upload** | LDIF/Master List 파일 업로드, 파싱, 검증 | Planning |
-| **Certificate Validation** | CSCA/DSC Trust Chain, CRL 검증 | Planning |
-| **LDAP Integration** | OpenLDAP 연동 (ICAO PKD DIT) | Planning |
+| **PKD Upload** | LDIF/Master List 파일 업로드, 파싱, 검증 | ✅ Complete |
+| **Certificate Validation** | CSCA/DSC Trust Chain, CRL 검증 | ✅ Complete |
+| **LDAP Integration** | OpenLDAP 연동 (ICAO PKD DIT) | ✅ Complete |
 | **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | Planning |
 | **React.js Frontend** | CSR 기반 웹 UI | Planning |
 
@@ -354,7 +354,7 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 | 1 | Week 1-2 | ✅ Complete | Project Foundation |
 | 2 | Week 3-4 | ✅ Complete | File Upload Module |
 | 3 | Week 5-6 | ✅ Complete | Certificate Validation |
-| 4 | Week 7 | Pending | LDAP Integration |
+| 4 | Week 7 | ✅ Complete | LDAP Integration |
 | 5 | Week 8-9 | Pending | Passive Authentication |
 | 6 | Week 10-11 | Pending | React.js Frontend |
 | 7 | Week 12 | Pending | Integration & Testing |
@@ -598,5 +598,97 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 
 **Phase 3 Status**: ✅ COMPLETE
 
+### 2025-12-29: Phase 4 - LDAP Integration Module (Session 5)
+
+**Objective**: Implement LDAP Integration bounded context with OpenLDAP C API
+
+**Completed Tasks**:
+1. Domain Layer (`src/ldapintegration/domain/`)
+   - Value Objects:
+     - DistinguishedName: RFC 2253 format DN validation
+       - RDN parsing and extraction
+       - Attribute extraction (CN, OU, O, DC, C)
+       - Parent DN navigation
+       - Case-insensitive comparison
+     - LdapEntryType: CSCA, DSC, DSC_NC, CRL, MASTER_LIST
+       - OU path generation for each type
+   - Entities:
+     - LdapCertificateEntry: Certificate LDAP entry
+       - DN building from subject DN
+       - Validity checking
+       - Base64 encoding
+       - Sync status tracking
+     - LdapCrlEntry: CRL LDAP entry
+       - Revoked serial numbers tracking
+       - Expiration checking
+       - Update detection
+     - LdapMasterListEntry: Master List LDAP entry
+       - Version comparison for updates
+       - Certificate count tracking
+   - Port Interface:
+     - ILdapConnectionPort: Comprehensive LDAP operations
+       - Connection management (pool stats, test)
+       - Certificate CRUD operations
+       - CRL CRUD operations
+       - Master List CRUD operations
+       - Generic search capabilities
+       - Progress callback support
+
+2. Infrastructure Layer (`src/ldapintegration/infrastructure/`)
+   - Adapters:
+     - OpenLdapAdapter: OpenLDAP C API implementation
+       - Connection pooling (configurable size)
+       - Thread-safe operations with mutex
+       - Automatic reconnection
+       - Binary attribute handling
+       - LDAP filter escaping
+       - Batch operations with progress
+       - Entry existence checking
+       - Search with scope (base, onelevel, subtree)
+   - Controller:
+     - LdapController: REST API endpoints
+       - GET /api/ldap/health - Health check
+       - GET /api/ldap/statistics - Statistics
+       - GET /api/ldap/certificates - Search certificates
+       - GET /api/ldap/certificates/{fingerprint} - Get by fingerprint
+       - GET /api/ldap/crls - Search CRLs
+       - GET /api/ldap/crls/issuer - Get CRL by issuer
+       - GET /api/ldap/revocation/check - Check revocation
+
+3. Application Layer (`src/ldapintegration/application/`)
+   - Use Cases:
+     - UploadToLdapUseCase: Batch upload operations
+       - Certificate upload with skip/update options
+       - CRL upload with version comparison
+       - Master List upload with version checking
+       - Country structure initialization
+       - Progress callback support
+     - LdapHealthCheckUseCase: Health monitoring
+       - Connection availability
+       - Response time measurement
+       - Pool statistics
+       - Entry count by type
+       - Country statistics
+     - SearchLdapUseCase: Search capabilities
+       - Certificate search by country/fingerprint/issuer
+       - CRL search by country/issuer
+       - CSCA lookup for DSC verification
+       - Revocation status checking
+
+4. Build Configuration:
+   - Updated CMakeLists.txt with new LDAP source files
+   - Build successful: 100% tests passed (9/9)
+
+**API Endpoints Implemented**:
+- GET /api/ldap/health - LDAP health check
+- GET /api/ldap/statistics - LDAP statistics (counts by type)
+- GET /api/ldap/certificates - Search certificates
+- GET /api/ldap/certificates/{fingerprint} - Get certificate by fingerprint
+- GET /api/ldap/crls - Search CRLs
+- GET /api/ldap/crls/issuer - Get CRL by issuer DN
+- GET /api/ldap/revocation/check - Check certificate revocation
+
+**Phase 4 Status**: ✅ COMPLETE
+
 **Next Steps**:
-- Phase 4: LDAP Integration Module
+- Phase 5: Passive Authentication Module

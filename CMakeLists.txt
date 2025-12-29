@@ -107,13 +107,9 @@ set(CERTVALIDATION_SOURCES
 
 # LDAP Integration Context
 set(LDAP_SOURCES
-    src/ldapintegration/domain/model/LdapEntry.cpp
-    src/ldapintegration/domain/model/DistinguishedName.cpp
-    src/ldapintegration/application/usecase/UploadToLdapUseCase.cpp
-    src/ldapintegration/application/usecase/LdapHealthCheckUseCase.cpp
+    src/ldapintegration/application/usecase/LdapUseCases.cpp
     src/ldapintegration/infrastructure/adapter/OpenLdapAdapter.cpp
-    src/ldapintegration/infrastructure/adapter/OpenLdapCscaAdapter.cpp
-    src/ldapintegration/infrastructure/adapter/OpenLdapCrlAdapter.cpp
+    src/ldapintegration/infrastructure/controller/LdapController.cpp
 )
 
 # Passive Authentication Context
