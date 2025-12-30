@@ -103,11 +103,102 @@ open http://localhost:3000
 
 ## 운영 가이드
 
-### 컨테이너 관리 스크립트
+### 케이스별 스크립트 실행 순서
+
+#### Case 1: 최초 설치 / 완전 초기화 후 시작
+
+```bash
+# 1. 전체 서비스 시작 (LDAP 초기화 자동 포함)
+./docker-start.sh
+
+# 위 명령어 하나로 다음이 순차 실행됩니다:
+#   1) 디렉토리 생성 (data/uploads, data/cert, logs, backups)
+#   2) Docker Compose로 모든 컨테이너 시작
+#   3) ./docker-ldap-init.sh 자동 실행 (MMR + DIT 초기화)
+```
+
+#### Case 2: 모든 데이터 삭제 후 재시작 (초기화)
+
+```bash
+# 1. 모든 컨테이너, 볼륨, 데이터 삭제
+./docker-clean.sh                    # "yes" 입력 필요
+
+# 2. 전체 서비스 시작 (LDAP 초기화 자동 포함)
+./docker-start.sh
+```
+
+#### Case 3: 컨테이너만 재시작 (데이터 유지)
+
+```bash
+# 1. 컨테이너 중지
+./docker-stop.sh
+
+# 2. 컨테이너 시작 (LDAP DIT 이미 존재하면 skip)
+./docker-start.sh
+```
+
+#### Case 4: 특정 서비스만 재시작
+
+```bash
+# 특정 서비스 재시작
+./docker-restart.sh pkd-management   # PKD 관리 서비스
+./docker-restart.sh pa-service       # PA 검증 서비스
+./docker-restart.sh frontend         # 프론트엔드
+```
+
+#### Case 5: 인프라만 시작 (개발/디버깅용)
+
+```bash
+# 1. DB + LDAP만 시작 (애플리케이션 제외)
+./docker-start.sh --skip-app
+
+# 2. LDAP 수동 초기화 (필요시)
+./docker-ldap-init.sh
+
+# 3. 로컬에서 애플리케이션 직접 실행
+./build/icao-local-pkd
+```
+
+#### Case 6: 백업에서 복구
+
+```bash
+# 1. 현재 상태 백업
+./docker-backup.sh
+
+# 2. 컨테이너 중지
+./docker-stop.sh
+
+# 3. 백업에서 복구
+./docker-restore.sh ./backups/20251231_120000
+
+# 4. 컨테이너 시작
+./docker-start.sh
+```
+
+#### Case 7: 이미지 재빌드 후 시작
+
+```bash
+# 코드 변경 후 이미지 재빌드
+./docker-start.sh --build
+```
+
+### 스크립트 실행 순서 요약
+
+| 상황 | 실행 순서 |
+|------|----------|
+| **최초 설치** | `./docker-start.sh` |
+| **완전 초기화** | `./docker-clean.sh` → `./docker-start.sh` |
+| **재시작 (데이터 유지)** | `./docker-stop.sh` → `./docker-start.sh` |
+| **특정 서비스 재시작** | `./docker-restart.sh [서비스명]` |
+| **개발 모드** | `./docker-start.sh --skip-app` → `./docker-ldap-init.sh` |
+| **백업 복구** | `./docker-backup.sh` → `./docker-stop.sh` → `./docker-restore.sh [경로]` → `./docker-start.sh` |
+| **이미지 재빌드** | `./docker-start.sh --build` |
+
+### 컨테이너 관리 스크립트 상세
 
 ```bash
 # 컨테이너 시작
-./docker-start.sh                    # 전체 서비스 시작
+./docker-start.sh                    # 전체 서비스 시작 + LDAP 초기화
 ./docker-start.sh --build            # 이미지 다시 빌드 후 시작
 ./docker-start.sh --skip-app         # 인프라만 시작 (DB, LDAP)
 ./docker-start.sh --skip-ldap        # LDAP 제외
@@ -135,7 +226,7 @@ open http://localhost:3000
 ./docker-clean.sh                    # 모든 데이터 삭제 (주의!)
 
 # LDAP 초기화 (스키마 + MMR + DIT)
-./docker-ldap-init.sh
+./docker-ldap-init.sh                # docker-start.sh에서 자동 호출됨
 ```
 
 ### 서비스 상태 모니터링
