@@ -4,7 +4,25 @@
 
 services:
   # ---------------------------------------------------------------------------
-  # Application
+  # Frontend (React.js)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: icao-local-pkd-frontend
+    ports:
+      - "3000:80"
+    environment:
+      - TZ=Asia/Seoul
+    depends_on:
+      - app
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Application (C++ Backend)
   # ---------------------------------------------------------------------------
   app:
     build:

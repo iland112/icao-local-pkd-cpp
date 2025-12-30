@@ -30,6 +30,9 @@ RUN apt-get update && apt-get install -y \
     libc-ares-dev \
     libbrotli-dev \
     zlib1g-dev \
+    bison \
+    flex \
+    autoconf \
     && rm -rf /var/lib/apt/lists/*
 
 # Install vcpkg
@@ -79,6 +82,7 @@ RUN apt-get update && apt-get install -y \
     zlib1g \
     ca-certificates \
     tzdata \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Set timezone
