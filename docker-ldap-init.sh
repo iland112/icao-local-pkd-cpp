@@ -107,53 +107,33 @@ echo "[OK] MMR 설정 완료!"
 echo ""
 echo "[DIT] ICAO PKD DIT 구조 생성 중..."
 
-# dc=pkd 컨테이너 생성
-docker exec icao-local-pkd-openldap1 ldapadd -x \
-    -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-    -w admin \
-    -H ldap://localhost <<EOF 2>/dev/null || true
+# PKD DIT LDIF 파일 생성 및 적용 (heredoc을 컨테이너 내부에서 처리)
+docker exec icao-local-pkd-openldap1 bash -c 'cat > /tmp/pkd-dit.ldif << EOF
 dn: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 objectClass: dcObject
 objectClass: organization
 dc: pkd
 o: ICAO PKD
-EOF
 
-# dc=download,dc=pkd 컨테이너 생성
-docker exec icao-local-pkd-openldap1 ldapadd -x \
-    -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-    -w admin \
-    -H ldap://localhost <<EOF 2>/dev/null || true
 dn: dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 objectClass: dcObject
 objectClass: organization
 dc: download
 o: PKD Download
-EOF
 
-# dc=data,dc=download,dc=pkd 컨테이너 생성
-docker exec icao-local-pkd-openldap1 ldapadd -x \
-    -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-    -w admin \
-    -H ldap://localhost <<EOF 2>/dev/null || true
 dn: dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 objectClass: dcObject
 objectClass: organization
 dc: data
 o: PKD Data
-EOF
 
-# dc=nc-data,dc=download,dc=pkd 컨테이너 생성
-docker exec icao-local-pkd-openldap1 ldapadd -x \
-    -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-    -w admin \
-    -H ldap://localhost <<EOF 2>/dev/null || true
 dn: dc=nc-data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 objectClass: dcObject
 objectClass: organization
 dc: nc-data
 o: PKD Non-Compliant Data
 EOF
+ldapadd -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin -H ldap://localhost -f /tmp/pkd-dit.ldif 2>/dev/null || echo "   (DIT already exists)"'
 
 # 복제 대기
 echo ""
