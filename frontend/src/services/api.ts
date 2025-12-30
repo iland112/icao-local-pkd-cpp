@@ -120,7 +120,11 @@ export const ldapApi = {
 
 // SSE connection for progress updates
 export const createProgressEventSource = (uploadId: string): EventSource => {
-  return new EventSource(`/api/upload/${uploadId}/progress`);
+  return new EventSource(`/api/progress/stream/${uploadId}`);
 };
+
+// Progress status polling (alternative to SSE)
+export const getProgressStatus = (uploadId: string) =>
+  api.get(`/progress/status/${uploadId}`);
 
 export default api;

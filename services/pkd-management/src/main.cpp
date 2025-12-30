@@ -877,11 +877,11 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
     std::string line;
 
     auto finalizeAttribute = [&]() {
-        if (!currentAttrName.empty()) {
+        if (!currentAttrName.empty() && currentAttrName != "dn") {
             currentEntry.attributes[currentAttrName].push_back(currentAttrValue);
-            currentAttrName.clear();
-            currentAttrValue.clear();
         }
+        currentAttrName.clear();
+        currentAttrValue.clear();
     };
 
     auto finalizeEntry = [&]() {
@@ -906,8 +906,15 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
         if (line[0] == '#') continue;
 
         if (line[0] == ' ') {
+            // Continuation line - append to current value
+            // For DN, currentEntry.dn is set but we use currentAttrValue for continuation
             if (inContinuation) {
-                currentAttrValue += line.substr(1);
+                if (currentAttrName == "dn") {
+                    // DN continuation
+                    currentEntry.dn += line.substr(1);
+                } else {
+                    currentAttrValue += line.substr(1);
+                }
             }
             continue;
         }
@@ -937,8 +944,9 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
 
         if (currentAttrName == "dn") {
             currentEntry.dn = currentAttrValue;
-            currentAttrName.clear();
-            currentAttrValue.clear();
+            // Keep currentAttrName as "dn" for continuation handling
+            // Don't clear currentAttrName here
+            inContinuation = true;
         } else {
             inContinuation = true;
         }
@@ -1026,6 +1034,177 @@ LDAP* getLdapReadConnection() {
 }
 
 /**
+ * @brief Ensure the base ICAO PKD DIT structure exists in LDAP
+ * Creates the hierarchy: dc=pkd -> dc=download -> dc=data/dc=nc-data
+ * This must be called before creating country entries
+ */
+bool ensureBaseDitStructure(LDAP* ld) {
+    // The base DN is: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+    // First we need to create dc=pkd, then dc=download, dc=data, dc=nc-data under it
+
+    std::string baseDn = appConfig.ldapBaseDn;  // dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+
+    // 0. Create dc=pkd,dc=ldap,dc=smartcoreinc,dc=com (if not exists)
+    LDAPMessage* result = nullptr;
+    int rc = ldap_search_ext_s(ld, baseDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                                nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+    if (result) {
+        ldap_msgfree(result);
+    }
+
+    if (rc == LDAP_NO_SUCH_OBJECT) {
+        // Create dc=pkd entry
+        LDAPMod modObjectClass;
+        modObjectClass.mod_op = LDAP_MOD_ADD;
+        modObjectClass.mod_type = const_cast<char*>("objectClass");
+        char* ocVals[] = {const_cast<char*>("dcObject"), const_cast<char*>("organization"), const_cast<char*>("top"), nullptr};
+        modObjectClass.mod_values = ocVals;
+
+        LDAPMod modDc;
+        modDc.mod_op = LDAP_MOD_ADD;
+        modDc.mod_type = const_cast<char*>("dc");
+        char* dcVal[] = {const_cast<char*>("pkd"), nullptr};
+        modDc.mod_values = dcVal;
+
+        LDAPMod modO;
+        modO.mod_op = LDAP_MOD_ADD;
+        modO.mod_type = const_cast<char*>("o");
+        char* oVal[] = {const_cast<char*>("pkd"), nullptr};
+        modO.mod_values = oVal;
+
+        LDAPMod* mods[] = {&modObjectClass, &modDc, &modO, nullptr};
+
+        rc = ldap_add_ext_s(ld, baseDn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::error("Failed to create dc=pkd entry: {}", ldap_err2string(rc));
+            return false;
+        }
+        spdlog::info("Created LDAP entry: {}", baseDn);
+    }
+
+    // 1. Create dc=download,dc=pkd,... (if not exists)
+    std::string downloadDn = "dc=download," + baseDn;
+
+    result = nullptr;
+    rc = ldap_search_ext_s(ld, downloadDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                            nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+    if (result) {
+        ldap_msgfree(result);
+    }
+
+    if (rc == LDAP_NO_SUCH_OBJECT) {
+        // Create dc=download entry
+        LDAPMod modObjectClass;
+        modObjectClass.mod_op = LDAP_MOD_ADD;
+        modObjectClass.mod_type = const_cast<char*>("objectClass");
+        char* ocVals[] = {const_cast<char*>("dcObject"), const_cast<char*>("organization"), const_cast<char*>("top"), nullptr};
+        modObjectClass.mod_values = ocVals;
+
+        LDAPMod modDc;
+        modDc.mod_op = LDAP_MOD_ADD;
+        modDc.mod_type = const_cast<char*>("dc");
+        char* dcVal[] = {const_cast<char*>("download"), nullptr};
+        modDc.mod_values = dcVal;
+
+        LDAPMod modO;
+        modO.mod_op = LDAP_MOD_ADD;
+        modO.mod_type = const_cast<char*>("o");
+        char* oVal[] = {const_cast<char*>("download"), nullptr};
+        modO.mod_values = oVal;
+
+        LDAPMod* mods[] = {&modObjectClass, &modDc, &modO, nullptr};
+
+        rc = ldap_add_ext_s(ld, downloadDn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::error("Failed to create dc=download entry: {}", ldap_err2string(rc));
+            return false;
+        }
+        spdlog::info("Created LDAP entry: {}", downloadDn);
+    }
+
+    // 2. Create dc=data,dc=download,... (for CSCA, DSC, CRL, ML)
+    std::string dataDn = "dc=data," + downloadDn;
+
+    result = nullptr;
+    rc = ldap_search_ext_s(ld, dataDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                            nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+    if (result) {
+        ldap_msgfree(result);
+    }
+
+    if (rc == LDAP_NO_SUCH_OBJECT) {
+        LDAPMod modObjectClass;
+        modObjectClass.mod_op = LDAP_MOD_ADD;
+        modObjectClass.mod_type = const_cast<char*>("objectClass");
+        char* ocVals[] = {const_cast<char*>("dcObject"), const_cast<char*>("organization"), const_cast<char*>("top"), nullptr};
+        modObjectClass.mod_values = ocVals;
+
+        LDAPMod modDc;
+        modDc.mod_op = LDAP_MOD_ADD;
+        modDc.mod_type = const_cast<char*>("dc");
+        char* dcVal[] = {const_cast<char*>("data"), nullptr};
+        modDc.mod_values = dcVal;
+
+        LDAPMod modO;
+        modO.mod_op = LDAP_MOD_ADD;
+        modO.mod_type = const_cast<char*>("o");
+        char* oVal[] = {const_cast<char*>("data"), nullptr};
+        modO.mod_values = oVal;
+
+        LDAPMod* mods[] = {&modObjectClass, &modDc, &modO, nullptr};
+
+        rc = ldap_add_ext_s(ld, dataDn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::error("Failed to create dc=data entry: {}", ldap_err2string(rc));
+            return false;
+        }
+        spdlog::info("Created LDAP entry: {}", dataDn);
+    }
+
+    // 3. Create dc=nc-data,dc=download,... (for DSC_NC - non-conformant)
+    std::string ncDataDn = "dc=nc-data," + downloadDn;
+
+    result = nullptr;
+    rc = ldap_search_ext_s(ld, ncDataDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                            nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+    if (result) {
+        ldap_msgfree(result);
+    }
+
+    if (rc == LDAP_NO_SUCH_OBJECT) {
+        LDAPMod modObjectClass;
+        modObjectClass.mod_op = LDAP_MOD_ADD;
+        modObjectClass.mod_type = const_cast<char*>("objectClass");
+        char* ocVals[] = {const_cast<char*>("dcObject"), const_cast<char*>("organization"), const_cast<char*>("top"), nullptr};
+        modObjectClass.mod_values = ocVals;
+
+        LDAPMod modDc;
+        modDc.mod_op = LDAP_MOD_ADD;
+        modDc.mod_type = const_cast<char*>("dc");
+        char* dcVal[] = {const_cast<char*>("nc-data"), nullptr};
+        modDc.mod_values = dcVal;
+
+        LDAPMod modO;
+        modO.mod_op = LDAP_MOD_ADD;
+        modO.mod_type = const_cast<char*>("o");
+        char* oVal[] = {const_cast<char*>("nc-data"), nullptr};
+        modO.mod_values = oVal;
+
+        LDAPMod* mods[] = {&modObjectClass, &modDc, &modO, nullptr};
+
+        rc = ldap_add_ext_s(ld, ncDataDn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::error("Failed to create dc=nc-data entry: {}", ldap_err2string(rc));
+            return false;
+        }
+        spdlog::info("Created LDAP entry: {}", ncDataDn);
+    }
+
+    spdlog::debug("Base LDAP DIT structure verified");
+    return true;
+}
+
+/**
  * @brief Build LDAP DN for certificate
  * @param certType CSCA, DSC, or DSC_NC
  * @param countryCode ISO country code
@@ -1075,9 +1254,16 @@ std::string buildCrlDn(const std::string& countryCode, const std::string& finger
 
 /**
  * @brief Ensure country organizational unit exists in LDAP
+ * @param ouType: "data" (default), "nc-data", or specific OU name like "ml", "csca", "dsc", "crl"
  */
-bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcData = false) {
-    std::string dataContainer = isNcData ? "dc=nc-data" : "dc=data";
+bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, const std::string& ouType = "data") {
+    if (countryCode.empty()) {
+        spdlog::warn("Cannot create country OU: empty country code");
+        return false;
+    }
+
+    // Determine data container and OU to create
+    std::string dataContainer = (ouType == "nc-data") ? "dc=nc-data" : "dc=data";
     std::string countryDn = "c=" + countryCode + "," + dataContainer + ",dc=download," + appConfig.ldapBaseDn;
 
     // Check if country entry exists
@@ -1090,41 +1276,59 @@ bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcDa
     }
 
     if (rc == LDAP_SUCCESS) {
-        return true;  // Country already exists
-    }
+        // Country exists, check if we need to create specific OU
+    } else if (rc == LDAP_NO_SUCH_OBJECT) {
+        // Create country entry
+        LDAPMod modObjectClass;
+        modObjectClass.mod_op = LDAP_MOD_ADD;
+        modObjectClass.mod_type = const_cast<char*>("objectClass");
+        char* ocVals[] = {const_cast<char*>("country"), const_cast<char*>("top"), nullptr};
+        modObjectClass.mod_values = ocVals;
 
-    if (rc != LDAP_NO_SUCH_OBJECT) {
+        LDAPMod modC;
+        modC.mod_op = LDAP_MOD_ADD;
+        modC.mod_type = const_cast<char*>("c");
+        char* cVal[] = {const_cast<char*>(countryCode.c_str()), nullptr};
+        modC.mod_values = cVal;
+
+        LDAPMod* mods[] = {&modObjectClass, &modC, nullptr};
+
+        rc = ldap_add_ext_s(ld, countryDn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::warn("Failed to create country entry {}: {}", countryDn, ldap_err2string(rc));
+            return false;
+        }
+        spdlog::debug("Created country entry: {}", countryDn);
+    } else {
         spdlog::warn("LDAP search for country {} failed: {}", countryCode, ldap_err2string(rc));
         return false;
     }
 
-    // Create country entry
-    LDAPMod modObjectClass;
-    modObjectClass.mod_op = LDAP_MOD_ADD;
-    modObjectClass.mod_type = const_cast<char*>("objectClass");
-    char* ocVals[] = {const_cast<char*>("country"), const_cast<char*>("top"), nullptr};
-    modObjectClass.mod_values = ocVals;
-
-    LDAPMod modC;
-    modC.mod_op = LDAP_MOD_ADD;
-    modC.mod_type = const_cast<char*>("c");
-    char* cVal[] = {const_cast<char*>(countryCode.c_str()), nullptr};
-    modC.mod_values = cVal;
-
-    LDAPMod* mods[] = {&modObjectClass, &modC, nullptr};
-
-    rc = ldap_add_ext_s(ld, countryDn.c_str(), mods, nullptr, nullptr);
-    if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
-        spdlog::warn("Failed to create country entry {}: {}", countryDn, ldap_err2string(rc));
-        return false;
+    // Determine which OUs to create
+    std::vector<std::string> ous;
+    if (ouType == "nc-data") {
+        ous = {"dsc"};
+    } else if (ouType == "ml" || ouType == "csca" || ouType == "dsc" || ouType == "crl") {
+        // Create only the specific OU requested
+        ous = {ouType};
+    } else {
+        // Default: create all standard OUs
+        ous = {"csca", "dsc", "crl", "ml"};
     }
-
-    // Create organizational units under country (csca, dsc, crl)
-    std::vector<std::string> ous = isNcData ? std::vector<std::string>{"dsc"}
-                                            : std::vector<std::string>{"csca", "dsc", "crl"};
 
     for (const auto& ouName : ous) {
         std::string ouDn = "o=" + ouName + "," + countryDn;
+
+        // Check if OU exists
+        result = nullptr;
+        rc = ldap_search_ext_s(ld, ouDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                                nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+        if (result) {
+            ldap_msgfree(result);
+        }
+        if (rc == LDAP_SUCCESS) {
+            continue;  // OU already exists
+        }
 
         LDAPMod ouObjClass;
         ouObjClass.mod_op = LDAP_MOD_ADD;
@@ -1141,7 +1345,9 @@ bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcDa
         LDAPMod* ouMods[] = {&ouObjClass, &ouO, nullptr};
 
         rc = ldap_add_ext_s(ld, ouDn.c_str(), ouMods, nullptr, nullptr);
-        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+        if (rc == LDAP_SUCCESS) {
+            spdlog::debug("Created OU: {}", ouDn);
+        } else if (rc != LDAP_ALREADY_EXISTS) {
             spdlog::debug("OU creation result for {}: {}", ouDn, ldap_err2string(rc));
         }
     }
@@ -1159,9 +1365,10 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
                                    const std::string& serialNumber, const std::string& fingerprint,
                                    const std::vector<uint8_t>& certBinary) {
     bool isNcData = (certType == "DSC_NC");
+    std::string ouType = isNcData ? "nc-data" : "data";
 
     // Ensure country structure exists
-    if (!ensureCountryOuExists(ld, countryCode, isNcData)) {
+    if (!ensureCountryOuExists(ld, countryCode, ouType)) {
         spdlog::warn("Failed to ensure country OU exists for {}", countryCode);
         // Continue anyway - the OU might exist even if we couldn't create it
     }
@@ -1241,7 +1448,7 @@ std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
                            const std::string& issuerDn, const std::string& fingerprint,
                            const std::vector<uint8_t>& crlBinary) {
     // Ensure country structure exists
-    if (!ensureCountryOuExists(ld, countryCode, false)) {
+    if (!ensureCountryOuExists(ld, countryCode, "crl")) {
         spdlog::warn("Failed to ensure country OU exists for CRL {}", countryCode);
     }
 
@@ -1592,18 +1799,416 @@ bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
     return !crlId.empty();
 }
 
+// =============================================================================
+// Master List (pkdMasterListContent) Functions
+// =============================================================================
+
 /**
- * @brief Update uploaded_file with parsing statistics
+ * @brief Escape special characters in DN for LDAP RDN usage
+ * Characters: , = + < > # ; " \
+ */
+std::string escapeDnForRdn(const std::string& dn) {
+    std::string result;
+    result.reserve(dn.size() * 2);
+    for (char c : dn) {
+        switch (c) {
+            case ',': result += "\\,"; break;
+            case '=': result += "\\="; break;
+            case '+': result += "\\+"; break;
+            case '<': result += "\\<"; break;
+            case '>': result += "\\>"; break;
+            case '#': result += "\\#"; break;
+            case ';': result += "\\;"; break;
+            case '"': result += "\\\""; break;
+            case '\\': result += "\\\\"; break;
+            default: result += c; break;
+        }
+    }
+    return result;
+}
+
+/**
+ * @brief Extract CSCA DN from the LDIF entry's cn attribute or DN
+ * The cn attribute contains the CSCA's subject DN (e.g., CN=CSCA-FRANCE,O=Gouv,C=FR)
+ */
+std::string extractCscaDnFromEntry(const LdifEntry& entry) {
+    // First try cn attribute
+    if (entry.hasAttribute("cn")) {
+        return entry.getFirstAttribute("cn");
+    }
+
+    // Extract from DN: cn=CN\=CSCA-FRANCE\,O\=Gouv\,C\=FR,o=ml,c=FR,...
+    // The cn component contains the escaped CSCA DN
+    std::string dn = entry.dn;
+    if (dn.substr(0, 3) == "cn=") {
+        size_t endPos = 0;
+        bool inEscape = false;
+        for (size_t i = 3; i < dn.size(); i++) {
+            if (inEscape) {
+                inEscape = false;
+                continue;
+            }
+            if (dn[i] == '\\') {
+                inEscape = true;
+                continue;
+            }
+            if (dn[i] == ',') {
+                endPos = i;
+                break;
+            }
+        }
+        if (endPos > 3) {
+            std::string escapedCn = dn.substr(3, endPos - 3);
+            // Unescape the DN
+            std::string result;
+            for (size_t i = 0; i < escapedCn.size(); i++) {
+                if (escapedCn[i] == '\\' && i + 1 < escapedCn.size()) {
+                    result += escapedCn[i + 1];
+                    i++;
+                } else {
+                    result += escapedCn[i];
+                }
+            }
+            return result;
+        }
+    }
+    return "";
+}
+
+/**
+ * @brief Save Master List to database
+ * @return master_list ID or empty string on failure
+ */
+std::string saveMasterList(PGconn* conn, const std::string& uploadId,
+                           const std::string& countryCode, const std::string& cscaDn,
+                           int version, int cscaCount, const std::string& fingerprint,
+                           const std::vector<uint8_t>& cmsBinary) {
+    std::string mlId = generateUuid();
+    std::string byteaEscaped = escapeBytea(conn, cmsBinary);
+
+    std::string query = "INSERT INTO master_list (id, upload_id, signer_country, "
+                       "signer_dn, version, csca_certificate_count, fingerprint_sha256, "
+                       "ml_binary, created_at) VALUES ("
+                       "'" + mlId + "', "
+                       "'" + uploadId + "', "
+                       + escapeSqlString(conn, countryCode) + ", "
+                       + escapeSqlString(conn, cscaDn) + ", "
+                       + std::to_string(version) + ", "
+                       + std::to_string(cscaCount) + ", "
+                       "'" + fingerprint + "', "
+                       "E'" + byteaEscaped + "', NOW()) "
+                       "ON CONFLICT DO NOTHING";
+
+    PGresult* res = PQexec(conn, query.c_str());
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+
+    return success ? mlId : "";
+}
+
+/**
+ * @brief Save Master List to LDAP (o=ml node)
+ * DN format: cn={ESCAPED-CSCA-DN},o=ml,c={COUNTRY},dc=data,dc=download,dc=pkd,...
+ */
+std::string saveMasterListToLdap(LDAP* ld, const std::string& countryCode,
+                                  const std::string& cscaDn, int version,
+                                  const std::string& fingerprint,
+                                  const std::vector<uint8_t>& cmsBinary) {
+    if (!ld) return "";
+
+    // Build LDAP DN
+    std::string escapedCscaDn = escapeDnForRdn(cscaDn);
+    std::string baseDn = appConfig.ldapBaseDn;
+    std::string dn = "cn=" + escapedCscaDn + ",o=ml,c=" + countryCode +
+                     ",dc=data,dc=download," + baseDn;
+
+    // Ensure country/ml OU exists
+    ensureCountryOuExists(ld, countryCode, "ml");
+
+    // Check if entry exists
+    bool exists = false;
+    LDAPMessage* searchResult = nullptr;
+    std::string filter = "(objectClass=pkdMasterList)";
+    int rc = ldap_search_ext_s(ld, dn.c_str(), LDAP_SCOPE_BASE, filter.c_str(),
+                                nullptr, 0, nullptr, nullptr, nullptr, 1, &searchResult);
+    if (rc == LDAP_SUCCESS && ldap_count_entries(ld, searchResult) > 0) {
+        exists = true;
+    }
+    if (searchResult) ldap_msgfree(searchResult);
+
+    // Prepare attribute values
+    std::string versionStr = std::to_string(version);
+    std::string snStr = fingerprint.substr(0, 16); // Use first 16 chars of fingerprint as serial
+
+    // Binary data for pkdMasterListContent
+    struct berval bv;
+    bv.bv_val = const_cast<char*>(reinterpret_cast<const char*>(cmsBinary.data()));
+    bv.bv_len = cmsBinary.size();
+    struct berval* bvals[] = {&bv, nullptr};
+
+    if (exists) {
+        // Modify existing entry
+        LDAPMod modPkdContent;
+        modPkdContent.mod_op = LDAP_MOD_REPLACE | LDAP_MOD_BVALUES;
+        modPkdContent.mod_type = const_cast<char*>("pkdMasterListContent");
+        modPkdContent.mod_bvalues = bvals;
+
+        char* versionVals[] = {const_cast<char*>(versionStr.c_str()), nullptr};
+        LDAPMod modVersion;
+        modVersion.mod_op = LDAP_MOD_REPLACE;
+        modVersion.mod_type = const_cast<char*>("pkdVersion");
+        modVersion.mod_vals.modv_strvals = versionVals;
+
+        LDAPMod* mods[] = {&modPkdContent, &modVersion, nullptr};
+
+        rc = ldap_modify_ext_s(ld, dn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS) {
+            spdlog::warn("Failed to modify Master List in LDAP: {} ({})", ldap_err2string(rc), dn);
+            return "";
+        }
+        spdlog::debug("Modified Master List in LDAP: {}", dn);
+    } else {
+        // Add new entry
+        char* objectClasses[] = {
+            const_cast<char*>("top"),
+            const_cast<char*>("person"),
+            const_cast<char*>("pkdMasterList"),
+            const_cast<char*>("pkdDownload"),
+            nullptr
+        };
+        char* cnVals[] = {const_cast<char*>(cscaDn.c_str()), nullptr};
+        char* snVals[] = {const_cast<char*>(snStr.c_str()), nullptr};
+        char* versionVals[] = {const_cast<char*>(versionStr.c_str()), nullptr};
+
+        LDAPMod modOc, modCn, modSn, modVersion, modPkdContent;
+
+        modOc.mod_op = LDAP_MOD_ADD;
+        modOc.mod_type = const_cast<char*>("objectClass");
+        modOc.mod_vals.modv_strvals = objectClasses;
+
+        modCn.mod_op = LDAP_MOD_ADD;
+        modCn.mod_type = const_cast<char*>("cn");
+        modCn.mod_vals.modv_strvals = cnVals;
+
+        modSn.mod_op = LDAP_MOD_ADD;
+        modSn.mod_type = const_cast<char*>("sn");
+        modSn.mod_vals.modv_strvals = snVals;
+
+        modVersion.mod_op = LDAP_MOD_ADD;
+        modVersion.mod_type = const_cast<char*>("pkdVersion");
+        modVersion.mod_vals.modv_strvals = versionVals;
+
+        modPkdContent.mod_op = LDAP_MOD_ADD | LDAP_MOD_BVALUES;
+        modPkdContent.mod_type = const_cast<char*>("pkdMasterListContent");
+        modPkdContent.mod_bvalues = bvals;
+
+        LDAPMod* mods[] = {&modOc, &modCn, &modSn, &modVersion, &modPkdContent, nullptr};
+
+        rc = ldap_add_ext_s(ld, dn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS) {
+            spdlog::warn("Failed to add Master List to LDAP: {} ({})", ldap_err2string(rc), dn);
+            return "";
+        }
+        spdlog::debug("Added Master List to LDAP: {}", dn);
+    }
+
+    return dn;
+}
+
+/**
+ * @brief Update Master List DB record with LDAP DN
+ */
+void updateMasterListLdapStatus(PGconn* conn, const std::string& mlId, const std::string& ldapDn) {
+    if (ldapDn.empty()) return;
+
+    std::string query = "UPDATE master_list SET "
+                       "ldap_dn = " + escapeSqlString(conn, ldapDn) + ", "
+                       "stored_in_ldap = TRUE, "
+                       "stored_at = NOW() "
+                       "WHERE id = '" + mlId + "'";
+
+    PGresult* res = PQexec(conn, query.c_str());
+    PQclear(res);
+}
+
+/**
+ * @brief Parse and save Master List from LDIF entry (DB + LDAP)
+ * Handles pkdMasterListContent attribute which contains CMS SignedData with CSCA certificates
+ */
+bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+                          const LdifEntry& entry, int& mlCount, int& ldapMlStoredCount) {
+    // Check for pkdMasterListContent;binary (base64 encoded CMS SignedData)
+    std::string base64Value = entry.getFirstAttribute("pkdMasterListContent;binary");
+    if (base64Value.empty()) {
+        // Also check without ;binary suffix
+        base64Value = entry.getFirstAttribute("pkdMasterListContent");
+        if (base64Value.empty()) return false;
+    }
+
+    std::vector<uint8_t> cmsBinary = base64Decode(base64Value);
+    if (cmsBinary.empty()) {
+        spdlog::warn("Failed to decode Master List content from entry: {}", entry.dn);
+        return false;
+    }
+
+    // Validate CMS format (must start with 0x30 SEQUENCE tag)
+    if (cmsBinary[0] != 0x30) {
+        spdlog::warn("Invalid Master List CMS format in entry: {}", entry.dn);
+        return false;
+    }
+
+    // Extract CSCA DN from entry first (needed for country code extraction)
+    std::string cscaDn = extractCscaDnFromEntry(entry);
+    if (cscaDn.empty()) {
+        cscaDn = "UNKNOWN";
+    }
+
+    // Extract country code - try multiple sources
+    std::string countryCode = "";
+
+    // 1. Try from LDIF entry DN (e.g., ,c=FR,dc=data,...)
+    size_t cPos = entry.dn.find(",c=");
+    if (cPos != std::string::npos) {
+        size_t cEnd = entry.dn.find(',', cPos + 3);
+        if (cEnd == std::string::npos) cEnd = entry.dn.size();
+        countryCode = entry.dn.substr(cPos + 3, cEnd - cPos - 3);
+    }
+
+    // 2. If empty or XX, try from CSCA DN (e.g., C=FR at the end)
+    if (countryCode.empty() || countryCode == "XX") {
+        // Look for C= or ,C= in CSCA DN
+        std::string upperCscaDn = cscaDn;
+        std::transform(upperCscaDn.begin(), upperCscaDn.end(), upperCscaDn.begin(), ::toupper);
+
+        size_t cPosInCsca = upperCscaDn.rfind(",C=");
+        if (cPosInCsca == std::string::npos) {
+            cPosInCsca = upperCscaDn.find("C=");
+        } else {
+            cPosInCsca += 1; // Skip the comma
+        }
+
+        if (cPosInCsca != std::string::npos) {
+            size_t valueStart = cPosInCsca + 2;
+            size_t valueEnd = cscaDn.find(',', valueStart);
+            if (valueEnd == std::string::npos) valueEnd = cscaDn.size();
+            countryCode = cscaDn.substr(valueStart, valueEnd - valueStart);
+        }
+    }
+
+    // Convert to uppercase and validate
+    std::transform(countryCode.begin(), countryCode.end(), countryCode.begin(), ::toupper);
+    if (countryCode.empty() || countryCode.length() != 2) {
+        countryCode = "XX";
+        spdlog::warn("Could not extract valid country code from entry: {}", entry.dn.substr(0, 80));
+    }
+
+    // Get version from pkdVersion attribute
+    int version = 0;
+    if (entry.hasAttribute("pkdVersion")) {
+        try {
+            version = std::stoi(entry.getFirstAttribute("pkdVersion"));
+        } catch (...) {}
+    }
+
+    // Compute fingerprint
+    std::string fingerprint = computeFileHash(cmsBinary);
+
+    // Parse CMS to count CSCA certificates (optional - for statistics)
+    int cscaCount = 0;
+    BIO* bio = BIO_new_mem_buf(cmsBinary.data(), static_cast<int>(cmsBinary.size()));
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+    BIO_free(bio);
+
+    if (cms) {
+        // Try to extract encapsulated content and count certificates
+        ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+        if (contentPtr && *contentPtr) {
+            const unsigned char* contentData = (*contentPtr)->data;
+            int contentLen = (*contentPtr)->length;
+
+            // Parse MasterList structure: SEQUENCE { version? INTEGER, certList SET OF Certificate }
+            const unsigned char* p = contentData;
+            long outerLen;
+            int outerTag, outerClass;
+            ASN1_get_object(&p, &outerLen, &outerTag, &outerClass, contentLen);
+
+            if (outerTag == V_ASN1_SEQUENCE) {
+                // Check if first element is INTEGER (version) or SET (certificates)
+                const unsigned char* inner = p;
+                long innerLen;
+                int innerTag, innerClass;
+                ASN1_get_object(&inner, &innerLen, &innerTag, &innerClass, outerLen);
+
+                if (innerTag == V_ASN1_INTEGER) {
+                    // Skip version, move to SET
+                    p = inner + innerLen;
+                    ASN1_get_object(&p, &innerLen, &innerTag, &innerClass, outerLen - (p - contentData));
+                } else {
+                    p = inner - 1; // Rewind to re-parse SET
+                    ASN1_get_object(&p, &innerLen, &innerTag, &innerClass, outerLen);
+                }
+
+                if (innerTag == V_ASN1_SET) {
+                    // Count certificates in SET
+                    const unsigned char* certP = p;
+                    long remaining = innerLen;
+                    while (remaining > 0) {
+                        const unsigned char* certStart = certP;
+                        X509* cert = d2i_X509(nullptr, &certP, remaining);
+                        if (cert) {
+                            cscaCount++;
+                            X509_free(cert);
+                            remaining -= (certP - certStart);
+                        } else {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        CMS_ContentInfo_free(cms);
+    }
+
+    spdlog::info("Parsed Master List: country={}, csca_dn={}, version={}, certs={}, fingerprint={}",
+                countryCode, cscaDn.substr(0, 30), version, cscaCount, fingerprint.substr(0, 16));
+
+    // 1. Save to DB
+    std::string mlId = saveMasterList(conn, uploadId, countryCode, cscaDn, version,
+                                       cscaCount, fingerprint, cmsBinary);
+
+    if (!mlId.empty()) {
+        mlCount++;
+        spdlog::debug("Saved Master List to DB: country={}, fingerprint={}",
+                     countryCode, fingerprint.substr(0, 16));
+
+        // 2. Save to LDAP
+        if (ld) {
+            std::string ldapDn = saveMasterListToLdap(ld, countryCode, cscaDn, version,
+                                                       fingerprint, cmsBinary);
+            if (!ldapDn.empty()) {
+                updateMasterListLdapStatus(conn, mlId, ldapDn);
+                ldapMlStoredCount++;
+                spdlog::debug("Saved Master List to LDAP: {}", ldapDn);
+            }
+        }
+    }
+
+    return !mlId.empty();
+}
+
+/**
+ * @brief Update uploaded_file with parsing statistics (including ML count)
  */
 void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
                            const std::string& status, int cscaCount, int dscCount,
-                           int crlCount, int totalEntries, int processedEntries,
+                           int crlCount, int mlCount, int totalEntries, int processedEntries,
                            const std::string& errorMessage) {
     std::string query = "UPDATE uploaded_file SET "
                        "status = '" + status + "', "
                        "csca_count = " + std::to_string(cscaCount) + ", "
                        "dsc_count = " + std::to_string(dscCount) + ", "
                        "crl_count = " + std::to_string(crlCount) + ", "
+                       "ml_count = " + std::to_string(mlCount) + ", "
                        "total_entries = " + std::to_string(totalEntries) + ", "
                        "processed_entries = " + std::to_string(processedEntries) + ", "
                        "error_message = " + escapeSqlString(conn, errorMessage) + ", "
@@ -1641,9 +2246,17 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             spdlog::warn("LDAP write connection failed - will only save to DB");
         } else {
             spdlog::info("LDAP write connection established for upload {}", uploadId);
+            // Ensure base DIT structure exists before processing entries
+            if (!ensureBaseDitStructure(ld)) {
+                spdlog::warn("Failed to ensure base DIT structure - LDAP storage may fail");
+            }
         }
 
         try {
+            // Send initial parsing progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED, 0, 0, "LDIF 파싱 시작"));
+
             std::string contentStr(content.begin(), content.end());
 
             // Parse LDIF content
@@ -1652,28 +2265,44 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
 
+            // Send parsing completed progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED, 0, totalEntries,
+                    "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
+
             int cscaCount = 0;
             int dscCount = 0;
             int crlCount = 0;
+            int mlCount = 0;
             int processedEntries = 0;
             int ldapCertStoredCount = 0;
             int ldapCrlStoredCount = 0;
+            int ldapMlStoredCount = 0;
 
             // Process each entry
             for (const auto& entry : entries) {
                 try {
-                    // Check for userCertificate;binary
-                    if (entry.hasAttribute("userCertificate;binary")) {
+                    // Determine entry type based on DN pattern and attributes
+                    bool isMasterListEntry = (entry.dn.find(",o=ml,") != std::string::npos) ||
+                                             entry.hasAttribute("pkdMasterListContent;binary") ||
+                                             entry.hasAttribute("pkdMasterListContent");
+
+                    if (isMasterListEntry) {
+                        // Process Master List entry (pkdMasterListContent)
+                        parseMasterListEntry(conn, ld, uploadId, entry, mlCount, ldapMlStoredCount);
+                    }
+                    // Check for userCertificate;binary (DSC certificates)
+                    else if (entry.hasAttribute("userCertificate;binary")) {
                         parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate;binary",
                                              cscaCount, dscCount, ldapCertStoredCount);
                     }
-                    // Check for cACertificate;binary
+                    // Check for cACertificate;binary (CSCA certificates)
                     else if (entry.hasAttribute("cACertificate;binary")) {
                         parseCertificateEntry(conn, ld, uploadId, entry, "cACertificate;binary",
                                              cscaCount, dscCount, ldapCertStoredCount);
                     }
 
-                    // Check for CRL
+                    // Check for CRL (can be in same entry or separate)
                     if (entry.hasAttribute("certificateRevocationList;binary")) {
                         parseCrlEntry(conn, ld, uploadId, entry, crlCount, ldapCrlStoredCount);
                     }
@@ -1684,25 +2313,54 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
                 processedEntries++;
 
-                // Log progress every 100 entries
-                if (processedEntries % 100 == 0) {
-                    spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP)",
-                                processedEntries, totalEntries,
-                                cscaCount + dscCount, ldapCertStoredCount,
-                                crlCount, ldapCrlStoredCount);
+                // Send progress every 50 entries or at the end
+                if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
+                    int percentage = totalEntries > 0 ? (processedEntries * 100 / totalEntries) : 100;
+                    std::string progressMsg = "처리 중: " + std::to_string(processedEntries) + "/" +
+                                             std::to_string(totalEntries) + " 엔트리 (" +
+                                             std::to_string(cscaCount) + " CSCA, " +
+                                             std::to_string(dscCount) + " DSC, " +
+                                             std::to_string(crlCount) + " CRL)";
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                            processedEntries, totalEntries, progressMsg));
+
+                    // Log progress every 100 entries
+                    if (processedEntries % 100 == 0) {
+                        spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP), {} MLs ({} LDAP)",
+                                    processedEntries, totalEntries,
+                                    cscaCount + dscCount, ldapCertStoredCount,
+                                    crlCount, ldapCrlStoredCount,
+                                    mlCount, ldapMlStoredCount);
+                    }
                 }
             }
 
             // Update final statistics
-            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, crlCount,
+            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, crlCount, mlCount,
                                   totalEntries, processedEntries, "");
 
-            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} CRLs (LDAP: {} certs, {} CRLs)",
-                        uploadId, cscaCount, dscCount, crlCount, ldapCertStoredCount, ldapCrlStoredCount);
+            // Send completion progress
+            std::string completionMsg = "처리 완료: " + std::to_string(cscaCount) + " CSCA, " +
+                                       std::to_string(dscCount) + " DSC, " +
+                                       std::to_string(crlCount) + " CRL, " +
+                                       std::to_string(mlCount) + " ML (LDAP: " +
+                                       std::to_string(ldapCertStoredCount) + " 인증서, " +
+                                       std::to_string(ldapCrlStoredCount) + " CRL)";
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                    processedEntries, totalEntries, completionMsg));
+
+            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} CRLs, {} MLs (LDAP: {} certs, {} CRLs, {} MLs)",
+                        uploadId, cscaCount, dscCount, crlCount, mlCount,
+                        ldapCertStoredCount, ldapCrlStoredCount, ldapMlStoredCount);
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, e.what());
+            // Send failure progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
+            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
         }
 
         // Cleanup connections
@@ -1741,11 +2399,14 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             spdlog::warn("LDAP write connection failed - will only save to DB");
         } else {
             spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
+            // Ensure base DIT structure exists before processing entries
+            if (!ensureBaseDitStructure(ld)) {
+                spdlog::warn("Failed to ensure base DIT structure - LDAP storage may fail");
+            }
         }
 
         try {
             int cscaCount = 0;
-            int dscCount = 0;
             int ldapStoredCount = 0;
             int skippedDuplicates = 0;
             int totalCerts = 0;
@@ -1759,7 +2420,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 spdlog::error("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
                 ProgressManager::getInstance().sendProgress(
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format", "CMS 형식 오류"));
-                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, "Invalid CMS format");
+                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "Invalid CMS format");
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                 PQfinish(conn);
                 return;
@@ -1822,15 +2483,15 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            // Master List only contains CSCA certificates
+                            std::string certType = "CSCA";
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                if (certType == "CSCA") cscaCount++;
-                                else dscCount++;
+                                cscaCount++;
 
                                 if (ld) {
                                     std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -1848,7 +2509,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 } else {
                     spdlog::error("Failed to parse Master List: neither CMS nor PKCS7 parsing succeeded");
                     spdlog::error("OpenSSL error: {}", ERR_error_string(ERR_get_error(), nullptr));
-                    updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
+                    updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
                     if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                     PQfinish(conn);
                     return;
@@ -1933,31 +2594,34 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         std::string fingerprint = computeFileHash(derBytes);
                                         std::string countryCode = extractCountryCode(subjectDn);
 
-                                        // Validate CSCA certificate with full self-signature verification
-                                        std::string certType = "DSC";  // default
+                                        // Master List contains ONLY CSCA certificates
+                                        // This includes: self-signed CSCAs and CSCA Link certificates (key rollover)
+                                        std::string certType = "CSCA";  // All certs in Master List are CSCAs
                                         std::string validationStatus = "VALID";
                                         std::string validationMessage = "";
 
                                         if (subjectDn == issuerDn) {
-                                            // Potential CSCA - verify self-signature
+                                            // Self-signed CSCA - verify self-signature
                                             auto cscaValidation = validateCscaCertificate(cert);
                                             if (cscaValidation.isValid) {
-                                                certType = "CSCA";
                                                 validationStatus = "VALID";
                                                 spdlog::debug("CSCA self-signature verified: {}", subjectDn.substr(0, 50));
                                             } else if (cscaValidation.signatureValid) {
                                                 // Self-signed but missing CA flag or key usage
-                                                certType = "CSCA";
                                                 validationStatus = "WARNING";
                                                 validationMessage = cscaValidation.errorMessage;
                                                 spdlog::warn("CSCA validation warning: {} - {}", subjectDn.substr(0, 50), cscaValidation.errorMessage);
                                             } else {
                                                 // Signature invalid
-                                                certType = "CSCA";
                                                 validationStatus = "INVALID";
                                                 validationMessage = cscaValidation.errorMessage;
                                                 spdlog::error("CSCA self-signature FAILED: {} - {}", subjectDn.substr(0, 50), cscaValidation.errorMessage);
                                             }
+                                        } else {
+                                            // CSCA Link certificate (issued by previous CSCA for key rollover)
+                                            validationStatus = "VALID";
+                                            validationMessage = "CSCA Link certificate (key rollover)";
+                                            spdlog::debug("CSCA Link certificate: {} issued by {}", subjectDn.substr(0, 40), issuerDn.substr(0, 40));
                                         }
                                         totalCerts++;
 
@@ -1973,7 +2637,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         if (totalCerts % 50 == 0) {
                                             ProgressManager::getInstance().sendProgress(
                                                 ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                                                    cscaCount + dscCount, totalCerts, "인증서 저장 중: " + std::to_string(cscaCount + dscCount) + "개"));
+                                                    cscaCount, totalCerts, "CSCA 인증서 저장 중: " + std::to_string(cscaCount) + "개"));
                                         }
 
                                         // 1. Save to DB with validation status
@@ -1983,11 +2647,10 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                                              validationStatus, validationMessage);
 
                                         if (!certId.empty()) {
-                                            if (certType == "CSCA") cscaCount++;
-                                            else dscCount++;
+                                            cscaCount++;  // All certs in Master List are CSCAs
 
-                                            spdlog::debug("Saved {} from Master List to DB: country={}, fingerprint={}",
-                                                         certType, countryCode, fingerprint.substr(0, 16));
+                                            spdlog::debug("Saved CSCA from Master List to DB: country={}, fingerprint={}",
+                                                         countryCode, fingerprint.substr(0, 16));
 
                                             // 2. Save to LDAP
                                             if (ld) {
@@ -2010,7 +2673,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                 }
                             }
 
-                            spdlog::info("Extracted {} certificates from Master List encapsulated content", cscaCount + dscCount);
+                            spdlog::info("Extracted {} CSCA certificates from Master List encapsulated content", cscaCount);
                         } else {
                             spdlog::warn("No certificate SET found in Master List structure");
                         }
@@ -2043,15 +2706,15 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            // Master List only contains CSCA certificates
+                            std::string certType = "CSCA";
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                if (certType == "CSCA") cscaCount++;
-                                else dscCount++;
+                                cscaCount++;
 
                                 if (ld) {
                                     std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -2072,25 +2735,24 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 CMS_ContentInfo_free(cms);
             }
 
-            // Update statistics
-            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 1, 1, "");
+            // Update statistics (Master List only contains CSCA certificates)
+            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, 0, 0, 0, totalCerts, cscaCount, "");
 
             // Send completion progress
             std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
-                                       "개, DSC " + std::to_string(dscCount) +
                                        "개 (중복 " + std::to_string(skippedDuplicates) + "개 건너뜀)";
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                    cscaCount + dscCount, totalCerts, completionMsg));
+                    cscaCount, totalCerts, completionMsg));
 
-            spdlog::info("Master List processing completed for upload {}: {} CSCA, {} DSC certificates (LDAP: {}, duplicates skipped: {})",
-                        uploadId, cscaCount, dscCount, ldapStoredCount, skippedDuplicates);
+            spdlog::info("Master List processing completed for upload {}: {} CSCA certificates (LDAP: {}, duplicates skipped: {})",
+                        uploadId, cscaCount, ldapStoredCount, skippedDuplicates);
 
         } catch (const std::exception& e) {
             spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, e.what());
+            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
         }
 
         // Cleanup connections

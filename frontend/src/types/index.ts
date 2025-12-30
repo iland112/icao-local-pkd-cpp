@@ -51,10 +51,16 @@ export interface UploadStatistics {
 export interface UploadProgress {
   uploadId: string;
   stage: string;
-  status: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+  stageName: string;
   message: string;
   percentage: number;
-  details?: Record<string, unknown>;
+  processedCount: number;
+  totalCount: number;
+  errorMessage?: string;
+  details?: string;
+  updatedAt?: string;
+  // For backward compatibility with frontend stage handling
+  status?: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
 }
 
 // Certificate types
