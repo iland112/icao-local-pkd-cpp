@@ -1,5 +1,6 @@
 # =============================================================================
 # ICAO Local PKD - Docker Compose Configuration
+# Multi-Service Architecture: PKD Management + PA Service
 # =============================================================================
 
 services:
@@ -16,23 +17,26 @@ services:
     environment:
       - TZ=Asia/Seoul
     depends_on:
-      - app
+      - pkd-management
+      - pa-service
     networks:
       - pkd-network
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Application (C++ Backend)
+  # PKD Management Service (File Upload, Parsing, Certificate Validation)
   # ---------------------------------------------------------------------------
-  app:
+  pkd-management:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
-    container_name: icao-local-pkd-app
+      dockerfile: services/pkd-management/Dockerfile
+    container_name: icao-local-pkd-management
     ports:
       - "8081:8081"
     environment:
       - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-management
+      - SERVER_PORT=8081
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=localpkd
@@ -45,6 +49,91 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=admin
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      haproxy:
+        condition: service_started
+    volumes:
+      - pkd-logs:/app/logs
+      - pkd-uploads:/app/uploads
+      - ../data/cert:/app/data/cert:ro
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PA Service (Passive Authentication Verification)
+  # ---------------------------------------------------------------------------
+  pa-service:
+    build:
+      context: ..
+      dockerfile: services/pa-service/Dockerfile
+    container_name: icao-local-pkd-pa-service
+    ports:
+      - "8082:8082"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pa-service
+      - SERVER_PORT=8082
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - LDAP_HOST=haproxy           # Read only via load balancer
+      - LDAP_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+    depends_on:
+      postgres:
+        condition: service_healthy
+      haproxy:
+        condition: service_started
+    volumes:
+      - pa-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Legacy App (Backwards compatibility - uses existing Dockerfile)
+  # ---------------------------------------------------------------------------
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: icao-local-pkd-app
+    ports:
+      - "8080:8081"
+    environment:
+      - TZ=Asia/Seoul
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - LDAP_HOST=haproxy
+      - LDAP_PORT=389
+      - LDAP_WRITE_HOST=openldap1
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
         condition: service_healthy
@@ -53,12 +142,15 @@ services:
     volumes:
       - app-logs:/app/logs
       - app-uploads:/app/uploads
+      - ../data/cert:/app/data/cert:ro
     networks:
       - pkd-network
     restart: unless-stopped
+    profiles:
+      - legacy  # Only starts with: docker-compose --profile legacy up
 
   # ---------------------------------------------------------------------------
-  # PostgreSQL Database
+  # PostgreSQL Database (Shared)
   # ---------------------------------------------------------------------------
   postgres:
     image: postgres:15
@@ -84,7 +176,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # HAProxy (LDAP Load Balancer)
+  # HAProxy (LDAP Load Balancer - Shared)
   # ---------------------------------------------------------------------------
   haproxy:
     image: haproxy:2.8
@@ -102,7 +194,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # OpenLDAP Node 1 (MMR Master)
+  # OpenLDAP Node 1 (MMR Master - Shared)
   # ---------------------------------------------------------------------------
   openldap1:
     build:
@@ -137,7 +229,7 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # OpenLDAP Node 2 (MMR Master)
+  # OpenLDAP Node 2 (MMR Master - Shared)
   # ---------------------------------------------------------------------------
   openldap2:
     build:
@@ -180,6 +272,9 @@ volumes:
   ldap1-config:
   ldap2-data:
   ldap2-config:
+  pkd-logs:
+  pkd-uploads:
+  pa-logs:
   app-logs:
   app-uploads:
 

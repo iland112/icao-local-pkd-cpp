@@ -1,12 +1,14 @@
 /**
  * @file main.cpp
- * @brief ICAO Local PKD Application Entry Point
+ * @brief PKD Management Service - ICAO Local PKD Management
  *
- * C++ REST API based ICAO Local PKD Management and
- * Passive Authentication (PA) Verification System.
+ * C++ REST API based ICAO Local PKD Management Service.
+ * Handles file upload (LDIF/Master List), parsing, certificate validation,
+ * and LDAP synchronization.
  *
  * @author SmartCore Inc.
- * @date 2025-12-29
+ * @date 2025-12-30
+ * @version 1.0.0
  */
 
 #include <drogon/drogon.h>
@@ -542,15 +544,14 @@ void initializeLogging() {
  */
 void printBanner() {
     std::cout << R"(
-  _____ _____          ____    _                    _   ____  _  ______
- |_   _/ ____|   /\   / __ \  | |                  | | |  _ \| |/ /  _ \
-   | || |       /  \ | |  | | | |     ___   ___ __ | | | |_) | ' /| | | |
-   | || |      / /\ \| |  | | | |    / _ \ / __/ _` | | |  _ <|  < | | | |
-  _| || |____ / ____ \ |__| | | |___| (_) | (_| (_| | | | |_) | . \| |_| |
- |_____\_____/_/    \_\____/  |______\___/ \___\__,_|_| |____/|_|\_\____/
-
+  ____  _  ______    __  __                                                   _
+ |  _ \| |/ /  _ \  |  \/  | __ _ _ __   __ _  __ _  ___ _ __ ___   ___ _ __ | |_
+ | |_) | ' /| | | | | |\/| |/ _` | '_ \ / _` |/ _` |/ _ \ '_ ` _ \ / _ \ '_ \| __|
+ |  __/| . \| |_| | | |  | | (_| | | | | (_| | (_| |  __/ | | | | |  __/ | | | |_
+ |_|   |_|\_\____/  |_|  |_|\__,_|_| |_|\__,_|\__, |\___|_| |_| |_|\___|_| |_|\__|
+                                               |___/
 )" << std::endl;
-    std::cout << "  ICAO Local PKD Management & Passive Authentication System" << std::endl;
+    std::cout << "  PKD Management Service - ICAO Local PKD" << std::endl;
     std::cout << "  Version: 1.0.0" << std::endl;
     std::cout << "  (C) 2025 SmartCore Inc." << std::endl;
     std::cout << std::endl;
@@ -2620,98 +2621,6 @@ void registerRoutes() {
         {drogon::Get}
     );
 
-    // PA statistics endpoint - returns PAStatisticsOverview format
-    app.registerHandler(
-        "/api/pa/statistics",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/pa/statistics");
-
-            // Return PAStatisticsOverview format matching frontend expectations
-            Json::Value result;
-            result["totalVerifications"] = 0;
-            result["validCount"] = 0;
-            result["invalidCount"] = 0;
-            result["errorCount"] = 0;
-            result["averageProcessingTimeMs"] = 0;
-            result["countriesVerified"] = 0;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
-    // PA verify endpoint - POST /api/pa/verify
-    app.registerHandler(
-        "/api/pa/verify",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/pa/verify - Passive Authentication verification");
-
-            // Mock response for PA verification
-            Json::Value result;
-            result["success"] = true;
-
-            Json::Value data;
-            data["id"] = "pa-" + std::to_string(std::time(nullptr));
-            data["status"] = "VALID";
-            data["overallValid"] = true;
-            data["verifiedAt"] = trantor::Date::now().toFormattedString(false);
-            data["processingTimeMs"] = 150;
-
-            // Step results
-            Json::Value sodParsing;
-            sodParsing["step"] = "SOD_PARSING";
-            sodParsing["status"] = "SUCCESS";
-            sodParsing["message"] = "SOD 파싱 완료";
-            data["sodParsing"] = sodParsing;
-
-            Json::Value dscExtraction;
-            dscExtraction["step"] = "DSC_EXTRACTION";
-            dscExtraction["status"] = "SUCCESS";
-            dscExtraction["message"] = "DSC 인증서 추출 완료";
-            data["dscExtraction"] = dscExtraction;
-
-            Json::Value cscaLookup;
-            cscaLookup["step"] = "CSCA_LOOKUP";
-            cscaLookup["status"] = "SUCCESS";
-            cscaLookup["message"] = "CSCA 인증서 조회 완료";
-            data["cscaLookup"] = cscaLookup;
-
-            Json::Value trustChainValidation;
-            trustChainValidation["step"] = "TRUST_CHAIN_VALIDATION";
-            trustChainValidation["status"] = "SUCCESS";
-            trustChainValidation["message"] = "Trust Chain 검증 완료";
-            data["trustChainValidation"] = trustChainValidation;
-
-            Json::Value sodSignatureValidation;
-            sodSignatureValidation["step"] = "SOD_SIGNATURE_VALIDATION";
-            sodSignatureValidation["status"] = "SUCCESS";
-            sodSignatureValidation["message"] = "SOD 서명 검증 완료";
-            data["sodSignatureValidation"] = sodSignatureValidation;
-
-            Json::Value dataGroupHashValidation;
-            dataGroupHashValidation["step"] = "DATA_GROUP_HASH_VALIDATION";
-            dataGroupHashValidation["status"] = "SUCCESS";
-            dataGroupHashValidation["message"] = "Data Group 해시 검증 완료";
-            data["dataGroupHashValidation"] = dataGroupHashValidation;
-
-            Json::Value crlCheck;
-            crlCheck["step"] = "CRL_CHECK";
-            crlCheck["status"] = "SUCCESS";
-            crlCheck["message"] = "CRL 확인 완료 - 인증서 유효";
-            data["crlCheck"] = crlCheck;
-
-            result["data"] = data;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            resp->setStatusCode(drogon::k200OK);
-            callback(resp);
-        },
-        {drogon::Post}
-    );
-
     // LDAP health check endpoint (for frontend Dashboard)
     app.registerHandler(
         "/api/ldap/health",
@@ -2728,52 +2637,19 @@ void registerRoutes() {
         {drogon::Get}
     );
 
-    // PA history endpoint - returns PageResponse format
-    app.registerHandler(
-        "/api/pa/history",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/pa/history");
-
-            // Get query parameters
-            int page = 0;
-            int size = 20;
-            if (auto p = req->getParameter("page"); !p.empty()) {
-                page = std::stoi(p);
-            }
-            if (auto s = req->getParameter("size"); !s.empty()) {
-                size = std::stoi(s);
-            }
-
-            // Return PageResponse format matching frontend expectations
-            Json::Value result;
-            result["content"] = Json::Value(Json::arrayValue);
-            result["page"] = page;
-            result["size"] = size;
-            result["totalElements"] = 0;
-            result["totalPages"] = 0;
-            result["first"] = true;
-            result["last"] = true;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
     // Root endpoint
     app.registerHandler(
         "/",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             Json::Value result;
-            result["name"] = "ICAO Local PKD";
-            result["description"] = "ICAO Local PKD Management and Passive Authentication System";
+            result["name"] = "PKD Management Service";
+            result["description"] = "ICAO Local PKD Management Service - File Upload, Parsing, and Certificate Validation";
             result["version"] = "1.0.0";
             result["endpoints"]["health"] = "/api/health";
             result["endpoints"]["upload"] = "/api/upload";
-            result["endpoints"]["pa"] = "/api/pa";
             result["endpoints"]["ldap"] = "/api/ldap";
+            result["endpoints"]["certificates"] = "/api/certificates";
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);
@@ -2787,7 +2663,7 @@ void registerRoutes() {
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             Json::Value result;
-            result["api"] = "ICAO Local PKD REST API";
+            result["api"] = "PKD Management Service REST API";
             result["version"] = "v1";
 
             Json::Value endpoints(Json::arrayValue);
@@ -2834,23 +2710,11 @@ void registerRoutes() {
             uploadStats["description"] = "Get upload statistics";
             endpoints.append(uploadStats);
 
-            Json::Value paVerify;
-            paVerify["method"] = "POST";
-            paVerify["path"] = "/api/pa/verify";
-            paVerify["description"] = "Perform Passive Authentication";
-            endpoints.append(paVerify);
-
-            Json::Value paHistory;
-            paHistory["method"] = "GET";
-            paHistory["path"] = "/api/pa/history";
-            paHistory["description"] = "Get PA verification history";
-            endpoints.append(paHistory);
-
-            Json::Value paStats;
-            paStats["method"] = "GET";
-            paStats["path"] = "/api/pa/statistics";
-            paStats["description"] = "Get PA verification statistics";
-            endpoints.append(paStats);
+            Json::Value progressStream;
+            progressStream["method"] = "GET";
+            progressStream["path"] = "/api/progress/stream/{uploadId}";
+            progressStream["description"] = "SSE progress stream for upload";
+            endpoints.append(progressStream);
 
             result["endpoints"] = endpoints;
 
@@ -2878,9 +2742,10 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting ICAO Local PKD Application...");
+    spdlog::info("Starting PKD Management Service...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
-    spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
+    spdlog::info("LDAP Read: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
+    spdlog::info("LDAP Write: {}:{}", appConfig.ldapWriteHost, appConfig.ldapWritePort);
 
     try {
         auto& app = drogon::app();
