@@ -874,12 +874,75 @@ Tag 0x77 (Application 23) - EF.SOD wrapper
 
 **Project Status**: All 7 phases completed successfully!
 
+### 2025-12-30: Upload Pipeline Complete Integration (Session 9)
+
+**Objective**: Complete end-to-end upload pipeline with DB and LDAP storage
+
+**Completed Tasks**:
+1. Upload Pipeline Integration
+   - LDIF parsing → PostgreSQL storage → LDAP storage
+   - Master List parsing → PostgreSQL storage → LDAP storage
+   - CRL parsing → PostgreSQL storage → LDAP storage
+   - Async processing with std::thread
+
+2. LDAP Storage Implementation
+   - `getLdapWriteConnection()`: Direct connection to primary master (openldap1) for writes
+   - `getLdapReadConnection()`: HAProxy connection for read operations (load balancing)
+   - `ensureCountryOuExists()`: Auto-create country/OU structure in LDAP
+   - `saveCertificateToLdap()`: Certificate storage with inetOrgPerson + pkdDownload
+   - `saveCrlToLdap()`: CRL storage with cRLDistributionPoint + pkdDownload
+   - `updateCertificateLdapStatus()`: Update DB with LDAP DN after storage
+
+3. ICAO PKD Custom Schema
+   - Copied from Java project: `openldap/schemas/icao-pkd.ldif`
+   - Custom attributes: pkdVersion, pkdMasterListContent, pkdConformanceText, etc.
+   - Custom objectClasses: pkdDownload (auxiliary), pkdMasterList (auxiliary)
+
+4. OpenLDAP Dockerfile Updates
+   - Auto-load ICAO PKD schema on container initialization
+   - Schema path: `/container/service/slapd/assets/config/bootstrap/ldif/custom/`
+
+5. LDAP MMR (Multi-Master Replication) Support
+   - Write operations: Direct to openldap1 (primary master)
+   - Read operations: Via HAProxy load balancer
+   - Environment variables: LDAP_WRITE_HOST, LDAP_WRITE_PORT
+
+6. docker-compose.yaml Updates
+   - Added LDAP_WRITE_HOST=openldap1
+   - Added LDAP_WRITE_PORT=389
+   - Comments explaining read vs write LDAP connections
+
+7. Bug Fixes
+   - BYTEA escape format for PostgreSQL binary data
+   - LDIF parser `;binary` suffix duplication fix
+   - DB column name mismatches (upload_timestamp vs created_at)
+   - LDAP objectClass violation (pkiCA → inetOrgPerson + pkdDownload)
+
+**Verified End-to-End Flow**:
+```
+LDIF Upload → Parse → DB (certificate table) → LDAP (o=csca,c=KR,...)
+                                              ↓
+                                     ldap_dn column updated
+```
+
+**Test Results**:
+- Upload: test_valid.ldif (CSCA certificate)
+- DB: certificate table with subject_dn, ldap_dn
+- LDAP: cn=1b386d9ddc6fe875...,o=csca,c=KR,dc=data,...
+- MMR: Replicated to openldap2 via syncrepl
+
 ### Deployment Information
 
 **Access URLs**:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8081/api
 - HAProxy Stats: http://localhost:8404
+
+**LDAP Connection Strategy**:
+| Operation | Host | Port | Purpose |
+|-----------|------|------|---------|
+| Read | haproxy | 389 | Load balanced across MMR nodes |
+| Write | openldap1 | 389 | Direct to primary master |
 
 **Docker Commands**:
 ```bash
@@ -891,4 +954,7 @@ docker-compose -f docker/docker-compose.yaml up -d --build
 
 # View logs
 docker-compose -f docker/docker-compose.yaml logs -f app
+
+# Initialize LDAP PKD DIT structure (if needed)
+docker exec icao-local-pkd-openldap1 ldapadd -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin -f /tmp/pkd-dit.ldif
 ```
