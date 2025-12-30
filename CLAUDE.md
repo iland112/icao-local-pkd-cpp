@@ -958,3 +958,76 @@ docker-compose -f docker/docker-compose.yaml logs -f app
 # Initialize LDAP PKD DIT structure (if needed)
 docker exec icao-local-pkd-openldap1 ldapadd -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin -f /tmp/pkd-dit.ldif
 ```
+
+### 2025-12-30: Master List CMS Parsing Fix (Session 10)
+
+**Objective**: Fix Master List (.ml) parsing that was failing with ASN.1 "wrong tag" error
+
+**Issue**:
+- Master List upload failed with error: `error:068000A8:asn1 encoding routines::wrong tag`
+- Original code used OpenSSL `d2i_PKCS7()` which doesn't properly handle ICAO Master List CMS format
+- Java reference project uses BouncyCastle `CMSSignedData` to parse CMS and extract certificates from encapsulated content
+
+**Root Cause Analysis**:
+- ICAO Master List format: CMS SignedData with encapsulated content containing certificate SET
+- Structure: `MasterList ::= SEQUENCE { version INTEGER OPTIONAL, certList SET OF Certificate }`
+- Certificates are inside the **signed content**, not in the CMS certificate store
+- OpenSSL PKCS7 API cannot properly parse this structure
+
+**Solution**:
+1. Added `#include <openssl/cms.h>` for OpenSSL CMS API
+2. Replaced `d2i_PKCS7()` with `d2i_CMS_bio()` for CMS parsing
+3. Extract encapsulated content using `CMS_get0_content()`
+4. Parse ASN.1 structure manually:
+   - Parse outer SEQUENCE
+   - Check for optional INTEGER (version)
+   - Extract SET OF Certificate
+   - Parse each certificate with `d2i_X509()`
+5. Added PKCS7 fallback for older format compatibility
+
+**Code Changes** (`src/main.cpp`):
+```cpp
+// New include
+#include <openssl/cms.h>
+
+// processMasterListFileAsync() changes:
+// 1. Validate CMS format (0x30 SEQUENCE tag)
+// 2. Parse with CMS API: d2i_CMS_bio()
+// 3. Extract encapsulated content: CMS_get0_content()
+// 4. Parse MasterList ASN.1 structure
+// 5. Extract certificates from SET
+// 6. Fallback to PKCS7 if CMS fails
+```
+
+**Test Results**:
+```
+Upload: ICAO_ml_October2025.ml (793,508 bytes)
+Certificates extracted: 525
+  - CSCA: 466
+  - DSC: 59
+Countries: 91
+LDAP storage: 525 certificates
+Status: COMPLETED
+```
+
+**Verification**:
+```bash
+# Statistics API
+curl http://localhost:8081/api/upload/statistics
+{
+  "totalCertificates": 526,
+  "cscaCount": 467,
+  "dscCount": 59,
+  "countriesCount": 91
+}
+
+# LDAP count
+ldapsearch -x -b "dc=data,dc=download,dc=pkd,..." "(objectClass=pkdDownload)" | grep "^dn:" | wc -l
+526
+```
+
+**Key Technical Details**:
+- OpenSSL CMS API properly handles ICAO Master List format
+- Encapsulated content extraction: `CMS_get0_content()` returns `ASN1_OCTET_STRING**`
+- ASN.1 manual parsing for MasterList structure
+- Memory management: `sk_X509_pop_free()` for certificate stack from CMS

@@ -41,6 +41,7 @@
 #include <openssl/bn.h>
 #include <openssl/bio.h>
 #include <openssl/pkcs7.h>
+#include <openssl/cms.h>
 #include <iomanip>
 #include <sstream>
 #include <random>
@@ -1338,75 +1339,259 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             int dscCount = 0;
             int ldapStoredCount = 0;
 
-            // Try to parse as CMS SignedData (Master List format)
-            const uint8_t* p = content.data();
-            PKCS7* p7 = d2i_PKCS7(nullptr, &p, static_cast<long>(content.size()));
+            // Validate CMS format: first byte must be 0x30 (SEQUENCE tag)
+            if (content.empty() || content[0] != 0x30) {
+                spdlog::error("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
+                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, "Invalid CMS format");
+                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                PQfinish(conn);
+                return;
+            }
 
-            if (p7) {
-                // Get certificates from PKCS7 structure
-                STACK_OF(X509)* certs = nullptr;
+            // Parse as CMS SignedData using OpenSSL CMS API
+            BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
+            CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+            BIO_free(bio);
 
-                if (PKCS7_type_is_signed(p7)) {
-                    certs = p7->d.sign->cert;
-                }
+            if (!cms) {
+                // Fallback: try PKCS7 API for older formats
+                spdlog::debug("CMS parsing failed, trying PKCS7 fallback...");
+                const uint8_t* p = content.data();
+                PKCS7* p7 = d2i_PKCS7(nullptr, &p, static_cast<long>(content.size()));
 
-                if (certs) {
-                    int numCerts = sk_X509_num(certs);
-                    spdlog::info("Found {} certificates in Master List", numCerts);
+                if (p7) {
+                    STACK_OF(X509)* certs = nullptr;
+                    if (PKCS7_type_is_signed(p7)) {
+                        certs = p7->d.sign->cert;
+                    }
 
-                    for (int i = 0; i < numCerts; i++) {
-                        X509* cert = sk_X509_value(certs, i);
-                        if (!cert) continue;
+                    if (certs) {
+                        int numCerts = sk_X509_num(certs);
+                        spdlog::info("Found {} certificates in Master List (PKCS7 fallback)", numCerts);
 
-                        // Get certificate DER
-                        int derLen = i2d_X509(cert, nullptr);
-                        if (derLen <= 0) continue;
+                        for (int i = 0; i < numCerts; i++) {
+                            X509* cert = sk_X509_value(certs, i);
+                            if (!cert) continue;
 
-                        std::vector<uint8_t> derBytes(derLen);
-                        uint8_t* derPtr = derBytes.data();
-                        i2d_X509(cert, &derPtr);
+                            int derLen = i2d_X509(cert, nullptr);
+                            if (derLen <= 0) continue;
 
-                        std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
-                        std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
-                        std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
-                        std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
-                        std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
-                        std::string fingerprint = computeFileHash(derBytes);
-                        std::string countryCode = extractCountryCode(subjectDn);
+                            std::vector<uint8_t> derBytes(derLen);
+                            uint8_t* derPtr = derBytes.data();
+                            i2d_X509(cert, &derPtr);
 
-                        // Master List typically contains CSCA certificates (self-signed)
-                        std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
+                            std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
+                            std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
+                            std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
+                            std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+                            std::string fingerprint = computeFileHash(derBytes);
+                            std::string countryCode = extractCountryCode(subjectDn);
 
-                        // 1. Save to DB
-                        std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                                             subjectDn, issuerDn, serialNumber, fingerprint,
-                                                             notBefore, notAfter, derBytes);
+                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
 
-                        if (!certId.empty()) {
-                            if (certType == "CSCA") cscaCount++;
-                            else dscCount++;
+                            std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
+                                                                 subjectDn, issuerDn, serialNumber, fingerprint,
+                                                                 notBefore, notAfter, derBytes);
 
-                            spdlog::debug("Saved {} from Master List to DB: country={}, fingerprint={}",
-                                         certType, countryCode, fingerprint.substr(0, 16));
+                            if (!certId.empty()) {
+                                if (certType == "CSCA") cscaCount++;
+                                else dscCount++;
 
-                            // 2. Save to LDAP
-                            if (ld) {
-                                std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
-                                                                            subjectDn, issuerDn, serialNumber,
-                                                                            fingerprint, derBytes);
-                                if (!ldapDn.empty()) {
-                                    updateCertificateLdapStatus(conn, certId, ldapDn);
-                                    ldapStoredCount++;
-                                    spdlog::debug("Saved {} from Master List to LDAP: {}", certType, ldapDn);
+                                if (ld) {
+                                    std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                subjectDn, issuerDn, serialNumber,
+                                                                                fingerprint, derBytes);
+                                    if (!ldapDn.empty()) {
+                                        updateCertificateLdapStatus(conn, certId, ldapDn);
+                                        ldapStoredCount++;
+                                    }
                                 }
                             }
                         }
                     }
+                    PKCS7_free(p7);
+                } else {
+                    spdlog::error("Failed to parse Master List: neither CMS nor PKCS7 parsing succeeded");
+                    spdlog::error("OpenSSL error: {}", ERR_error_string(ERR_get_error(), nullptr));
+                    updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
+                    if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                    PQfinish(conn);
+                    return;
+                }
+            } else {
+                // CMS parsing succeeded - extract certificates from encapsulated content
+                // ICAO Master List structure: MasterList ::= SEQUENCE { version INTEGER OPTIONAL, certList SET OF Certificate }
+                spdlog::info("CMS SignedData parsed successfully, extracting encapsulated content...");
+
+                // Get the encapsulated content (signed data)
+                ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+                if (contentPtr && *contentPtr) {
+                    const unsigned char* contentData = ASN1_STRING_get0_data(*contentPtr);
+                    int contentLen = ASN1_STRING_length(*contentPtr);
+
+                    spdlog::debug("Encapsulated content length: {} bytes", contentLen);
+
+                    // Parse the Master List ASN.1 structure
+                    // MasterList ::= SEQUENCE { version INTEGER OPTIONAL, certList SET OF Certificate }
+                    const unsigned char* p = contentData;
+                    long remaining = contentLen;
+
+                    // Parse outer SEQUENCE
+                    int tag, xclass;
+                    long seqLen;
+                    int ret = ASN1_get_object(&p, &seqLen, &tag, &xclass, remaining);
+
+                    if (ret == 0x80 || tag != V_ASN1_SEQUENCE) {
+                        spdlog::error("Invalid Master List structure: expected SEQUENCE");
+                    } else {
+                        const unsigned char* seqEnd = p + seqLen;
+
+                        // Check first element: could be version (INTEGER) or certList (SET)
+                        const unsigned char* elemStart = p;
+                        long elemLen;
+                        ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+
+                        const unsigned char* certSetStart = nullptr;
+                        long certSetLen = 0;
+
+                        if (tag == V_ASN1_INTEGER) {
+                            // Has version, skip it and read next element (certList)
+                            p += elemLen;
+                            if (p < seqEnd) {
+                                ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+                                if (tag == V_ASN1_SET) {
+                                    certSetStart = p;
+                                    certSetLen = elemLen;
+                                }
+                            }
+                        } else if (tag == V_ASN1_SET) {
+                            // No version, this is the certList
+                            certSetStart = p;
+                            certSetLen = elemLen;
+                        }
+
+                        if (certSetStart && certSetLen > 0) {
+                            // Parse certificates from SET
+                            const unsigned char* certPtr = certSetStart;
+                            const unsigned char* certSetEnd = certSetStart + certSetLen;
+
+                            while (certPtr < certSetEnd) {
+                                // Parse each certificate
+                                const unsigned char* certStart = certPtr;
+                                X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
+
+                                if (cert) {
+                                    int derLen = i2d_X509(cert, nullptr);
+                                    if (derLen > 0) {
+                                        std::vector<uint8_t> derBytes(derLen);
+                                        uint8_t* derPtr = derBytes.data();
+                                        i2d_X509(cert, &derPtr);
+
+                                        std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
+                                        std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
+                                        std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
+                                        std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
+                                        std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+                                        std::string fingerprint = computeFileHash(derBytes);
+                                        std::string countryCode = extractCountryCode(subjectDn);
+
+                                        // Master List contains CSCA certificates (typically self-signed)
+                                        std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+
+                                        // 1. Save to DB
+                                        std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
+                                                                             subjectDn, issuerDn, serialNumber, fingerprint,
+                                                                             notBefore, notAfter, derBytes);
+
+                                        if (!certId.empty()) {
+                                            if (certType == "CSCA") cscaCount++;
+                                            else dscCount++;
+
+                                            spdlog::debug("Saved {} from Master List to DB: country={}, fingerprint={}",
+                                                         certType, countryCode, fingerprint.substr(0, 16));
+
+                                            // 2. Save to LDAP
+                                            if (ld) {
+                                                std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                            subjectDn, issuerDn, serialNumber,
+                                                                                            fingerprint, derBytes);
+                                                if (!ldapDn.empty()) {
+                                                    updateCertificateLdapStatus(conn, certId, ldapDn);
+                                                    ldapStoredCount++;
+                                                    spdlog::debug("Saved {} from Master List to LDAP: {}", certType, ldapDn);
+                                                }
+                                            }
+                                        }
+                                    }
+                                    X509_free(cert);
+                                } else {
+                                    // Failed to parse certificate, skip to end
+                                    spdlog::warn("Failed to parse certificate in Master List SET");
+                                    break;
+                                }
+                            }
+
+                            spdlog::info("Extracted {} certificates from Master List encapsulated content", cscaCount + dscCount);
+                        } else {
+                            spdlog::warn("No certificate SET found in Master List structure");
+                        }
+                    }
+                } else {
+                    // No encapsulated content, try getting signer certificates from CMS store
+                    spdlog::debug("No encapsulated content, trying CMS certificate store...");
+                    STACK_OF(X509)* certs = CMS_get1_certs(cms);
+
+                    if (certs) {
+                        int numCerts = sk_X509_num(certs);
+                        spdlog::info("Found {} certificates in CMS certificate store", numCerts);
+
+                        for (int i = 0; i < numCerts; i++) {
+                            X509* cert = sk_X509_value(certs, i);
+                            if (!cert) continue;
+
+                            int derLen = i2d_X509(cert, nullptr);
+                            if (derLen <= 0) continue;
+
+                            std::vector<uint8_t> derBytes(derLen);
+                            uint8_t* derPtr = derBytes.data();
+                            i2d_X509(cert, &derPtr);
+
+                            std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
+                            std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
+                            std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
+                            std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
+                            std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+                            std::string fingerprint = computeFileHash(derBytes);
+                            std::string countryCode = extractCountryCode(subjectDn);
+
+                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+
+                            std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
+                                                                 subjectDn, issuerDn, serialNumber, fingerprint,
+                                                                 notBefore, notAfter, derBytes);
+
+                            if (!certId.empty()) {
+                                if (certType == "CSCA") cscaCount++;
+                                else dscCount++;
+
+                                if (ld) {
+                                    std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                subjectDn, issuerDn, serialNumber,
+                                                                                fingerprint, derBytes);
+                                    if (!ldapDn.empty()) {
+                                        updateCertificateLdapStatus(conn, certId, ldapDn);
+                                        ldapStoredCount++;
+                                    }
+                                }
+                            }
+                        }
+
+                        sk_X509_pop_free(certs, X509_free);
+                    }
                 }
 
-                PKCS7_free(p7);
-            } else {
-                spdlog::warn("Failed to parse Master List as PKCS7/CMS: {}", ERR_error_string(ERR_get_error(), nullptr));
+                CMS_ContentInfo_free(cms);
             }
 
             // Update statistics
