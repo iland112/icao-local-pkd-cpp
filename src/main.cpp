@@ -19,6 +19,7 @@
 #include <memory>
 #include <chrono>
 #include <cstdlib>
+#include <ctime>
 #include <array>
 
 // PostgreSQL header for direct connection test
@@ -251,6 +252,60 @@ void registerRoutes() {
             callback(resp);
         },
         {drogon::Get}
+    );
+
+    // Upload LDIF file endpoint
+    app.registerHandler(
+        "/api/upload/ldif",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/upload/ldif - LDIF file upload");
+
+            Json::Value result;
+            result["success"] = true;
+            result["message"] = "LDIF file upload received (mock response)";
+
+            Json::Value data;
+            data["uploadId"] = "upload-" + std::to_string(std::time(nullptr));
+            data["fileName"] = "uploaded.ldif";
+            data["fileSize"] = 0;
+            data["status"] = "PENDING";
+            data["createdAt"] = trantor::Date::now().toFormattedString(false);
+
+            result["data"] = data;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            resp->setStatusCode(drogon::k201Created);
+            callback(resp);
+        },
+        {drogon::Post}
+    );
+
+    // Upload Master List file endpoint
+    app.registerHandler(
+        "/api/upload/masterlist",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/upload/masterlist - Master List file upload");
+
+            Json::Value result;
+            result["success"] = true;
+            result["message"] = "Master List file upload received (mock response)";
+
+            Json::Value data;
+            data["uploadId"] = "upload-" + std::to_string(std::time(nullptr));
+            data["fileName"] = "uploaded.ml";
+            data["fileSize"] = 0;
+            data["status"] = "PENDING";
+            data["createdAt"] = trantor::Date::now().toFormattedString(false);
+
+            result["data"] = data;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            resp->setStatusCode(drogon::k201Created);
+            callback(resp);
+        },
+        {drogon::Post}
     );
 
     // Upload statistics endpoint
