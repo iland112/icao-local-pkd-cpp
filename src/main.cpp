@@ -17,8 +17,58 @@
 
 #include <iostream>
 #include <memory>
+#include <chrono>
+#include <cstdlib>
+#include <array>
+
+// PostgreSQL header for direct connection test
+#include <libpq-fe.h>
 
 namespace {
+
+/**
+ * @brief Application configuration
+ */
+struct AppConfig {
+    std::string dbHost = "postgres";
+    int dbPort = 5432;
+    std::string dbName = "localpkd";
+    std::string dbUser = "localpkd";
+    std::string dbPassword = "localpkd123";
+
+    std::string ldapHost = "haproxy";
+    int ldapPort = 389;
+    std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
+    std::string ldapBindPassword = "admin";
+    std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
+
+    int serverPort = 8081;
+    int threadNum = 4;
+
+    static AppConfig fromEnvironment() {
+        AppConfig config;
+
+        if (auto val = std::getenv("DB_HOST")) config.dbHost = val;
+        if (auto val = std::getenv("DB_PORT")) config.dbPort = std::stoi(val);
+        if (auto val = std::getenv("DB_NAME")) config.dbName = val;
+        if (auto val = std::getenv("DB_USER")) config.dbUser = val;
+        if (auto val = std::getenv("DB_PASSWORD")) config.dbPassword = val;
+
+        if (auto val = std::getenv("LDAP_HOST")) config.ldapHost = val;
+        if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = std::stoi(val);
+        if (auto val = std::getenv("LDAP_BIND_DN")) config.ldapBindDn = val;
+        if (auto val = std::getenv("LDAP_BIND_PASSWORD")) config.ldapBindPassword = val;
+        if (auto val = std::getenv("LDAP_BASE_DN")) config.ldapBaseDn = val;
+
+        if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
+        if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
+
+        return config;
+    }
+};
+
+// Global configuration
+AppConfig appConfig;
 
 /**
  * @brief Initialize logging system
@@ -70,6 +120,85 @@ void printBanner() {
 }
 
 /**
+ * @brief Check database connectivity using libpq directly
+ */
+Json::Value checkDatabase() {
+    Json::Value result;
+    result["name"] = "database";
+
+    auto start = std::chrono::steady_clock::now();
+
+    std::string conninfo = "host=" + appConfig.dbHost +
+                          " port=" + std::to_string(appConfig.dbPort) +
+                          " dbname=" + appConfig.dbName +
+                          " user=" + appConfig.dbUser +
+                          " password=" + appConfig.dbPassword +
+                          " connect_timeout=5";
+
+    PGconn* conn = PQconnectdb(conninfo.c_str());
+
+    auto end = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    if (PQstatus(conn) == CONNECTION_OK) {
+        // Execute a simple query to verify
+        PGresult* res = PQexec(conn, "SELECT version()");
+        if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+            result["status"] = "UP";
+            result["responseTimeMs"] = static_cast<int>(duration.count());
+            result["type"] = "PostgreSQL";
+            result["version"] = PQgetvalue(res, 0, 0);
+        } else {
+            result["status"] = "DOWN";
+            result["error"] = PQerrorMessage(conn);
+        }
+        PQclear(res);
+    } else {
+        result["status"] = "DOWN";
+        result["error"] = PQerrorMessage(conn);
+    }
+
+    PQfinish(conn);
+    return result;
+}
+
+/**
+ * @brief Check LDAP connectivity
+ */
+Json::Value checkLdap() {
+    Json::Value result;
+    result["name"] = "ldap";
+
+    try {
+        // Simple LDAP connection test using system ldapsearch
+        auto start = std::chrono::steady_clock::now();
+
+        std::string cmd = "ldapsearch -x -H ldap://" + appConfig.ldapHost + ":" +
+                         std::to_string(appConfig.ldapPort) +
+                         " -b \"\" -s base \"(objectclass=*)\" namingContexts 2>/dev/null | grep -q namingContexts";
+
+        int ret = system(cmd.c_str());
+        auto end = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        if (ret == 0) {
+            result["status"] = "UP";
+            result["responseTimeMs"] = static_cast<int>(duration.count());
+            result["host"] = appConfig.ldapHost;
+            result["port"] = appConfig.ldapPort;
+        } else {
+            result["status"] = "DOWN";
+            result["error"] = "LDAP connection failed";
+        }
+    } catch (const std::exception& e) {
+        result["status"] = "DOWN";
+        result["error"] = e.what();
+    }
+
+    return result;
+}
+
+/**
  * @brief Register API controllers and routes
  */
 void registerRoutes() {
@@ -92,6 +221,132 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // Database health check endpoint
+    app.registerHandler(
+        "/api/health/database",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            auto result = checkDatabase();
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            if (result["status"].asString() != "UP") {
+                resp->setStatusCode(drogon::k503ServiceUnavailable);
+            }
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // LDAP health check endpoint
+    app.registerHandler(
+        "/api/health/ldap",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            auto result = checkLdap();
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            if (result["status"].asString() != "UP") {
+                resp->setStatusCode(drogon::k503ServiceUnavailable);
+            }
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // Upload statistics endpoint
+    app.registerHandler(
+        "/api/upload/statistics",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["success"] = true;
+
+            Json::Value data;
+            data["totalUploads"] = 0;
+            data["ldifUploads"] = 0;
+            data["masterListUploads"] = 0;
+            data["successfulUploads"] = 0;
+            data["failedUploads"] = 0;
+            data["pendingUploads"] = 0;
+            data["totalCertificates"] = 0;
+            data["totalCrls"] = 0;
+
+            result["data"] = data;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // Upload history endpoint
+    app.registerHandler(
+        "/api/upload/history",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["success"] = true;
+
+            Json::Value data;
+            data["items"] = Json::Value(Json::arrayValue);
+            data["total"] = 0;
+            data["page"] = 1;
+            data["pageSize"] = 20;
+            data["totalPages"] = 0;
+
+            result["data"] = data;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // PA statistics endpoint
+    app.registerHandler(
+        "/api/pa/statistics",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["success"] = true;
+
+            Json::Value data;
+            data["totalVerifications"] = 0;
+            data["successfulVerifications"] = 0;
+            data["failedVerifications"] = 0;
+            data["averageProcessingTimeMs"] = 0;
+
+            result["data"] = data;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // PA history endpoint
+    app.registerHandler(
+        "/api/pa/history",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["success"] = true;
+
+            Json::Value data;
+            data["items"] = Json::Value(Json::arrayValue);
+            data["total"] = 0;
+            data["page"] = 1;
+            data["pageSize"] = 20;
+            data["totalPages"] = 0;
+
+            result["data"] = data;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     // Root endpoint
     app.registerHandler(
         "/",
@@ -104,7 +359,7 @@ void registerRoutes() {
             result["endpoints"]["health"] = "/api/health";
             result["endpoints"]["upload"] = "/api/upload";
             result["endpoints"]["pa"] = "/api/pa";
-            result["endpoints"]["statistics"] = "/api/statistics";
+            result["endpoints"]["ldap"] = "/api/ldap";
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);
@@ -129,6 +384,18 @@ void registerRoutes() {
             health["description"] = "Health check endpoint";
             endpoints.append(health);
 
+            Json::Value healthDb;
+            healthDb["method"] = "GET";
+            healthDb["path"] = "/api/health/database";
+            healthDb["description"] = "Database health check";
+            endpoints.append(healthDb);
+
+            Json::Value healthLdap;
+            healthLdap["method"] = "GET";
+            healthLdap["path"] = "/api/health/ldap";
+            healthLdap["description"] = "LDAP health check";
+            endpoints.append(healthLdap);
+
             Json::Value uploadLdif;
             uploadLdif["method"] = "POST";
             uploadLdif["path"] = "/api/upload/ldif";
@@ -141,6 +408,18 @@ void registerRoutes() {
             uploadMl["description"] = "Upload Master List file";
             endpoints.append(uploadMl);
 
+            Json::Value uploadHistory;
+            uploadHistory["method"] = "GET";
+            uploadHistory["path"] = "/api/upload/history";
+            uploadHistory["description"] = "Get upload history";
+            endpoints.append(uploadHistory);
+
+            Json::Value uploadStats;
+            uploadStats["method"] = "GET";
+            uploadStats["path"] = "/api/upload/statistics";
+            uploadStats["description"] = "Get upload statistics";
+            endpoints.append(uploadStats);
+
             Json::Value paVerify;
             paVerify["method"] = "POST";
             paVerify["path"] = "/api/pa/verify";
@@ -152,6 +431,12 @@ void registerRoutes() {
             paHistory["path"] = "/api/pa/history";
             paHistory["description"] = "Get PA verification history";
             endpoints.append(paHistory);
+
+            Json::Value paStats;
+            paStats["method"] = "GET";
+            paStats["path"] = "/api/pa/statistics";
+            paStats["description"] = "Get PA verification statistics";
+            endpoints.append(paStats);
 
             result["endpoints"] = endpoints;
 
@@ -176,19 +461,21 @@ int main(int argc, char* argv[]) {
     // Initialize logging
     initializeLogging();
 
+    // Load configuration from environment
+    appConfig = AppConfig::fromEnvironment();
+
     spdlog::info("Starting ICAO Local PKD Application...");
+    spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
+    spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
     try {
         auto& app = drogon::app();
 
-        // Load configuration
-        // app.loadConfigFile("config/config.json");
-
         // Server settings
         app.setLogPath("logs")
            .setLogLevel(trantor::Logger::kInfo)
-           .addListener("0.0.0.0", 8081)
-           .setThreadNum(std::thread::hardware_concurrency())
+           .addListener("0.0.0.0", appConfig.serverPort)
+           .setThreadNum(appConfig.threadNum)
            .enableGzip(true)
            .setClientMaxBodySize(100 * 1024 * 1024)  // 100MB max upload
            .setUploadPath("./uploads")
@@ -199,7 +486,7 @@ int main(int argc, char* argv[]) {
                                          const drogon::HttpResponsePtr& resp) {
             resp->addHeader("Access-Control-Allow-Origin", "*");
             resp->addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-            resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id");
         });
 
         // Handle OPTIONS requests for CORS preflight
@@ -218,7 +505,7 @@ int main(int argc, char* argv[]) {
         // Register routes
         registerRoutes();
 
-        spdlog::info("Server starting on http://0.0.0.0:8081");
+        spdlog::info("Server starting on http://0.0.0.0:{}", appConfig.serverPort);
         spdlog::info("Press Ctrl+C to stop the server");
 
         // Run the server

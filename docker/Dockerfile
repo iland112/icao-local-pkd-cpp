@@ -83,6 +83,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     tzdata \
     curl \
+    ldap-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Set timezone

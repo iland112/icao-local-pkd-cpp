@@ -33,12 +33,16 @@ services:
       - "8081:8081"
     environment:
       - TZ=Asia/Seoul
-      - DATABASE_URL=postgresql://pkd:pkd@postgres:5432/localpkd
-      - LDAP_WRITE_URL=ldap://openldap1:389
-      - LDAP_READ_URL=ldap://haproxy:389
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - LDAP_HOST=haproxy
+      - LDAP_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=admin
-      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
         condition: service_healthy
