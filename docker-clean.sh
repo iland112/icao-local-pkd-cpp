@@ -28,7 +28,8 @@ sleep 3
 echo ""
 echo "🗄️  Bind mount 데이터 삭제 중 (.docker-data/)..."
 if [ -d ".docker-data" ]; then
-    rm -rf .docker-data
+    # Docker 컨테이너가 생성한 파일은 root 소유이므로 sudo 필요
+    sudo rm -rf .docker-data
     echo "   ✓ .docker-data/ 디렉토리 삭제 완료"
 else
     echo "   ℹ️  .docker-data/ 디렉토리가 존재하지 않습니다"
