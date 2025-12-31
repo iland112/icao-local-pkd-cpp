@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Home,
@@ -13,10 +14,21 @@ import {
   ChevronRight,
   Sun,
   Moon,
+  Database,
+  Server,
+  CheckCircle,
+  XCircle,
+  Loader2,
+  ExternalLink,
+  FileText,
+  Key,
+  GraduationCap,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { cn } from '@/utils/cn';
+import { Dialog } from '@/components/common';
+import { healthApi, ldapApi } from '@/services/api';
 
 interface NavItem {
   path: string;
@@ -27,6 +39,12 @@ interface NavItem {
 interface NavSection {
   title: string;
   items: NavItem[];
+}
+
+interface SystemStatus {
+  database: { status: 'checking' | 'up' | 'down'; version?: string };
+  ldap: { status: 'checking' | 'up' | 'down'; responseTime?: number };
+  app: { status: 'up'; version: string };
 }
 
 const navSections: NavSection[] = [
@@ -53,7 +71,75 @@ export function Sidebar() {
   const { expanded, toggleExpanded, mobileOpen, setMobileOpen } = useSidebarStore();
   const { darkMode, toggleTheme } = useThemeStore();
 
+  // Dialog states
+  const [showSystemInfo, setShowSystemInfo] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
+    database: { status: 'checking' },
+    ldap: { status: 'checking' },
+    app: { status: 'up', version: '1.0.0' },
+  });
+
   const isActive = (path: string) => location.pathname === path;
+
+  // Check system status when dialog opens
+  useEffect(() => {
+    if (showSystemInfo) {
+      checkSystemStatus();
+    }
+  }, [showSystemInfo]);
+
+  const checkSystemStatus = async () => {
+    setSystemStatus((prev) => ({
+      ...prev,
+      database: { status: 'checking' },
+      ldap: { status: 'checking' },
+    }));
+
+    // Check database
+    try {
+      const dbResponse = await healthApi.checkDatabase();
+      setSystemStatus((prev) => ({
+        ...prev,
+        database: {
+          status: dbResponse.data.status === 'UP' ? 'up' : 'down',
+          version: dbResponse.data.version,
+        },
+      }));
+    } catch {
+      setSystemStatus((prev) => ({
+        ...prev,
+        database: { status: 'down' },
+      }));
+    }
+
+    // Check LDAP
+    try {
+      const ldapResponse = await ldapApi.getHealth();
+      setSystemStatus((prev) => ({
+        ...prev,
+        ldap: {
+          status: ldapResponse.data.status === 'UP' ? 'up' : 'down',
+          responseTime: ldapResponse.data.responseTime,
+        },
+      }));
+    } catch {
+      setSystemStatus((prev) => ({
+        ...prev,
+        ldap: { status: 'down' },
+      }));
+    }
+  };
+
+  const StatusIcon = ({ status }: { status: 'checking' | 'up' | 'down' }) => {
+    if (status === 'checking') {
+      return <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />;
+    }
+    if (status === 'up') {
+      return <CheckCircle className="w-4 h-4 text-green-500" />;
+    }
+    return <XCircle className="w-4 h-4 text-red-500" />;
+  };
 
   return (
     <>
@@ -172,6 +258,7 @@ export function Sidebar() {
 
               <li>
                 <button
+                  onClick={() => setShowSystemInfo(true)}
                   className={cn(
                     'w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
                     !expanded && 'lg:justify-center lg:px-2'
@@ -185,6 +272,7 @@ export function Sidebar() {
 
               <li>
                 <button
+                  onClick={() => setShowHelp(true)}
                   className={cn(
                     'w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-medium rounded-lg transition-colors text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
                     !expanded && 'lg:justify-center lg:px-2'
@@ -228,6 +316,206 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
+
+      {/* System Info Dialog */}
+      <Dialog
+        isOpen={showSystemInfo}
+        onClose={() => setShowSystemInfo(false)}
+        title="시스템 정보"
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* App Info */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-500" />
+              애플리케이션
+            </h4>
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">이름</span>
+                <span className="font-medium text-gray-900 dark:text-white">ICAO PKD Local Manager</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">버전</span>
+                <span className="font-medium text-gray-900 dark:text-white">{systemStatus.app.version}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">상태</span>
+                <span className="flex items-center gap-1.5">
+                  <StatusIcon status={systemStatus.app.status} />
+                  <span className="font-medium text-green-600 dark:text-green-400">Active</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Database Status */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <Database className="w-4 h-4 text-blue-500" />
+              PostgreSQL
+            </h4>
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">상태</span>
+                <span className="flex items-center gap-1.5">
+                  <StatusIcon status={systemStatus.database.status} />
+                  <span className={cn(
+                    'font-medium',
+                    systemStatus.database.status === 'up' ? 'text-green-600 dark:text-green-400' :
+                    systemStatus.database.status === 'down' ? 'text-red-600 dark:text-red-400' :
+                    'text-gray-600 dark:text-gray-400'
+                  )}>
+                    {systemStatus.database.status === 'checking' ? '확인 중...' :
+                     systemStatus.database.status === 'up' ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+              {systemStatus.database.version && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">버전</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{systemStatus.database.version}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">호스트</span>
+                <span className="font-medium text-gray-900 dark:text-white">postgres:5432</span>
+              </div>
+            </div>
+          </div>
+
+          {/* LDAP Status */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+              <Server className="w-4 h-4 text-orange-500" />
+              OpenLDAP (HAProxy)
+            </h4>
+            <div className="bg-gray-50 dark:bg-gray-900 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">상태</span>
+                <span className="flex items-center gap-1.5">
+                  <StatusIcon status={systemStatus.ldap.status} />
+                  <span className={cn(
+                    'font-medium',
+                    systemStatus.ldap.status === 'up' ? 'text-green-600 dark:text-green-400' :
+                    systemStatus.ldap.status === 'down' ? 'text-red-600 dark:text-red-400' :
+                    'text-gray-600 dark:text-gray-400'
+                  )}>
+                    {systemStatus.ldap.status === 'checking' ? '확인 중...' :
+                     systemStatus.ldap.status === 'up' ? 'Active' : 'Inactive'}
+                  </span>
+                </span>
+              </div>
+              {systemStatus.ldap.responseTime !== undefined && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600 dark:text-gray-400">응답 시간</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{systemStatus.ldap.responseTime}ms</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600 dark:text-gray-400">호스트</span>
+                <span className="font-medium text-gray-900 dark:text-white">haproxy:389</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Refresh Button */}
+          <div className="flex justify-end">
+            <button
+              onClick={checkSystemStatus}
+              className="py-2 px-4 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+            >
+              <Loader2 className={cn('w-4 h-4', systemStatus.database.status === 'checking' && 'animate-spin')} />
+              상태 새로고침
+            </button>
+          </div>
+        </div>
+      </Dialog>
+
+      {/* Help Dialog */}
+      <Dialog
+        isOpen={showHelp}
+        onClose={() => setShowHelp(false)}
+        title="도움말"
+        size="lg"
+      >
+        <div className="space-y-6">
+          {/* Overview */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">시스템 개요</h4>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              ICAO PKD Local Manager는 전자여권 인증서(CSCA, DSC)를 관리하고
+              Passive Authentication을 수행하는 시스템입니다.
+            </p>
+          </div>
+
+          {/* Standards */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">지원 표준</h4>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { icon: GraduationCap, label: 'ICAO Doc 9303', desc: 'eMRTD 표준' },
+                { icon: FileText, label: 'RFC 5652', desc: 'CMS (Cryptographic Message Syntax)' },
+                { icon: Key, label: 'RFC 5280', desc: 'X.509 PKI 인증서' },
+                { icon: ShieldCheck, label: 'ISO/IEC 19794-5', desc: '생체인식 데이터' },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-2 p-2 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                  <item.icon className="w-4 h-4 text-blue-500 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.label}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Quick Guide */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">주요 기능</h4>
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <Upload className="w-4 h-4 text-violet-500 mt-0.5" />
+                <span><strong>PKD 업로드:</strong> LDIF/Master List 파일을 업로드하여 인증서를 LDAP에 저장</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <ShieldCheck className="w-4 h-4 text-teal-500 mt-0.5" />
+                <span><strong>PA 검증:</strong> SOD와 Data Group을 검증하여 전자여권 무결성 확인</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
+                <History className="w-4 h-4 text-blue-500 mt-0.5" />
+                <span><strong>이력 관리:</strong> 업로드 및 검증 이력 조회 및 통계 확인</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Links */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">참고 자료</h4>
+            <div className="space-y-2">
+              <a
+                href="https://www.icao.int/publications/pages/publication.aspx?docnum=9303"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <ExternalLink className="w-4 h-4" />
+                ICAO Doc 9303 공식 문서
+              </a>
+              <a
+                href="https://pkddownloadsg.icao.int/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+              >
+                <ExternalLink className="w-4 h-4" />
+                ICAO PKD 다운로드 사이트
+              </a>
+            </div>
+          </div>
+        </div>
+      </Dialog>
     </>
   );
 }

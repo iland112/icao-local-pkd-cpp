@@ -1,8 +1,10 @@
-import { Menu, Bell, Search, User } from 'lucide-react';
+import { Menu, Bell, Search, User, Sun, Moon } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
+import { useThemeStore } from '@/stores/themeStore';
 
 export function Header() {
   const { toggleMobile } = useSidebarStore();
+  const { darkMode, toggleTheme } = useThemeStore();
 
   return (
     <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -32,6 +34,19 @@ export function Header() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-2">
+          {/* Theme Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title={darkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
+          >
+            {darkMode ? (
+              <Sun className="w-5 h-5 text-yellow-500" />
+            ) : (
+              <Moon className="w-5 h-5 text-gray-600" />
+            )}
+          </button>
+
           {/* Notifications */}
           <button className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
             <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />

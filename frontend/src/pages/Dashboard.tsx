@@ -58,6 +58,12 @@ export function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
+  // Auto-check connections on mount
+  useEffect(() => {
+    testDatabaseConnection();
+    testLdapConnection();
+  }, []);
+
   const testDatabaseConnection = async () => {
     setDbStatus((prev) => ({ ...prev, testing: true }));
     try {
