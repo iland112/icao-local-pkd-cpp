@@ -44,9 +44,9 @@ export function FileUpload() {
   const [uploadId, setUploadId] = useState<string | null>(null);
 
   // Stage statuses
+  // Note: VALIDATION and DB_SAVING are combined into dbSaveStage ("검증 및 DB 저장")
   const [uploadStage, setUploadStage] = useState<StageStatus>(initialStage);
   const [parseStage, setParseStage] = useState<StageStatus>(initialStage);
-  const [validateStage, setValidateStage] = useState<StageStatus>(initialStage);
   const [dbSaveStage, setDbSaveStage] = useState<StageStatus>(initialStage);
   const [ldapStage, setLdapStage] = useState<StageStatus>(initialStage);
 
@@ -70,9 +70,6 @@ export function FileUpload() {
 
   // Build steps array for Stepper component
   const steps: Step[] = useMemo(() => {
-    // Combine validate and dbSave into one step
-    const dbStage = dbSaveStage.status !== 'IDLE' ? dbSaveStage : validateStage;
-
     return [
       {
         id: 'upload',
@@ -95,10 +92,10 @@ export function FileUpload() {
       {
         id: 'database',
         label: '검증 및 DB 저장',
-        description: dbStage.message || '인증서 검증 및 데이터베이스 저장',
-        status: toStepStatus(dbStage.status),
-        progress: dbStage.percentage,
-        details: dbStage.details,
+        description: dbSaveStage.message || '인증서 검증 및 데이터베이스 저장',
+        status: toStepStatus(dbSaveStage.status),
+        progress: dbSaveStage.percentage,
+        details: dbSaveStage.details,
         icon: <Database className="w-3.5 h-3.5" />,
       },
       {
@@ -111,7 +108,7 @@ export function FileUpload() {
         icon: <Server className="w-3.5 h-3.5" />,
       },
     ];
-  }, [uploadStage, parseStage, validateStage, dbSaveStage, ldapStage]);
+  }, [uploadStage, parseStage, dbSaveStage, ldapStage]);
 
   const isValidFileType = useCallback((file: File) => {
     const name = file.name.toLowerCase();
@@ -148,7 +145,6 @@ export function FileUpload() {
   const resetStages = () => {
     setUploadStage(initialStage);
     setParseStage(initialStage);
-    setValidateStage(initialStage);
     setDbSaveStage(initialStage);
     setLdapStage(initialStage);
     setOverallStatus('IDLE');
@@ -254,19 +250,20 @@ export function FileUpload() {
     // Convert backend overall percentage (0-100) to stage-specific percentage (0-100)
     // Backend percentage ranges per stage:
     // - PARSING: 10-50% (range: 40)
-    // - VALIDATION: 55-70% (range: 15)
-    // - DB_SAVING: 72-85% (range: 13)
+    // - VALIDATION + DB_SAVING combined: 55-85% (range: 30) -> shown as one "검증 및 DB 저장" step
     // - LDAP_SAVING: 87-100% (range: 13)
     const calculateStagePercentage = (stageStr: string, overallPercent: number): number => {
       if (stageStr.startsWith('PARSING')) {
         // Map 10-50 to 0-100
         return Math.min(100, Math.max(0, Math.round((overallPercent - 10) * 100 / 40)));
-      } else if (stageStr.startsWith('VALIDATION')) {
-        // Map 55-70 to 0-100
-        return Math.min(100, Math.max(0, Math.round((overallPercent - 55) * 100 / 15)));
-      } else if (stageStr.startsWith('DB_SAVING')) {
-        // Map 72-85 to 0-100
-        return Math.min(100, Math.max(0, Math.round((overallPercent - 72) * 100 / 13)));
+      } else if (stageStr.startsWith('VALIDATION') || stageStr.startsWith('DB_SAVING')) {
+        // Combined VALIDATION (55-70) + DB_SAVING (72-85) mapped to 0-100
+        // VALIDATION: 55-70 -> 0-50, DB_SAVING: 72-85 -> 50-100
+        if (stageStr.startsWith('VALIDATION')) {
+          return Math.min(50, Math.max(0, Math.round((overallPercent - 55) * 50 / 15)));
+        } else {
+          return Math.min(100, Math.max(50, 50 + Math.round((overallPercent - 72) * 50 / 13)));
+        }
       } else if (stageStr.startsWith('LDAP_SAVING')) {
         // Map 87-100 to 0-100
         return Math.min(100, Math.max(0, Math.round((overallPercent - 87) * 100 / 13)));
@@ -300,6 +297,7 @@ export function FileUpload() {
     };
 
     // Map backend stage names to frontend stages
+    // Note: VALIDATION and DB_SAVING are combined into one "검증 및 DB 저장" step (dbSaveStage)
     if (stage.startsWith('UPLOAD')) {
       setUploadStage(stageStatus);
     } else if (stage.startsWith('PARSING')) {
@@ -307,28 +305,38 @@ export function FileUpload() {
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(stageStatus);
     } else if (stage.startsWith('VALIDATION')) {
-      // Mark previous stages as completed
+      // VALIDATION is part of the combined "검증 및 DB 저장" step
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 파싱` } : prev);
-      setValidateStage(stageStatus);
+      // Update dbSaveStage with validation progress (0-50%)
+      const validationStatus: StageStatus = {
+        status: stage === 'VALIDATION_COMPLETED' ? 'IN_PROGRESS' : stageStatus.status,  // Keep IN_PROGRESS until DB_SAVING_COMPLETED
+        message: stageName || message,
+        percentage: stagePercent,
+        details: stage === 'VALIDATION_COMPLETED' ? `검증: ${totalCount}건` : details,
+      };
+      setDbSaveStage(validationStatus);
     } else if (stage.startsWith('DB_SAVING')) {
-      // Mark previous stages as completed
+      // DB_SAVING continues the combined "검증 및 DB 저장" step (50-100%)
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setValidateStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setDbSaveStage(stageStatus);
+      const dbStatus: StageStatus = {
+        status: stage === 'DB_SAVING_COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
+        message: stageName || message,
+        percentage: stage === 'DB_SAVING_COMPLETED' ? 100 : stagePercent,
+        details: stage === 'DB_SAVING_COMPLETED' ? `${totalCount}건 저장` : details,
+      };
+      setDbSaveStage(dbStatus);
     } else if (stage.startsWith('LDAP_SAVING')) {
       // Mark previous stages as completed
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setValidateStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setDbSaveStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장` } : prev);
+      setDbSaveStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setLdapStage(stageStatus);
     } else if (stage === 'COMPLETED') {
       // Mark all stages as completed with final message
       setUploadStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setParseStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
-      setValidateStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setDbSaveStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setLdapStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장` }));
       setOverallStatus('FINALIZED');
@@ -354,11 +362,11 @@ export function FileUpload() {
 
   const triggerValidate = async () => {
     if (!uploadId) return;
-    setValidateStage({ status: 'IN_PROGRESS', message: '검증 중...', percentage: 0 });
+    setDbSaveStage({ status: 'IN_PROGRESS', message: '검증 및 저장 중...', percentage: 0 });
     try {
       await uploadApi.triggerValidate(uploadId);
     } catch (error) {
-      setValidateStage({ status: 'FAILED', message: '검증 실패', percentage: 0 });
+      setDbSaveStage({ status: 'FAILED', message: '검증 실패', percentage: 0 });
     }
   };
 
@@ -603,7 +611,7 @@ export function FileUpload() {
 
                     <button
                       onClick={triggerValidate}
-                      disabled={parseStage.status !== 'COMPLETED' || dbSaveStage.status === 'COMPLETED' || validateStage.status === 'IN_PROGRESS'}
+                      disabled={parseStage.status !== 'COMPLETED' || dbSaveStage.status === 'COMPLETED' || dbSaveStage.status === 'IN_PROGRESS'}
                       className={cn(
                         'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
                         dbSaveStage.status === 'COMPLETED'
@@ -612,7 +620,7 @@ export function FileUpload() {
                         'disabled:opacity-50'
                       )}
                     >
-                      {validateStage.status === 'IN_PROGRESS' || dbSaveStage.status === 'IN_PROGRESS' ? (
+                      {dbSaveStage.status === 'IN_PROGRESS' ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : dbSaveStage.status === 'COMPLETED' ? (
                         <CheckCircle className="w-3.5 h-3.5" />
