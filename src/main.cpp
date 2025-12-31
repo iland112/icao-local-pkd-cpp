@@ -418,6 +418,19 @@ struct CscaValidationResult {
     std::string errorMessage;
 };
 
+/**
+ * @brief DSC Trust Chain Validation Result
+ */
+struct DscValidationResult {
+    bool isValid;
+    bool cscaFound;
+    bool signatureValid;
+    bool notExpired;
+    bool notRevoked;
+    std::string cscaSubjectDn;
+    std::string errorMessage;
+};
+
 CscaValidationResult validateCscaCertificate(X509* cert) {
     CscaValidationResult result = {false, false, false, false, false, ""};
 
@@ -485,6 +498,126 @@ CscaValidationResult validateCscaCertificate(X509* cert) {
         result.errorMessage = "Certificate does not have CA flag in Basic Constraints";
     } else if (!result.hasKeyCertSign) {
         result.errorMessage = "Certificate does not have keyCertSign in Key Usage";
+    }
+
+    return result;
+}
+
+/**
+ * @brief Find CSCA certificate from DB by issuer DN
+ * @return X509* pointer (caller must free) or nullptr if not found
+ */
+X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
+    if (!conn || issuerDn.empty()) return nullptr;
+
+    // Query for CSCA with matching subject_dn
+    std::string escapedDn = issuerDn;
+    // Simple escape for SQL
+    size_t pos = 0;
+    while ((pos = escapedDn.find("'", pos)) != std::string::npos) {
+        escapedDn.replace(pos, 1, "''");
+        pos += 2;
+    }
+
+    std::string query = "SELECT certificate_binary FROM certificate WHERE "
+                        "certificate_type = 'CSCA' AND subject_dn = '" + escapedDn + "' LIMIT 1";
+
+    PGresult* res = PQexec(conn, query.c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+        PQclear(res);
+        return nullptr;
+    }
+
+    // Get binary certificate data
+    char* certData = PQgetvalue(res, 0, 0);
+    int certLen = PQgetlength(res, 0, 0);
+
+    if (!certData || certLen == 0) {
+        PQclear(res);
+        return nullptr;
+    }
+
+    // Parse bytea hex format (PostgreSQL escape format: \x...)
+    std::vector<uint8_t> derBytes;
+    if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
+        // Hex encoded
+        for (int i = 2; i < certLen; i += 2) {
+            char hex[3] = {certData[i], certData[i+1], 0};
+            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+        }
+    }
+
+    PQclear(res);
+
+    if (derBytes.empty()) return nullptr;
+
+    const uint8_t* data = derBytes.data();
+    return d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+}
+
+/**
+ * @brief Validate DSC certificate against its issuing CSCA
+ * Checks:
+ * 1. CSCA exists in DB
+ * 2. DSC signature is valid (signed by CSCA)
+ * 3. DSC is not expired
+ */
+DscValidationResult validateDscCertificate(PGconn* conn, X509* dscCert, const std::string& issuerDn) {
+    DscValidationResult result = {false, false, false, false, false, "", ""};
+
+    if (!dscCert) {
+        result.errorMessage = "DSC certificate is null";
+        return result;
+    }
+
+    // 1. Check expiration
+    time_t now = time(nullptr);
+    if (X509_cmp_time(X509_get0_notAfter(dscCert), &now) < 0) {
+        result.errorMessage = "DSC certificate is expired";
+        spdlog::warn("DSC validation: Certificate is EXPIRED");
+        return result;
+    }
+    if (X509_cmp_time(X509_get0_notBefore(dscCert), &now) > 0) {
+        result.errorMessage = "DSC certificate is not yet valid";
+        spdlog::warn("DSC validation: Certificate is NOT YET VALID");
+        return result;
+    }
+    result.notExpired = true;
+
+    // 2. Find CSCA in DB
+    X509* cscaCert = findCscaByIssuerDn(conn, issuerDn);
+    if (!cscaCert) {
+        result.errorMessage = "CSCA not found for issuer: " + issuerDn.substr(0, 80);
+        spdlog::warn("DSC validation: CSCA NOT FOUND for issuer: {}", issuerDn.substr(0, 80));
+        return result;
+    }
+    result.cscaFound = true;
+    result.cscaSubjectDn = issuerDn;
+
+    spdlog::info("DSC validation: Found CSCA for issuer: {}", issuerDn.substr(0, 80));
+
+    // 3. Verify DSC signature with CSCA public key
+    EVP_PKEY* cscaPubKey = X509_get_pubkey(cscaCert);
+    if (!cscaPubKey) {
+        result.errorMessage = "Failed to extract CSCA public key";
+        X509_free(cscaCert);
+        return result;
+    }
+
+    int verifyResult = X509_verify(dscCert, cscaPubKey);
+    EVP_PKEY_free(cscaPubKey);
+    X509_free(cscaCert);
+
+    if (verifyResult == 1) {
+        result.signatureValid = true;
+        result.isValid = true;
+        spdlog::info("DSC validation: Trust Chain VERIFIED - signature valid");
+    } else {
+        unsigned long err = ERR_get_error();
+        char errBuf[256];
+        ERR_error_string_n(err, errBuf, sizeof(errBuf));
+        result.errorMessage = std::string("DSC signature verification failed: ") + errBuf;
+        spdlog::error("DSC validation: Trust Chain FAILED - {}", result.errorMessage);
     }
 
     return result;
@@ -1460,25 +1593,81 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         countryCode = extractCountryCode(issuerDn);
     }
 
-    // Determine certificate type
+    // Determine certificate type and perform validation
     std::string certType;
+    std::string validationStatus = "PENDING";
+    std::string validationMessage = "";
+
     if (subjectDn == issuerDn) {
+        // CSCA - self-signed certificate
         certType = "CSCA";
         cscaCount++;
+
+        // Validate CSCA self-signature
+        auto cscaValidation = validateCscaCertificate(cert);
+        if (cscaValidation.isValid) {
+            validationStatus = "VALID";
+            spdlog::info("CSCA validation: VERIFIED - self-signature valid for {}", countryCode);
+        } else if (cscaValidation.signatureValid) {
+            validationStatus = "WARNING";
+            validationMessage = cscaValidation.errorMessage;
+            spdlog::warn("CSCA validation: WARNING - {} for {}", cscaValidation.errorMessage, countryCode);
+        } else {
+            validationStatus = "INVALID";
+            validationMessage = cscaValidation.errorMessage;
+            spdlog::error("CSCA validation: FAILED - {} for {}", cscaValidation.errorMessage, countryCode);
+        }
     } else if (entry.dn.find("nc-data") != std::string::npos) {
         certType = "DSC_NC";
         dscCount++;
+
+        // DSC_NC - perform trust chain validation
+        auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
+        if (dscValidation.isValid) {
+            validationStatus = "VALID";
+            spdlog::info("DSC_NC validation: Trust Chain VERIFIED for {} (issuer: {})",
+                        countryCode, issuerDn.substr(0, 50));
+        } else if (dscValidation.cscaFound) {
+            validationStatus = "INVALID";
+            validationMessage = dscValidation.errorMessage;
+            spdlog::error("DSC_NC validation: Trust Chain FAILED - {} for {}",
+                         dscValidation.errorMessage, countryCode);
+        } else {
+            validationStatus = "PENDING";
+            validationMessage = dscValidation.errorMessage;
+            spdlog::warn("DSC_NC validation: CSCA not found - {} for {}",
+                        dscValidation.errorMessage, countryCode);
+        }
     } else {
         certType = "DSC";
         dscCount++;
+
+        // DSC - perform trust chain validation
+        auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
+        if (dscValidation.isValid) {
+            validationStatus = "VALID";
+            spdlog::info("DSC validation: Trust Chain VERIFIED for {} (issuer: {})",
+                        countryCode, issuerDn.substr(0, 50));
+        } else if (dscValidation.cscaFound) {
+            validationStatus = "INVALID";
+            validationMessage = dscValidation.errorMessage;
+            spdlog::error("DSC validation: Trust Chain FAILED - {} for {}",
+                         dscValidation.errorMessage, countryCode);
+        } else {
+            validationStatus = "PENDING";
+            validationMessage = dscValidation.errorMessage;
+            spdlog::warn("DSC validation: CSCA not found - {} for {}",
+                        dscValidation.errorMessage, countryCode);
+        }
     }
 
     X509_free(cert);
 
-    // 1. Save to DB
+    // 1. Save to DB with validation status
     std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                          subjectDn, issuerDn, serialNumber, fingerprint,
-                                         notBefore, notAfter, derBytes);
+                                         notBefore, notAfter, derBytes,
+                                         validationStatus, validationMessage);
 
     if (!certId.empty()) {
         spdlog::debug("Saved certificate to DB: type={}, country={}, fingerprint={}",
@@ -1821,15 +2010,15 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
+                            std::string certType = "CSCA";
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                if (certType == "CSCA") cscaCount++;
-                                else dscCount++;
+                                cscaCount++;  // Master List only contains CSCA
 
                                 if (ld) {
                                     std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -1932,31 +2121,35 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         std::string fingerprint = computeFileHash(derBytes);
                                         std::string countryCode = extractCountryCode(subjectDn);
 
-                                        // Validate CSCA certificate with full self-signature verification
-                                        std::string certType = "DSC";  // default
+                                        // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
+                                        // This includes self-signed, cross-signed, and link certificates
+                                        std::string certType = "CSCA";  // All Master List certs are CSCA
                                         std::string validationStatus = "VALID";
                                         std::string validationMessage = "";
 
                                         if (subjectDn == issuerDn) {
-                                            // Potential CSCA - verify self-signature
+                                            // Self-signed CSCA - verify self-signature
                                             auto cscaValidation = validateCscaCertificate(cert);
                                             if (cscaValidation.isValid) {
-                                                certType = "CSCA";
                                                 validationStatus = "VALID";
                                                 spdlog::debug("CSCA self-signature verified: {}", subjectDn.substr(0, 50));
                                             } else if (cscaValidation.signatureValid) {
                                                 // Self-signed but missing CA flag or key usage
-                                                certType = "CSCA";
                                                 validationStatus = "WARNING";
                                                 validationMessage = cscaValidation.errorMessage;
                                                 spdlog::warn("CSCA validation warning: {} - {}", subjectDn.substr(0, 50), cscaValidation.errorMessage);
                                             } else {
                                                 // Signature invalid
-                                                certType = "CSCA";
                                                 validationStatus = "INVALID";
                                                 validationMessage = cscaValidation.errorMessage;
                                                 spdlog::error("CSCA self-signature FAILED: {} - {}", subjectDn.substr(0, 50), cscaValidation.errorMessage);
                                             }
+                                        } else {
+                                            // Cross-signed or Link CSCA certificate
+                                            // These are still CSCA certificates, issued by another CSCA
+                                            validationStatus = "VALID";
+                                            spdlog::info("Cross-signed/Link CSCA: {} issued by {}",
+                                                        subjectDn.substr(0, 50), issuerDn.substr(0, 50));
                                         }
                                         totalCerts++;
 
@@ -1982,11 +2175,11 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                                              validationStatus, validationMessage);
 
                                         if (!certId.empty()) {
-                                            if (certType == "CSCA") cscaCount++;
-                                            else dscCount++;
+                                            // Master List only contains CSCA certificates
+                                            cscaCount++;
 
-                                            spdlog::debug("Saved {} from Master List to DB: country={}, fingerprint={}",
-                                                         certType, countryCode, fingerprint.substr(0, 16));
+                                            spdlog::debug("Saved CSCA from Master List to DB: country={}, fingerprint={}",
+                                                         countryCode, fingerprint.substr(0, 16));
 
                                             // 2. Save to LDAP
                                             if (ld) {
@@ -2042,15 +2235,15 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            // Master List CMS certificate store also contains ONLY CSCA certificates
+                            std::string certType = "CSCA";
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                if (certType == "CSCA") cscaCount++;
-                                else dscCount++;
+                                cscaCount++;  // Master List only contains CSCA
 
                                 if (ld) {
                                     std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,

@@ -136,6 +136,37 @@ export interface PAHistory {
   documentNumber?: string;
   verifiedAt: string;
   processingTimeMs: number;
+  requestedBy?: string;
+}
+
+// Alias for PAHistory used in dashboard/history pages
+export interface PAHistoryItem {
+  id: string;
+  status: PAStatus;
+  issuingCountry?: string;
+  documentNumber?: string;
+  verifiedAt: string;
+  processingTimeMs: number;
+  requestedBy?: string;
+}
+
+// Upload history item
+export interface UploadHistoryItem {
+  id: string;
+  fileName: string;
+  fileType: 'LDIF' | 'ML';
+  fileSize: number;
+  status: UploadStatus;
+  uploadedAt: string;
+  completedAt?: string;
+  errorMessage?: string;
+  processedCertificates?: {
+    total: number;
+    csca: number;
+    dsc: number;
+    crl: number;
+    countries: string[];
+  };
 }
 
 // Pagination

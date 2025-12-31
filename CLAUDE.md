@@ -1098,3 +1098,65 @@ ldapsearch -x -b "dc=data,dc=download,dc=pkd,..." "(objectClass=pkdDownload)" | 
 |----------|----------|-------------|
 | Validation Comparison | `docs/CERTIFICATE_VALIDATION_COMPARISON.md` | Java vs C++ validation comparison |
 | RFC 5280 LDAP Guide | `docs/RFC5280_LDAP_UPDATE_GUIDE.md` | LDAP update logic documentation |
+
+### 2025-12-31: DSC Trust Chain Validation & Master List CSCA Fix (Session 12)
+
+**Objective**: Add DSC Trust Chain validation for LDIF uploads and fix Master List certificate type classification
+
+**Completed Tasks**:
+
+1. DSC Trust Chain Validation (`src/main.cpp`)
+   - Added `DscValidationResult` struct for validation results
+   - Added `findCscaByIssuerDn()` function to lookup CSCA from DB
+   - Added `validateDscCertificate()` function for Trust Chain verification:
+     - Check certificate expiration
+     - Find CSCA in DB by issuer DN
+     - Verify DSC signature with CSCA public key using `X509_verify()`
+   - Modified `parseCertificateEntry()` to perform validation on:
+     - CSCA: Self-signature verification
+     - DSC: Trust Chain verification against issuing CSCA
+     - DSC_NC: Trust Chain verification (non-conformant)
+   - Validation results logged with status (VALID, INVALID, PENDING)
+
+2. Master List Certificate Type Fix (`src/main.cpp`)
+   - **Issue**: Master List certificates were incorrectly classified as DSC when `subjectDn != issuerDn`
+   - **Root Cause**: ICAO Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
+     - Self-signed CSCA: `subjectDn == issuerDn`
+     - Cross-signed/Link CSCA: `subjectDn != issuerDn` (issued by another CSCA)
+   - **Fix**: Changed default `certType` from "DSC" to "CSCA" for all Master List certificates
+   - Updated 3 locations in `processMasterListFileAsync()`:
+     - Line 2126: Main encapsulated content parsing
+     - Line 2014: PKCS7 fallback parsing
+     - Line 2239: CMS certificate store parsing
+   - All Master List certificates now correctly classified as CSCA
+
+**Code Changes**:
+```cpp
+// Before (incorrect)
+std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+
+// After (correct per ICAO Doc 9303)
+std::string certType = "CSCA";  // Master List contains ONLY CSCA certificates
+```
+
+**Validation Logic Added**:
+```cpp
+// DSC Trust Chain Validation
+DscValidationResult validateDscCertificate(PGconn* conn, X509* cert, const std::string& issuerDn) {
+    // 1. Check certificate expiration
+    // 2. Find CSCA in DB by issuer DN
+    // 3. Verify DSC signature with CSCA public key
+    return result;
+}
+```
+
+**Expected Results After Fix**:
+```
+Master List Upload:
+- Total certificates: 525
+- CSCA: 525 (all)
+- DSC: 0 (none - Master List contains only CSCA)
+```
+
+**Files Modified**:
+- `src/main.cpp`: DSC validation + Master List CSCA fix

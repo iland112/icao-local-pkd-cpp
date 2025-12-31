@@ -1,79 +1,322 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
+import ReactECharts from 'echarts-for-react';
 import {
   PresentationIcon,
   ShieldCheck,
   CheckCircle,
-  XCircle,
-  AlertTriangle,
   Clock,
   Globe,
   TrendingUp,
   Loader2,
-  ArrowRight,
-  History,
-  Zap,
+  RefreshCw,
+  Calendar,
 } from 'lucide-react';
 import { paApi } from '@/services/api';
-import type { PAStatisticsOverview } from '@/types';
+import type { PAStatisticsOverview, PAHistoryItem } from '@/types';
 import { cn } from '@/utils/cn';
+import { useThemeStore } from '@/stores/themeStore';
 
 export function PADashboard() {
+  const { darkMode } = useThemeStore();
   const [stats, setStats] = useState<PAStatisticsOverview | null>(null);
+  const [recentVerifications, setRecentVerifications] = useState<PAHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStatistics();
+    fetchDashboardData();
   }, []);
 
-  const fetchStatistics = async () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const response = await paApi.getStatistics();
-      setStats(response.data);
+      const [statsResponse, historyResponse] = await Promise.all([
+        paApi.getStatistics(),
+        paApi.getHistory({ page: 0, size: 100 }),
+      ]);
+      setStats(statsResponse.data);
+      setRecentVerifications(historyResponse.data.content || []);
     } catch (error) {
-      console.error('Failed to fetch PA statistics:', error);
+      console.error('Failed to fetch PA dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const statCards = stats
-    ? [
-        {
-          label: '총 검증',
-          value: stats.totalVerifications,
-          icon: ShieldCheck,
-          color: 'from-blue-500 to-indigo-500',
-          bgColor: 'bg-blue-50 dark:bg-blue-900/20',
-        },
-        {
-          label: '성공 (VALID)',
-          value: stats.validCount,
-          icon: CheckCircle,
-          color: 'from-green-500 to-emerald-500',
-          bgColor: 'bg-green-50 dark:bg-green-900/20',
-        },
-        {
-          label: '실패 (INVALID)',
-          value: stats.invalidCount,
-          icon: XCircle,
-          color: 'from-red-500 to-rose-500',
-          bgColor: 'bg-red-50 dark:bg-red-900/20',
-        },
-        {
-          label: '오류 (ERROR)',
-          value: stats.errorCount,
-          icon: AlertTriangle,
-          color: 'from-yellow-500 to-orange-500',
-          bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
-        },
-      ]
-    : [];
+  // Calculate derived statistics from recent verifications
+  const derivedStats = useMemo(() => {
+    if (!recentVerifications.length) {
+      return {
+        countryStats: {} as Record<string, number>,
+        dailyStats: [] as { date: string; valid: number; invalid: number; error: number }[],
+        todayCount: 0,
+        lastVerification: 'N/A',
+      };
+    }
 
-  const successRate = stats && stats.totalVerifications > 0
-    ? ((stats.validCount / stats.totalVerifications) * 100).toFixed(1)
-    : '0.0';
+    // Country stats
+    const countryStats: Record<string, number> = {};
+    recentVerifications.forEach((r) => {
+      if (r.issuingCountry) {
+        countryStats[r.issuingCountry] = (countryStats[r.issuingCountry] || 0) + 1;
+      }
+    });
+
+    // Daily stats (last 30 days)
+    const dailyMap: Record<string, { valid: number; invalid: number; error: number }> = {};
+    const last30Days: string[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      last30Days.push(dateStr);
+      dailyMap[dateStr] = { valid: 0, invalid: 0, error: 0 };
+    }
+
+    recentVerifications.forEach((r) => {
+      if (r.verifiedAt) {
+        const dateStr = r.verifiedAt.split('T')[0];
+        if (dailyMap[dateStr]) {
+          if (r.status === 'VALID') dailyMap[dateStr].valid++;
+          else if (r.status === 'INVALID') dailyMap[dateStr].invalid++;
+          else if (r.status === 'ERROR') dailyMap[dateStr].error++;
+        }
+      }
+    });
+
+    const dailyStats = last30Days.map((date) => ({
+      date,
+      ...dailyMap[date],
+    }));
+
+    // Today count
+    const today = new Date().toISOString().split('T')[0];
+    const todayCount = recentVerifications.filter(
+      (r) => r.verifiedAt?.startsWith(today)
+    ).length;
+
+    // Last verification time
+    let lastVerification = 'N/A';
+    if (recentVerifications.length > 0 && recentVerifications[0].verifiedAt) {
+      const last = new Date(recentVerifications[0].verifiedAt);
+      const now = new Date();
+      const diffMinutes = Math.floor((now.getTime() - last.getTime()) / 1000 / 60);
+      if (diffMinutes < 60) {
+        lastVerification = `${diffMinutes}분 전`;
+      } else if (diffMinutes < 1440) {
+        lastVerification = `${Math.floor(diffMinutes / 60)}시간 전`;
+      } else {
+        lastVerification = `${Math.floor(diffMinutes / 1440)}일 전`;
+      }
+    }
+
+    return { countryStats, dailyStats, todayCount, lastVerification };
+  }, [recentVerifications]);
+
+  // Get top 10 countries sorted by count
+  const topCountries = useMemo(() => {
+    const entries = Object.entries(derivedStats.countryStats);
+    if (entries.length === 0) return [];
+    const sorted = entries.sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const maxCount = sorted[0][1];
+    return sorted.map(([country, count]) => ({
+      country,
+      count,
+      percentage: Math.max(15, (count / maxCount) * 100),
+    }));
+  }, [derivedStats.countryStats]);
+
+  const successRate =
+    stats && stats.totalVerifications > 0
+      ? ((stats.validCount / stats.totalVerifications) * 100).toFixed(1)
+      : '0.0';
+
+  // Pie chart options for verification status
+  const statusChartOption = useMemo(() => {
+    const colors = darkMode
+      ? { valid: '#4ADE80', invalid: '#F87171', error: '#FBBF24' }
+      : { valid: '#86EFAC', invalid: '#FCA5A5', error: '#FDE68A' };
+
+    const total = (stats?.validCount || 0) + (stats?.invalidCount || 0) + (stats?.errorCount || 0);
+
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'item',
+        formatter: '{b}: {c}건 ({d}%)',
+      },
+      legend: {
+        bottom: '5%',
+        left: 'center',
+        textStyle: { color: darkMode ? '#9CA3AF' : '#6B7280' },
+      },
+      graphic: {
+        type: 'text',
+        left: 'center',
+        top: 'center',
+        style: {
+          text: `총 검증\n${total.toLocaleString()}`,
+          textAlign: 'center',
+          fill: darkMode ? '#F3F4F6' : '#1F2937',
+          fontSize: 14,
+          fontWeight: 'bold',
+        },
+      },
+      series: [
+        {
+          type: 'pie',
+          radius: ['50%', '70%'],
+          center: ['50%', '45%'],
+          avoidLabelOverlap: false,
+          itemStyle: { borderRadius: 4, borderColor: 'transparent', borderWidth: 2 },
+          label: { show: false },
+          emphasis: {
+            label: { show: true, fontSize: 14, fontWeight: 'bold' },
+            itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.3)' },
+          },
+          labelLine: { show: false },
+          data: [
+            { value: stats?.validCount || 0, name: 'Valid', itemStyle: { color: colors.valid } },
+            { value: stats?.invalidCount || 0, name: 'Invalid', itemStyle: { color: colors.invalid } },
+            { value: stats?.errorCount || 0, name: 'Error', itemStyle: { color: colors.error } },
+          ],
+        },
+      ],
+    };
+  }, [stats, darkMode]);
+
+  // Line chart options for daily trend
+  const trendChartOption = useMemo(() => {
+    const colors = darkMode
+      ? { valid: '#4ADE80', invalid: '#F87171', error: '#FBBF24' }
+      : { valid: '#86EFAC', invalid: '#FCA5A5', error: '#FDE68A' };
+
+    const xAxisData = derivedStats.dailyStats.map((d) => {
+      const date = new Date(d.date);
+      return `${date.getMonth() + 1}/${date.getDate()}`;
+    });
+
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: Array<{ axisValue: string; marker: string; seriesName: string; value: number }>) => {
+          let result = params[0].axisValue + '<br/>';
+          params.forEach((p) => {
+            result += `${p.marker} ${p.seriesName}: ${p.value.toLocaleString()}건<br/>`;
+          });
+          return result;
+        },
+      },
+      legend: {
+        bottom: '5%',
+        left: 'center',
+        textStyle: { color: darkMode ? '#9CA3AF' : '#6B7280' },
+      },
+      grid: {
+        left: '3%',
+        right: '4%',
+        bottom: '15%',
+        top: '10%',
+        containLabel: true,
+      },
+      xAxis: {
+        type: 'category',
+        boundaryGap: false,
+        data: xAxisData,
+        axisLabel: {
+          color: darkMode ? '#9CA3AF' : '#6B7280',
+          rotate: 45,
+          fontSize: 10,
+        },
+        axisLine: { show: false },
+        axisTick: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        axisLabel: { color: darkMode ? '#9CA3AF' : '#6B7280' },
+        splitLine: {
+          lineStyle: {
+            color: darkMode ? '#374151' : '#E5E7EB',
+            type: 'dashed',
+          },
+        },
+      },
+      series: [
+        {
+          name: 'Valid',
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 2, color: colors.valid },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: colors.valid + '66' },
+                { offset: 1, color: colors.valid + '1A' },
+              ],
+            },
+          },
+          data: derivedStats.dailyStats.map((d) => d.valid),
+        },
+        {
+          name: 'Invalid',
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 2, color: colors.invalid },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: colors.invalid + '66' },
+                { offset: 1, color: colors.invalid + '1A' },
+              ],
+            },
+          },
+          data: derivedStats.dailyStats.map((d) => d.invalid),
+        },
+        {
+          name: 'Error',
+          type: 'line',
+          smooth: true,
+          symbol: 'none',
+          lineStyle: { width: 2, color: colors.error },
+          areaStyle: {
+            color: {
+              type: 'linear',
+              x: 0,
+              y: 0,
+              x2: 0,
+              y2: 1,
+              colorStops: [
+                { offset: 0, color: colors.error + '66' },
+                { offset: 1, color: colors.error + '1A' },
+              ],
+            },
+          },
+          data: derivedStats.dailyStats.map((d) => d.error),
+        },
+      ],
+    };
+  }, [derivedStats.dailyStats, darkMode]);
+
+  const getCountryColor = (index: number) => {
+    const colors = [
+      '#06B6D4', '#0891B2', '#0E7490', '#14B8A6', '#0D9488',
+      '#6366F1', '#4F46E5', '#8B5CF6', '#7C3AED', '#A855F7',
+    ];
+    return colors[index % colors.length];
+  };
 
   return (
     <div className="w-full px-4 lg:px-6 py-4">
@@ -83,11 +326,38 @@ export function PADashboard() {
           <div className="p-3 rounded-xl bg-gradient-to-br from-teal-500 to-cyan-600 shadow-lg">
             <PresentationIcon className="w-7 h-7 text-white" />
           </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">PA 검증 통계</h1>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Passive Authentication 대시보드
+            </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              Passive Authentication 검증 현황을 확인합니다.
+              전자여권 검증 통계 및 추이를 시각화합니다.
             </p>
+          </div>
+          {/* Quick Actions */}
+          <div className="flex gap-2">
+            <Link
+              to="/pa/verify"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-teal-500 to-cyan-500 hover:from-teal-600 hover:to-cyan-600 transition-all duration-200 shadow-md hover:shadow-lg"
+            >
+              <ShieldCheck className="w-4 h-4" />
+              새 검증 수행
+            </Link>
+            <Link
+              to="/pa/history"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
+            >
+              <Clock className="w-4 h-4" />
+              검증 이력
+            </Link>
+            <button
+              onClick={fetchDashboardData}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+              새로고침
+            </button>
           </div>
         </div>
       </div>
@@ -98,178 +368,199 @@ export function PADashboard() {
         </div>
       ) : (
         <>
-          {/* Main Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            {statCards.map((card) => (
-              <div
-                key={card.label}
-                className={cn(
-                  'relative overflow-hidden rounded-2xl p-5 shadow-lg transition-all hover:shadow-xl',
-                  card.bgColor
-                )}
-              >
+          {/* Summary Statistics */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+            {/* 총 검증 건수 */}
+            <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
+              <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-teal-400 to-cyan-500"></div>
+              <div className="pl-4">
                 <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{card.label}</p>
-                    <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
-                      {card.value.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className={cn('p-3 rounded-xl bg-gradient-to-br shadow-md', card.color)}>
-                    <card.icon className="w-6 h-6 text-white" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Performance Metrics */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-            {/* Success Rate */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500">
-                    <TrendingUp className="w-5 h-5 text-white" />
-                  </div>
-                  검증 성공률
-                </h3>
-              </div>
-              <div className="p-6">
-                <div className="flex items-center gap-6">
-                  <div className="relative w-32 h-32">
-                    <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        stroke="currentColor"
-                        strokeWidth="8"
-                        fill="none"
-                        className="text-gray-200 dark:text-gray-700"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        stroke="currentColor"
-                        strokeWidth="8"
-                        fill="none"
-                        strokeDasharray={`${parseFloat(successRate) * 2.51} 251`}
-                        strokeLinecap="round"
-                        className="text-green-500"
-                      />
-                    </svg>
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <span className="text-2xl font-bold text-gray-900 dark:text-white">{successRate}%</span>
+                  <div className="flex-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
+                      총 검증 건수
+                    </h3>
+                    <div className="text-3xl font-bold text-teal-500">
+                      {stats?.totalVerifications.toLocaleString() || 0}
                     </div>
+                    <p className="text-xs mt-1 text-gray-400">전체 검증 수행 건수</p>
                   </div>
-                  <div className="flex-1 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">성공</span>
-                      <span className="font-semibold text-green-600">{stats?.validCount || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">실패</span>
-                      <span className="font-semibold text-red-600">{stats?.invalidCount || 0}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">오류</span>
-                      <span className="font-semibold text-yellow-600">{stats?.errorCount || 0}</span>
-                    </div>
+                  <div className="flex-shrink-0 p-3 rounded-xl bg-teal-50 dark:bg-teal-900/30">
+                    <ShieldCheck className="w-8 h-8 text-teal-500" />
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Performance */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500">
-                    <Zap className="w-5 h-5 text-white" />
+            {/* 검증 성공률 */}
+            <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
+              <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-green-400 to-emerald-500"></div>
+              <div className="pl-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
+                      검증 성공률
+                    </h3>
+                    <div className="text-3xl font-bold text-green-500">{successRate}%</div>
+                    <p className="text-xs mt-1 text-gray-400">
+                      {stats?.validCount || 0} / {stats?.totalVerifications || 0} 건
+                    </p>
                   </div>
-                  성능 지표
-                </h3>
+                  <div className="flex-shrink-0 p-3 rounded-xl bg-green-50 dark:bg-green-900/30">
+                    <CheckCircle className="w-8 h-8 text-green-500" />
+                  </div>
+                </div>
               </div>
-              <div className="p-6">
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Clock className="w-5 h-5 text-purple-500" />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">평균 처리 시간</span>
+            </div>
+
+            {/* 검증 국가 수 */}
+            <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
+              <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-blue-400 to-indigo-500"></div>
+              <div className="pl-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
+                      검증 국가 수
+                    </h3>
+                    <div className="text-3xl font-bold text-blue-500">
+                      {Object.keys(derivedStats.countryStats).length}
                     </div>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {stats?.averageProcessingTimeMs || 0} <span className="text-sm font-normal">ms</span>
-                    </p>
+                    <p className="text-xs mt-1 text-gray-400">서로 다른 발급 국가</p>
                   </div>
-                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Globe className="w-5 h-5 text-blue-500" />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">검증된 국가</span>
-                    </div>
-                    <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                      {stats?.countriesVerified || 0} <span className="text-sm font-normal">개국</span>
-                    </p>
+                  <div className="flex-shrink-0 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30">
+                    <Globe className="w-8 h-8 text-blue-500" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 오늘 검증 건수 */}
+            <div className="group relative rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 bg-white dark:bg-gray-800 shadow-lg">
+              <div className="absolute left-0 top-4 bottom-4 w-1 rounded-full bg-gradient-to-b from-amber-400 to-orange-500"></div>
+              <div className="pl-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500 dark:text-gray-400">
+                      오늘 검증 건수
+                    </h3>
+                    <div className="text-3xl font-bold text-amber-500">{derivedStats.todayCount}</div>
+                    <p className="text-xs mt-1 text-gray-400">최근: {derivedStats.lastVerification}</p>
+                  </div>
+                  <div className="flex-shrink-0 p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30">
+                    <Calendar className="w-8 h-8 text-amber-500" />
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-500">
-                  <ShieldCheck className="w-5 h-5 text-white" />
+          {/* Charts Row 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+            {/* Verification Status Chart */}
+            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
+              <div className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-xl bg-green-50 dark:bg-green-900/30">
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">검증 결과 분포</h2>
                 </div>
-                빠른 작업
-              </h3>
+                <div className="h-72">
+                  <ReactECharts
+                    option={statusChartOption}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'svg' }}
+                  />
+                </div>
+              </div>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Link
-                  to="/pa/verify"
-                  className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all group"
-                >
-                  <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/30">
-                    <ShieldCheck className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800 dark:text-gray-200">PA 검증</p>
-                    <p className="text-xs text-gray-500">새 검증 수행</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                </Link>
 
-                <Link
-                  to="/pa/history"
-                  className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all group"
-                >
-                  <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                    <History className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            {/* Country Distribution */}
+            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
+              <div className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
+                    <Globe className="w-5 h-5 text-cyan-500" />
                   </div>
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-800 dark:text-gray-200">검증 이력</p>
-                    <p className="text-xs text-gray-500">이력 조회</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                </Link>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                    국가별 검증 건수 (Top 10)
+                  </h2>
+                </div>
+                {/* Country List with Flags and Progress Bars */}
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-2">
+                  {topCountries.length > 0 ? (
+                    topCountries.map((item, index) => (
+                      <div
+                        key={item.country}
+                        className="flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
+                      >
+                        {/* Rank */}
+                        <span
+                          className={cn(
+                            'w-5 flex-shrink-0 text-xs font-bold text-center',
+                            index < 3 ? 'text-amber-500' : 'text-gray-400'
+                          )}
+                        >
+                          {index + 1}
+                        </span>
+                        {/* Flag */}
+                        <img
+                          src={`/svg/${item.country.toLowerCase()}.svg`}
+                          alt={item.country}
+                          className="w-7 h-5 flex-shrink-0 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                        {/* Country Code */}
+                        <span className="w-20 flex-shrink-0 font-mono font-semibold text-sm text-gray-700 dark:text-gray-300">
+                          {item.country}
+                        </span>
+                        {/* Progress Bar with Count */}
+                        <div className="flex-1 flex items-center gap-2">
+                          <div className="flex-1 h-6 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${item.percentage}%`,
+                                background: getCountryColor(index),
+                              }}
+                            />
+                          </div>
+                          <span className="w-14 flex-shrink-0 text-xs font-bold text-right text-gray-600 dark:text-gray-300">
+                            {item.count.toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-sm text-gray-400">데이터가 없습니다</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
 
-                <button
-                  onClick={fetchStatistics}
-                  className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700 transition-all group"
-                >
-                  <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30">
-                    <Globe className="w-5 h-5 text-green-600 dark:text-green-400" />
+          {/* Charts Row 2 - Daily Trend */}
+          <div className="grid grid-cols-1 gap-5">
+            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
+              <div className="p-5">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30">
+                    <TrendingUp className="w-5 h-5 text-teal-500" />
                   </div>
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-gray-800 dark:text-gray-200">통계 새로고침</p>
-                    <p className="text-xs text-gray-500">최신 데이터 조회</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition-colors" />
-                </button>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                    일별 검증 추이 (최근 30일)
+                  </h2>
+                </div>
+                <div className="h-72">
+                  <ReactECharts
+                    option={trendChartOption}
+                    style={{ height: '100%', width: '100%' }}
+                    opts={{ renderer: 'svg' }}
+                  />
+                </div>
               </div>
             </div>
           </div>
