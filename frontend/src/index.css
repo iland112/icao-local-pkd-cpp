@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Tailwind CSS 4 - Dark mode selector configuration */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Preline custom theme variables */
 :root {
   --color-primary: #4f46e5;
