@@ -202,8 +202,7 @@ export function FileUpload() {
     const maxReconnectAttempts = 3;
 
     // Handle 'connected' event
-    eventSource.addEventListener('connected', (event) => {
-      console.log('[SSE] Connected:', (event as MessageEvent).data);
+    eventSource.addEventListener('connected', () => {
       reconnectAttempts = 0;
     });
 
@@ -211,33 +210,29 @@ export function FileUpload() {
     eventSource.addEventListener('progress', (event) => {
       try {
         const data = (event as MessageEvent).data;
-        console.log('[SSE] Progress event received:', data);
         const progress: UploadProgress = JSON.parse(data);
         handleProgressUpdate(progress);
-      } catch (error) {
-        console.error('[SSE] Failed to parse progress event:', error);
+      } catch {
+        // Ignore parse errors
       }
     });
 
     // Fallback for unnamed events
     eventSource.onmessage = (event) => {
       try {
-        console.log('[SSE] Message event received:', event.data);
         const progress: UploadProgress = JSON.parse(event.data);
         handleProgressUpdate(progress);
-      } catch (error) {
-        console.error('[SSE] Failed to parse message event:', error);
+      } catch {
+        // Ignore parse errors
       }
     };
 
-    eventSource.onerror = (error) => {
-      console.error('[SSE] Connection error:', error);
+    eventSource.onerror = () => {
       eventSource.close();
 
       // Try to reconnect if not too many attempts
       if (reconnectAttempts < maxReconnectAttempts && isProcessing) {
         reconnectAttempts++;
-        console.log(`[SSE] Reconnecting... attempt ${reconnectAttempts}`);
         setTimeout(() => connectToProgressStream(id), 1000);
       } else {
         setIsProcessing(false);
@@ -248,8 +243,6 @@ export function FileUpload() {
   const handleProgressUpdate = (progress: UploadProgress) => {
     const { stage, stageName, message, percentage, processedCount, totalCount, errorMessage } = progress;
 
-    console.log('[Progress] Stage:', stage, 'Percentage:', percentage, 'Message:', message);
-
     // Determine status from stage
     const getStatus = (stageStr: string): StageStatus['status'] => {
       if (stageStr.endsWith('_STARTED') || stageStr.endsWith('_IN_PROGRESS')) return 'IN_PROGRESS';
@@ -258,61 +251,93 @@ export function FileUpload() {
       return 'IDLE';
     };
 
+    // Convert backend overall percentage (0-100) to stage-specific percentage (0-100)
+    // Backend percentage ranges per stage:
+    // - PARSING: 10-50% (range: 40)
+    // - VALIDATION: 55-70% (range: 15)
+    // - DB_SAVING: 72-85% (range: 13)
+    // - LDAP_SAVING: 87-100% (range: 13)
+    const calculateStagePercentage = (stageStr: string, overallPercent: number): number => {
+      if (stageStr.startsWith('PARSING')) {
+        // Map 10-50 to 0-100
+        return Math.min(100, Math.max(0, Math.round((overallPercent - 10) * 100 / 40)));
+      } else if (stageStr.startsWith('VALIDATION')) {
+        // Map 55-70 to 0-100
+        return Math.min(100, Math.max(0, Math.round((overallPercent - 55) * 100 / 15)));
+      } else if (stageStr.startsWith('DB_SAVING')) {
+        // Map 72-85 to 0-100
+        return Math.min(100, Math.max(0, Math.round((overallPercent - 72) * 100 / 13)));
+      } else if (stageStr.startsWith('LDAP_SAVING')) {
+        // Map 87-100 to 0-100
+        return Math.min(100, Math.max(0, Math.round((overallPercent - 87) * 100 / 13)));
+      }
+      return overallPercent;
+    };
+
+    // Build details string with processing counts
+    const buildDetails = (stageStr: string, processed: number, total: number): string | undefined => {
+      if (stageStr.endsWith('_COMPLETED') || stageStr === 'COMPLETED') {
+        // Show final count on completion
+        if (total > 0) {
+          return `${total}건 처리`;
+        }
+      } else if (processed > 0 && total > 0) {
+        // Show progress during processing
+        return `${processed}/${total}`;
+      }
+      return undefined;
+    };
+
+    const stagePercent = calculateStagePercentage(stage, percentage);
+    const status = getStatus(stage);
+    const details = buildDetails(stage, processedCount, totalCount);
+
     const stageStatus: StageStatus = {
-      status: getStatus(stage),
+      status,
       message: stageName || message,
-      percentage,
-      details: processedCount > 0 ? `${processedCount}/${totalCount}` : undefined,
+      percentage: status === 'COMPLETED' ? 100 : stagePercent,
+      details,
     };
 
     // Map backend stage names to frontend stages
     if (stage.startsWith('UPLOAD')) {
-      console.log('[Progress] Updating upload stage:', stageStatus);
       setUploadStage(stageStatus);
     } else if (stage.startsWith('PARSING')) {
-      console.log('[Progress] Updating parse stage:', stageStatus);
-      // Also mark upload as completed when parsing starts
+      // Mark upload as completed when parsing starts
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(stageStatus);
     } else if (stage.startsWith('VALIDATION')) {
-      console.log('[Progress] Updating validate stage:', stageStatus);
       // Mark previous stages as completed
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 파싱` } : prev);
       setValidateStage(stageStatus);
     } else if (stage.startsWith('DB_SAVING')) {
-      console.log('[Progress] Updating DB save stage:', stageStatus);
       // Mark previous stages as completed
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setValidateStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setDbSaveStage(stageStatus);
     } else if (stage.startsWith('LDAP_SAVING')) {
-      console.log('[Progress] Updating LDAP stage:', stageStatus);
       // Mark previous stages as completed
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setValidateStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setDbSaveStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setDbSaveStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장` } : prev);
       setLdapStage(stageStatus);
     } else if (stage === 'COMPLETED') {
-      console.log('[Progress] All stages completed');
-      // Mark all stages as completed
+      // Mark all stages as completed with final message
       setUploadStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setParseStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setValidateStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setDbSaveStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
-      setLdapStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
+      setLdapStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장` }));
       setOverallStatus('FINALIZED');
       setOverallMessage(message || '모든 처리가 완료되었습니다.');
       setIsProcessing(false);
     } else if (stage === 'FAILED') {
-      console.log('[Progress] Processing failed:', errorMessage);
       setOverallStatus('FAILED');
       setOverallMessage(errorMessage || message);
       setIsProcessing(false);
-    } else {
-      console.log('[Progress] Unknown stage:', stage);
     }
   };
 
