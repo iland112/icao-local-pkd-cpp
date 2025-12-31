@@ -1160,3 +1160,124 @@ Master List Upload:
 
 **Files Modified**:
 - `src/main.cpp`: DSC validation + Master List CSCA fix
+
+### 2026-01-01: Docker Infrastructure Reset & LDAP DIT Fix (Session 13)
+
+**Objective**: Fix Docker initialization issues after container reset - PostgreSQL validation schema and LDAP PKD DIT initialization
+
+**Problems Identified**:
+
+1. **PostgreSQL Init Script Permission Issue**
+   - `02-validation-schema.sql` had permission `600` (owner only)
+   - PostgreSQL Docker entrypoint couldn't read the file
+   - Error: `Permission denied` for validation_result table creation
+
+2. **Docker Volume Management Complexity**
+   - Docker volumes are harder to inspect and reset
+   - User requested bind mounts for easier data management
+
+3. **LDAP PKD DIT Not Initialized**
+   - osixia/openldap creates naming context but NOT the actual base DN data entry
+   - ldapadd returns "Already exists (68)" but ldapsearch returns "No such object (32)"
+   - Root cause: Config vs Data database mismatch in OpenLDAP
+   - Anonymous read access not allowed by default ACL
+
+**Solutions Implemented**:
+
+1. **PostgreSQL Permission Fix**
+   ```bash
+   chmod 644 docker/init-scripts/02-validation-schema.sql
+   ```
+   - validation_result table now created successfully with all columns and indexes
+
+2. **Bind Mount Migration** (`docker-compose.yaml`)
+   ```yaml
+   # Changed from Docker volumes to bind mounts
+   volumes:
+     - ../.docker-data/postgres:/var/lib/postgresql/data
+     - ../.docker-data/openldap1/data:/var/lib/ldap
+     - ../.docker-data/openldap1/config:/etc/ldap/slapd.d
+   ```
+   - Added `.docker-data/` to `.gitignore`
+   - Easy to reset: `rm -rf .docker-data && docker-compose up -d`
+
+3. **LDAP DIT Initialization Service** (`docker-compose.yaml`)
+   ```yaml
+   ldap-init:
+     image: osixia/openldap:1.5.0
+     depends_on:
+       openldap1:
+         condition: service_healthy
+     volumes:
+       - ../openldap/scripts:/scripts:ro
+     entrypoint: ["/bin/bash", "/scripts/init-pkd-dit.sh"]
+     restart: "no"
+   ```
+
+4. **Bootstrap LDIF with Base DN** (`openldap/bootstrap/01-pkd-dit.ldif`)
+   - Added base DN entry that osixia doesn't create:
+   ```ldif
+   dn: dc=ldap,dc=smartcoreinc,dc=com
+   objectClass: top
+   objectClass: dcObject
+   objectClass: organization
+   dc: ldap
+   o: SmartCore Inc
+   ```
+
+5. **Improved Init Script** (`openldap/scripts/init-pkd-dit.sh`)
+   - Uses **authenticated search** (osixia ACL blocks anonymous read)
+   - Retry logic with verification
+   - Final verification of all 5 PKD DIT entries
+   - Clear success/failure logging
+
+**Key Insight - osixia/openldap ACL**:
+```
+olcAccess: {2}to * by self read by dn="cn=admin,..." write by * none
+```
+- Anonymous users cannot read any data
+- Must use `-D "cn=admin,..." -w admin` for all ldapsearch operations
+
+**Files Modified**:
+- `docker/docker-compose.yaml`: Bind mounts, ldap-init service, WSL2 port fix
+- `docker/init-scripts/02-validation-schema.sql`: Permission fix (644)
+- `openldap/bootstrap/01-pkd-dit.ldif`: Added base DN entry
+- `openldap/scripts/init-pkd-dit.sh`: Complete rewrite with auth + retry
+- `openldap/Dockerfile`: Bootstrap LDIF copy to custom directory
+
+**Verification Results**:
+```bash
+# PostgreSQL - validation_result table created
+docker exec icao-local-pkd-postgres psql -U pkd -d localpkd -c "\d validation_result"
+# 35 columns, 7 indexes, 2 foreign keys ✓
+
+# LDAP PKD DIT structure verified
+ldapsearch -x -H ldap://localhost:389 -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin \
+  -b "dc=ldap,dc=smartcoreinc,dc=com" "(objectClass=*)" dn
+# dn: dc=ldap,dc=smartcoreinc,dc=com
+# dn: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+# dn: dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+# dn: dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+# dn: dc=nc-data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com ✓
+
+# All services healthy
+docker ps --format "table {{.Names}}\t{{.Status}}"
+# icao-local-pkd-frontend     Up (healthy)
+# icao-local-pkd-management   Up (healthy)
+# icao-local-pkd-postgres     Up (healthy)
+# icao-local-pkd-openldap1    Up (healthy)
+# icao-local-pkd-openldap2    Up (healthy) ✓
+```
+
+**Current Service Status**:
+| Service | Status | Port |
+|---------|--------|------|
+| Frontend | ✅ UP | 3000 |
+| PKD Management | ✅ UP | 8081 |
+| PA Service | ✅ UP | (internal) |
+| PostgreSQL | ✅ UP | 5432 |
+| OpenLDAP1 | ✅ UP | 3891 |
+| OpenLDAP2 | ✅ UP | 3892 |
+| HAProxy | ✅ UP | 389, 8404 |
+
+**Note**: PA Service port 8082 disabled due to WSL2 port forwarding issues - access via frontend nginx proxy instead

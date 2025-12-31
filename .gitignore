@@ -64,3 +64,4 @@ uploads/
 # Backup files
 *.bak
 backups/
+.docker-data/

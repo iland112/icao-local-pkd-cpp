@@ -65,6 +65,9 @@ export const uploadApi = {
   getStatistics: () =>
     api.get<UploadStatisticsOverview>('/upload/statistics'),
 
+  getCountryStatistics: (limit: number = 20) =>
+    api.get<{ country: string; csca: number; dsc: number; dscNc: number; total: number }[]>('/upload/countries', { params: { limit } }),
+
   // Manual processing triggers
   triggerParse: (uploadId: string) =>
     api.post(`/upload/${uploadId}/parse`),

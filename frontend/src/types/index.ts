@@ -187,6 +187,19 @@ export interface PageResponse<T> {
   last: boolean;
 }
 
+// Validation Statistics
+export interface ValidationStats {
+  validCount: number;
+  invalidCount: number;
+  pendingCount: number;
+  errorCount: number;
+  trustChainValidCount: number;
+  trustChainInvalidCount: number;
+  cscaNotFoundCount: number;
+  expiredCount: number;
+  revokedCount: number;
+}
+
 // Statistics
 export interface UploadStatisticsOverview {
   totalUploads: number;
@@ -195,8 +208,10 @@ export interface UploadStatisticsOverview {
   totalCertificates: number;
   cscaCount: number;
   dscCount: number;
+  dscNcCount: number;
   crlCount: number;
   countriesCount: number;
+  validation: ValidationStats;
 }
 
 export interface PAStatisticsOverview {

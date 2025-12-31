@@ -49,8 +49,31 @@
 #include <set>
 #include <optional>
 #include <regex>
+#include <algorithm>
+#include <cctype>
 
 namespace {
+
+/**
+ * @brief Case-insensitive string search
+ * @param haystack String to search in
+ * @param needle String to search for
+ * @return true if needle is found in haystack (case-insensitive)
+ */
+bool containsIgnoreCase(const std::string& haystack, const std::string& needle) {
+    if (needle.empty()) return true;
+    if (haystack.size() < needle.size()) return false;
+
+    std::string haystackLower = haystack;
+    std::string needleLower = needle;
+
+    std::transform(haystackLower.begin(), haystackLower.end(), haystackLower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+    std::transform(needleLower.begin(), needleLower.end(), needleLower.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    return haystackLower.find(needleLower) != std::string::npos;
+}
 
 /**
  * @brief Application configuration
@@ -226,6 +249,7 @@ struct ProcessingProgress {
         json["updatedAt"] = ss.str();
 
         Json::StreamWriterBuilder writer;
+        writer["indentation"] = "";  // Single-line JSON for SSE compatibility
         return Json::writeString(writer, json);
     }
 
@@ -519,8 +543,9 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
         pos += 2;
     }
 
+    // Use case-insensitive comparison for DN matching (RFC 4517)
     std::string query = "SELECT certificate_binary FROM certificate WHERE "
-                        "certificate_type = 'CSCA' AND subject_dn = '" + escapedDn + "' LIMIT 1";
+                        "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "') LIMIT 1";
 
     PGresult* res = PQexec(conn, query.c_str());
     if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
@@ -621,6 +646,159 @@ DscValidationResult validateDscCertificate(PGconn* conn, X509* dscCert, const st
     }
 
     return result;
+}
+
+// =============================================================================
+// Validation Result Storage
+// =============================================================================
+
+/**
+ * @brief Structure to hold detailed validation result for storage
+ */
+struct ValidationResultRecord {
+    std::string certificateId;
+    std::string uploadId;
+    std::string certificateType;
+    std::string countryCode;
+    std::string subjectDn;
+    std::string issuerDn;
+    std::string serialNumber;
+
+    // Overall result
+    std::string validationStatus;  // VALID, INVALID, PENDING, ERROR
+
+    // Trust chain
+    bool trustChainValid = false;
+    std::string trustChainMessage;
+    bool cscaFound = false;
+    std::string cscaSubjectDn;
+    std::string cscaFingerprint;
+    bool signatureVerified = false;
+    std::string signatureAlgorithm;
+
+    // Validity period
+    bool validityCheckPassed = false;
+    bool isExpired = false;
+    bool isNotYetValid = false;
+    std::string notBefore;
+    std::string notAfter;
+
+    // CSCA specific
+    bool isCa = false;
+    bool isSelfSigned = false;
+    int pathLengthConstraint = -1;
+
+    // Key usage
+    bool keyUsageValid = false;
+    std::string keyUsageFlags;
+
+    // CRL check
+    std::string crlCheckStatus = "NOT_CHECKED";
+    std::string crlCheckMessage;
+
+    // Error
+    std::string errorCode;
+    std::string errorMessage;
+
+    int validationDurationMs = 0;
+};
+
+/**
+ * @brief Store validation result to database
+ */
+bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
+    if (!conn) return false;
+
+    // Escape strings for SQL
+    auto escapeStr = [](const std::string& str) -> std::string {
+        std::string result = str;
+        size_t pos = 0;
+        while ((pos = result.find("'", pos)) != std::string::npos) {
+            result.replace(pos, 1, "''");
+            pos += 2;
+        }
+        return result;
+    };
+
+    std::ostringstream sql;
+    sql << "INSERT INTO validation_result ("
+        << "certificate_id, upload_id, certificate_type, country_code, "
+        << "subject_dn, issuer_dn, serial_number, "
+        << "validation_status, trust_chain_valid, trust_chain_message, "
+        << "csca_found, csca_subject_dn, csca_fingerprint, signature_verified, signature_algorithm, "
+        << "validity_check_passed, is_expired, is_not_yet_valid, not_before, not_after, "
+        << "is_ca, is_self_signed, path_length_constraint, "
+        << "key_usage_valid, key_usage_flags, "
+        << "crl_check_status, crl_check_message, "
+        << "error_code, error_message, validation_duration_ms"
+        << ") VALUES ("
+        << "'" << escapeStr(record.certificateId) << "', "
+        << "'" << escapeStr(record.uploadId) << "', "
+        << "'" << escapeStr(record.certificateType) << "', "
+        << "'" << escapeStr(record.countryCode) << "', "
+        << "'" << escapeStr(record.subjectDn) << "', "
+        << "'" << escapeStr(record.issuerDn) << "', "
+        << "'" << escapeStr(record.serialNumber) << "', "
+        << "'" << escapeStr(record.validationStatus) << "', "
+        << (record.trustChainValid ? "TRUE" : "FALSE") << ", "
+        << "'" << escapeStr(record.trustChainMessage) << "', "
+        << (record.cscaFound ? "TRUE" : "FALSE") << ", "
+        << "'" << escapeStr(record.cscaSubjectDn) << "', "
+        << "'" << escapeStr(record.cscaFingerprint) << "', "
+        << (record.signatureVerified ? "TRUE" : "FALSE") << ", "
+        << "'" << escapeStr(record.signatureAlgorithm) << "', "
+        << (record.validityCheckPassed ? "TRUE" : "FALSE") << ", "
+        << (record.isExpired ? "TRUE" : "FALSE") << ", "
+        << (record.isNotYetValid ? "TRUE" : "FALSE") << ", "
+        << (record.notBefore.empty() ? "NULL" : ("'" + escapeStr(record.notBefore) + "'")) << ", "
+        << (record.notAfter.empty() ? "NULL" : ("'" + escapeStr(record.notAfter) + "'")) << ", "
+        << (record.isCa ? "TRUE" : "FALSE") << ", "
+        << (record.isSelfSigned ? "TRUE" : "FALSE") << ", "
+        << (record.pathLengthConstraint >= 0 ? std::to_string(record.pathLengthConstraint) : "NULL") << ", "
+        << (record.keyUsageValid ? "TRUE" : "FALSE") << ", "
+        << "'" << escapeStr(record.keyUsageFlags) << "', "
+        << "'" << escapeStr(record.crlCheckStatus) << "', "
+        << "'" << escapeStr(record.crlCheckMessage) << "', "
+        << "'" << escapeStr(record.errorCode) << "', "
+        << "'" << escapeStr(record.errorMessage) << "', "
+        << record.validationDurationMs
+        << ")";
+
+    PGresult* res = PQexec(conn, sql.str().c_str());
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    if (!success) {
+        spdlog::error("Failed to save validation result: {}", PQerrorMessage(conn));
+    }
+    PQclear(res);
+
+    return success;
+}
+
+/**
+ * @brief Update validation statistics in uploaded_file table
+ */
+void updateValidationStatistics(PGconn* conn, const std::string& uploadId,
+                                 int validCount, int invalidCount, int pendingCount, int errorCount,
+                                 int trustChainValidCount, int trustChainInvalidCount, int cscaNotFoundCount,
+                                 int expiredCount, int revokedCount) {
+    std::ostringstream sql;
+    sql << "UPDATE uploaded_file SET "
+        << "validation_valid_count = " << validCount << ", "
+        << "validation_invalid_count = " << invalidCount << ", "
+        << "validation_pending_count = " << pendingCount << ", "
+        << "validation_error_count = " << errorCount << ", "
+        << "trust_chain_valid_count = " << trustChainValidCount << ", "
+        << "trust_chain_invalid_count = " << trustChainInvalidCount << ", "
+        << "csca_not_found_count = " << cscaNotFoundCount << ", "
+        << "expired_count = " << expiredCount << ", "
+        << "revoked_count = " << revokedCount
+        << " WHERE id = '" << uploadId << "'";
+
+    PGresult* res = PQexec(conn, sql.str().c_str());
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update validation statistics: {}", PQerrorMessage(conn));
+    }
+    PQclear(res);
 }
 
 // =============================================================================
@@ -1038,8 +1216,14 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
         if (line[0] == '#') continue;
 
         if (line[0] == ' ') {
+            // LDIF continuation line - append to current value
             if (inContinuation) {
-                currentAttrValue += line.substr(1);
+                if (currentAttrName == "dn") {
+                    // DN continuation - append to entry.dn
+                    currentEntry.dn += line.substr(1);
+                } else {
+                    currentAttrValue += line.substr(1);
+                }
             }
             continue;
         }
@@ -1069,8 +1253,8 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
 
         if (currentAttrName == "dn") {
             currentEntry.dn = currentAttrValue;
-            currentAttrName.clear();
-            currentAttrValue.clear();
+            // Keep currentAttrName as "dn" for continuation line handling
+            inContinuation = true;
         } else {
             inContinuation = true;
         }
@@ -1564,11 +1748,27 @@ void saveRevokedCertificate(PGconn* conn, const std::string& crlId,
 }
 
 /**
+ * @brief Validation statistics counters for an upload
+ */
+struct ValidationStats {
+    int validCount = 0;
+    int invalidCount = 0;
+    int pendingCount = 0;
+    int errorCount = 0;
+    int trustChainValidCount = 0;
+    int trustChainInvalidCount = 0;
+    int cscaNotFoundCount = 0;
+    int expiredCount = 0;
+    int revokedCount = 0;
+};
+
+/**
  * @brief Parse and save certificate from LDIF entry (DB + LDAP)
  */
 bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                            const LdifEntry& entry, const std::string& attrName,
-                           int& cscaCount, int& dscCount, int& ldapStoredCount) {
+                           int& cscaCount, int& dscCount, int& dscNcCount, int& ldapStoredCount,
+                           ValidationStats& validationStats) {
     std::string base64Value = entry.getFirstAttribute(attrName);
     if (base64Value.empty()) return false;
 
@@ -1598,68 +1798,157 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
     std::string validationStatus = "PENDING";
     std::string validationMessage = "";
 
+    // Prepare validation result record
+    ValidationResultRecord valRecord;
+    valRecord.uploadId = uploadId;
+    valRecord.countryCode = countryCode;
+    valRecord.subjectDn = subjectDn;
+    valRecord.issuerDn = issuerDn;
+    valRecord.serialNumber = serialNumber;
+    valRecord.notBefore = notBefore;
+    valRecord.notAfter = notAfter;
+
+    auto startTime = std::chrono::high_resolution_clock::now();
+
     if (subjectDn == issuerDn) {
         // CSCA - self-signed certificate
         certType = "CSCA";
         cscaCount++;
+        valRecord.certificateType = "CSCA";
+        valRecord.isSelfSigned = true;
 
         // Validate CSCA self-signature
         auto cscaValidation = validateCscaCertificate(cert);
+        valRecord.isCa = cscaValidation.isCa;
+        valRecord.signatureVerified = cscaValidation.signatureValid;
+        valRecord.validityCheckPassed = cscaValidation.isValid;  // isValid includes validity period check
+        valRecord.keyUsageValid = cscaValidation.hasKeyCertSign;
+        valRecord.trustChainValid = cscaValidation.signatureValid;  // Self-signed trust chain = signature valid
+
         if (cscaValidation.isValid) {
             validationStatus = "VALID";
+            valRecord.validationStatus = "VALID";
+            valRecord.trustChainMessage = "Self-signature verified";
+            validationStats.validCount++;
+            validationStats.trustChainValidCount++;
             spdlog::info("CSCA validation: VERIFIED - self-signature valid for {}", countryCode);
         } else if (cscaValidation.signatureValid) {
-            validationStatus = "WARNING";
+            validationStatus = "VALID";  // Signature valid but other issues
             validationMessage = cscaValidation.errorMessage;
+            valRecord.validationStatus = "VALID";
+            valRecord.trustChainMessage = cscaValidation.errorMessage;
+            validationStats.validCount++;
+            validationStats.trustChainValidCount++;
             spdlog::warn("CSCA validation: WARNING - {} for {}", cscaValidation.errorMessage, countryCode);
         } else {
             validationStatus = "INVALID";
             validationMessage = cscaValidation.errorMessage;
+            valRecord.validationStatus = "INVALID";
+            valRecord.trustChainValid = false;
+            valRecord.trustChainMessage = cscaValidation.errorMessage;
+            valRecord.errorMessage = cscaValidation.errorMessage;
+            validationStats.invalidCount++;
+            validationStats.trustChainInvalidCount++;
             spdlog::error("CSCA validation: FAILED - {} for {}", cscaValidation.errorMessage, countryCode);
         }
-    } else if (entry.dn.find("nc-data") != std::string::npos) {
+    } else if (containsIgnoreCase(entry.dn, "dc=nc-data")) {
+        // Non-Conformant DSC - detected by dc=nc-data in LDIF DN path (case-insensitive)
         certType = "DSC_NC";
-        dscCount++;
+        dscNcCount++;
+        valRecord.certificateType = "DSC_NC";
+        spdlog::info("Detected DSC_NC certificate from nc-data path: dn={}", entry.dn);
 
         // DSC_NC - perform trust chain validation
         auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
+        valRecord.cscaFound = dscValidation.cscaFound;
+        valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
+        valRecord.signatureVerified = dscValidation.signatureValid;
+        valRecord.validityCheckPassed = dscValidation.notExpired;
+        valRecord.isExpired = !dscValidation.notExpired;
+
         if (dscValidation.isValid) {
             validationStatus = "VALID";
+            valRecord.validationStatus = "VALID";
+            valRecord.trustChainValid = true;
+            valRecord.trustChainMessage = "Trust chain verified: DSC signed by CSCA";
+            validationStats.validCount++;
+            validationStats.trustChainValidCount++;
             spdlog::info("DSC_NC validation: Trust Chain VERIFIED for {} (issuer: {})",
                         countryCode, issuerDn.substr(0, 50));
         } else if (dscValidation.cscaFound) {
             validationStatus = "INVALID";
             validationMessage = dscValidation.errorMessage;
+            valRecord.validationStatus = "INVALID";
+            valRecord.trustChainValid = false;
+            valRecord.trustChainMessage = dscValidation.errorMessage;
+            valRecord.errorMessage = dscValidation.errorMessage;
+            validationStats.invalidCount++;
+            validationStats.trustChainInvalidCount++;
+            if (!dscValidation.notExpired) validationStats.expiredCount++;
             spdlog::error("DSC_NC validation: Trust Chain FAILED - {} for {}",
                          dscValidation.errorMessage, countryCode);
         } else {
             validationStatus = "PENDING";
             validationMessage = dscValidation.errorMessage;
+            valRecord.validationStatus = "PENDING";
+            valRecord.trustChainMessage = "CSCA not found in database";
+            valRecord.errorCode = "CSCA_NOT_FOUND";
+            valRecord.errorMessage = dscValidation.errorMessage;
+            validationStats.pendingCount++;
+            validationStats.cscaNotFoundCount++;
             spdlog::warn("DSC_NC validation: CSCA not found - {} for {}",
                         dscValidation.errorMessage, countryCode);
         }
     } else {
         certType = "DSC";
         dscCount++;
+        valRecord.certificateType = "DSC";
 
         // DSC - perform trust chain validation
         auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
+        valRecord.cscaFound = dscValidation.cscaFound;
+        valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
+        valRecord.signatureVerified = dscValidation.signatureValid;
+        valRecord.validityCheckPassed = dscValidation.notExpired;
+        valRecord.isExpired = !dscValidation.notExpired;
+
         if (dscValidation.isValid) {
             validationStatus = "VALID";
+            valRecord.validationStatus = "VALID";
+            valRecord.trustChainValid = true;
+            valRecord.trustChainMessage = "Trust chain verified: DSC signed by CSCA";
+            validationStats.validCount++;
+            validationStats.trustChainValidCount++;
             spdlog::info("DSC validation: Trust Chain VERIFIED for {} (issuer: {})",
                         countryCode, issuerDn.substr(0, 50));
         } else if (dscValidation.cscaFound) {
             validationStatus = "INVALID";
             validationMessage = dscValidation.errorMessage;
+            valRecord.validationStatus = "INVALID";
+            valRecord.trustChainValid = false;
+            valRecord.trustChainMessage = dscValidation.errorMessage;
+            valRecord.errorMessage = dscValidation.errorMessage;
+            validationStats.invalidCount++;
+            validationStats.trustChainInvalidCount++;
+            if (!dscValidation.notExpired) validationStats.expiredCount++;
             spdlog::error("DSC validation: Trust Chain FAILED - {} for {}",
                          dscValidation.errorMessage, countryCode);
         } else {
             validationStatus = "PENDING";
             validationMessage = dscValidation.errorMessage;
+            valRecord.validationStatus = "PENDING";
+            valRecord.trustChainMessage = "CSCA not found in database";
+            valRecord.errorCode = "CSCA_NOT_FOUND";
+            valRecord.errorMessage = dscValidation.errorMessage;
+            validationStats.pendingCount++;
+            validationStats.cscaNotFoundCount++;
             spdlog::warn("DSC validation: CSCA not found - {} for {}",
                         dscValidation.errorMessage, countryCode);
         }
     }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    valRecord.validationDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
     X509_free(cert);
 
@@ -1673,7 +1962,11 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         spdlog::debug("Saved certificate to DB: type={}, country={}, fingerprint={}",
                      certType, countryCode, fingerprint.substr(0, 16));
 
-        // 2. Save to LDAP
+        // 3. Save validation result
+        valRecord.certificateId = certId;
+        saveValidationResult(conn, valRecord);
+
+        // 4. Save to LDAP
         if (ld) {
             std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
                                                         subjectDn, issuerDn, serialNumber,
@@ -1785,12 +2078,13 @@ bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
  */
 void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
                            const std::string& status, int cscaCount, int dscCount,
-                           int crlCount, int totalEntries, int processedEntries,
+                           int dscNcCount, int crlCount, int totalEntries, int processedEntries,
                            const std::string& errorMessage) {
     std::string query = "UPDATE uploaded_file SET "
                        "status = '" + status + "', "
                        "csca_count = " + std::to_string(cscaCount) + ", "
                        "dsc_count = " + std::to_string(dscCount) + ", "
+                       "dsc_nc_count = " + std::to_string(dscNcCount) + ", "
                        "crl_count = " + std::to_string(crlCount) + ", "
                        "total_entries = " + std::to_string(totalEntries) + ", "
                        "processed_entries = " + std::to_string(processedEntries) + ", "
@@ -1834,18 +2128,35 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
         try {
             std::string contentStr(content.begin(), content.end());
 
+            // Send parsing started progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
+                    0, 100, "LDIF 파일 파싱 중..."));
+
             // Parse LDIF content
             std::vector<LdifEntry> entries = parseLdifContent(contentStr);
             int totalEntries = static_cast<int>(entries.size());
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
 
+            // Send parsing completed progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                    totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
+
+            // Send validation started progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
+                    0, totalEntries, "인증서 검증 및 DB 저장 중..."));
+
             int cscaCount = 0;
             int dscCount = 0;
+            int dscNcCount = 0;
             int crlCount = 0;
             int processedEntries = 0;
             int ldapCertStoredCount = 0;
             int ldapCrlStoredCount = 0;
+            ValidationStats validationStats;  // Track validation statistics
 
             // Process each entry
             for (const auto& entry : entries) {
@@ -1853,12 +2164,12 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                     // Check for userCertificate;binary
                     if (entry.hasAttribute("userCertificate;binary")) {
                         parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate;binary",
-                                             cscaCount, dscCount, ldapCertStoredCount);
+                                             cscaCount, dscCount, dscNcCount, ldapCertStoredCount, validationStats);
                     }
                     // Check for cACertificate;binary
                     else if (entry.hasAttribute("cACertificate;binary")) {
                         parseCertificateEntry(conn, ld, uploadId, entry, "cACertificate;binary",
-                                             cscaCount, dscCount, ldapCertStoredCount);
+                                             cscaCount, dscCount, dscNcCount, ldapCertStoredCount, validationStats);
                     }
 
                     // Check for CRL
@@ -1872,8 +2183,14 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
                 processedEntries++;
 
-                // Log progress every 100 entries
-                if (processedEntries % 100 == 0) {
+                // Send progress update every 50 entries
+                if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                            processedEntries, totalEntries,
+                            "처리 중: " + std::to_string(cscaCount + dscCount) + "개 인증서, " +
+                            std::to_string(crlCount) + "개 CRL"));
+
                     spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP)",
                                 processedEntries, totalEntries,
                                 cscaCount + dscCount, ldapCertStoredCount,
@@ -1881,16 +2198,47 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                 }
             }
 
+            // Send LDAP saving progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
+                    ldapCertStoredCount + ldapCrlStoredCount, cscaCount + dscCount + crlCount,
+                    "LDAP 저장 완료: " + std::to_string(ldapCertStoredCount) + "개 인증서, " +
+                    std::to_string(ldapCrlStoredCount) + "개 CRL"));
+
             // Update final statistics
-            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, crlCount,
+            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, dscNcCount, crlCount,
                                   totalEntries, processedEntries, "");
 
-            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} CRLs (LDAP: {} certs, {} CRLs)",
-                        uploadId, cscaCount, dscCount, crlCount, ldapCertStoredCount, ldapCrlStoredCount);
+            // Update validation statistics
+            updateValidationStatistics(conn, uploadId,
+                                       validationStats.validCount, validationStats.invalidCount,
+                                       validationStats.pendingCount, validationStats.errorCount,
+                                       validationStats.trustChainValidCount, validationStats.trustChainInvalidCount,
+                                       validationStats.cscaNotFoundCount, validationStats.expiredCount,
+                                       validationStats.revokedCount);
+
+            // Send completion progress with validation info
+            std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
+                                       "개, DSC " + std::to_string(dscCount) +
+                                       (dscNcCount > 0 ? "개, DSC_NC " + std::to_string(dscNcCount) : "") +
+                                       "개, CRL " + std::to_string(crlCount) + "개" +
+                                       " (검증: " + std::to_string(validationStats.validCount) + " 성공, " +
+                                       std::to_string(validationStats.invalidCount) + " 실패, " +
+                                       std::to_string(validationStats.pendingCount) + " 보류)";
+            int totalCerts = cscaCount + dscCount + dscNcCount + crlCount;
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                    totalCerts, totalCerts, completionMsg));
+
+            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} DSC_NC, {} CRLs (LDAP: {} certs, {} CRLs)",
+                        uploadId, cscaCount, dscCount, dscNcCount, crlCount, ldapCertStoredCount, ldapCrlStoredCount);
+            spdlog::info("Validation stats: {} valid, {} invalid, {} pending, {} csca_not_found, {} expired",
+                        validationStats.validCount, validationStats.invalidCount, validationStats.pendingCount,
+                        validationStats.cscaNotFoundCount, validationStats.expiredCount);
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, e.what());
+            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
         }
 
         // Cleanup connections
@@ -1947,7 +2295,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 spdlog::error("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
                 ProgressManager::getInstance().sendProgress(
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format", "CMS 형식 오류"));
-                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, "Invalid CMS format");
+                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "Invalid CMS format");
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                 PQfinish(conn);
                 return;
@@ -2010,15 +2358,16 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
+                            // Including both self-signed and cross-signed/link CSCAs
+                            std::string certType = "CSCA";
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                if (certType == "CSCA") cscaCount++;
-                                else dscCount++;
+                                cscaCount++;
 
                                 if (ld) {
                                     std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -2036,7 +2385,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 } else {
                     spdlog::error("Failed to parse Master List: neither CMS nor PKCS7 parsing succeeded");
                     spdlog::error("OpenSSL error: {}", ERR_error_string(ERR_get_error(), nullptr));
-                    updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
+                    updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
                     if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                     PQfinish(conn);
                     return;
@@ -2121,31 +2470,33 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         std::string fingerprint = computeFileHash(derBytes);
                                         std::string countryCode = extractCountryCode(subjectDn);
 
-                                        // Validate CSCA certificate with full self-signature verification
-                                        std::string certType = "DSC";  // default
+                                        // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
+                                        // Including both self-signed and cross-signed/link CSCAs
+                                        std::string certType = "CSCA";
                                         std::string validationStatus = "VALID";
                                         std::string validationMessage = "";
 
                                         if (subjectDn == issuerDn) {
-                                            // Potential CSCA - verify self-signature
+                                            // Self-signed CSCA - verify self-signature
                                             auto cscaValidation = validateCscaCertificate(cert);
                                             if (cscaValidation.isValid) {
-                                                certType = "CSCA";
                                                 validationStatus = "VALID";
                                                 spdlog::debug("CSCA self-signature verified: {}", subjectDn.substr(0, 50));
                                             } else if (cscaValidation.signatureValid) {
                                                 // Self-signed but missing CA flag or key usage
-                                                certType = "CSCA";
                                                 validationStatus = "WARNING";
                                                 validationMessage = cscaValidation.errorMessage;
                                                 spdlog::warn("CSCA validation warning: {} - {}", subjectDn.substr(0, 50), cscaValidation.errorMessage);
                                             } else {
                                                 // Signature invalid
-                                                certType = "CSCA";
                                                 validationStatus = "INVALID";
                                                 validationMessage = cscaValidation.errorMessage;
                                                 spdlog::error("CSCA self-signature FAILED: {} - {}", subjectDn.substr(0, 50), cscaValidation.errorMessage);
                                             }
+                                        } else {
+                                            // Cross-signed/Link CSCA - mark as valid (signed by another CSCA)
+                                            spdlog::debug("Cross-signed CSCA: subject={}, issuer={}",
+                                                         subjectDn.substr(0, 50), issuerDn.substr(0, 50));
                                         }
                                         totalCerts++;
 
@@ -2171,11 +2522,11 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                                              validationStatus, validationMessage);
 
                                         if (!certId.empty()) {
-                                            if (certType == "CSCA") cscaCount++;
-                                            else dscCount++;
+                                            // All Master List certificates are CSCA
+                                            cscaCount++;
 
-                                            spdlog::debug("Saved {} from Master List to DB: country={}, fingerprint={}",
-                                                         certType, countryCode, fingerprint.substr(0, 16));
+                                            spdlog::debug("Saved CSCA from Master List to DB: country={}, fingerprint={}",
+                                                         countryCode, fingerprint.substr(0, 16));
 
                                             // 2. Save to LDAP
                                             if (ld) {
@@ -2231,15 +2582,16 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certType = (subjectDn == issuerDn) ? "CSCA" : "DSC";
+                            // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
+                            // Including both self-signed and cross-signed/link CSCAs
+                            std::string certType = "CSCA";
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                if (certType == "CSCA") cscaCount++;
-                                else dscCount++;
+                                cscaCount++;
 
                                 if (ld) {
                                     std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -2260,8 +2612,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 CMS_ContentInfo_free(cms);
             }
 
-            // Update statistics
-            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 1, 1, "");
+            // Update statistics (Master List contains only CSCA, no DSC or DSC_NC)
+            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, 1, 1, "");
 
             // Send completion progress
             std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
@@ -2278,7 +2630,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, e.what());
+            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
         }
 
         // Cleanup connections
@@ -2609,7 +2961,7 @@ void registerRoutes() {
                 PQclear(res);
 
                 // Get total certificates (sum of certificate_count from all uploads)
-                res = PQexec(conn, "SELECT COALESCE(SUM(csca_count + dsc_count), 0) FROM uploaded_file");
+                res = PQexec(conn, "SELECT COALESCE(SUM(csca_count + dsc_count + dsc_nc_count), 0) FROM uploaded_file");
                 result["totalCertificates"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
@@ -2623,15 +2975,61 @@ void registerRoutes() {
                 result["cscaCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
-                // Get DSC count from certificate table
-                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type IN ('DSC', 'DSC_NC')");
+                // Get DSC count from certificate table (conformant DSC only)
+                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'DSC'");
                 result["dscCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                // Get DSC_NC count from certificate table (non-conformant DSC)
+                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'DSC_NC'");
+                result["dscNcCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
                 // Get distinct country count from certificate table
                 res = PQexec(conn, "SELECT COUNT(DISTINCT country_code) FROM certificate");
                 result["countriesCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
+
+                // Validation statistics from validation_result table
+                Json::Value validation;
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'VALID'");
+                validation["validCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'INVALID'");
+                validation["invalidCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'PENDING'");
+                validation["pendingCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'ERROR'");
+                validation["errorCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE trust_chain_valid = TRUE");
+                validation["trustChainValidCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE trust_chain_valid = FALSE");
+                validation["trustChainInvalidCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE csca_found = FALSE AND certificate_type IN ('DSC', 'DSC_NC')");
+                validation["cscaNotFoundCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE is_expired = TRUE");
+                validation["expiredCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE crl_check_status = 'REVOKED'");
+                validation["revokedCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
+                result["validation"] = validation;
 
             } else {
                 result["totalUploads"] = 0;
@@ -2640,8 +3038,21 @@ void registerRoutes() {
                 result["totalCertificates"] = 0;
                 result["cscaCount"] = 0;
                 result["dscCount"] = 0;
+                result["dscNcCount"] = 0;
                 result["crlCount"] = 0;
                 result["countriesCount"] = 0;
+
+                // Empty validation stats
+                Json::Value validation;
+                validation["validCount"] = 0;
+                validation["invalidCount"] = 0;
+                validation["pendingCount"] = 0;
+                validation["trustChainValidCount"] = 0;
+                validation["trustChainInvalidCount"] = 0;
+                validation["cscaNotFoundCount"] = 0;
+                validation["expiredCount"] = 0;
+                validation["revokedCount"] = 0;
+                result["validation"] = validation;
             }
 
             PQfinish(conn);
@@ -2691,10 +3102,15 @@ void registerRoutes() {
                 result["first"] = (page == 0);
                 result["last"] = (page >= result["totalPages"].asInt() - 1);
 
-                // Get paginated results
+                // Get paginated results with validation statistics
                 int offset = page * size;
                 std::string query = "SELECT id, file_name, file_format, file_size, status, "
-                                   "(csca_count + dsc_count) as certificate_count, crl_count, error_message, upload_timestamp, completed_timestamp "
+                                   "csca_count, dsc_count, dsc_nc_count, crl_count, error_message, "
+                                   "upload_timestamp, completed_timestamp, "
+                                   "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
+                                   "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
+                                   "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
+                                   "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
                                    "FROM uploaded_file ORDER BY upload_timestamp DESC "
                                    "LIMIT " + std::to_string(size) + " OFFSET " + std::to_string(offset);
 
@@ -2707,11 +3123,31 @@ void registerRoutes() {
                         item["fileFormat"] = PQgetvalue(res, i, 2);
                         item["fileSize"] = static_cast<Json::Int64>(std::stoll(PQgetvalue(res, i, 3)));
                         item["status"] = PQgetvalue(res, i, 4);
-                        item["certificateCount"] = std::stoi(PQgetvalue(res, i, 5));
-                        item["crlCount"] = std::stoi(PQgetvalue(res, i, 6));
-                        item["errorMessage"] = PQgetvalue(res, i, 7) ? PQgetvalue(res, i, 7) : "";
-                        item["createdAt"] = PQgetvalue(res, i, 8);
-                        item["updatedAt"] = PQgetvalue(res, i, 9);
+                        int cscaCount = std::stoi(PQgetvalue(res, i, 5));
+                        int dscCount = std::stoi(PQgetvalue(res, i, 6));
+                        int dscNcCount = std::stoi(PQgetvalue(res, i, 7));
+                        item["cscaCount"] = cscaCount;
+                        item["dscCount"] = dscCount;
+                        item["dscNcCount"] = dscNcCount;
+                        item["certificateCount"] = cscaCount + dscCount + dscNcCount;  // Keep for backward compatibility
+                        item["crlCount"] = std::stoi(PQgetvalue(res, i, 8));
+                        item["errorMessage"] = PQgetvalue(res, i, 9) ? PQgetvalue(res, i, 9) : "";
+                        item["createdAt"] = PQgetvalue(res, i, 10);
+                        item["updatedAt"] = PQgetvalue(res, i, 11);
+
+                        // Validation statistics
+                        Json::Value validation;
+                        validation["validCount"] = std::stoi(PQgetvalue(res, i, 12));
+                        validation["invalidCount"] = std::stoi(PQgetvalue(res, i, 13));
+                        validation["pendingCount"] = std::stoi(PQgetvalue(res, i, 14));
+                        validation["errorCount"] = std::stoi(PQgetvalue(res, i, 15));
+                        validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, i, 16));
+                        validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, i, 17));
+                        validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, i, 18));
+                        validation["expiredCount"] = std::stoi(PQgetvalue(res, i, 19));
+                        validation["revokedCount"] = std::stoi(PQgetvalue(res, i, 20));
+                        item["validation"] = validation;
+
                         result["content"].append(item);
                     }
                 }
@@ -2721,6 +3157,65 @@ void registerRoutes() {
                 result["totalPages"] = 0;
                 result["first"] = true;
                 result["last"] = true;
+            }
+
+            PQfinish(conn);
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // Country statistics endpoint - GET /api/upload/countries
+    app.registerHandler(
+        "/api/upload/countries",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/upload/countries");
+
+            // Get query parameters for limit (default 20)
+            int limit = 20;
+            if (auto l = req->getParameter("limit"); !l.empty()) {
+                limit = std::stoi(l);
+                if (limit > 100) limit = 100;  // Cap at 100
+            }
+
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            Json::Value result(Json::arrayValue);
+
+            if (PQstatus(conn) == CONNECTION_OK) {
+                // Query certificate counts by country, ordered by total count
+                std::string query =
+                    "SELECT country_code, "
+                    "SUM(CASE WHEN certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
+                    "SUM(CASE WHEN certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
+                    "SUM(CASE WHEN certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
+                    "COUNT(*) as total "
+                    "FROM certificate "
+                    "WHERE country_code IS NOT NULL AND country_code != '' "
+                    "GROUP BY country_code "
+                    "ORDER BY total DESC "
+                    "LIMIT " + std::to_string(limit);
+
+                PGresult* res = PQexec(conn, query.c_str());
+                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                    for (int i = 0; i < PQntuples(res); i++) {
+                        Json::Value item;
+                        item["country"] = PQgetvalue(res, i, 0);
+                        item["csca"] = std::stoi(PQgetvalue(res, i, 1));
+                        item["dsc"] = std::stoi(PQgetvalue(res, i, 2));
+                        item["dscNc"] = std::stoi(PQgetvalue(res, i, 3));
+                        item["total"] = std::stoi(PQgetvalue(res, i, 4));
+                        result.append(item);
+                    }
+                }
+                PQclear(res);
             }
 
             PQfinish(conn);
@@ -2767,8 +3262,9 @@ void registerRoutes() {
                     }
                 });
 
-            resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-            resp->addHeader("Content-Type", "text/event-stream");
+            // Use setContentTypeString to properly set SSE content type
+            // This replaces the default text/plain set by newAsyncStreamResponse
+            resp->setContentTypeString("text/event-stream; charset=utf-8");
             resp->addHeader("Cache-Control", "no-cache");
             resp->addHeader("Connection", "keep-alive");
             resp->addHeader("Access-Control-Allow-Origin", "*");

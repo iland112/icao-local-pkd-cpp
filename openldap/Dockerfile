@@ -9,5 +9,12 @@ RUN mkdir -p /container/service/slapd/assets/config/replication && \
     echo "# Empty replication enable config" > /container/service/slapd/assets/config/replication/replication-enable.ldif && \
     echo "# Empty root password change config" > /container/service/slapd/assets/config/admin/root-password-change.ldif
 
-# Copy ICAO PKD custom schema
-COPY schemas/icao-pkd.ldif /container/service/slapd/assets/config/bootstrap/ldif/custom/
+# Copy ICAO PKD custom schema (goes to schema directory)
+COPY schemas/icao-pkd.ldif /container/service/slapd/assets/config/bootstrap/schema/
+
+# Copy PKD DIT structure initialization LDIF (goes to custom directory for ldapadd)
+COPY bootstrap/ /container/service/slapd/assets/config/bootstrap/ldif/custom/
+
+# Fix permissions for all copied files
+RUN chmod 644 /container/service/slapd/assets/config/bootstrap/schema/icao-pkd.ldif && \
+    chmod 644 /container/service/slapd/assets/config/bootstrap/ldif/custom/*.ldif || true

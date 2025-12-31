@@ -2,6 +2,9 @@
 # ICAO Local PKD - Docker Compose Configuration
 # Multi-Service Architecture: PKD Management + PA Service
 # =============================================================================
+# Data Directory: .docker-data/ (bind mount for easy management)
+# To reset: rm -rf .docker-data && docker compose up -d
+# =============================================================================
 
 services:
   # ---------------------------------------------------------------------------
@@ -56,8 +59,8 @@ services:
       haproxy:
         condition: service_started
     volumes:
-      - pkd-logs:/app/logs
-      - pkd-uploads:/app/uploads
+      - ../.docker-data/pkd-logs:/app/logs
+      - ../.docker-data/pkd-uploads:/app/uploads
       - ../data/cert:/app/data/cert:ro
     networks:
       - pkd-network
@@ -77,8 +80,9 @@ services:
       context: ..
       dockerfile: services/pa-service/Dockerfile
     container_name: icao-local-pkd-pa-service
-    ports:
-      - "8082:8082"
+    # Port disabled due to WSL2 port forwarding issues - access via frontend nginx proxy
+    # ports:
+    #   - "8082:8082"
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pa-service
@@ -99,7 +103,7 @@ services:
       haproxy:
         condition: service_started
     volumes:
-      - pa-logs:/app/logs
+      - ../.docker-data/pa-logs:/app/logs
     networks:
       - pkd-network
     restart: unless-stopped
@@ -140,8 +144,8 @@ services:
       haproxy:
         condition: service_started
     volumes:
-      - app-logs:/app/logs
-      - app-uploads:/app/uploads
+      - ../.docker-data/app-logs:/app/logs
+      - ../.docker-data/app-uploads:/app/uploads
       - ../data/cert:/app/data/cert:ro
     networks:
       - pkd-network
@@ -164,8 +168,8 @@ services:
       - TZ=Asia/Seoul
       - PGTZ=Asia/Seoul
     volumes:
-      - postgres-data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
+      - ../.docker-data/postgres:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
     networks:
       - pkd-network
     healthcheck:
@@ -174,6 +178,28 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # LDAP PKD DIT Initializer (runs once at startup)
+  # ---------------------------------------------------------------------------
+  ldap-init:
+    image: osixia/openldap:1.5.0
+    container_name: icao-local-pkd-ldap-init
+    depends_on:
+      openldap1:
+        condition: service_healthy
+    environment:
+      - LDAP_HOST=openldap1
+      - LDAP_PORT=389
+      - LDAP_ADMIN_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
+    volumes:
+      - ../openldap/scripts:/scripts:ro
+    entrypoint: ["/bin/bash", "/scripts/init-pkd-dit.sh"]
+    networks:
+      - pkd-network
+    restart: "no"
 
   # ---------------------------------------------------------------------------
   # HAProxy (LDAP Load Balancer - Shared)
@@ -189,6 +215,7 @@ services:
     depends_on:
       - openldap1
       - openldap2
+      - ldap-init  # Wait for PKD DIT initialization
     networks:
       - pkd-network
     restart: unless-stopped
@@ -216,16 +243,18 @@ services:
       - LDAP_TLS=false
       - LDAP_REPLICATION=true
       - LDAP_REPLICATION_HOSTS=#DIFFHOST ldap://openldap1 ldap://openldap2
+      - LDAP_SEED_INTERNAL_LDIF_PATH=/container/service/slapd/assets/config/bootstrap/ldif/custom
     volumes:
-      - ldap1-data:/var/lib/ldap
-      - ldap1-config:/etc/ldap/slapd.d
+      - ../.docker-data/openldap1/data:/var/lib/ldap
+      - ../.docker-data/openldap1/config:/etc/ldap/slapd.d
     networks:
       - pkd-network
     healthcheck:
       test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -251,32 +280,19 @@ services:
       - LDAP_TLS=false
       - LDAP_REPLICATION=true
       - LDAP_REPLICATION_HOSTS=#DIFFHOST ldap://openldap1 ldap://openldap2
+      - LDAP_SEED_INTERNAL_LDIF_PATH=/container/service/slapd/assets/config/bootstrap/ldif/custom
     volumes:
-      - ldap2-data:/var/lib/ldap
-      - ldap2-config:/etc/ldap/slapd.d
+      - ../.docker-data/openldap2/data:/var/lib/ldap
+      - ../.docker-data/openldap2/config:/etc/ldap/slapd.d
     networks:
       - pkd-network
     healthcheck:
       test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
       interval: 10s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 30s
     restart: unless-stopped
-
-# =============================================================================
-# Volumes
-# =============================================================================
-volumes:
-  postgres-data:
-  ldap1-data:
-  ldap1-config:
-  ldap2-data:
-  ldap2-config:
-  pkd-logs:
-  pkd-uploads:
-  pa-logs:
-  app-logs:
-  app-uploads:
 
 # =============================================================================
 # Networks

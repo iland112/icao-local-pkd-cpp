@@ -13,16 +13,26 @@ import {
   RefreshCw,
   Shield,
   Key,
-  FileWarning,
 } from 'lucide-react';
 import { uploadApi } from '@/services/api';
 import type { UploadStatisticsOverview } from '@/types';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/themeStore';
 
+// Country statistics type
+interface CountryStats {
+  country: string;
+  csca: number;
+  dsc: number;
+  dscNc: number;
+  total: number;
+  percentage?: number;
+}
+
 export function UploadDashboard() {
   const { darkMode } = useThemeStore();
   const [stats, setStats] = useState<UploadStatisticsOverview | null>(null);
+  const [countryData, setCountryData] = useState<CountryStats[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,64 +42,27 @@ export function UploadDashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const statsResponse = await uploadApi.getStatistics();
+      const [statsResponse, countryResponse] = await Promise.all([
+        uploadApi.getStatistics(),
+        uploadApi.getCountryStatistics(15),
+      ]);
       setStats(statsResponse.data);
+
+      // Process country data with percentage
+      const countries = countryResponse.data;
+      if (countries.length > 0) {
+        const maxTotal = countries[0].total;
+        setCountryData(countries.map((item) => ({
+          ...item,
+          percentage: Math.max(15, (item.total / maxTotal) * 100),
+        })));
+      }
     } catch (error) {
       console.error('Failed to fetch upload dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
-
-  // Calculate country statistics - mock data for demonstration
-  // In real app, this would come from a dedicated API endpoint
-  const countryStats = useMemo(() => {
-    // Generate sample country statistics based on stats
-    const sampleCountries = ['KR', 'US', 'JP', 'DE', 'FR', 'GB', 'CN', 'AU', 'CA', 'IT'];
-    const countryMap: Record<string, { csca: number; dsc: number; crl: number; ml: number }> = {};
-
-    if (stats && stats.countriesCount > 0) {
-      const countriesCount = Math.min(stats.countriesCount, sampleCountries.length);
-      for (let i = 0; i < countriesCount; i++) {
-        const country = sampleCountries[i];
-        // Distribute certificates among countries (mock logic)
-        const factor = 1 - (i * 0.08); // Decreasing factor for ranking
-        countryMap[country] = {
-          csca: Math.floor((stats.cscaCount / countriesCount) * factor) || 1,
-          dsc: Math.floor((stats.dscCount / countriesCount) * factor) || 0,
-          crl: Math.floor((stats.crlCount / countriesCount) * factor) || 0,
-          ml: Math.floor(factor * 2) || 1,
-        };
-      }
-    }
-
-    return countryMap;
-  }, [stats]);
-
-  // Get top countries sorted by total certificates
-  const topCountries = useMemo(() => {
-    // Use stats.countriesCount if available, otherwise derive from countryStats
-    const entries = Object.entries(countryStats);
-    if (entries.length === 0) {
-      // Generate placeholder data based on stats
-      return [];
-    }
-    const sorted = entries
-      .map(([country, counts]) => ({
-        country,
-        total: counts.csca + counts.dsc + counts.crl + counts.ml,
-        ...counts,
-      }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 10);
-
-    if (sorted.length === 0) return [];
-    const maxTotal = sorted[0].total;
-    return sorted.map((item) => ({
-      ...item,
-      percentage: Math.max(15, (item.total / maxTotal) * 100),
-    }));
-  }, [countryStats]);
 
   // Certificate type pie chart
   const certTypeChartOption = useMemo(() => {
@@ -383,7 +356,7 @@ export function UploadDashboard() {
           </div>
 
           {/* Country Distribution */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="grid grid-cols-1 gap-5">
             {/* Countries with Most Certificates */}
             <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
               <div className="p-5">
@@ -395,9 +368,9 @@ export function UploadDashboard() {
                     국가별 인증서 현황
                   </h2>
                 </div>
-                {topCountries.length > 0 ? (
+                {countryData.length > 0 ? (
                   <div className="space-y-2 max-h-80 overflow-y-auto pr-2">
-                    {topCountries.map((item, index) => (
+                    {countryData.map((item, index) => (
                       <div
                         key={item.country}
                         className="flex items-center gap-3 p-2 rounded-lg transition-colors hover:bg-gray-50 dark:hover:bg-gray-700"
@@ -457,69 +430,6 @@ export function UploadDashboard() {
                     </Link>
                   </div>
                 )}
-              </div>
-            </div>
-
-            {/* Certificate Type Breakdown */}
-            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-900/30">
-                    <Database className="w-5 h-5 text-purple-500" />
-                  </div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-                    인증서 유형 상세
-                  </h2>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* CSCA */}
-                  <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Shield className="w-6 h-6 text-blue-500" />
-                      <span className="font-semibold text-blue-700 dark:text-blue-300">CSCA</span>
-                    </div>
-                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                      {stats?.cscaCount.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-blue-500/70 mt-1">Country Signing CA</p>
-                  </div>
-
-                  {/* DSC */}
-                  <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-100 dark:border-green-800">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Key className="w-6 h-6 text-green-500" />
-                      <span className="font-semibold text-green-700 dark:text-green-300">DSC</span>
-                    </div>
-                    <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {stats?.dscCount.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-green-500/70 mt-1">Document Signer</p>
-                  </div>
-
-                  {/* CRL */}
-                  <div className="p-4 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800">
-                    <div className="flex items-center gap-3 mb-2">
-                      <FileWarning className="w-6 h-6 text-orange-500" />
-                      <span className="font-semibold text-orange-700 dark:text-orange-300">CRL</span>
-                    </div>
-                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                      {stats?.crlCount.toLocaleString() || 0}
-                    </p>
-                    <p className="text-xs text-orange-500/70 mt-1">Revocation List</p>
-                  </div>
-
-                  {/* Countries */}
-                  <div className="p-4 rounded-xl bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800">
-                    <div className="flex items-center gap-3 mb-2">
-                      <Globe className="w-6 h-6 text-purple-500" />
-                      <span className="font-semibold text-purple-700 dark:text-purple-300">국가</span>
-                    </div>
-                    <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {stats?.countriesCount || 0}
-                    </p>
-                    <p className="text-xs text-purple-500/70 mt-1">등록 국가 수</p>
-                  </div>
-                </div>
               </div>
             </div>
           </div>
