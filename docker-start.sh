@@ -45,6 +45,12 @@ mkdir -p ./data/cert
 mkdir -p ./logs
 mkdir -p ./backups
 
+# Docker bind mount 디렉토리 생성 (권한 문제 방지)
+mkdir -p ./.docker-data/pkd-logs
+mkdir -p ./.docker-data/pkd-uploads
+mkdir -p ./.docker-data/pa-logs
+chmod 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs 2>/dev/null || true
+
 # 2. Docker Compose 시작
 echo "🐳 Docker Compose 시작..."
 cd docker
