@@ -58,10 +58,12 @@ Thumbs.db
 data/
 uploads/
 
-# Docker volumes
+# Docker bind mount data
 .docker-data/
 
 # Backup files
 *.bak
 backups/
-.docker-data/
+
+# Playwright MCP screenshots
+.playwright-mcp/
