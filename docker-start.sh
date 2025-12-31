@@ -54,15 +54,16 @@ if [ -n "$SKIP_APP" ]; then
         # PostgreSQL만 시작
         docker compose up -d $BUILD_FLAG postgres
     else
-        # PostgreSQL, OpenLDAP, HAProxy 시작
-        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2 haproxy
+        # PostgreSQL, OpenLDAP, HAProxy 시작 (ldap-init이 PKD DIT 자동 초기화)
+        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2 ldap-init haproxy
     fi
 elif [ -n "$LEGACY" ]; then
     # Legacy 단일 앱 모드
     docker compose --profile legacy up -d $BUILD_FLAG
 else
     # 마이크로서비스 모드 (frontend + pkd-management + pa-service)
-    docker compose up -d $BUILD_FLAG frontend pkd-management pa-service postgres openldap1 openldap2 haproxy
+    # ldap-init 서비스가 PKD DIT 구조를 자동으로 초기화합니다
+    docker compose up -d $BUILD_FLAG frontend pkd-management pa-service postgres openldap1 openldap2 ldap-init haproxy
 fi
 
 cd ..
@@ -79,11 +80,13 @@ docker compose -f docker/docker-compose.yaml ps
 echo ""
 echo "✅ 컨테이너 시작 완료!"
 
-# 4. LDAP 초기화 (스키마 + MMR + DIT)
+# 4. LDAP 초기화 확인
 if [ -z "$SKIP_LDAP" ]; then
     echo ""
-    echo "🔧 LDAP 초기화 중..."
-    ./docker-ldap-init.sh
+    echo "🔧 LDAP 초기화 확인 중..."
+    echo "   (ldap-init 서비스가 자동으로 PKD DIT 구조를 초기화합니다)"
+    # ldap-init 서비스 완료 대기
+    docker compose -f docker/docker-compose.yaml logs ldap-init 2>/dev/null | tail -5
 fi
 
 echo ""
@@ -112,5 +115,6 @@ echo "   --skip-ldap  OpenLDAP 제외"
 echo "   --legacy     Legacy 단일 앱 모드"
 echo ""
 if [ -z "$SKIP_LDAP" ]; then
-    echo "📝 LDAP 재초기화가 필요하면: ./docker-ldap-init.sh"
+    echo "📝 LDAP DIT 재초기화가 필요하면:"
+    echo "   docker compose -f docker/docker-compose.yaml restart ldap-init"
 fi
