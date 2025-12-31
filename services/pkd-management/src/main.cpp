@@ -3241,8 +3241,7 @@ void registerRoutes() {
                     }
                 });
 
-            resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
-            resp->addHeader("Content-Type", "text/event-stream");
+            resp->setContentTypeString("text/event-stream");
             resp->addHeader("Cache-Control", "no-cache");
             resp->addHeader("Connection", "keep-alive");
             resp->addHeader("Access-Control-Allow-Origin", "*");
