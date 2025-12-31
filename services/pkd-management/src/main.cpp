@@ -2358,7 +2358,8 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                     ProgressManager::getInstance().sendProgress(
                         ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
                             processedEntries, totalEntries,
-                            "DB 저장 중: " + std::to_string(cscaCount + dscCount) + " 인증서, " +
+                            "DB 저장 중: " + std::to_string(cscaCount) + " CSCA, " +
+                            std::to_string(dscCount) + " DSC, " +
                             std::to_string(crlCount) + " CRL"));
 
                     // Log progress every 100 entries
@@ -2374,7 +2375,8 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             int totalDbSaved = cscaCount + dscCount + crlCount + mlCount;
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_COMPLETED, totalDbSaved, totalDbSaved,
-                    "DB 저장 완료: " + std::to_string(cscaCount + dscCount) + " 인증서, " +
+                    "DB 저장 완료: " + std::to_string(cscaCount) + " CSCA, " +
+                    std::to_string(dscCount) + " DSC, " +
                     std::to_string(crlCount) + " CRL, " + std::to_string(mlCount) + " ML"));
 
             // === LDAP SAVING STAGE ===
@@ -2387,8 +2389,8 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             // Just report the final counts
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_COMPLETED, totalLdapSaved, totalLdapSaved,
-                    "LDAP 저장 완료: " + std::to_string(ldapCertStoredCount) + " 인증서, " +
-                    std::to_string(ldapCrlStoredCount) + " CRL"));
+                    "LDAP 저장 완료: " + std::to_string(ldapCertStoredCount) + "개 인증서, " +
+                    std::to_string(ldapCrlStoredCount) + "개 CRL"));
 
             // Update final statistics
             updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, crlCount, mlCount,
@@ -2398,9 +2400,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             std::string completionMsg = "처리 완료: " + std::to_string(cscaCount) + " CSCA, " +
                                        std::to_string(dscCount) + " DSC, " +
                                        std::to_string(crlCount) + " CRL, " +
-                                       std::to_string(mlCount) + " ML (LDAP: " +
-                                       std::to_string(ldapCertStoredCount) + " 인증서, " +
-                                       std::to_string(ldapCrlStoredCount) + " CRL)";
+                                       std::to_string(mlCount) + " ML";
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
                     processedEntries, totalEntries, completionMsg));
@@ -2792,25 +2792,24 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             // === VALIDATION COMPLETED ===
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_COMPLETED, totalCerts, totalCerts,
-                    "검증 완료: " + std::to_string(totalCerts) + "개 인증서"));
+                    "검증 완료: " + std::to_string(totalCerts) + "개 CSCA"));
 
             // === DB SAVING COMPLETED ===
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_COMPLETED, cscaCount, cscaCount,
-                    "DB 저장 완료: " + std::to_string(cscaCount) + " CSCA (중복 " + std::to_string(skippedDuplicates) + "개 건너뜀)"));
+                    "DB 저장 완료: " + std::to_string(cscaCount) + "개 CSCA (중복 " + std::to_string(skippedDuplicates) + "개 건너뜀)"));
 
             // === LDAP SAVING COMPLETED ===
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_COMPLETED, ldapStoredCount, ldapStoredCount,
-                    "LDAP 저장 완료: " + std::to_string(ldapStoredCount) + " 인증서"));
+                    "LDAP 저장 완료: " + std::to_string(ldapStoredCount) + "개 CSCA"));
 
             // Update statistics (Master List only contains CSCA certificates)
             updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, 0, 0, 0, totalCerts, cscaCount, "");
 
             // Send completion progress
-            std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
-                                       "개 (중복 " + std::to_string(skippedDuplicates) + "개 건너뜀, LDAP: " +
-                                       std::to_string(ldapStoredCount) + "개)";
+            std::string completionMsg = "처리 완료: " + std::to_string(cscaCount) + "개 CSCA (중복 " +
+                                       std::to_string(skippedDuplicates) + "개 건너뜀)";
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
                     cscaCount, totalCerts, completionMsg));
