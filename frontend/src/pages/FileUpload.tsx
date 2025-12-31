@@ -198,40 +198,57 @@ export function FileUpload() {
 
   const connectToProgressStream = (id: string) => {
     const eventSource = createProgressEventSource(id);
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 3;
 
     // Handle 'connected' event
     eventSource.addEventListener('connected', (event) => {
-      console.log('SSE connected:', (event as MessageEvent).data);
+      console.log('[SSE] Connected:', (event as MessageEvent).data);
+      reconnectAttempts = 0;
     });
 
     // Handle 'progress' events from backend
     eventSource.addEventListener('progress', (event) => {
       try {
-        const progress: UploadProgress = JSON.parse((event as MessageEvent).data);
+        const data = (event as MessageEvent).data;
+        console.log('[SSE] Progress event received:', data);
+        const progress: UploadProgress = JSON.parse(data);
         handleProgressUpdate(progress);
       } catch (error) {
-        console.error('Failed to parse progress event:', error);
+        console.error('[SSE] Failed to parse progress event:', error);
       }
     });
 
     // Fallback for unnamed events
     eventSource.onmessage = (event) => {
       try {
+        console.log('[SSE] Message event received:', event.data);
         const progress: UploadProgress = JSON.parse(event.data);
         handleProgressUpdate(progress);
       } catch (error) {
-        console.error('Failed to parse message event:', error);
+        console.error('[SSE] Failed to parse message event:', error);
       }
     };
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (error) => {
+      console.error('[SSE] Connection error:', error);
       eventSource.close();
-      setIsProcessing(false);
+
+      // Try to reconnect if not too many attempts
+      if (reconnectAttempts < maxReconnectAttempts && isProcessing) {
+        reconnectAttempts++;
+        console.log(`[SSE] Reconnecting... attempt ${reconnectAttempts}`);
+        setTimeout(() => connectToProgressStream(id), 1000);
+      } else {
+        setIsProcessing(false);
+      }
     };
   };
 
   const handleProgressUpdate = (progress: UploadProgress) => {
     const { stage, stageName, message, percentage, processedCount, totalCount, errorMessage } = progress;
+
+    console.log('[Progress] Stage:', stage, 'Percentage:', percentage, 'Message:', message);
 
     // Determine status from stage
     const getStatus = (stageStr: string): StageStatus['status'] => {
@@ -250,26 +267,52 @@ export function FileUpload() {
 
     // Map backend stage names to frontend stages
     if (stage.startsWith('UPLOAD')) {
+      console.log('[Progress] Updating upload stage:', stageStatus);
       setUploadStage(stageStatus);
     } else if (stage.startsWith('PARSING')) {
+      console.log('[Progress] Updating parse stage:', stageStatus);
+      // Also mark upload as completed when parsing starts
+      setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(stageStatus);
     } else if (stage.startsWith('VALIDATION')) {
+      console.log('[Progress] Updating validate stage:', stageStatus);
+      // Mark previous stages as completed
+      setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setValidateStage(stageStatus);
     } else if (stage.startsWith('DB_SAVING')) {
+      console.log('[Progress] Updating DB save stage:', stageStatus);
+      // Mark previous stages as completed
+      setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setValidateStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setDbSaveStage(stageStatus);
     } else if (stage.startsWith('LDAP_SAVING')) {
+      console.log('[Progress] Updating LDAP stage:', stageStatus);
+      // Mark previous stages as completed
+      setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setValidateStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setDbSaveStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setLdapStage(stageStatus);
     } else if (stage === 'COMPLETED') {
-      // Mark all remaining stages as completed
-      setDbSaveStage(prev => prev.status === 'IDLE' ? { ...prev, status: 'COMPLETED' } : prev);
-      setLdapStage(prev => prev.status === 'IDLE' ? { ...prev, status: 'COMPLETED' } : prev);
+      console.log('[Progress] All stages completed');
+      // Mark all stages as completed
+      setUploadStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
+      setParseStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
+      setValidateStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
+      setDbSaveStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
+      setLdapStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setOverallStatus('FINALIZED');
       setOverallMessage(message || '모든 처리가 완료되었습니다.');
       setIsProcessing(false);
     } else if (stage === 'FAILED') {
+      console.log('[Progress] Processing failed:', errorMessage);
       setOverallStatus('FAILED');
       setOverallMessage(errorMessage || message);
       setIsProcessing(false);
+    } else {
+      console.log('[Progress] Unknown stage:', stage);
     }
   };
 
