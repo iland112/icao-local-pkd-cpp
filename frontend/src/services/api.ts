@@ -42,8 +42,10 @@ export const uploadApi = {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('processingMode', processingMode);
+    // Let axios set Content-Type automatically with boundary for multipart
     return api.post<ApiResponse<UploadedFile>>('/upload/ldif', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
+      timeout: 300000, // 5 minutes for large files
     });
   },
 
@@ -51,8 +53,10 @@ export const uploadApi = {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('processingMode', processingMode);
+    // Let axios set Content-Type automatically with boundary for multipart
     return api.post<ApiResponse<UploadedFile>>('/upload/masterlist', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
+      headers: { 'Content-Type': undefined },
+      timeout: 300000, // 5 minutes for large files
     });
   },
 
