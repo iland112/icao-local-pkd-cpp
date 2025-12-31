@@ -228,6 +228,7 @@ struct ProcessingProgress {
         json["updatedAt"] = ss.str();
 
         Json::StreamWriterBuilder writer;
+        writer["indentation"] = "";  // Single-line JSON for SSE
         return Json::writeString(writer, json);
     }
 
