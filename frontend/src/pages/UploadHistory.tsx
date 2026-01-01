@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Clock,
@@ -19,6 +19,7 @@ import {
   FileCheck,
   ShieldCheck,
   HardDrive,
+  RefreshCw,
 } from 'lucide-react';
 import { uploadApi } from '@/services/api';
 import type { PageResponse, UploadStatus, FileFormat } from '@/types';
@@ -81,8 +82,13 @@ export function UploadHistory() {
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
+
+  // Filters
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<UploadStatus | ''>('');
+  const [formatFilter, setFormatFilter] = useState<FileFormat | ''>('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   // Detail dialog state
   const [selectedUpload, setSelectedUpload] = useState<UploadHistoryItem | null>(null);
@@ -114,6 +120,26 @@ export function UploadHistory() {
       setLoading(false);
     }
   };
+
+  // Calculate statistics from current page data
+  const stats = useMemo(() => {
+    const completed = uploads.filter((u) => u.status === 'COMPLETED').length;
+    const failed = uploads.filter((u) => u.status === 'FAILED').length;
+    const inProgress = uploads.filter((u) =>
+      ['PENDING', 'UPLOADING', 'PARSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'].includes(u.status)
+    ).length;
+    const total = uploads.length;
+
+    return {
+      total: totalElements,
+      completed,
+      failed,
+      inProgress,
+      completedPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
+      failedPercent: total > 0 ? Math.round((failed / total) * 100) : 0,
+      inProgressPercent: total > 0 ? Math.round((inProgress / total) * 100) : 0,
+    };
+  }, [uploads, totalElements]);
 
   // Parse PostgreSQL timestamp format: "2025-12-31 09:04:28.432487+09"
   const formatDate = (dateString: string): string => {
@@ -258,68 +284,235 @@ export function UploadHistory() {
   const filteredUploads = uploads.filter((upload) => {
     const matchesSearch = upload.fileName.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = !statusFilter || upload.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesFormat = !formatFilter || upload.fileFormat === formatFilter;
+
+    // Date range filter
+    let matchesDateFrom = true;
+    let matchesDateTo = true;
+    if (dateFrom && upload.createdAt) {
+      const uploadDate = new Date(upload.createdAt.replace(' ', 'T').replace(/\+(\d{2})$/, '+$1:00'));
+      matchesDateFrom = uploadDate >= new Date(dateFrom);
+    }
+    if (dateTo && upload.createdAt) {
+      const uploadDate = new Date(upload.createdAt.replace(' ', 'T').replace(/\+(\d{2})$/, '+$1:00'));
+      matchesDateTo = uploadDate <= new Date(dateTo + 'T23:59:59');
+    }
+
+    return matchesSearch && matchesStatus && matchesFormat && matchesDateFrom && matchesDateTo;
   });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('');
+    setFormatFilter('');
+    setDateFrom('');
+    setDateTo('');
+  };
+
+  const hasActiveFilters = searchTerm || statusFilter || formatFilter || dateFrom || dateTo;
 
   return (
     <div className="w-full px-4 lg:px-6 py-4">
       {/* Page Header */}
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex items-center gap-4">
           <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
             <Clock className="w-7 h-7 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">업로드 이력</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               LDIF 및 Master List 파일 업로드 이력을 확인합니다.
             </p>
           </div>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchUploads}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            </button>
+            <Link
+              to="/upload"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all shadow-md hover:shadow-lg"
+            >
+              <Upload className="w-4 h-4" />
+              새 업로드
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Action Bar */}
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 justify-between">
-        <div className="flex gap-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="파일명 검색..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Status Filter */}
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as UploadStatus | '')}
-              className="pl-10 pr-8 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
-            >
-              <option value="">모든 상태</option>
-              <option value="COMPLETED">완료</option>
-              <option value="FAILED">실패</option>
-              <option value="PENDING">대기</option>
-            </select>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {/* Total */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-blue-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+              <FileText className="w-5 h-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 업로드</p>
+              <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
+            </div>
           </div>
         </div>
 
-        <Link
-          to="/upload"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all shadow-md hover:shadow-lg"
-        >
-          <Upload className="w-4 h-4" />
-          새 업로드
-        </Link>
+        {/* Completed */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-green-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/30">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">완료</p>
+              <p className="text-xl font-bold text-green-600 dark:text-green-400">{stats.completed}</p>
+              <p className="text-xs text-gray-400">{stats.completedPercent}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Failed */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-red-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30">
+              <XCircle className="w-5 h-5 text-red-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">실패</p>
+              <p className="text-xl font-bold text-red-600 dark:text-red-400">{stats.failed}</p>
+              <p className="text-xs text-gray-400">{stats.failedPercent}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* In Progress */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-yellow-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/30">
+              <Loader2 className="w-5 h-5 text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">진행 중</p>
+              <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stats.inProgress}</p>
+              <p className="text-xs text-gray-400">{stats.inProgressPercent}%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {/* File Format Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              파일 형식
+            </label>
+            <select
+              value={formatFilter}
+              onChange={(e) => setFormatFilter(e.target.value as FileFormat | '')}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">전체</option>
+              <option value="LDIF">LDIF</option>
+              <option value="MASTER_LIST">Master List</option>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              업로드 상태
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as UploadStatus | '')}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">전체</option>
+              <option value="COMPLETED">완료</option>
+              <option value="FAILED">실패</option>
+              <option value="PENDING">대기</option>
+              <option value="UPLOADING">업로드 중</option>
+              <option value="PARSING">파싱 중</option>
+              <option value="VALIDATING">검증 중</option>
+              <option value="SAVING_DB">DB 저장 중</option>
+              <option value="SAVING_LDAP">LDAP 저장 중</option>
+            </select>
+          </div>
+
+          {/* Date From */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              시작 날짜
+            </label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Date To */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              종료 날짜
+            </label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          {/* Search & Actions */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              검색
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="파일명..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {hasActiveFilters && (
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  초기화
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Table */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-orange-500" />
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">업로드 이력</h3>
+          <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+            {filteredUploads.length}건
+          </span>
+        </div>
+
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
@@ -328,7 +521,14 @@ export function UploadHistory() {
           <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
             <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
             <p className="text-lg font-medium">업로드 이력이 없습니다.</p>
-            <p className="text-sm">새 파일을 업로드하여 시작하세요.</p>
+            <p className="text-sm">새 파일을 업로드하거나 필터를 조정하세요.</p>
+            <Link
+              to="/upload"
+              className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500"
+            >
+              <Upload className="w-4 h-4" />
+              파일 업로드하기
+            </Link>
           </div>
         ) : (
           <>
@@ -436,25 +636,25 @@ export function UploadHistory() {
             </div>
 
             {/* Pagination */}
-            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
+            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 총 {totalElements}개 중 {page * pageSize + 1}-{Math.min((page + 1) * pageSize, totalElements)}개 표시
               </p>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1">
                 <button
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm text-gray-600 dark:text-gray-300">
-                  {page + 1} / {totalPages}
+                <span className="px-3 text-sm text-gray-600 dark:text-gray-300">
+                  {page + 1} / {totalPages || 1}
                 </span>
                 <button
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
-                  className="p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>

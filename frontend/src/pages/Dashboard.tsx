@@ -17,14 +17,22 @@ import {
   Key,
   User,
   GraduationCap,
-  XCircle,
-  AlertTriangle,
-  HardDrive,
   Globe,
+  Loader2,
+  Shield,
 } from 'lucide-react';
 import { healthApi, ldapApi, uploadApi } from '@/services/api';
 import { cn } from '@/utils/cn';
-import type { UploadStatisticsOverview } from '@/types';
+
+// Country statistics type
+interface CountryStats {
+  country: string;
+  csca: number;
+  dsc: number;
+  dscNc: number;
+  total: number;
+  percentage?: number;
+}
 
 interface ConnectionStatus {
   connected: boolean;
@@ -45,7 +53,8 @@ export function Dashboard() {
     message: '연결 상태를 확인하세요.',
     testing: false,
   });
-  const [uploadStats, setUploadStats] = useState<UploadStatisticsOverview | null>(null);
+  const [countryData, setCountryData] = useState<CountryStats[]>([]);
+  const [countryLoading, setCountryLoading] = useState(true);
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -68,15 +77,25 @@ export function Dashboard() {
   useEffect(() => {
     testDatabaseConnection();
     testLdapConnection();
-    loadUploadStats();
+    loadCountryData();
   }, []);
 
-  const loadUploadStats = async () => {
+  const loadCountryData = async () => {
+    setCountryLoading(true);
     try {
-      const response = await uploadApi.getStatistics();
-      setUploadStats(response.data);
+      const response = await uploadApi.getCountryStatistics(18);
+      const countries = response.data;
+      if (countries.length > 0) {
+        const maxTotal = countries[0].total;
+        setCountryData(countries.map((item) => ({
+          ...item,
+          percentage: Math.max(15, (item.total / maxTotal) * 100),
+        })));
+      }
     } catch (error) {
-      console.error('Failed to load upload statistics:', error);
+      console.error('Failed to load country statistics:', error);
+    } finally {
+      setCountryLoading(false);
     }
   };
 
@@ -118,6 +137,14 @@ export function Dashboard() {
         testing: false,
       });
     }
+  };
+
+  const getCountryColor = (index: number) => {
+    const colors = [
+      '#3B82F6', '#22C55E', '#F59E0B', '#8B5CF6', '#EF4444',
+      '#06B6D4', '#EC4899', '#14B8A6', '#6366F1', '#F97316',
+    ];
+    return colors[index % colors.length];
   };
 
   return (
@@ -324,161 +351,105 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Certificate & Validation Statistics */}
-      {uploadStats && (
-        <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+      {/* Country Certificate Statistics - Top 18 in 2 columns */}
+      <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-500">
-                <BarChart3 className="w-5 h-5 text-white" />
+              <div className="p-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500">
+                <Globe className="w-5 h-5 text-white" />
               </div>
-              인증서 및 검증 통계
+              국가별 인증서 현황 (Top 18)
             </h3>
-          </div>
-          <div className="p-6">
-            {/* Certificate Counts */}
-            <div className="mb-6">
-              <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">인증서 현황</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
-                <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <HardDrive className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">전체</span>
-                  </div>
-                  <p className="text-2xl font-bold text-blue-700 dark:text-blue-300">{(uploadStats.totalCertificates ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ShieldCheck className="w-4 h-4 text-green-600 dark:text-green-400" />
-                    <span className="text-xs font-medium text-green-600 dark:text-green-400">CSCA</span>
-                  </div>
-                  <p className="text-2xl font-bold text-green-700 dark:text-green-300">{(uploadStats.cscaCount ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-violet-50 to-violet-100 dark:from-violet-900/20 dark:to-violet-800/20 border border-violet-200 dark:border-violet-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Key className="w-4 h-4 text-violet-600 dark:text-violet-400" />
-                    <span className="text-xs font-medium text-violet-600 dark:text-violet-400">DSC</span>
-                  </div>
-                  <p className="text-2xl font-bold text-violet-700 dark:text-violet-300">{(uploadStats.dscCount ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20 border border-amber-200 dark:border-amber-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                    <span className="text-xs font-medium text-amber-600 dark:text-amber-400">DSC_NC</span>
-                  </div>
-                  <p className="text-2xl font-bold text-amber-700 dark:text-amber-300">{(uploadStats.dscNcCount ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                    <span className="text-xs font-medium text-orange-600 dark:text-orange-400">CRL</span>
-                  </div>
-                  <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{(uploadStats.crlCount ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-900/20 dark:to-teal-800/20 border border-teal-200 dark:border-teal-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
-                    <span className="text-xs font-medium text-teal-600 dark:text-teal-400">ML</span>
-                  </div>
-                  <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{(uploadStats.mlCount ?? 0).toLocaleString()}</p>
-                </div>
-                <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 border border-cyan-200 dark:border-cyan-700">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Globe className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                    <span className="text-xs font-medium text-cyan-600 dark:text-cyan-400">국가</span>
-                  </div>
-                  <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-300">{(uploadStats.countriesCount ?? 0).toLocaleString()}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Validation Statistics */}
-            {uploadStats.validation && (
-              <div>
-                <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">검증 결과</h4>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Overall Validation Status */}
-                  <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">검증 상태</h5>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700">
-                        <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                        <div>
-                          <p className="text-xs text-green-600 dark:text-green-400">유효</p>
-                          <p className="text-lg font-bold text-green-700 dark:text-green-300">{(uploadStats.validation?.validCount ?? 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700">
-                        <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                        <div>
-                          <p className="text-xs text-red-600 dark:text-red-400">무효</p>
-                          <p className="text-lg font-bold text-red-700 dark:text-red-300">{(uploadStats.validation?.invalidCount ?? 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700">
-                        <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
-                        <div>
-                          <p className="text-xs text-yellow-600 dark:text-yellow-400">대기</p>
-                          <p className="text-lg font-bold text-yellow-700 dark:text-yellow-300">{(uploadStats.validation?.pendingCount ?? 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-100 dark:bg-gray-600/50 border border-gray-300 dark:border-gray-500">
-                        <AlertTriangle className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                        <div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">오류</p>
-                          <p className="text-lg font-bold text-gray-700 dark:text-gray-300">{(uploadStats.validation?.errorCount ?? 0).toLocaleString()}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Trust Chain & Expiration */}
-                  <div className="p-5 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Trust Chain 검증</h5>
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-600/50 border border-gray-200 dark:border-gray-500">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">Trust Chain 성공</span>
-                        </div>
-                        <span className="font-bold text-green-600 dark:text-green-400">{(uploadStats.validation?.trustChainValidCount ?? 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-600/50 border border-gray-200 dark:border-gray-500">
-                        <div className="flex items-center gap-2">
-                          <XCircle className="w-4 h-4 text-red-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">Trust Chain 실패</span>
-                        </div>
-                        <span className="font-bold text-red-600 dark:text-red-400">{(uploadStats.validation?.trustChainInvalidCount ?? 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-600/50 border border-gray-200 dark:border-gray-500">
-                        <div className="flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">CSCA 미발견</span>
-                        </div>
-                        <span className="font-bold text-amber-600 dark:text-amber-400">{(uploadStats.validation?.cscaNotFoundCount ?? 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-600/50 border border-gray-200 dark:border-gray-500">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-orange-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">만료됨</span>
-                        </div>
-                        <span className="font-bold text-orange-600 dark:text-orange-400">{(uploadStats.validation?.expiredCount ?? 0).toLocaleString()}</span>
-                      </div>
-                      <div className="flex items-center justify-between p-3 rounded-lg bg-white dark:bg-gray-600/50 border border-gray-200 dark:border-gray-500">
-                        <div className="flex items-center gap-2">
-                          <XCircle className="w-4 h-4 text-red-500" />
-                          <span className="text-sm text-gray-700 dark:text-gray-300">폐지됨</span>
-                        </div>
-                        <span className="font-bold text-red-600 dark:text-red-400">{(uploadStats.validation?.revokedCount ?? 0).toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+            <Link
+              to="/upload-dashboard"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              <BarChart3 className="w-4 h-4" />
+              상세 통계
+            </Link>
           </div>
         </div>
-      )}
+        <div className="p-6">
+          {countryLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+          ) : countryData.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2">
+              {countryData.map((item, index) => (
+                <div
+                  key={item.country}
+                  className="flex items-center gap-3 p-2.5 rounded-lg transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50"
+                >
+                  {/* Rank */}
+                  <span
+                    className={cn(
+                      'w-6 flex-shrink-0 text-sm font-bold text-center',
+                      index < 3 ? 'text-amber-500' : 'text-gray-400'
+                    )}
+                  >
+                    {index + 1}
+                  </span>
+                  {/* Flag */}
+                  <img
+                    src={`/svg/${item.country.toLowerCase()}.svg`}
+                    alt={item.country}
+                    className="w-8 h-6 flex-shrink-0 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                  {/* Country Code */}
+                  <span className="w-10 flex-shrink-0 font-mono font-semibold text-sm text-gray-700 dark:text-gray-300">
+                    {item.country}
+                  </span>
+                  {/* Progress Bar */}
+                  <div className="flex-1 flex items-center gap-2">
+                    <div className="flex-1 h-5 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${item.percentage}%`,
+                          background: getCountryColor(index),
+                        }}
+                      />
+                    </div>
+                    <span className="w-14 flex-shrink-0 text-xs font-bold text-right text-gray-600 dark:text-gray-300">
+                      {item.total.toLocaleString()}
+                    </span>
+                  </div>
+                  {/* Certificate breakdown */}
+                  <div className="hidden xl:flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Shield className="w-3 h-3 text-blue-500" />
+                      {item.csca}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Key className="w-3 h-3 text-green-500" />
+                      {item.dsc}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <Globe className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                업로드된 인증서가 없습니다
+              </p>
+              <Link
+                to="/upload"
+                className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-purple-500"
+              >
+                <Upload className="w-4 h-4" />
+                파일 업로드
+              </Link>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Main Features */}
       <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">

@@ -246,6 +246,25 @@ docker-compose -f docker/docker-compose.yaml up -d pkd-management
 
 ## Change Log
 
+### 2026-01-01: Frontend UI/UX Improvements
+
+**Upload History Page** (`/upload-history`):
+- Added statistics cards (Total, Completed, Failed, In Progress)
+- Added filter card with file format, status, date range, and search
+- Consistent design pattern with PA History page
+
+**Upload Dashboard Page** (`/upload-dashboard`):
+- Removed pie charts (certificate type, upload status)
+- Added overview stats cards (4 columns): Total certificates, Upload status, Validation rate, Countries
+- Added certificate breakdown cards (6 columns) with visual indicators
+- Replaced pie charts with horizontal progress bars for validation status
+- Improved Trust Chain validation display with card grid layout
+
+**Dashboard Page** (`/`):
+- Moved certificate/validation statistics to Upload Dashboard
+- Added Top 18 countries display with 2-column grid layout
+- Country cards show flag, CSCA/DSC counts, and progress bars
+
 ### 2026-01-01: Bytea Storage Bug Fix
 
 **Issue**: DSC Trust Chain validation returned 0 valid certificates despite 30k DSCs matching 525 CSCAs.
