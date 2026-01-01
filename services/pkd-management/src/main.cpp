@@ -547,8 +547,18 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
     std::string query = "SELECT certificate_binary FROM certificate WHERE "
                         "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "') LIMIT 1";
 
+    spdlog::debug("CSCA lookup query: {}", query.substr(0, 200));
+
     PGresult* res = PQexec(conn, query.c_str());
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        spdlog::error("CSCA lookup query failed: {} - Query: {}",
+                     PQerrorMessage(conn), query.substr(0, 200));
+        PQclear(res);
+        return nullptr;
+    }
+
+    if (PQntuples(res) == 0) {
+        spdlog::warn("CSCA not found for issuer DN: {}", escapedDn.substr(0, 80));
         PQclear(res);
         return nullptr;
     }
@@ -557,7 +567,19 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
     char* certData = PQgetvalue(res, 0, 0);
     int certLen = PQgetlength(res, 0, 0);
 
+    spdlog::debug("CSCA found: certLen={}, first4chars='{}{}{}{}' (codes: {} {} {} {})",
+                 certLen,
+                 certLen > 0 ? certData[0] : '?',
+                 certLen > 1 ? certData[1] : '?',
+                 certLen > 2 ? certData[2] : '?',
+                 certLen > 3 ? certData[3] : '?',
+                 certLen > 0 ? (int)(unsigned char)certData[0] : -1,
+                 certLen > 1 ? (int)(unsigned char)certData[1] : -1,
+                 certLen > 2 ? (int)(unsigned char)certData[2] : -1,
+                 certLen > 3 ? (int)(unsigned char)certData[3] : -1);
+
     if (!certData || certLen == 0) {
+        spdlog::warn("CSCA lookup: empty certificate data");
         PQclear(res);
         return nullptr;
     }
@@ -566,18 +588,42 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
     std::vector<uint8_t> derBytes;
     if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
         // Hex encoded
+        spdlog::debug("CSCA lookup: parsing hex format, len={}", certLen);
         for (int i = 2; i < certLen; i += 2) {
             char hex[3] = {certData[i], certData[i+1], 0};
             derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+        }
+    } else {
+        // Might be raw binary (if using binary mode) or escape format
+        spdlog::debug("CSCA lookup: non-hex format detected, first byte code={}", (int)(unsigned char)certData[0]);
+        // Try to detect if it's already DER binary (starts with 0x30 for SEQUENCE)
+        if (certLen > 0 && (unsigned char)certData[0] == 0x30) {
+            derBytes.assign(certData, certData + certLen);
+            spdlog::debug("CSCA lookup: detected raw DER binary, len={}", derBytes.size());
         }
     }
 
     PQclear(res);
 
-    if (derBytes.empty()) return nullptr;
+    if (derBytes.empty()) {
+        spdlog::warn("CSCA lookup: failed to parse certificate binary data");
+        return nullptr;
+    }
+
+    spdlog::debug("CSCA lookup: parsed {} DER bytes, first byte=0x{:02x}", derBytes.size(), derBytes[0]);
 
     const uint8_t* data = derBytes.data();
-    return d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+    X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+    if (!cert) {
+        unsigned long err = ERR_get_error();
+        char errBuf[256];
+        ERR_error_string_n(err, errBuf, sizeof(errBuf));
+        spdlog::error("CSCA lookup: d2i_X509 failed: {}", errBuf);
+        return nullptr;
+    }
+
+    spdlog::debug("CSCA lookup: successfully parsed X509 certificate");
+    return cert;
 }
 
 /**
@@ -1268,11 +1314,17 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
  * @brief Escape binary data for PostgreSQL BYTEA
  */
 std::string escapeBytea(PGconn* conn, const std::vector<uint8_t>& data) {
+    if (data.size() >= 4) {
+        spdlog::debug("escapeBytea input: size={}, first4bytes=0x{:02x}{:02x}{:02x}{:02x}",
+                     data.size(), data[0], data[1], data[2], data[3]);
+    }
     size_t toLen = 0;
     unsigned char* escaped = PQescapeByteaConn(conn, data.data(), data.size(), &toLen);
     if (!escaped) return "";
     std::string result(reinterpret_cast<char*>(escaped), toLen - 1);
     PQfreemem(escaped);
+    spdlog::debug("escapeBytea output: len={}, first20chars={}", result.size(),
+                 result.size() >= 20 ? result.substr(0, 20) : result);
     return result;
 }
 
@@ -1650,6 +1702,179 @@ void updateCrlLdapStatus(PGconn* conn, const std::string& crlId, const std::stri
     PQclear(res);
 }
 
+/**
+ * @brief Build DN for Master List entry in LDAP (o=ml node)
+ * Format: cn={fingerprint},o=ml,c={country},dc=data,dc=download,dc=pkd,{baseDN}
+ */
+std::string buildMasterListDn(const std::string& countryCode, const std::string& fingerprint) {
+    return "cn=" + fingerprint.substr(0, 32) + ",o=ml,c=" + countryCode +
+           ",dc=data,dc=download," + appConfig.ldapBaseDn;
+}
+
+/**
+ * @brief Ensure Master List OU (o=ml) exists under country entry
+ */
+bool ensureMasterListOuExists(LDAP* ld, const std::string& countryCode) {
+    std::string countryDn = "c=" + countryCode + ",dc=data,dc=download," + appConfig.ldapBaseDn;
+
+    // First ensure country exists
+    LDAPMessage* result = nullptr;
+    int rc = ldap_search_ext_s(ld, countryDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                                nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+    if (result) ldap_msgfree(result);
+
+    if (rc == LDAP_NO_SUCH_OBJECT) {
+        // Create country entry
+        LDAPMod modObjectClass;
+        modObjectClass.mod_op = LDAP_MOD_ADD;
+        modObjectClass.mod_type = const_cast<char*>("objectClass");
+        char* ocVals[] = {const_cast<char*>("country"), const_cast<char*>("top"), nullptr};
+        modObjectClass.mod_values = ocVals;
+
+        LDAPMod modC;
+        modC.mod_op = LDAP_MOD_ADD;
+        modC.mod_type = const_cast<char*>("c");
+        char* cVal[] = {const_cast<char*>(countryCode.c_str()), nullptr};
+        modC.mod_values = cVal;
+
+        LDAPMod* mods[] = {&modObjectClass, &modC, nullptr};
+        rc = ldap_add_ext_s(ld, countryDn.c_str(), mods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::warn("Failed to create country entry for ML {}: {}", countryDn, ldap_err2string(rc));
+            return false;
+        }
+    }
+
+    // Create o=ml OU under country
+    std::string mlOuDn = "o=ml," + countryDn;
+    result = nullptr;
+    rc = ldap_search_ext_s(ld, mlOuDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                            nullptr, 0, nullptr, nullptr, nullptr, 1, &result);
+    if (result) ldap_msgfree(result);
+
+    if (rc == LDAP_NO_SUCH_OBJECT) {
+        LDAPMod ouObjClass;
+        ouObjClass.mod_op = LDAP_MOD_ADD;
+        ouObjClass.mod_type = const_cast<char*>("objectClass");
+        char* ouOcVals[] = {const_cast<char*>("organization"), const_cast<char*>("top"), nullptr};
+        ouObjClass.mod_values = ouOcVals;
+
+        LDAPMod ouO;
+        ouO.mod_op = LDAP_MOD_ADD;
+        ouO.mod_type = const_cast<char*>("o");
+        char* ouVal[] = {const_cast<char*>("ml"), nullptr};
+        ouO.mod_values = ouVal;
+
+        LDAPMod* ouMods[] = {&ouObjClass, &ouO, nullptr};
+        rc = ldap_add_ext_s(ld, mlOuDn.c_str(), ouMods, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS && rc != LDAP_ALREADY_EXISTS) {
+            spdlog::debug("ML OU creation result for {}: {}", mlOuDn, ldap_err2string(rc));
+        }
+    }
+
+    return true;
+}
+
+/**
+ * @brief Save Master List to LDAP (o=ml node)
+ * @return LDAP DN or empty string on failure
+ */
+std::string saveMasterListToLdap(LDAP* ld, const std::string& countryCode,
+                                  const std::string& signerDn, const std::string& fingerprint,
+                                  const std::vector<uint8_t>& mlBinary) {
+    // Ensure o=ml structure exists
+    if (!ensureMasterListOuExists(ld, countryCode)) {
+        spdlog::warn("Failed to ensure ML OU exists for {}", countryCode);
+    }
+
+    std::string dn = buildMasterListDn(countryCode, fingerprint);
+
+    // Build LDAP entry attributes
+    // objectClass: person (structural) + pkdMasterList + pkdDownload (auxiliary)
+    LDAPMod modObjectClass;
+    modObjectClass.mod_op = LDAP_MOD_ADD;
+    modObjectClass.mod_type = const_cast<char*>("objectClass");
+    char* ocVals[] = {
+        const_cast<char*>("top"),
+        const_cast<char*>("person"),
+        const_cast<char*>("pkdMasterList"),
+        const_cast<char*>("pkdDownload"),
+        nullptr
+    };
+    modObjectClass.mod_values = ocVals;
+
+    // cn (required for person)
+    LDAPMod modCn;
+    modCn.mod_op = LDAP_MOD_ADD;
+    modCn.mod_type = const_cast<char*>("cn");
+    std::string cnValue = fingerprint.substr(0, 32);
+    char* cnVals[] = {const_cast<char*>(cnValue.c_str()), nullptr};
+    modCn.mod_values = cnVals;
+
+    // sn (required for person - use "1" as serial)
+    LDAPMod modSn;
+    modSn.mod_op = LDAP_MOD_ADD;
+    modSn.mod_type = const_cast<char*>("sn");
+    char* snVals[] = {const_cast<char*>("1"), nullptr};
+    modSn.mod_values = snVals;
+
+    // pkdMasterListContent (binary - the CMS signed Master List)
+    LDAPMod modMlContent;
+    modMlContent.mod_op = LDAP_MOD_ADD | LDAP_MOD_BVALUES;
+    modMlContent.mod_type = const_cast<char*>("pkdMasterListContent");
+    berval mlBv;
+    mlBv.bv_val = reinterpret_cast<char*>(const_cast<uint8_t*>(mlBinary.data()));
+    mlBv.bv_len = mlBinary.size();
+    berval* mlBvVals[] = {&mlBv, nullptr};
+    modMlContent.mod_bvalues = mlBvVals;
+
+    // pkdVersion
+    LDAPMod modVersion;
+    modVersion.mod_op = LDAP_MOD_ADD;
+    modVersion.mod_type = const_cast<char*>("pkdVersion");
+    char* versionVals[] = {const_cast<char*>("70"), nullptr};
+    modVersion.mod_values = versionVals;
+
+    LDAPMod* mods[] = {&modObjectClass, &modCn, &modSn, &modMlContent, &modVersion, nullptr};
+
+    int rc = ldap_add_ext_s(ld, dn.c_str(), mods, nullptr, nullptr);
+
+    if (rc == LDAP_ALREADY_EXISTS) {
+        // Update existing Master List
+        LDAPMod modMlReplace;
+        modMlReplace.mod_op = LDAP_MOD_REPLACE | LDAP_MOD_BVALUES;
+        modMlReplace.mod_type = const_cast<char*>("pkdMasterListContent");
+        modMlReplace.mod_bvalues = mlBvVals;
+
+        LDAPMod* replaceMods[] = {&modMlReplace, nullptr};
+        rc = ldap_modify_ext_s(ld, dn.c_str(), replaceMods, nullptr, nullptr);
+    }
+
+    if (rc != LDAP_SUCCESS) {
+        spdlog::warn("Failed to save Master List to LDAP {}: {}", dn, ldap_err2string(rc));
+        return "";
+    }
+
+    spdlog::info("Saved Master List to LDAP: {} (country: {})", dn, countryCode);
+    return dn;
+}
+
+/**
+ * @brief Update Master List DB record with LDAP DN after successful LDAP storage
+ */
+void updateMasterListLdapStatus(PGconn* conn, const std::string& mlId, const std::string& ldapDn) {
+    if (ldapDn.empty()) return;
+
+    std::string query = "UPDATE master_list SET "
+                       "ldap_dn = " + escapeSqlString(conn, ldapDn) + ", "
+                       "stored_in_ldap = TRUE, "
+                       "stored_at = NOW() "
+                       "WHERE id = '" + mlId + "'";
+
+    PGresult* res = PQexec(conn, query.c_str());
+    PQclear(res);
+}
+
 // =============================================================================
 // Database Storage Functions
 // =============================================================================
@@ -1682,7 +1907,7 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
                        "'" + fingerprint + "', "
                        "'" + notBefore + "', "
                        "'" + notAfter + "', "
-                       "E'" + byteaEscaped + "', "
+                       "'" + byteaEscaped + "', "
                        + escapeSqlString(conn, validationStatus) + ", "
                        + escapeSqlString(conn, validationMessage) + ", NOW()) "
                        "ON CONFLICT (certificate_type, fingerprint_sha256) DO NOTHING";
@@ -1717,7 +1942,7 @@ std::string saveCrl(PGconn* conn, const std::string& uploadId,
                        + (nextUpdate.empty() ? "NULL" : "'" + nextUpdate + "'") + ", "
                        + escapeSqlString(conn, crlNumber) + ", "
                        "'" + fingerprint + "', "
-                       "E'" + byteaEscaped + "', "
+                       "'" + byteaEscaped + "', "
                        "'PENDING', NOW()) "
                        "ON CONFLICT DO NOTHING";
 
@@ -1748,6 +1973,35 @@ void saveRevokedCertificate(PGconn* conn, const std::string& crlId,
 }
 
 /**
+ * @brief Save Master List to database
+ * @return Master List ID or empty string on failure
+ */
+std::string saveMasterList(PGconn* conn, const std::string& uploadId,
+                            const std::string& countryCode, const std::string& signerDn,
+                            const std::string& fingerprint, int cscaCount,
+                            const std::vector<uint8_t>& mlBinary) {
+    std::string mlId = generateUuid();
+    std::string byteaEscaped = escapeBytea(conn, mlBinary);
+
+    std::string query = "INSERT INTO master_list (id, upload_id, signer_country, signer_dn, "
+                       "fingerprint_sha256, csca_certificate_count, ml_binary, created_at) VALUES ("
+                       "'" + mlId + "', "
+                       "'" + uploadId + "', "
+                       + escapeSqlString(conn, countryCode) + ", "
+                       + escapeSqlString(conn, signerDn) + ", "
+                       "'" + fingerprint + "', "
+                       + std::to_string(cscaCount) + ", "
+                       "'" + byteaEscaped + "', NOW()) "
+                       "ON CONFLICT DO NOTHING";
+
+    PGresult* res = PQexec(conn, query.c_str());
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    PQclear(res);
+
+    return success ? mlId : "";
+}
+
+/**
  * @brief Validation statistics counters for an upload
  */
 struct ValidationStats {
@@ -1772,8 +2026,18 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
     std::string base64Value = entry.getFirstAttribute(attrName);
     if (base64Value.empty()) return false;
 
+    spdlog::debug("parseCertificateEntry: base64Value len={}, first20chars={}",
+                 base64Value.size(), base64Value.substr(0, 20));
+
     std::vector<uint8_t> derBytes = base64Decode(base64Value);
     if (derBytes.empty()) return false;
+
+    spdlog::debug("parseCertificateEntry: derBytes size={}, first4bytes=0x{:02x}{:02x}{:02x}{:02x}",
+                 derBytes.size(),
+                 derBytes.size() > 0 ? derBytes[0] : 0,
+                 derBytes.size() > 1 ? derBytes[1] : 0,
+                 derBytes.size() > 2 ? derBytes[2] : 0,
+                 derBytes.size() > 3 ? derBytes[3] : 0);
 
     const uint8_t* data = derBytes.data();
     X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
@@ -2074,6 +2338,132 @@ bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
 }
 
 /**
+ * @brief Extract country code from LDIF entry DN
+ * Example: "cn=...,o=ml,c=FR,dc=data,..." -> "FR"
+ * Example: "cn=...,o=ml,C=CA,dc=data,..." -> "CA" (case-insensitive)
+ */
+std::string extractCountryCodeFromDn(const std::string& dn) {
+    // Look for ",c=" or ",C=" pattern in DN (case-insensitive)
+    std::regex countryPattern(",([cC])=([A-Za-z]{2,3}),", std::regex::icase);
+    std::smatch match;
+    if (std::regex_search(dn, match, countryPattern)) {
+        std::string country = match[2].str();
+        std::transform(country.begin(), country.end(), country.begin(), ::toupper);
+        return country;
+    }
+    return "XX";  // Default country code if not found
+}
+
+/**
+ * @brief Parse and save Master List from LDIF entry (DB + LDAP)
+ * This handles entries with pkdMasterListContent attribute
+ */
+bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+                          const LdifEntry& entry, int& mlCount, int& ldapMlStoredCount) {
+    // Check for pkdMasterListContent;binary (LDIF parser adds ;binary suffix for base64 values)
+    std::string base64Value = entry.getFirstAttribute("pkdMasterListContent;binary");
+    if (base64Value.empty()) {
+        // Fallback: try without ;binary suffix
+        base64Value = entry.getFirstAttribute("pkdMasterListContent");
+    }
+    if (base64Value.empty()) return false;
+
+    std::vector<uint8_t> mlBytes = base64Decode(base64Value);
+    if (mlBytes.empty()) return false;
+
+    spdlog::info("Parsing Master List entry: dn={}, size={} bytes", entry.dn, mlBytes.size());
+
+    // Extract country code from DN
+    std::string countryCode = extractCountryCodeFromDn(entry.dn);
+
+    // Calculate fingerprint
+    std::string fingerprint = computeFileHash(mlBytes);
+
+    // Try to extract signer DN from the CMS structure
+    std::string signerDn;
+    int cscaCount = 0;
+
+    // Parse CMS to get certificate count and signer info
+    BIO* bio = BIO_new_mem_buf(mlBytes.data(), static_cast<int>(mlBytes.size()));
+    if (bio) {
+        CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+        if (cms) {
+            // Get certificates from CMS
+            STACK_OF(X509)* certs = CMS_get1_certs(cms);
+            if (certs) {
+                cscaCount = sk_X509_num(certs);
+
+                // Get first certificate's subject DN as signer reference
+                if (cscaCount > 0) {
+                    X509* firstCert = sk_X509_value(certs, 0);
+                    if (firstCert) {
+                        char subjectBuf[512];
+                        X509_NAME_oneline(X509_get_subject_name(firstCert), subjectBuf, sizeof(subjectBuf));
+                        signerDn = subjectBuf;
+                    }
+                }
+                sk_X509_pop_free(certs, X509_free);
+            }
+            CMS_ContentInfo_free(cms);
+        } else {
+            // Fallback: Try PKCS7
+            BIO_reset(bio);
+            PKCS7* p7 = d2i_PKCS7_bio(bio, nullptr);
+            if (p7) {
+                STACK_OF(X509)* certs = nullptr;
+                if (PKCS7_type_is_signed(p7)) {
+                    certs = p7->d.sign->cert;
+                }
+                if (certs) {
+                    cscaCount = sk_X509_num(certs);
+                    if (cscaCount > 0) {
+                        X509* firstCert = sk_X509_value(certs, 0);
+                        if (firstCert) {
+                            char subjectBuf[512];
+                            X509_NAME_oneline(X509_get_subject_name(firstCert), subjectBuf, sizeof(subjectBuf));
+                            signerDn = subjectBuf;
+                        }
+                    }
+                }
+                PKCS7_free(p7);
+            }
+        }
+        BIO_free(bio);
+    }
+
+    // Use cn from entry as fallback signer DN
+    if (signerDn.empty()) {
+        signerDn = entry.getFirstAttribute("cn");
+        if (signerDn.empty()) {
+            signerDn = "Unknown";
+        }
+    }
+
+    spdlog::info("Master List parsed: country={}, cscaCount={}, fingerprint={}",
+                 countryCode, cscaCount, fingerprint.substr(0, 16));
+
+    // 1. Save to DB
+    std::string mlId = saveMasterList(conn, uploadId, countryCode, signerDn, fingerprint, cscaCount, mlBytes);
+
+    if (!mlId.empty()) {
+        mlCount++;
+        spdlog::info("Saved Master List to DB: id={}, country={}", mlId, countryCode);
+
+        // 2. Save to LDAP (o=ml node)
+        if (ld) {
+            std::string ldapDn = saveMasterListToLdap(ld, countryCode, signerDn, fingerprint, mlBytes);
+            if (!ldapDn.empty()) {
+                updateMasterListLdapStatus(conn, mlId, ldapDn);
+                ldapMlStoredCount++;
+                spdlog::info("Saved Master List to LDAP: {}", ldapDn);
+            }
+        }
+    }
+
+    return !mlId.empty();
+}
+
+/**
  * @brief Update uploaded_file with parsing statistics
  */
 void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
@@ -2153,9 +2543,11 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             int dscCount = 0;
             int dscNcCount = 0;
             int crlCount = 0;
+            int mlCount = 0;  // Master List count
             int processedEntries = 0;
             int ldapCertStoredCount = 0;
             int ldapCrlStoredCount = 0;
+            int ldapMlStoredCount = 0;  // LDAP Master List count
             ValidationStats validationStats;  // Track validation statistics
 
             // Process each entry
@@ -2177,6 +2569,11 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                         parseCrlEntry(conn, ld, uploadId, entry, crlCount, ldapCrlStoredCount);
                     }
 
+                    // Check for Master List (pkdMasterListContent;binary - LDIF parser adds ;binary for base64 values)
+                    if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
+                        parseMasterListEntry(conn, ld, uploadId, entry, mlCount, ldapMlStoredCount);
+                    }
+
                 } catch (const std::exception& e) {
                     spdlog::warn("Error processing entry {}: {}", entry.dn, e.what());
                 }
@@ -2185,29 +2582,45 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
                 // Send progress update every 50 entries
                 if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
+                    std::string progressMsg = "처리 중: " + std::to_string(cscaCount + dscCount) + "개 인증서, " +
+                                             std::to_string(crlCount) + "개 CRL";
+                    if (mlCount > 0) {
+                        progressMsg += ", " + std::to_string(mlCount) + "개 ML";
+                    }
                     ProgressManager::getInstance().sendProgress(
                         ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                            processedEntries, totalEntries,
-                            "처리 중: " + std::to_string(cscaCount + dscCount) + "개 인증서, " +
-                            std::to_string(crlCount) + "개 CRL"));
+                            processedEntries, totalEntries, progressMsg));
 
-                    spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP)",
+                    spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP), {} MLs ({} LDAP)",
                                 processedEntries, totalEntries,
                                 cscaCount + dscCount, ldapCertStoredCount,
-                                crlCount, ldapCrlStoredCount);
+                                crlCount, ldapCrlStoredCount,
+                                mlCount, ldapMlStoredCount);
                 }
             }
 
             // Send LDAP saving progress
+            std::string ldapProgressMsg = "LDAP 저장 완료: " + std::to_string(ldapCertStoredCount) + "개 인증서, " +
+                                          std::to_string(ldapCrlStoredCount) + "개 CRL";
+            if (ldapMlStoredCount > 0) {
+                ldapProgressMsg += ", " + std::to_string(ldapMlStoredCount) + "개 ML";
+            }
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
-                    ldapCertStoredCount + ldapCrlStoredCount, cscaCount + dscCount + crlCount,
-                    "LDAP 저장 완료: " + std::to_string(ldapCertStoredCount) + "개 인증서, " +
-                    std::to_string(ldapCrlStoredCount) + "개 CRL"));
+                    ldapCertStoredCount + ldapCrlStoredCount + ldapMlStoredCount,
+                    cscaCount + dscCount + crlCount + mlCount, ldapProgressMsg));
 
-            // Update final statistics
+            // Update final statistics (ml_count will be updated separately)
             updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, dscNcCount, crlCount,
                                   totalEntries, processedEntries, "");
+
+            // Update ml_count in uploaded_file
+            if (mlCount > 0) {
+                std::string mlUpdateQuery = "UPDATE uploaded_file SET ml_count = " + std::to_string(mlCount) +
+                                           " WHERE id = '" + uploadId + "'";
+                PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
+                PQclear(mlRes);
+            }
 
             // Update validation statistics
             updateValidationStatistics(conn, uploadId,
@@ -2221,17 +2634,21 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
                                        "개, DSC " + std::to_string(dscCount) +
                                        (dscNcCount > 0 ? "개, DSC_NC " + std::to_string(dscNcCount) : "") +
-                                       "개, CRL " + std::to_string(crlCount) + "개" +
-                                       " (검증: " + std::to_string(validationStats.validCount) + " 성공, " +
-                                       std::to_string(validationStats.invalidCount) + " 실패, " +
-                                       std::to_string(validationStats.pendingCount) + " 보류)";
-            int totalCerts = cscaCount + dscCount + dscNcCount + crlCount;
+                                       "개, CRL " + std::to_string(crlCount) + "개";
+            if (mlCount > 0) {
+                completionMsg += ", ML " + std::to_string(mlCount) + "개";
+            }
+            completionMsg += " (검증: " + std::to_string(validationStats.validCount) + " 성공, " +
+                            std::to_string(validationStats.invalidCount) + " 실패, " +
+                            std::to_string(validationStats.pendingCount) + " 보류)";
+            int totalItems = cscaCount + dscCount + dscNcCount + crlCount + mlCount;
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                    totalCerts, totalCerts, completionMsg));
+                    totalItems, totalItems, completionMsg));
 
-            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} DSC_NC, {} CRLs (LDAP: {} certs, {} CRLs)",
-                        uploadId, cscaCount, dscCount, dscNcCount, crlCount, ldapCertStoredCount, ldapCrlStoredCount);
+            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} DSC_NC, {} CRLs, {} MLs (LDAP: {} certs, {} CRLs, {} MLs)",
+                        uploadId, cscaCount, dscCount, dscNcCount, crlCount, mlCount,
+                        ldapCertStoredCount, ldapCrlStoredCount, ldapMlStoredCount);
             spdlog::info("Validation stats: {} valid, {} invalid, {} pending, {} csca_not_found, {} expired",
                         validationStats.validCount, validationStats.invalidCount, validationStats.pendingCount,
                         validationStats.cscaNotFoundCount, validationStats.expiredCount);
@@ -2613,6 +3030,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             }
 
             // Update statistics (Master List contains only CSCA, no DSC or DSC_NC)
+            // Note: ICAO Master List (.ml) extracts individual CSCA certificates, so ml_count = 0
+            // Only Country Master Lists from LDIF (pkdMasterListContent) are counted as ML
             updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, 1, 1, "");
 
             // Send completion progress
@@ -2730,6 +3149,147 @@ void registerRoutes() {
             callback(resp);
         },
         {drogon::Get}
+    );
+
+    // Re-validate DSC certificates endpoint
+    app.registerHandler(
+        "/api/validation/revalidate",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/validation/revalidate - Re-validate DSC certificates");
+
+            // Connect to PostgreSQL
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+
+            // Get optional limit from query param (default: 10 for testing)
+            int limit = 10;
+            auto limitParam = req->getParameter("limit");
+            if (!limitParam.empty()) {
+                try {
+                    limit = std::stoi(limitParam);
+                } catch (...) {}
+            }
+
+            // Get DSC certificates that need re-validation (CSCA_NOT_FOUND)
+            std::string query = "SELECT c.id, c.issuer_dn, c.certificate_binary "
+                               "FROM certificate c "
+                               "JOIN validation_result vr ON c.id = vr.certificate_id "
+                               "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
+                               "AND vr.error_code = 'CSCA_NOT_FOUND' "
+                               "LIMIT " + std::to_string(limit);
+
+            PGresult* res = PQexec(conn, query.c_str());
+            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Query failed: " + std::string(PQerrorMessage(conn));
+                PQclear(res);
+                PQfinish(conn);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+
+            int totalDscs = PQntuples(res);
+            int validatedCount = 0;
+            int cscaFoundCount = 0;
+            int signatureValidCount = 0;
+            Json::Value details(Json::arrayValue);
+
+            for (int i = 0; i < totalDscs; i++) {
+                std::string certId = PQgetvalue(res, i, 0);
+                std::string issuerDn = PQgetvalue(res, i, 1);
+
+                // Try to find CSCA
+                X509* csca = findCscaByIssuerDn(conn, issuerDn);
+
+                Json::Value detail;
+                detail["certId"] = certId;
+                detail["issuerDn"] = issuerDn.substr(0, 100);
+
+                if (csca) {
+                    cscaFoundCount++;
+                    detail["cscaFound"] = true;
+
+                    // Parse DSC certificate
+                    char* certData = PQgetvalue(res, i, 2);
+                    int certLen = PQgetlength(res, i, 2);
+
+                    std::vector<uint8_t> derBytes;
+                    if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
+                        for (int j = 2; j < certLen; j += 2) {
+                            char hex[3] = {certData[j], certData[j+1], 0};
+                            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+                        }
+                    }
+
+                    if (!derBytes.empty()) {
+                        const uint8_t* data = derBytes.data();
+                        X509* dsc = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+                        if (dsc) {
+                            EVP_PKEY* cscaPubKey = X509_get_pubkey(csca);
+                            if (cscaPubKey) {
+                                int verifyResult = X509_verify(dsc, cscaPubKey);
+                                detail["signatureValid"] = (verifyResult == 1);
+                                if (verifyResult == 1) {
+                                    signatureValidCount++;
+                                }
+                                EVP_PKEY_free(cscaPubKey);
+                            }
+                            X509_free(dsc);
+                        }
+                    }
+
+                    X509_free(csca);
+                } else {
+                    detail["cscaFound"] = false;
+                    detail["signatureValid"] = false;
+
+                    // Check if CSCA exists with simple query
+                    std::string checkQuery = "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER($1)";
+                    const char* paramValues[1] = {issuerDn.c_str()};
+                    PGresult* checkRes = PQexecParams(conn, checkQuery.c_str(), 1, nullptr, paramValues, nullptr, nullptr, 0);
+                    if (PQresultStatus(checkRes) == PGRES_TUPLES_OK) {
+                        int count = std::stoi(PQgetvalue(checkRes, 0, 0));
+                        detail["cscaExistsInDb"] = count;
+                    }
+                    PQclear(checkRes);
+                }
+
+                validatedCount++;
+                details.append(detail);
+            }
+
+            PQclear(res);
+            PQfinish(conn);
+
+            Json::Value result;
+            result["success"] = true;
+            result["totalProcessed"] = validatedCount;
+            result["cscaFoundCount"] = cscaFoundCount;
+            result["signatureValidCount"] = signatureValidCount;
+            result["details"] = details;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Post, drogon::Get}
     );
 
     // Upload LDIF file endpoint
@@ -2990,6 +3550,11 @@ void registerRoutes() {
                 result["countriesCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
+                // Get Master List count (sum of ml_count from all uploads)
+                res = PQexec(conn, "SELECT COALESCE(SUM(ml_count), 0) FROM uploaded_file");
+                result["mlCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
                 // Validation statistics from validation_result table
                 Json::Value validation;
 
@@ -3040,6 +3605,7 @@ void registerRoutes() {
                 result["dscCount"] = 0;
                 result["dscNcCount"] = 0;
                 result["crlCount"] = 0;
+                result["mlCount"] = 0;
                 result["countriesCount"] = 0;
 
                 // Empty validation stats
@@ -3105,7 +3671,7 @@ void registerRoutes() {
                 // Get paginated results with validation statistics
                 int offset = page * size;
                 std::string query = "SELECT id, file_name, file_format, file_size, status, "
-                                   "csca_count, dsc_count, dsc_nc_count, crl_count, error_message, "
+                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), error_message, "
                                    "upload_timestamp, completed_timestamp, "
                                    "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
                                    "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
@@ -3131,21 +3697,22 @@ void registerRoutes() {
                         item["dscNcCount"] = dscNcCount;
                         item["certificateCount"] = cscaCount + dscCount + dscNcCount;  // Keep for backward compatibility
                         item["crlCount"] = std::stoi(PQgetvalue(res, i, 8));
-                        item["errorMessage"] = PQgetvalue(res, i, 9) ? PQgetvalue(res, i, 9) : "";
-                        item["createdAt"] = PQgetvalue(res, i, 10);
-                        item["updatedAt"] = PQgetvalue(res, i, 11);
+                        item["mlCount"] = std::stoi(PQgetvalue(res, i, 9));  // Master List count
+                        item["errorMessage"] = PQgetvalue(res, i, 10) ? PQgetvalue(res, i, 10) : "";
+                        item["createdAt"] = PQgetvalue(res, i, 11);
+                        item["updatedAt"] = PQgetvalue(res, i, 12);
 
                         // Validation statistics
                         Json::Value validation;
-                        validation["validCount"] = std::stoi(PQgetvalue(res, i, 12));
-                        validation["invalidCount"] = std::stoi(PQgetvalue(res, i, 13));
-                        validation["pendingCount"] = std::stoi(PQgetvalue(res, i, 14));
-                        validation["errorCount"] = std::stoi(PQgetvalue(res, i, 15));
-                        validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, i, 16));
-                        validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, i, 17));
-                        validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, i, 18));
-                        validation["expiredCount"] = std::stoi(PQgetvalue(res, i, 19));
-                        validation["revokedCount"] = std::stoi(PQgetvalue(res, i, 20));
+                        validation["validCount"] = std::stoi(PQgetvalue(res, i, 13));
+                        validation["invalidCount"] = std::stoi(PQgetvalue(res, i, 14));
+                        validation["pendingCount"] = std::stoi(PQgetvalue(res, i, 15));
+                        validation["errorCount"] = std::stoi(PQgetvalue(res, i, 16));
+                        validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, i, 17));
+                        validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, i, 18));
+                        validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, i, 19));
+                        validation["expiredCount"] = std::stoi(PQgetvalue(res, i, 20));
+                        validation["revokedCount"] = std::stoi(PQgetvalue(res, i, 21));
                         item["validation"] = validation;
 
                         result["content"].append(item);

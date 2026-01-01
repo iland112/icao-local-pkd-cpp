@@ -210,6 +210,7 @@ export interface UploadStatisticsOverview {
   dscCount: number;
   dscNcCount: number;
   crlCount: number;
+  mlCount: number;  // Master List count
   countriesCount: number;
   validation: ValidationStats;
 }

@@ -49,6 +49,7 @@ interface UploadHistoryItem {
   dscNcCount: number;  // Non-Conformant DSC count
   certificateCount: number;  // Keep for backward compatibility
   crlCount: number;
+  mlCount: number;  // Master List count
   errorMessage: string;
   createdAt: string;
   updatedAt: string;
@@ -333,27 +334,27 @@ export function UploadHistory() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       파일명
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       형식
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       크기
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       진행 상태
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       인증서
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       업로드 일시
                     </th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       액션
                     </th>
                   </tr>
@@ -405,7 +406,13 @@ export function UploadHistory() {
                               CRL {upload.crlCount}
                             </span>
                           )}
-                          {upload.certificateCount === 0 && upload.crlCount === 0 && (
+                          {upload.mlCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
+                              <FileText className="w-3 h-3" />
+                              ML {upload.mlCount}
+                            </span>
+                          )}
+                          {upload.certificateCount === 0 && upload.crlCount === 0 && !upload.mlCount && (
                             <span className="text-gray-400 dark:text-gray-500">-</span>
                           )}
                         </div>

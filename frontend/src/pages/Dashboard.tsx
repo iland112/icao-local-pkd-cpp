@@ -339,7 +339,7 @@ export function Dashboard() {
             {/* Certificate Counts */}
             <div className="mb-6">
               <h4 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-4">인증서 현황</h4>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                 <div className="p-4 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700">
                   <div className="flex items-center gap-2 mb-2">
                     <HardDrive className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -374,6 +374,13 @@ export function Dashboard() {
                     <span className="text-xs font-medium text-orange-600 dark:text-orange-400">CRL</span>
                   </div>
                   <p className="text-2xl font-bold text-orange-700 dark:text-orange-300">{(uploadStats.crlCount ?? 0).toLocaleString()}</p>
+                </div>
+                <div className="p-4 rounded-xl bg-gradient-to-br from-teal-50 to-teal-100 dark:from-teal-900/20 dark:to-teal-800/20 border border-teal-200 dark:border-teal-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Database className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                    <span className="text-xs font-medium text-teal-600 dark:text-teal-400">ML</span>
+                  </div>
+                  <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{(uploadStats.mlCount ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="p-4 rounded-xl bg-gradient-to-br from-cyan-50 to-cyan-100 dark:from-cyan-900/20 dark:to-cyan-800/20 border border-cyan-200 dark:border-cyan-700">
                   <div className="flex items-center gap-2 mb-2">
