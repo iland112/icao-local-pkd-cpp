@@ -15,6 +15,7 @@ import {
 import { paApi } from '@/services/api';
 import type { PAStatisticsOverview, PAHistoryItem } from '@/types';
 import { cn } from '@/utils/cn';
+import { getFlagSvgPath } from '@/utils/countryCode';
 import { useThemeStore } from '@/stores/themeStore';
 
 export function PADashboard() {
@@ -74,8 +75,9 @@ export function PADashboard() {
     }
 
     recentVerifications.forEach((r) => {
-      if (r.verifiedAt) {
-        const dateStr = r.verifiedAt.split('T')[0];
+      if (r.verificationTimestamp) {
+        // Handle both ISO format (2026-01-02T16:35:28) and PostgreSQL format (2026-01-02 16:35:28.313491+09)
+        const dateStr = r.verificationTimestamp.split(/[T\s]/)[0];
         if (dailyMap[dateStr]) {
           if (r.status === 'VALID') dailyMap[dateStr].valid++;
           else if (r.status === 'INVALID') dailyMap[dateStr].invalid++;
@@ -92,13 +94,13 @@ export function PADashboard() {
     // Today count
     const today = new Date().toISOString().split('T')[0];
     const todayCount = recentVerifications.filter(
-      (r) => r.verifiedAt?.startsWith(today)
+      (r) => r.verificationTimestamp?.split(/[T\s]/)[0] === today
     ).length;
 
     // Last verification time
     let lastVerification = 'N/A';
-    if (recentVerifications.length > 0 && recentVerifications[0].verifiedAt) {
-      const last = new Date(recentVerifications[0].verifiedAt);
+    if (recentVerifications.length > 0 && recentVerifications[0].verificationTimestamp) {
+      const last = new Date(recentVerifications[0].verificationTimestamp);
       const now = new Date();
       const diffMinutes = Math.floor((now.getTime() - last.getTime()) / 1000 / 60);
       if (diffMinutes < 60) {
@@ -503,14 +505,16 @@ export function PADashboard() {
                           {index + 1}
                         </span>
                         {/* Flag */}
-                        <img
-                          src={`/svg/${item.country.toLowerCase()}.svg`}
-                          alt={item.country}
-                          className="w-7 h-5 flex-shrink-0 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).style.display = 'none';
-                          }}
-                        />
+                        {getFlagSvgPath(item.country) && (
+                          <img
+                            src={getFlagSvgPath(item.country)}
+                            alt={item.country}
+                            className="w-7 h-5 flex-shrink-0 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).style.display = 'none';
+                            }}
+                          />
+                        )}
                         {/* Country Code */}
                         <span className="w-20 flex-shrink-0 font-mono font-semibold text-sm text-gray-700 dark:text-gray-300">
                           {item.country}

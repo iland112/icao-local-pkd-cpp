@@ -1631,6 +1631,62 @@ void registerRoutes() {
             std::string issuingCountry = (*jsonBody).get("issuingCountry", "").asString();
             std::string documentNumber = (*jsonBody).get("documentNumber", "").asString();
 
+            // Extract documentNumber from DG1 if not provided in request
+            if (documentNumber.empty() && dataGroups.count(1) > 0) {
+                const auto& dg1Data = dataGroups[1];
+                // Local helper to clean MRZ field (remove trailing '<' chars)
+                auto cleanDocNum = [](const std::string& field) -> std::string {
+                    std::string result;
+                    for (char c : field) {
+                        if (c != '<') result += c;
+                    }
+                    // Trim trailing spaces
+                    size_t end = result.find_last_not_of(' ');
+                    if (end != std::string::npos) {
+                        result = result.substr(0, end + 1);
+                    }
+                    return result;
+                };
+                // Extract MRZ from DG1 (skip TLV header - find 0x5F1F tag)
+                size_t pos = 0;
+                while (pos + 3 < dg1Data.size()) {
+                    if (dg1Data[pos] == 0x5F && dg1Data[pos + 1] == 0x1F) {
+                        // Found MRZ tag 5F1F
+                        pos += 2;
+                        size_t mrzLen = dg1Data[pos++];
+                        if (mrzLen > 127) {
+                            // Long form length
+                            size_t numBytes = mrzLen & 0x7F;
+                            mrzLen = 0;
+                            for (size_t i = 0; i < numBytes && pos < dg1Data.size(); i++) {
+                                mrzLen = (mrzLen << 8) | dg1Data[pos++];
+                            }
+                        }
+                        if (pos + mrzLen <= dg1Data.size()) {
+                            std::string mrzData(dg1Data.begin() + pos, dg1Data.begin() + pos + mrzLen);
+                            // Parse MRZ to extract document number
+                            if (mrzData.length() == 88) {
+                                // TD3 format (passport): line2 starts at 44, docNum at 0-9
+                                std::string line2 = mrzData.substr(44, 44);
+                                documentNumber = cleanDocNum(line2.substr(0, 9));
+                            } else if (mrzData.length() == 72) {
+                                // TD2 format: line2 starts at 36, docNum at 0-9
+                                std::string line2 = mrzData.substr(36, 36);
+                                documentNumber = cleanDocNum(line2.substr(0, 9));
+                            } else if (mrzData.length() == 90) {
+                                // TD1 format: docNum at 5-14
+                                documentNumber = cleanDocNum(mrzData.substr(5, 9));
+                            }
+                            if (!documentNumber.empty()) {
+                                spdlog::info("Extracted documentNumber from DG1: {}", documentNumber);
+                            }
+                        }
+                        break;
+                    }
+                    pos++;
+                }
+            }
+
             // Start verification process
             std::string status = "VALID";
             CertificateChainValidationResult chainResult;
@@ -2621,10 +2677,10 @@ void registerRoutes() {
         {drogon::Post}
     );
 
-    // Data groups endpoint
+    // Data groups endpoint with full DG1/DG2 parsing
     app.registerHandler(
         "/api/pa/{id}/datagroups",
-        [](const drogon::HttpRequestPtr& /* req */,
+        [&convertMrzDate, &convertMrzExpiryDate, &cleanMrzField](const drogon::HttpRequestPtr& /* req */,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback,
            const std::string& id) {
             spdlog::info("GET /api/pa/{}/datagroups", id);
@@ -2635,23 +2691,202 @@ void registerRoutes() {
             result["hasDg1"] = false;
             result["hasDg2"] = false;
 
-            if (conn) {
-                std::string sql = "SELECT dg_number, dg_binary FROM pa_data_group "
-                    "WHERE verification_id = $1 ORDER BY dg_number";
-                const char* paramValues[1] = {id.c_str()};
-                PGresult* res = PQexecParams(conn, sql.c_str(), 1, nullptr, paramValues, nullptr, nullptr, 1);
+            if (!conn) {
+                spdlog::error("Failed to connect to database for datagroups");
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
 
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    int nRows = PQntuples(res);
-                    for (int i = 0; i < nRows; i++) {
-                        int dgNum = std::stoi(PQgetvalue(res, i, 0));
-                        if (dgNum == 1) result["hasDg1"] = true;
-                        if (dgNum == 2) result["hasDg2"] = true;
-                    }
-                }
+            // Query using text result format (not binary) for dg_number
+            std::string sql = "SELECT dg_number, dg_binary FROM pa_data_group "
+                "WHERE verification_id = $1 ORDER BY dg_number";
+            const char* paramValues[1] = {id.c_str()};
+            PGresult* res = PQexecParams(conn, sql.c_str(), 1, nullptr, paramValues, nullptr, nullptr, 0);
+
+            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                spdlog::error("Failed to query data groups: {}", PQerrorMessage(conn));
                 PQclear(res);
                 PQfinish(conn);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+                return;
             }
+
+            int nRows = PQntuples(res);
+            spdlog::debug("Found {} data groups for verification {}", nRows, id);
+
+            for (int i = 0; i < nRows; i++) {
+                int dgNum = std::stoi(PQgetvalue(res, i, 0));
+
+                // Get binary data (bytea field returns escaped format)
+                char* binaryStr = PQgetvalue(res, i, 1);
+                size_t binaryLen = 0;
+                unsigned char* binaryData = PQunescapeBytea(reinterpret_cast<unsigned char*>(binaryStr), &binaryLen);
+
+                if (!binaryData || binaryLen == 0) {
+                    spdlog::warn("Empty DG{} data for verification {}", dgNum, id);
+                    continue;
+                }
+
+                std::vector<uint8_t> dgBytes(binaryData, binaryData + binaryLen);
+                PQfreemem(binaryData);
+
+                if (dgNum == 1) {
+                    result["hasDg1"] = true;
+                    spdlog::debug("Parsing DG1 ({} bytes)", dgBytes.size());
+
+                    // Parse DG1 (MRZ) - same logic as parse-dg1 endpoint
+                    Json::Value dg1Result;
+                    std::string mrzData;
+
+                    for (size_t j = 0; j < dgBytes.size() - 2; j++) {
+                        if (dgBytes[j] == 0x5F && dgBytes[j+1] == 0x1F) {
+                            j += 2;
+                            size_t mrzLen = dgBytes[j++];
+                            if (mrzLen > 0x80) {
+                                int numBytes = mrzLen & 0x7F;
+                                mrzLen = 0;
+                                for (int k = 0; k < numBytes; k++) {
+                                    mrzLen = (mrzLen << 8) | dgBytes[j++];
+                                }
+                            }
+                            if (j + mrzLen <= dgBytes.size()) {
+                                mrzData = std::string(reinterpret_cast<const char*>(&dgBytes[j]), mrzLen);
+                            }
+                            break;
+                        }
+                    }
+
+                    if (mrzData.length() >= 88) {
+                        std::string line1 = mrzData.substr(0, 44);
+                        std::string line2 = mrzData.substr(44, 44);
+
+                        dg1Result["mrzLine1"] = line1;
+                        dg1Result["mrzLine2"] = line2;
+                        dg1Result["mrzFull"] = mrzData;
+                        dg1Result["documentType"] = cleanMrzField(line1.substr(0, 2));
+                        dg1Result["issuingCountry"] = line1.substr(2, 3);
+
+                        // Parse name
+                        size_t nameEnd = line1.find("<<", 5);
+                        std::string surname, givenNames;
+                        if (nameEnd != std::string::npos) {
+                            surname = line1.substr(5, nameEnd - 5);
+                            std::replace(surname.begin(), surname.end(), '<', ' ');
+                            while (!surname.empty() && surname.back() == ' ') surname.pop_back();
+                            while (!surname.empty() && surname.front() == ' ') surname.erase(0, 1);
+                            dg1Result["surname"] = surname;
+
+                            std::string givenPart = line1.substr(nameEnd + 2);
+                            std::replace(givenPart.begin(), givenPart.end(), '<', ' ');
+                            while (!givenPart.empty() && givenPart.back() == ' ') givenPart.pop_back();
+                            while (!givenPart.empty() && givenPart.front() == ' ') givenPart.erase(0, 1);
+                            givenNames = givenPart;
+                            dg1Result["givenNames"] = givenNames;
+                        }
+
+                        dg1Result["fullName"] = !surname.empty() ? (surname + " " + givenNames) : givenNames;
+                        dg1Result["documentNumber"] = cleanMrzField(line2.substr(0, 9));
+                        dg1Result["nationality"] = line2.substr(10, 3);
+                        dg1Result["dateOfBirth"] = convertMrzDate(line2.substr(13, 6));
+                        dg1Result["sex"] = line2.substr(20, 1);
+                        dg1Result["expirationDate"] = convertMrzExpiryDate(line2.substr(21, 6));
+
+                        result["dg1"] = dg1Result;
+                        spdlog::debug("DG1 parsed: documentNumber={}", dg1Result["documentNumber"].asString());
+                    } else if (mrzData.length() >= 72) {
+                        // TD2 format
+                        std::string line1 = mrzData.substr(0, 36);
+                        std::string line2 = mrzData.substr(36, 36);
+
+                        dg1Result["mrzLine1"] = line1;
+                        dg1Result["mrzLine2"] = line2;
+                        dg1Result["documentNumber"] = cleanMrzField(line2.substr(0, 9));
+                        dg1Result["nationality"] = line2.substr(10, 3);
+                        dg1Result["dateOfBirth"] = convertMrzDate(line2.substr(13, 6));
+                        dg1Result["sex"] = line2.substr(20, 1);
+                        dg1Result["expirationDate"] = convertMrzExpiryDate(line2.substr(21, 6));
+
+                        result["dg1"] = dg1Result;
+                    }
+                } else if (dgNum == 2) {
+                    result["hasDg2"] = true;
+                    spdlog::debug("Parsing DG2 ({} bytes)", dgBytes.size());
+
+                    // Parse DG2 (Face Image) - simplified version
+                    Json::Value dg2Result;
+                    Json::Value faceImages(Json::arrayValue);
+
+                    // Find JPEG or JPEG2000 image markers
+                    auto findImageStart = [](const std::vector<uint8_t>& data, size_t start)
+                        -> std::pair<size_t, std::string> {
+                        for (size_t i = start; i < data.size() - 4; i++) {
+                            // JPEG: FF D8 FF
+                            if (data[i] == 0xFF && data[i+1] == 0xD8 && data[i+2] == 0xFF) {
+                                return {i, "JPEG"};
+                            }
+                            // JPEG2000: 00 00 00 0C 6A 50
+                            if (i + 5 < data.size() &&
+                                data[i] == 0x00 && data[i+1] == 0x00 &&
+                                data[i+2] == 0x00 && data[i+3] == 0x0C &&
+                                data[i+4] == 0x6A && data[i+5] == 0x50) {
+                                return {i, "JP2"};
+                            }
+                        }
+                        return {std::string::npos, ""};
+                    };
+
+                    auto findImageEnd = [](const std::vector<uint8_t>& data, size_t start, const std::string& format)
+                        -> size_t {
+                        if (format == "JPEG") {
+                            // Find JPEG EOI marker: FF D9
+                            for (size_t i = start + 2; i < data.size() - 1; i++) {
+                                if (data[i] == 0xFF && data[i+1] == 0xD9) {
+                                    return i + 2;
+                                }
+                            }
+                        } else if (format == "JP2") {
+                            // For JP2, look for next image or end of data
+                            for (size_t i = start + 12; i < data.size() - 4; i++) {
+                                if (data[i] == 0xFF && data[i+1] == 0xD8 && data[i+2] == 0xFF) {
+                                    return i;
+                                }
+                            }
+                            return data.size();
+                        }
+                        return data.size();
+                    };
+
+                    auto [imgStart, imgFormat] = findImageStart(dgBytes, 0);
+                    if (imgStart != std::string::npos) {
+                        size_t imgEnd = findImageEnd(dgBytes, imgStart, imgFormat);
+
+                        std::vector<uint8_t> imageData(dgBytes.begin() + imgStart, dgBytes.begin() + imgEnd);
+
+                        // Base64 encode the image
+                        std::string base64Image = base64Encode(imageData);
+                        std::string mimeType = (imgFormat == "JPEG") ? "image/jpeg" : "image/jp2";
+                        std::string dataUrl = "data:" + mimeType + ";base64," + base64Image;
+
+                        Json::Value faceImage;
+                        faceImage["imageFormat"] = imgFormat;
+                        faceImage["imageSize"] = static_cast<int>(imageData.size());
+                        faceImage["imageDataUrl"] = dataUrl;
+                        faceImages.append(faceImage);
+
+                        spdlog::debug("DG2 face image found: format={}, size={}", imgFormat, imageData.size());
+                    }
+
+                    dg2Result["faceCount"] = faceImages.size();
+                    dg2Result["faceImages"] = faceImages;
+                    result["dg2"] = dg2Result;
+                }
+            }
+
+            PQclear(res);
+            PQfinish(conn);
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);

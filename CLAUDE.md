@@ -262,6 +262,25 @@ docker-compose -f docker/docker-compose.yaml up -d pkd-management
 
 ## Change Log
 
+### 2026-01-02: PA Frontend UI/UX 개선
+
+**PA Verify Page** (`/pa/verify`):
+- Step 1-8 검증 단계 라벨을 한글로 변경
+- Step 4 Trust Chain 검증에 CSCA → DSC 인증서 체인 경로 시각화 추가
+- DSC Subject 텍스트 오버플로우 처리 (`break-all`)
+- DG2 얼굴 이미지 카드 레이아웃 개선 (이미지 크기 확대, 정보 그리드 배치)
+- 원본 MRZ 데이터 기본값을 펼친 상태로 변경
+
+**PA Dashboard Page** (`/pa/dashboard`):
+- 일별 검증 추이 차트 버그 수정 (PostgreSQL timestamp 형식 파싱)
+- `verificationTimestamp.split('T')` → `split(/[T\s]/)` 정규식으로 변경
+
+**국가 플래그 SVG 표시 문제 해결**:
+- ISO 3166-1 alpha-3 (3글자) → alpha-2 (2글자) 변환 유틸리티 추가
+- `frontend/src/utils/countryCode.ts` 생성
+- ICAO/MRTD 특수 코드 지원 (D, GBD, UNK 등)
+- PAHistory, PADashboard 페이지에 `getFlagSvgPath()` 함수 적용
+
 ### 2026-01-02: Docker 관리 스크립트 정리
 
 **삭제된 스크립트:**

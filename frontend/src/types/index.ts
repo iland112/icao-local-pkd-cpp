@@ -199,14 +199,19 @@ export interface PAHistory {
 }
 
 // Alias for PAHistory used in dashboard/history pages
+// API returns: verificationId, verificationTimestamp, processingDurationMs
 export interface PAHistoryItem {
-  id: string;
+  verificationId: string;
   status: PAStatus;
   issuingCountry?: string;
   documentNumber?: string;
-  verifiedAt: string;
-  processingTimeMs: number;
+  verificationTimestamp: string;
+  processingDurationMs: number;
   requestedBy?: string;
+  // Validation results from API
+  sodSignatureValidation?: { valid: boolean };
+  certificateChainValidation?: { valid: boolean };
+  dataGroupValidation?: { valid: boolean };
 }
 
 // Upload history item
