@@ -1,20 +1,13 @@
 # =============================================================================
 # ICAO Local PKD - LDAP DIT Structure Initialization
 # =============================================================================
-# Version: 1.1
+# Version: 1.2
 # Created: 2025-12-31
-# Updated: 2026-01-01
+# Updated: 2026-01-02
 # Description: Creates the ICAO PKD DIT structure for certificate storage
-# Note: Base DN must be created first for the PKD structure to work
+# Note: Base DN (dc=ldap,dc=smartcoreinc,dc=com) is automatically created
+#       by osixia/openldap based on LDAP_DOMAIN environment variable
 # =============================================================================
-
-# Create Base DN (required - osixia only creates naming context, not the data entry)
-dn: dc=ldap,dc=smartcoreinc,dc=com
-objectClass: top
-objectClass: dcObject
-objectClass: organization
-dc: ldap
-o: SmartCore Inc
 
 # Create PKD root container
 dn: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com

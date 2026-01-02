@@ -180,14 +180,20 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # LDAP PKD DIT Initializer (runs once at startup)
+  # LDAP PKD DIT Initializer (runs once after MMR setup)
   # ---------------------------------------------------------------------------
   ldap-init:
-    image: osixia/openldap:1.5.0
+    image: icao-local-pkd-openldap:1.5.0
     container_name: icao-local-pkd-ldap-init
     depends_on:
       openldap1:
         condition: service_healthy
+      openldap2:
+        condition: service_healthy
+      ldap-mmr-setup1:
+        condition: service_completed_successfully
+      ldap-mmr-setup2:
+        condition: service_completed_successfully
     environment:
       - LDAP_HOST=openldap1
       - LDAP_PORT=389
@@ -213,9 +219,12 @@ services:
     volumes:
       - ../haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
-      - openldap1
-      - openldap2
-      - ldap-init  # Wait for PKD DIT initialization
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
+      ldap-init:
+        condition: service_completed_successfully
     networks:
       - pkd-network
     restart: unless-stopped
@@ -241,9 +250,6 @@ services:
       - LDAP_CONFIG_PASSWORD=config
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
-      - LDAP_REPLICATION=true
-      - LDAP_REPLICATION_HOSTS=#DIFFHOST ldap://openldap1 ldap://openldap2
-      - LDAP_SEED_INTERNAL_LDIF_PATH=/container/service/slapd/assets/config/bootstrap/ldif/custom
     volumes:
       - ../.docker-data/openldap1/data:/var/lib/ldap
       - ../.docker-data/openldap1/config:/etc/ldap/slapd.d
@@ -278,9 +284,6 @@ services:
       - LDAP_CONFIG_PASSWORD=config
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
-      - LDAP_REPLICATION=true
-      - LDAP_REPLICATION_HOSTS=#DIFFHOST ldap://openldap1 ldap://openldap2
-      - LDAP_SEED_INTERNAL_LDIF_PATH=/container/service/slapd/assets/config/bootstrap/ldif/custom
     volumes:
       - ../.docker-data/openldap2/data:/var/lib/ldap
       - ../.docker-data/openldap2/config:/etc/ldap/slapd.d
@@ -293,6 +296,139 @@ services:
       retries: 20
       start_period: 60s
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenLDAP MMR Setup (runs once to configure Multi-Master Replication)
+  # ---------------------------------------------------------------------------
+  ldap-mmr-setup1:
+    image: icao-local-pkd-openldap:1.5.0
+    container_name: icao-local-pkd-ldap-mmr-setup1
+    depends_on:
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
+    environment:
+      - LDAP_CONFIG_PASSWORD=config
+      - LDAP_ADMIN_PASSWORD=admin
+      - SERVER_ID=1
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Wait for both LDAP servers
+        sleep 5
+
+        # Run MMR setup on openldap1
+        export LDAP_URI="ldap://openldap1:389"
+
+        echo "Setting up MMR on openldap1 (Server ID: 1)..."
+
+        # Load syncprov module
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: cn=module{0},cn=config
+        changetype: modify
+        add: olcModuleLoad
+        olcModuleLoad: syncprov
+        EOF
+
+        # Create syncprov overlay
+        ldapadd -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: olcOverlay=syncprov,olcDatabase={1}mdb,cn=config
+        objectClass: olcOverlayConfig
+        objectClass: olcSyncProvConfig
+        olcOverlay: syncprov
+        olcSpSessionLog: 100
+        EOF
+
+        # Set server ID
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: cn=config
+        changetype: modify
+        add: olcServerID
+        olcServerID: 1
+        EOF
+
+        # Configure MMR replication
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: olcDatabase={1}mdb,cn=config
+        changetype: modify
+        add: olcSyncRepl
+        olcSyncRepl: {0}rid=001 provider=ldap://openldap1:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        olcSyncRepl: {1}rid=002 provider=ldap://openldap2:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        -
+        add: olcMirrorMode
+        olcMirrorMode: TRUE
+        EOF
+
+        echo "MMR setup complete for openldap1"
+    networks:
+      - pkd-network
+    restart: "no"
+
+  ldap-mmr-setup2:
+    image: icao-local-pkd-openldap:1.5.0
+    container_name: icao-local-pkd-ldap-mmr-setup2
+    depends_on:
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
+    environment:
+      - LDAP_CONFIG_PASSWORD=config
+      - LDAP_ADMIN_PASSWORD=admin
+      - SERVER_ID=2
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        # Wait for both LDAP servers
+        sleep 5
+
+        # Run MMR setup on openldap2
+        export LDAP_URI="ldap://openldap2:389"
+
+        echo "Setting up MMR on openldap2 (Server ID: 2)..."
+
+        # Load syncprov module
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: cn=module{0},cn=config
+        changetype: modify
+        add: olcModuleLoad
+        olcModuleLoad: syncprov
+        EOF
+
+        # Create syncprov overlay
+        ldapadd -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: olcOverlay=syncprov,olcDatabase={1}mdb,cn=config
+        objectClass: olcOverlayConfig
+        objectClass: olcSyncProvConfig
+        olcOverlay: syncprov
+        olcSpSessionLog: 100
+        EOF
+
+        # Set server ID
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: cn=config
+        changetype: modify
+        add: olcServerID
+        olcServerID: 2
+        EOF
+
+        # Configure MMR replication
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        dn: olcDatabase={1}mdb,cn=config
+        changetype: modify
+        add: olcSyncRepl
+        olcSyncRepl: {0}rid=001 provider=ldap://openldap1:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        olcSyncRepl: {1}rid=002 provider=ldap://openldap2:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        -
+        add: olcMirrorMode
+        olcMirrorMode: TRUE
+        EOF
+
+        echo "MMR setup complete for openldap2"
+    networks:
+      - pkd-network
+    restart: "no"
 
 # =============================================================================
 # Networks

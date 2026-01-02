@@ -1,6 +1,8 @@
 # Custom OpenLDAP image based on osixia/openldap
-# Includes ICAO PKD custom schema and fixes missing replication config files
+# Includes ICAO PKD custom schema and MMR replication setup
 FROM osixia/openldap:1.5.0
+
+# Note: ldap-utils is already included in osixia/openldap image
 
 # Create required empty config files that osixia startup script expects
 RUN mkdir -p /container/service/slapd/assets/config/replication && \
@@ -12,9 +14,12 @@ RUN mkdir -p /container/service/slapd/assets/config/replication && \
 # Copy ICAO PKD custom schema (goes to schema directory)
 COPY schemas/icao-pkd.ldif /container/service/slapd/assets/config/bootstrap/schema/
 
-# Copy PKD DIT structure initialization LDIF (goes to custom directory for ldapadd)
-COPY bootstrap/ /container/service/slapd/assets/config/bootstrap/ldif/custom/
+# Note: PKD DIT structure is initialized by ldap-init container, not bootstrap LDIF
+# This avoids conflicts with osixia/openldap's base DN creation
+
+# Copy MMR setup script
+COPY scripts/setup-mmr.sh /setup-mmr.sh
+RUN chmod +x /setup-mmr.sh
 
 # Fix permissions for all copied files
-RUN chmod 644 /container/service/slapd/assets/config/bootstrap/schema/icao-pkd.ldif && \
-    chmod 644 /container/service/slapd/assets/config/bootstrap/ldif/custom/*.ldif || true
+RUN chmod 644 /container/service/slapd/assets/config/bootstrap/schema/icao-pkd.ldif
