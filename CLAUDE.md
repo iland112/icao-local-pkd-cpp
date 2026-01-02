@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.0
-**Last Updated**: 2026-01-01
+**Version**: 1.1
+**Last Updated**: 2026-01-02
 **Status**: Production Ready
 
 ---
@@ -124,7 +124,23 @@ icao-local-pkd/
 
 # Clean all data and restart
 ./docker-clean.sh
+
+# Health check (MMR 상태 포함)
+./docker-health.sh
 ```
+
+### Docker Management Scripts
+
+| Script | Description |
+|--------|-------------|
+| `docker-start.sh` | 전체 서비스 시작 (MMR 초기화 포함) |
+| `docker-stop.sh` | 서비스 중지 |
+| `docker-restart.sh` | 서비스 재시작 |
+| `docker-logs.sh` | 로그 확인 |
+| `docker-clean.sh` | 완전 삭제 (.docker-data 포함) |
+| `docker-health.sh` | 헬스 체크 (MMR 상태, 엔트리 수 포함) |
+| `docker-backup.sh` | 데이터 백업 (PostgreSQL, LDAP, 업로드 파일) |
+| `docker-restore.sh` | 데이터 복구 |
 
 ### Access URLs
 
@@ -245,6 +261,22 @@ docker-compose -f docker/docker-compose.yaml up -d pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-02: Docker 관리 스크립트 정리
+
+**삭제된 스크립트:**
+- `docker-ldap-init.sh` - ldap-init 컨테이너로 대체됨
+- `scripts/docker-start.sh` - 루트의 docker-start.sh와 중복
+
+**업데이트된 스크립트:**
+- `docker-health.sh` - MMR 복제 상태, HAProxy, PA Service 내부 포트 체크 추가
+- `docker-backup.sh` - `.docker-data/pkd-uploads` 경로로 업데이트
+- `docker-restore.sh` - bind mount 경로 업데이트, MMR 복제 안내 추가
+
+**OpenLDAP MMR 설정:**
+- osixia/openldap의 LDAP_REPLICATION 환경변수 대신 ldap-mmr-setup1/2 컨테이너 사용
+- Bootstrap LDIF에서 Base DN 제거 (osixia 자동 생성과 충돌 방지)
+- ICAO PKD custom schema 추가 (cscaCertificateObject 포함)
 
 ### 2026-01-01: Frontend UI/UX Improvements
 

@@ -1,5 +1,6 @@
 #!/bin/bash
 # docker-backup.sh - 데이터 백업 스크립트
+# Updated: 2026-01-02 - Updated paths for bind mount structure
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -29,16 +30,17 @@ if docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost -b "" 
         -H ldap://localhost \
         -b "dc=ldap,dc=smartcoreinc,dc=com" \
         -LLL > $BACKUP_DIR/ldap_backup.ldif 2>/dev/null
-    echo "  ✅ OpenLDAP 백업 완료"
+    LDAP_ENTRIES=$(grep -c "^dn:" $BACKUP_DIR/ldap_backup.ldif 2>/dev/null || echo 0)
+    echo "  ✅ OpenLDAP 백업 완료 ($LDAP_ENTRIES entries)"
 else
     echo "  ⚠️  OpenLDAP이 실행 중이지 않습니다"
 fi
 
-# 업로드 파일 백업
+# 업로드 파일 백업 (.docker-data/pkd-uploads)
 echo ""
 echo "📦 업로드 파일 백업 중..."
-if [ -d "./data/uploads" ] && [ "$(ls -A ./data/uploads 2>/dev/null)" ]; then
-    tar -czf $BACKUP_DIR/uploads.tar.gz ./data/uploads
+if [ -d "./.docker-data/pkd-uploads" ] && [ "$(ls -A ./.docker-data/pkd-uploads 2>/dev/null)" ]; then
+    tar -czf $BACKUP_DIR/uploads.tar.gz ./.docker-data/pkd-uploads
     echo "  ✅ 업로드 파일 백업 완료"
 else
     echo "  ⚠️  업로드 파일이 없습니다. 건너뜁니다."

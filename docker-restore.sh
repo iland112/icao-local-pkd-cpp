@@ -1,5 +1,6 @@
 #!/bin/bash
 # docker-restore.sh - 데이터 복구 스크립트
+# Updated: 2026-01-02 - Updated paths for bind mount structure
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -49,16 +50,17 @@ if [ -f "$BACKUP_DIR/ldap_backup.ldif" ]; then
         -w admin \
         -H ldap://localhost \
         -c < $BACKUP_DIR/ldap_backup.ldif 2>/dev/null || true
-    echo "  ✅ OpenLDAP 복구 완료"
+    echo "  ✅ OpenLDAP 복구 완료 (MMR 통해 자동 복제됨)"
 else
     echo ""
     echo "  ⚠️  OpenLDAP 백업 파일을 찾을 수 없습니다."
 fi
 
-# 업로드 파일 복구
+# 업로드 파일 복구 (.docker-data/pkd-uploads)
 if [ -f "$BACKUP_DIR/uploads.tar.gz" ]; then
     echo ""
     echo "📦 업로드 파일 복구 중..."
+    mkdir -p ./.docker-data/pkd-uploads
     tar -xzf $BACKUP_DIR/uploads.tar.gz -C .
     echo "  ✅ 업로드 파일 복구 완료"
 else
@@ -79,3 +81,5 @@ fi
 
 echo ""
 echo "✅ 복구 완료!"
+echo ""
+echo "📝 참고: OpenLDAP 데이터는 MMR을 통해 자동으로 두 노드에 복제됩니다."

@@ -1,5 +1,6 @@
 #!/bin/bash
 # docker-health.sh - 헬스 체크 스크립트
+# Updated: 2026-01-02 - Added MMR replication status check
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -19,19 +20,67 @@ fi
 
 # OpenLDAP 체크
 echo ""
-echo "📂 OpenLDAP (HAProxy):"
+echo "📂 OpenLDAP:"
+LDAP1_OK=false
+LDAP2_OK=false
+LDAP1_COUNT=0
+LDAP2_COUNT=0
+
+LDAP_BIND_DN="cn=admin,dc=ldap,dc=smartcoreinc,dc=com"
+LDAP_BIND_PW="admin"
+
 if docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
-    LDAP1_COUNT=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost -b "dc=ldap,dc=smartcoreinc,dc=com" -s sub "(objectClass=*)" dn 2>/dev/null | grep -c "^dn:" || echo 0)
+    LDAP1_RESULT=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost \
+        -D "$LDAP_BIND_DN" -w "$LDAP_BIND_PW" \
+        -b "dc=ldap,dc=smartcoreinc,dc=com" -s sub "(objectClass=*)" dn 2>/dev/null)
+    LDAP1_COUNT=$(echo "$LDAP1_RESULT" | grep "^dn:" | wc -l | xargs)
     echo "  ✅ OpenLDAP1 정상 ($LDAP1_COUNT entries)"
+    LDAP1_OK=true
 else
     echo "  ❌ OpenLDAP1 오류"
 fi
 
 if docker exec icao-local-pkd-openldap2 ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
-    LDAP2_COUNT=$(docker exec icao-local-pkd-openldap2 ldapsearch -x -H ldap://localhost -b "dc=ldap,dc=smartcoreinc,dc=com" -s sub "(objectClass=*)" dn 2>/dev/null | grep -c "^dn:" || echo 0)
+    LDAP2_RESULT=$(docker exec icao-local-pkd-openldap2 ldapsearch -x -H ldap://localhost \
+        -D "$LDAP_BIND_DN" -w "$LDAP_BIND_PW" \
+        -b "dc=ldap,dc=smartcoreinc,dc=com" -s sub "(objectClass=*)" dn 2>/dev/null)
+    LDAP2_COUNT=$(echo "$LDAP2_RESULT" | grep "^dn:" | wc -l | xargs)
     echo "  ✅ OpenLDAP2 정상 ($LDAP2_COUNT entries)"
+    LDAP2_OK=true
 else
     echo "  ❌ OpenLDAP2 오류"
+fi
+
+# MMR 복제 상태 체크
+echo ""
+echo "🔄 MMR 복제 상태:"
+if [ "$LDAP1_OK" = true ] && [ "$LDAP2_OK" = true ]; then
+    if [ "$LDAP1_COUNT" -eq "$LDAP2_COUNT" ]; then
+        echo "  ✅ 동기화됨 (OpenLDAP1: $LDAP1_COUNT, OpenLDAP2: $LDAP2_COUNT)"
+    else
+        echo "  ⚠️  동기화 중 (OpenLDAP1: $LDAP1_COUNT, OpenLDAP2: $LDAP2_COUNT)"
+    fi
+
+    # MMR 설정 확인
+    MMR_CONFIG=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost \
+        -D "cn=admin,cn=config" -w config \
+        -b "olcDatabase={1}mdb,cn=config" "(objectClass=*)" olcMirrorMode 2>/dev/null | grep "olcMirrorMode" || echo "")
+    if [ -n "$MMR_CONFIG" ]; then
+        echo "  ✅ MMR 설정 활성화됨"
+    else
+        echo "  ⚠️  MMR 설정 확인 필요"
+    fi
+else
+    echo "  ❌ OpenLDAP 노드 확인 필요"
+fi
+
+# HAProxy 체크
+echo ""
+echo "🔀 HAProxy:"
+if curl -sf http://localhost:8404/stats > /dev/null 2>&1; then
+    echo "  ✅ 정상 (http://localhost:8404)"
+else
+    echo "  ❌ 오류 (stats page not responding)"
 fi
 
 # PKD Management API 체크
@@ -45,12 +94,12 @@ else
     echo "  ❌ 오류 (not responding)"
 fi
 
-# PA Service API 체크
+# PA Service API 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
 echo ""
 echo "🔐 PA Service:"
-if curl -sf http://localhost:8082/api/health > /dev/null 2>&1; then
-    HEALTH=$(curl -s http://localhost:8082/api/health 2>/dev/null)
-    echo "  ✅ 정상"
+if docker exec icao-local-pkd-pa-service curl -sf http://localhost:8082/api/health > /dev/null 2>&1; then
+    HEALTH=$(docker exec icao-local-pkd-pa-service curl -s http://localhost:8082/api/health 2>/dev/null)
+    echo "  ✅ 정상 (내부 포트 8082)"
     echo "     $HEALTH"
 else
     echo "  ❌ 오류 (not responding)"

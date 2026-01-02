@@ -60,16 +60,18 @@ if [ -n "$SKIP_APP" ]; then
         # PostgreSQL만 시작
         docker compose up -d $BUILD_FLAG postgres
     else
-        # PostgreSQL, OpenLDAP, HAProxy 시작 (ldap-init이 PKD DIT 자동 초기화)
-        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2 ldap-init haproxy
+        # PostgreSQL, OpenLDAP, HAProxy 시작
+        # MMR setup 컨테이너가 자동으로 실행되고, ldap-init이 PKD DIT 초기화
+        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2 haproxy
     fi
 elif [ -n "$LEGACY" ]; then
     # Legacy 단일 앱 모드
     docker compose --profile legacy up -d $BUILD_FLAG
 else
     # 마이크로서비스 모드 (frontend + pkd-management + pa-service)
-    # ldap-init 서비스가 PKD DIT 구조를 자동으로 초기화합니다
-    docker compose up -d $BUILD_FLAG frontend pkd-management pa-service postgres openldap1 openldap2 ldap-init haproxy
+    # 서비스 의존성 순서:
+    #   openldap1/2 -> ldap-mmr-setup1/2 -> ldap-init -> haproxy -> apps
+    docker compose up -d $BUILD_FLAG
 fi
 
 cd ..
@@ -89,9 +91,16 @@ echo "✅ 컨테이너 시작 완료!"
 # 4. LDAP 초기화 확인
 if [ -z "$SKIP_LDAP" ]; then
     echo ""
-    echo "🔧 LDAP 초기화 확인 중..."
-    echo "   (ldap-init 서비스가 자동으로 PKD DIT 구조를 초기화합니다)"
-    # ldap-init 서비스 완료 대기
+    echo "🔧 LDAP MMR 및 DIT 초기화 확인 중..."
+    echo "   1. ldap-mmr-setup1/2: MMR (Multi-Master Replication) 설정"
+    echo "   2. ldap-init: PKD DIT 구조 초기화"
+    echo ""
+    # MMR setup 로그
+    echo "📋 MMR Setup 결과:"
+    docker compose -f docker/docker-compose.yaml logs ldap-mmr-setup1 2>/dev/null | tail -3
+    docker compose -f docker/docker-compose.yaml logs ldap-mmr-setup2 2>/dev/null | tail -3
+    echo ""
+    echo "📋 LDAP Init 결과:"
     docker compose -f docker/docker-compose.yaml logs ldap-init 2>/dev/null | tail -5
 fi
 
