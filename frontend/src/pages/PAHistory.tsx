@@ -17,11 +17,11 @@ import {
   FileText,
 } from 'lucide-react';
 import { paApi } from '@/services/api';
-import type { PAHistory as PAHistoryType, PageResponse, PAStatus } from '@/types';
+import type { PAHistoryItem, PageResponse, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
 
 export function PAHistory() {
-  const [history, setHistory] = useState<PAHistoryType[]>([]);
+  const [history, setHistory] = useState<PAHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -49,7 +49,7 @@ export function PAHistory() {
         sort: 'verifiedAt',
         direction: 'DESC',
       });
-      const data: PageResponse<PAHistoryType> = response.data;
+      const data: PageResponse<PAHistoryItem> = response.data;
       setHistory(data.content);
       setTotalPages(data.totalPages);
       setTotalElements(data.totalElements);
@@ -82,8 +82,8 @@ export function PAHistory() {
   const uniqueCountries = useMemo(() => {
     const countries = new Set<string>();
     history.forEach((item) => {
-      if (item.countryCode) {
-        countries.add(item.countryCode);
+      if (item.issuingCountry) {
+        countries.add(item.issuingCountry);
       }
     });
     return Array.from(countries).sort();
@@ -137,9 +137,9 @@ export function PAHistory() {
     const matchesSearch =
       !searchTerm ||
       item.documentNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.countryCode?.toLowerCase().includes(searchTerm.toLowerCase());
+      item.issuingCountry?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = !statusFilter || item.status === statusFilter;
-    const matchesCountry = !countryFilter || item.countryCode === countryFilter;
+    const matchesCountry = !countryFilter || item.issuingCountry === countryFilter;
 
     // Date range filter
     let matchesDateFrom = true;
@@ -420,18 +420,18 @@ export function PAHistory() {
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        {item.countryCode ? (
+                        {item.issuingCountry ? (
                           <div className="flex items-center gap-2">
                             <img
-                              src={`/svg/${item.countryCode.toLowerCase()}.svg`}
-                              alt={item.countryCode}
+                              src={`/svg/${item.issuingCountry.toLowerCase()}.svg`}
+                              alt={item.issuingCountry}
                               className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
                               }}
                             />
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              {item.countryCode}
+                              {item.issuingCountry}
                             </span>
                           </div>
                         ) : (

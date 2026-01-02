@@ -5,8 +5,8 @@ import type {
   UploadedFile,
   UploadStatisticsOverview,
   PAVerificationRequest,
-  PAVerificationResult,
-  PAHistory,
+  PAVerificationResponse,
+  PAHistoryItem,
   PAStatisticsOverview,
   PageRequest,
   PageResponse,
@@ -86,13 +86,13 @@ export const uploadApi = {
 // PA APIs
 export const paApi = {
   verify: (request: PAVerificationRequest) =>
-    api.post<ApiResponse<PAVerificationResult>>('/pa/verify', request),
+    api.post<ApiResponse<PAVerificationResponse>>('/pa/verify', request),
 
   getHistory: (params: PageRequest) =>
-    api.get<PageResponse<PAHistory>>('/pa/history', { params }),
+    api.get<PageResponse<PAHistoryItem>>('/pa/history', { params }),
 
   getDetail: (id: string) =>
-    api.get<PAVerificationResult>(`/pa/${id}`),
+    api.get<PAVerificationResponse>(`/pa/${id}`),
 
   getStatistics: () =>
     api.get<PAStatisticsOverview>('/pa/statistics'),

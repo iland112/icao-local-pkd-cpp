@@ -61,7 +61,7 @@ export function useVerifyPA() {
       queryClient.invalidateQueries({ queryKey: paKeys.lists() });
       queryClient.invalidateQueries({ queryKey: paKeys.statistics() });
       if (data.success && data.data) {
-        if (data.data.overallValid) {
+        if (data.data.status === 'VALID') {
           toast.success('PA 검증 성공', 'Passive Authentication이 성공적으로 완료되었습니다.');
         } else {
           toast.warning('PA 검증 실패', '일부 검증 단계가 실패했습니다.');

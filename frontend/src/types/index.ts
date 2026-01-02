@@ -107,6 +107,65 @@ export interface MRZData {
   expirationDate?: string;
 }
 
+// Java와 동일한 PA 검증 응답 형식
+export interface PAVerificationResponse {
+  status: PAStatus;
+  verificationId: string;
+  verificationTimestamp: string;
+  issuingCountry: string;
+  documentNumber: string;
+  certificateChainValidation: CertificateChainValidationDto;
+  sodSignatureValidation: SodSignatureValidationDto;
+  dataGroupValidation: DataGroupValidationDto;
+  processingDurationMs: number;
+  errors: PAError[];
+}
+
+export interface CertificateChainValidationDto {
+  valid: boolean;
+  dscSubject: string;
+  dscSerialNumber: string;
+  cscaSubject: string;
+  cscaSerialNumber: string;
+  notBefore: string;
+  notAfter: string;
+  crlChecked: boolean;
+  revoked: boolean;
+  crlStatus: string;
+  crlStatusDescription: string;
+  crlStatusDetailedDescription: string;
+  crlStatusSeverity: string;
+  crlMessage: string;
+  validationErrors?: string;
+}
+
+export interface SodSignatureValidationDto {
+  valid: boolean;
+  signatureAlgorithm: string;
+  hashAlgorithm: string;
+  validationErrors?: string;
+}
+
+export interface DataGroupValidationDto {
+  totalGroups: number;
+  validGroups: number;
+  invalidGroups: number;
+  details: Record<string, DataGroupDetailDto>;
+}
+
+export interface DataGroupDetailDto {
+  valid: boolean;
+  expectedHash: string;
+  actualHash: string;
+}
+
+export interface PAError {
+  code: string;
+  message: string;
+  step?: string;
+}
+
+// Legacy types for backward compatibility (deprecated)
 export interface PAVerificationResult {
   id: string;
   status: PAStatus;
