@@ -1,10 +1,15 @@
 # =============================================================================
 # Sync Service Dockerfile
 # Multi-stage build for optimized production image
+# Supports: linux/amd64, linux/arm64
 # =============================================================================
 
 # Stage 1: Build
-FROM ubuntu:22.04 AS builder
+FROM --platform=$TARGETPLATFORM ubuntu:22.04 AS builder
+
+# Build arguments for multi-arch support
+ARG TARGETPLATFORM
+ARG TARGETARCH
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -47,8 +52,10 @@ WORKDIR /app
 COPY services/sync-service/CMakeLists.txt services/sync-service/vcpkg.json ./
 COPY services/sync-service/src/ ./src/
 
-# Install dependencies
-RUN vcpkg install --triplet x64-linux
+# Set vcpkg triplet based on architecture (amd64->x64, arm64->arm64)
+ENV VCPKG_TRIPLET=${TARGETARCH}-linux
+RUN if [ "$TARGETARCH" = "amd64" ]; then export VCPKG_TRIPLET="x64-linux"; else export VCPKG_TRIPLET="arm64-linux"; fi && \
+    vcpkg install --triplet $VCPKG_TRIPLET
 
 # Build
 RUN cmake -B build -S . \
@@ -57,7 +64,7 @@ RUN cmake -B build -S . \
     && cmake --build build -j$(nproc)
 
 # Stage 2: Runtime
-FROM ubuntu:22.04 AS runtime
+FROM --platform=$TARGETPLATFORM ubuntu:22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul

@@ -1,0 +1,192 @@
+# =============================================================================
+# ICAO Local PKD - ARM64 Deployment Docker Compose
+# Target: Luckfox Omni 3576 (aarch64)
+# =============================================================================
+#
+# This configuration is for ARM64 deployment with:
+# - Native OpenLDAP (systemd service on host)
+# - Native HAProxy (systemd service on host)
+# - Docker containers: PostgreSQL + App Services
+#
+# Usage:
+#   docker compose -f docker-compose.arm64.yaml up -d
+#
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Frontend (React.js)
+  # ---------------------------------------------------------------------------
+  frontend:
+    image: icao-local-pkd-frontend:arm64
+    container_name: icao-local-pkd-frontend
+    platform: linux/arm64
+    ports:
+      - "3000:80"
+    environment:
+      - TZ=Asia/Seoul
+    depends_on:
+      - pkd-management
+      - pa-service
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PKD Management Service (File Upload, Parsing, Certificate Validation)
+  # ---------------------------------------------------------------------------
+  pkd-management:
+    image: icao-local-pkd-management:arm64
+    container_name: icao-local-pkd-management
+    platform: linux/arm64
+    ports:
+      - "8081:8081"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-management
+      - SERVER_PORT=8081
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      # Native LDAP on host (accessed via host.docker.internal or host IP)
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=389
+      - LDAP_WRITE_HOST=192.168.100.10
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/pkd-logs:/app/logs
+      - ./data/pkd-uploads:/app/uploads
+      - ./data/cert:/app/data/cert:ro
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PA Service (Passive Authentication Verification)
+  # ---------------------------------------------------------------------------
+  pa-service:
+    image: icao-local-pkd-pa:arm64
+    container_name: icao-local-pkd-pa-service
+    platform: linux/arm64
+    ports:
+      - "8082:8082"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pa-service
+      - SERVER_PORT=8082
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/pa-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Sync Service (DB-LDAP Synchronization Checker)
+  # ---------------------------------------------------------------------------
+  sync-service:
+    image: icao-local-pkd-sync:arm64
+    container_name: icao-local-pkd-sync-service
+    platform: linux/arm64
+    ports:
+      - "8083:8083"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=sync-service
+      - SERVER_PORT=8083
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=389
+      - LDAP_WRITE_HOST=192.168.100.10
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - SYNC_INTERVAL_MINUTES=5
+      - AUTO_RECONCILE=true
+      - MAX_RECONCILE_BATCH_SIZE=100
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./data/sync-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/sync/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: icao-local-pkd-postgres
+    platform: linux/arm64
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=pkd
+      - POSTGRES_PASSWORD=pkd
+      - POSTGRES_DB=localpkd
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pkd -d localpkd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  pkd-network:
+    driver: bridge
