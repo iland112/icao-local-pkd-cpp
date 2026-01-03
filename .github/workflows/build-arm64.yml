@@ -9,6 +9,7 @@ on:
       - 'services/**'
       - 'shared/**'
       - 'frontend/**'
+      - '.github/workflows/build-arm64.yml'
 
 jobs:
   build-arm64:
