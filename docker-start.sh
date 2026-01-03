@@ -1,5 +1,6 @@
 #!/bin/bash
 # docker-start.sh - Docker 컨테이너 시작 스크립트
+# Updated: 2026-01-03 - Added Sync Service
 
 set -e
 
@@ -49,7 +50,8 @@ mkdir -p ./backups
 mkdir -p ./.docker-data/pkd-logs
 mkdir -p ./.docker-data/pkd-uploads
 mkdir -p ./.docker-data/pa-logs
-chmod 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs 2>/dev/null || true
+mkdir -p ./.docker-data/sync-logs
+chmod 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs 2>/dev/null || true
 
 # 2. Docker Compose 시작
 echo "🐳 Docker Compose 시작..."
@@ -68,7 +70,7 @@ elif [ -n "$LEGACY" ]; then
     # Legacy 단일 앱 모드
     docker compose --profile legacy up -d $BUILD_FLAG
 else
-    # 마이크로서비스 모드 (frontend + pkd-management + pa-service)
+    # 마이크로서비스 모드 (frontend + pkd-management + pa-service + sync-service)
     # 서비스 의존성 순서:
     #   openldap1/2 -> ldap-mmr-setup1/2 -> ldap-init -> haproxy -> apps
     docker compose up -d $BUILD_FLAG
@@ -116,7 +118,8 @@ fi
 if [ -z "$SKIP_APP" ]; then
     echo "   - Frontend:      http://localhost:3000"
     echo "   - PKD Management: http://localhost:8081/api"
-    echo "   - PA Service:    http://localhost:8082/api"
+    echo "   - PA Service:    http://localhost:8082/api (via nginx proxy)"
+    echo "   - Sync Service:  http://localhost:8083/api/sync (via nginx proxy)"
 fi
 echo ""
 echo "🔍 로그 확인: ./docker-logs.sh [서비스명]"

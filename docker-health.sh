@@ -1,6 +1,6 @@
 #!/bin/bash
 # docker-health.sh - 헬스 체크 스크립트
-# Updated: 2026-01-02 - Added MMR replication status check
+# Updated: 2026-01-03 - Added Sync Service health check
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
@@ -100,6 +100,17 @@ echo "🔐 PA Service:"
 if docker exec icao-local-pkd-pa-service curl -sf http://localhost:8082/api/health > /dev/null 2>&1; then
     HEALTH=$(docker exec icao-local-pkd-pa-service curl -s http://localhost:8082/api/health 2>/dev/null)
     echo "  ✅ 정상 (내부 포트 8082)"
+    echo "     $HEALTH"
+else
+    echo "  ❌ 오류 (not responding)"
+fi
+
+# Sync Service API 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
+echo ""
+echo "🔄 Sync Service:"
+if docker exec icao-local-pkd-sync-service curl -sf http://localhost:8083/api/sync/health > /dev/null 2>&1; then
+    HEALTH=$(docker exec icao-local-pkd-sync-service curl -s http://localhost:8083/api/sync/health 2>/dev/null)
+    echo "  ✅ 정상 (내부 포트 8083)"
     echo "     $HEALTH"
 else
     echo "  ❌ 오류 (not responding)"
