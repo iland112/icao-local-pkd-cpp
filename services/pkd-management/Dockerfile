@@ -5,11 +5,7 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM --platform=$TARGETPLATFORM ubuntu:22.04 AS builder
-
-# Build arguments for multi-arch support
-ARG TARGETPLATFORM
-ARG TARGETARCH
+FROM ubuntu:22.04 AS builder
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -56,10 +52,10 @@ COPY services/pkd-management/src/ ./src/
 # Copy shared code
 COPY shared/ ./shared/
 
-# Set vcpkg triplet based on architecture (amd64->x64, arm64->arm64)
-ENV VCPKG_TRIPLET=${TARGETARCH}-linux
-RUN if [ "$TARGETARCH" = "amd64" ]; then export VCPKG_TRIPLET="x64-linux"; else export VCPKG_TRIPLET="arm64-linux"; fi && \
-    vcpkg install --triplet $VCPKG_TRIPLET
+# Install vcpkg dependencies (auto-detect architecture)
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
+    vcpkg install --triplet $TRIPLET
 
 # Build
 RUN cmake -B build -S . \
@@ -68,7 +64,7 @@ RUN cmake -B build -S . \
     && cmake --build build -j$(nproc)
 
 # Stage 2: Runtime
-FROM --platform=$TARGETPLATFORM ubuntu:22.04 AS runtime
+FROM ubuntu:22.04 AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
