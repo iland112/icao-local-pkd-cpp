@@ -12,46 +12,75 @@ on:
 
 jobs:
   build-arm64:
-    runs-on: ubuntu-24.04-arm  # GitHub ARM64 runner
+    runs-on: ubuntu-latest  # Standard x86 runner with QEMU
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build PKD Management Service
-        run: |
-          docker build \
-            -t icao-local-pkd-management:arm64 \
-            -f services/pkd-management/Dockerfile \
-            .
-          docker save icao-local-pkd-management:arm64 | gzip > pkd-management-arm64.tar.gz
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/pkd-management/Dockerfile
+          platforms: linux/arm64
+          tags: icao-local-pkd-management:arm64
+          outputs: type=docker,dest=pkd-management-arm64.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compress PKD Management Image
+        run: gzip pkd-management-arm64.tar
 
       - name: Build PA Service
-        run: |
-          docker build \
-            -t icao-local-pkd-pa:arm64 \
-            -f services/pa-service/Dockerfile \
-            .
-          docker save icao-local-pkd-pa:arm64 | gzip > pkd-pa-arm64.tar.gz
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/pa-service/Dockerfile
+          platforms: linux/arm64
+          tags: icao-local-pkd-pa:arm64
+          outputs: type=docker,dest=pkd-pa-arm64.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compress PA Service Image
+        run: gzip pkd-pa-arm64.tar
 
       - name: Build Sync Service
-        run: |
-          docker build \
-            -t icao-local-pkd-sync:arm64 \
-            -f services/sync-service/Dockerfile \
-            .
-          docker save icao-local-pkd-sync:arm64 | gzip > pkd-sync-arm64.tar.gz
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/sync-service/Dockerfile
+          platforms: linux/arm64
+          tags: icao-local-pkd-sync:arm64
+          outputs: type=docker,dest=pkd-sync-arm64.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compress Sync Service Image
+        run: gzip pkd-sync-arm64.tar
 
       - name: Build Frontend
-        run: |
-          docker build \
-            -t icao-local-pkd-frontend:arm64 \
-            -f frontend/Dockerfile \
-            frontend/
-          docker save icao-local-pkd-frontend:arm64 | gzip > pkd-frontend-arm64.tar.gz
+        uses: docker/build-push-action@v5
+        with:
+          context: frontend
+          file: frontend/Dockerfile
+          platforms: linux/arm64
+          tags: icao-local-pkd-frontend:arm64
+          outputs: type=docker,dest=pkd-frontend-arm64.tar
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Compress Frontend Image
+        run: gzip pkd-frontend-arm64.tar
 
       - name: Upload ARM64 Images
         uses: actions/upload-artifact@v4
