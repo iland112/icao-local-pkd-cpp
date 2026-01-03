@@ -27,56 +27,56 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build PKD Management Service
+      - name: Build and export PKD Management Service
         uses: docker/build-push-action@v5
         with:
           context: .
           file: services/pkd-management/Dockerfile
           platforms: linux/arm64
           tags: icao-local-pkd-management:arm64
-          outputs: type=docker,dest=pkd-management-arm64.tar
+          outputs: type=oci,dest=pkd-management-arm64.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Compress PKD Management Image
         run: gzip pkd-management-arm64.tar
 
-      - name: Build PA Service
+      - name: Build and export PA Service
         uses: docker/build-push-action@v5
         with:
           context: .
           file: services/pa-service/Dockerfile
           platforms: linux/arm64
           tags: icao-local-pkd-pa:arm64
-          outputs: type=docker,dest=pkd-pa-arm64.tar
+          outputs: type=oci,dest=pkd-pa-arm64.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Compress PA Service Image
         run: gzip pkd-pa-arm64.tar
 
-      - name: Build Sync Service
+      - name: Build and export Sync Service
         uses: docker/build-push-action@v5
         with:
           context: .
           file: services/sync-service/Dockerfile
           platforms: linux/arm64
           tags: icao-local-pkd-sync:arm64
-          outputs: type=docker,dest=pkd-sync-arm64.tar
+          outputs: type=oci,dest=pkd-sync-arm64.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
       - name: Compress Sync Service Image
         run: gzip pkd-sync-arm64.tar
 
-      - name: Build Frontend
+      - name: Build and export Frontend
         uses: docker/build-push-action@v5
         with:
           context: frontend
           file: frontend/Dockerfile
           platforms: linux/arm64
           tags: icao-local-pkd-frontend:arm64
-          outputs: type=docker,dest=pkd-frontend-arm64.tar
+          outputs: type=oci,dest=pkd-frontend-arm64.tar
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
