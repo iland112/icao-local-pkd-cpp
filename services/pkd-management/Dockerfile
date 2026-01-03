@@ -98,9 +98,6 @@ RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
 # Copy binary from builder
 COPY --from=builder /app/build/bin/pkd-management /app/
 
-# Copy trust anchor certificate
-COPY data/cert/UN_CSCA_2.pem /app/data/cert/
-
 WORKDIR /app
 
 # Environment variables
@@ -117,7 +114,8 @@ ENV LDAP_WRITE_HOST=openldap1
 ENV LDAP_WRITE_PORT=389
 ENV LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
 ENV LDAP_BIND_PASSWORD=admin
-ENV TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+# Trust anchor certificate path - mount externally or set via environment
+ENV TRUST_ANCHOR_PATH=/app/data/cert/trust_anchor.pem
 
 EXPOSE 8081
 
