@@ -1,0 +1,16 @@
+{
+  "name": "sync-service",
+  "version": "1.0.0",
+  "description": "ICAO Local PKD DB-LDAP Sync Service",
+  "homepage": "https://github.com/smartcoreinc/icao-local-pkd",
+  "license": "MIT",
+  "dependencies": [
+    "drogon",
+    "openssl",
+    "libpq",
+    {
+      "name": "spdlog",
+      "features": ["fmt"]
+    }
+  ]
+}

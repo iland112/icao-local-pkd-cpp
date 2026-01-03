@@ -287,3 +287,67 @@ export interface PAStatisticsOverview {
   averageProcessingTimeMs: number;
   countriesVerified: number;
 }
+
+// Sync types
+export type SyncStatusType = 'SYNCED' | 'DISCREPANCY' | 'ERROR' | 'PENDING' | 'NO_DATA';
+
+export interface SyncStats {
+  csca: number;
+  dsc: number;
+  dscNc: number;
+  crl: number;
+  total?: number;
+  storedInLdap?: number;
+}
+
+export interface SyncDiscrepancy {
+  csca: number;
+  dsc: number;
+  dscNc: number;
+  crl: number;
+  total: number;
+}
+
+export interface SyncStatusResponse {
+  id?: number;
+  checkedAt?: string;
+  dbStats?: SyncStats;
+  ldapStats?: SyncStats;
+  discrepancy?: SyncDiscrepancy;
+  status: SyncStatusType;
+  errorMessage?: string;
+  checkDurationMs?: number;
+  message?: string;
+}
+
+export interface SyncHistoryItem {
+  id: number;
+  checkedAt: string;
+  dbTotal: number;
+  ldapTotal: number;
+  totalDiscrepancy: number;
+  status: SyncStatusType;
+  checkDurationMs: number;
+}
+
+export interface SyncDiscrepancyItem {
+  id: string;
+  detectedAt: string;
+  itemType: 'CERTIFICATE' | 'CRL';
+  certificateType?: string;
+  countryCode?: string;
+  fingerprint?: string;
+  issueType: 'MISSING_IN_LDAP' | 'MISSING_IN_DB' | 'MISMATCH';
+  dbExists: boolean;
+  ldapExists: boolean;
+}
+
+export interface SyncCheckResponse {
+  success: boolean;
+  syncStatusId: number;
+  status: SyncStatusType;
+  dbStats: SyncStats;
+  ldapStats: SyncStats;
+  discrepancy: SyncDiscrepancy;
+  checkDurationMs: number;
+}

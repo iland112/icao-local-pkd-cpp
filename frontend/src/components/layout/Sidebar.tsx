@@ -23,6 +23,8 @@ import {
   FileText,
   Key,
   GraduationCap,
+  RefreshCw,
+  Zap,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -64,6 +66,12 @@ const navSections: NavSection[] = [
       { path: '/pa/dashboard', label: '통계 대시보드', icon: <PresentationIcon className="w-4 h-4" /> },
     ],
   },
+  {
+    title: 'DB-LDAP Sync',
+    items: [
+      { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
+    ],
+  },
 ];
 
 export function Sidebar() {
@@ -90,13 +98,16 @@ export function Sidebar() {
   }, [showSystemInfo]);
 
   const checkSystemStatus = async () => {
+    await checkDatabaseStatus();
+    await checkLdapStatus();
+  };
+
+  const checkDatabaseStatus = async () => {
     setSystemStatus((prev) => ({
       ...prev,
       database: { status: 'checking' },
-      ldap: { status: 'checking' },
     }));
 
-    // Check database
     try {
       const dbResponse = await healthApi.checkDatabase();
       setSystemStatus((prev) => ({
@@ -112,8 +123,14 @@ export function Sidebar() {
         database: { status: 'down' },
       }));
     }
+  };
 
-    // Check LDAP
+  const checkLdapStatus = async () => {
+    setSystemStatus((prev) => ({
+      ...prev,
+      ldap: { status: 'checking' },
+    }));
+
     try {
       const ldapResponse = await ldapApi.getHealth();
       setSystemStatus((prev) => ({
@@ -382,6 +399,20 @@ export function Sidebar() {
                 <span className="text-gray-600 dark:text-gray-400">호스트</span>
                 <span className="font-medium text-gray-900 dark:text-white">postgres:5432</span>
               </div>
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={checkDatabaseStatus}
+                  disabled={systemStatus.database.status === 'checking'}
+                  className="w-full py-2 px-3 text-xs font-medium rounded-lg border transition disabled:opacity-50 flex items-center justify-center gap-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-600/20 dark:text-blue-400 dark:hover:bg-blue-600/30"
+                >
+                  {systemStatus.database.status === 'checking' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="w-3.5 h-3.5" />
+                  )}
+                  {systemStatus.database.status === 'checking' ? '테스트 중...' : '연결 테스트'}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -417,17 +448,32 @@ export function Sidebar() {
                 <span className="text-gray-600 dark:text-gray-400">호스트</span>
                 <span className="font-medium text-gray-900 dark:text-white">haproxy:389</span>
               </div>
+              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={checkLdapStatus}
+                  disabled={systemStatus.ldap.status === 'checking'}
+                  className="w-full py-2 px-3 text-xs font-medium rounded-lg border transition disabled:opacity-50 flex items-center justify-center gap-2 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-600/20 dark:text-orange-400 dark:hover:bg-orange-600/30"
+                >
+                  {systemStatus.ldap.status === 'checking' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="w-3.5 h-3.5" />
+                  )}
+                  {systemStatus.ldap.status === 'checking' ? '테스트 중...' : '연결 테스트'}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Refresh Button */}
+          {/* Refresh All Button */}
           <div className="flex justify-end">
             <button
               onClick={checkSystemStatus}
-              className="py-2 px-4 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2"
+              disabled={systemStatus.database.status === 'checking' || systemStatus.ldap.status === 'checking'}
+              className="py-2 px-4 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50"
             >
-              <Loader2 className={cn('w-4 h-4', systemStatus.database.status === 'checking' && 'animate-spin')} />
-              상태 새로고침
+              <RefreshCw className={cn('w-4 h-4', (systemStatus.database.status === 'checking' || systemStatus.ldap.status === 'checking') && 'animate-spin')} />
+              전체 새로고침
             </button>
           </div>
         </div>

@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.1
-**Last Updated**: 2026-01-02
+**Version**: 1.2
+**Last Updated**: 2026-01-03
 **Status**: Production Ready
 
 ---
@@ -18,6 +18,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 | **Certificate Validation** | CSCA/DSC Trust Chain, CRL 검증 | ✅ Complete |
 | **LDAP Integration** | OpenLDAP 연동 (ICAO PKD DIT) | ✅ Complete |
 | **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | ✅ Complete |
+| **DB-LDAP Sync** | PostgreSQL-LDAP 동기화 모니터링 | ✅ Complete |
 | **React.js Frontend** | CSR 기반 웹 UI | ✅ Complete |
 
 ### Technology Stack
@@ -43,12 +44,12 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 │                         React.js Frontend (:3000)                        │
 └─────────────────────────────────────────────────────────────────────────┘
                                     │ REST API
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    PKD Management Service (:8081)                        │
-│  ┌───────────────┐  ┌───────────────┐  ┌───────────────────────────┐   │
-│  │ Upload API    │  │ Statistics    │  │ Certificate Validation    │   │
-│  └───────────────┘  └───────────────┘  └───────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────┬─────────────────────────────────────┐
+│   PKD Management Service (:8081)  │      Sync Service (:8083)           │
+│  ┌──────────┐ ┌──────────────┐   │  ┌──────────┐ ┌──────────────┐      │
+│  │ Upload   │ │ Certificate  │   │  │ DB Stats │ │ LDAP Stats   │      │
+│  └──────────┘ └──────────────┘   │  └──────────┘ └──────────────┘      │
+└───────────────────────────────────┴─────────────────────────────────────┘
          │                              │
          ↓                              ↓
 ┌─────────────────┐          ┌─────────────────────────────────────────┐
@@ -89,8 +90,13 @@ dc=ldap,dc=smartcoreinc,dc=com
 ```
 icao-local-pkd/
 ├── services/
-│   └── pkd-management/        # Main C++ service
-│       ├── src/main.cpp       # All endpoints and logic
+│   ├── pkd-management/        # Main C++ service (:8081)
+│   │   ├── src/main.cpp       # Upload, Certificate, Health APIs
+│   │   ├── CMakeLists.txt
+│   │   ├── vcpkg.json
+│   │   └── Dockerfile
+│   └── sync-service/          # DB-LDAP Sync Service (:8083)
+│       ├── src/main.cpp       # Sync status, stats APIs
 │       ├── CMakeLists.txt
 │       ├── vcpkg.json
 │       └── Dockerfile
@@ -147,7 +153,8 @@ icao-local-pkd/
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
-| Backend API | http://localhost:8081/api |
+| PKD Management API | http://localhost:8081/api |
+| Sync Service API | http://localhost:8083/api/sync |
 | HAProxy Stats | http://localhost:8404 |
 | PostgreSQL | localhost:5432 (pkd/pkd123) |
 | LDAP (HAProxy) | ldap://localhost:389 |
@@ -173,6 +180,16 @@ icao-local-pkd/
 | GET | `/api/health` | Application health |
 | GET | `/api/health/database` | PostgreSQL status |
 | GET | `/api/health/ldap` | LDAP status |
+
+### DB-LDAP Sync (Port 8083)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/sync/health` | Sync service health |
+| GET | `/api/sync/status` | Full sync status with DB/LDAP stats |
+| GET | `/api/sync/stats` | DB and LDAP statistics |
+| POST | `/api/sync/trigger` | Manual sync trigger |
+| GET | `/api/sync/config` | Current configuration |
 
 ---
 
@@ -261,6 +278,44 @@ docker-compose -f docker/docker-compose.yaml up -d pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-03: DB-LDAP Sync Service 구현
+
+**새 마이크로서비스 추가:**
+- `services/sync-service/` - C++ Drogon 기반 동기화 모니터링 서비스
+- Port 8083에서 실행
+- PostgreSQL과 LDAP 간 데이터 통계 비교 및 동기화 상태 모니터링
+
+**API 엔드포인트:**
+- `GET /api/sync/health` - 서비스 헬스체크
+- `GET /api/sync/status` - DB/LDAP 통계 포함 전체 상태
+- `GET /api/sync/stats` - 인증서 타입별 통계
+- `POST /api/sync/trigger` - 수동 동기화 트리거
+- `GET /api/sync/config` - 현재 설정 조회
+
+**기술적 해결 사항:**
+- JSON 라이브러리: nlohmann/json → jsoncpp (Drogon 내장 사용)
+- 로깅 권한: 파일 생성 실패 시 콘솔 전용으로 폴백
+- LDAP 접근: Anonymous bind → Authenticated bind로 변경
+
+**Frontend 추가:**
+- `/sync` 라우트 → SyncDashboard 페이지
+- DB/LDAP 통계 카드, 동기화 이력 테이블 표시
+
+### 2026-01-03: Dashboard UI 간소화
+
+**Hero 영역 변경:**
+- 시간 표시 아래에 DB/LDAP 연결 상태를 컴팩트하게 표시
+- 초록색/빨간색 점으로 연결 상태 표시
+
+**시스템 연결 상태 섹션 제거:**
+- Dashboard에서 큰 "시스템 연결 상태" 카드 섹션 삭제
+- 페이지가 더 간결해짐
+
+**시스템 정보 다이얼로그 개선:**
+- PostgreSQL/OpenLDAP 카드에 개별 "연결 테스트" 버튼 추가
+- `checkSystemStatus()` → `checkDatabaseStatus()`, `checkLdapStatus()` 분리
+- "전체 새로고침" 버튼 RefreshCw 아이콘으로 변경
 
 ### 2026-01-02: PA Frontend UI/UX 개선
 

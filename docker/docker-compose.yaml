@@ -115,6 +115,52 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
+  # Sync Service (DB-LDAP Synchronization Checker)
+  # ---------------------------------------------------------------------------
+  sync-service:
+    build:
+      context: ..
+      dockerfile: services/sync-service/Dockerfile
+    container_name: icao-local-pkd-sync-service
+    ports:
+      - "8083:8083"
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=sync-service
+      - SERVER_PORT=8083
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - LDAP_HOST=haproxy
+      - LDAP_PORT=389
+      - LDAP_WRITE_HOST=openldap1
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - SYNC_INTERVAL_MINUTES=5
+      - AUTO_RECONCILE=true
+      - MAX_RECONCILE_BATCH_SIZE=100
+    depends_on:
+      postgres:
+        condition: service_healthy
+      haproxy:
+        condition: service_started
+    volumes:
+      - ../.docker-data/sync-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/sync/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
   # Legacy App (Backwards compatibility - uses existing Dockerfile)
   # ---------------------------------------------------------------------------
   app:

@@ -10,6 +10,10 @@ import type {
   PAStatisticsOverview,
   PageRequest,
   PageResponse,
+  SyncStatusResponse,
+  SyncHistoryItem,
+  SyncCheckResponse,
+  SyncDiscrepancyItem,
 } from '@/types';
 
 const api = axios.create({
@@ -133,5 +137,39 @@ export const createProgressEventSource = (uploadId: string): EventSource => {
 // Progress status polling (alternative to SSE)
 export const getProgressStatus = (uploadId: string) =>
   api.get(`/progress/status/${uploadId}`);
+
+// Sync Service APIs (separate service on port 8083)
+const syncApi = axios.create({
+  baseURL: '/api/sync',
+  timeout: 60000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+syncApi.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
+    console.error('Sync API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
+export const syncServiceApi = {
+  getStatus: () => syncApi.get<SyncStatusResponse>('/status'),
+
+  getHistory: (limit: number = 20) =>
+    syncApi.get<SyncHistoryItem[]>('/history', { params: { limit } }),
+
+  triggerCheck: () => syncApi.post<SyncCheckResponse>('/check'),
+
+  getDiscrepancies: () => syncApi.get<SyncDiscrepancyItem[]>('/discrepancies'),
+
+  triggerReconcile: () => syncApi.post('/reconcile'),
+
+  getHealth: () => syncApi.get<{ status: string; database?: string }>('/health'),
+
+  getConfig: () => syncApi.get<{ syncIntervalMinutes: number; autoReconcile: boolean }>('/config'),
+};
 
 export default api;

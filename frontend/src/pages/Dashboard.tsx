@@ -12,7 +12,6 @@ import {
   History,
   PresentationIcon,
   Calendar,
-  Zap,
   FileText,
   Key,
   User,
@@ -199,151 +198,37 @@ export function Dashboard() {
                     <Calendar className="w-4 h-4" />
                     <span>{currentDate}</span>
                   </div>
-                  <div className="text-white/90 text-sm flex items-center justify-end gap-2">
+                  <div className="text-white/90 text-sm flex items-center justify-end gap-2 mb-3">
                     <Clock className="w-4 h-4" />
                     <span>{currentTime}</span>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* System Connection Status */}
-      <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-emerald-400 to-teal-500">
-              <Zap className="w-5 h-5 text-white" />
-            </div>
-            시스템 연결 상태
-          </h3>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* PostgreSQL Status */}
-            <div className={cn(
-              'relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden',
-              'bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-blue-100 dark:border-gray-600',
-              dbStatus.connected ? 'hover:border-blue-300' : 'hover:border-red-300'
-            )}>
-              <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
-                <Database className="w-full h-full text-blue-500" />
-              </div>
-              <div className="relative z-10 flex items-start gap-4">
-                <span className={cn(
-                  'shrink-0 p-2.5 rounded-lg transition-colors',
-                  dbStatus.connected
-                    ? 'bg-green-100 dark:bg-green-900/50'
-                    : 'bg-red-100 dark:bg-red-900/50'
-                )}>
-                  <Database className={cn(
-                    'w-6 h-6',
-                    dbStatus.connected ? 'text-green-500' : 'text-red-500'
-                  )} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">PostgreSQL</h4>
-                    <span className={cn(
-                      'inline-flex items-center gap-x-1 py-0.5 px-2 rounded-full text-xs font-medium',
-                      dbStatus.connected
-                        ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400'
-                        : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-400'
-                    )}>
-                      <span className="relative flex size-1.5">
+                  {/* Compact Connection Status */}
+                  <div className="border-t border-white/20 pt-3 flex items-center justify-end gap-3">
+                    <div className="flex items-center gap-1.5" title={dbStatus.message}>
+                      <Database className="w-3.5 h-3.5" />
+                      <span className="text-xs">DB</span>
+                      {dbStatus.testing ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
                         <span className={cn(
-                          'absolute inline-flex size-full rounded-full opacity-75 animate-ping',
+                          'w-2 h-2 rounded-full',
                           dbStatus.connected ? 'bg-green-400' : 'bg-red-400'
-                        )}></span>
+                        )} />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5" title={ldapStatus.message}>
+                      <Server className="w-3.5 h-3.5" />
+                      <span className="text-xs">LDAP</span>
+                      {ldapStatus.testing ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
                         <span className={cn(
-                          'relative inline-flex rounded-full size-1.5',
-                          dbStatus.connected ? 'bg-green-500' : 'bg-red-500'
-                        )}></span>
-                      </span>
-                      {dbStatus.connected ? 'Active' : 'Inactive'}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{dbStatus.message}</p>
-                  <button
-                    onClick={testDatabaseConnection}
-                    disabled={dbStatus.testing}
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition disabled:opacity-50 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-600 dark:bg-blue-600/20 dark:text-blue-400 dark:hover:bg-blue-600/30"
-                  >
-                    {dbStatus.testing ? (
-                      <svg className="animate-spin size-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <Zap className="w-4 h-4" />
-                    )}
-                    {dbStatus.testing ? '테스트 중...' : '연결 테스트'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* OpenLDAP Status */}
-            <div className={cn(
-              'relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden',
-              'bg-gradient-to-br from-orange-50/50 to-amber-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-orange-100 dark:border-gray-600',
-              ldapStatus.connected ? 'hover:border-orange-300' : 'hover:border-red-300'
-            )}>
-              <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
-                <Server className="w-full h-full text-orange-500" />
-              </div>
-              <div className="relative z-10 flex items-start gap-4">
-                <span className={cn(
-                  'shrink-0 p-2.5 rounded-lg transition-colors',
-                  ldapStatus.connected
-                    ? 'bg-green-100 dark:bg-green-900/50'
-                    : 'bg-red-100 dark:bg-red-900/50'
-                )}>
-                  <Server className={cn(
-                    'w-6 h-6',
-                    ldapStatus.connected ? 'text-green-500' : 'text-red-500'
-                  )} />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold text-gray-800 dark:text-gray-200">OpenLDAP</h4>
-                    <span className={cn(
-                      'inline-flex items-center gap-x-1 py-0.5 px-2 rounded-full text-xs font-medium',
-                      ldapStatus.connected
-                        ? 'bg-green-100 text-green-800 dark:bg-green-800/30 dark:text-green-400'
-                        : 'bg-red-100 text-red-800 dark:bg-red-800/30 dark:text-red-400'
-                    )}>
-                      <span className="relative flex size-1.5">
-                        <span className={cn(
-                          'absolute inline-flex size-full rounded-full opacity-75 animate-ping',
+                          'w-2 h-2 rounded-full',
                           ldapStatus.connected ? 'bg-green-400' : 'bg-red-400'
-                        )}></span>
-                        <span className={cn(
-                          'relative inline-flex rounded-full size-1.5',
-                          ldapStatus.connected ? 'bg-green-500' : 'bg-red-500'
-                        )}></span>
-                      </span>
-                      {ldapStatus.connected ? 'Active' : 'Inactive'}
-                    </span>
+                        )} />
+                      )}
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">{ldapStatus.message}</p>
-                  <button
-                    onClick={testLdapConnection}
-                    disabled={ldapStatus.testing}
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition disabled:opacity-50 border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-600 dark:bg-orange-600/20 dark:text-orange-400 dark:hover:bg-orange-600/30"
-                  >
-                    {ldapStatus.testing ? (
-                      <svg className="animate-spin size-4" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <Zap className="w-4 h-4" />
-                    )}
-                    {ldapStatus.testing ? '테스트 중...' : '연결 테스트'}
-                  </button>
                 </div>
               </div>
             </div>
