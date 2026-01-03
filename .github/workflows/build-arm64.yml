@@ -6,10 +6,12 @@ on:
   push:
     branches:
       - feature/arm64-support
+      - feature/openapi-support
     paths:
       - 'services/**'
       - 'shared/**'
       - 'frontend/**'
+      - 'nginx/**'
       - '.github/workflows/build-arm64.yml'
 
 jobs:
