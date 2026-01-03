@@ -98,6 +98,9 @@ RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
 # Copy binary from builder
 COPY --from=builder /app/build/bin/pkd-management /app/
 
+# Copy Swagger UI static files
+COPY shared/static/swagger-ui/ /app/static/swagger-ui/
+
 WORKDIR /app
 
 # Environment variables

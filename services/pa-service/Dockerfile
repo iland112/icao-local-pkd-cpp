@@ -92,6 +92,9 @@ RUN mkdir -p /app/logs /app/static /app/config \
 
 COPY --from=builder /app/build/bin/pa-service /app/
 
+# Copy Swagger UI static files
+COPY shared/static/swagger-ui/ /app/static/swagger-ui/
+
 WORKDIR /app
 
 # Environment variables

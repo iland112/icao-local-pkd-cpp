@@ -89,8 +89,11 @@ RUN useradd -m -s /bin/bash app
 # Copy binary from builder
 COPY --from=builder /app/build/bin/sync-service /app/
 
+# Copy Swagger UI static files
+COPY shared/static/swagger-ui/ /app/static/swagger-ui/
+
 # Create directories and set ownership
-RUN mkdir -p /app/logs /app/config \
+RUN mkdir -p /app/logs /app/config /app/static \
     && chown -R app:app /app
 
 WORKDIR /app

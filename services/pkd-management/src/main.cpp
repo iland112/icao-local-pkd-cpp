@@ -4112,6 +4112,202 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // OpenAPI specification endpoint
+    app.registerHandler(
+        "/api/openapi.yaml",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/openapi.yaml");
+
+            // OpenAPI 3.0 specification
+            std::string openApiSpec = R"(openapi: 3.0.3
+info:
+  title: PKD Management Service API
+  description: ICAO Local PKD Management Service - Certificate upload, validation, and PA verification
+  version: 1.0.0
+servers:
+  - url: /
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Upload
+    description: Certificate upload operations
+  - name: Validation
+    description: Certificate validation
+  - name: PA
+    description: Passive Authentication
+  - name: Progress
+    description: Upload progress tracking
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Application health check
+      responses:
+        '200':
+          description: Service is healthy
+  /api/health/database:
+    get:
+      tags: [Health]
+      summary: Database health check
+      responses:
+        '200':
+          description: Database status
+  /api/health/ldap:
+    get:
+      tags: [Health]
+      summary: LDAP health check
+      responses:
+        '200':
+          description: LDAP status
+  /api/upload/ldif:
+    post:
+      tags: [Upload]
+      summary: Upload LDIF file
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+  /api/upload/masterlist:
+    post:
+      tags: [Upload]
+      summary: Upload Master List file
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Upload successful
+  /api/upload/statistics:
+    get:
+      tags: [Upload]
+      summary: Get upload statistics
+      responses:
+        '200':
+          description: Statistics data
+  /api/upload/history:
+    get:
+      tags: [Upload]
+      summary: Get upload history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Upload history
+  /api/upload/countries:
+    get:
+      tags: [Upload]
+      summary: Get country statistics
+      responses:
+        '200':
+          description: Country stats
+  /api/validation/revalidate:
+    post:
+      tags: [Validation]
+      summary: Re-validate DSC trust chains
+      responses:
+        '200':
+          description: Revalidation result
+  /api/pa/verify:
+    post:
+      tags: [PA]
+      summary: Verify Passive Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sod:
+                  type: string
+                dataGroups:
+                  type: object
+      responses:
+        '200':
+          description: Verification result
+  /api/pa/statistics:
+    get:
+      tags: [PA]
+      summary: Get PA statistics
+      responses:
+        '200':
+          description: PA stats
+  /api/pa/history:
+    get:
+      tags: [PA]
+      summary: Get PA history
+      responses:
+        '200':
+          description: PA history
+  /api/progress/stream/{uploadId}:
+    get:
+      tags: [Progress]
+      summary: SSE progress stream
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: SSE stream
+  /api/progress/status/{uploadId}:
+    get:
+      tags: [Progress]
+      summary: Get progress status
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Progress status
+)";
+
+            auto resp = drogon::HttpResponse::newHttpResponse();
+            resp->setBody(openApiSpec);
+            resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
+            resp->addHeader("Content-Type", "application/x-yaml");
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // Swagger UI redirect
+    app.registerHandler(
+        "/api/docs",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            auto resp = drogon::HttpResponse::newRedirectionResponse("/swagger-ui/index.html");
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     spdlog::info("API routes registered");
 }
 

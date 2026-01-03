@@ -1,0 +1,602 @@
+openapi: 3.0.3
+info:
+  title: PA Service API
+  description: |
+    ICAO Passive Authentication Service API.
+    Dedicated service for ICAO 9303 Passive Authentication verification.
+  version: 1.0.0
+  contact:
+    name: SmartCore Inc.
+    email: support@smartcoreinc.com
+
+servers:
+  - url: http://localhost:8082
+    description: Development server
+  - url: http://pa-service:8082
+    description: Docker internal
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: PA
+    description: Passive Authentication operations
+  - name: Parser
+    description: Document parsing utilities
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Application health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/health/database:
+    get:
+      tags: [Health]
+      summary: Database health check
+      operationId: getDatabaseHealth
+      responses:
+        '200':
+          description: Database connection status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseHealthResponse'
+
+  /api/health/ldap:
+    get:
+      tags: [Health]
+      summary: LDAP health check
+      operationId: getLdapHealth
+      responses:
+        '200':
+          description: LDAP connection status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LdapHealthResponse'
+
+  /api/pa/verify:
+    post:
+      tags: [PA]
+      summary: Verify Passive Authentication
+      description: |
+        Perform complete ICAO 9303 Passive Authentication verification.
+
+        Verification steps:
+        1. Parse SOD (Security Object Document)
+        2. Extract Document Signing Certificate (DSC)
+        3. Verify SOD signature
+        4. Validate DSC trust chain (DSC -> CSCA)
+        5. Check certificate validity period
+        6. Verify Data Group hashes
+        7. Parse MRZ data (if DG1 provided)
+        8. Extract face image (if DG2 provided)
+      operationId: verifyPA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PAVerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAVerifyResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pa/statistics:
+    get:
+      tags: [PA]
+      summary: Get PA statistics
+      operationId: getPAStatistics
+      responses:
+        '200':
+          description: PA verification statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAStatisticsResponse'
+
+  /api/pa/history:
+    get:
+      tags: [PA]
+      summary: Get PA verification history
+      operationId: getPAHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: country
+          in: query
+          schema:
+            type: string
+          description: Filter by issuing country code
+        - name: result
+          in: query
+          schema:
+            type: string
+            enum: [success, failure]
+          description: Filter by verification result
+      responses:
+        '200':
+          description: PA history list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAHistoryResponse'
+
+  /api/pa/{id}:
+    get:
+      tags: [PA]
+      summary: Get PA verification details
+      operationId: getPADetails
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Verification ID
+      responses:
+        '200':
+          description: Verification details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PADetailResponse'
+        '404':
+          description: Verification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pa/{id}/datagroups:
+    get:
+      tags: [PA]
+      summary: Get data groups for a verification
+      operationId: getPADataGroups
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Data groups information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataGroupsResponse'
+
+  /api/pa/parse-dg1:
+    post:
+      tags: [Parser]
+      summary: Parse DG1 (MRZ) data
+      description: Parse Machine Readable Zone data from DG1
+      operationId: parseDG1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dg1:
+                  type: string
+                  description: Base64 encoded DG1 data
+              required:
+                - dg1
+      responses:
+        '200':
+          description: Parsed MRZ data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MRZDataResponse'
+
+  /api/pa/parse-dg2:
+    post:
+      tags: [Parser]
+      summary: Parse DG2 (Face Image) data
+      description: Extract face image from DG2
+      operationId: parseDG2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dg2:
+                  type: string
+                  description: Base64 encoded DG2 data
+              required:
+                - dg2
+      responses:
+        '200':
+          description: Extracted face image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FaceImageResponse'
+
+  /api/pa/parse-mrz-text:
+    post:
+      tags: [Parser]
+      summary: Parse MRZ text
+      description: Parse raw MRZ text string
+      operationId: parseMRZText
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mrz:
+                  type: string
+                  description: Raw MRZ text (2 or 3 lines)
+              required:
+                - mrz
+      responses:
+        '200':
+          description: Parsed MRZ data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MRZDataResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        service:
+          type: string
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    DatabaseHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [connected, disconnected]
+        host:
+          type: string
+        port:
+          type: integer
+        responseTime:
+          type: integer
+
+    LdapHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [connected, disconnected]
+        host:
+          type: string
+        port:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+        message:
+          type: string
+
+    PAVerifyRequest:
+      type: object
+      required:
+        - sod
+        - dataGroups
+      properties:
+        sod:
+          type: string
+          description: Base64 encoded SOD (Security Object Document)
+        dataGroups:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Map of Data Group number to Base64 encoded data.
+            Example: {"1": "base64...", "2": "base64..."}
+        mrzData:
+          type: string
+          description: Optional raw MRZ text for cross-validation
+
+    PAVerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        verificationId:
+          type: string
+        overallResult:
+          type: string
+          enum: [PASSED, FAILED]
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationStep'
+        documentInfo:
+          $ref: '#/components/schemas/DocumentInfo'
+        certificateInfo:
+          $ref: '#/components/schemas/CertificateInfo'
+        faceImage:
+          type: string
+          description: Base64 encoded face image (if DG2 provided)
+
+    VerificationStep:
+      type: object
+      properties:
+        stepNumber:
+          type: integer
+        stepName:
+          type: string
+        stepNameKo:
+          type: string
+          description: Korean translation of step name
+        status:
+          type: string
+          enum: [PASSED, FAILED, SKIPPED, NOT_APPLICABLE]
+        message:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    DocumentInfo:
+      type: object
+      properties:
+        documentType:
+          type: string
+          description: Document type (P=Passport, ID=ID Card, etc.)
+        issuingCountry:
+          type: string
+          description: 3-letter country code
+        documentNumber:
+          type: string
+        surname:
+          type: string
+        givenNames:
+          type: string
+        nationality:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        sex:
+          type: string
+          enum: [M, F, X]
+        expiryDate:
+          type: string
+          format: date
+
+    CertificateInfo:
+      type: object
+      properties:
+        dscSubject:
+          type: string
+        dscIssuer:
+          type: string
+        dscSerialNumber:
+          type: string
+        dscValidFrom:
+          type: string
+          format: date-time
+        dscValidTo:
+          type: string
+          format: date-time
+        cscaSubject:
+          type: string
+        cscaSerialNumber:
+          type: string
+        trustChainValid:
+          type: boolean
+
+    PAStatisticsResponse:
+      type: object
+      properties:
+        totalVerifications:
+          type: integer
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+        successRate:
+          type: number
+          format: float
+        todayCount:
+          type: integer
+        byCountry:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountryVerificationStats'
+        byDate:
+          type: array
+          items:
+            $ref: '#/components/schemas/DailyStats'
+
+    CountryVerificationStats:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        totalCount:
+          type: integer
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+
+    DailyStats:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        totalCount:
+          type: integer
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+
+    PAHistoryResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PAHistoryItem'
+
+    PAHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        verificationTimestamp:
+          type: string
+          format: date-time
+        issuingCountry:
+          type: string
+        documentType:
+          type: string
+        documentNumber:
+          type: string
+        holderName:
+          type: string
+        result:
+          type: string
+          enum: [PASSED, FAILED]
+        failureReason:
+          type: string
+
+    PADetailResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        verificationTimestamp:
+          type: string
+          format: date-time
+        result:
+          type: string
+        documentInfo:
+          $ref: '#/components/schemas/DocumentInfo'
+        certificateInfo:
+          $ref: '#/components/schemas/CertificateInfo'
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/VerificationStep'
+
+    DataGroupsResponse:
+      type: object
+      properties:
+        verificationId:
+          type: string
+        dataGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataGroupInfo'
+
+    DataGroupInfo:
+      type: object
+      properties:
+        dgNumber:
+          type: integer
+        present:
+          type: boolean
+        hashValid:
+          type: boolean
+        size:
+          type: integer
+
+    MRZDataResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        documentType:
+          type: string
+        issuingCountry:
+          type: string
+        surname:
+          type: string
+        givenNames:
+          type: string
+        documentNumber:
+          type: string
+        nationality:
+          type: string
+        dateOfBirth:
+          type: string
+        sex:
+          type: string
+        expiryDate:
+          type: string
+        optionalData:
+          type: string
+        checksumValid:
+          type: boolean
+
+    FaceImageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        imageFormat:
+          type: string
+          enum: [JPEG, JPEG2000, PNG]
+        width:
+          type: integer
+        height:
+          type: integer
+        imageData:
+          type: string
+          description: Base64 encoded image data

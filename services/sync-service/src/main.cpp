@@ -820,6 +820,116 @@ int main() {
     app().registerHandler("/api/sync/config",
         &handleSyncConfig, {Get});
 
+    // OpenAPI specification endpoint
+    app().registerHandler("/api/openapi.yaml",
+        [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/openapi.yaml");
+
+            std::string spec = R"(openapi: 3.0.3
+info:
+  title: Sync Service API
+  description: DB-LDAP Synchronization Service
+  version: 1.0.0
+servers:
+  - url: /
+tags:
+  - name: Health
+    description: Health check
+  - name: Sync
+    description: Synchronization operations
+  - name: Config
+    description: Configuration
+paths:
+  /api/sync/health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      responses:
+        '200':
+          description: Health status
+  /api/sync/status:
+    get:
+      tags: [Sync]
+      summary: Get sync status
+      description: Returns DB and LDAP statistics
+      responses:
+        '200':
+          description: Sync status
+  /api/sync/check:
+    post:
+      tags: [Sync]
+      summary: Trigger sync check
+      responses:
+        '200':
+          description: Check result
+  /api/sync/discrepancies:
+    get:
+      tags: [Sync]
+      summary: Get discrepancies
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Discrepancy list
+  /api/sync/reconcile:
+    post:
+      tags: [Sync]
+      summary: Reconcile discrepancies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                dryRun:
+                  type: boolean
+      responses:
+        '200':
+          description: Reconciliation result
+  /api/sync/history:
+    get:
+      tags: [Sync]
+      summary: Get sync history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sync history
+  /api/sync/config:
+    get:
+      tags: [Config]
+      summary: Get configuration
+      responses:
+        '200':
+          description: Current configuration
+)";
+
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setBody(spec);
+            resp->setContentTypeCode(CT_TEXT_PLAIN);
+            resp->addHeader("Content-Type", "application/x-yaml");
+            callback(resp);
+        }, {Get});
+
+    // Swagger UI redirect
+    app().registerHandler("/api/docs",
+        [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
+            auto resp = HttpResponse::newRedirectionResponse("/swagger-ui/index.html");
+            callback(resp);
+        }, {Get});
+
     // Enable CORS
     app().registerPostHandlingAdvice([](const HttpRequestPtr&, const HttpResponsePtr& resp) {
         resp->addHeader("Access-Control-Allow-Origin", "*");

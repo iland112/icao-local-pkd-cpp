@@ -2949,6 +2949,186 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // OpenAPI specification endpoint
+    app.registerHandler(
+        "/api/openapi.yaml",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/openapi.yaml");
+
+            std::string openApiSpec = R"(openapi: 3.0.3
+info:
+  title: PA Service API
+  description: ICAO 9303 Passive Authentication Verification Service
+  version: 2.0.0
+servers:
+  - url: /
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: PA
+    description: Passive Authentication operations
+  - name: Parser
+    description: Document parsing utilities
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Application health check
+      responses:
+        '200':
+          description: Service is healthy
+  /api/health/database:
+    get:
+      tags: [Health]
+      summary: Database health check
+      responses:
+        '200':
+          description: Database status
+  /api/health/ldap:
+    get:
+      tags: [Health]
+      summary: LDAP health check
+      responses:
+        '200':
+          description: LDAP status
+  /api/pa/verify:
+    post:
+      tags: [PA]
+      summary: Verify Passive Authentication
+      description: Perform complete ICAO 9303 PA verification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sod, dataGroups]
+              properties:
+                sod:
+                  type: string
+                  description: Base64 encoded SOD
+                dataGroups:
+                  type: object
+                  description: Map of DG number to Base64 data
+      responses:
+        '200':
+          description: Verification result
+  /api/pa/statistics:
+    get:
+      tags: [PA]
+      summary: Get PA statistics
+      responses:
+        '200':
+          description: PA verification statistics
+  /api/pa/history:
+    get:
+      tags: [PA]
+      summary: Get PA verification history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: offset
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: PA history list
+  /api/pa/{id}:
+    get:
+      tags: [PA]
+      summary: Get verification details
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Verification details
+  /api/pa/{id}/datagroups:
+    get:
+      tags: [PA]
+      summary: Get data groups info
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Data groups information
+  /api/pa/parse-dg1:
+    post:
+      tags: [Parser]
+      summary: Parse DG1 (MRZ) data
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dg1:
+                  type: string
+      responses:
+        '200':
+          description: Parsed MRZ data
+  /api/pa/parse-dg2:
+    post:
+      tags: [Parser]
+      summary: Parse DG2 (Face Image)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dg2:
+                  type: string
+      responses:
+        '200':
+          description: Extracted face image
+  /api/pa/parse-mrz-text:
+    post:
+      tags: [Parser]
+      summary: Parse MRZ text
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mrz:
+                  type: string
+      responses:
+        '200':
+          description: Parsed MRZ data
+)";
+
+            auto resp = drogon::HttpResponse::newHttpResponse();
+            resp->setBody(openApiSpec);
+            resp->setContentTypeCode(drogon::CT_TEXT_PLAIN);
+            resp->addHeader("Content-Type", "application/x-yaml");
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // Swagger UI redirect
+    app.registerHandler(
+        "/api/docs",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            auto resp = drogon::HttpResponse::newRedirectionResponse("/swagger-ui/index.html");
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     spdlog::info("PA Service API routes registered");
 }
 

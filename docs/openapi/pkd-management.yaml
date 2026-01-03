@@ -1,0 +1,590 @@
+openapi: 3.0.3
+info:
+  title: PKD Management Service API
+  description: |
+    ICAO Local PKD Management Service API.
+    Handles certificate upload, validation, and LDAP synchronization.
+  version: 1.0.0
+  contact:
+    name: SmartCore Inc.
+    email: support@smartcoreinc.com
+
+servers:
+  - url: http://localhost:8081
+    description: Development server
+  - url: http://pkd-management:8081
+    description: Docker internal
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Upload
+    description: Certificate upload operations
+  - name: Validation
+    description: Certificate validation operations
+  - name: PA
+    description: Passive Authentication operations
+  - name: Progress
+    description: Upload progress tracking
+  - name: LDAP
+    description: LDAP operations
+
+paths:
+  /api/health:
+    get:
+      tags: [Health]
+      summary: Application health check
+      description: Returns the overall health status of the service
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/health/database:
+    get:
+      tags: [Health]
+      summary: Database health check
+      description: Returns PostgreSQL connection status
+      operationId: getDatabaseHealth
+      responses:
+        '200':
+          description: Database connection status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseHealthResponse'
+
+  /api/health/ldap:
+    get:
+      tags: [Health]
+      summary: LDAP health check
+      description: Returns OpenLDAP connection status
+      operationId: getLdapHealth
+      responses:
+        '200':
+          description: LDAP connection status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LdapHealthResponse'
+
+  /api/upload/ldif:
+    post:
+      tags: [Upload]
+      summary: Upload LDIF file
+      description: Upload and process an LDIF file containing certificates
+      operationId: uploadLdif
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: LDIF file to upload
+              required:
+                - file
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Invalid file or upload error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/upload/masterlist:
+    post:
+      tags: [Upload]
+      summary: Upload Master List file
+      description: Upload and process an ICAO Master List file (CMS signed)
+      operationId: uploadMasterList
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Master List file (.ml) to upload
+              required:
+                - file
+      responses:
+        '200':
+          description: Upload successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadResponse'
+        '400':
+          description: Invalid file or upload error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/upload/statistics:
+    get:
+      tags: [Upload]
+      summary: Get upload statistics
+      description: Returns statistics about uploaded certificates
+      operationId: getUploadStatistics
+      responses:
+        '200':
+          description: Upload statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadStatisticsResponse'
+
+  /api/upload/history:
+    get:
+      tags: [Upload]
+      summary: Get upload history
+      description: Returns history of file uploads
+      operationId: getUploadHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Maximum number of records to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Number of records to skip
+      responses:
+        '200':
+          description: Upload history list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadHistoryResponse'
+
+  /api/upload/countries:
+    get:
+      tags: [Upload]
+      summary: Get country statistics
+      description: Returns certificate counts by country
+      operationId: getCountryStatistics
+      responses:
+        '200':
+          description: Country statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountryStatisticsResponse'
+
+  /api/validation/revalidate:
+    post:
+      tags: [Validation]
+      summary: Re-validate certificates
+      description: Trigger re-validation of DSC trust chains
+      operationId: revalidateCertificates
+      responses:
+        '200':
+          description: Revalidation started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevalidateResponse'
+
+  /api/pa/verify:
+    post:
+      tags: [PA]
+      summary: Verify Passive Authentication
+      description: Perform ICAO 9303 Passive Authentication verification
+      operationId: verifyPA
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PAVerifyRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAVerifyResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/pa/statistics:
+    get:
+      tags: [PA]
+      summary: Get PA statistics
+      description: Returns Passive Authentication verification statistics
+      operationId: getPAStatistics
+      responses:
+        '200':
+          description: PA statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAStatisticsResponse'
+
+  /api/pa/history:
+    get:
+      tags: [PA]
+      summary: Get PA verification history
+      description: Returns history of PA verifications
+      operationId: getPAHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: PA history list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAHistoryResponse'
+
+  /api/progress/stream/{uploadId}:
+    get:
+      tags: [Progress]
+      summary: SSE progress stream
+      description: Server-Sent Events stream for upload progress
+      operationId: getProgressStream
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Upload ID to track
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
+  /api/progress/status/{uploadId}:
+    get:
+      tags: [Progress]
+      summary: Get progress status
+      description: Returns current progress status for an upload
+      operationId: getProgressStatus
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Progress status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressStatusResponse'
+
+  /api/ldap/health:
+    get:
+      tags: [LDAP]
+      summary: LDAP health check
+      description: Returns detailed LDAP connection status
+      operationId: getLdapDetailedHealth
+      responses:
+        '200':
+          description: LDAP health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LdapHealthResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+        service:
+          type: string
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+
+    DatabaseHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [connected, disconnected]
+        host:
+          type: string
+        port:
+          type: integer
+        database:
+          type: string
+        responseTime:
+          type: integer
+          description: Response time in milliseconds
+
+    LdapHealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [connected, disconnected]
+        host:
+          type: string
+        port:
+          type: integer
+        baseDn:
+          type: string
+        responseTime:
+          type: integer
+
+    UploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        uploadId:
+          type: string
+        filename:
+          type: string
+        message:
+          type: string
+        certificatesProcessed:
+          type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+        message:
+          type: string
+
+    UploadStatisticsResponse:
+      type: object
+      properties:
+        totalCertificates:
+          type: integer
+        csca:
+          type: integer
+        dsc:
+          type: integer
+        dscNc:
+          type: integer
+        crl:
+          type: integer
+        masterList:
+          type: integer
+        trustChainValid:
+          type: integer
+        trustChainInvalid:
+          type: integer
+
+    UploadHistoryResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/UploadHistoryItem'
+
+    UploadHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+        fileType:
+          type: string
+        uploadDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+        certificatesProcessed:
+          type: integer
+
+    CountryStatisticsResponse:
+      type: object
+      properties:
+        countries:
+          type: array
+          items:
+            $ref: '#/components/schemas/CountryStats'
+
+    CountryStats:
+      type: object
+      properties:
+        countryCode:
+          type: string
+        csca:
+          type: integer
+        dsc:
+          type: integer
+        crl:
+          type: integer
+
+    RevalidateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        validatedCount:
+          type: integer
+
+    PAVerifyRequest:
+      type: object
+      required:
+        - sod
+        - dataGroups
+      properties:
+        sod:
+          type: string
+          description: Base64 encoded SOD (Security Object Document)
+        dataGroups:
+          type: object
+          additionalProperties:
+            type: string
+          description: Map of DG number to Base64 encoded data
+        mrzData:
+          type: string
+          description: Optional MRZ data for additional validation
+
+    PAVerifyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        verificationId:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PAVerificationStep'
+        documentInfo:
+          $ref: '#/components/schemas/DocumentInfo'
+
+    PAVerificationStep:
+      type: object
+      properties:
+        step:
+          type: integer
+        name:
+          type: string
+        status:
+          type: string
+          enum: [passed, failed, skipped]
+        message:
+          type: string
+
+    DocumentInfo:
+      type: object
+      properties:
+        documentType:
+          type: string
+        issuingCountry:
+          type: string
+        documentNumber:
+          type: string
+        expiryDate:
+          type: string
+
+    PAStatisticsResponse:
+      type: object
+      properties:
+        totalVerifications:
+          type: integer
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+        byCountry:
+          type: object
+          additionalProperties:
+            type: integer
+
+    PAHistoryResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PAHistoryItem'
+
+    PAHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        verificationDate:
+          type: string
+          format: date-time
+        issuingCountry:
+          type: string
+        documentType:
+          type: string
+        result:
+          type: string
+          enum: [success, failure]
+
+    ProgressStatusResponse:
+      type: object
+      properties:
+        uploadId:
+          type: string
+        stage:
+          type: string
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        message:
+          type: string
+        isComplete:
+          type: boolean

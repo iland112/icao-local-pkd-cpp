@@ -1,0 +1,401 @@
+openapi: 3.0.3
+info:
+  title: Sync Service API
+  description: |
+    DB-LDAP Synchronization Service API.
+    Monitors and manages synchronization between PostgreSQL and OpenLDAP.
+  version: 1.0.0
+  contact:
+    name: SmartCore Inc.
+    email: support@smartcoreinc.com
+
+servers:
+  - url: http://localhost:8083
+    description: Development server
+  - url: http://sync-service:8083
+    description: Docker internal
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Sync
+    description: Synchronization operations
+  - name: Config
+    description: Configuration endpoints
+
+paths:
+  /api/sync/health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      description: Returns the health status of the sync service
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/sync/status:
+    get:
+      tags: [Sync]
+      summary: Get sync status
+      description: Returns current synchronization status with DB and LDAP statistics
+      operationId: getSyncStatus
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusResponse'
+
+  /api/sync/check:
+    post:
+      tags: [Sync]
+      summary: Check sync status
+      description: Trigger a sync status check
+      operationId: checkSync
+      responses:
+        '200':
+          description: Check completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncCheckResponse'
+
+  /api/sync/discrepancies:
+    get:
+      tags: [Sync]
+      summary: Get discrepancies
+      description: Returns list of discrepancies between DB and LDAP
+      operationId: getDiscrepancies
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [all, missing_in_ldap, missing_in_db, mismatch]
+          description: Filter by discrepancy type
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+      responses:
+        '200':
+          description: Discrepancy list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DiscrepanciesResponse'
+
+  /api/sync/reconcile:
+    post:
+      tags: [Sync]
+      summary: Reconcile discrepancies
+      description: Trigger reconciliation to fix discrepancies
+      operationId: reconcile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileRequest'
+      responses:
+        '200':
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileResponse'
+
+  /api/sync/history:
+    get:
+      tags: [Sync]
+      summary: Get sync history
+      description: Returns history of sync operations
+      operationId: getSyncHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Sync history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncHistoryResponse'
+
+  /api/sync/config:
+    get:
+      tags: [Config]
+      summary: Get configuration
+      description: Returns current sync service configuration
+      operationId: getConfig
+      responses:
+        '200':
+          description: Configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+        service:
+          type: string
+        version:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        components:
+          type: object
+          properties:
+            database:
+              type: string
+              enum: [connected, disconnected]
+            ldap:
+              type: string
+              enum: [connected, disconnected]
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        syncStatus:
+          type: string
+          enum: [synced, out_of_sync, unknown]
+        lastSyncTime:
+          type: string
+          format: date-time
+        lastCheckTime:
+          type: string
+          format: date-time
+        dbStats:
+          $ref: '#/components/schemas/DBStats'
+        ldapStats:
+          $ref: '#/components/schemas/LDAPStats'
+        discrepancyCount:
+          type: integer
+
+    DBStats:
+      type: object
+      properties:
+        totalCertificates:
+          type: integer
+        csca:
+          type: integer
+        dsc:
+          type: integer
+        dscNc:
+          type: integer
+        crl:
+          type: integer
+        masterList:
+          type: integer
+        countries:
+          type: integer
+
+    LDAPStats:
+      type: object
+      properties:
+        totalEntries:
+          type: integer
+        csca:
+          type: integer
+        dsc:
+          type: integer
+        dscNc:
+          type: integer
+        crl:
+          type: integer
+        masterList:
+          type: integer
+        countries:
+          type: integer
+
+    SyncCheckResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        checkTime:
+          type: string
+          format: date-time
+        syncStatus:
+          type: string
+        discrepanciesFound:
+          type: integer
+        message:
+          type: string
+
+    DiscrepanciesResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Discrepancy'
+
+    Discrepancy:
+      type: object
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          enum: [missing_in_ldap, missing_in_db, mismatch]
+        certificateType:
+          type: string
+          enum: [CSCA, DSC, DSC_NC, CRL, ML]
+        countryCode:
+          type: string
+        serialNumber:
+          type: string
+        subject:
+          type: string
+        detectedAt:
+          type: string
+          format: date-time
+        details:
+          type: string
+
+    ReconcileRequest:
+      type: object
+      properties:
+        mode:
+          type: string
+          enum: [auto, db_to_ldap, ldap_to_db]
+          default: auto
+          description: |
+            Reconciliation mode:
+            - auto: Automatically determine the correct action
+            - db_to_ldap: Copy missing entries from DB to LDAP
+            - ldap_to_db: Copy missing entries from LDAP to DB
+        discrepancyIds:
+          type: array
+          items:
+            type: string
+          description: Specific discrepancy IDs to reconcile (empty = all)
+        dryRun:
+          type: boolean
+          default: false
+          description: If true, only simulate the reconciliation
+
+    ReconcileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        mode:
+          type: string
+        dryRun:
+          type: boolean
+        processed:
+          type: integer
+        fixed:
+          type: integer
+        failed:
+          type: integer
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconcileDetail'
+
+    ReconcileDetail:
+      type: object
+      properties:
+        discrepancyId:
+          type: string
+        action:
+          type: string
+        status:
+          type: string
+          enum: [success, failed, skipped]
+        message:
+          type: string
+
+    SyncHistoryResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SyncHistoryItem'
+
+    SyncHistoryItem:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        type:
+          type: string
+          enum: [check, reconcile, manual]
+        status:
+          type: string
+          enum: [success, partial, failed]
+        discrepanciesFound:
+          type: integer
+        discrepanciesFixed:
+          type: integer
+        duration:
+          type: integer
+          description: Duration in milliseconds
+        triggeredBy:
+          type: string
+          enum: [scheduler, manual, api]
+
+    ConfigResponse:
+      type: object
+      properties:
+        syncIntervalMinutes:
+          type: integer
+        autoReconcile:
+          type: boolean
+        maxReconcileBatchSize:
+          type: integer
+        dbConfig:
+          type: object
+          properties:
+            host:
+              type: string
+            port:
+              type: integer
+            database:
+              type: string
+        ldapConfig:
+          type: object
+          properties:
+            readHost:
+              type: string
+            readPort:
+              type: integer
+            writeHost:
+              type: string
+            writePort:
+              type: integer
+            baseDn:
+              type: string
