@@ -271,6 +271,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/MRZDataResponse'
 
+  /api/pa/parse-sod:
+    post:
+      tags: [Parser]
+      summary: Parse SOD (Security Object)
+      description: |
+        Extract metadata from SOD (Security Object Document) including:
+        - Hash algorithm used
+        - Signature algorithm used
+        - DSC (Document Signing Certificate) information
+        - Contained Data Group list with their hash values
+      operationId: parseSOD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sod:
+                  type: string
+                  description: Base64 encoded SOD data
+                sodBase64:
+                  type: string
+                  description: Alternative field name for Base64 encoded SOD data
+              required: []
+      responses:
+        '200':
+          description: Parsed SOD metadata
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SODParseResponse'
+        '400':
+          description: Invalid SOD data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   schemas:
     HealthResponse:
@@ -600,3 +639,85 @@ components:
         imageData:
           type: string
           description: Base64 encoded image data
+
+    SODParseResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        sodSize:
+          type: integer
+          description: Size of the SOD in bytes
+        hashAlgorithm:
+          type: string
+          description: Hash algorithm used (e.g., SHA-256, SHA-384)
+        hashAlgorithmOid:
+          type: string
+          description: OID of the hash algorithm
+        signatureAlgorithm:
+          type: string
+          description: Signature algorithm used (e.g., SHA256withRSA)
+        hasIcaoWrapper:
+          type: boolean
+          description: Whether the SOD has ICAO Tag 0x77 wrapper
+        hasDg14:
+          type: boolean
+          description: Whether DG14 (Active Authentication) is present
+        hasDg15:
+          type: boolean
+          description: Whether DG15 (Extended Access Control) is present
+        dataGroupCount:
+          type: integer
+          description: Number of data groups in the SOD
+        dscCertificate:
+          $ref: '#/components/schemas/DSCCertificateInfo'
+        containedDataGroups:
+          type: array
+          items:
+            $ref: '#/components/schemas/SODDataGroupInfo'
+        warning:
+          type: string
+          description: Warning message if any issues encountered
+        error:
+          type: string
+          description: Error message if parsing failed
+
+    DSCCertificateInfo:
+      type: object
+      description: Document Signing Certificate information extracted from SOD
+      properties:
+        subjectDn:
+          type: string
+          description: Subject Distinguished Name
+        issuerDn:
+          type: string
+          description: Issuer Distinguished Name (CSCA)
+        serialNumber:
+          type: string
+          description: Certificate serial number in hex format
+        notBefore:
+          type: string
+          description: Certificate validity start date
+        notAfter:
+          type: string
+          description: Certificate validity end date
+        countryCode:
+          type: string
+          description: 2-letter country code from issuer
+
+    SODDataGroupInfo:
+      type: object
+      description: Data group information from SOD
+      properties:
+        dgNumber:
+          type: integer
+          description: Data group number (1-16)
+        dgName:
+          type: string
+          description: Data group name (e.g., DG1, DG2)
+        hashValue:
+          type: string
+          description: Expected hash value in hex format
+        hashLength:
+          type: integer
+          description: Length of the hash in bytes
