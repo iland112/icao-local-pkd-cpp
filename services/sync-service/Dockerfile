@@ -5,13 +5,13 @@
 # =============================================================================
 
 # Stage 1: Build
-FROM ubuntu:22.04 AS builder
+FROM debian:bookworm AS builder
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y \
     bison \
     flex \
     autoconf \
-    linux-libc-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install vcpkg
@@ -60,13 +60,13 @@ RUN cmake -B build -S . \
     && cmake --build build -j$(nproc)
 
 # Stage 2: Runtime
-FROM ubuntu:22.04 AS runtime
+FROM debian:bookworm-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 
 # Install runtime dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     libpq5 \
     libldap-2.5-0 \
