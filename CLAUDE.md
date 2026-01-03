@@ -1,6 +1,6 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.2
+**Version**: 1.3
 **Last Updated**: 2026-01-03
 **Status**: Production Ready
 
@@ -43,15 +43,25 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                         React.js Frontend (:3000)                        │
 └─────────────────────────────────────────────────────────────────────────┘
-                                    │ REST API
-┌───────────────────────────────────┬─────────────────────────────────────┐
-│   PKD Management Service (:8081)  │      Sync Service (:8083)           │
-│  ┌──────────┐ ┌──────────────┐   │  ┌──────────┐ ┌──────────────┐      │
-│  │ Upload   │ │ Certificate  │   │  │ DB Stats │ │ LDAP Stats   │      │
-│  └──────────┘ └──────────────┘   │  └──────────┘ └──────────────┘      │
-└───────────────────────────────────┴─────────────────────────────────────┘
-         │                              │
-         ↓                              ↓
+                                    │ /api/*
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                      API Gateway (Nginx :8080)                           │
+│  /api/upload, /api/health, /api/certificates → PKD Management           │
+│  /api/pa/*                                   → PA Service               │
+│  /api/sync/*                                 → Sync Service             │
+└─────────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+┌───────────────┐          ┌───────────────┐          ┌───────────────┐
+│ PKD Management│          │  PA Service   │          │ Sync Service  │
+│    (:8081)    │          │   (:8082)     │          │   (:8083)     │
+│  Upload/Cert  │          │ PA Verify/DG  │          │ DB-LDAP Sync  │
+└───────────────┘          └───────────────┘          └───────────────┘
+        │                           │                           │
+        └───────────────────────────┼───────────────────────────┘
+                                    ▼
 ┌─────────────────┐          ┌─────────────────────────────────────────┐
 │   PostgreSQL    │          │         OpenLDAP MMR Cluster            │
 │     :5432       │          │  ┌───────────┐      ┌───────────┐       │
@@ -90,8 +100,13 @@ dc=ldap,dc=smartcoreinc,dc=com
 ```
 icao-local-pkd/
 ├── services/
-│   ├── pkd-management/        # Main C++ service (:8081)
+│   ├── pkd-management/        # PKD Management C++ service (:8081)
 │   │   ├── src/main.cpp       # Upload, Certificate, Health APIs
+│   │   ├── CMakeLists.txt
+│   │   ├── vcpkg.json
+│   │   └── Dockerfile
+│   ├── pa-service/            # PA Service C++ (:8082)
+│   │   ├── src/main.cpp       # PA Verify, DG Parsing APIs
 │   │   ├── CMakeLists.txt
 │   │   ├── vcpkg.json
 │   │   └── Dockerfile
@@ -100,6 +115,9 @@ icao-local-pkd/
 │       ├── CMakeLists.txt
 │       ├── vcpkg.json
 │       └── Dockerfile
+├── nginx/                     # API Gateway configuration
+│   ├── api-gateway.conf       # Nginx routing config
+│   └── proxy_params           # Common proxy parameters
 ├── frontend/                  # React.js frontend
 ├── docker/
 │   ├── docker-compose.yaml
@@ -108,6 +126,9 @@ icao-local-pkd/
 │   ├── schemas/               # ICAO PKD custom schema
 │   ├── bootstrap/             # Initial LDIF
 │   └── scripts/               # Init scripts
+├── docs/
+│   ├── openapi/               # OpenAPI specifications
+│   └── PA_API_GUIDE.md        # External client API guide
 ├── .docker-data/              # Bind mount data (gitignored)
 └── data/cert/                 # Trust anchor certificates
 ```
@@ -153,17 +174,23 @@ icao-local-pkd/
 | Service | URL |
 |---------|-----|
 | Frontend | http://localhost:3000 |
-| PKD Management API | http://localhost:8081/api |
-| Sync Service API | http://localhost:8083/api/sync |
+| **API Gateway** | **http://localhost:8080/api** |
+| ├─ PKD Management | http://localhost:8080/api/upload, /api/health |
+| ├─ PA Service | http://localhost:8080/api/pa/* |
+| └─ Sync Service | http://localhost:8080/api/sync/* |
 | HAProxy Stats | http://localhost:8404 |
 | PostgreSQL | localhost:5432 (pkd/pkd123) |
 | LDAP (HAProxy) | ldap://localhost:389 |
+
+> **Note**: 모든 백엔드 서비스(8081, 8082, 8083)는 API Gateway를 통해서만 접근합니다.
 
 ---
 
 ## API Endpoints
 
-### File Upload
+> 모든 API는 API Gateway (http://localhost:8080)를 통해 접근합니다.
+
+### PKD Management (via Gateway)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -172,16 +199,24 @@ icao-local-pkd/
 | GET | `/api/upload/history` | Get upload history |
 | GET | `/api/upload/statistics` | Get upload statistics |
 | GET | `/api/progress/stream/{id}` | SSE progress stream |
-
-### Health Check
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
 | GET | `/api/health` | Application health |
 | GET | `/api/health/database` | PostgreSQL status |
 | GET | `/api/health/ldap` | LDAP status |
 
-### DB-LDAP Sync (Port 8083)
+### PA Service (via Gateway)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/pa/verify` | PA verification |
+| POST | `/api/pa/parse-sod` | Parse SOD metadata |
+| POST | `/api/pa/parse-dg1` | Parse DG1 (MRZ) |
+| POST | `/api/pa/parse-dg2` | Parse DG2 (Face Image) |
+| GET | `/api/pa/statistics` | Verification statistics |
+| GET | `/api/pa/history` | Verification history |
+| GET | `/api/pa/{id}` | Verification details |
+| GET | `/api/pa/health` | PA service health |
+
+### Sync Service (via Gateway)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -278,6 +313,35 @@ docker-compose -f docker/docker-compose.yaml up -d pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-03: API Gateway 구현
+
+**Nginx 기반 API Gateway 추가:**
+- `nginx/api-gateway.conf` - 라우팅 설정
+- `nginx/proxy_params` - 공통 프록시 파라미터
+- 단일 진입점(포트 8080)으로 3개 마이크로서비스 통합
+
+**라우팅 규칙:**
+- `/api/upload/*`, `/api/health/*`, `/api/certificates/*` → PKD Management (:8081)
+- `/api/pa/*` → PA Service (:8082)
+- `/api/sync/*` → Sync Service (:8083)
+
+**기능:**
+- Rate Limiting (100 req/s per IP)
+- 파일 업로드 최대 100MB
+- SSE(Server-Sent Events) 지원
+- Gzip 압축
+- JSON 오류 응답 (502, 503, 504)
+
+**Frontend 수정:**
+- `frontend/nginx.conf` - 모든 `/api/*` 요청을 API Gateway로 라우팅
+
+**docker-compose.yaml 변경:**
+- `api-gateway` 서비스 추가
+- 백엔드 서비스 포트 외부 노출 제거 (내부 전용)
+
+**문서 업데이트:**
+- `docs/PA_API_GUIDE.md` - API Gateway 엔드포인트로 변경
 
 ### 2026-01-03: DB-LDAP Sync Service 구현
 

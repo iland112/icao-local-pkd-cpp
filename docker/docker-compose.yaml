@@ -1,12 +1,44 @@
 # =============================================================================
 # ICAO Local PKD - Docker Compose Configuration
-# Multi-Service Architecture: PKD Management + PA Service
+# Multi-Service Architecture: PKD Management + PA Service + Sync Service
 # =============================================================================
 # Data Directory: .docker-data/ (bind mount for easy management)
 # To reset: rm -rf .docker-data && docker compose up -d
 # =============================================================================
+# API Gateway: http://localhost:8080/api/* (unified API entry point)
+# Frontend:    http://localhost:3000 (React SPA)
+# =============================================================================
 
 services:
+  # ---------------------------------------------------------------------------
+  # API Gateway (Nginx - Unified API Entry Point)
+  # ---------------------------------------------------------------------------
+  api-gateway:
+    image: nginx:alpine
+    container_name: icao-local-pkd-api-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../nginx/api-gateway.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - ../.docker-data/gateway-logs:/var/log/nginx
+    depends_on:
+      pkd-management:
+        condition: service_healthy
+      pa-service:
+        condition: service_healthy
+      sync-service:
+        condition: service_healthy
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
   # ---------------------------------------------------------------------------
   # Frontend (React.js)
   # ---------------------------------------------------------------------------
@@ -34,8 +66,8 @@ services:
       context: ..
       dockerfile: services/pkd-management/Dockerfile
     container_name: icao-local-pkd-management
-    ports:
-      - "8081:8081"
+    # ports:
+    #   - "8081:8081"  # Direct access (use API Gateway instead)
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-management
@@ -80,9 +112,8 @@ services:
       context: ..
       dockerfile: services/pa-service/Dockerfile
     container_name: icao-local-pkd-pa-service
-    # Port disabled due to WSL2 port forwarding issues - access via frontend nginx proxy
     # ports:
-    #   - "8082:8082"
+    #   - "8082:8082"  # Direct access (use API Gateway instead)
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pa-service
@@ -122,8 +153,8 @@ services:
       context: ..
       dockerfile: services/sync-service/Dockerfile
     container_name: icao-local-pkd-sync-service
-    ports:
-      - "8083:8083"
+    # ports:
+    #   - "8083:8083"  # Direct access (use API Gateway instead)
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=sync-service

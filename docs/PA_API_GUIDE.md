@@ -1,8 +1,8 @@
 # PA Service API Guide for External Clients
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Last Updated**: 2026-01-03
-**Service Port**: 8082
+**API Gateway Port**: 8080
 
 ---
 
@@ -12,9 +12,12 @@ PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) �
 
 ### Base URL
 
+**API Gateway (권장)**:
 ```
-http://<server-host>:8082/api
+http://<server-host>:8080/api/pa
 ```
+
+> **Note**: 모든 API 요청은 API Gateway(포트 8080)를 통해 라우팅됩니다. API Gateway는 로드 밸런싱, Rate Limiting, 통합 로깅 등의 기능을 제공합니다.
 
 ### 인증
 
@@ -468,7 +471,7 @@ import org.springframework.http.*;
 
 public class PAServiceClient {
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String baseUrl = "http://localhost:8082/api";
+    private final String baseUrl = "http://localhost:8080/api";  // API Gateway
 
     public PAVerifyResponse verify(byte[] sod, Map<Integer, byte[]> dataGroups) {
         // Build request
@@ -506,7 +509,7 @@ import requests
 import base64
 
 class PAServiceClient:
-    def __init__(self, base_url="http://localhost:8082/api"):
+    def __init__(self, base_url="http://localhost:8080/api"):  # API Gateway
         self.base_url = base_url
 
     def verify(self, sod: bytes, data_groups: dict) -> dict:
@@ -590,7 +593,7 @@ public class PAServiceClient
     private readonly HttpClient _client;
     private readonly string _baseUrl;
 
-    public PAServiceClient(string baseUrl = "http://localhost:8082/api")
+    public PAServiceClient(string baseUrl = "http://localhost:8080/api")  // API Gateway
     {
         _client = new HttpClient();
         _baseUrl = baseUrl;
@@ -643,8 +646,10 @@ public class PAServiceClient
 ## OpenAPI Specification
 
 전체 OpenAPI 3.0 스펙은 다음에서 확인할 수 있습니다:
-- Swagger UI: `http://localhost:8082/api/docs`
-- OpenAPI YAML: `http://localhost:8082/api/openapi.yaml`
+- Swagger UI: `http://localhost:8080/api/pa/docs`
+- OpenAPI YAML: `http://localhost:8080/api/pa/openapi.yaml`
+
+> **Note**: API Gateway를 통해 접근합니다.
 
 ---
 
