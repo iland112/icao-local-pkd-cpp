@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.3
-**Last Updated**: 2026-01-03
+**Version**: 1.4
+**Last Updated**: 2026-01-04
 **Status**: Production Ready
 
 ---
@@ -312,7 +312,117 @@ docker-compose -f docker/docker-compose.yaml up -d pkd-management
 
 ---
 
+## Luckfox ARM64 Deployment
+
+### Target Environment
+
+| Item | Value |
+|------|-------|
+| Device | Luckfox Pico (ARM64) |
+| IP Address | 192.168.100.11 |
+| SSH Credentials | luckfox / luckfox |
+| Docker Compose | docker-compose-luckfox.yaml |
+| PostgreSQL DB | localpkd (user: pkd, password: pkd) |
+
+### Host Network Mode
+
+Luckfox 환경에서는 모든 컨테이너가 `network_mode: host`로 실행됩니다.
+
+```yaml
+# docker-compose-luckfox.yaml
+services:
+  postgres:
+    network_mode: host
+    environment:
+      - POSTGRES_DB=localpkd  # 주의: 로컬 환경의 pkd와 다름
+```
+
+### Cross-Platform Docker Build
+
+```bash
+# AMD64에서 ARM64 이미지 빌드
+docker build --platform linux/arm64 --no-cache -t icao-frontend:arm64 .
+
+# 이미지 저장 및 전송
+docker save icao-frontend:arm64 | gzip > icao-frontend-arm64.tar.gz
+scp icao-frontend-arm64.tar.gz luckfox@192.168.100.11:/home/luckfox/
+
+# Luckfox에서 이미지 로드
+ssh luckfox@192.168.100.11 "docker load < /home/luckfox/icao-frontend-arm64.tar.gz"
+```
+
+### sync_status Table Schema
+
+Luckfox 배포 시 `sync_status` 테이블 수동 생성이 필요합니다:
+
+```sql
+CREATE TABLE sync_status (
+    id SERIAL PRIMARY KEY,
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    db_csca_count INTEGER NOT NULL DEFAULT 0,
+    db_dsc_count INTEGER NOT NULL DEFAULT 0,
+    db_dsc_nc_count INTEGER NOT NULL DEFAULT 0,
+    db_crl_count INTEGER NOT NULL DEFAULT 0,
+    db_stored_in_ldap_count INTEGER NOT NULL DEFAULT 0,
+    ldap_csca_count INTEGER NOT NULL DEFAULT 0,
+    ldap_dsc_count INTEGER NOT NULL DEFAULT 0,
+    ldap_dsc_nc_count INTEGER NOT NULL DEFAULT 0,
+    ldap_crl_count INTEGER NOT NULL DEFAULT 0,
+    ldap_total_entries INTEGER NOT NULL DEFAULT 0,
+    csca_discrepancy INTEGER NOT NULL DEFAULT 0,
+    dsc_discrepancy INTEGER NOT NULL DEFAULT 0,
+    dsc_nc_discrepancy INTEGER NOT NULL DEFAULT 0,
+    crl_discrepancy INTEGER NOT NULL DEFAULT 0,
+    total_discrepancy INTEGER NOT NULL DEFAULT 0,
+    db_country_stats JSONB,
+    ldap_country_stats JSONB,
+    status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
+    error_message TEXT,
+    check_duration_ms INTEGER NOT NULL DEFAULT 0
+);
+```
+
+### Luckfox Docker Management
+
+```bash
+# 서비스 시작
+cd /home/luckfox/icao-local-pkd-cpp-v2
+docker compose -f docker-compose-luckfox.yaml up -d
+
+# 서비스 중지
+docker compose -f docker-compose-luckfox.yaml down
+
+# 로그 확인
+docker compose -f docker-compose-luckfox.yaml logs -f [service]
+
+# 컨테이너 재시작
+docker compose -f docker-compose-luckfox.yaml restart [service]
+```
+
+---
+
 ## Change Log
+
+### 2026-01-04: Luckfox ARM64 배포 및 Sync Service 수정
+
+**Luckfox 배포 완료:**
+- ARM64 크로스 컴파일 이미지 빌드 및 배포
+- Host network mode 환경에서 전체 서비스 동작 확인
+- Frontend, PKD Management, PA Service, Sync Service 모두 정상 동작
+
+**sync_status 테이블 이슈 해결:**
+- 문제: `relation "sync_status" does not exist` 오류
+- 원인: PostgreSQL init-scripts에 sync_status 테이블 정의 누락
+- 해결: 수동으로 테이블 생성 (스키마는 sync-service 코드 분석 후 정확한 컬럼명 사용)
+
+**주요 발견 사항:**
+- Luckfox PostgreSQL DB 이름: `localpkd` (로컬 환경의 `pkd`와 다름)
+- sync_status 테이블 컬럼명은 sync-service main.cpp의 INSERT/SELECT 쿼리와 정확히 일치해야 함
+- `checked_at` (not `created_at`), `*_discrepancy` 컬럼 필수
+
+**Frontend UI 개선:**
+- PAHistory 상세보기 다이얼로그 모달 레이아웃 개선
+- UploadHistory 상세보기 다이얼로그 모달 레이아웃 개선
 
 ### 2026-01-03: API Gateway 구현
 

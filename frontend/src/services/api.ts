@@ -111,7 +111,7 @@ export const paApi = {
 // LDAP APIs
 export const ldapApi = {
   getHealth: () =>
-    api.get('/ldap/health'),
+    api.get('/health/ldap'),
 
   getStatistics: () =>
     api.get('/ldap/statistics'),

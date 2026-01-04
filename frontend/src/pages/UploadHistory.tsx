@@ -673,10 +673,10 @@ export function UploadHistory() {
             onClick={closeDialog}
           />
 
-          {/* Dialog Content */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+          {/* Dialog Content - Wide layout without vertical scroll */}
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl mx-4">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
                   <FileText className="w-5 h-5 text-white" />
@@ -698,194 +698,203 @@ export function UploadHistory() {
               </button>
             </div>
 
-            {/* Body */}
-            <div className="p-6 space-y-6">
-              {/* Status Progress */}
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">진행 상태</h3>
-                <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  {STATUS_STEPS.map((step, index) => {
-                    const currentIndex = getStatusStepIndex(selectedUpload.status);
-                    const isPassed = index < currentIndex || selectedUpload.status === 'COMPLETED';
-                    const isCurrent = index === currentIndex && selectedUpload.status !== 'COMPLETED';
-                    const isFailed = selectedUpload.status === 'FAILED' && index === 0;
+            {/* Body - Horizontal two-column layout */}
+            <div className="p-5">
+              <div className="flex gap-5">
+                {/* Left Column - Status Progress & Certificate Counts */}
+                <div className="flex-1 space-y-4">
+                  {/* Status Progress - Compact horizontal */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">진행 상태</h3>
+                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                      {STATUS_STEPS.map((step, index) => {
+                        const currentIndex = getStatusStepIndex(selectedUpload.status);
+                        const isPassed = index < currentIndex || selectedUpload.status === 'COMPLETED';
+                        const isCurrent = index === currentIndex && selectedUpload.status !== 'COMPLETED';
+                        const isFailed = selectedUpload.status === 'FAILED' && index === 0;
 
-                    return (
-                      <div key={step.key} className="flex flex-col items-center">
-                        <div
-                          className={cn(
-                            'flex items-center justify-center w-10 h-10 rounded-full mb-2 transition-all',
-                            isPassed && 'bg-green-500 text-white',
-                            isCurrent && 'bg-blue-500 text-white animate-pulse',
-                            isFailed && 'bg-red-500 text-white',
-                            !isPassed && !isCurrent && !isFailed && 'bg-gray-200 dark:bg-gray-600 text-gray-400'
-                          )}
-                        >
-                          {isPassed ? (
-                            <CheckCircle className="w-5 h-5" />
-                          ) : isCurrent ? (
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                          ) : isFailed ? (
-                            <XCircle className="w-5 h-5" />
-                          ) : (
-                            step.icon
-                          )}
+                        return (
+                          <div key={step.key} className="flex flex-col items-center">
+                            <div
+                              className={cn(
+                                'flex items-center justify-center w-8 h-8 rounded-full mb-1 transition-all',
+                                isPassed && 'bg-green-500 text-white',
+                                isCurrent && 'bg-blue-500 text-white animate-pulse',
+                                isFailed && 'bg-red-500 text-white',
+                                !isPassed && !isCurrent && !isFailed && 'bg-gray-200 dark:bg-gray-600 text-gray-400'
+                              )}
+                            >
+                              {isPassed ? (
+                                <CheckCircle className="w-4 h-4" />
+                              ) : isCurrent ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : isFailed ? (
+                                <XCircle className="w-4 h-4" />
+                              ) : (
+                                step.icon
+                              )}
+                            </div>
+                            <span className={cn(
+                              'text-xs font-medium',
+                              isPassed && 'text-green-600 dark:text-green-400',
+                              isCurrent && 'text-blue-600 dark:text-blue-400',
+                              isFailed && 'text-red-600 dark:text-red-400',
+                              !isPassed && !isCurrent && !isFailed && 'text-gray-400'
+                            )}>
+                              {step.label}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Error Message - Compact */}
+                  {selectedUpload.errorMessage && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h4 className="text-xs font-medium text-red-800 dark:text-red-300">오류 발생</h4>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                            {selectedUpload.errorMessage}
+                          </p>
                         </div>
-                        <span className={cn(
-                          'text-xs font-medium',
-                          isPassed && 'text-green-600 dark:text-green-400',
-                          isCurrent && 'text-blue-600 dark:text-blue-400',
-                          isFailed && 'text-red-600 dark:text-red-400',
-                          !isPassed && !isCurrent && !isFailed && 'text-gray-400'
-                        )}>
-                          {step.label}
-                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
+                    </div>
+                  )}
 
-              {/* Error Message */}
-              {selectedUpload.errorMessage && (
-                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
-                  <div className="flex items-start gap-3">
-                    <XCircle className="w-5 h-5 text-red-500 mt-0.5" />
-                    <div>
-                      <h4 className="text-sm font-medium text-red-800 dark:text-red-300">오류 발생</h4>
-                      <p className="text-sm text-red-600 dark:text-red-400 mt-1">
-                        {selectedUpload.errorMessage}
+                  {/* Certificate & File Info Grid - Compact */}
+                  <div className="grid grid-cols-5 gap-2">
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">형식</span>
+                      <div className="mt-0.5">{getFormatBadge(selectedUpload.fileFormat)}</div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">크기</span>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
+                        {formatFileSize(selectedUpload.fileSize)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">총 인증서</span>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
+                        {selectedUpload.certificateCount}개
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">업로드</span>
+                      <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
+                        {formatDate(selectedUpload.createdAt)}
+                      </p>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">완료</span>
+                      <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
+                        {formatDate(selectedUpload.updatedAt)}
                       </p>
                     </div>
                   </div>
-                </div>
-              )}
 
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">파일 형식</span>
-                  <div className="mt-1">{getFormatBadge(selectedUpload.fileFormat)}</div>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">파일 크기</span>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                    {formatFileSize(selectedUpload.fileSize)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">CSCA 인증서</span>
-                  <p className="text-sm font-medium text-purple-600 dark:text-purple-400 mt-1">
-                    {selectedUpload.cscaCount}개
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">DSC 인증서</span>
-                  <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mt-1">
-                    {selectedUpload.dscCount || 0}개
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">DSC_NC 인증서</span>
-                  <p className="text-sm font-medium text-orange-600 dark:text-orange-400 mt-1">
-                    {selectedUpload.dscNcCount || 0}개
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">CRL 수</span>
-                  <p className="text-sm font-medium text-amber-600 dark:text-amber-400 mt-1">
-                    {selectedUpload.crlCount}개
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">총 인증서</span>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                    {selectedUpload.certificateCount}개
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">업로드 일시</span>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                    {formatDate(selectedUpload.createdAt)}
-                  </p>
-                </div>
-                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">완료 일시</span>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white mt-1">
-                    {formatDate(selectedUpload.updatedAt)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Validation Statistics Section */}
-              {selectedUpload.validation && (
-                <div>
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Trust Chain 검증 결과</h3>
-                  <div className="grid grid-cols-3 gap-3">
-                    {/* Valid */}
-                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-3 text-center">
-                      <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                        {selectedUpload.validation.validCount}
+                  {/* Certificate Type Breakdown */}
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                        {selectedUpload.cscaCount}
                       </p>
-                      <span className="text-xs text-green-700 dark:text-green-300">검증 성공</span>
+                      <span className="text-xs text-purple-700 dark:text-purple-300">CSCA</span>
                     </div>
-                    {/* Invalid */}
-                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-3 text-center">
-                      <p className="text-2xl font-bold text-red-600 dark:text-red-400">
-                        {selectedUpload.validation.invalidCount}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                        {selectedUpload.dscCount || 0}
                       </p>
-                      <span className="text-xs text-red-700 dark:text-red-300">검증 실패</span>
+                      <span className="text-xs text-blue-700 dark:text-blue-300">DSC</span>
                     </div>
-                    {/* Pending */}
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 text-center">
-                      <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                        {selectedUpload.validation.pendingCount}
+                    <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                        {selectedUpload.dscNcCount || 0}
                       </p>
-                      <span className="text-xs text-yellow-700 dark:text-yellow-300">검증 보류</span>
+                      <span className="text-xs text-orange-700 dark:text-orange-300">DSC_NC</span>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                        {selectedUpload.crlCount}
+                      </p>
+                      <span className="text-xs text-amber-700 dark:text-amber-300">CRL</span>
                     </div>
                   </div>
 
-                  {/* Detailed Validation Stats */}
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                      <span className="text-gray-600 dark:text-gray-400">Trust Chain 성공</span>
-                      <span className="font-medium text-green-600 dark:text-green-400">
-                        {selectedUpload.validation.trustChainValidCount}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                      <span className="text-gray-600 dark:text-gray-400">Trust Chain 실패</span>
-                      <span className="font-medium text-red-600 dark:text-red-400">
-                        {selectedUpload.validation.trustChainInvalidCount}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                      <span className="text-gray-600 dark:text-gray-400">CSCA 미발견</span>
-                      <span className="font-medium text-yellow-600 dark:text-yellow-400">
-                        {selectedUpload.validation.cscaNotFoundCount}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center p-2 bg-gray-50 dark:bg-gray-700/50 rounded">
-                      <span className="text-gray-600 dark:text-gray-400">만료됨</span>
-                      <span className="font-medium text-orange-600 dark:text-orange-400">
-                        {selectedUpload.validation.expiredCount}
-                      </span>
-                    </div>
+                  {/* Upload ID - Compact */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400">업로드 ID</span>
+                    <p className="text-xs font-mono text-gray-900 dark:text-white mt-0.5 break-all">
+                      {selectedUpload.id}
+                    </p>
                   </div>
                 </div>
-              )}
 
-              {/* Upload ID */}
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                <span className="text-xs text-gray-500 dark:text-gray-400">업로드 ID</span>
-                <p className="text-sm font-mono text-gray-900 dark:text-white mt-1 break-all">
-                  {selectedUpload.id}
-                </p>
+                {/* Right Column - Validation Statistics */}
+                {selectedUpload.validation && (
+                  <div className="w-64 flex-shrink-0">
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trust Chain 검증</h3>
+                    <div className="space-y-2">
+                      {/* Main Validation Stats */}
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                          {selectedUpload.validation.validCount}
+                        </p>
+                        <span className="text-xs text-green-700 dark:text-green-300">검증 성공</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-red-600 dark:text-red-400">
+                            {selectedUpload.validation.invalidCount}
+                          </p>
+                          <span className="text-xs text-red-700 dark:text-red-300">실패</span>
+                        </div>
+                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2 text-center">
+                          <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
+                            {selectedUpload.validation.pendingCount}
+                          </p>
+                          <span className="text-xs text-yellow-700 dark:text-yellow-300">보류</span>
+                        </div>
+                      </div>
+
+                      {/* Detailed Stats - Compact list */}
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">Trust Chain 성공</span>
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            {selectedUpload.validation.trustChainValidCount}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">Trust Chain 실패</span>
+                          <span className="font-medium text-red-600 dark:text-red-400">
+                            {selectedUpload.validation.trustChainInvalidCount}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">CSCA 미발견</span>
+                          <span className="font-medium text-yellow-600 dark:text-yellow-400">
+                            {selectedUpload.validation.cscaNotFoundCount}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="text-gray-600 dark:text-gray-400">만료됨</span>
+                          <span className="font-medium text-orange-600 dark:text-orange-400">
+                            {selectedUpload.validation.expiredCount}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={closeDialog}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
