@@ -1,16 +1,33 @@
 #!/bin/bash
 #
 # Luckfox ICAO Local PKD - Backup
-# Usage: ./luckfox-backup.sh [backup_dir]
+# Usage: ./luckfox-backup.sh [jvm|cpp] [backup_dir]
 #
 
 set -e
 
-BACKUP_DIR="${1:-/home/luckfox/backups}"
+# Source common configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/luckfox-common.sh"
+
+# Check for help
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    print_usage "luckfox-backup.sh" "[backup_dir]"
+    exit 0
+fi
+
+# Parse version and get remaining args
+REMAINING_ARGS=$(parse_version "$@")
+
+PROJECT_DIR=$(get_project_dir)
+
+# Get backup directory from remaining args or use default
+BACKUP_DIR="${REMAINING_ARGS:-/home/luckfox/backups}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_PATH="$BACKUP_DIR/icao-pkd-backup-$TIMESTAMP"
+BACKUP_PATH="$BACKUP_DIR/icao-pkd-${VERSION}-backup-$TIMESTAMP"
 
 echo "=== ICAO Local PKD - Backup ==="
+print_version_info
 echo "Backup directory: $BACKUP_PATH"
 echo ""
 
@@ -19,7 +36,11 @@ mkdir -p "$BACKUP_PATH"
 
 # PostgreSQL Backup
 echo "=== Backing up PostgreSQL ==="
-docker exec icao-pkd-postgres pg_dump -U pkd localpkd > "$BACKUP_PATH/postgresql.sql"
+if [ "$VERSION" = "jvm" ]; then
+    docker exec icao-pkd-postgres pg_dump -U pkd pkd > "$BACKUP_PATH/postgresql.sql"
+else
+    docker exec icao-pkd-postgres pg_dump -U pkd localpkd > "$BACKUP_PATH/postgresql.sql"
+fi
 echo "PostgreSQL backup: $BACKUP_PATH/postgresql.sql"
 
 # LDAP Backup
@@ -31,11 +52,12 @@ echo "LDAP backup: $BACKUP_PATH/ldap.ldif"
 # Upload Files Backup
 echo ""
 echo "=== Backing up Upload Files ==="
-if [ -d "/home/luckfox/icao-local-pkd-cpp-v2/.docker-data/pkd-uploads" ]; then
-    tar -czf "$BACKUP_PATH/uploads.tar.gz" -C /home/luckfox/icao-local-pkd-cpp-v2/.docker-data pkd-uploads
+UPLOAD_DIR="$PROJECT_DIR/.docker-data/pkd-uploads"
+if [ -d "$UPLOAD_DIR" ]; then
+    tar -czf "$BACKUP_PATH/uploads.tar.gz" -C "$PROJECT_DIR/.docker-data" pkd-uploads
     echo "Uploads backup: $BACKUP_PATH/uploads.tar.gz"
 else
-    echo "No upload files found"
+    echo "No upload files found at $UPLOAD_DIR"
 fi
 
 # Backup Summary
@@ -48,6 +70,6 @@ ls -lh "$BACKUP_PATH"
 echo ""
 echo "=== Compressing Backup ==="
 cd "$BACKUP_DIR"
-tar -czf "icao-pkd-backup-$TIMESTAMP.tar.gz" "icao-pkd-backup-$TIMESTAMP"
+tar -czf "icao-pkd-${VERSION}-backup-$TIMESTAMP.tar.gz" "icao-pkd-${VERSION}-backup-$TIMESTAMP"
 rm -rf "$BACKUP_PATH"
-echo "Final backup: $BACKUP_DIR/icao-pkd-backup-$TIMESTAMP.tar.gz"
+echo "Final backup: $BACKUP_DIR/icao-pkd-${VERSION}-backup-$TIMESTAMP.tar.gz"

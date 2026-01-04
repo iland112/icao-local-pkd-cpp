@@ -1,31 +1,43 @@
 #!/bin/bash
 #
 # Luckfox ICAO Local PKD - Start Services
-# Usage: ./luckfox-start.sh [service...]
+# Usage: ./luckfox-start.sh [jvm|cpp] [service...]
 #
 
 set -e
 
-COMPOSE_FILE="/home/luckfox/icao-local-pkd-cpp-v2/docker-compose-luckfox.yaml"
-cd /home/luckfox/icao-local-pkd-cpp-v2
+# Source common configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/luckfox-common.sh"
+
+# Check for help
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    print_usage "luckfox-start.sh" "[service...]"
+    exit 0
+fi
+
+# Parse version and get remaining args
+REMAINING_ARGS=$(parse_version "$@")
+
+COMPOSE_FILE=$(get_compose_file)
+PROJECT_DIR=$(get_project_dir)
 
 echo "=== ICAO Local PKD - Starting Services ==="
+print_version_info
+echo ""
 
-if [ $# -eq 0 ]; then
+cd "$PROJECT_DIR"
+
+if [ -z "$REMAINING_ARGS" ]; then
     echo "Starting all services..."
-    docker compose -f $COMPOSE_FILE up -d
+    docker compose -f "$COMPOSE_FILE" up -d
 else
-    echo "Starting services: $@"
-    docker compose -f $COMPOSE_FILE up -d "$@"
+    echo "Starting services: $REMAINING_ARGS"
+    docker compose -f "$COMPOSE_FILE" up -d $REMAINING_ARGS
 fi
 
 echo ""
 echo "=== Service Status ==="
-docker compose -f $COMPOSE_FILE ps
+docker compose -f "$COMPOSE_FILE" ps
 
-echo ""
-echo "=== Access URLs ==="
-echo "Frontend:    http://192.168.100.11:3000"
-echo "PKD API:     http://192.168.100.11:8081/api"
-echo "PA API:      http://192.168.100.11:8082/api"
-echo "Sync API:    http://192.168.100.11:8083/api"
+print_access_urls

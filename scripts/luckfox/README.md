@@ -1,6 +1,7 @@
 # Luckfox Docker Management Scripts
 
 Luckfox ARM64 환경에서 ICAO Local PKD 서비스를 운영하기 위한 스크립트 모음입니다.
+JVM 버전과 CPP 버전을 모두 지원합니다.
 
 ## Prerequisites
 
@@ -12,6 +13,7 @@ Luckfox ARM64 환경에서 ICAO Local PKD 서비스를 운영하기 위한 스�
 
 | Script | Description |
 |--------|-------------|
+| `luckfox-common.sh` | 공통 설정 및 함수 |
 | `luckfox-start.sh` | 서비스 시작 |
 | `luckfox-stop.sh` | 서비스 중지 |
 | `luckfox-restart.sh` | 서비스 재시작 |
@@ -32,50 +34,84 @@ ssh luckfox@192.168.100.11
 chmod +x /home/luckfox/scripts/*.sh
 ```
 
+## Version Selection
+
+모든 스크립트는 첫 번째 인자로 `jvm` 또는 `cpp` 버전을 선택할 수 있습니다.
+버전을 지정하지 않으면 기본값은 `cpp`입니다.
+
+```bash
+# CPP 버전 (기본값)
+./luckfox-start.sh
+./luckfox-start.sh cpp
+
+# JVM 버전
+./luckfox-start.sh jvm
+```
+
+## Version Directories
+
+| Version | Directory | Docker Compose |
+|---------|-----------|----------------|
+| JVM | /home/luckfox/icao-local-pkd | docker-compose.yml |
+| CPP | /home/luckfox/icao-local-pkd-cpp-v2 | docker-compose-luckfox.yaml |
+
 ## Usage Examples
 
 ### 서비스 시작/중지
 
 ```bash
-# 전체 서비스 시작
-./luckfox-start.sh
+# CPP 버전 전체 서비스 시작
+./luckfox-start.sh cpp
+
+# JVM 버전 전체 서비스 시작
+./luckfox-start.sh jvm
 
 # 특정 서비스만 시작
-./luckfox-start.sh frontend sync-service
+./luckfox-start.sh cpp frontend sync-service
 
 # 서비스 중지
-./luckfox-stop.sh
+./luckfox-stop.sh cpp
 
 # 서비스 재시작
-./luckfox-restart.sh pa-service
+./luckfox-restart.sh cpp pa-service
 ```
 
 ### 로그 확인
 
 ```bash
-# 서비스별 로그 확인
-./luckfox-logs.sh sync-service
+# CPP 서비스 로그 확인
+./luckfox-logs.sh cpp sync-service
+
+# JVM 서비스 로그 확인
+./luckfox-logs.sh jvm backend
 
 # 실시간 로그 추적
-./luckfox-logs.sh sync-service -f
+./luckfox-logs.sh cpp sync-service -f
 
 # 사용법 보기
-./luckfox-logs.sh
+./luckfox-logs.sh -h
 ```
 
 ### 헬스 체크
 
 ```bash
-./luckfox-health.sh
+# CPP 버전 헬스 체크
+./luckfox-health.sh cpp
+
+# JVM 버전 헬스 체크
+./luckfox-health.sh jvm
 ```
 
-출력 예시:
+출력 예시 (CPP):
 ```
+=== ICAO Local PKD - Health Check ===
+Version: CPP (C++/Drogon)
+Directory: /home/luckfox/icao-local-pkd-cpp-v2
+
 === Container Status ===
 NAME                     STATUS
 icao-pkd-postgres        Up 2 hours
 icao-pkd-openldap        Up 2 hours
-icao-pkd-management      Up 2 hours
 ...
 
 === API Health Checks ===
@@ -95,14 +131,17 @@ Frontend (3000):        OK
 ### 백업/복구
 
 ```bash
-# 백업 생성
-./luckfox-backup.sh
+# CPP 버전 백업 생성
+./luckfox-backup.sh cpp
+
+# JVM 버전 백업 생성
+./luckfox-backup.sh jvm
 
 # 특정 디렉토리에 백업
-./luckfox-backup.sh /mnt/usb/backups
+./luckfox-backup.sh cpp /mnt/usb/backups
 
 # 복구
-./luckfox-restore.sh /home/luckfox/backups/icao-pkd-backup-20260104_120000.tar.gz
+./luckfox-restore.sh cpp /home/luckfox/backups/icao-pkd-cpp-backup-20260104_120000.tar.gz
 ```
 
 ### 서비스 업데이트
@@ -114,10 +153,12 @@ docker save icao-frontend:arm64 | gzip > icao-frontend-arm64.tar.gz
 scp icao-frontend-arm64.tar.gz luckfox@192.168.100.11:/home/luckfox/
 
 # 2. Luckfox에서 업데이트 적용
-./luckfox-update.sh /home/luckfox/icao-frontend-arm64.tar.gz frontend
+./luckfox-update.sh cpp /home/luckfox/icao-frontend-arm64.tar.gz frontend
 ```
 
 ## Services
+
+### CPP Version
 
 | Service | Port | Description |
 |---------|------|-------------|
@@ -128,19 +169,28 @@ scp icao-frontend-arm64.tar.gz luckfox@192.168.100.11:/home/luckfox/
 | sync-service | 8083 | DB-LDAP Sync API |
 | frontend | 3000 | React Web UI |
 
+### JVM Version
+
+| Service | Port | Description |
+|---------|------|-------------|
+| postgres | 5432 | PostgreSQL (DB: pkd) |
+| openldap | 389 | OpenLDAP server |
+| backend | 8080 | Spring Boot API |
+| frontend | 3000 | React Web UI |
+
 ## Troubleshooting
 
 ### 서비스가 시작되지 않음
 
 ```bash
 # 로그 확인
-./luckfox-logs.sh <service> -f
+./luckfox-logs.sh cpp <service> -f
 
 # 컨테이너 상태 확인
 docker ps -a
 ```
 
-### sync_status 테이블 오류
+### sync_status 테이블 오류 (CPP only)
 
 ```bash
 # PostgreSQL 접속
@@ -161,3 +211,10 @@ df -h
 # 기존 이미지 정리
 docker image prune -a
 ```
+
+### DB 이름 차이
+
+| Version | Database Name |
+|---------|---------------|
+| JVM | pkd |
+| CPP | localpkd |
