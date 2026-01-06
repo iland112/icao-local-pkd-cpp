@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 1.1.0
-**Last Updated**: 2026-01-03
+**Version**: 1.2.0
+**Last Updated**: 2026-01-06
 **API Gateway Port**: 8080
 
 ---
@@ -73,11 +73,14 @@ http://<server-host>:8080/api/pa
     "dscSerialNumber": "1A2B3C4D5E6F",
     "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
     "cscaFingerprint": "SHA256:ABCD1234...",
-    "validityPeriod": {
-      "notBefore": "2024-01-01T00:00:00Z",
-      "notAfter": "2029-12-31T23:59:59Z"
-    },
-    "crlStatus": "NOT_REVOKED"
+    "notBefore": "2024-01-01T00:00:00Z",
+    "notAfter": "2029-12-31T23:59:59Z",
+    "crlStatus": "NOT_REVOKED",
+    "dscExpired": false,
+    "cscaExpired": false,
+    "validAtSigningTime": true,
+    "expirationStatus": "VALID",
+    "expirationMessage": ""
   },
 
   "sodSignatureValidation": {
@@ -132,7 +135,12 @@ http://<server-host>:8080/api/pa
 
   "certificateChainValidation": {
     "valid": false,
-    "message": "CSCA certificate not found for issuer"
+    "message": "CSCA certificate not found for issuer",
+    "dscExpired": false,
+    "cscaExpired": false,
+    "validAtSigningTime": false,
+    "expirationStatus": "VALID",
+    "expirationMessage": ""
   },
 
   "sodSignatureValidation": {
@@ -158,6 +166,26 @@ http://<server-host>:8080/api/pa
 }
 ```
 
+#### Certificate Chain Validation Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| valid | boolean | 인증서 체인 검증 성공 여부 |
+| dscSubject | string | DSC 인증서 Subject DN |
+| dscSerialNumber | string | DSC 인증서 시리얼 번호 |
+| cscaSubject | string | CSCA 인증서 Subject DN |
+| cscaFingerprint | string | CSCA 인증서 SHA256 지문 |
+| notBefore | string | DSC 인증서 유효 시작일 |
+| notAfter | string | DSC 인증서 유효 종료일 |
+| crlStatus | string | CRL 상태 (NOT_REVOKED, REVOKED, UNKNOWN) |
+| **dscExpired** | boolean | DSC 인증서 만료 여부 (v1.2.0+) |
+| **cscaExpired** | boolean | CSCA 인증서 만료 여부 (v1.2.0+) |
+| **validAtSigningTime** | boolean | 여권 서명 당시 인증서 유효 여부 (v1.2.0+) |
+| **expirationStatus** | string | 만료 상태: VALID, WARNING, EXPIRED (v1.2.0+) |
+| **expirationMessage** | string | 만료 상태 설명 메시지 (v1.2.0+) |
+
+> **Note (v1.2.0)**: ICAO 9303 표준에 따라 Point-in-Time Validation을 지원합니다. 인증서가 현재 만료되었더라도, 여권 서명 당시에 유효했다면 `validAtSigningTime`이 `true`로 설정됩니다. 이 경우 `expirationStatus`는 `EXPIRED`이지만 검증은 성공(`valid: true`)할 수 있습니다.
+
 #### Error Codes
 
 | Code | Severity | Description |
@@ -170,7 +198,7 @@ http://<server-host>:8080/api/pa
 | TRUST_CHAIN_INVALID | HIGH | 인증서 신뢰 체인 검증 실패 |
 | SOD_SIGNATURE_INVALID | HIGH | SOD 서명 검증 실패 |
 | DG_HASH_MISMATCH | HIGH | Data Group 해시 불일치 |
-| CERTIFICATE_EXPIRED | MEDIUM | 인증서 유효기간 만료 |
+| CERTIFICATE_EXPIRED | MEDIUM | 인증서 유효기간 만료 (현재 시점) |
 | CERTIFICATE_REVOKED | HIGH | 인증서 폐지됨 |
 
 ---
@@ -359,7 +387,14 @@ MRZ 파싱 결과 (DG1 파싱과 동일한 형식)
       "status": "VALID",
       "verificationTimestamp": "2026-01-03T10:30:00",
       "processingDurationMs": 245,
-      "certificateChainValidation": { "valid": true },
+      "certificateChainValidation": {
+        "valid": true,
+        "dscExpired": false,
+        "cscaExpired": false,
+        "validAtSigningTime": true,
+        "expirationStatus": "VALID",
+        "expirationMessage": ""
+      },
       "sodSignatureValidation": { "valid": true },
       "dataGroupValidation": { "valid": true }
     }
@@ -672,6 +707,35 @@ public class PAServiceClient
 **4. Invalid Base64 encoding**
 - 원인: 잘못된 Base64 인코딩
 - 해결: 표준 Base64 인코딩 확인 (URL-safe가 아닌 standard Base64)
+
+---
+
+## Changelog
+
+### v1.2.0 (2026-01-06)
+
+**Certificate Expiration Handling**:
+- `certificateChainValidation` 응답에 인증서 만료 필드 추가:
+  - `dscExpired`: DSC 인증서 만료 여부
+  - `cscaExpired`: CSCA 인증서 만료 여부
+  - `validAtSigningTime`: 서명 당시 인증서 유효 여부 (Point-in-Time Validation)
+  - `expirationStatus`: 만료 상태 (`VALID`, `WARNING`, `EXPIRED`)
+  - `expirationMessage`: 만료 상태 설명 메시지
+
+- ICAO 9303 Point-in-Time Validation 지원:
+  - 인증서가 현재 만료되었더라도 여권 서명 당시 유효했다면 검증 성공 가능
+  - `validAtSigningTime: true`로 서명 당시 유효성 표시
+
+### v1.1.0 (2026-01-03)
+
+- API Gateway (포트 8080) 통합
+- 모든 API 엔드포인트를 API Gateway를 통해 접근하도록 변경
+
+### v1.0.0 (2025-12-30)
+
+- 초기 릴리스
+- PA 검증, SOD/DG1/DG2 파싱 API
+- 검증 이력 및 통계 API
 
 ---
 
