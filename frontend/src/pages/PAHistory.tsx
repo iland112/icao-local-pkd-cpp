@@ -22,6 +22,8 @@ import {
   FileCheck,
   Link2,
   Hash,
+  AlertTriangle,
+  CalendarX,
 } from 'lucide-react';
 import { paApi } from '@/services/api';
 import type { PAHistoryItem, PageResponse, PAStatus } from '@/types';
@@ -159,40 +161,6 @@ export function PAHistory() {
 
     return (
       <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium', style.bg, style.text)}>
-        {style.icon}
-        {label}
-      </span>
-    );
-  };
-
-  const getStatusBadgeLarge = (status: PAStatus) => {
-    const styles: Record<PAStatus, { bg: string; text: string; icon: React.ReactNode }> = {
-      VALID: {
-        bg: 'bg-green-100 dark:bg-green-900/30',
-        text: 'text-green-600 dark:text-green-400',
-        icon: <CheckCircle className="w-4 h-4" />,
-      },
-      INVALID: {
-        bg: 'bg-red-100 dark:bg-red-900/30',
-        text: 'text-red-600 dark:text-red-400',
-        icon: <XCircle className="w-4 h-4" />,
-      },
-      ERROR: {
-        bg: 'bg-yellow-100 dark:bg-yellow-900/30',
-        text: 'text-yellow-600 dark:text-yellow-400',
-        icon: <AlertCircle className="w-4 h-4" />,
-      },
-    };
-
-    const style = styles[status];
-    const label = {
-      VALID: 'Valid',
-      INVALID: 'Invalid',
-      ERROR: 'Error',
-    }[status];
-
-    return (
-      <span className={cn('inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold', style.bg, style.text)}>
         {style.icon}
         {label}
       </span>
@@ -616,14 +584,21 @@ export function PAHistory() {
             onClick={closeDetailModal}
           />
 
-          {/* Modal Content - Wide layout without vertical scroll */}
+          {/* Modal Content - Wide layout for desktop without scrollbars */}
           <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl mx-4">
             {/* Modal Header */}
-            <div className="bg-white dark:bg-gray-800 px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between rounded-t-2xl">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Info className="w-5 h-5 text-blue-500" />
-                <h2 className="text-lg font-bold text-gray-900 dark:text-white">검증 상세 정보</h2>
-                {getStatusBadgeLarge(selectedRecord.status)}
+                <div className="p-2 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+                  <Info className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">검증 상세 정보</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Passive Authentication 검증 결과</p>
+                </div>
+                <div className="ml-2">
+                  {getStatusBadge(selectedRecord.status)}
+                </div>
               </div>
               <button
                 onClick={closeDetailModal}
@@ -633,262 +608,323 @@ export function PAHistory() {
               </button>
             </div>
 
-            {/* Modal Body - Horizontal layout */}
-            <div className="p-5">
-              <div className="flex gap-5">
-                {/* Left Column - Basic Info & Validation */}
-                <div className="flex-1 space-y-4">
-                  {/* Top Row: ID, Time, Country, Document, Requester */}
-                  <div className="grid grid-cols-5 gap-3">
-                    {/* Verification ID */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                      <div className="flex items-center gap-1 mb-1">
-                        <Hash className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">검증 ID</p>
-                      </div>
-                      <p className="font-mono text-xs text-gray-900 dark:text-white break-all">
-                        {selectedRecord.verificationId.substring(0, 8)}...
-                      </p>
-                    </div>
+            {/* Modal Body - Sectioned layout */}
+            <div className="p-6 space-y-5">
 
-                    {/* Verification Time */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                      <div className="flex items-center gap-1 mb-1">
-                        <Clock className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">검증 시각</p>
-                      </div>
-                      <p className="text-xs text-gray-900 dark:text-white">
-                        {formatDate(selectedRecord.verificationTimestamp)}
-                      </p>
+              {/* Section 1: 기본 정보 */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 rounded-full bg-blue-500" />
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">기본 정보</h3>
+                </div>
+                <div className="grid grid-cols-5 gap-3">
+                  {/* Verification ID */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Hash className="w-3 h-3 text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">검증 ID</p>
                     </div>
+                    <p className="font-mono text-sm text-gray-900 dark:text-white truncate" title={selectedRecord.verificationId}>
+                      {selectedRecord.verificationId.substring(0, 12)}...
+                    </p>
+                  </div>
 
-                    {/* Issuing Country */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">발급 국가</p>
-                      <div className="flex items-center gap-2">
-                        {selectedRecord.issuingCountry && getFlagSvgPath(selectedRecord.issuingCountry) && (
-                          <img
-                            src={getFlagSvgPath(selectedRecord.issuingCountry)}
-                            alt={selectedRecord.issuingCountry}
-                            className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        )}
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {selectedRecord.issuingCountry || '-'}
-                        </span>
-                      </div>
+                  {/* Verification Time */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <Clock className="w-3 h-3 text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">검증 시각</p>
                     </div>
+                    <p className="text-sm text-gray-900 dark:text-white">
+                      {formatDate(selectedRecord.verificationTimestamp)}
+                    </p>
+                  </div>
 
-                    {/* Document Number */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-1">여권 번호</p>
-                      <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedRecord.documentNumber || '-'}
-                      </p>
-                    </div>
-
-                    {/* Requester */}
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                      <div className="flex items-center gap-1 mb-1">
-                        <User className="w-3 h-3 text-gray-400" />
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">요청자</p>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {selectedRecord.requestedBy || 'anonymous'}
-                      </p>
+                  {/* Issuing Country */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">발급 국가</p>
+                    <div className="flex items-center gap-2">
+                      {selectedRecord.issuingCountry && getFlagSvgPath(selectedRecord.issuingCountry) && (
+                        <img
+                          src={getFlagSvgPath(selectedRecord.issuingCountry)}
+                          alt={selectedRecord.issuingCountry}
+                          className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                          }}
+                        />
+                      )}
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedRecord.issuingCountry || '-'}
+                      </span>
                     </div>
                   </div>
 
-                  {/* Validation Results - Horizontal */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <FileCheck className="w-4 h-4 text-blue-500" />
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검증 결과</h3>
-                    </div>
-                    <div className="grid grid-cols-3 gap-3">
-                      {/* SOD Signature */}
-                      <div className={cn(
-                        'rounded-lg p-3 border-l-4',
-                        selectedRecord.sodSignatureValidation?.valid
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-                      )}>
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">SOD 서명</p>
-                        <div className="flex items-center gap-2">
-                          {selectedRecord.sodSignatureValidation?.valid ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className={cn(
-                            'text-sm font-medium',
-                            selectedRecord.sodSignatureValidation?.valid
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-600 dark:text-red-400'
-                          )}>
-                            {selectedRecord.sodSignatureValidation?.valid ? 'Valid' : 'Invalid'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Certificate Chain */}
-                      <div className={cn(
-                        'rounded-lg p-3 border-l-4',
-                        selectedRecord.certificateChainValidation?.valid
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-                      )}>
-                        <div className="flex items-center gap-1 mb-1">
-                          <Link2 className="w-3 h-3 text-gray-400" />
-                          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">인증서 체인</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {selectedRecord.certificateChainValidation?.valid ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className={cn(
-                            'text-sm font-medium',
-                            selectedRecord.certificateChainValidation?.valid
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-600 dark:text-red-400'
-                          )}>
-                            {selectedRecord.certificateChainValidation?.valid ? 'Valid' : 'Invalid'}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Data Group Hash */}
-                      <div className={cn(
-                        'rounded-lg p-3 border-l-4',
-                        selectedRecord.dataGroupValidation?.valid
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-                      )}>
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">DG 해시</p>
-                        <div className="flex items-center gap-2">
-                          {selectedRecord.dataGroupValidation?.valid ? (
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          ) : (
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          )}
-                          <span className={cn(
-                            'text-sm font-medium',
-                            selectedRecord.dataGroupValidation?.valid
-                              ? 'text-green-600 dark:text-green-400'
-                              : 'text-red-600 dark:text-red-400'
-                          )}>
-                            {selectedRecord.dataGroupValidation?.valid ? 'Valid' : 'Invalid'}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                  {/* Document Number */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+                    <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">여권 번호</p>
+                    <p className="font-mono text-sm font-medium text-blue-600 dark:text-blue-400">
+                      {selectedRecord.documentNumber || '-'}
+                    </p>
                   </div>
 
-                  {/* DG1 MRZ Data - Compact grid (for VALID records with DG data) */}
-                  {selectedRecord.status === 'VALID' && !dgLoading && !dgError && dgData?.hasDg1 && dgData.dg1 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-500" />
-                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">DG1 - MRZ 데이터</p>
-                      </div>
-                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
-                        <div className="grid grid-cols-6 gap-2">
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">성</p>
-                            <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">{dgData.dg1.surname || '-'}</p>
-                          </div>
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2 col-span-2">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">이름</p>
-                            <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">{dgData.dg1.givenNames || '-'}</p>
-                          </div>
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">여권번호</p>
-                            <p className="font-mono text-sm font-medium text-blue-600 dark:text-blue-400">{dgData.dg1.documentNumber || '-'}</p>
-                          </div>
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">국적</p>
-                            <div className="flex items-center gap-1">
-                              {dgData.dg1.nationality && getFlagSvgPath(dgData.dg1.nationality) && (
-                                <img
-                                  src={getFlagSvgPath(dgData.dg1.nationality)}
-                                  alt={dgData.dg1.nationality}
-                                  className="w-4 h-3 object-cover rounded-sm shadow-sm border border-gray-200 dark:border-gray-600"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                  }}
-                                />
-                              )}
-                              <span className="font-mono text-sm font-medium text-gray-900 dark:text-white">{dgData.dg1.nationality || '-'}</span>
-                            </div>
-                          </div>
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">성별</p>
-                            <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
-                              {dgData.dg1.sex === 'M' ? '남성' : dgData.dg1.sex === 'F' ? '여성' : dgData.dg1.sex || '-'}
-                            </p>
-                          </div>
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2 col-span-3">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">생년월일</p>
-                            <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">{dgData.dg1.dateOfBirth || '-'}</p>
-                          </div>
-                          <div className="bg-white dark:bg-gray-800 rounded-md p-2 col-span-3">
-                            <p className="text-xs text-gray-500 dark:text-gray-400">만료일</p>
-                            <p className="font-mono text-sm font-medium text-yellow-600 dark:text-yellow-400">{dgData.dg1.expirationDate || '-'}</p>
-                          </div>
-                        </div>
-                      </div>
+                  {/* Requester */}
+                  <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <User className="w-3 h-3 text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">요청자</p>
                     </div>
-                  )}
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                      {selectedRecord.requestedBy || 'anonymous'}
+                    </p>
+                  </div>
+                </div>
+              </div>
 
-                  {/* Loading/Error states for VALID records */}
-                  {selectedRecord.status === 'VALID' && dgLoading && (
-                    <div className="flex items-center justify-center py-4">
-                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                      <span className="ml-2 text-sm text-gray-500">데이터 로딩 중...</span>
-                    </div>
-                  )}
-                  {selectedRecord.status === 'VALID' && dgError && (
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm text-yellow-700 dark:text-yellow-400">{dgError}</span>
-                    </div>
-                  )}
+              {/* Section 2: 검증 결과 */}
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-1 h-4 rounded-full bg-green-500" />
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">검증 결과</h3>
+                  <FileCheck className="w-4 h-4 text-green-500" />
                 </div>
 
-                {/* Right Column - DG2 Face Image (for VALID records) */}
-                {selectedRecord.status === 'VALID' && !dgLoading && !dgError && dgData?.hasDg2 && dgData.dg2?.faceImages?.[0]?.imageDataUrl && (
-                  <div className="w-36 flex-shrink-0">
-                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 h-full">
-                      <div className="flex items-center gap-1 mb-2">
-                        <div className="w-2 h-2 rounded-full bg-purple-500" />
-                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">DG2</p>
-                      </div>
-                      <div className="flex flex-col items-center">
-                        <img
-                          src={dgData.dg2.faceImages[0].imageDataUrl}
-                          alt="Passport Face"
-                          className="w-full aspect-[3/4] object-cover rounded-lg shadow-md border-2 border-purple-200 dark:border-purple-800"
-                        />
-                        <span className="mt-2 px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-                          {dgData.dg2.faceImages[0].imageFormat || 'N/A'}
+                {/* Validation Results Grid */}
+                <div className="grid grid-cols-3 gap-3 mb-3">
+                  {/* SOD Signature */}
+                  <div className={cn(
+                    'rounded-xl p-4 border-l-4',
+                    selectedRecord.sodSignatureValidation?.valid
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                  )}>
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">SOD 서명 검증</p>
+                    <div className="flex items-center gap-2">
+                      {selectedRecord.sodSignatureValidation?.valid ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-500" />
+                      )}
+                      <span className={cn(
+                        'text-sm font-bold',
+                        selectedRecord.sodSignatureValidation?.valid
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      )}>
+                        {selectedRecord.sodSignatureValidation?.valid ? 'Valid' : 'Invalid'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Certificate Chain */}
+                  <div className={cn(
+                    'rounded-xl p-4 border-l-4',
+                    selectedRecord.certificateChainValidation?.valid
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                  )}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Link2 className="w-3 h-3 text-gray-400" />
+                      <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">인증서 체인 검증</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {selectedRecord.certificateChainValidation?.valid ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-500" />
+                      )}
+                      <span className={cn(
+                        'text-sm font-bold',
+                        selectedRecord.certificateChainValidation?.valid
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      )}>
+                        {selectedRecord.certificateChainValidation?.valid ? 'Valid' : 'Invalid'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Data Group Hash */}
+                  <div className={cn(
+                    'rounded-xl p-4 border-l-4',
+                    selectedRecord.dataGroupValidation?.valid
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                  )}>
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">DG 해시 검증</p>
+                    <div className="flex items-center gap-2">
+                      {selectedRecord.dataGroupValidation?.valid ? (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-red-500" />
+                      )}
+                      <span className={cn(
+                        'text-sm font-bold',
+                        selectedRecord.dataGroupValidation?.valid
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      )}>
+                        {selectedRecord.dataGroupValidation?.valid ? 'Valid' : 'Invalid'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Certificate Expiration Status - Show when expired or warning */}
+                {selectedRecord.certificateChainValidation?.expirationStatus &&
+                 selectedRecord.certificateChainValidation.expirationStatus !== 'VALID' && (
+                  <div className={cn(
+                    'rounded-xl p-4 flex items-start gap-3',
+                    selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED'
+                      ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800'
+                      : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                  )}>
+                    {selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED' ? (
+                      <CalendarX className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className={cn(
+                          'text-sm font-bold',
+                          selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED'
+                            ? 'text-orange-700 dark:text-orange-400'
+                            : 'text-yellow-700 dark:text-yellow-400'
+                        )}>
+                          {selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED'
+                            ? '인증서 만료'
+                            : '인증서 만료 임박'}
                         </span>
+                        {selectedRecord.certificateChainValidation.validAtSigningTime && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                            <CheckCircle className="w-3 h-3" />
+                            서명 당시 유효
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        {selectedRecord.certificateChainValidation.expirationMessage}
+                      </p>
+                      <div className="flex gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
+                        {selectedRecord.certificateChainValidation.dscExpired && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                            DSC 만료
+                          </span>
+                        )}
+                        {selectedRecord.certificateChainValidation.cscaExpired && (
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-orange-500" />
+                            CSCA 만료
+                          </span>
+                        )}
+                        {selectedRecord.certificateChainValidation.notAfter && (
+                          <span>유효기간: ~ {selectedRecord.certificateChainValidation.notAfter}</span>
+                        )}
                       </div>
                     </div>
                   </div>
                 )}
               </div>
+
+              {/* Section 3: 데이터 그룹 (DG1 + DG2 같은 행) */}
+              {selectedRecord.status === 'VALID' && (
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-1 h-4 rounded-full bg-purple-500" />
+                    <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200">데이터 그룹</h3>
+                  </div>
+
+                  {dgLoading ? (
+                    <div className="flex items-center justify-center py-8 bg-gray-50 dark:bg-gray-700/30 rounded-xl">
+                      <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                      <span className="ml-2 text-sm text-gray-500">데이터 로딩 중...</span>
+                    </div>
+                  ) : dgError ? (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-xl p-4 flex items-center gap-3">
+                      <AlertCircle className="w-5 h-5 text-yellow-500" />
+                      <span className="text-sm text-yellow-700 dark:text-yellow-400">{dgError}</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-4">
+                      {/* DG1 - MRZ 데이터 */}
+                      <div className="flex-1 bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 rounded-full bg-blue-500" />
+                          <p className="text-sm font-bold text-blue-700 dark:text-blue-300">DG1 - MRZ 데이터</p>
+                        </div>
+                        {dgData?.hasDg1 && dgData.dg1 ? (
+                          <div className="grid grid-cols-4 gap-2">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">성</p>
+                              <p className="font-mono text-sm font-medium text-gray-900 dark:text-white truncate">{dgData.dg1.surname || '-'}</p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 col-span-2">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">이름</p>
+                              <p className="font-mono text-sm font-medium text-gray-900 dark:text-white truncate">{dgData.dg1.givenNames || '-'}</p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">성별</p>
+                              <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">
+                                {dgData.dg1.sex === 'M' ? '남성' : dgData.dg1.sex === 'F' ? '여성' : dgData.dg1.sex || '-'}
+                              </p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5 col-span-2">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">여권번호</p>
+                              <p className="font-mono text-sm font-bold text-blue-600 dark:text-blue-400">{dgData.dg1.documentNumber || '-'}</p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">국적</p>
+                              <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">{dgData.dg1.nationality || '-'}</p>
+                            </div>
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-2.5">
+                              <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">생년월일</p>
+                              <p className="font-mono text-sm font-medium text-gray-900 dark:text-white">{dgData.dg1.dateOfBirth || '-'}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                            DG1 데이터 없음
+                          </div>
+                        )}
+                      </div>
+
+                      {/* DG2 - 얼굴 이미지 */}
+                      <div className="w-48 flex-shrink-0 bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4 border border-purple-100 dark:border-purple-800">
+                        <div className="flex items-center gap-2 mb-3">
+                          <div className="w-2 h-2 rounded-full bg-purple-500" />
+                          <p className="text-sm font-bold text-purple-700 dark:text-purple-300">DG2 - 얼굴 이미지</p>
+                        </div>
+                        {dgData?.hasDg2 && dgData.dg2?.faceImages?.[0]?.imageDataUrl ? (
+                          <div className="flex flex-col items-center">
+                            <img
+                              src={dgData.dg2.faceImages[0].imageDataUrl}
+                              alt="Passport Face"
+                              className="w-32 aspect-[3/4] object-cover rounded-xl shadow-lg border-3 border-purple-200 dark:border-purple-700"
+                            />
+                            <span className="mt-2 px-2 py-1 text-xs rounded-full bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 font-medium">
+                              {dgData.dg2.faceImages[0].imageFormat || 'N/A'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center h-32 text-sm text-gray-500 dark:text-gray-400">
+                            <User className="w-8 h-8 text-gray-300 dark:text-gray-600 mb-2" />
+                            DG2 데이터 없음
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-white dark:bg-gray-800 px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end rounded-b-2xl">
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
               <button
                 onClick={closeDetailModal}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
                 <X className="w-4 h-4" />
                 닫기

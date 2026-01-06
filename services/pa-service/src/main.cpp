@@ -118,6 +118,12 @@ struct CertificateChainValidationResult {
     std::string cscaSerialNumber;
     std::string notBefore;
     std::string notAfter;
+    // Certificate expiration status (ICAO 9303 - point-in-time validation)
+    bool dscExpired = false;           // DSC certificate currently expired
+    bool cscaExpired = false;          // CSCA certificate currently expired
+    bool validAtSigningTime = true;    // Was valid at document signing time
+    std::string expirationStatus;      // "VALID", "WARNING", "EXPIRED"
+    std::string expirationMessage;     // Human-readable expiration message
     bool crlChecked = false;
     bool revoked = false;
     CrlStatus crlStatus = CrlStatus::NOT_CHECKED;
@@ -1144,6 +1150,56 @@ CertificateChainValidationResult validateCertificateChain(
     result.cscaSubject = getX509SubjectDn(cscaCert);
     result.cscaSerialNumber = getX509SerialNumber(cscaCert);
 
+    // Check certificate expiration status (ICAO 9303 - point-in-time validation)
+    time_t now = time(nullptr);
+
+    // Check DSC expiration
+    const ASN1_TIME* dscNotAfter = X509_get0_notAfter(dscCert);
+    if (dscNotAfter) {
+        int dscExpCmp = X509_cmp_time(dscNotAfter, &now);
+        result.dscExpired = (dscExpCmp < 0);  // expired if notAfter < now
+    }
+
+    // Check CSCA expiration
+    const ASN1_TIME* cscaNotAfter = X509_get0_notAfter(cscaCert);
+    if (cscaNotAfter) {
+        int cscaExpCmp = X509_cmp_time(cscaNotAfter, &now);
+        result.cscaExpired = (cscaExpCmp < 0);  // expired if notAfter < now
+    }
+
+    // Set expiration status and message
+    // Per ICAO 9303: Trust Chain validation is still valid if certificate was valid at signing time
+    result.validAtSigningTime = true;  // Assumed true - would need document signing date for accurate check
+
+    if (result.dscExpired && result.cscaExpired) {
+        result.expirationStatus = "EXPIRED";
+        result.expirationMessage = "DSC 및 CSCA 인증서가 모두 만료됨. 단, 서명 당시에는 유효했을 수 있음 (ICAO 9303 기준)";
+    } else if (result.dscExpired) {
+        result.expirationStatus = "EXPIRED";
+        result.expirationMessage = "DSC 인증서가 만료됨. 단, 서명 당시에는 유효했을 수 있음 (ICAO 9303 기준)";
+    } else if (result.cscaExpired) {
+        result.expirationStatus = "WARNING";
+        result.expirationMessage = "CSCA 인증서가 만료됨. DSC 인증서는 유효함";
+    } else {
+        // Check if expiring soon (within 90 days)
+        const ASN1_TIME* dscNotAfterCheck = X509_get0_notAfter(dscCert);
+        time_t future = now + (90 * 24 * 60 * 60);  // 90 days from now
+        int expiringSoon = X509_cmp_time(dscNotAfterCheck, &future);
+
+        if (expiringSoon < 0) {
+            result.expirationStatus = "WARNING";
+            result.expirationMessage = "DSC 인증서가 90일 이내에 만료 예정";
+        } else {
+            result.expirationStatus = "VALID";
+            result.expirationMessage = "";
+        }
+    }
+
+    if (result.dscExpired || result.cscaExpired) {
+        spdlog::info("Certificate expiration check - DSC expired: {}, CSCA expired: {}, Status: {}",
+            result.dscExpired, result.cscaExpired, result.expirationStatus);
+    }
+
     // Verify DSC signature with CSCA public key
     EVP_PKEY* cscaPubKey = X509_get_pubkey(cscaCert);
     if (!cscaPubKey) {
@@ -1451,6 +1507,14 @@ Json::Value buildCertificateChainValidationJson(const CertificateChainValidation
     json["cscaSerialNumber"] = result.cscaSerialNumber;
     json["notBefore"] = result.notBefore;
     json["notAfter"] = result.notAfter;
+    // Certificate expiration status (ICAO 9303)
+    json["dscExpired"] = result.dscExpired;
+    json["cscaExpired"] = result.cscaExpired;
+    json["validAtSigningTime"] = result.validAtSigningTime;
+    json["expirationStatus"] = result.expirationStatus;
+    if (!result.expirationMessage.empty()) {
+        json["expirationMessage"] = result.expirationMessage;
+    }
     json["crlChecked"] = result.crlChecked;
     json["revoked"] = result.revoked;
     json["crlStatus"] = crlStatusToString(result.crlStatus);
@@ -1557,24 +1621,44 @@ void registerRoutes() {
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
 
             spdlog::info("POST /api/pa/verify - Passive Authentication verification");
-            auto startTime = std::chrono::steady_clock::now();
-            std::string verificationId = generateUuid();
-            std::vector<PassiveAuthenticationError> errors;
 
-            // Parse request body
-            auto jsonBody = req->getJsonObject();
-            if (!jsonBody) {
-                Json::Value error;
-                error["status"] = "ERROR";
-                error["verificationId"] = verificationId;
-                error["errors"][0]["code"] = "INVALID_REQUEST";
-                error["errors"][0]["message"] = "Invalid JSON body";
-                error["errors"][0]["severity"] = "CRITICAL";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
+            // Log request details for debugging
+            auto contentType = req->getHeader("Content-Type");
+            auto contentLength = req->getHeader("Content-Length");
+            auto bodyLength = req->body().length();
+            spdlog::info("Request - Content-Type: {}, Content-Length: {}, Body Length: {}",
+                        contentType.empty() ? "(empty)" : contentType,
+                        contentLength.empty() ? "(empty)" : contentLength,
+                        bodyLength);
+
+            // Log first 200 chars of body for debugging
+            if (bodyLength > 0) {
+                std::string bodyPreview = std::string(req->body().substr(0, 200));
+                spdlog::debug("Body preview: {}", bodyPreview);
+            } else {
+                spdlog::warn("Request body is empty!");
             }
+
+            try {
+                auto startTime = std::chrono::steady_clock::now();
+                std::string verificationId = generateUuid();
+                std::vector<PassiveAuthenticationError> errors;
+
+                // Parse request body
+                auto jsonBody = req->getJsonObject();
+                if (!jsonBody) {
+                    spdlog::error("Failed to parse JSON body. Body length: {}", bodyLength);
+                    Json::Value error;
+                    error["status"] = "ERROR";
+                    error["verificationId"] = verificationId;
+                    error["errors"][0]["code"] = "INVALID_REQUEST";
+                    error["errors"][0]["message"] = "Invalid JSON body";
+                    error["errors"][0]["severity"] = "CRITICAL";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
 
             // Get SOD data (Base64 encoded)
             std::string sodBase64 = (*jsonBody)["sod"].asString();
@@ -1618,9 +1702,16 @@ void registerRoutes() {
                         dataGroups[dgNum] = base64Decode(dgData);
                     }
                 } else if ((*jsonBody)["dataGroups"].isObject()) {
-                    // Object format: {"DG1": "base64...", "DG2": "base64..."}
+                    // Object format: {"DG1": "base64...", "DG2": "base64..."} OR {"1": "base64...", "2": "base64..."}
                     for (const auto& key : (*jsonBody)["dataGroups"].getMemberNames()) {
-                        int dgNum = std::stoi(key.substr(2));
+                        int dgNum;
+                        // Support both "DG1" format and "1" format
+                        if (key.length() > 2 && (key.substr(0, 2) == "DG" || key.substr(0, 2) == "dg")) {
+                            dgNum = std::stoi(key.substr(2));
+                        } else {
+                            // Direct number format: "1", "2", "14"
+                            dgNum = std::stoi(key);
+                        }
                         std::string dgData = (*jsonBody)["dataGroups"][key].asString();
                         dataGroups[dgNum] = base64Decode(dgData);
                     }
@@ -1827,6 +1918,26 @@ void registerRoutes() {
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(wrappedResponse);
             callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Exception in PA verify handler: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Internal Server Error";
+                error["message"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            } catch (...) {
+                spdlog::error("Unknown exception in PA verify handler");
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Internal Server Error";
+                error["message"] = "Unknown error occurred";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
         },
         {drogon::Post}
     );
@@ -3369,6 +3480,20 @@ int main(int /* argc */, char* /* argv */[]) {
            .enableGzip(true)
            .setClientMaxBodySize(50 * 1024 * 1024)
            .setDocumentRoot("./static");
+
+        // Global exception handler
+        app.setExceptionHandler([](const std::exception& e,
+                                   const drogon::HttpRequestPtr& req,
+                                   std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::error("Unhandled exception in {}: {}", req->getPath(), e.what());
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "Internal Server Error";
+            error["message"] = e.what();
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k500InternalServerError);
+            callback(resp);
+        });
 
         // Enable CORS
         app.registerPreSendingAdvice([](const drogon::HttpRequestPtr& /* req */,

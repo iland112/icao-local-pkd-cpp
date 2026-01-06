@@ -129,6 +129,12 @@ export interface CertificateChainValidationDto {
   cscaSerialNumber: string;
   notBefore: string;
   notAfter: string;
+  // Certificate expiration status (ICAO 9303)
+  dscExpired?: boolean;
+  cscaExpired?: boolean;
+  validAtSigningTime?: boolean;
+  expirationStatus?: 'VALID' | 'WARNING' | 'EXPIRED';
+  expirationMessage?: string;
   crlChecked: boolean;
   revoked: boolean;
   crlStatus: string;
@@ -210,7 +216,7 @@ export interface PAHistoryItem {
   requestedBy?: string;
   // Validation results from API
   sodSignatureValidation?: { valid: boolean };
-  certificateChainValidation?: { valid: boolean };
+  certificateChainValidation?: Partial<CertificateChainValidationDto>;
   dataGroupValidation?: { valid: boolean };
 }
 

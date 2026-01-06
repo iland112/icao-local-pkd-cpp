@@ -215,15 +215,31 @@ export function PAVerify() {
 
       // Step 4: Trust Chain 검증
       if (response.certificateChainValidation?.valid) {
+        const chainValidation = response.certificateChainValidation;
+        // Determine status based on expiration
+        const stepStatus = chainValidation.expirationStatus === 'EXPIRED' || chainValidation.expirationStatus === 'WARNING'
+          ? 'warning' as StepStatus
+          : 'success' as StepStatus;
+        const statusMessage = chainValidation.expirationStatus === 'EXPIRED'
+          ? '✓ Trust Chain 검증 성공 (인증서 만료됨)'
+          : chainValidation.expirationStatus === 'WARNING'
+            ? '✓ Trust Chain 검증 성공 (인증서 만료 임박)'
+            : '✓ Trust Chain 검증 성공';
+
         newSteps[3] = {
           ...newSteps[3],
-          status: 'success',
-          message: '✓ Trust Chain 검증 성공',
+          status: stepStatus,
+          message: statusMessage,
           details: {
-            dscSubject: response.certificateChainValidation.dscSubject,
-            cscaSubject: response.certificateChainValidation.cscaSubject,
-            notBefore: response.certificateChainValidation.notBefore,
-            notAfter: response.certificateChainValidation.notAfter,
+            dscSubject: chainValidation.dscSubject,
+            cscaSubject: chainValidation.cscaSubject,
+            notBefore: chainValidation.notBefore,
+            notAfter: chainValidation.notAfter,
+            dscExpired: chainValidation.dscExpired,
+            cscaExpired: chainValidation.cscaExpired,
+            validAtSigningTime: chainValidation.validAtSigningTime,
+            expirationStatus: chainValidation.expirationStatus,
+            expirationMessage: chainValidation.expirationMessage,
           },
           expanded: true,
         };
@@ -981,6 +997,11 @@ export function PAVerify() {
                               <div className="flex items-center gap-2">
                                 <FileKey className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                                 <span className="font-semibold text-blue-700 dark:text-blue-300">DSC (Document Signer)</span>
+                                {step.details.dscExpired && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
+                                    만료됨
+                                  </span>
+                                )}
                               </div>
                               <code className="block mt-1 text-xs font-mono break-all text-gray-600 dark:text-gray-400">
                                 {step.details.dscSubject}
@@ -991,6 +1012,43 @@ export function PAVerify() {
                                 </div>
                               )}
                             </div>
+
+                            {/* Certificate Expiration Warning/Info */}
+                            {step.details.expirationStatus && step.details.expirationStatus !== 'VALID' && (
+                              <div className={cn(
+                                'w-full mt-2 p-2 rounded text-xs',
+                                step.details.expirationStatus === 'EXPIRED'
+                                  ? 'bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700'
+                                  : 'bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700'
+                              )}>
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className={cn(
+                                    'w-4 h-4',
+                                    step.details.expirationStatus === 'EXPIRED'
+                                      ? 'text-orange-600 dark:text-orange-400'
+                                      : 'text-yellow-600 dark:text-yellow-400'
+                                  )} />
+                                  <span className={cn(
+                                    'font-semibold',
+                                    step.details.expirationStatus === 'EXPIRED'
+                                      ? 'text-orange-700 dark:text-orange-300'
+                                      : 'text-yellow-700 dark:text-yellow-300'
+                                  )}>
+                                    {step.details.expirationStatus === 'EXPIRED' ? '인증서 만료' : '인증서 만료 임박'}
+                                  </span>
+                                  {step.details.validAtSigningTime && (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                                      ✓ 서명 당시 유효
+                                    </span>
+                                  )}
+                                </div>
+                                {step.details.expirationMessage && (
+                                  <p className="mt-1 text-gray-600 dark:text-gray-400">
+                                    {step.details.expirationMessage}
+                                  </p>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
