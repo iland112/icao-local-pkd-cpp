@@ -4,7 +4,12 @@ info:
   description: |
     ICAO Passive Authentication Service API.
     Dedicated service for ICAO 9303 Passive Authentication verification.
-  version: 1.0.0
+
+    ## Changelog
+    - **v1.2.0** (2026-01-06): Added certificate expiration fields (dscExpired, cscaExpired, validAtSigningTime, expirationStatus, expirationMessage)
+    - **v1.1.0** (2026-01-03): API Gateway integration
+    - **v1.0.0** (2025-12-30): Initial release
+  version: 1.2.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -470,6 +475,26 @@ components:
           type: string
         trustChainValid:
           type: boolean
+        dscExpired:
+          type: boolean
+          description: Whether the DSC certificate is currently expired (v1.2.0+)
+        cscaExpired:
+          type: boolean
+          description: Whether the CSCA certificate is currently expired (v1.2.0+)
+        validAtSigningTime:
+          type: boolean
+          description: Whether certificates were valid at passport signing time (v1.2.0+)
+        expirationStatus:
+          type: string
+          enum: [VALID, WARNING, EXPIRED]
+          description: |
+            Certificate expiration status (v1.2.0+):
+            - VALID: All certificates are currently valid
+            - WARNING: Expired now but was valid at signing time
+            - EXPIRED: Was already expired at signing time
+        expirationMessage:
+          type: string
+          description: Human-readable expiration status message (v1.2.0+)
 
     PAStatisticsResponse:
       type: object
