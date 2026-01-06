@@ -1,8 +1,12 @@
 // =============================================================================
 // ICAO Local PKD - Sync Service
 // =============================================================================
-// Version: 1.0.0
-// Description: DB-LDAP synchronization checker and reconciler
+// Version: 1.1.0
+// Description: DB-LDAP synchronization checker, certificate re-validation
+// =============================================================================
+// Changelog:
+//   v1.1.0 (2026-01-06): Daily scheduler at midnight, certificate re-validation
+//   v1.0.0 (2026-01-03): Initial release
 // =============================================================================
 
 #include <drogon/drogon.h>
@@ -12,6 +16,10 @@
 #include <json/json.h>
 #include <libpq-fe.h>
 #include <ldap.h>
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/bio.h>
+#include <openssl/err.h>
 
 #include <string>
 #include <vector>
@@ -22,6 +30,9 @@
 #include <atomic>
 #include <mutex>
 #include <condition_variable>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 
 using namespace drogon;
 
@@ -55,6 +66,12 @@ struct Config {
     bool autoReconcile = true;
     int maxReconcileBatchSize = 100;
 
+    // Daily scheduler settings
+    bool dailySyncEnabled = true;
+    int dailySyncHour = 0;      // 00:00 (midnight)
+    int dailySyncMinute = 0;
+    bool revalidateCertsOnSync = true;
+
     void loadFromEnv() {
         if (auto e = std::getenv("SERVER_PORT")) serverPort = std::stoi(e);
         if (auto e = std::getenv("DB_HOST")) dbHost = e;
@@ -72,6 +89,10 @@ struct Config {
         if (auto e = std::getenv("SYNC_INTERVAL_MINUTES")) syncIntervalMinutes = std::stoi(e);
         if (auto e = std::getenv("AUTO_RECONCILE")) autoReconcile = (std::string(e) == "true");
         if (auto e = std::getenv("MAX_RECONCILE_BATCH_SIZE")) maxReconcileBatchSize = std::stoi(e);
+        if (auto e = std::getenv("DAILY_SYNC_ENABLED")) dailySyncEnabled = (std::string(e) == "true");
+        if (auto e = std::getenv("DAILY_SYNC_HOUR")) dailySyncHour = std::stoi(e);
+        if (auto e = std::getenv("DAILY_SYNC_MINUTE")) dailySyncMinute = std::stoi(e);
+        if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) revalidateCertsOnSync = (std::string(e) == "true");
     }
 };
 
@@ -540,16 +561,289 @@ SyncResult performSyncCheck() {
 }
 
 // =============================================================================
+// Certificate Re-validation
+// =============================================================================
+
+struct RevalidationResult {
+    int totalProcessed = 0;
+    int newlyExpired = 0;
+    int newlyValid = 0;
+    int unchanged = 0;
+    int errors = 0;
+    int durationMs = 0;
+};
+
+// Check if certificate is expired based on not_after timestamp
+bool isCertificateExpired(const std::string& notAfterStr) {
+    if (notAfterStr.empty()) return false;
+
+    // Parse PostgreSQL timestamp format: "2025-12-31 23:59:59+00"
+    std::tm tm = {};
+    std::istringstream ss(notAfterStr);
+    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
+    if (ss.fail()) {
+        // Try ISO format: "2025-12-31T23:59:59"
+        ss.clear();
+        ss.str(notAfterStr);
+        ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+        if (ss.fail()) {
+            spdlog::warn("Failed to parse timestamp: {}", notAfterStr);
+            return false;
+        }
+    }
+
+    time_t certTime = std::mktime(&tm);
+    time_t now = std::time(nullptr);
+
+    return now > certTime;
+}
+
+// Re-validate all certificates and update expiration status
+RevalidationResult performCertificateRevalidation() {
+    RevalidationResult result;
+    auto startTime = std::chrono::high_resolution_clock::now();
+
+    spdlog::info("Starting certificate re-validation...");
+
+    PgConnection conn;
+    if (!conn.connect()) {
+        spdlog::error("Failed to connect to database for certificate re-validation");
+        result.errors = 1;
+        return result;
+    }
+
+    // Get all validation results with expiration info
+    const char* selectQuery = R"(
+        SELECT vr.id, vr.certificate_id, vr.certificate_type, vr.country_code,
+               vr.is_expired, vr.validation_status, vr.not_after
+        FROM validation_result vr
+        WHERE vr.not_after IS NOT NULL
+    )";
+
+    PGresult* res = PQexec(conn.get(), selectQuery);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        spdlog::error("Failed to query validation results: {}", PQerrorMessage(conn.get()));
+        PQclear(res);
+        result.errors = 1;
+        return result;
+    }
+
+    int rows = PQntuples(res);
+    spdlog::info("Processing {} certificates for expiration check", rows);
+
+    // Process each certificate
+    for (int i = 0; i < rows; i++) {
+        std::string vrId = PQgetvalue(res, i, 0);
+        std::string certId = PQgetvalue(res, i, 1);
+        std::string certType = PQgetvalue(res, i, 2);
+        std::string countryCode = PQgetvalue(res, i, 3);
+        bool wasExpired = std::string(PQgetvalue(res, i, 4)) == "t";
+        std::string oldStatus = PQgetvalue(res, i, 5);
+        std::string notAfter = PQgetvalue(res, i, 6);
+
+        bool isNowExpired = isCertificateExpired(notAfter);
+
+        result.totalProcessed++;
+
+        // Check if status changed
+        if (isNowExpired != wasExpired) {
+            // Update validation_result
+            std::string newStatus = isNowExpired ? "INVALID" : "VALID";
+
+            // If certificate just expired, update status
+            // If certificate is no longer expired (unlikely but handle it), update status
+            std::string updateQuery = "UPDATE validation_result SET is_expired = $1, "
+                "validation_status = CASE WHEN $1 = TRUE THEN 'INVALID' ELSE validation_status END, "
+                "validated_at = NOW() WHERE id = $2";
+
+            const char* paramValues[2];
+            std::string expiredStr = isNowExpired ? "TRUE" : "FALSE";
+            paramValues[0] = expiredStr.c_str();
+            paramValues[1] = vrId.c_str();
+
+            PGresult* updateRes = PQexecParams(conn.get(), updateQuery.c_str(), 2, nullptr, paramValues, nullptr, nullptr, 0);
+
+            if (PQresultStatus(updateRes) == PGRES_COMMAND_OK) {
+                if (isNowExpired) {
+                    result.newlyExpired++;
+                    spdlog::debug("Certificate {} ({} {}) marked as expired", certId, countryCode, certType);
+                } else {
+                    result.newlyValid++;
+                    spdlog::debug("Certificate {} ({} {}) no longer expired", certId, countryCode, certType);
+                }
+            } else {
+                result.errors++;
+                spdlog::error("Failed to update certificate {}: {}", certId, PQerrorMessage(conn.get()));
+            }
+            PQclear(updateRes);
+        } else {
+            result.unchanged++;
+        }
+    }
+    PQclear(res);
+
+    // Update upload file statistics if any changes were made
+    if (result.newlyExpired > 0 || result.newlyValid > 0) {
+        const char* updateStatsQuery = R"(
+            UPDATE uploaded_file uf SET
+                expired_count = COALESCE((
+                    SELECT COUNT(*) FROM validation_result vr
+                    WHERE vr.upload_id = uf.id AND vr.is_expired = TRUE
+                ), 0)
+            WHERE EXISTS (SELECT 1 FROM validation_result vr WHERE vr.upload_id = uf.id)
+        )";
+
+        PGresult* statsRes = PQexec(conn.get(), updateStatsQuery);
+        if (PQresultStatus(statsRes) != PGRES_COMMAND_OK) {
+            spdlog::warn("Failed to update upload file statistics: {}", PQerrorMessage(conn.get()));
+        }
+        PQclear(statsRes);
+    }
+
+    auto endTime = std::chrono::high_resolution_clock::now();
+    result.durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+
+    spdlog::info("Certificate re-validation completed: {} processed, {} newly expired, {} unchanged, {} errors ({}ms)",
+                 result.totalProcessed, result.newlyExpired, result.unchanged, result.errors, result.durationMs);
+
+    return result;
+}
+
+// Save re-validation result to database
+void saveRevalidationResult(const RevalidationResult& result) {
+    PgConnection conn;
+    if (!conn.connect()) {
+        spdlog::error("Failed to connect to database for saving revalidation result");
+        return;
+    }
+
+    // Create table if not exists
+    const char* createTableQuery = R"(
+        CREATE TABLE IF NOT EXISTS revalidation_history (
+            id SERIAL PRIMARY KEY,
+            executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+            total_processed INTEGER NOT NULL DEFAULT 0,
+            newly_expired INTEGER NOT NULL DEFAULT 0,
+            newly_valid INTEGER NOT NULL DEFAULT 0,
+            unchanged INTEGER NOT NULL DEFAULT 0,
+            errors INTEGER NOT NULL DEFAULT 0,
+            duration_ms INTEGER NOT NULL DEFAULT 0
+        )
+    )";
+
+    PGresult* createRes = PQexec(conn.get(), createTableQuery);
+    if (PQresultStatus(createRes) != PGRES_COMMAND_OK) {
+        spdlog::warn("Failed to create revalidation_history table: {}", PQerrorMessage(conn.get()));
+    }
+    PQclear(createRes);
+
+    // Insert result
+    std::string insertQuery = "INSERT INTO revalidation_history "
+        "(total_processed, newly_expired, newly_valid, unchanged, errors, duration_ms) "
+        "VALUES ($1, $2, $3, $4, $5, $6)";
+
+    std::string totalStr = std::to_string(result.totalProcessed);
+    std::string expiredStr = std::to_string(result.newlyExpired);
+    std::string validStr = std::to_string(result.newlyValid);
+    std::string unchangedStr = std::to_string(result.unchanged);
+    std::string errorsStr = std::to_string(result.errors);
+    std::string durationStr = std::to_string(result.durationMs);
+
+    const char* paramValues[6] = {
+        totalStr.c_str(), expiredStr.c_str(), validStr.c_str(),
+        unchangedStr.c_str(), errorsStr.c_str(), durationStr.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn.get(), insertQuery.c_str(), 6, nullptr, paramValues, nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to save revalidation result: {}", PQerrorMessage(conn.get()));
+    } else {
+        spdlog::info("Revalidation result saved to database");
+    }
+    PQclear(res);
+}
+
+// Get revalidation history
+Json::Value getRevalidationHistory(int limit = 10) {
+    PgConnection conn;
+    Json::Value result(Json::arrayValue);
+
+    if (!conn.connect()) {
+        return result;
+    }
+
+    std::string query = "SELECT id, executed_at, total_processed, newly_expired, newly_valid, "
+        "unchanged, errors, duration_ms FROM revalidation_history "
+        "ORDER BY executed_at DESC LIMIT " + std::to_string(limit);
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
+
+    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++) {
+            Json::Value item(Json::objectValue);
+            item["id"] = std::stoi(PQgetvalue(res, i, 0));
+            item["executedAt"] = PQgetvalue(res, i, 1);
+            item["totalProcessed"] = std::stoi(PQgetvalue(res, i, 2));
+            item["newlyExpired"] = std::stoi(PQgetvalue(res, i, 3));
+            item["newlyValid"] = std::stoi(PQgetvalue(res, i, 4));
+            item["unchanged"] = std::stoi(PQgetvalue(res, i, 5));
+            item["errors"] = std::stoi(PQgetvalue(res, i, 6));
+            item["durationMs"] = std::stoi(PQgetvalue(res, i, 7));
+            result.append(item);
+        }
+    }
+    PQclear(res);
+
+    return result;
+}
+
+// =============================================================================
+// Daily Scheduler
+// =============================================================================
+
+// Calculate seconds until next scheduled time
+int secondsUntilScheduledTime(int targetHour, int targetMinute) {
+    auto now = std::chrono::system_clock::now();
+    std::time_t nowTime = std::chrono::system_clock::to_time_t(now);
+    std::tm* localTm = std::localtime(&nowTime);
+
+    // Create target time for today
+    std::tm targetTm = *localTm;
+    targetTm.tm_hour = targetHour;
+    targetTm.tm_min = targetMinute;
+    targetTm.tm_sec = 0;
+
+    std::time_t targetTime = std::mktime(&targetTm);
+
+    // If target time has passed today, schedule for tomorrow
+    if (targetTime <= nowTime) {
+        targetTime += 24 * 60 * 60;  // Add 24 hours
+    }
+
+    return static_cast<int>(targetTime - nowTime);
+}
+
+std::string formatScheduledTime(int targetHour, int targetMinute) {
+    std::ostringstream ss;
+    ss << std::setfill('0') << std::setw(2) << targetHour << ":"
+       << std::setfill('0') << std::setw(2) << targetMinute;
+    return ss.str();
+}
+
+// =============================================================================
 // Scheduler
 // =============================================================================
 class SyncScheduler {
 public:
-    SyncScheduler() : running_(false) {}
+    SyncScheduler() : running_(false), lastDailySyncDate_("") {}
 
     void start() {
         running_ = true;
-        thread_ = std::thread([this]() {
-            spdlog::info("Sync scheduler started (interval: {} minutes)", g_config.syncIntervalMinutes);
+
+        // Start interval-based sync thread
+        intervalThread_ = std::thread([this]() {
+            spdlog::info("Interval sync scheduler started (interval: {} minutes)", g_config.syncIntervalMinutes);
 
             // Initial sync after startup delay
             std::this_thread::sleep_for(std::chrono::seconds(10));
@@ -562,32 +856,114 @@ public:
                 }
 
                 // Wait for next interval
-                std::unique_lock<std::mutex> lock(mutex_);
-                cv_.wait_for(lock, std::chrono::minutes(g_config.syncIntervalMinutes),
+                std::unique_lock<std::mutex> lock(intervalMutex_);
+                intervalCv_.wait_for(lock, std::chrono::minutes(g_config.syncIntervalMinutes),
                             [this]() { return !running_; });
             }
 
-            spdlog::info("Sync scheduler stopped");
+            spdlog::info("Interval sync scheduler stopped");
         });
+
+        // Start daily sync thread (midnight scheduler)
+        if (g_config.dailySyncEnabled) {
+            dailyThread_ = std::thread([this]() {
+                std::string scheduledTime = formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute);
+                spdlog::info("Daily sync scheduler started (scheduled at {} daily)", scheduledTime);
+
+                while (running_) {
+                    // Calculate time until next scheduled run
+                    int waitSeconds = secondsUntilScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute);
+                    spdlog::info("Next daily sync in {} seconds ({} hours {} minutes)",
+                                 waitSeconds, waitSeconds / 3600, (waitSeconds % 3600) / 60);
+
+                    // Wait until scheduled time
+                    std::unique_lock<std::mutex> lock(dailyMutex_);
+                    bool signaled = dailyCv_.wait_for(lock, std::chrono::seconds(waitSeconds),
+                                [this]() { return !running_ || forceDailySync_; });
+
+                    if (!running_) break;
+
+                    // Check if we should run (either scheduled time reached or forced)
+                    std::string today = getCurrentDateString();
+                    if (forceDailySync_ || lastDailySyncDate_ != today) {
+                        forceDailySync_ = false;
+                        lastDailySyncDate_ = today;
+
+                        spdlog::info("=== Starting Daily Sync Tasks ===");
+
+                        try {
+                            // 1. Perform sync check
+                            spdlog::info("[Daily] Step 1: Performing sync check...");
+                            performSyncCheck();
+
+                            // 2. Re-validate certificates if enabled
+                            if (g_config.revalidateCertsOnSync) {
+                                spdlog::info("[Daily] Step 2: Performing certificate re-validation...");
+                                RevalidationResult revalResult = performCertificateRevalidation();
+                                saveRevalidationResult(revalResult);
+                            }
+
+                            spdlog::info("=== Daily Sync Tasks Completed ===");
+                        } catch (const std::exception& e) {
+                            spdlog::error("Daily sync failed: {}", e.what());
+                        }
+                    }
+                }
+
+                spdlog::info("Daily sync scheduler stopped");
+            });
+        }
     }
 
     void stop() {
         running_ = false;
-        cv_.notify_all();
-        if (thread_.joinable()) {
-            thread_.join();
+        intervalCv_.notify_all();
+        dailyCv_.notify_all();
+
+        if (intervalThread_.joinable()) {
+            intervalThread_.join();
+        }
+        if (dailyThread_.joinable()) {
+            dailyThread_.join();
         }
     }
 
-    void triggerNow() {
-        cv_.notify_all();
+    void triggerIntervalSync() {
+        intervalCv_.notify_all();
+    }
+
+    void triggerDailySync() {
+        {
+            std::lock_guard<std::mutex> lock(dailyMutex_);
+            forceDailySync_ = true;
+        }
+        dailyCv_.notify_all();
     }
 
 private:
+    std::string getCurrentDateString() {
+        auto now = std::chrono::system_clock::now();
+        std::time_t nowTime = std::chrono::system_clock::to_time_t(now);
+        std::tm* localTm = std::localtime(&nowTime);
+
+        std::ostringstream ss;
+        ss << std::put_time(localTm, "%Y-%m-%d");
+        return ss.str();
+    }
+
     std::atomic<bool> running_;
-    std::thread thread_;
-    std::mutex mutex_;
-    std::condition_variable cv_;
+    std::string lastDailySyncDate_;
+    bool forceDailySync_ = false;
+
+    // Interval sync
+    std::thread intervalThread_;
+    std::mutex intervalMutex_;
+    std::condition_variable intervalCv_;
+
+    // Daily sync
+    std::thread dailyThread_;
+    std::mutex dailyMutex_;
+    std::condition_variable dailyCv_;
 };
 
 SyncScheduler g_scheduler;
@@ -746,8 +1122,64 @@ void handleSyncConfig(const HttpRequestPtr&, std::function<void(const HttpRespon
     config["syncIntervalMinutes"] = g_config.syncIntervalMinutes;
     config["autoReconcile"] = g_config.autoReconcile;
     config["maxReconcileBatchSize"] = g_config.maxReconcileBatchSize;
+    config["dailySyncEnabled"] = g_config.dailySyncEnabled;
+    config["dailySyncTime"] = formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute);
+    config["revalidateCertsOnSync"] = g_config.revalidateCertsOnSync;
 
     auto resp = HttpResponse::newHttpJsonResponse(config);
+    callback(resp);
+}
+
+// Trigger manual certificate re-validation
+void handleRevalidate(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
+    try {
+        spdlog::info("Manual certificate re-validation triggered via API");
+        RevalidationResult result = performCertificateRevalidation();
+        saveRevalidationResult(result);
+
+        Json::Value response(Json::objectValue);
+        response["success"] = true;
+        response["totalProcessed"] = result.totalProcessed;
+        response["newlyExpired"] = result.newlyExpired;
+        response["newlyValid"] = result.newlyValid;
+        response["unchanged"] = result.unchanged;
+        response["errors"] = result.errors;
+        response["durationMs"] = result.durationMs;
+
+        auto resp = HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+    } catch (const std::exception& e) {
+        Json::Value error(Json::objectValue);
+        error["success"] = false;
+        error["error"] = e.what();
+        auto resp = HttpResponse::newHttpJsonResponse(error);
+        resp->setStatusCode(k500InternalServerError);
+        callback(resp);
+    }
+}
+
+// Get re-validation history
+void handleRevalidationHistory(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    int limit = 10;
+    if (auto l = req->getParameter("limit"); !l.empty()) {
+        limit = std::stoi(l);
+    }
+
+    Json::Value result = getRevalidationHistory(limit);
+    auto resp = HttpResponse::newHttpJsonResponse(result);
+    callback(resp);
+}
+
+// Trigger daily sync manually
+void handleTriggerDailySync(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
+    spdlog::info("Manual daily sync triggered via API");
+    g_scheduler.triggerDailySync();
+
+    Json::Value response(Json::objectValue);
+    response["success"] = true;
+    response["message"] = "Daily sync triggered";
+
+    auto resp = HttpResponse::newHttpJsonResponse(response);
     callback(resp);
 }
 
@@ -795,12 +1227,15 @@ int main() {
     setupLogging();
 
     spdlog::info("===========================================");
-    spdlog::info("  ICAO Local PKD - Sync Service v1.0.0");
+    spdlog::info("  ICAO Local PKD - Sync Service v1.1.0");
     spdlog::info("===========================================");
     spdlog::info("Server port: {}", g_config.serverPort);
     spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
     spdlog::info("LDAP (read): {}:{}", g_config.ldapHost, g_config.ldapPort);
     spdlog::info("LDAP (write): {}:{}", g_config.ldapWriteHost, g_config.ldapWritePort);
+    spdlog::info("Daily sync: {} at {}", g_config.dailySyncEnabled ? "enabled" : "disabled",
+                 formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute));
+    spdlog::info("Certificate re-validation on sync: {}", g_config.revalidateCertsOnSync ? "enabled" : "disabled");
     spdlog::info("Sync interval: {} minutes", g_config.syncIntervalMinutes);
     spdlog::info("Auto reconcile: {}", g_config.autoReconcile ? "enabled" : "disabled");
 
@@ -820,6 +1255,14 @@ int main() {
     app().registerHandler("/api/sync/config",
         &handleSyncConfig, {Get});
 
+    // Re-validation endpoints
+    app().registerHandler("/api/sync/revalidate",
+        &handleRevalidate, {Post});
+    app().registerHandler("/api/sync/revalidation-history",
+        &handleRevalidationHistory, {Get});
+    app().registerHandler("/api/sync/trigger-daily",
+        &handleTriggerDailySync, {Post});
+
     // OpenAPI specification endpoint
     app().registerHandler("/api/openapi.yaml",
         [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
@@ -828,8 +1271,13 @@ int main() {
             std::string spec = R"(openapi: 3.0.3
 info:
   title: Sync Service API
-  description: DB-LDAP Synchronization Service
-  version: 1.0.0
+  description: |
+    DB-LDAP Synchronization and Certificate Re-validation Service.
+
+    ## Changelog
+    - v1.1.0 (2026-01-06): Daily scheduler, certificate re-validation
+    - v1.0.0 (2026-01-03): Initial release
+  version: 1.1.0
 servers:
   - url: /
 tags:
@@ -837,6 +1285,8 @@ tags:
     description: Health check
   - name: Sync
     description: Synchronization operations
+  - name: Revalidation
+    description: Certificate re-validation operations
   - name: Config
     description: Configuration
 paths:
@@ -914,6 +1364,35 @@ paths:
       responses:
         '200':
           description: Current configuration
+  /api/sync/revalidate:
+    post:
+      tags: [Revalidation]
+      summary: Trigger certificate re-validation
+      description: Re-check all certificates for expiration and update validation status
+      responses:
+        '200':
+          description: Re-validation result
+  /api/sync/revalidation-history:
+    get:
+      tags: [Revalidation]
+      summary: Get re-validation history
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Re-validation history
+  /api/sync/trigger-daily:
+    post:
+      tags: [Sync]
+      summary: Trigger daily sync manually
+      description: Manually trigger the daily sync process including certificate re-validation
+      responses:
+        '200':
+          description: Daily sync triggered
 )";
 
             auto resp = HttpResponse::newHttpResponse();
