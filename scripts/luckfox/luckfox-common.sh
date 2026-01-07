@@ -66,13 +66,14 @@ print_access_urls() {
     echo ""
     echo "=== Access URLs ==="
     if [ "$VERSION" = "jvm" ]; then
-        echo "Frontend:    http://$EXTERNAL_HOST:3000"
-        echo "API:         http://$EXTERNAL_HOST:8080/api"
+        echo "Frontend:         http://$EXTERNAL_HOST:3000"
+        echo "API Gateway:      http://$EXTERNAL_HOST:8080/api"
     else
-        echo "Frontend:    http://$EXTERNAL_HOST:3000"
-        echo "PKD API:     http://$EXTERNAL_HOST:8081/api"
-        echo "PA API:      http://$EXTERNAL_HOST:8082/api"
-        echo "Sync API:    http://$EXTERNAL_HOST:8083/api"
+        echo "Frontend:         http://$EXTERNAL_HOST/"
+        echo "API Gateway:      http://$EXTERNAL_HOST:8080/api"
+        echo "PKD Management:   http://$EXTERNAL_HOST:8081/api"
+        echo "PA Service:       http://$EXTERNAL_HOST:8082/api"
+        echo "Sync Service:     http://$EXTERNAL_HOST:8083/api"
     fi
 }
 
