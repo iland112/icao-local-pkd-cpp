@@ -576,5 +576,61 @@ docker compose -f docker-compose-luckfox.yaml restart [service]
 
 ---
 
+## ARM64 Build Rules (절대 규칙)
+
+### 핵심 원칙
+**Luckfox는 ARM64 네이티브 시스템이다.** 따라서:
+- ✅ Luckfox **자체에서 직접** `docker build` 실행
+- ❌ 로컬에서 `docker build --platform linux/arm64` 절대 금지 (cross-compile)
+- ❌ 빌드된 이미지를 로컬에서 생성 후 전송 절대 금지
+
+### 올바른 워크플로우
+```bash
+# 1. 로컬: 소스 수정, 테스트, 빌드
+# 로컬에서의 작업은 x86_64 기반
+
+# 2. 로컬: 변경사항 Luckfox로 푸시/동기화
+cd /home/kbjung/projects/c/icao-local-pkd
+git add .
+git commit -m "changes"
+git push
+
+# 3. Luckfox로 SSH 접속
+ssh luckfox@192.168.100.11
+cd ~/icao-local-pkd-cpp-v2
+
+# 4. Luckfox: 최신 코드 풀
+git pull
+
+# 5. Luckfox: 네이티브 ARM64 빌드 (Luckfox 자체에서)
+cd services/sync-service
+docker build -f Dockerfile.local -t icao-local-sync:arm64-v1.2.0 .
+
+# 6. Luckfox: 바로 docker-compose로 배포
+cd ../..
+docker compose -f docker-compose-luckfox.yaml up -d
+```
+
+### 금지 사항 (DO NOT)
+```bash
+# ❌ 절대 금지: 로컬에서 ARM64 빌드
+docker build --platform linux/arm64 -t icao-local-sync:arm64 .
+
+# ❌ 절대 금지: 로컬에서 빌드 후 전송
+docker save icao-local-sync:arm64 | gzip > image.tar.gz
+scp image.tar.gz luckfox@192.168.100.11:/home/luckfox/
+
+# ❌ 절대 금지: cross-compile 도구 사용
+docker buildx build --platform linux/arm64 ...
+```
+
+### 이유
+1. **효율성**: Luckfox에서 네이티브 컴파일하면 cross-compile 오버헤드 없음
+2. **환경 일치**: 빌드 환경 = 배포 환경 (동일한 ARM64 아키텍처)
+3. **즉각 배포**: 빌드된 이미지를 바로 docker-compose로 실행 (전송 불필요)
+4. **간결성**: 복잡한 이미지 전송 과정 제거
+
+---
+
 **Project Owner**: kbjung
 **Organization**: SmartCore Inc.
