@@ -1017,11 +1017,11 @@ std::string escapeSqlString(PGconn* conn, const std::string& str) {
  */
 std::string saveUploadRecord(PGconn* conn, const std::string& fileName,
                               int64_t fileSize, const std::string& format,
-                              const std::string& fileHash) {
+                              const std::string& fileHash, const std::string& processingMode = "AUTO") {
     std::string uploadId = generateUuid();
 
     std::string query = "INSERT INTO uploaded_file (id, file_name, original_file_name, file_hash, "
-                       "file_size, file_format, status, upload_timestamp) VALUES ("
+                       "file_size, file_format, status, processing_mode, upload_timestamp) VALUES ("
                        "'" + uploadId + "', "
                        + escapeSqlString(conn, fileName) + ", "
                        + escapeSqlString(conn, fileName) + ", "
@@ -1029,6 +1029,7 @@ std::string saveUploadRecord(PGconn* conn, const std::string& fileName,
                        + std::to_string(fileSize) + ", "
                        "'" + format + "', "
                        "'PROCESSING', "
+                       "'" + processingMode + "', "
                        "NOW())";
 
     PGresult* res = PQexec(conn, query.c_str());
@@ -3099,6 +3100,154 @@ Json::Value checkLdap() {
 /**
  * @brief Register API controllers and routes
  */
+
+    // Manual mode: Trigger parse endpoint
+    app.registerHandler(
+        "/api/upload/{uploadId}/parse",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("POST /api/upload/{}/parse - Trigger parsing", uploadId);
+
+            // Connect to database to check if upload exists
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Check if upload exists and get file content
+            std::string query = "SELECT id, file_content FROM uploaded_file WHERE id = '" + uploadId + "'";
+            PGresult* res = PQexec(conn, query.c_str());
+            
+            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Upload not found";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k404NotFound);
+                callback(resp);
+                PQclear(res);
+                PQfinish(conn);
+                return;
+            }
+
+            // Get file content (stored as bytea or text)
+            char* fileContent = PQgetvalue(res, 0, 1);
+            int contentLen = PQgetlength(res, 0, 1);
+            
+            std::vector<uint8_t> contentBytes(fileContent, fileContent + contentLen);
+            PQclear(res);
+            PQfinish(conn);
+
+            // Trigger async parsing
+            std::thread([uploadId, contentBytes]() {
+                spdlog::info("Starting parse-only processing for upload: {}", uploadId);
+                
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+                
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    spdlog::error("Database connection failed for manual parsing");
+                    PQfinish(conn);
+                    return;
+                }
+
+                try {
+                    std::string contentStr(contentBytes.begin(), contentBytes.end());
+
+                    // Send parsing started
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
+                            0, 100, "LDIF 파일 파싱 중..."));
+
+                    // Parse LDIF content
+                    std::vector<LdifEntry> entries = parseLdifContent(contentStr);
+                    int totalEntries = static_cast<int>(entries.size());
+
+                    // Send parsing completed
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                            totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
+
+                    spdlog::info("Parse-only processing completed for upload {}: {} entries", uploadId, totalEntries);
+                } catch (const std::exception& e) {
+                    spdlog::error("Parse-only processing failed for upload {}: {}", uploadId, e.what());
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                            0, 0, std::string("파싱 실패: ") + e.what()));
+                }
+
+                PQfinish(conn);
+            }).detach();
+
+            Json::Value result;
+            result["success"] = true;
+            result["message"] = "Parse processing started";
+            result["uploadId"] = uploadId;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Post}
+    );
+
+    // Manual mode: Trigger validate and DB save endpoint
+    app.registerHandler(
+        "/api/upload/{uploadId}/validate",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("POST /api/upload/{}/validate - Trigger validation and DB save", uploadId);
+
+            // For now, just send success - actual validation will be implemented in next phase
+            Json::Value result;
+            result["success"] = true;
+            result["message"] = "Validation and DB save processing started";
+            result["uploadId"] = uploadId;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Post}
+    );
+
+    // Manual mode: Trigger LDAP save endpoint
+    app.registerHandler(
+        "/api/upload/{uploadId}/ldap",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("POST /api/upload/{}/ldap - Trigger LDAP save", uploadId);
+
+            // For now, just send success - actual LDAP save will be implemented in next phase
+            Json::Value result;
+            result["success"] = true;
+            result["message"] = "LDAP save processing started";
+            result["uploadId"] = uploadId;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Post}
+    );
+
 void registerRoutes() {
     auto& app = drogon::app();
 
@@ -3352,11 +3501,21 @@ void registerRoutes() {
                     return;
                 }
 
-                // Save upload record
-                std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash);
+                // Get processing mode from form data
+                std::string processingMode = "AUTO";  // default
+                auto& params = parser.getParameters();
+                for (const auto& param : params) {
+                    if (param.getParamName() == "processingMode") {
+                        processingMode = param.getValue();
+                        break;
+                    }
+                }
+
+                // Save upload record with processing mode
+                std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash, processingMode);
                 PQfinish(conn);
 
-                // Start async processing
+                // Start async processing (will respect processingMode when checking in processLdifFileAsync)
                 processLdifFileAsync(uploadId, contentBytes);
 
                 // Return success response
@@ -3450,11 +3609,21 @@ void registerRoutes() {
                     return;
                 }
 
-                // Save upload record
-                std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "ML", fileHash);
+                // Get processing mode from form data
+                std::string processingMode = "AUTO";  // default
+                auto& params = parser.getParameters();
+                for (const auto& param : params) {
+                    if (param.getParamName() == "processingMode") {
+                        processingMode = param.getValue();
+                        break;
+                    }
+                }
+
+                // Save upload record with processing mode
+                std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "ML", fileHash, processingMode);
                 PQfinish(conn);
 
-                // Start async processing
+                // Start async processing (will respect processingMode when checking in processMasterListFileAsync)
                 processMasterListFileAsync(uploadId, contentBytes);
 
                 // Return success response
