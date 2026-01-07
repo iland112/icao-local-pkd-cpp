@@ -1,0 +1,105 @@
+# =============================================================================
+# Sync Service Dockerfile (Local Build on Luckfox)
+# =============================================================================
+
+FROM debian:bookworm AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV LANG=en_US.UTF-8
+
+# Split apt-get update and install for better caching
+# Retry logic for apt-get update (in case of network issues)
+RUN apt-get update || apt-get update || apt-get update || true
+
+RUN apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    curl \
+    wget \
+    zip \
+    unzip \
+    tar \
+    pkg-config \
+    ninja-build \
+    libssl-dev \
+    libpq-dev \
+    libldap2-dev \
+    libjsoncpp-dev \
+    libc-ares-dev \
+    libbrotli-dev \
+    zlib1g-dev \
+    bison \
+    flex \
+    autoconf \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+RUN git clone https://github.com/microsoft/vcpkg.git && \
+    cd vcpkg && \
+    ./bootstrap-vcpkg.sh
+
+ENV VCPKG_ROOT=/opt/vcpkg
+ENV PATH="${VCPKG_ROOT}:${PATH}"
+
+WORKDIR /app
+COPY CMakeLists.txt vcpkg.json ./
+COPY src/ ./src/
+
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
+    vcpkg install --triplet $TRIPLET
+
+RUN cmake -B build -S . \
+    -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build -j$(nproc)
+
+# ============================================================================
+# Runtime Stage
+# ============================================================================
+
+FROM debian:bookworm-slim AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Seoul
+ENV LANG=en_US.UTF-8
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libssl3 \
+    libpq5 \
+    libldap-2.5-0 \
+    libjsoncpp25 \
+    libc-ares2 \
+    libbrotli1 \
+    zlib1g \
+    ca-certificates \
+    tzdata \
+    curl \
+    ldap-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
+
+RUN useradd -m -s /bin/bash app
+
+COPY --from=builder /app/build/bin/sync-service /app/
+
+RUN mkdir -p /app/logs /app/config /app/static && \
+    chown -R app:app /app
+
+WORKDIR /app
+
+ENV SERVICE_NAME=sync-service
+ENV SERVER_PORT=8083
+
+EXPOSE 8083
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8083/api/sync/health || exit 1
+
+USER app
+
+CMD ["./sync-service"]
