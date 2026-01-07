@@ -155,6 +155,35 @@ syncApi.interceptors.response.use(
   }
 );
 
+export interface SyncConfigResponse {
+  autoReconcile: boolean;
+  maxReconcileBatchSize: number;
+  dailySyncEnabled: boolean;
+  dailySyncTime: string;
+  revalidateCertsOnSync: boolean;
+}
+
+export interface RevalidationResult {
+  success: boolean;
+  totalProcessed: number;
+  newlyExpired: number;
+  newlyValid: number;
+  unchanged: number;
+  errors: number;
+  durationMs: number;
+}
+
+export interface RevalidationHistoryItem {
+  id: number;
+  executedAt: string;
+  totalProcessed: number;
+  newlyExpired: number;
+  newlyValid: number;
+  unchanged: number;
+  errors: number;
+  durationMs: number;
+}
+
 export const syncServiceApi = {
   getStatus: () => syncApi.get<SyncStatusResponse>('/status'),
 
@@ -169,7 +198,15 @@ export const syncServiceApi = {
 
   getHealth: () => syncApi.get<{ status: string; database?: string }>('/health'),
 
-  getConfig: () => syncApi.get<{ syncIntervalMinutes: number; autoReconcile: boolean }>('/config'),
+  getConfig: () => syncApi.get<SyncConfigResponse>('/config'),
+
+  // Certificate re-validation APIs (v1.1.0+)
+  triggerRevalidation: () => syncApi.post<RevalidationResult>('/revalidate'),
+
+  getRevalidationHistory: (limit: number = 10) =>
+    syncApi.get<RevalidationHistoryItem[]>('/revalidation-history', { params: { limit } }),
+
+  triggerDailySync: () => syncApi.post<{ success: boolean; message: string }>('/trigger-daily'),
 };
 
 export default api;

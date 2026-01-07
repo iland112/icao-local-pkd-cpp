@@ -1,10 +1,11 @@
 // =============================================================================
 // ICAO Local PKD - Sync Service
 // =============================================================================
-// Version: 1.1.0
+// Version: 1.2.0
 // Description: DB-LDAP synchronization checker, certificate re-validation
 // =============================================================================
 // Changelog:
+//   v1.2.0 (2026-01-07): Remove interval sync, keep only daily scheduler
 //   v1.1.0 (2026-01-06): Daily scheduler at midnight, certificate re-validation
 //   v1.0.0 (2026-01-03): Initial release
 // =============================================================================
@@ -62,7 +63,6 @@ struct Config {
     std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
 
     // Sync settings
-    int syncIntervalMinutes = 5;
     bool autoReconcile = true;
     int maxReconcileBatchSize = 100;
 
@@ -86,7 +86,6 @@ struct Config {
         if (auto e = std::getenv("LDAP_BIND_DN")) ldapBindDn = e;
         if (auto e = std::getenv("LDAP_BIND_PASSWORD")) ldapBindPassword = e;
         if (auto e = std::getenv("LDAP_BASE_DN")) ldapBaseDn = e;
-        if (auto e = std::getenv("SYNC_INTERVAL_MINUTES")) syncIntervalMinutes = std::stoi(e);
         if (auto e = std::getenv("AUTO_RECONCILE")) autoReconcile = (std::string(e) == "true");
         if (auto e = std::getenv("MAX_RECONCILE_BATCH_SIZE")) maxReconcileBatchSize = std::stoi(e);
         if (auto e = std::getenv("DAILY_SYNC_ENABLED")) dailySyncEnabled = (std::string(e) == "true");
@@ -832,7 +831,7 @@ std::string formatScheduledTime(int targetHour, int targetMinute) {
 }
 
 // =============================================================================
-// Scheduler
+// Scheduler (Daily sync only)
 // =============================================================================
 class SyncScheduler {
 public:
@@ -841,30 +840,20 @@ public:
     void start() {
         running_ = true;
 
-        // Start interval-based sync thread
-        intervalThread_ = std::thread([this]() {
-            spdlog::info("Interval sync scheduler started (interval: {} minutes)", g_config.syncIntervalMinutes);
-
-            // Initial sync after startup delay
+        // Perform initial sync check after startup delay
+        std::thread([this]() {
             std::this_thread::sleep_for(std::chrono::seconds(10));
-
-            while (running_) {
+            if (running_) {
+                spdlog::info("Performing initial sync check after startup...");
                 try {
                     performSyncCheck();
                 } catch (const std::exception& e) {
-                    spdlog::error("Sync check failed: {}", e.what());
+                    spdlog::error("Initial sync check failed: {}", e.what());
                 }
-
-                // Wait for next interval
-                std::unique_lock<std::mutex> lock(intervalMutex_);
-                intervalCv_.wait_for(lock, std::chrono::minutes(g_config.syncIntervalMinutes),
-                            [this]() { return !running_; });
             }
+        }).detach();
 
-            spdlog::info("Interval sync scheduler stopped");
-        });
-
-        // Start daily sync thread (midnight scheduler)
+        // Start daily sync thread
         if (g_config.dailySyncEnabled) {
             dailyThread_ = std::thread([this]() {
                 std::string scheduledTime = formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute);
@@ -917,19 +906,11 @@ public:
 
     void stop() {
         running_ = false;
-        intervalCv_.notify_all();
         dailyCv_.notify_all();
 
-        if (intervalThread_.joinable()) {
-            intervalThread_.join();
-        }
         if (dailyThread_.joinable()) {
             dailyThread_.join();
         }
-    }
-
-    void triggerIntervalSync() {
-        intervalCv_.notify_all();
     }
 
     void triggerDailySync() {
@@ -954,11 +935,6 @@ private:
     std::atomic<bool> running_;
     std::string lastDailySyncDate_;
     bool forceDailySync_ = false;
-
-    // Interval sync
-    std::thread intervalThread_;
-    std::mutex intervalMutex_;
-    std::condition_variable intervalCv_;
 
     // Daily sync
     std::thread dailyThread_;
@@ -1119,7 +1095,6 @@ void handleReconcile(const HttpRequestPtr&, std::function<void(const HttpRespons
 // Get sync configuration
 void handleSyncConfig(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
     Json::Value config(Json::objectValue);
-    config["syncIntervalMinutes"] = g_config.syncIntervalMinutes;
     config["autoReconcile"] = g_config.autoReconcile;
     config["maxReconcileBatchSize"] = g_config.maxReconcileBatchSize;
     config["dailySyncEnabled"] = g_config.dailySyncEnabled;
@@ -1227,7 +1202,7 @@ int main() {
     setupLogging();
 
     spdlog::info("===========================================");
-    spdlog::info("  ICAO Local PKD - Sync Service v1.1.0");
+    spdlog::info("  ICAO Local PKD - Sync Service v1.2.0");
     spdlog::info("===========================================");
     spdlog::info("Server port: {}", g_config.serverPort);
     spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
@@ -1236,7 +1211,6 @@ int main() {
     spdlog::info("Daily sync: {} at {}", g_config.dailySyncEnabled ? "enabled" : "disabled",
                  formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute));
     spdlog::info("Certificate re-validation on sync: {}", g_config.revalidateCertsOnSync ? "enabled" : "disabled");
-    spdlog::info("Sync interval: {} minutes", g_config.syncIntervalMinutes);
     spdlog::info("Auto reconcile: {}", g_config.autoReconcile ? "enabled" : "disabled");
 
     // Register HTTP handlers

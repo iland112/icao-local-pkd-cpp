@@ -2,9 +2,15 @@ openapi: 3.0.3
 info:
   title: Sync Service API
   description: |
-    DB-LDAP Synchronization Service API.
-    Monitors and manages synchronization between PostgreSQL and OpenLDAP.
-  version: 1.0.0
+    DB-LDAP Synchronization and Certificate Re-validation Service API.
+    Monitors synchronization between PostgreSQL and OpenLDAP, and performs
+    certificate expiration re-validation.
+
+    ## Changelog
+    - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
+    - **v1.1.0** (2026-01-06): Daily scheduler at midnight, certificate re-validation
+    - **v1.0.0** (2026-01-03): Initial release
+  version: 1.2.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -20,6 +26,8 @@ tags:
     description: Health check endpoints
   - name: Sync
     description: Synchronization operations
+  - name: Revalidation
+    description: Certificate re-validation operations
   - name: Config
     description: Configuration endpoints
 
@@ -149,6 +157,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ConfigResponse'
+
+  /api/sync/revalidate:
+    post:
+      tags: [Revalidation]
+      summary: Trigger certificate re-validation
+      description: |
+        Re-check all certificates for expiration and update validation status.
+        This checks the `not_after` field against current time and updates
+        `is_expired` and `validation_status` fields in validation_result table.
+      operationId: revalidateCertificates
+      responses:
+        '200':
+          description: Re-validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevalidationResult'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/sync/revalidation-history:
+    get:
+      tags: [Revalidation]
+      summary: Get re-validation history
+      description: Returns history of certificate re-validation operations
+      operationId: getRevalidationHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Maximum number of records to return
+      responses:
+        '200':
+          description: Re-validation history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RevalidationHistoryItem'
+
+  /api/sync/trigger-daily:
+    post:
+      tags: [Sync]
+      summary: Trigger daily sync manually
+      description: |
+        Manually trigger the daily sync process which includes:
+        1. Sync check (DB-LDAP comparison)
+        2. Certificate re-validation (if enabled)
+      operationId: triggerDailySync
+      responses:
+        '200':
+          description: Daily sync triggered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerResponse'
 
 components:
   schemas:
@@ -371,12 +442,22 @@ components:
     ConfigResponse:
       type: object
       properties:
-        syncIntervalMinutes:
-          type: integer
         autoReconcile:
           type: boolean
+          description: Whether to automatically reconcile discrepancies
         maxReconcileBatchSize:
           type: integer
+          description: Maximum number of entries to reconcile per batch
+        dailySyncEnabled:
+          type: boolean
+          description: Whether daily sync at scheduled time is enabled
+        dailySyncTime:
+          type: string
+          description: Scheduled time for daily sync in HH:MM format
+          example: "00:00"
+        revalidateCertsOnSync:
+          type: boolean
+          description: Whether to re-validate certificates during daily sync
         dbConfig:
           type: object
           properties:
@@ -399,3 +480,73 @@ components:
               type: integer
             baseDn:
               type: string
+
+    RevalidationResult:
+      type: object
+      description: Result of certificate re-validation operation (v1.1.0+)
+      properties:
+        success:
+          type: boolean
+          description: Whether the operation completed successfully
+        totalProcessed:
+          type: integer
+          description: Total number of certificates processed
+        newlyExpired:
+          type: integer
+          description: Number of certificates newly marked as expired
+        newlyValid:
+          type: integer
+          description: Number of certificates that became valid again
+        unchanged:
+          type: integer
+          description: Number of certificates with no status change
+        errors:
+          type: integer
+          description: Number of processing errors
+        durationMs:
+          type: integer
+          description: Duration of the operation in milliseconds
+
+    RevalidationHistoryItem:
+      type: object
+      description: A record from re-validation history (v1.1.0+)
+      properties:
+        id:
+          type: integer
+          description: Record ID
+        executedAt:
+          type: string
+          format: date-time
+          description: When the re-validation was executed
+        totalProcessed:
+          type: integer
+        newlyExpired:
+          type: integer
+        newlyValid:
+          type: integer
+        unchanged:
+          type: integer
+        errors:
+          type: integer
+        durationMs:
+          type: integer
+
+    TriggerResponse:
+      type: object
+      description: Response for manual trigger operations
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+          description: Status message
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+          description: Error message

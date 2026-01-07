@@ -12,27 +12,38 @@ import {
   Loader2,
   Play,
   History,
+  Settings,
+  CalendarClock,
+  ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
-import { syncServiceApi } from '@/services/api';
+import { syncServiceApi, type SyncConfigResponse, type RevalidationHistoryItem } from '@/services/api';
 import type { SyncStatusResponse, SyncHistoryItem, SyncStatusType } from '@/types';
 import { cn } from '@/utils/cn';
 
 export function SyncDashboard() {
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
   const [history, setHistory] = useState<SyncHistoryItem[]>([]);
+  const [config, setConfig] = useState<SyncConfigResponse | null>(null);
+  const [revalidationHistory, setRevalidationHistory] = useState<RevalidationHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [revalidating, setRevalidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
       setError(null);
-      const [statusRes, historyRes] = await Promise.all([
+      const [statusRes, historyRes, configRes, revalHistoryRes] = await Promise.all([
         syncServiceApi.getStatus(),
         syncServiceApi.getHistory(10),
+        syncServiceApi.getConfig(),
+        syncServiceApi.getRevalidationHistory(5),
       ]);
       setStatus(statusRes.data);
       setHistory(historyRes.data);
+      setConfig(configRes.data);
+      setRevalidationHistory(revalHistoryRes.data);
     } catch (err) {
       console.error('Failed to fetch sync data:', err);
       setError('동기화 서비스에 연결할 수 없습니다.');
@@ -58,6 +69,19 @@ export function SyncDashboard() {
       setError('수동 검사 실패');
     } finally {
       setChecking(false);
+    }
+  };
+
+  const handleRevalidation = async () => {
+    setRevalidating(true);
+    try {
+      await syncServiceApi.triggerRevalidation();
+      await fetchData();
+    } catch (err) {
+      console.error('Revalidation failed:', err);
+      setError('인증서 재검증 실패');
+    } finally {
+      setRevalidating(false);
     }
   };
 
@@ -105,7 +129,33 @@ export function SyncDashboard() {
   const formatTime = (timestamp: string | undefined) => {
     if (!timestamp) return '-';
     try {
-      return new Date(timestamp).toLocaleString('ko-KR');
+      // PostgreSQL TIMESTAMP WITH TIME ZONE 형식 처리
+      // 예: "2026-01-07 08:30:00+00" -> ISO 8601 형식으로 변환
+      let isoTimestamp = timestamp;
+
+      // PostgreSQL 형식을 ISO 8601로 변환 (공백을 T로, +00을 +00:00으로)
+      if (timestamp.includes(' ') && !timestamp.includes('T')) {
+        isoTimestamp = timestamp.replace(' ', 'T');
+      }
+      // +00 또는 +09 형식을 +00:00 또는 +09:00으로 변환
+      if (/[+-]\d{2}$/.test(isoTimestamp)) {
+        isoTimestamp = isoTimestamp + ':00';
+      }
+
+      const date = new Date(isoTimestamp);
+      if (isNaN(date.getTime())) {
+        return timestamp;
+      }
+
+      return date.toLocaleString('ko-KR', {
+        timeZone: 'Asia/Seoul',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      });
     } catch {
       return timestamp;
     }
@@ -153,24 +203,84 @@ export function SyncDashboard() {
             PostgreSQL과 LDAP 간의 데이터 일관성을 모니터링합니다.
           </p>
         </div>
-        <button
-          onClick={handleManualCheck}
-          disabled={checking}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
-            checking
-              ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
-              : 'bg-blue-500 hover:bg-blue-600 text-white'
-          )}
-        >
-          {checking ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Play className="w-4 h-4" />
-          )}
-          {checking ? '검사 중...' : '수동 검사'}
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRevalidation}
+            disabled={revalidating}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+              revalidating
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                : 'bg-purple-500 hover:bg-purple-600 text-white'
+            )}
+          >
+            {revalidating ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <ShieldCheck className="w-4 h-4" />
+            )}
+            {revalidating ? '재검증 중...' : '인증서 재검증'}
+          </button>
+          <button
+            onClick={handleManualCheck}
+            disabled={checking}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+              checking
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                : 'bg-blue-500 hover:bg-blue-600 text-white'
+            )}
+          >
+            {checking ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Play className="w-4 h-4" />
+            )}
+            {checking ? '검사 중...' : '수동 검사'}
+          </button>
+        </div>
       </div>
+
+      {/* Config Card */}
+      {config && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Settings className="w-5 h-5 text-gray-500" />
+            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              서비스 설정
+            </h3>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarClock className="w-4 h-4 text-purple-500" />
+                <span className="text-xs text-gray-500 dark:text-gray-400">일일 동기화 시간</span>
+              </div>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {config.dailySyncEnabled ? `매일 ${config.dailySyncTime}` : '비활성화'}
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <ShieldCheck className="w-4 h-4 text-green-500" />
+                <span className="text-xs text-gray-500 dark:text-gray-400">인증서 자동 재검증</span>
+              </div>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {config.revalidateCertsOnSync ? '활성화' : '비활성화'}
+              </p>
+            </div>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <RotateCcw className="w-4 h-4 text-orange-500" />
+                <span className="text-xs text-gray-500 dark:text-gray-400">불일치 자동 조정</span>
+              </div>
+              <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                {config.autoReconcile ? '활성화' : '비활성화'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Status Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -424,16 +534,128 @@ export function SyncDashboard() {
         )}
       </div>
 
+      {/* Revalidation History */}
+      {revalidationHistory.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <ShieldCheck className="w-5 h-5 text-green-500" />
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              인증서 재검증 이력
+            </h3>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700">
+                  <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    실행 시간
+                  </th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    처리된 인증서
+                  </th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    새로 만료
+                  </th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    새로 유효
+                  </th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    변경 없음
+                  </th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    오류
+                  </th>
+                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                    소요 시간
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {revalidationHistory.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
+                  >
+                    <td className="py-3 px-4 text-gray-900 dark:text-white">
+                      {formatTime(item.executedAt)}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-gray-700 dark:text-gray-300">
+                      {item.totalProcessed.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span
+                        className={cn(
+                          'font-mono font-semibold',
+                          item.newlyExpired > 0
+                            ? 'text-orange-600 dark:text-orange-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        )}
+                      >
+                        {item.newlyExpired}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span
+                        className={cn(
+                          'font-mono font-semibold',
+                          item.newlyValid > 0
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        )}
+                      >
+                        {item.newlyValid}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-gray-500 dark:text-gray-400">
+                      {item.unchanged.toLocaleString()}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span
+                        className={cn(
+                          'font-mono font-semibold',
+                          item.errors > 0
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                        )}
+                      >
+                        {item.errors}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right text-gray-500 dark:text-gray-400">
+                      {item.durationMs}ms
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Info */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
         <div className="flex items-start gap-3">
           <Activity className="w-5 h-5 text-blue-500 mt-0.5" />
           <div className="text-sm text-blue-700 dark:text-blue-300">
-            <p className="font-medium mb-1">자동 동기화 검사</p>
-            <p>
-              Sync Service가 5분마다 PostgreSQL과 LDAP의 데이터 일관성을 자동으로 검사합니다.
-              불일치가 감지되면 이 대시보드에서 상세 내역을 확인할 수 있습니다.
-            </p>
+            <p className="font-medium mb-1">일일 동기화 및 인증서 재검증</p>
+            {config?.dailySyncEnabled ? (
+              <div>
+                <p className="mb-1">
+                  Sync Service가 매일 {config.dailySyncTime}에 자동으로 동기화를 실행합니다.
+                </p>
+                <ul className="list-disc list-inside space-y-0.5 ml-1">
+                  <li>PostgreSQL과 LDAP의 데이터 일관성을 검사합니다.</li>
+                  {config.revalidateCertsOnSync && (
+                    <li>인증서 만료 상태를 자동으로 재검증합니다.</li>
+                  )}
+                </ul>
+              </div>
+            ) : (
+              <p>
+                일일 동기화가 비활성화되어 있습니다. 수동 검사 버튼을 사용하여 동기화 상태를 확인하세요.
+              </p>
+            )}
           </div>
         </div>
       </div>
