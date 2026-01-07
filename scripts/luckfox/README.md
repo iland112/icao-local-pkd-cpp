@@ -167,11 +167,17 @@ Status: DISCREPANCY
 # 프롬프트에서 'yes' 입력으로 확인
 # 삭제되는 항목:
 #  - 모든 Docker 컨테이너
-#  - 모든 Docker 볼륨
-#  - PostgreSQL 데이터
-#  - 업로드된 파일들
-#  - LDAP 데이터
+#  - 모든 Docker 볼륨 (named volumes)
+#  - PostgreSQL 데이터 (data/postgres bind mount)
+#  - 로그 파일들 (pkd-logs, pa-logs, sync-logs)
+#  - 업로드된 파일들 (data/pkd-uploads)
+
+# 완전한 정리 후 서비스 재시작
+./luckfox-clean.sh cpp
+./luckfox-start.sh cpp
 ```
+
+> **주의**: clean script는 `sudo` 권한이 필요합니다 (bind mount 디렉토리 삭제용)
 
 ### 백업/복구
 

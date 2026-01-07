@@ -63,14 +63,38 @@ cd "$PROJECT_DIR"
 docker compose -f "$COMPOSE_FILE" down -v 2>/dev/null || true
 echo "✓ Services stopped and volumes removed"
 
-# Remove .docker-data directory if it exists
+# Remove data directories (bind mount volumes)
 echo ""
 echo "=== Removing Data Directories ==="
+
+# Remove .docker-data directory if it exists
 if [ -d "$PROJECT_DIR/.docker-data" ]; then
     rm -rf "$PROJECT_DIR/.docker-data"
     echo "✓ Removed .docker-data directory"
 else
     echo "- .docker-data directory not found"
+fi
+
+# Remove data/postgres bind mount (this holds PostgreSQL data)
+if [ -d "$PROJECT_DIR/data/postgres" ]; then
+    sudo rm -rf "$PROJECT_DIR/data/postgres"
+    echo "✓ Removed PostgreSQL bind mount (data/postgres)"
+else
+    echo "- PostgreSQL bind mount not found"
+fi
+
+# Remove logs directories
+for log_dir in pkd-logs pa-logs sync-logs; do
+    if [ -d "$PROJECT_DIR/data/$log_dir" ]; then
+        sudo rm -rf "$PROJECT_DIR/data/$log_dir"
+        echo "✓ Removed $log_dir"
+    fi
+done
+
+# Remove uploads directory
+if [ -d "$PROJECT_DIR/data/pkd-uploads" ]; then
+    sudo rm -rf "$PROJECT_DIR/data/pkd-uploads"
+    echo "✓ Removed pkd-uploads directory"
 fi
 
 # Optional: Remove backup directory if empty
