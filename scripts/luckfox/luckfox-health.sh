@@ -56,8 +56,8 @@ if [ "$VERSION" = "jvm" ]; then
         echo "UNREACHABLE"
     fi
 
-    echo -n "Frontend (3000):       "
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://$HOST:3000 2>/dev/null)
+    echo -n "Frontend (80):         "
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://$HOST:80 2>/dev/null)
     if [ "$http_code" = "200" ]; then echo "OK"; else echo "UNREACHABLE ($http_code)"; fi
 else
     # CPP version health checks
@@ -85,8 +85,8 @@ else
         echo "UNREACHABLE"
     fi
 
-    echo -n "Frontend (3000):       "
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://$HOST:3000 2>/dev/null)
+    echo -n "Frontend (80):         "
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://$HOST:80 2>/dev/null)
     if [ "$http_code" = "200" ]; then echo "OK"; else echo "UNREACHABLE ($http_code)"; fi
 fi
 echo ""
@@ -123,11 +123,11 @@ if [ "$VERSION" = "cpp" ]; then
     echo ""
 fi
 
-# LDAP Entry Count
-echo "=== LDAP Entry Count ==="
-docker exec icao-pkd-openldap ldapsearch -x -H ldap://localhost:389 \
+# LDAP Entry Count (via HAProxy)
+echo "=== LDAP Entry Count (via HAProxy) ==="
+ldapsearch -x -H ldap://localhost:389 \
     -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin123 \
-    -b "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" "(objectClass=*)" dn 2>/dev/null | grep -c "^dn:" || echo "0"
+    -b "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" "(objectClass=*)" dn 2>/dev/null | grep -c "^dn:" || echo "0 (LDAP unreachable)"
 echo ""
 
 echo "=== Health Check Complete ==="
