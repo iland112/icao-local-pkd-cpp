@@ -3097,9 +3097,8 @@ Json::Value checkLdap() {
     return result;
 }
 
-/**
- * @brief Register API controllers and routes
- */
+void registerRoutes() {
+    auto& app = drogon::app();
 
     // Manual mode: Trigger parse endpoint
     app.registerHandler(
@@ -3152,50 +3151,8 @@ Json::Value checkLdap() {
             PQclear(res);
             PQfinish(conn);
 
-            // Trigger async parsing
-            std::thread([uploadId, contentBytes]() {
-                spdlog::info("Starting parse-only processing for upload: {}", uploadId);
-                
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    spdlog::error("Database connection failed for manual parsing");
-                    PQfinish(conn);
-                    return;
-                }
-
-                try {
-                    std::string contentStr(contentBytes.begin(), contentBytes.end());
-
-                    // Send parsing started
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
-                            0, 100, "LDIF 파일 파싱 중..."));
-
-                    // Parse LDIF content
-                    std::vector<LdifEntry> entries = parseLdifContent(contentStr);
-                    int totalEntries = static_cast<int>(entries.size());
-
-                    // Send parsing completed
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                            totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
-
-                    spdlog::info("Parse-only processing completed for upload {}: {} entries", uploadId, totalEntries);
-                } catch (const std::exception& e) {
-                    spdlog::error("Parse-only processing failed for upload {}: {}", uploadId, e.what());
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                            0, 0, std::string("파싱 실패: ") + e.what()));
-                }
-
-                PQfinish(conn);
-            }).detach();
+            // Trigger async processing (same as automatic mode, but triggered manually)
+            processLdifFileAsync(uploadId, contentBytes);
 
             Json::Value result;
             result["success"] = true;
@@ -3216,10 +3173,158 @@ Json::Value checkLdap() {
            const std::string& uploadId) {
             spdlog::info("POST /api/upload/{}/validate - Trigger validation and DB save", uploadId);
 
-            // For now, just send success - actual validation will be implemented in next phase
+            // Connect to database to check if upload exists
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Check if upload exists
+            std::string query = "SELECT id FROM uploaded_file WHERE id = '" + uploadId + "'";
+            PGresult* res = PQexec(conn, query.c_str());
+
+            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Upload not found";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k404NotFound);
+                callback(resp);
+                PQclear(res);
+                PQfinish(conn);
+                return;
+            }
+            PQclear(res);
+            PQfinish(conn);
+
+            // Trigger DSC validation in background
+            std::thread([uploadId]() {
+                spdlog::info("Starting DSC validation for upload: {}", uploadId);
+
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    spdlog::error("Database connection failed for validation");
+                    PQfinish(conn);
+                    return;
+                }
+
+                try {
+                    // Send validation started
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
+                            0, 100, "인증서 검증 중..."));
+
+                    // Get total count of certificates to validate
+                    std::string countQuery = "SELECT COUNT(*) FROM certificate WHERE upload_id = '" + uploadId + "' AND cert_type = 'DSC'";
+                    PGresult* countRes = PQexec(conn, countQuery.c_str());
+                    int totalCerts = 0;
+                    if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
+                        totalCerts = std::stoi(PQgetvalue(countRes, 0, 0));
+                    }
+                    PQclear(countRes);
+
+                    spdlog::info("Validating {} DSC certificates for upload {}", totalCerts, uploadId);
+
+                    // Get DSC certificates to validate
+                    std::string dscQuery = "SELECT id, cert_data, issuer_dn FROM certificate "
+                                          "WHERE upload_id = '" + uploadId + "' AND cert_type = 'DSC' "
+                                          "ORDER BY id";
+                    PGresult* dscRes = PQexec(conn, dscQuery.c_str());
+
+                    if (PQresultStatus(dscRes) == PGRES_TUPLES_OK) {
+                        int processed = 0;
+                        for (int i = 0; i < PQntuples(dscRes); i++) {
+                            std::string certId = PQgetvalue(dscRes, i, 0);
+                            std::string issuerDn = PQgetvalue(dscRes, i, 2);
+
+                            // Get certificate data
+                            const char* certData = PQgetvalue(dscRes, i, 1);
+                            int certLen = PQgetlength(dscRes, i, 1);
+                            std::vector<uint8_t> certBytes(certData, certData + certLen);
+
+                            // Parse certificate
+                            BIO* bio = BIO_new_mem_buf(certBytes.data(), certBytes.size());
+                            X509* cert = d2i_X509_bio(bio, nullptr);
+                            BIO_free(bio);
+
+                            if (cert) {
+                                // Validate DSC certificate
+                                DscValidationResult result = validateDscCertificate(conn, cert, issuerDn);
+
+                                // Determine validation status string
+                                std::string validationStatus;
+                                if (result.isValid) {
+                                    validationStatus = "VALID";
+                                } else if (!result.cscaFound) {
+                                    validationStatus = "CSCA_NOT_FOUND";
+                                } else if (!result.notExpired) {
+                                    validationStatus = "EXPIRED";
+                                } else {
+                                    validationStatus = "INVALID";
+                                }
+
+                                // Update validation result in database
+                                std::string updateQuery = "UPDATE certificate SET "
+                                                         "validation_status = '" + validationStatus + "', "
+                                                         "validation_message = " + escapeSqlString(conn, result.errorMessage) + ", "
+                                                         "validated_at = NOW() "
+                                                         "WHERE id = '" + certId + "'";
+                                PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                                PQclear(updateRes);
+
+                                X509_free(cert);
+                            }
+
+                            processed++;
+
+                            // Send progress update every 10 certificates
+                            if (processed % 10 == 0 || processed == totalCerts) {
+                                ProgressManager::getInstance().sendProgress(
+                                    ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
+                                        processed, totalCerts, "검증 중: " + std::to_string(processed) + "/" + std::to_string(totalCerts)));
+                            }
+                        }
+                    }
+                    PQclear(dscRes);
+
+                    // Send validation completed
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_COMPLETED,
+                            totalCerts, totalCerts, "검증 완료: " + std::to_string(totalCerts) + "개 인증서"));
+
+                    spdlog::info("DSC validation completed for upload {}: {} certificates", uploadId, totalCerts);
+                } catch (const std::exception& e) {
+                    spdlog::error("Validation failed for upload {}: {}", uploadId, e.what());
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                            0, 0, std::string("검증 실패: ") + e.what()));
+                }
+
+                PQfinish(conn);
+            }).detach();
+
             Json::Value result;
             result["success"] = true;
-            result["message"] = "Validation and DB save processing started";
+            result["message"] = "Validation processing started";
             result["uploadId"] = uploadId;
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -3236,7 +3341,212 @@ Json::Value checkLdap() {
            const std::string& uploadId) {
             spdlog::info("POST /api/upload/{}/ldap - Trigger LDAP save", uploadId);
 
-            // For now, just send success - actual LDAP save will be implemented in next phase
+            // Connect to database to check if upload exists
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Check if upload exists
+            std::string query = "SELECT id FROM uploaded_file WHERE id = '" + uploadId + "'";
+            PGresult* res = PQexec(conn, query.c_str());
+
+            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Upload not found";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k404NotFound);
+                callback(resp);
+                PQclear(res);
+                PQfinish(conn);
+                return;
+            }
+            PQclear(res);
+            PQfinish(conn);
+
+            // Trigger LDAP save in background
+            std::thread([uploadId]() {
+                spdlog::info("Starting LDAP save for upload: {}", uploadId);
+
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    spdlog::error("Database connection failed for LDAP save");
+                    PQfinish(conn);
+                    return;
+                }
+
+                // Connect to LDAP (write connection - direct to primary master)
+                LDAP* ld = getLdapWriteConnection();
+                if (!ld) {
+                    spdlog::error("LDAP write connection failed for upload {}", uploadId);
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                            0, 0, "LDAP 연결 실패"));
+                    PQfinish(conn);
+                    return;
+                }
+
+                try {
+                    // Send LDAP saving started
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
+                            0, 100, "LDAP에 저장 중..."));
+
+                    // Get certificates that haven't been stored in LDAP yet
+                    std::string certQuery = "SELECT id, cert_data, cert_type, country, subject_dn, "
+                                           "issuer_dn, serial_number, fingerprint_sha256 "
+                                           "FROM certificate "
+                                           "WHERE upload_id = '" + uploadId + "' "
+                                           "AND (stored_in_ldap = false OR stored_in_ldap IS NULL) "
+                                           "ORDER BY id";
+                    PGresult* certRes = PQexec(conn, certQuery.c_str());
+
+                    int totalCerts = 0;
+                    int storedCerts = 0;
+
+                    if (PQresultStatus(certRes) == PGRES_TUPLES_OK) {
+                        totalCerts = PQntuples(certRes);
+                        spdlog::info("Found {} certificates to save to LDAP for upload {}", totalCerts, uploadId);
+
+                        for (int i = 0; i < totalCerts; i++) {
+                            std::string certId = PQgetvalue(certRes, i, 0);
+                            const char* certData = PQgetvalue(certRes, i, 1);
+                            int certLen = PQgetlength(certRes, i, 1);
+                            std::string certType = PQgetvalue(certRes, i, 2);
+                            std::string country = PQgetvalue(certRes, i, 3);
+                            std::string subjectDn = PQgetvalue(certRes, i, 4);
+                            std::string issuerDn = PQgetvalue(certRes, i, 5);
+                            std::string serialNumber = PQgetvalue(certRes, i, 6);
+                            std::string fingerprint = PQgetvalue(certRes, i, 7);
+
+                            std::vector<uint8_t> certBytes(certData, certData + certLen);
+
+                            try {
+                                // Save certificate to LDAP using existing function
+                                std::string ldapDn = saveCertificateToLdap(ld, certType, country,
+                                                                           subjectDn, issuerDn,
+                                                                           serialNumber, fingerprint,
+                                                                           certBytes);
+
+                                if (!ldapDn.empty()) {
+                                    storedCerts++;
+
+                                    // Mark as stored in LDAP
+                                    std::string updateQuery = "UPDATE certificate SET stored_in_ldap = true "
+                                                             "WHERE id = '" + certId + "'";
+                                    PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                                    PQclear(updateRes);
+
+                                    spdlog::debug("Saved certificate {} to LDAP: {}", certId, ldapDn);
+                                }
+                            } catch (const std::exception& e) {
+                                spdlog::warn("Failed to save certificate {} to LDAP: {}", certId, e.what());
+                            }
+
+                            // Send progress update every 10 certificates
+                            if ((i + 1) % 10 == 0 || (i + 1) == totalCerts) {
+                                ProgressManager::getInstance().sendProgress(
+                                    ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
+                                        i + 1, totalCerts, "LDAP 저장 중: " + std::to_string(i + 1) + "/" + std::to_string(totalCerts)));
+                            }
+                        }
+                    }
+                    PQclear(certRes);
+
+                    // Get CRLs that haven't been stored in LDAP yet
+                    std::string crlQuery = "SELECT id, crl_data, country, issuer_dn, fingerprint_sha256 "
+                                          "FROM crl "
+                                          "WHERE upload_id = '" + uploadId + "' "
+                                          "AND (stored_in_ldap = false OR stored_in_ldap IS NULL) "
+                                          "ORDER BY id";
+                    PGresult* crlRes = PQexec(conn, crlQuery.c_str());
+
+                    int totalCrls = 0;
+                    int storedCrls = 0;
+
+                    if (PQresultStatus(crlRes) == PGRES_TUPLES_OK) {
+                        totalCrls = PQntuples(crlRes);
+                        spdlog::info("Found {} CRLs to save to LDAP for upload {}", totalCrls, uploadId);
+
+                        for (int i = 0; i < totalCrls; i++) {
+                            std::string crlId = PQgetvalue(crlRes, i, 0);
+                            const char* crlData = PQgetvalue(crlRes, i, 1);
+                            int crlLen = PQgetlength(crlRes, i, 1);
+                            std::string country = PQgetvalue(crlRes, i, 2);
+                            std::string issuerDn = PQgetvalue(crlRes, i, 3);
+                            std::string fingerprint = PQgetvalue(crlRes, i, 4);
+
+                            std::vector<uint8_t> crlBytes(crlData, crlData + crlLen);
+
+                            try {
+                                // Save CRL to LDAP using existing helper function
+                                std::string ldapDn = saveCrlToLdap(ld, country, issuerDn, fingerprint, crlBytes);
+
+                                if (!ldapDn.empty()) {
+                                    storedCrls++;
+
+                                    // Mark as stored in LDAP
+                                    std::string updateQuery = "UPDATE crl SET stored_in_ldap = true "
+                                                             "WHERE id = '" + crlId + "'";
+                                    PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                                    PQclear(updateRes);
+
+                                    spdlog::debug("Saved CRL {} to LDAP: {}", crlId, ldapDn);
+
+                                    // Send progress update
+                                    ProgressManager::getInstance().sendProgress(
+                                        ProcessingProgress::create(uploadId, ProcessingStage::PROCESSING,
+                                            storedCerts + storedCrls, totalCerts + totalCrls,
+                                            "LDAP 저장 중: " + std::to_string(storedCerts + storedCrls) + "/" +
+                                            std::to_string(totalCerts + totalCrls)));
+                                }
+                            } catch (const std::exception& e) {
+                                spdlog::warn("Failed to save CRL {} to LDAP: {}", crlId, e.what());
+                            }
+                        }
+                    }
+                    PQclear(crlRes);
+
+                    ldap_unbind_ext_s(ld, nullptr, nullptr);
+
+                    // Send LDAP saving completed
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                            100, 100, "LDAP 저장 완료: " + std::to_string(storedCerts) + "개 인증서, " +
+                                     std::to_string(storedCrls) + "개 CRL"));
+
+                    spdlog::info("LDAP save completed for upload {}: {} certificates, {} CRLs",
+                                uploadId, storedCerts, storedCrls);
+                } catch (const std::exception& e) {
+                    spdlog::error("LDAP save failed for upload {}: {}", uploadId, e.what());
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                            0, 0, std::string("LDAP 저장 실패: ") + e.what()));
+                }
+
+                PQfinish(conn);
+            }).detach();
+
             Json::Value result;
             result["success"] = true;
             result["message"] = "LDAP save processing started";
@@ -3247,9 +3557,6 @@ Json::Value checkLdap() {
         },
         {drogon::Post}
     );
-
-void registerRoutes() {
-    auto& app = drogon::app();
 
     // Health check endpoint
     app.registerHandler(
@@ -3505,8 +3812,8 @@ void registerRoutes() {
                 std::string processingMode = "AUTO";  // default
                 auto& params = parser.getParameters();
                 for (const auto& param : params) {
-                    if (param.getParamName() == "processingMode") {
-                        processingMode = param.getValue();
+                    if (param.first == "processingMode") {
+                        processingMode = param.second;
                         break;
                     }
                 }
@@ -3613,8 +3920,8 @@ void registerRoutes() {
                 std::string processingMode = "AUTO";  // default
                 auto& params = parser.getParameters();
                 for (const auto& param : params) {
-                    if (param.getParamName() == "processingMode") {
-                        processingMode = param.getValue();
+                    if (param.first == "processingMode") {
+                        processingMode = param.second;
                         break;
                     }
                 }
