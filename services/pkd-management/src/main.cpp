@@ -3822,13 +3822,19 @@ void registerRoutes() {
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash, processingMode);
                 PQfinish(conn);
 
-                // Start async processing (will respect processingMode when checking in processLdifFileAsync)
-                processLdifFileAsync(uploadId, contentBytes);
+                // Start async processing only in AUTO mode
+                if (processingMode == "AUTO" || processingMode == "auto") {
+                    processLdifFileAsync(uploadId, contentBytes);
+                }
 
                 // Return success response
                 Json::Value result;
                 result["success"] = true;
-                result["message"] = "LDIF file uploaded successfully. Processing started.";
+                if (processingMode == "MANUAL" || processingMode == "manual") {
+                    result["message"] = "LDIF file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
+                } else {
+                    result["message"] = "LDIF file uploaded successfully. Processing started.";
+                }
 
                 Json::Value data;
                 data["uploadId"] = uploadId;
@@ -3930,13 +3936,19 @@ void registerRoutes() {
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "ML", fileHash, processingMode);
                 PQfinish(conn);
 
-                // Start async processing (will respect processingMode when checking in processMasterListFileAsync)
-                processMasterListFileAsync(uploadId, contentBytes);
+                // Start async processing only in AUTO mode
+                if (processingMode == "AUTO" || processingMode == "auto") {
+                    processMasterListFileAsync(uploadId, contentBytes);
+                }
 
                 // Return success response
                 Json::Value result;
                 result["success"] = true;
-                result["message"] = "Master List file uploaded successfully. Processing started.";
+                if (processingMode == "MANUAL" || processingMode == "manual") {
+                    result["message"] = "Master List file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
+                } else {
+                    result["message"] = "Master List file uploaded successfully. Processing started.";
+                }
 
                 Json::Value data;
                 data["uploadId"] = uploadId;
