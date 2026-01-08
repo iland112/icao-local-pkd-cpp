@@ -3515,7 +3515,7 @@ void registerRoutes() {
 
                                     // Send progress update
                                     ProgressManager::getInstance().sendProgress(
-                                        ProcessingProgress::create(uploadId, ProcessingStage::PROCESSING,
+                                        ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
                                             storedCerts + storedCrls, totalCerts + totalCrls,
                                             "LDAP 저장 중: " + std::to_string(storedCerts + storedCrls) + "/" +
                                             std::to_string(totalCerts + totalCrls)));
