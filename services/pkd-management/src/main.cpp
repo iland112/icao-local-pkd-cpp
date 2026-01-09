@@ -866,6 +866,41 @@ bool certificateExistsByFingerprint(PGconn* conn, const std::string& fingerprint
 }
 
 /**
+ * @brief Check if a file with the same hash already exists
+ * @param conn PostgreSQL connection
+ * @param fileHash SHA-256 hash of the file
+ * @return JSON object with existing upload details if duplicate found, null otherwise
+ */
+Json::Value checkDuplicateFile(PGconn* conn, const std::string& fileHash) {
+    Json::Value result;  // null by default
+
+    std::string query = "SELECT id, file_name, upload_timestamp, status, "
+                       "processing_mode, file_format FROM uploaded_file "
+                       "WHERE file_hash = '" + fileHash + "' LIMIT 1";
+
+    PGresult* res = PQexec(conn, query.c_str());
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        spdlog::warn("Duplicate check query failed (continuing with upload): {}",
+                     PQerrorMessage(conn));
+        PQclear(res);
+        return result;  // Fail open: allow upload if check fails
+    }
+
+    if (PQntuples(res) > 0) {
+        result["uploadId"] = PQgetvalue(res, 0, 0);
+        result["fileName"] = PQgetvalue(res, 0, 1);
+        result["uploadTimestamp"] = PQgetvalue(res, 0, 2);
+        result["status"] = PQgetvalue(res, 0, 3);
+        result["processingMode"] = PQgetvalue(res, 0, 4);
+        result["fileFormat"] = PQgetvalue(res, 0, 5);
+    }
+
+    PQclear(res);
+    return result;
+}
+
+/**
  * @brief Initialize logging system
  */
 void initializeLogging() {
@@ -3870,6 +3905,33 @@ void registerRoutes() {
                     }
                 }
 
+                // Check for duplicate file
+                Json::Value duplicateCheck = checkDuplicateFile(conn, fileHash);
+                if (!duplicateCheck.isNull()) {
+                    PQfinish(conn);
+
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Duplicate file detected. This file has already been uploaded.";
+
+                    Json::Value errorDetail;
+                    errorDetail["code"] = "DUPLICATE_FILE";
+                    errorDetail["detail"] = "A file with the same content (SHA-256 hash) already exists in the system.";
+                    error["error"] = errorDetail;
+
+                    error["existingUpload"] = duplicateCheck;
+
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k409Conflict);
+                    callback(resp);
+
+                    spdlog::warn("Duplicate LDIF file upload rejected: hash={}, existing_upload_id={}, original_file={}",
+                                 fileHash.substr(0, 16),
+                                 duplicateCheck["uploadId"].asString(),
+                                 duplicateCheck["fileName"].asString());
+                    return;
+                }
+
                 // Save upload record with processing mode
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash, processingMode);
 
@@ -3997,6 +4059,33 @@ void registerRoutes() {
                         processingMode = param.second;
                         break;
                     }
+                }
+
+                // Check for duplicate file
+                Json::Value duplicateCheck = checkDuplicateFile(conn, fileHash);
+                if (!duplicateCheck.isNull()) {
+                    PQfinish(conn);
+
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Duplicate file detected. This file has already been uploaded.";
+
+                    Json::Value errorDetail;
+                    errorDetail["code"] = "DUPLICATE_FILE";
+                    errorDetail["detail"] = "A file with the same content (SHA-256 hash) already exists in the system.";
+                    error["error"] = errorDetail;
+
+                    error["existingUpload"] = duplicateCheck;
+
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k409Conflict);
+                    callback(resp);
+
+                    spdlog::warn("Duplicate Master List file upload rejected: hash={}, existing_upload_id={}, original_file={}",
+                                 fileHash.substr(0, 16),
+                                 duplicateCheck["uploadId"].asString(),
+                                 duplicateCheck["fileName"].asString());
+                    return;
                 }
 
                 // Save upload record with processing mode
