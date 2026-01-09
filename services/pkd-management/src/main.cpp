@@ -16,6 +16,7 @@
 #include <spdlog/sinks/rotating_file_sink.h>
 
 #include <iostream>
+#include <fstream>
 #include <memory>
 #include <chrono>
 #include <cstdlib>
@@ -3127,10 +3128,10 @@ void registerRoutes() {
                 return;
             }
 
-            // Check if upload exists and get file content
-            std::string query = "SELECT id, file_content FROM uploaded_file WHERE id = '" + uploadId + "'";
+            // Check if upload exists and get file path
+            std::string query = "SELECT id, file_path, file_format FROM uploaded_file WHERE id = '" + uploadId + "'";
             PGresult* res = PQexec(conn, query.c_str());
-            
+
             if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
                 Json::Value error;
                 error["success"] = false;
@@ -3143,16 +3144,67 @@ void registerRoutes() {
                 return;
             }
 
-            // Get file content (stored as bytea or text)
-            char* fileContent = PQgetvalue(res, 0, 1);
-            int contentLen = PQgetlength(res, 0, 1);
-            
-            std::vector<uint8_t> contentBytes(fileContent, fileContent + contentLen);
+            // Get file path and format
+            char* filePath = PQgetvalue(res, 0, 1);
+            char* fileFormat = PQgetvalue(res, 0, 2);
+
+            if (!filePath || strlen(filePath) == 0) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "File path not found. File may not have been saved.";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k404NotFound);
+                callback(resp);
+                PQclear(res);
+                PQfinish(conn);
+                return;
+            }
+
+            std::string filePathStr(filePath);
+            std::string fileFormatStr(fileFormat);
             PQclear(res);
             PQfinish(conn);
 
-            // Trigger async processing (same as automatic mode, but triggered manually)
-            processLdifFileAsync(uploadId, contentBytes);
+            // Read file from disk
+            std::ifstream inFile(filePathStr, std::ios::binary | std::ios::ate);
+            if (!inFile.is_open()) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Failed to open file: " + filePathStr;
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+
+            std::streamsize fileSize = inFile.tellg();
+            inFile.seekg(0, std::ios::beg);
+            std::vector<uint8_t> contentBytes(fileSize);
+            if (!inFile.read(reinterpret_cast<char*>(contentBytes.data()), fileSize)) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Failed to read file";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+            inFile.close();
+
+            // Trigger async processing based on file format
+            if (fileFormatStr == "LDIF") {
+                processLdifFileAsync(uploadId, contentBytes);
+            } else if (fileFormatStr == "ML") {
+                processMasterListFileAsync(uploadId, contentBytes);
+            } else {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Unsupported file format: " + fileFormatStr;
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
 
             Json::Value result;
             result["success"] = true;
@@ -3820,6 +3872,21 @@ void registerRoutes() {
 
                 // Save upload record with processing mode
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash, processingMode);
+
+                // Save file to disk for manual mode processing
+                std::string uploadDir = "./uploads";
+                std::string filePath = uploadDir + "/" + uploadId + ".ldif";
+                std::ofstream outFile(filePath, std::ios::binary);
+                if (outFile.is_open()) {
+                    outFile.write(reinterpret_cast<const char*>(contentBytes.data()), contentBytes.size());
+                    outFile.close();
+
+                    // Update file_path in database
+                    std::string updateQuery = "UPDATE uploaded_file SET file_path = '" + filePath + "' WHERE id = '" + uploadId + "'";
+                    PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                    PQclear(updateRes);
+                }
+
                 PQfinish(conn);
 
                 // Start async processing only in AUTO mode
@@ -3934,6 +4001,21 @@ void registerRoutes() {
 
                 // Save upload record with processing mode
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "ML", fileHash, processingMode);
+
+                // Save file to disk for manual mode processing
+                std::string uploadDir = "./uploads";
+                std::string filePath = uploadDir + "/" + uploadId + ".ml";
+                std::ofstream outFile(filePath, std::ios::binary);
+                if (outFile.is_open()) {
+                    outFile.write(reinterpret_cast<const char*>(contentBytes.data()), contentBytes.size());
+                    outFile.close();
+
+                    // Update file_path in database
+                    std::string updateQuery = "UPDATE uploaded_file SET file_path = '" + filePath + "' WHERE id = '" + uploadId + "'";
+                    PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                    PQclear(updateRes);
+                }
+
                 PQfinish(conn);
 
                 // Start async processing only in AUTO mode
