@@ -51,6 +51,8 @@ find_library(UUID_LIBRARY uuid REQUIRED)
 # =============================================================================
 add_executable(${PROJECT_NAME}
     src/main.cpp
+    src/processing_strategy.cpp
+    src/ldif_processor.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

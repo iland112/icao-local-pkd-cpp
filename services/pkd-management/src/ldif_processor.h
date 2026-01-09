@@ -1,0 +1,68 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include <libpq-fe.h>
+#include <ldap.h>
+#include "common.h"
+
+/**
+ * @brief LDIF file processor
+ *
+ * Handles parsing and processing of LDIF files including:
+ * - Parsing LDIF content
+ * - Extracting certificates, CRLs, and master lists
+ * - Saving to PostgreSQL database
+ * - Validating trust chains
+ * - Uploading to LDAP
+ */
+class LdifProcessor {
+public:
+    /**
+     * @brief Parse LDIF content
+     * @param content Raw LDIF file content as string
+     * @return Vector of parsed LDIF entries
+     */
+    static std::vector<LdifEntry> parseLdifContent(const std::string& content);
+
+    /**
+     * @brief Process LDIF entries (save to DB and validate)
+     * @param uploadId Upload record UUID
+     * @param entries Parsed LDIF entries
+     * @param conn PostgreSQL connection
+     * @param ld LDAP connection (can be nullptr to skip LDAP upload)
+     * @param stats Output validation statistics
+     * @return Processing counts (csca, dsc, dsc_nc, crl, ml)
+     */
+    struct ProcessingCounts {
+        int cscaCount = 0;
+        int dscCount = 0;
+        int dscNcCount = 0;
+        int crlCount = 0;
+        int mlCount = 0;
+        int ldapCertStoredCount = 0;
+        int ldapCrlStoredCount = 0;
+        int ldapMlStoredCount = 0;
+    };
+
+    static ProcessingCounts processEntries(
+        const std::string& uploadId,
+        const std::vector<LdifEntry>& entries,
+        PGconn* conn,
+        LDAP* ld,
+        ValidationStats& stats
+    );
+
+    /**
+     * @brief Upload certificates from DB to LDAP
+     * @param uploadId Upload record UUID
+     * @param conn PostgreSQL connection
+     * @param ld LDAP connection
+     * @return Number of entries uploaded
+     */
+    static int uploadToLdap(
+        const std::string& uploadId,
+        PGconn* conn,
+        LDAP* ld
+    );
+};

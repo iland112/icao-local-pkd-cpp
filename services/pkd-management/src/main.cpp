@@ -53,6 +53,11 @@
 #include <algorithm>
 #include <cctype>
 
+// Project headers
+#include "common.h"
+#include "processing_strategy.h"
+#include "ldif_processor.h"
+
 namespace {
 
 /**
@@ -1131,25 +1136,7 @@ int countLdifEntries(const std::string& content) {
 // Certificate/CRL Parsing and DB Storage Functions
 // ============================================================================
 
-/**
- * @brief LDIF Entry structure
- */
-struct LdifEntry {
-    std::string dn;
-    std::map<std::string, std::vector<std::string>> attributes;
-
-    bool hasAttribute(const std::string& name) const {
-        return attributes.find(name) != attributes.end();
-    }
-
-    std::string getFirstAttribute(const std::string& name) const {
-        auto it = attributes.find(name);
-        if (it != attributes.end() && !it->second.empty()) {
-            return it->second[0];
-        }
-        return "";
-    }
-};
+// Note: LdifEntry and ValidationStats are now in common.h
 
 /**
  * @brief Base64 decode
@@ -2039,21 +2026,6 @@ std::string saveMasterList(PGconn* conn, const std::string& uploadId,
 }
 
 /**
- * @brief Validation statistics counters for an upload
- */
-struct ValidationStats {
-    int validCount = 0;
-    int invalidCount = 0;
-    int pendingCount = 0;
-    int errorCount = 0;
-    int trustChainValidCount = 0;
-    int trustChainInvalidCount = 0;
-    int cscaNotFoundCount = 0;
-    int expiredCount = 0;
-    int revokedCount = 0;
-};
-
-/**
  * @brief Parse and save certificate from LDIF entry (DB + LDAP)
  */
 bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
@@ -2585,9 +2557,61 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
                     totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
 
-            // MANUAL mode: Stop here, wait for user to trigger next steps
+            // Use Strategy Pattern to handle AUTO vs MANUAL modes
+            auto strategy = ProcessingStrategyFactory::create(processingMode);
+            strategy->processLdifEntries(uploadId, entries, conn, ld);
+
+            // For MANUAL mode, stop here (strategy already saved to temp file)
             if (processingMode == "MANUAL") {
-                spdlog::info("MANUAL mode: Parsing completed, waiting for user trigger");
+                PQfinish(conn);
+                return;
+            }
+
+            // For AUTO mode, strategy has already processed everything
+            // No additional work needed here
+
+            /* OLD CODE - Replaced by Strategy Pattern
+            if (processingMode == "MANUAL_OLD") {
+                spdlog::info("MANUAL mode OLD: Saving parsed entries to temp file");
+
+                // Serialize LDIF entries to JSON
+                Json::Value jsonEntries(Json::arrayValue);
+                for (const auto& entry : entries) {
+                    Json::Value jsonEntry;
+                    jsonEntry["dn"] = entry.dn;
+
+                    // Serialize attributes
+                    Json::Value jsonAttrs(Json::objectValue);
+                    for (const auto& attr : entry.attributes) {
+                        Json::Value jsonValues(Json::arrayValue);
+                        for (const auto& val : attr.second) {
+                            jsonValues.append(val);
+                        }
+                        jsonAttrs[attr.first] = jsonValues;
+                    }
+                    jsonEntry["attributes"] = jsonAttrs;
+                    jsonEntries.append(jsonEntry);
+                }
+
+                // Save to temp file
+                std::string tempDir = "/app/temp";
+                std::string tempFile = tempDir + "/" + uploadId + "_ldif.json";
+
+                // Create temp directory if not exists
+                std::filesystem::create_directories(tempDir);
+
+                std::ofstream outFile(tempFile);
+                if (outFile.is_open()) {
+                    Json::StreamWriterBuilder writer;
+                    writer["indentation"] = "";  // Compact JSON
+                    std::unique_ptr<Json::StreamWriter> jsonWriter(writer.newStreamWriter());
+                    jsonWriter->write(jsonEntries, &outFile);
+                    outFile.close();
+                    spdlog::info("MANUAL mode: Saved {} entries to {}", totalEntries, tempFile);
+                } else {
+                    spdlog::error("MANUAL mode: Failed to save temp file: {}", tempFile);
+                }
+
                 // Update status to show parsing is done
                 std::string updateQuery = "UPDATE uploaded_file SET status = 'PENDING', "
                                          "total_entries = " + std::to_string(totalEntries) + " "
@@ -2718,6 +2742,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             spdlog::info("Validation stats: {} valid, {} invalid, {} pending, {} csca_not_found, {} expired",
                         validationStats.validCount, validationStats.invalidCount, validationStats.pendingCount,
                         validationStats.cscaNotFoundCount, validationStats.expiredCount);
+            */ // END OLD CODE
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
@@ -5028,7 +5053,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting ICAO Local PKD Application (v1.3.0 - Manual Mode Fix 2026-01-09)...");
+    spdlog::info("Starting ICAO Local PKD Application (v1.4.0 - Strategy Pattern Refactoring 2026-01-10)...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
