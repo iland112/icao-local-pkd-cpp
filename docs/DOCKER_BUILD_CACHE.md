@@ -433,28 +433,60 @@ Just be aware of its behavior and verify deployments.
 ### 2026-01-09: Duplicate Detection Feature Missing
 
 **Problem**:
-- Added `checkDuplicateFile()` function to main.cpp
+- Added `checkDuplicateFile()` function to main.cpp (commit d0efa45)
+- Changed version from v1.1.0 to v1.2.0 (commit 8bb5d73)
 - Committed and pushed successfully
-- GitHub Actions build succeeded (5m 48s)
-- Deployed to Luckfox
+- GitHub Actions builds succeeded multiple times
+- Deployed to Luckfox 3 times with different cache invalidation attempts
 - **Feature did not work** - function never called
+- Deployed binary showed v1.1.0 (old version) instead of v1.2.0
+- Binary missing `checkDuplicateFile()` function (verified with `strings` command)
 
 **Root Cause**:
-- All builder stage layers were CACHED
-- New source code was not compiled
-- Previous binary was used
+- **Conflicting cache backends**: Using BOTH `BUILDKIT_INLINE_CACHE=1` AND `type=gha` cache
+- BuildKit inline cache (mode=min only) conflicted with GitHub Actions cache (mode=max)
+- Cache invalidation attempts failed:
+  1. Version bump (v1.2.0) - FAILED
+  2. BUILD_ID file addition to Dockerfile - FAILED
+  3. BUILD_ID timestamp update - FAILED
+- BuildKit used stale cached object files despite:
+  - Correct code in GitHub repository (verified)
+  - Correct commit checked out in build (verified)
+  - Compilation occurring (verified in logs)
+  - src/ directory being COPY'd (not showing CACHED)
+
+**Investigation Process**:
+- Verified commits: d0efa45 (duplicate detection), 8bb5d73 (v1.2.0), e145bc8 (BUILD_ID)
+- Checked GitHub repository: Code correct via curl to raw.githubusercontent.com
+- Analyzed build logs: Commit e145bc8 checked out, compilation occurred
+- Inspected deployed binary: `docker exec ... strings /app/pkd-management`
+  - Output: v1.1.0 (not v1.2.0)
+  - No "checkDuplicateFile" string found
+- Web search: Found Docker BuildKit known issues with inline cache conflicts
 
 **Solution**:
-- Changed version from v1.1.0 to v1.2.0
-- Pushed version bump
-- New build compiled fresh code (22m)
-- Deployed successfully
-- Feature worked correctly
+- **Removed `BUILDKIT_INLINE_CACHE=1` from GitHub Actions workflow**
+- Used only `type=gha` cache backend (more reliable per Docker docs)
+- Rationale:
+  - Inline cache only supports mode=min (final stage only)
+  - GitHub Actions cache supports mode=max (all stages)
+  - Using both causes cache conflicts and stale artifacts
+  - Docker documentation recommends GHA cache for GitHub Actions
+
+**Files Modified**:
+- `.github/workflows/build-arm64.yml` (removed BUILDKIT_INLINE_CACHE=1)
+
+**Prevention Measures**:
+1. Created `scripts/check-build-freshness.sh` - validates build before deployment
+2. Documented in `docs/DOCKER_BUILD_CACHE.md` - comprehensive cache guide
+3. Updated `docs/LUCKFOX_DEPLOYMENT.md` - deployment procedures
 
 **Lesson Learned**:
-- Always verify build logs for CACHED entries
-- Version bump for significant features
+- Never mix cache backends (inline + GHA cache = conflicts)
+- Always verify build logs for excessive CACHED entries
+- Version bump alone insufficient if cache backend flawed
 - Test immediately after deployment
+- Use automated build freshness validation before deployment
 
 ---
 

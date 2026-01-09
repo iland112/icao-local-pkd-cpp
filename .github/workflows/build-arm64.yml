@@ -53,8 +53,6 @@ jobs:
             type=gha,mode=max,scope=pkd-mgmt-vcpkg-base
             type=gha,mode=max,scope=pkd-mgmt-vcpkg-deps
             type=gha,mode=max,scope=pkd-mgmt-builder
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
 
       - name: Compress Image
         run: gzip pkd-management-arm64.tar
@@ -99,8 +97,6 @@ jobs:
           cache-to: |
             type=gha,mode=max,scope=pa-svc-vcpkg-base
             type=gha,mode=max,scope=pa-svc-vcpkg-deps
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
 
       - name: Compress Image
         run: gzip pkd-pa-arm64.tar
@@ -145,8 +141,6 @@ jobs:
           cache-to: |
             type=gha,mode=max,scope=sync-svc-vcpkg-base
             type=gha,mode=max,scope=sync-svc-vcpkg-deps
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
 
       - name: Compress Image
         run: gzip pkd-sync-arm64.tar
