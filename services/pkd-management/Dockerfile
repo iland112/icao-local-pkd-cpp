@@ -61,6 +61,9 @@ RUN ARCH=$(uname -m) && \
 # Stage 3: Application Build (changes frequently)
 FROM vcpkg-deps AS builder
 
+# Copy BUILD_ID to invalidate cache when needed
+COPY services/pkd-management/BUILD_ID ./BUILD_ID
+
 # Copy build configuration (rarely changes)
 COPY services/pkd-management/CMakeLists.txt ./
 
