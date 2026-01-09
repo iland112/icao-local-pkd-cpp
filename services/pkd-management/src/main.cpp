@@ -2544,12 +2544,26 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             return;
         }
 
-        // Connect to LDAP (write connection - direct to primary master)
-        LDAP* ld = getLdapWriteConnection();
-        if (!ld) {
-            spdlog::warn("LDAP write connection failed - will only save to DB");
-        } else {
-            spdlog::info("LDAP write connection established for upload {}", uploadId);
+        // Check processing_mode
+        std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
+        PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+        std::string processingMode = "AUTO";  // Default to AUTO
+        if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
+            processingMode = PQgetvalue(modeRes, 0, 0);
+        }
+        PQclear(modeRes);
+
+        spdlog::info("Processing mode for upload {}: {}", uploadId, processingMode);
+
+        // Connect to LDAP only if AUTO mode (for MANUAL, LDAP connection happens during triggerLdapUpload)
+        LDAP* ld = nullptr;
+        if (processingMode == "AUTO") {
+            ld = getLdapWriteConnection();
+            if (!ld) {
+                spdlog::warn("LDAP write connection failed - will only save to DB");
+            } else {
+                spdlog::info("LDAP write connection established for upload {}", uploadId);
+            }
         }
 
         try {
@@ -2571,6 +2585,21 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
                     totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
 
+            // MANUAL mode: Stop here, wait for user to trigger next steps
+            if (processingMode == "MANUAL") {
+                spdlog::info("MANUAL mode: Parsing completed, waiting for user trigger");
+                // Update status to show parsing is done
+                std::string updateQuery = "UPDATE uploaded_file SET status = 'PENDING', "
+                                         "total_entries = " + std::to_string(totalEntries) + " "
+                                         "WHERE id = '" + uploadId + "'";
+                PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                PQclear(updateRes);
+
+                PQfinish(conn);
+                return;  // Stop here for MANUAL mode
+            }
+
+            // AUTO mode: Continue with validation and DB save
             // Send validation started progress
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
@@ -2725,12 +2754,26 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             return;
         }
 
-        // Connect to LDAP (write connection - direct to primary master)
-        LDAP* ld = getLdapWriteConnection();
-        if (!ld) {
-            spdlog::warn("LDAP write connection failed - will only save to DB");
-        } else {
-            spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
+        // Check processing_mode
+        std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
+        PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+        std::string processingMode = "AUTO";  // Default to AUTO
+        if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
+            processingMode = PQgetvalue(modeRes, 0, 0);
+        }
+        PQclear(modeRes);
+
+        spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
+
+        // Connect to LDAP only if AUTO mode
+        LDAP* ld = nullptr;
+        if (processingMode == "AUTO") {
+            ld = getLdapWriteConnection();
+            if (!ld) {
+                spdlog::warn("LDAP write connection failed - will only save to DB");
+            } else {
+                spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
+            }
         }
 
         try {
@@ -4985,7 +5028,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting ICAO Local PKD Application (v1.2.1 - Cache Fix Build 2026-01-09)...");
+    spdlog::info("Starting ICAO Local PKD Application (v1.3.0 - Manual Mode Fix 2026-01-09)...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
