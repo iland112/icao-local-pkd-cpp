@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   Upload,
   CloudUpload,
@@ -176,18 +177,51 @@ export function FileUpload() {
         setUploadId(fileId);
         setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
 
-        // Connect to SSE for progress updates if AUTO mode
-        if (processingMode === 'AUTO') {
-          connectToProgressStream(fileId);
-        }
+        // Connect to SSE for progress updates (both AUTO and MANUAL modes)
+        connectToProgressStream(fileId);
       } else {
         throw new Error(response.data.error || '업로드 실패');
       }
-    } catch (error) {
-      setUploadStage({ status: 'FAILED', message: '업로드 실패', percentage: 0 });
-      setOverallStatus('FAILED');
-      setOverallMessage('파일 업로드에 실패했습니다.');
-      setErrorMessages([error instanceof Error ? error.message : '알 수 없는 오류']);
+    } catch (error: unknown) {
+      // Check for HTTP 409 Conflict (duplicate file)
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        const errorData = error.response.data as {
+          message?: string;
+          existingUpload?: {
+            uploadId: string;
+            fileName: string;
+            uploadTimestamp: string;
+            status: string;
+            processingMode: string;
+            fileFormat: string;
+          };
+        };
+
+        setUploadStage({ status: 'FAILED', message: '중복 파일', percentage: 0 });
+        setOverallStatus('FAILED');
+        setOverallMessage(errorData.message || '이미 업로드된 파일입니다.');
+
+        const existing = errorData.existingUpload;
+        if (existing) {
+          setErrorMessages([
+            `이 파일은 이미 업로드되었습니다 (SHA-256 해시 중복).`,
+            `기존 업로드 ID: ${existing.uploadId}`,
+            `파일명: ${existing.fileName}`,
+            `업로드 시간: ${new Date(existing.uploadTimestamp).toLocaleString('ko-KR')}`,
+            `상태: ${existing.status}`,
+            `처리 모드: ${existing.processingMode}`,
+            `파일 형식: ${existing.fileFormat}`,
+          ]);
+        } else {
+          setErrorMessages(['이 파일은 이미 업로드되었습니다.']);
+        }
+      } else {
+        // Other errors
+        setUploadStage({ status: 'FAILED', message: '업로드 실패', percentage: 0 });
+        setOverallStatus('FAILED');
+        setOverallMessage('파일 업로드에 실패했습니다.');
+        setErrorMessages([error instanceof Error ? error.message : '알 수 없는 오류']);
+      }
       setIsProcessing(false);
     }
   };
@@ -352,31 +386,37 @@ export function FileUpload() {
   // Manual mode triggers
   const triggerParse = async () => {
     if (!uploadId) return;
-    setParseStage({ status: 'IN_PROGRESS', message: '파싱 중...', percentage: 0 });
+    setParseStage({ status: 'IN_PROGRESS', message: '파싱 시작...', percentage: 0 });
     try {
       await uploadApi.triggerParse(uploadId);
+      // Note: Progress will be updated via SSE connection established during upload
     } catch (error) {
       setParseStage({ status: 'FAILED', message: '파싱 실패', percentage: 0 });
+      setErrorMessages(prev => [...prev, error instanceof Error ? error.message : '파싱 요청 실패']);
     }
   };
 
   const triggerValidate = async () => {
     if (!uploadId) return;
-    setDbSaveStage({ status: 'IN_PROGRESS', message: '검증 및 저장 중...', percentage: 0 });
+    setDbSaveStage({ status: 'IN_PROGRESS', message: '검증 시작...', percentage: 0 });
     try {
       await uploadApi.triggerValidate(uploadId);
+      // Note: Progress will be updated via SSE connection established during upload
     } catch (error) {
       setDbSaveStage({ status: 'FAILED', message: '검증 실패', percentage: 0 });
+      setErrorMessages(prev => [...prev, error instanceof Error ? error.message : '검증 요청 실패']);
     }
   };
 
   const triggerLdapUpload = async () => {
     if (!uploadId) return;
-    setLdapStage({ status: 'IN_PROGRESS', message: 'LDAP 저장 중...', percentage: 0 });
+    setLdapStage({ status: 'IN_PROGRESS', message: 'LDAP 저장 시작...', percentage: 0 });
     try {
       await uploadApi.triggerLdapUpload(uploadId);
+      // Note: Progress will be updated via SSE connection established during upload
     } catch (error) {
       setLdapStage({ status: 'FAILED', message: 'LDAP 저장 실패', percentage: 0 });
+      setErrorMessages(prev => [...prev, error instanceof Error ? error.message : 'LDAP 저장 요청 실패']);
     }
   };
 
