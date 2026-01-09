@@ -826,6 +826,11 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
     return success;
 }
 
+} // Close anonymous namespace temporarily for extern functions
+
+// Functions that need to be accessible from other compilation units
+// (processing_strategy.cpp, ldif_processor.cpp)
+
 /**
  * @brief Update validation statistics in uploaded_file table
  */
@@ -2494,6 +2499,8 @@ void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
     PGresult* res = PQexec(conn, query.c_str());
     PQclear(res);
 }
+
+namespace {  // Resume anonymous namespace
 
 /**
  * @brief Process LDIF file asynchronously with full parsing (DB + LDAP)
@@ -5053,7 +5060,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting ICAO Local PKD Application (v1.4.4 - LdifProcessor Headers Fix 2026-01-10)...");
+    spdlog::info("Starting ICAO Local PKD Application (v1.4.5 - Linker Fix: Extern Functions 2026-01-10)...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
