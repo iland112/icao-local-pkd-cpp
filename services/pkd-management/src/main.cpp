@@ -2546,8 +2546,8 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
                     0, 100, "LDIF 파일 파싱 중..."));
 
-            // Parse LDIF content
-            std::vector<LdifEntry> entries = parseLdifContent(contentStr);
+            // Parse LDIF content using LdifProcessor
+            std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(contentStr);
             int totalEntries = static_cast<int>(entries.size());
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
@@ -5053,7 +5053,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting ICAO Local PKD Application (v1.4.0 - Strategy Pattern Refactoring 2026-01-10)...");
+    spdlog::info("Starting ICAO Local PKD Application (v1.4.1 - Strategy Pattern Fix 2026-01-10)...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
