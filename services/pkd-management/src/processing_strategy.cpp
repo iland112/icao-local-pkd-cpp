@@ -1,10 +1,13 @@
 #include "processing_strategy.h"
 #include "ldif_processor.h"
-#include <drogon/drogon.h>
+#include <drogon/HttpTypes.h>
+#include <json/json.h>
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <filesystem>
 #include <stdexcept>
+#include <libpq-fe.h>
+#include <ldap.h>
 
 // This file will be implemented in phases
 // For now, we provide the factory implementation
