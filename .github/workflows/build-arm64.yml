@@ -33,6 +33,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: |
+            image=moby/buildkit:latest
 
       - name: Build and export PKD Management Service
         uses: docker/build-push-action@v5
@@ -42,8 +45,16 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-management:arm64
           outputs: type=oci,dest=pkd-management-arm64.tar
-          cache-from: type=gha,scope=pkd-management
-          cache-to: type=gha,mode=max,scope=pkd-management
+          cache-from: |
+            type=gha,scope=pkd-mgmt-vcpkg-base
+            type=gha,scope=pkd-mgmt-vcpkg-deps
+            type=gha,scope=pkd-mgmt-builder
+          cache-to: |
+            type=gha,mode=max,scope=pkd-mgmt-vcpkg-base
+            type=gha,mode=max,scope=pkd-mgmt-vcpkg-deps
+            type=gha,mode=max,scope=pkd-mgmt-builder
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
       - name: Compress Image
         run: gzip pkd-management-arm64.tar
@@ -60,7 +71,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-pa-service:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -82,8 +93,14 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-pa:arm64
           outputs: type=oci,dest=pkd-pa-arm64.tar
-          cache-from: type=gha,scope=pa-service
-          cache-to: type=gha,mode=max,scope=pa-service
+          cache-from: |
+            type=gha,scope=pa-svc-vcpkg-base
+            type=gha,scope=pa-svc-vcpkg-deps
+          cache-to: |
+            type=gha,mode=max,scope=pa-svc-vcpkg-base
+            type=gha,mode=max,scope=pa-svc-vcpkg-deps
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
       - name: Compress Image
         run: gzip pkd-pa-arm64.tar
@@ -100,7 +117,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-sync-service:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -122,8 +139,14 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-sync:arm64
           outputs: type=oci,dest=pkd-sync-arm64.tar
-          cache-from: type=gha,scope=sync-service
-          cache-to: type=gha,mode=max,scope=sync-service
+          cache-from: |
+            type=gha,scope=sync-svc-vcpkg-base
+            type=gha,scope=sync-svc-vcpkg-deps
+          cache-to: |
+            type=gha,mode=max,scope=sync-svc-vcpkg-base
+            type=gha,mode=max,scope=sync-svc-vcpkg-deps
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
 
       - name: Compress Image
         run: gzip pkd-sync-arm64.tar

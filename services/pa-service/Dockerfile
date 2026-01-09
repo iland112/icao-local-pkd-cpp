@@ -1,11 +1,11 @@
 # =============================================================================
 # PA Service Dockerfile
-# Multi-stage build for optimized production image
+# Multi-stage build for optimized production image with aggressive caching
 # Supports: linux/amd64, linux/arm64
 # =============================================================================
 
-# Stage 1: Build
-FROM debian:bookworm AS builder
+# Stage 1: vcpkg Base (rarely changes - heavily cached)
+FROM debian:bookworm AS vcpkg-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -33,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install vcpkg
 WORKDIR /opt
 RUN git clone https://github.com/microsoft/vcpkg.git \
     && cd vcpkg \
@@ -42,32 +41,34 @@ RUN git clone https://github.com/microsoft/vcpkg.git \
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV PATH="${VCPKG_ROOT}:${PATH}"
 
-# Copy project files
+# Stage 2: vcpkg Dependencies (changes only when vcpkg.json changes)
+FROM vcpkg-base AS vcpkg-deps
+
 WORKDIR /app
-COPY services/pa-service/CMakeLists.txt services/pa-service/vcpkg.json ./
-COPY services/pa-service/src/ ./src/
+COPY services/pa-service/vcpkg.json ./
 
-# Copy shared code
-COPY shared/ ./shared/
-
-# Install vcpkg dependencies (auto-detect architecture)
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
     vcpkg install --triplet $TRIPLET
 
-# Build
+# Stage 3: Application Build (changes frequently)
+FROM vcpkg-deps AS builder
+
+COPY services/pa-service/CMakeLists.txt ./
+COPY shared/ ./shared/
+COPY services/pa-service/src/ ./src/
+
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j$(nproc)
 
-# Stage 2: Runtime
+# Stage 4: Runtime
 FROM debian:bookworm-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     libpq5 \
@@ -84,22 +85,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
-
 RUN useradd -m -s /bin/bash app
-
-RUN mkdir -p /app/logs /app/static /app/config \
+RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
 COPY --from=builder /app/build/bin/pa-service /app/
-
-# Copy Swagger UI static files
 COPY shared/static/swagger-ui/ /app/static/swagger-ui/
 
 WORKDIR /app
 
-# Environment variables
-ENV SERVICE_NAME=pa-service
-ENV SERVER_PORT=8082
+ENV PA Service=PA Service
+ENV 8082=8082
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_NAME=localpkd
@@ -107,6 +103,8 @@ ENV DB_USER=pkd
 ENV DB_PASSWORD=pkd123
 ENV LDAP_HOST=haproxy
 ENV LDAP_PORT=389
+ENV LDAP_WRITE_HOST=openldap1
+ENV LDAP_WRITE_PORT=389
 ENV LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
 ENV LDAP_BIND_PASSWORD=admin
 
@@ -116,5 +114,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8082/api/health || exit 1
 
 USER app
-
 CMD ["./pa-service"]

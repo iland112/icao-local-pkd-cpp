@@ -1,16 +1,14 @@
 # =============================================================================
 # Sync Service Dockerfile
-# Multi-stage build for optimized production image
+# Multi-stage build for optimized production image with aggressive caching
 # Supports: linux/amd64, linux/arm64
 # =============================================================================
 
-# Stage 1: Build
-FROM debian:bookworm AS builder
+# Stage 1: vcpkg Base (rarely changes - heavily cached)
+FROM debian:bookworm AS vcpkg-base
 
-# Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
@@ -24,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     libpq-dev \
     libldap2-dev \
+    uuid-dev \
     libjsoncpp-dev \
     libc-ares-dev \
     libbrotli-dev \
@@ -34,7 +33,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Install vcpkg
 WORKDIR /opt
 RUN git clone https://github.com/microsoft/vcpkg.git \
     && cd vcpkg \
@@ -43,33 +41,39 @@ RUN git clone https://github.com/microsoft/vcpkg.git \
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV PATH="${VCPKG_ROOT}:${PATH}"
 
-# Copy project files
-WORKDIR /app
-COPY services/sync-service/CMakeLists.txt services/sync-service/vcpkg.json ./
-COPY services/sync-service/src/ ./src/
+# Stage 2: vcpkg Dependencies (changes only when vcpkg.json changes)
+FROM vcpkg-base AS vcpkg-deps
 
-# Install vcpkg dependencies (auto-detect architecture)
+WORKDIR /app
+COPY services/sync-service/vcpkg.json ./
+
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
     vcpkg install --triplet $TRIPLET
 
-# Build
+# Stage 3: Application Build (changes frequently)
+FROM vcpkg-deps AS builder
+
+COPY services/sync-service/CMakeLists.txt ./
+COPY shared/ ./shared/
+COPY services/sync-service/src/ ./src/
+
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j$(nproc)
 
-# Stage 2: Runtime
+# Stage 4: Runtime
 FROM debian:bookworm-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 
-# Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     libpq5 \
     libldap-2.5-0 \
+    libuuid1 \
     libjsoncpp25 \
     libc-ares2 \
     libbrotli1 \
@@ -80,30 +84,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ldap-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Set timezone
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
-
-# Create app user
 RUN useradd -m -s /bin/bash app
-
-# Copy binary from builder
-COPY --from=builder /app/build/bin/sync-service /app/
-
-# Copy Swagger UI static files
-COPY shared/static/swagger-ui/ /app/static/swagger-ui/
-
-# Create directories and set ownership
-RUN mkdir -p /app/logs /app/config /app/static \
+RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
+
+COPY --from=builder /app/build/bin/sync-service /app/
+COPY shared/static/swagger-ui/ /app/static/swagger-ui/
 
 WORKDIR /app
 
-# Environment variables
-ENV SERVICE_NAME=sync-service
-ENV SERVER_PORT=8083
+ENV Sync Service=Sync Service
+ENV 8083=8083
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
-ENV DB_NAME=pkd
+ENV DB_NAME=localpkd
 ENV DB_USER=pkd
 ENV DB_PASSWORD=pkd123
 ENV LDAP_HOST=haproxy
@@ -112,17 +107,11 @@ ENV LDAP_WRITE_HOST=openldap1
 ENV LDAP_WRITE_PORT=389
 ENV LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
 ENV LDAP_BIND_PASSWORD=admin
-ENV LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
-ENV SYNC_INTERVAL_MINUTES=5
-ENV AUTO_RECONCILE=true
-ENV MAX_RECONCILE_BATCH_SIZE=100
 
 EXPOSE 8083
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD curl -f http://localhost:8083/api/sync/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8083/api/health || exit 1
 
 USER app
-
 CMD ["./sync-service"]

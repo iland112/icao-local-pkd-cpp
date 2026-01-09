@@ -1,11 +1,11 @@
 # =============================================================================
 # PKD Management Service Dockerfile
-# Multi-stage build for optimized production image
+# Multi-stage build for optimized production image with aggressive caching
 # Supports: linux/amd64, linux/arm64
 # =============================================================================
 
-# Stage 1: Build
-FROM debian:bookworm AS builder
+# Stage 1: vcpkg Base (rarely changes - heavily cached)
+FROM debian:bookworm AS vcpkg-base
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive
@@ -44,26 +44,40 @@ RUN git clone https://github.com/microsoft/vcpkg.git \
 ENV VCPKG_ROOT=/opt/vcpkg
 ENV PATH="${VCPKG_ROOT}:${PATH}"
 
-# Copy project files
-WORKDIR /app
-COPY services/pkd-management/CMakeLists.txt services/pkd-management/vcpkg.json ./
-COPY services/pkd-management/src/ ./src/
+# Stage 2: vcpkg Dependencies (changes only when vcpkg.json changes)
+FROM vcpkg-base AS vcpkg-deps
 
-# Copy shared code
-COPY shared/ ./shared/
+WORKDIR /app
+
+# Copy ONLY dependency manifests (for better layer caching)
+COPY services/pkd-management/vcpkg.json ./
 
 # Install vcpkg dependencies (auto-detect architecture)
+# This layer will be cached unless vcpkg.json changes
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
     vcpkg install --triplet $TRIPLET
 
-# Build
+# Stage 3: Application Build (changes frequently)
+FROM vcpkg-deps AS builder
+
+# Copy build configuration (rarely changes)
+COPY services/pkd-management/CMakeLists.txt ./
+
+# Copy shared code (changes occasionally)
+COPY shared/ ./shared/
+
+# Copy source code (changes frequently)
+COPY services/pkd-management/src/ ./src/
+
+# Build application
+# vcpkg dependencies are already installed in previous stage
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j$(nproc)
 
-# Stage 2: Runtime
+# Stage 4: Runtime (production image)
 FROM debian:bookworm-slim AS runtime
 
 ENV DEBIAN_FRONTEND=noninteractive
