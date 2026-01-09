@@ -71,7 +71,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-pa-service:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
@@ -117,7 +117,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-sync-service:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Checkout
