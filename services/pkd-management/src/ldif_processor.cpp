@@ -1,5 +1,7 @@
 #include "ldif_processor.h"
 #include <spdlog/spdlog.h>
+#include <libpq-fe.h>
+#include <ldap.h>
 #include <sstream>
 #include <algorithm>
 
