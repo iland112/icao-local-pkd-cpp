@@ -337,7 +337,50 @@ services:
       - POSTGRES_DB=localpkd  # 주의: 로컬 환경의 pkd와 다름
 ```
 
-### Cross-Platform Docker Build
+### Automated Deployment (Recommended) ⭐
+
+**공식 배포 방법**: GitHub Actions → 자동화 스크립트
+
+```bash
+# 1. 코드 수정 및 푸시
+git add .
+git commit -m "feat: your changes"
+git push origin feature/openapi-support
+
+# 2. GitHub Actions 빌드 완료 대기 (10-15분)
+# https://github.com/iland112/icao-local-pkd-cpp/actions
+
+# 3. 자동 배포 스크립트 실행
+./scripts/deploy-from-github-artifacts.sh pkd-management
+
+# 전체 서비스 배포
+./scripts/deploy-from-github-artifacts.sh all
+```
+
+**배포 스크립트 기능**:
+- ✅ GitHub Actions artifacts 자동 다운로드
+- ✅ OCI 형식 → Docker 형식 자동 변환 (skopeo)
+- ✅ sshpass를 통한 비대화형 SSH/SCP 인증
+- ✅ 기존 컨테이너/이미지 자동 정리
+- ✅ 이미지 전송 및 로드
+- ✅ 서비스 시작 및 헬스체크
+
+**필수 도구**:
+```bash
+# sshpass (SSH 자동 인증)
+sudo apt-get install sshpass
+
+# skopeo (OCI → Docker 변환)
+sudo apt-get install skopeo
+
+# gh CLI (artifact 다운로드)
+sudo apt-get install gh
+gh auth login
+```
+
+**상세 문서**: [docs/LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md)
+
+### Cross-Platform Docker Build (비권장)
 
 ```bash
 # AMD64에서 ARM64 이미지 빌드

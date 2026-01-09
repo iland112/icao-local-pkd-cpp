@@ -1,19 +1,35 @@
 #!/bin/bash
 # Deploy ARM64 images from GitHub Actions artifacts to Luckfox
+# Handles OCI format conversion and uses sshpass for authentication
 
 set -e
 
-LUCKFOX_HOST="luckfox@192.168.100.11"
-LUCKFOX_DIR="~/icao-local-pkd-cpp-v2"
+LUCKFOX_HOST="192.168.100.11"
+LUCKFOX_USER="luckfox"
+LUCKFOX_PASS="luckfox"
+LUCKFOX_DIR="/home/luckfox/icao-local-pkd-cpp-v2"
 ARTIFACTS_DIR="./github-artifacts"
+TEMP_DIR="/tmp/icao-deploy-$$"
+
+# SSH and SCP commands with sshpass
+SSH_CMD="sshpass -p $LUCKFOX_PASS ssh -o StrictHostKeyChecking=no $LUCKFOX_USER@$LUCKFOX_HOST"
+SCP_CMD="sshpass -p $LUCKFOX_PASS scp -o StrictHostKeyChecking=no"
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}=== Luckfox ARM64 Deployment Script ===${NC}"
+echo -e "${GREEN}=== Luckfox ARM64 Deployment Script (OCI-aware) ===${NC}"
+echo ""
+
+# Check dependencies
+echo -e "${BLUE}Checking dependencies...${NC}"
+command -v sshpass >/dev/null 2>&1 || { echo -e "${RED}Error: sshpass is required but not installed.${NC}"; exit 1; }
+command -v skopeo >/dev/null 2>&1 || { echo -e "${RED}Error: skopeo is required but not installed.${NC}"; exit 1; }
+echo -e "${GREEN}✓ Dependencies OK${NC}"
 echo ""
 
 # Service selection
@@ -28,11 +44,56 @@ echo ""
 
 # Check if artifacts directory exists
 if [ ! -d "$ARTIFACTS_DIR" ]; then
-    echo -e "${YELLOW}Artifacts directory not found. Please download from GitHub Actions first.${NC}"
-    echo "Go to: https://github.com/iland112/icao-local-pkd-cpp/actions"
-    echo "Download the latest 'arm64-docker-images-all' artifact and extract to: $ARTIFACTS_DIR"
-    exit 1
+    echo -e "${YELLOW}Artifacts directory not found. Attempting to download from GitHub Actions...${NC}"
+
+    # Check if gh CLI is available and authenticated
+    if command -v gh >/dev/null 2>&1; then
+        echo -e "${BLUE}Downloading latest artifacts...${NC}"
+        LATEST_RUN=$(gh run list --repo iland112/icao-local-pkd-cpp --branch feature/openapi-support --limit 1 --json databaseId --jq '.[0].databaseId')
+
+        if [ -n "$LATEST_RUN" ]; then
+            echo "Found workflow run: $LATEST_RUN"
+            rm -rf "$ARTIFACTS_DIR"
+            gh run download "$LATEST_RUN" --repo iland112/icao-local-pkd-cpp --dir "$ARTIFACTS_DIR"
+            echo -e "${GREEN}✓ Artifacts downloaded${NC}"
+        else
+            echo -e "${RED}Error: No workflow runs found${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${RED}Error: gh CLI not found. Please install it or manually download artifacts.${NC}"
+        echo "Go to: https://github.com/iland112/icao-local-pkd-cpp/actions"
+        echo "Download the latest 'arm64-docker-images-all' artifact and extract to: $ARTIFACTS_DIR"
+        exit 1
+    fi
 fi
+
+# Create temporary directory
+mkdir -p "$TEMP_DIR"
+trap "rm -rf $TEMP_DIR" EXIT
+
+# Function to convert OCI to Docker archive
+convert_oci_to_docker() {
+    local oci_archive=$1
+    local image_name=$2
+    local output_tar=$3
+
+    echo -e "${BLUE}Converting OCI format to Docker archive...${NC}"
+
+    local oci_dir="$TEMP_DIR/oci-$(basename $oci_archive .tar.gz)"
+    mkdir -p "$oci_dir"
+
+    # Extract OCI archive
+    tar -xzf "$oci_archive" -C "$oci_dir"
+
+    # Convert to Docker archive using skopeo
+    skopeo copy --override-arch arm64 \
+        "oci:$oci_dir" \
+        "docker-archive:$output_tar:$image_name" \
+        2>&1 | grep -v "^Copying" || true
+
+    echo -e "${GREEN}✓ Converted to Docker format${NC}"
+}
 
 # Function to deploy a single service
 deploy_service() {
@@ -40,7 +101,10 @@ deploy_service() {
     local image_name=$2
     local artifact_name=$3
 
-    echo -e "${GREEN}--- Deploying $service ---${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}Deploying: $service${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
 
     # Find artifact file
     ARTIFACT_FILE=$(find "$ARTIFACTS_DIR" -name "$artifact_name" -type f | head -1)
@@ -50,61 +114,87 @@ deploy_service() {
         return 1
     fi
 
-    echo "Found artifact: $ARTIFACT_FILE"
+    echo -e "${BLUE}Found artifact: $ARTIFACT_FILE${NC}"
 
-    # Step 1: Clean old artifacts on Luckfox
-    echo -e "${YELLOW}Cleaning old $service on Luckfox...${NC}"
-    ssh $LUCKFOX_HOST "
+    # Step 1: Convert OCI to Docker archive
+    echo -e "${YELLOW}[1/5] Converting OCI format to Docker archive...${NC}"
+    DOCKER_ARCHIVE="$TEMP_DIR/$(basename $artifact_name .tar.gz)-docker.tar"
+    convert_oci_to_docker "$ARTIFACT_FILE" "$image_name" "$DOCKER_ARCHIVE"
+
+    # Step 2: Clean old artifacts on Luckfox
+    echo -e "${YELLOW}[2/5] Cleaning old $service on Luckfox...${NC}"
+    $SSH_CMD "
         cd $LUCKFOX_DIR
-        docker compose -f docker-compose-luckfox.yaml down $service 2>/dev/null || true
+        docker compose -f docker-compose-luckfox.yaml stop $service 2>/dev/null || true
+        docker rm icao-$service 2>/dev/null || true
         docker rmi $image_name 2>/dev/null || true
-        rm -f /tmp/$artifact_name
+        rm -rf /home/luckfox/${service}-* 2>/dev/null || true
     " || echo -e "${YELLOW}Warning: Some cleanup commands failed (may be expected)${NC}"
+    echo -e "${GREEN}✓ Cleanup complete${NC}"
 
-    # Step 2: Transfer artifact
-    echo -e "${YELLOW}Transferring $artifact_name to Luckfox...${NC}"
-    scp "$ARTIFACT_FILE" "$LUCKFOX_HOST:/tmp/"
+    # Step 3: Transfer Docker archive
+    echo -e "${YELLOW}[3/5] Transferring Docker archive to Luckfox...${NC}"
+    $SCP_CMD "$DOCKER_ARCHIVE" "$LUCKFOX_USER@$LUCKFOX_HOST:/home/luckfox/$(basename $DOCKER_ARCHIVE)"
+    echo -e "${GREEN}✓ Transfer complete ($(du -h $DOCKER_ARCHIVE | cut -f1))${NC}"
 
-    # Step 3: Load image on Luckfox
-    echo -e "${YELLOW}Loading Docker image on Luckfox...${NC}"
-    ssh $LUCKFOX_HOST "
-        cd /tmp
-        gunzip -c $artifact_name | docker load
-        rm -f $artifact_name
+    # Step 4: Load image on Luckfox
+    echo -e "${YELLOW}[4/5] Loading Docker image on Luckfox...${NC}"
+    $SSH_CMD "
+        docker load < /home/luckfox/$(basename $DOCKER_ARCHIVE)
+        rm -f /home/luckfox/$(basename $DOCKER_ARCHIVE)
     "
+    echo -e "${GREEN}✓ Image loaded${NC}"
 
-    # Step 4: Start service
-    echo -e "${YELLOW}Starting $service on Luckfox...${NC}"
-    ssh $LUCKFOX_HOST "
+    # Step 5: Start service
+    echo -e "${YELLOW}[5/5] Starting $service on Luckfox...${NC}"
+    $SSH_CMD "
         cd $LUCKFOX_DIR
-        docker compose -f docker-compose-luckfox.yaml up -d $service
+        /home/luckfox/scripts/luckfox-start.sh
     "
+    echo -e "${GREEN}✓ Service started${NC}"
 
-    echo -e "${GREEN}✓ $service deployed successfully${NC}"
+    echo ""
+    echo -e "${GREEN}✅ $service deployed successfully!${NC}"
+    echo ""
+
+    # Wait for health check
+    echo -e "${BLUE}Waiting for service health check...${NC}"
+    sleep 5
+    SERVICE_STATUS=$($SSH_CMD "docker ps --filter name=$service --format '{{.Status}}'")
+    echo -e "${GREEN}Status: $SERVICE_STATUS${NC}"
     echo ""
 }
 
 # Deploy based on selection
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pkd-management" ]; then
-    deploy_service "pkd-management" "icao-local-pkd-management:arm64" "pkd-management-arm64.tar.gz"
+    deploy_service "pkd-management" "icao-pkd-management:arm64" "pkd-management-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pa-service" ]; then
-    deploy_service "pa-service" "icao-local-pkd-pa:arm64" "pkd-pa-arm64.tar.gz"
+    deploy_service "pa-service" "icao-pa-service:arm64" "pkd-pa-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "sync-service" ]; then
-    deploy_service "sync-service" "icao-local-pkd-sync:arm64" "pkd-sync-arm64.tar.gz"
+    deploy_service "sync-service" "icao-sync-service:arm64" "pkd-sync-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "frontend" ]; then
-    deploy_service "frontend" "icao-local-pkd-frontend:arm64" "pkd-frontend-arm64.tar.gz"
+    deploy_service "frontend" "icao-frontend:arm64" "pkd-frontend-arm64.tar.gz"
 fi
 
-echo -e "${GREEN}=== Deployment Complete ===${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}🎉 Deployment Complete!${NC}"
+echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "Check service status on Luckfox:"
-echo "  ssh $LUCKFOX_HOST 'cd $LUCKFOX_DIR && docker compose -f docker-compose-luckfox.yaml ps'"
+echo -e "${BLUE}Useful commands:${NC}"
 echo ""
-echo "View logs:"
-echo "  ssh $LUCKFOX_HOST 'cd $LUCKFOX_DIR && docker compose -f docker-compose-luckfox.yaml logs -f $SERVICE'"
+echo -e "${YELLOW}Check service status:${NC}"
+echo "  $SSH_CMD 'cd $LUCKFOX_DIR && docker compose -f docker-compose-luckfox.yaml ps'"
+echo ""
+echo -e "${YELLOW}View logs:${NC}"
+echo "  $SSH_CMD 'cd $LUCKFOX_DIR && docker compose -f docker-compose-luckfox.yaml logs -f $SERVICE'"
+echo ""
+echo -e "${YELLOW}Access services:${NC}"
+echo "  Frontend:     http://$LUCKFOX_HOST/"
+echo "  API Gateway:  http://$LUCKFOX_HOST:8080/api"
+echo ""
