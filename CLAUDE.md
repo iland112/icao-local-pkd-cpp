@@ -444,7 +444,89 @@ docker compose -f docker-compose-luckfox.yaml restart [service]
 
 ---
 
+## Critical Notes
+
+### ⚠️ Docker Build Cache Issue (MUST READ)
+
+**문제**: GitHub Actions 빌드 캐시가 소스 코드 변경을 무시할 수 있음
+
+**증상**:
+- 코드를 수정하고 푸시했지만 기능이 작동하지 않음
+- 빌드 로그에 많은 "CACHED" 메시지
+- 배포 후 이전 버전이 실행됨
+
+**해결 방법**:
+```cpp
+// main.cpp에서 버전 번호 업데이트
+spdlog::info("Starting ICAO Local PKD Application (v1.X.Y - Feature Name)...");
+```
+
+**배포 전 필수 체크**:
+```bash
+# 1. 빌드 신선도 검증
+./scripts/check-build-freshness.sh
+
+# 2. 검증 통과 시에만 배포
+./scripts/deploy-from-github-artifacts.sh pkd-management
+
+# 3. 버전 확인
+sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management --tail 5"
+```
+
+**상세 문서**: [docs/DOCKER_BUILD_CACHE.md](docs/DOCKER_BUILD_CACHE.md)
+
+---
+
 ## Change Log
+
+### 2026-01-09: Docker Build Cache 문제 해결 및 문서화
+
+**발견된 문제**:
+- 중복 검사 기능 추가 후 배포했으나 작동하지 않음
+- 원인: GitHub Actions 빌드에서 모든 레이어가 CACHED 처리
+- 새 소스 코드가 컴파일되지 않고 이전 바이너리 재사용
+
+**해결 조치**:
+- v1.1.0 → v1.2.0 버전 업데이트로 캐시 무효화
+- 빌드 신선도 검증 스크립트 추가 (`scripts/check-build-freshness.sh`)
+- 캐시 관리 가이드 문서 작성 (`docs/DOCKER_BUILD_CACHE.md`)
+
+**새로운 배포 프로세스**:
+1. 코드 수정 + 버전 번호 업데이트
+2. 커밋 및 푸시
+3. GitHub Actions 빌드 대기
+4. `./scripts/check-build-freshness.sh` 실행 (신선도 검증)
+5. 검증 통과 시 배포
+6. 버전 및 기능 테스트
+
+**교훈**:
+- 빌드 캐시는 속도 향상(10-15분)과 정확성 사이의 트레이드오프
+- 중요한 기능 추가 시 항상 버전 번호 업데이트
+- 배포 전 빌드 신선도 검증 필수
+
+### 2026-01-09: 배포 자동화 스크립트 및 문서화
+
+**자동화 스크립트**:
+- `scripts/deploy-from-github-artifacts.sh`: OCI → Docker 변환, 자동 배포
+- `scripts/check-build-freshness.sh`: 빌드 신선도 검증
+
+**문서**:
+- `docs/LUCKFOX_DEPLOYMENT.md`: 배포 절차 상세 가이드
+- `docs/DOCKER_BUILD_CACHE.md`: 캐시 문제 예방 가이드
+
+### 2026-01-09: 파일 업로드 중복 검사 기능 (v1.2.0)
+
+**구현 내용**:
+- `checkDuplicateFile()` 함수 추가 (SHA-256 해시 기반)
+- LDIF/Master List 업로드 엔드포인트에 중복 검사 적용
+- HTTP 409 Conflict 응답 (기존 업로드 정보 포함)
+- AUTO/MANUAL 모드 모두 적용
+- fail-open 전략 (DB 실패 시 업로드 허용)
+
+**기능**:
+- 동일한 파일 재업로드 시 거부
+- 파일명이 달라도 내용이 같으면 중복 감지
+- 기존 업로드 정보 제공 (ID, 파일명, 타임스탬프, 상태, 처리모드)
 
 ### 2026-01-04: Luckfox ARM64 배포 및 Sync Service 수정
 

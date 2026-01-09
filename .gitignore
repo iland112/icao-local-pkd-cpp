@@ -71,3 +71,6 @@ backups/
 # Tool cache and memory
 .cache/
 .serena/
+
+# github artifacts
+github-artifacts/
