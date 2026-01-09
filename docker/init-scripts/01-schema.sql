@@ -23,6 +23,7 @@ CREATE TABLE uploaded_file (
     file_format VARCHAR(20) NOT NULL,  -- LDIF, ML (Master List)
     collection_number VARCHAR(50),
     status VARCHAR(30) NOT NULL DEFAULT 'PENDING',  -- PENDING, PROCESSING, COMPLETED, FAILED
+    processing_mode VARCHAR(10) NOT NULL DEFAULT 'AUTO',  -- AUTO, MANUAL
     upload_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     completed_timestamp TIMESTAMP WITH TIME ZONE,
     error_message TEXT,
@@ -38,7 +39,8 @@ CREATE TABLE uploaded_file (
     ml_count INTEGER DEFAULT 0,
 
     CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML')),
-    CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'))
+    CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO', 'MANUAL'))
 );
 
 -- Index for common queries
