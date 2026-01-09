@@ -5,7 +5,6 @@
 #include <memory>
 #include <libpq-fe.h>
 #include <ldap.h>
-#include <json/json.h>
 #include "common.h"
 
 /**

@@ -1,5 +1,6 @@
 #include "processing_strategy.h"
 #include "ldif_processor.h"
+#include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <filesystem>
