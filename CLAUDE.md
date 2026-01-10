@@ -520,15 +520,31 @@ RUN strings build_fresh/bin/pkd-management | grep -i "ICAO.*PKD"
 - CMake가 타임스탬프만 확인하여 오래된 객체 파일 재사용
 - `touch` 명령으로 모든 소스 파일 타임스탬프 갱신 → 강제 재컴파일
 
-**현재 상태**:
-- GitHub Actions Run ID: 20879118487
-- 커밋: 60d3dd5
-- 빌드 진행 중 (예상 완료: 10-15분)
-- 다음 단계: 빌드 로그에서 "VERIFYING COMPILED BINARY VERSION" 섹션 확인
+**결과** (Run 20879118487):
+- ✅ Builder 스테이지: v1.4.6 바이너리 정상 컴파일 확인
+- ❌ Runtime 스테이지: `COPY --from=builder` 단계가 CACHED 처리됨
+- 문제: Builder가 재빌드되어도 Runtime의 COPY 명령이 캐시를 재사용
 
-**만약 이것도 실패하면**:
-- vcpkg-deps 스테이지에도 ARG CACHE_BUST 추가 (완전 재빌드)
-- 또는 GitHub Actions cache 완전 제거 (빌드 시간 60-80분으로 증가)
+**최종 해결** (커밋 ddfd21e):
+```dockerfile
+# Stage 4: Runtime
+FROM debian:bookworm-slim AS runtime
+
+# ARG를 runtime stage에도 재선언
+ARG CACHE_BUST=unknown
+RUN echo "=== Runtime Cache Bust Token: $CACHE_BUST ==="
+```
+
+**근본 원인**:
+- Docker의 ARG는 stage 간 자동 전파되지 않음
+- Builder stage의 CACHE_BUST는 runtime stage에 영향 없음
+- COPY --from=builder 명령이 독립적으로 캐시됨
+
+**현재 상태**:
+- GitHub Actions Run ID: 20879268691
+- 커밋: ddfd21e
+- 빌드 진행 중 (예상 완료: 10-15분)
+- 다음 단계: Runtime stage의 COPY 단계가 CACHED가 아닌지 확인
 
 ### 2026-01-10: Strategy Pattern 리팩토링 및 BUILD_ID 캐시 무효화
 
