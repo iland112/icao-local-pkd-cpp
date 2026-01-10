@@ -3372,7 +3372,7 @@ void registerRoutes() {
             PQclear(res);
             PQfinish(conn);
 
-            // Trigger DSC validation in background
+            // Trigger validation and DB save in background (MANUAL mode Stage 2)
             std::thread([uploadId]() {
                 spdlog::info("Starting DSC validation for upload: {}", uploadId);
 
@@ -3395,85 +3395,19 @@ void registerRoutes() {
                         ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
                             0, 100, "인증서 검증 중..."));
 
-                    // Get total count of certificates to validate
-                    std::string countQuery = "SELECT COUNT(*) FROM certificate WHERE upload_id = '" + uploadId + "' AND cert_type = 'DSC'";
-                    PGresult* countRes = PQexec(conn, countQuery.c_str());
-                    int totalCerts = 0;
-                    if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-                        totalCerts = std::stoi(PQgetvalue(countRes, 0, 0));
+                    // MANUAL mode Stage 2: Validate and save to DB
+                    auto strategy = ProcessingStrategyFactory::create("MANUAL");
+                    auto manualStrategy = dynamic_cast<ManualProcessingStrategy*>(strategy.get());
+                    if (manualStrategy) {
+                        manualStrategy->validateAndSaveToDb(uploadId, conn);
                     }
-                    PQclear(countRes);
 
-                    spdlog::info("Validating {} DSC certificates for upload {}", totalCerts, uploadId);
-
-                    // Get DSC certificates to validate
-                    std::string dscQuery = "SELECT id, cert_data, issuer_dn FROM certificate "
-                                          "WHERE upload_id = '" + uploadId + "' AND cert_type = 'DSC' "
-                                          "ORDER BY id";
-                    PGresult* dscRes = PQexec(conn, dscQuery.c_str());
-
-                    if (PQresultStatus(dscRes) == PGRES_TUPLES_OK) {
-                        int processed = 0;
-                        for (int i = 0; i < PQntuples(dscRes); i++) {
-                            std::string certId = PQgetvalue(dscRes, i, 0);
-                            std::string issuerDn = PQgetvalue(dscRes, i, 2);
-
-                            // Get certificate data
-                            const char* certData = PQgetvalue(dscRes, i, 1);
-                            int certLen = PQgetlength(dscRes, i, 1);
-                            std::vector<uint8_t> certBytes(certData, certData + certLen);
-
-                            // Parse certificate
-                            BIO* bio = BIO_new_mem_buf(certBytes.data(), certBytes.size());
-                            X509* cert = d2i_X509_bio(bio, nullptr);
-                            BIO_free(bio);
-
-                            if (cert) {
-                                // Validate DSC certificate
-                                DscValidationResult result = validateDscCertificate(conn, cert, issuerDn);
-
-                                // Determine validation status string
-                                std::string validationStatus;
-                                if (result.isValid) {
-                                    validationStatus = "VALID";
-                                } else if (!result.cscaFound) {
-                                    validationStatus = "CSCA_NOT_FOUND";
-                                } else if (!result.notExpired) {
-                                    validationStatus = "EXPIRED";
-                                } else {
-                                    validationStatus = "INVALID";
-                                }
-
-                                // Update validation result in database
-                                std::string updateQuery = "UPDATE certificate SET "
-                                                         "validation_status = '" + validationStatus + "', "
-                                                         "validation_message = " + escapeSqlString(conn, result.errorMessage) + ", "
-                                                         "validated_at = NOW() "
-                                                         "WHERE id = '" + certId + "'";
-                                PGresult* updateRes = PQexec(conn, updateQuery.c_str());
-                                PQclear(updateRes);
-
-                                X509_free(cert);
-                            }
-
-                            processed++;
-
-                            // Send progress update every 10 certificates
-                            if (processed % 10 == 0 || processed == totalCerts) {
-                                ProgressManager::getInstance().sendProgress(
-                                    ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
-                                        processed, totalCerts, "검증 중: " + std::to_string(processed) + "/" + std::to_string(totalCerts)));
-                            }
-                        }
-                    }
-                    PQclear(dscRes);
-
-                    // Send validation completed
+                    // Send DB save completed (Stage 2 완료)
                     ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_COMPLETED,
-                            totalCerts, totalCerts, "검증 완료: " + std::to_string(totalCerts) + "개 인증서"));
+                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVE_COMPLETED,
+                            100, 100, "DB 저장 및 검증 완료"));
 
-                    spdlog::info("DSC validation completed for upload {}: {} certificates", uploadId, totalCerts);
+                    spdlog::info("MANUAL mode Stage 2 completed for upload {}", uploadId);
                 } catch (const std::exception& e) {
                     spdlog::error("Validation failed for upload {}: {}", uploadId, e.what());
                     ProgressManager::getInstance().sendProgress(
