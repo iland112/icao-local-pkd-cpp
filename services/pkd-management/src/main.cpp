@@ -5060,7 +5060,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting ICAO Local PKD Application (v1.4.6 - Strategy Pattern Refactoring 2026-01-10)...");
+    spdlog::info("====== ICAO Local PKD v1.4.6 NO-CACHE BUILD 20260110-143000 ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
