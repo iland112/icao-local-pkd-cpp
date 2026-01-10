@@ -47,7 +47,8 @@ jobs:
           outputs: type=oci,dest=pkd-management-arm64.tar
           build-args: |
             CACHE_BUST=${{ github.sha }}
-          no-cache: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Compress Image
         run: gzip pkd-management-arm64.tar
