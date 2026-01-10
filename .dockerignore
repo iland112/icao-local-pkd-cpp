@@ -1,0 +1,71 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Docker
+.docker-data
+docker-compose*.yaml
+Dockerfile*
+.dockerignore
+
+# Build artifacts
+**/build/
+**/dist/
+**/target/
+**/*.o
+**/*.a
+**/*.so
+
+# Node.js
+**/node_modules/
+**/package-lock.json
+**/yarn.lock
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
+**/*.egg-info/
+**/.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+**/*.swp
+**/*.swo
+*~
+
+# Logs
+**/logs/
+**/*.log
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Scripts (not needed in build)
+scripts/
+*.sh
+
+# Temporary files
+**/tmp/
+**/.cache/
+**/*.tmp
+
+# SSL certificates (if sensitive)
+**/*.pem
+**/*.key
+**/*.crt
+
+# Environment files
+.env
+.env.*
+!.env.example

@@ -75,10 +75,12 @@ COPY services/pkd-management/src/ ./src/
 
 # Build application
 # vcpkg dependencies are already installed in previous stage
-RUN cmake -B build -S . \
+# Force clean build by removing any cached build directory first
+RUN rm -rf build && \
+    cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build -j$(nproc)
+    && cmake --build build -j$(nproc) --clean-first
 
 # Stage 4: Runtime (production image)
 FROM debian:bookworm-slim AS runtime
