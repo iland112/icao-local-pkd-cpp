@@ -479,6 +479,87 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 
 ## Change Log
 
+### 2026-01-10: Docker Build Cache 문제 - 최종 해결 시도 (v1.4.7)
+
+**24시간 디버깅 요약**:
+- **문제**: v1.4.6 소스 코드를 푸시했지만 배포된 바이너리는 v1.3.0을 계속 표시
+- **증거**:
+  - 빌드 로그: `grep "spdlog::info.*ICAO" ./src/main.cpp` → v1.4.6 확인됨
+  - 바이너리: `strings pkd-management | grep ICAO` → v1.3.0만 발견됨
+- **시도한 방법들**:
+  1. ❌ GitHub Actions cache 비활성화 (`no-cache: true`)
+  2. ❌ BUILD_ID 파일 업데이트 및 커밋
+  3. ❌ 버전 문자열을 고유값으로 변경
+  4. ❌ CMake `--clean-first` 플래그 추가
+  5. ❌ `.dockerignore` 파일 추가
+  6. ❌ 소스 검증 스텝 추가
+  7. ❌ ARG CACHE_BUST 구현 (Gemini 추천)
+  8. ❌ GitHub Actions cache 재활성화 (ARG 보호)
+
+**최종 해결 시도** (커밋 60d3dd5):
+```dockerfile
+# CRITICAL: Clean any potential cached artifacts from vcpkg-deps stage
+RUN rm -rf build build_fresh bin lib CMakeCache.txt CMakeFiles && \
+    find . -name "*.o" -delete && \
+    find . -name "*.a" -delete
+
+# CRITICAL: Touch all source files to force CMake to recompile
+RUN find ./src -type f -name "*.cpp" -exec touch {} \; && \
+    find ./src -type f -name "*.h" -exec touch {} \;
+
+# Build with verbose output
+cmake -DCMAKE_VERBOSE_MAKEFILE=ON
+cmake --build build_fresh --verbose
+
+# CRITICAL: Verify binary version BEFORE copying to runtime
+RUN strings build_fresh/bin/pkd-management | grep -i "ICAO.*PKD"
+```
+
+**가설**:
+- vcpkg-deps 스테이지가 캐시될 때 .o/.a 파일이 함께 캐시됨
+- CMake가 타임스탬프만 확인하여 오래된 객체 파일 재사용
+- `touch` 명령으로 모든 소스 파일 타임스탬프 갱신 → 강제 재컴파일
+
+**현재 상태**:
+- GitHub Actions Run ID: 20879118487
+- 커밋: 60d3dd5
+- 빌드 진행 중 (예상 완료: 10-15분)
+- 다음 단계: 빌드 로그에서 "VERIFYING COMPILED BINARY VERSION" 섹션 확인
+
+**만약 이것도 실패하면**:
+- vcpkg-deps 스테이지에도 ARG CACHE_BUST 추가 (완전 재빌드)
+- 또는 GitHub Actions cache 완전 제거 (빌드 시간 60-80분으로 증가)
+
+### 2026-01-10: Strategy Pattern 리팩토링 및 BUILD_ID 캐시 무효화
+
+**구현 내용** (v1.4.0 - v1.4.6):
+- MANUAL/AUTO 모드 분리를 위한 Strategy Pattern 적용
+- `common.h`: LdifEntry, ValidationStats 공통 구조체
+- `processing_strategy.h/cpp`: ProcessingStrategy 인터페이스 및 구현체
+  - AutoProcessingStrategy: 기존 one-shot 처리
+  - ManualProcessingStrategy: 3단계 분리 처리
+- `ldif_processor.h/cpp`: LDIF 처리 로직 캡슐화
+- ProcessingStrategyFactory: Factory Pattern으로 전략 선택
+
+**MANUAL 모드 3단계 처리**:
+1. Stage 1 (Parse): `/app/temp/{uploadId}_ldif.json`에 저장 후 대기
+2. Stage 2 (Validate): Temp 파일 로드 → DB 저장 (LDAP=nullptr)
+3. Stage 3 (LDAP Upload): DB → LDAP 업로드
+
+**빌드 오류 해결 과정** (5회 반복):
+1. v1.4.1: LdifProcessor 네임스페이스 호출 오류
+2. v1.4.2: Drogon Json 헤더 누락
+3. v1.4.3: processing_strategy.cpp 헤더 누락
+4. v1.4.4: ldif_processor.cpp 헤더 누락
+5. v1.4.5: **Critical** - Anonymous namespace 링커 오류
+   - 문제: extern 선언된 함수들이 익명 네임스페이스 내부에 정의됨
+   - 해결: main.cpp 829-2503 라인 범위를 익명 네임스페이스 외부로 이동
+
+**Docker 빌드 캐시 문제 발견**:
+- 문제: 버전 번호(v1.4.6)만 변경해도 Docker가 이전 바이너리 재사용
+- 원인: ARG CACHE_BUST가 있어도 CMake가 타임스탬프 기반으로 캐시된 .o 파일 재사용
+- 최종 해결은 v1.4.7에서 시도 중
+
 ### 2026-01-09: Docker Build Cache 문제 해결 및 문서화
 
 **발견된 문제**:
