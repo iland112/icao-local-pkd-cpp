@@ -69,6 +69,14 @@ RUN echo "=== Cache Bust Token: $CACHE_BUST ===" && \
 
 WORKDIR /app
 
+# CRITICAL: Clean any potential cached artifacts from vcpkg-deps stage
+RUN echo "=== CLEANING ALL POTENTIAL CACHED ARTIFACTS ===" && \
+    rm -rf build build_fresh bin lib CMakeCache.txt CMakeFiles && \
+    find . -name "*.o" -delete && \
+    find . -name "*.a" -delete && \
+    find . -name "CMakeCache.txt" -delete && \
+    echo "=== CLEANUP COMPLETE ==="
+
 # Copy build configuration (rarely changes)
 COPY services/pkd-management/CMakeLists.txt ./
 
@@ -83,12 +91,30 @@ RUN echo "=== VERIFYING COPIED SOURCE CODE ===" && \
     grep "spdlog::info.*ICAO" ./src/main.cpp | head -5 && \
     echo "=== END VERIFICATION ==="
 
-# Build application in completely new directory to avoid any cached artifacts
+# CRITICAL: Touch all source files to force CMake to recompile
+RUN echo "=== FORCING SOURCE FILES TIMESTAMP UPDATE ===" && \
+    find ./src -type f -name "*.cpp" -exec touch {} \; && \
+    find ./src -type f -name "*.h" -exec touch {} \; && \
+    echo "=== TIMESTAMP UPDATE COMPLETE ==="
+
+# Build application in completely new directory with verbose output
 RUN mkdir -p build_fresh && \
     cmake -B build_fresh -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
-    -DCMAKE_BUILD_TYPE=Release && \
-    cmake --build build_fresh -j$(nproc)
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_VERBOSE_MAKEFILE=ON && \
+    cmake --build build_fresh -j$(nproc) --verbose
+
+# CRITICAL: Verify binary contains correct version BEFORE copying to runtime
+RUN echo "=== VERIFYING COMPILED BINARY VERSION ===" && \
+    if [ -f build_fresh/bin/pkd-management ]; then \
+        strings build_fresh/bin/pkd-management | grep -i "ICAO.*PKD" | head -10 || \
+        echo "WARNING: No ICAO PKD version string found in binary!"; \
+    else \
+        echo "ERROR: Binary not found at expected location!"; \
+        exit 1; \
+    fi && \
+    echo "=== BINARY VERIFICATION COMPLETE ==="
 
 # Stage 4: Runtime (production image)
 FROM debian:bookworm-slim AS runtime
