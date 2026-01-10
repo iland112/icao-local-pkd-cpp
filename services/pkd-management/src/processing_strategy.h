@@ -109,6 +109,12 @@ public:
         LDAP* ld
     );
 
+    // Cleanup failed upload
+    static void cleanupFailedUpload(
+        const std::string& uploadId,
+        PGconn* conn
+    );
+
 private:
     std::string getTempFilePath(const std::string& uploadId, const std::string& type) const;
     void saveLdifEntriesToTempFile(const std::string& uploadId, const std::vector<LdifEntry>& entries);

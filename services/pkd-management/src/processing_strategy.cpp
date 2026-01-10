@@ -271,16 +271,22 @@ void ManualProcessingStrategy::validateAndSaveToDb(
 ) {
     spdlog::info("MANUAL mode Stage 2: Validating and saving to DB for upload {}", uploadId);
 
-    // Check file format
-    std::string formatQuery = "SELECT file_format FROM uploaded_file WHERE id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, formatQuery.c_str());
+    // Check upload status and file format
+    std::string checkQuery = "SELECT file_format, status FROM uploaded_file WHERE id = '" + uploadId + "'";
+    PGresult* res = PQexec(conn, checkQuery.c_str());
     if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
         PQclear(res);
         throw std::runtime_error("Upload not found: " + uploadId);
     }
 
     std::string fileFormat = PQgetvalue(res, 0, 0);
+    std::string status = PQgetvalue(res, 0, 1);
     PQclear(res);
+
+    // Verify Stage 1 is completed (status should be PENDING after parsing)
+    if (status != "PENDING") {
+        throw std::runtime_error("Stage 1 parsing not completed. Current status: " + status);
+    }
 
     if (fileFormat == "LDIF") {
         // Load LDIF entries from temp file
@@ -345,4 +351,64 @@ void ManualProcessingStrategy::uploadToLdap(
     int uploadedCount = LdifProcessor::uploadToLdap(uploadId, conn, ld);
 
     spdlog::info("MANUAL mode Stage 3: Completed, uploaded {} entries to LDAP", uploadedCount);
+}
+
+void ManualProcessingStrategy::cleanupFailedUpload(
+    const std::string& uploadId,
+    PGconn* conn
+) {
+    spdlog::info("Cleaning up failed upload: {}", uploadId);
+
+    // Delete certificates
+    std::string deleteCerts = "DELETE FROM certificate WHERE upload_id = '" + uploadId + "'";
+    PGresult* res = PQexec(conn, deleteCerts.c_str());
+    int certsDeleted = 0;
+    if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+        certsDeleted = atoi(PQcmdTuples(res));
+    }
+    PQclear(res);
+
+    // Delete CRLs
+    std::string deleteCrls = "DELETE FROM crl WHERE upload_id = '" + uploadId + "'";
+    res = PQexec(conn, deleteCrls.c_str());
+    int crlsDeleted = 0;
+    if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+        crlsDeleted = atoi(PQcmdTuples(res));
+    }
+    PQclear(res);
+
+    // Delete master lists
+    std::string deleteMls = "DELETE FROM master_list WHERE upload_id = '" + uploadId + "'";
+    res = PQexec(conn, deleteMls.c_str());
+    int mlsDeleted = 0;
+    if (PQresultStatus(res) == PGRES_COMMAND_OK) {
+        mlsDeleted = atoi(PQcmdTuples(res));
+    }
+    PQclear(res);
+
+    // Delete upload record
+    std::string deleteUpload = "DELETE FROM uploaded_file WHERE id = '" + uploadId + "'";
+    res = PQexec(conn, deleteUpload.c_str());
+    PQclear(res);
+
+    // Delete temp files
+    ManualProcessingStrategy strategy;
+    std::string ldifTemp = strategy.getTempFilePath(uploadId, "ldif");
+    std::string mlTemp = strategy.getTempFilePath(uploadId, "ml");
+
+    try {
+        if (std::filesystem::exists(ldifTemp)) {
+            std::filesystem::remove(ldifTemp);
+            spdlog::info("Deleted temp file: {}", ldifTemp);
+        }
+        if (std::filesystem::exists(mlTemp)) {
+            std::filesystem::remove(mlTemp);
+            spdlog::info("Deleted temp file: {}", mlTemp);
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to delete temp files: {}", e.what());
+    }
+
+    spdlog::info("Cleanup completed: {} certs, {} CRLs, {} MLs deleted",
+                 certsDeleted, crlsDeleted, mlsDeleted);
 }

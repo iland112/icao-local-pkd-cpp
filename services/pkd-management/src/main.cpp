@@ -3429,6 +3429,76 @@ void registerRoutes() {
         {drogon::Post}
     );
 
+    // Cleanup failed upload endpoint
+    app.registerHandler(
+        "/api/upload/{uploadId}",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("DELETE /api/upload/{} - Cleanup failed upload", uploadId);
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Check if upload exists
+            std::string query = "SELECT id FROM uploaded_file WHERE id = '" + uploadId + "'";
+            PGresult* res = PQexec(conn, query.c_str());
+
+            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = "Upload not found";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k404NotFound);
+                callback(resp);
+                PQclear(res);
+                PQfinish(conn);
+                return;
+            }
+            PQclear(res);
+
+            // Cleanup failed upload
+            try {
+                ManualProcessingStrategy::cleanupFailedUpload(uploadId, conn);
+
+                Json::Value result;
+                result["success"] = true;
+                result["message"] = "Upload cleaned up successfully";
+                result["uploadId"] = uploadId;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+            } catch (const std::exception& e) {
+                spdlog::error("Failed to cleanup upload {}: {}", uploadId, e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = std::string("Cleanup failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Delete}
+    );
+
     // Manual mode: Trigger LDAP save endpoint
     app.registerHandler(
         "/api/upload/{uploadId}/ldap",
@@ -4994,7 +5064,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.6 NO-CACHE BUILD 20260110-143000 ======");
+    spdlog::info("====== ICAO Local PKD v1.4.8 CLEANUP-FAILED-UPLOAD BUILD 20260111-090000 ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
