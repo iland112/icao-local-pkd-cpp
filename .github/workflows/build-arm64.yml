@@ -45,14 +45,7 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-management:arm64
           outputs: type=oci,dest=pkd-management-arm64.tar
-          cache-from: |
-            type=gha,scope=pkd-mgmt-vcpkg-base
-            type=gha,scope=pkd-mgmt-vcpkg-deps
-            type=gha,scope=pkd-mgmt-builder
-          cache-to: |
-            type=gha,mode=max,scope=pkd-mgmt-vcpkg-base
-            type=gha,mode=max,scope=pkd-mgmt-vcpkg-deps
-            type=gha,mode=max,scope=pkd-mgmt-builder
+          no-cache: true
 
       - name: Compress Image
         run: gzip pkd-management-arm64.tar
