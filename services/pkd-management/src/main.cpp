@@ -3404,7 +3404,7 @@ void registerRoutes() {
 
                     // Send DB save completed (Stage 2 완료)
                     ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVE_COMPLETED,
+                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_COMPLETED,
                             100, 100, "DB 저장 및 검증 완료"));
 
                     spdlog::info("MANUAL mode Stage 2 completed for upload {}", uploadId);
