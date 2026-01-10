@@ -73,6 +73,11 @@ COPY shared/ ./shared/
 # Copy source code (changes frequently)
 COPY services/pkd-management/src/ ./src/
 
+# DEBUG: Verify source code was copied correctly
+RUN echo "=== VERIFYING COPIED SOURCE CODE ===" && \
+    grep "spdlog::info.*ICAO" ./src/main.cpp | head -5 && \
+    echo "=== END VERIFICATION ==="
+
 # Build application
 # vcpkg dependencies are already installed in previous stage
 # Force clean build by removing any cached build directory first
