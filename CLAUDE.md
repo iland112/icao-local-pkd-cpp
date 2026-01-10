@@ -540,11 +540,21 @@ RUN echo "=== Runtime Cache Bust Token: $CACHE_BUST ==="
 - Builder stage의 CACHE_BUST는 runtime stage에 영향 없음
 - COPY --from=builder 명령이 독립적으로 캐시됨
 
-**현재 상태**:
-- GitHub Actions Run ID: 20879268691
-- 커밋: ddfd21e
-- 빌드 진행 중 (예상 완료: 10-15분)
-- 다음 단계: Runtime stage의 COPY 단계가 CACHED가 아닌지 확인
+**최종 결과** (Run 20879268691):
+- ✅ Builder 스테이지: v1.4.6 바이너리 정상 컴파일
+- ✅ Runtime 스테이지: `COPY --from=builder` → **DONE** (캐시 사용 안 함)
+- ✅ Luckfox 배포 성공: **v1.4.6 정상 실행 확인**
+
+**24시간 디버깅 완료!**
+
+```
+[2026-01-10 22:57:42.575] [info] [1] ====== ICAO Local PKD v1.4.6 NO-CACHE BUILD 20260110-143000 ======
+```
+
+**핵심 교훈**:
+- Docker ARG는 FROM 경계를 넘지 못함 (각 stage마다 재선언 필수)
+- Multi-stage build에서 builder 재빌드 ≠ runtime COPY 재실행
+- 각 stage의 캐시를 독립적으로 관리해야 함
 
 ### 2026-01-10: Strategy Pattern 리팩토링 및 BUILD_ID 캐시 무효화
 
