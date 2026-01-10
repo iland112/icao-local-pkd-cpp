@@ -45,6 +45,8 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-management:arm64
           outputs: type=oci,dest=pkd-management-arm64.tar
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
           no-cache: true
 
       - name: Compress Image

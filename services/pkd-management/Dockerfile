@@ -61,8 +61,13 @@ RUN ARCH=$(uname -m) && \
 # Stage 3: Application Build (changes frequently)
 FROM vcpkg-deps AS builder
 
-# Copy BUILD_ID to invalidate cache when needed
-COPY services/pkd-management/BUILD_ID ./BUILD_ID
+# ARG to force cache invalidation on every build
+# This will be set to github.sha in GitHub Actions workflow
+ARG CACHE_BUST=unknown
+RUN echo "=== Cache Bust Token: $CACHE_BUST ===" && \
+    echo "This ensures fresh build on every run"
+
+WORKDIR /app
 
 # Copy build configuration (rarely changes)
 COPY services/pkd-management/CMakeLists.txt ./
@@ -70,7 +75,7 @@ COPY services/pkd-management/CMakeLists.txt ./
 # Copy shared code (changes occasionally)
 COPY shared/ ./shared/
 
-# Copy source code (changes frequently)
+# Copy source code (changes frequently) - AFTER CACHE_BUST
 COPY services/pkd-management/src/ ./src/
 
 # DEBUG: Verify source code was copied correctly
@@ -78,14 +83,12 @@ RUN echo "=== VERIFYING COPIED SOURCE CODE ===" && \
     grep "spdlog::info.*ICAO" ./src/main.cpp | head -5 && \
     echo "=== END VERIFICATION ==="
 
-# Build application
-# vcpkg dependencies are already installed in previous stage
-# Force clean build by removing any cached build directory first
-RUN rm -rf build && \
-    cmake -B build -S . \
+# Build application in completely new directory to avoid any cached artifacts
+RUN mkdir -p build_fresh && \
+    cmake -B build_fresh -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
-    -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build -j$(nproc) --clean-first
+    -DCMAKE_BUILD_TYPE=Release && \
+    cmake --build build_fresh -j$(nproc)
 
 # Stage 4: Runtime (production image)
 FROM debian:bookworm-slim AS runtime
@@ -119,8 +122,8 @@ RUN useradd -m -s /bin/bash app
 RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
-# Copy binary from builder
-COPY --from=builder /app/build/bin/pkd-management /app/
+# Copy binary from builder (note: using build_fresh directory)
+COPY --from=builder /app/build_fresh/bin/pkd-management /app/
 
 # Copy Swagger UI static files
 COPY shared/static/swagger-ui/ /app/static/swagger-ui/
