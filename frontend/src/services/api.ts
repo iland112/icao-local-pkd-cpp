@@ -85,6 +85,10 @@ export const uploadApi = {
 
   triggerLdapUpload: (uploadId: string) =>
     api.post(`/upload/${uploadId}/ldap`),
+
+  // Delete failed/pending upload
+  deleteUpload: (uploadId: string) =>
+    api.delete(`/upload/${uploadId}`),
 };
 
 // PA APIs

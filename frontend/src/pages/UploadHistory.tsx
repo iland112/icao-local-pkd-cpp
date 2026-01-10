@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   HardDrive,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { uploadApi } from '@/services/api';
 import type { PageResponse, UploadStatus, FileFormat } from '@/types';
@@ -93,6 +94,11 @@ export function UploadHistory() {
   // Detail dialog state
   const [selectedUpload, setSelectedUpload] = useState<UploadHistoryItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Delete confirmation dialog state
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [uploadToDelete, setUploadToDelete] = useState<UploadHistoryItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const pageSize = 10;
 
@@ -279,6 +285,35 @@ export function UploadHistory() {
   const closeDialog = () => {
     setDialogOpen(false);
     setSelectedUpload(null);
+  };
+
+  const handleDeleteClick = (upload: UploadHistoryItem) => {
+    setUploadToDelete(upload);
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setUploadToDelete(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!uploadToDelete) return;
+
+    setDeleting(true);
+    try {
+      await uploadApi.deleteUpload(uploadToDelete.id);
+      // Refresh the list
+      await fetchUploads();
+      closeDeleteDialog();
+      // Show success message (optional - can add toast notification here)
+      console.log('Upload deleted successfully');
+    } catch (error) {
+      console.error('Failed to delete upload:', error);
+      alert('업로드 삭제에 실패했습니다.');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const filteredUploads = uploads.filter((upload) => {
@@ -621,13 +656,25 @@ export function UploadHistory() {
                         {formatDate(upload.createdAt)}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={() => handleViewDetail(upload)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                          상세
-                        </button>
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleViewDetail(upload)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                            상세
+                          </button>
+                          {(upload.status === 'FAILED' || upload.status === 'PENDING') && (
+                            <button
+                              onClick={() => handleDeleteClick(upload)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              title="실패한 업로드 삭제"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              삭제
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -900,6 +947,110 @@ export function UploadHistory() {
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Dialog */}
+      {deleteDialogOpen && uploadToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={closeDeleteDialog}
+          />
+
+          {/* Dialog Content */}
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
+                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  업로드 삭제
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  정말 삭제하시겠습니까?
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
+                      경고
+                    </h4>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
+                      다음 데이터가 모두 삭제됩니다:
+                    </p>
+                    <ul className="text-sm text-yellow-700 dark:text-yellow-400 mt-2 ml-4 list-disc space-y-1">
+                      <li>업로드 기록</li>
+                      <li>인증서 데이터 (CSCA, DSC, DSC_NC)</li>
+                      <li>CRL 데이터</li>
+                      <li>Master List 데이터</li>
+                      <li>임시 파일</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">파일명</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {uploadToDelete.fileName}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">상태</span>
+                  {uploadToDelete.status === 'FAILED' ? (
+                    <span className="text-sm font-medium text-red-600 dark:text-red-400">실패</span>
+                  ) : (
+                    <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">대기</span>
+                  )}
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">업로드 ID</span>
+                  <span className="text-xs font-mono text-gray-900 dark:text-white">
+                    {uploadToDelete.id.substring(0, 8)}...
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={closeDeleteDialog}
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {deleting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    삭제 중...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    삭제
+                  </>
+                )}
               </button>
             </div>
           </div>
