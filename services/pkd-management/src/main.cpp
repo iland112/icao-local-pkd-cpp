@@ -3579,7 +3579,7 @@ void registerRoutes() {
                             0, 100, "LDAP에 저장 중..."));
 
                     // Get certificates that haven't been stored in LDAP yet
-                    std::string certQuery = "SELECT id, cert_data, cert_type, country, subject_dn, "
+                    std::string certQuery = "SELECT id, certificate_binary, certificate_type, country_code, subject_dn, "
                                            "issuer_dn, serial_number, fingerprint_sha256 "
                                            "FROM certificate "
                                            "WHERE upload_id = '" + uploadId + "' "
@@ -3640,7 +3640,7 @@ void registerRoutes() {
                     PQclear(certRes);
 
                     // Get CRLs that haven't been stored in LDAP yet
-                    std::string crlQuery = "SELECT id, crl_data, country, issuer_dn, fingerprint_sha256 "
+                    std::string crlQuery = "SELECT id, crl_binary, country_code, issuer_dn, fingerprint_sha256 "
                                           "FROM crl "
                                           "WHERE upload_id = '" + uploadId + "' "
                                           "AND (stored_in_ldap = false OR stored_in_ldap IS NULL) "
@@ -5166,7 +5166,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.9 MANUAL-MODE-UX-IMPROVEMENTS ======");
+    spdlog::info("====== ICAO Local PKD v1.4.10 LDAP-UPLOAD-FIX ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
