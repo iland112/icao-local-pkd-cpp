@@ -3589,10 +3589,18 @@ void registerRoutes() {
                         auto strategy = ProcessingStrategyFactory::create(processingMode);
                         strategy->processMasterListContent(uploadId, contentBytes, conn, ld);
 
-                        // Send completion progress
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                100, 100, "Master List 파싱 완료"));
+                        // Send appropriate progress based on mode
+                        if (processingMode == "MANUAL") {
+                            // MANUAL mode: Only parsing completed, waiting for Stage 2
+                            ProgressManager::getInstance().sendProgress(
+                                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                                    100, 100, "Master List 파싱 완료 - 검증 대기"));
+                        } else {
+                            // AUTO mode: All processing completed
+                            ProgressManager::getInstance().sendProgress(
+                                ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                                    100, 100, "Master List 처리 완료"));
+                        }
 
                     } catch (const std::exception& e) {
                         spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
