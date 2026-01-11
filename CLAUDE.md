@@ -380,6 +380,22 @@ gh auth login
 
 **상세 문서**: [docs/LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md)
 
+### Docker Image Name Mapping
+
+**중요**: 배포 스크립트와 docker-compose-luckfox.yaml의 이미지 이름이 일치해야 합니다.
+
+| Service | 배포 스크립트 이미지 이름 | docker-compose 이미지 이름 |
+|---------|--------------------------|---------------------------|
+| pkd-management | `icao-local-management:arm64` | `icao-local-management:arm64` |
+| pa-service | `icao-local-pa:arm64-v3` | `icao-local-pa:arm64-v3` |
+| sync-service | `icao-local-sync:arm64-v1.2.0` | `icao-local-sync:arm64-v1.2.0` |
+| frontend | `icao-local-pkd-frontend:arm64-fixed` | `icao-local-pkd-frontend:arm64-fixed` |
+
+**버전 업데이트 시 주의사항**:
+1. `scripts/deploy-from-github-artifacts.sh` - `deploy_service` 호출 시 이미지 이름 업데이트
+2. `docker-compose-luckfox.yaml` - 서비스의 `image:` 필드 업데이트
+3. Luckfox에 docker-compose-luckfox.yaml 업데이트 후 재배포
+
 ### Cross-Platform Docker Build (비권장)
 
 ```bash
@@ -555,6 +571,40 @@ RUN echo "=== Runtime Cache Bust Token: $CACHE_BUST ==="
 - Docker ARG는 FROM 경계를 넘지 못함 (각 stage마다 재선언 필수)
 - Multi-stage build에서 builder 재빌드 ≠ runtime COPY 재실행
 - 각 stage의 캐시를 독립적으로 관리해야 함
+
+### 2026-01-11: Failed Upload Cleanup 기능 및 Luckfox 배포 이미지 이름 불일치 해결 (v1.4.8)
+
+**Failed Upload Cleanup 기능 구현**:
+- DELETE `/api/upload/{uploadId}` 엔드포인트 추가
+- `ManualProcessingStrategy::cleanupFailedUpload()` 정적 함수 구현
+- DB 정리: certificate, crl, master_list, uploaded_file 레코드 삭제
+- 파일 정리: `/app/temp/{uploadId}_ldif.json` 임시 파일 삭제
+- Frontend: Upload History 페이지에 삭제 버튼 및 확인 다이얼로그 추가 (FAILED/PENDING만)
+
+**MANUAL 모드 안정성 개선**:
+- Stage 2 시작 전 Stage 1 완료 검증 (PENDING 상태 확인)
+- Temp 파일 누락 시 명확한 에러 메시지
+- 타이밍 이슈 근본 해결
+
+**Luckfox 배포 이미지 이름 불일치 해결**:
+- 문제: 배포 스크립트가 생성하는 이미지 이름과 docker-compose가 사용하는 이미지 이름 불일치
+- 결과: 이미지를 로드해도 컨테이너가 이전 버전 계속 사용
+- 해결:
+  - `scripts/deploy-from-github-artifacts.sh`: 이미지 이름을 docker-compose와 일치하도록 수정
+  - `docker-compose-luckfox.yaml`: 로컬 저장소에 추가 (버전 관리)
+  - CLAUDE.md: 이미지 이름 매핑 테이블 및 업데이트 주의사항 추가
+
+**이미지 이름 통일**:
+| Service | Image Name |
+|---------|------------|
+| pkd-management | `icao-local-management:arm64` |
+| pa-service | `icao-local-pa:arm64-v3` |
+| sync-service | `icao-local-sync:arm64-v1.2.0` |
+| frontend | `icao-local-pkd-frontend:arm64-fixed` |
+
+**배포 완료**:
+- v1.4.8 CLEANUP-FAILED-UPLOAD Luckfox 배포 성공
+- 로그 확인: `====== ICAO Local PKD v1.4.8 CLEANUP-FAILED-UPLOAD BUILD 20260111-130200 ======`
 
 ### 2026-01-10: Strategy Pattern 리팩토링 및 BUILD_ID 캐시 무효화
 

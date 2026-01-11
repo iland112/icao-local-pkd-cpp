@@ -1,0 +1,151 @@
+# =============================================================================
+# ICAO Local PKD C++ - Luckfox ARM64 Deployment
+# =============================================================================
+# Network Architecture:
+#   192.168.100.10: HAProxy (:10389) + OpenLDAP1 (:389) - Master Node
+#   192.168.100.11: OpenLDAP2 (:389) + Docker Apps - This Node
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API Gateway (Nginx)
+  # ---------------------------------------------------------------------------
+  api-gateway:
+    image: nginx:alpine
+    container_name: icao-pkd-api-gateway
+    network_mode: host
+    volumes:
+      - ./nginx/api-gateway-luckfox.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - pkd-management
+      - pa-service
+      - sync-service
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React.js)
+  # ---------------------------------------------------------------------------
+  frontend:
+    image: icao-local-pkd-frontend:arm64-fixed
+    container_name: icao-pkd-frontend
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+    volumes:
+      - ./frontend/nginx-luckfox.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PKD Management Service
+  # ---------------------------------------------------------------------------
+  pkd-management:
+    image: icao-local-management:arm64
+    container_name: icao-pkd-management
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-management
+      - SERVER_PORT=8081
+      # PostgreSQL (local)
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      # LDAP Read via HAProxy on Master Node (port 10389)
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=10389
+      # LDAP Write direct to Master Node OpenLDAP1 (port 389)
+      - LDAP_WRITE_HOST=192.168.100.10
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=core
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+    depends_on:
+      - postgres
+    volumes:
+      - ./data/pkd-logs:/app/logs
+      - ./data/pkd-uploads:/app/uploads
+      - ./data/cert:/app/data/cert:ro
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PA Service (Passive Authentication)
+  # ---------------------------------------------------------------------------
+  pa-service:
+    image: icao-local-pa:arm64-v3
+    container_name: icao-pkd-pa-service
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pa-service
+      - SERVER_PORT=8082
+      # PostgreSQL (local)
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      # LDAP Read via HAProxy on Master Node (port 10389)
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=10389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=core
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+    depends_on:
+      - postgres
+    volumes:
+      - ./data/pa-logs:/app/logs
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Sync Service
+  # ---------------------------------------------------------------------------
+  sync-service:
+    image: icao-local-sync:arm64-v1.2.0
+    container_name: icao-pkd-sync-service
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=sync-service
+      - SERVER_PORT=8083
+      # PostgreSQL (local)
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      # LDAP Read via HAProxy on Master Node (port 10389)
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=10389
+      # LDAP Write direct to Master Node (port 389)
+      - LDAP_WRITE_HOST=192.168.100.10
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=core
+      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+    depends_on:
+      - postgres
+    volumes:
+      - ./data/sync-logs:/app/logs
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15
+    container_name: icao-pkd-postgres
+    network_mode: host
+    environment:
+      - POSTGRES_USER=pkd
+      - POSTGRES_PASSWORD=pkd
+      - POSTGRES_DB=localpkd
+      - TZ=Asia/Seoul
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    restart: unless-stopped

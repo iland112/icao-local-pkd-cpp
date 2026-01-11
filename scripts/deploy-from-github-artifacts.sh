@@ -166,20 +166,21 @@ deploy_service() {
 }
 
 # Deploy based on selection
+# Image names MUST match docker-compose-luckfox.yaml
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pkd-management" ]; then
-    deploy_service "pkd-management" "icao-pkd-management:arm64" "pkd-management-arm64.tar.gz"
+    deploy_service "pkd-management" "icao-local-management:arm64" "pkd-management-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pa-service" ]; then
-    deploy_service "pa-service" "icao-pa-service:arm64" "pkd-pa-arm64.tar.gz"
+    deploy_service "pa-service" "icao-local-pa:arm64-v3" "pkd-pa-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "sync-service" ]; then
-    deploy_service "sync-service" "icao-sync-service:arm64" "pkd-sync-arm64.tar.gz"
+    deploy_service "sync-service" "icao-local-sync:arm64-v1.2.0" "pkd-sync-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "frontend" ]; then
-    deploy_service "frontend" "icao-frontend:arm64" "pkd-frontend-arm64.tar.gz"
+    deploy_service "frontend" "icao-local-pkd-frontend:arm64-fixed" "pkd-frontend-arm64.tar.gz"
 fi
 
 echo -e "${GREEN}========================================${NC}"
