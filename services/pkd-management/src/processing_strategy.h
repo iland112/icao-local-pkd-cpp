@@ -121,6 +121,7 @@ private:
     std::vector<LdifEntry> loadLdifEntriesFromTempFile(const std::string& uploadId);
     void saveMasterListToTempFile(const std::string& uploadId, const std::vector<uint8_t>& content);
     std::vector<uint8_t> loadMasterListFromTempFile(const std::string& uploadId);
+    void processMasterListToDb(const std::string& uploadId, const std::vector<uint8_t>& content, PGconn* conn);
 };
 
 /**

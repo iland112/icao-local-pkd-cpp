@@ -2765,6 +2765,240 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 }
 
 /**
+ * @brief Core Master List processing logic (called by Strategy Pattern)
+ * @param uploadId Upload record UUID
+ * @param content Raw Master List file content
+ * @param conn PostgreSQL connection
+ * @param ld LDAP connection (can be nullptr for MANUAL mode Stage 2)
+ */
+void processMasterListContentCore(const std::string& uploadId, const std::vector<uint8_t>& content,
+                                   PGconn* conn, LDAP* ld) {
+    spdlog::info("Processing Master List core for upload {}: {} bytes, LDAP={}",
+                 uploadId, content.size(), (ld ? "yes" : "no"));
+
+    int cscaCount = 0;
+    int dscCount = 0;
+    int ldapStoredCount = 0;
+    int skippedDuplicates = 0;
+    int totalCerts = 0;
+
+    try {
+        // Send initial progress
+        ProgressManager::getInstance().sendProgress(
+            ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED, 0, 0, "CMS 파싱 시작"));
+
+        // Validate CMS format
+        if (content.empty() || content[0] != 0x30) {
+            spdlog::error("Invalid Master List: not a valid CMS structure");
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format"));
+            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "Invalid CMS format");
+            return;
+        }
+
+        // Parse as CMS SignedData
+        BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
+        CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+        BIO_free(bio);
+
+        // Verify CMS signature with UN_CSCA trust anchor
+        if (cms) {
+            X509* trustAnchor = loadTrustAnchor();
+            if (trustAnchor) {
+                bool signatureValid = verifyCmsSignature(cms, trustAnchor);
+                X509_free(trustAnchor);
+                if (!signatureValid) {
+                    spdlog::warn("Master List CMS signature verification failed - continuing with parsing");
+                }
+            }
+        }
+
+        // Extract certificates from CMS or PKCS7
+        if (cms) {
+            // CMS parsing succeeded
+            spdlog::info("CMS SignedData parsed successfully, extracting certificates...");
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS, 0, 0, "인증서 추출 중"));
+
+            ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+            if (contentPtr && *contentPtr) {
+                const unsigned char* contentData = ASN1_STRING_get0_data(*contentPtr);
+                int contentLen = ASN1_STRING_length(*contentPtr);
+
+                // Parse MasterList ASN.1 structure
+                const unsigned char* p = contentData;
+                int tag, xclass;
+                long seqLen;
+                int ret = ASN1_get_object(&p, &seqLen, &tag, &xclass, contentLen);
+
+                if (ret != 0x80 && tag == V_ASN1_SEQUENCE) {
+                    const unsigned char* seqEnd = p + seqLen;
+                    long elemLen;
+                    ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+
+                    // Find certList (SET)
+                    const unsigned char* certSetStart = nullptr;
+                    long certSetLen = 0;
+
+                    if (tag == V_ASN1_INTEGER) {
+                        // Skip version
+                        p += elemLen;
+                        if (p < seqEnd) {
+                            ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+                            if (tag == V_ASN1_SET) {
+                                certSetStart = p;
+                                certSetLen = elemLen;
+                            }
+                        }
+                    } else if (tag == V_ASN1_SET) {
+                        certSetStart = p;
+                        certSetLen = elemLen;
+                    }
+
+                    // Parse certificates
+                    if (certSetStart && certSetLen > 0) {
+                        const unsigned char* certPtr = certSetStart;
+                        const unsigned char* certSetEnd = certSetStart + certSetLen;
+
+                        while (certPtr < certSetEnd) {
+                            X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certPtr);
+                            if (cert) {
+                                totalCerts++;
+
+                                // Extract certificate data
+                                int derLen = i2d_X509(cert, nullptr);
+                                if (derLen > 0) {
+                                    std::vector<uint8_t> derBytes(derLen);
+                                    uint8_t* derPtr = derBytes.data();
+                                    i2d_X509(cert, &derPtr);
+
+                                    std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
+                                    std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
+                                    std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
+                                    std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
+                                    std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+                                    std::string fingerprint = computeFileHash(derBytes);
+                                    std::string countryCode = extractCountryCode(subjectDn);
+                                    std::string certType = "CSCA";
+
+                                    // Validate certificate
+                                    std::string validationStatus = "VALID";
+                                    if (subjectDn == issuerDn) {
+                                        auto cscaValidation = validateCscaCertificate(cert);
+                                        validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
+                                    }
+
+                                    // Save to DB
+                                    std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
+                                                                         subjectDn, issuerDn, serialNumber, fingerprint,
+                                                                         notBefore, notAfter, derBytes);
+
+                                    if (!certId.empty()) {
+                                        cscaCount++;
+
+                                        // Save to LDAP if connection available
+                                        if (ld) {
+                                            std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                        subjectDn, issuerDn, serialNumber,
+                                                                                        fingerprint, derBytes);
+                                            if (!ldapDn.empty()) {
+                                                updateCertificateLdapStatus(conn, certId, ldapDn);
+                                                ldapStoredCount++;
+                                            }
+                                        }
+                                    }
+
+                                    // Progress update
+                                    if (totalCerts % 50 == 0) {
+                                        ProgressManager::getInstance().sendProgress(
+                                            ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                                                totalCerts, totalCerts, "DB 저장 중: " + std::to_string(cscaCount) + " CSCA"));
+                                    }
+                                }
+                                X509_free(cert);
+                            }
+                        }
+                    }
+                }
+            }
+            CMS_ContentInfo_free(cms);
+
+        } else {
+            // Fallback: PKCS7
+            spdlog::debug("CMS parsing failed, trying PKCS7 fallback...");
+            const uint8_t* p = content.data();
+            PKCS7* p7 = d2i_PKCS7(nullptr, &p, static_cast<long>(content.size()));
+
+            if (p7 && PKCS7_type_is_signed(p7)) {
+                STACK_OF(X509)* certs = p7->d.sign->cert;
+                if (certs) {
+                    int numCerts = sk_X509_num(certs);
+                    spdlog::info("Found {} certificates in Master List (PKCS7)", numCerts);
+
+                    for (int i = 0; i < numCerts; i++) {
+                        X509* cert = sk_X509_value(certs, i);
+                        if (!cert) continue;
+
+                        int derLen = i2d_X509(cert, nullptr);
+                        if (derLen > 0) {
+                            std::vector<uint8_t> derBytes(derLen);
+                            uint8_t* derPtr = derBytes.data();
+                            i2d_X509(cert, &derPtr);
+
+                            std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
+                            std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
+                            std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
+                            std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
+                            std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+                            std::string fingerprint = computeFileHash(derBytes);
+                            std::string countryCode = extractCountryCode(subjectDn);
+
+                            std::string certId = saveCertificate(conn, uploadId, "CSCA", countryCode,
+                                                                 subjectDn, issuerDn, serialNumber, fingerprint,
+                                                                 notBefore, notAfter, derBytes);
+
+                            if (!certId.empty()) {
+                                cscaCount++;
+                                if (ld) {
+                                    std::string ldapDn = saveCertificateToLdap(ld, "CSCA", countryCode,
+                                                                                subjectDn, issuerDn, serialNumber,
+                                                                                fingerprint, derBytes);
+                                    if (!ldapDn.empty()) {
+                                        updateCertificateLdapStatus(conn, certId, ldapDn);
+                                        ldapStoredCount++;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                PKCS7_free(p7);
+            } else {
+                spdlog::error("Failed to parse Master List: neither CMS nor PKCS7");
+                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
+                return;
+            }
+        }
+
+        // Update statistics
+        ProgressManager::getInstance().sendProgress(
+            ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                100, 100, "DB 저장 완료: " + std::to_string(cscaCount) + " CSCA"));
+
+        spdlog::info("Extracted {} certificates from Master List", totalCerts);
+        updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, totalCerts, totalCerts, "");
+
+        spdlog::info("Master List processing completed: {} CSCA, LDAP: {}", cscaCount, ldapStoredCount);
+
+    } catch (const std::exception& e) {
+        spdlog::error("Master List processing failed: {}", e.what());
+        ProgressManager::getInstance().sendProgress(
+            ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
+        updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
+    }
+}
+
+/**
  * @brief Parse Master List (CMS SignedData) and extract CSCA certificates (DB + LDAP)
  * Master List contains CSCA certificates in CMS SignedData format
  */
@@ -3305,7 +3539,63 @@ void registerRoutes() {
             if (fileFormatStr == "LDIF") {
                 processLdifFileAsync(uploadId, contentBytes);
             } else if (fileFormatStr == "ML") {
-                processMasterListFileAsync(uploadId, contentBytes);
+                // Use Strategy Pattern for Master List (same as LDIF)
+                std::thread([uploadId, contentBytes]() {
+                    spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
+
+                    std::string conninfo = "host=" + appConfig.dbHost +
+                                          " port=" + std::to_string(appConfig.dbPort) +
+                                          " dbname=" + appConfig.dbName +
+                                          " user=" + appConfig.dbUser +
+                                          " password=" + appConfig.dbPassword;
+
+                    PGconn* conn = PQconnectdb(conninfo.c_str());
+                    if (PQstatus(conn) != CONNECTION_OK) {
+                        spdlog::error("Database connection failed for async processing: {}", PQerrorMessage(conn));
+                        PQfinish(conn);
+                        return;
+                    }
+
+                    // Get processing mode
+                    std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
+                    PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+                    std::string processingMode = "AUTO";
+                    if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
+                        processingMode = PQgetvalue(modeRes, 0, 0);
+                    }
+                    PQclear(modeRes);
+
+                    spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
+
+                    // Connect to LDAP only if AUTO mode
+                    LDAP* ld = nullptr;
+                    if (processingMode == "AUTO") {
+                        ld = getLdapWriteConnection();
+                        if (!ld) {
+                            spdlog::warn("LDAP write connection failed - will only save to DB");
+                        }
+                    }
+
+                    try {
+                        // Use Strategy Pattern
+                        auto strategy = ProcessingStrategyFactory::create(processingMode);
+                        strategy->processMasterListContent(uploadId, contentBytes, conn, ld);
+
+                        // Send completion progress
+                        ProgressManager::getInstance().sendProgress(
+                            ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                                100, 100, "Master List 파싱 완료"));
+
+                    } catch (const std::exception& e) {
+                        spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
+                        ProgressManager::getInstance().sendProgress(
+                            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                                0, 0, "처리 실패", e.what()));
+                    }
+
+                    if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                    PQfinish(conn);
+                }).detach();
             } else {
                 Json::Value error;
                 error["success"] = false;

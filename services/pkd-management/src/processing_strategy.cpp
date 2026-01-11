@@ -38,6 +38,14 @@ extern void updateValidationStatistics(PGconn* conn, const std::string& uploadId
                                       int trustChainInvalidCount, int cscaNotFoundCount,
                                       int expiredCount, int revokedCount);
 
+// Master List processing helper (implemented in main.cpp)
+extern void processMasterListContentCore(
+    const std::string& uploadId,
+    const std::vector<uint8_t>& content,
+    PGconn* conn,
+    LDAP* ld  // Can be nullptr for MANUAL mode Stage 2
+);
+
 void AutoProcessingStrategy::processLdifEntries(
     const std::string& uploadId,
     const std::vector<LdifEntry>& entries,
@@ -87,8 +95,8 @@ void AutoProcessingStrategy::processMasterListContent(
 ) {
     spdlog::info("AUTO mode: Processing Master List ({} bytes) for upload {}", content.size(), uploadId);
 
-    // TODO: Implement Master List processing
-    // Will be extracted to MasterListProcessor class later
+    // Use core Master List processing function from main.cpp
+    processMasterListContentCore(uploadId, content, conn, ld);
 
     spdlog::info("AUTO mode: Master List processing completed");
 }
@@ -326,8 +334,17 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         // Load Master List from temp file
         auto content = loadMasterListFromTempFile(uploadId);
 
-        // TODO: Process Master List (save to DB with validation)
+        // Process Master List (save to DB with validation, LDAP=nullptr for MANUAL mode)
         spdlog::info("MANUAL mode Stage 2: Processing Master List ({} bytes)", content.size());
+        processMasterListToDb(uploadId, content, conn);
+
+        // Update upload status to COMPLETED
+        std::string mlUpdateQuery = "UPDATE uploaded_file SET status = 'COMPLETED', completed_timestamp = NOW() "
+                                   " WHERE id = '" + uploadId + "'";
+        PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
+        PQclear(mlRes);
+
+        spdlog::info("MANUAL mode Stage 2: Master List processing completed");
 
     } else {
         throw std::runtime_error("Unknown file format: " + fileFormat);
@@ -411,4 +428,23 @@ void ManualProcessingStrategy::cleanupFailedUpload(
 
     spdlog::info("Cleanup completed: {} certs, {} CRLs, {} MLs deleted",
                  certsDeleted, crlsDeleted, mlsDeleted);
+}
+
+// ============================================================================
+// ManualProcessingStrategy - Helper: Process Master List to DB (Stage 2)
+// ============================================================================
+
+void ManualProcessingStrategy::processMasterListToDb(
+    const std::string& uploadId,
+    const std::vector<uint8_t>& content,
+    PGconn* conn
+) {
+    spdlog::info("MANUAL mode Stage 2: Processing Master List to DB ({} bytes)", content.size());
+
+    // Use core Master List processing function with LDAP=nullptr
+    // This will parse CMS, extract certificates, validate them, and save to DB
+    // but will NOT upload to LDAP
+    processMasterListContentCore(uploadId, content, conn, nullptr);
+
+    spdlog::info("MANUAL mode Stage 2: Master List saved to DB successfully");
 }
