@@ -337,7 +337,16 @@ export function FileUpload() {
     } else if (stage.startsWith('PARSING')) {
       // Mark upload as completed when parsing starts
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setParseStage(stageStatus);
+      // For PARSING_COMPLETED, add a small delay to ensure DB status is updated
+      if (stage === 'PARSING_COMPLETED') {
+        // Keep button disabled for 1 second after PARSING_COMPLETED to ensure DB update completes
+        setParseStage({ ...stageStatus, status: 'IN_PROGRESS' });
+        setTimeout(() => {
+          setParseStage(stageStatus);  // Set to COMPLETED after delay
+        }, 1000);
+      } else {
+        setParseStage(stageStatus);
+      }
     } else if (stage.startsWith('VALIDATION')) {
       // VALIDATION is part of the combined "검증 및 DB 저장" step
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
