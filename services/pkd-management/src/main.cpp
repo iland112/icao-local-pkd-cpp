@@ -4471,6 +4471,108 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // Get individual upload status - GET /api/upload/{uploadId}
+    app.registerHandler(
+        "/api/upload/{uploadId}",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("GET /api/upload/{}", uploadId);
+
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            Json::Value result;
+
+            if (PQstatus(conn) == CONNECTION_OK) {
+                // Get upload details with validation statistics
+                std::string query = "SELECT id, file_name, file_format, file_size, status, processing_mode, "
+                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), "
+                                   "total_entries, processed_entries, error_message, "
+                                   "upload_timestamp, completed_timestamp, "
+                                   "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
+                                   "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
+                                   "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
+                                   "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
+                                   "FROM uploaded_file WHERE id = '" + uploadId + "'";
+
+                PGresult* res = PQexec(conn, query.c_str());
+                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+                    result["success"] = true;
+                    Json::Value data;
+                    data["id"] = PQgetvalue(res, 0, 0);
+                    data["fileName"] = PQgetvalue(res, 0, 1);
+                    data["fileFormat"] = PQgetvalue(res, 0, 2);
+                    data["fileSize"] = static_cast<Json::Int64>(std::stoll(PQgetvalue(res, 0, 3)));
+                    data["status"] = PQgetvalue(res, 0, 4);
+                    data["processingMode"] = PQgetvalue(res, 0, 5);
+
+                    int cscaCount = std::stoi(PQgetvalue(res, 0, 6));
+                    int dscCount = std::stoi(PQgetvalue(res, 0, 7));
+                    int dscNcCount = std::stoi(PQgetvalue(res, 0, 8));
+                    data["cscaCount"] = cscaCount;
+                    data["dscCount"] = dscCount;
+                    data["dscNcCount"] = dscNcCount;
+                    data["certificateCount"] = cscaCount + dscCount + dscNcCount;
+                    data["crlCount"] = std::stoi(PQgetvalue(res, 0, 9));
+                    data["mlCount"] = std::stoi(PQgetvalue(res, 0, 10));
+                    data["totalEntries"] = std::stoi(PQgetvalue(res, 0, 11));
+                    data["processedEntries"] = std::stoi(PQgetvalue(res, 0, 12));
+                    data["errorMessage"] = PQgetvalue(res, 0, 13) ? PQgetvalue(res, 0, 13) : "";
+                    data["createdAt"] = PQgetvalue(res, 0, 14);
+                    data["updatedAt"] = PQgetvalue(res, 0, 15);
+
+                    // Validation statistics
+                    Json::Value validation;
+                    validation["validCount"] = std::stoi(PQgetvalue(res, 0, 16));
+                    validation["invalidCount"] = std::stoi(PQgetvalue(res, 0, 17));
+                    validation["pendingCount"] = std::stoi(PQgetvalue(res, 0, 18));
+                    validation["errorCount"] = std::stoi(PQgetvalue(res, 0, 19));
+                    validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, 0, 20));
+                    validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, 0, 21));
+                    validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, 0, 22));
+                    validation["expiredCount"] = std::stoi(PQgetvalue(res, 0, 23));
+                    validation["revokedCount"] = std::stoi(PQgetvalue(res, 0, 24));
+                    data["validation"] = validation;
+
+                    // Check LDAP upload status by querying certificate table
+                    std::string ldapQuery = "SELECT COUNT(*) as total, "
+                                          "SUM(CASE WHEN stored_in_ldap = true THEN 1 ELSE 0 END) as in_ldap "
+                                          "FROM certificate WHERE upload_id = '" + uploadId + "'";
+                    PGresult* ldapRes = PQexec(conn, ldapQuery.c_str());
+                    if (PQresultStatus(ldapRes) == PGRES_TUPLES_OK && PQntuples(ldapRes) > 0) {
+                        int totalCerts = std::stoi(PQgetvalue(ldapRes, 0, 0));
+                        int ldapCerts = PQgetvalue(ldapRes, 0, 1) ? std::stoi(PQgetvalue(ldapRes, 0, 1)) : 0;
+                        data["ldapUploadedCount"] = ldapCerts;
+                        data["ldapPendingCount"] = totalCerts - ldapCerts;
+                    } else {
+                        data["ldapUploadedCount"] = 0;
+                        data["ldapPendingCount"] = 0;
+                    }
+                    PQclear(ldapRes);
+
+                    result["data"] = data;
+                } else {
+                    result["success"] = false;
+                    result["error"] = "Upload not found";
+                }
+                PQclear(res);
+            } else {
+                result["success"] = false;
+                result["error"] = "Database connection failed";
+            }
+
+            PQfinish(conn);
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     // Country statistics endpoint - GET /api/upload/countries
     app.registerHandler(
         "/api/upload/countries",
@@ -5064,7 +5166,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.8 CLEANUP-FAILED-UPLOAD VERSIONED-BINARY ======");
+    spdlog::info("====== ICAO Local PKD v1.4.9 MANUAL-MODE-UX-IMPROVEMENTS ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

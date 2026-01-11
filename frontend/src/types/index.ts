@@ -29,13 +29,39 @@ export interface UploadedFile {
   fileName: string;
   fileFormat: FileFormat;
   fileSize: number;
-  fileHash: string;
+  fileHash?: string;
   status: UploadStatus;
   processingMode: ProcessingMode;
-  uploadedAt: string;
+  uploadedAt?: string;
+  createdAt?: string;  // Backend uses createdAt
   completedAt?: string;
+  updatedAt?: string;  // Backend uses updatedAt
   errorMessage?: string;
   statistics?: UploadStatistics;
+  // Certificate counts
+  cscaCount?: number;
+  dscCount?: number;
+  dscNcCount?: number;
+  crlCount?: number;
+  mlCount?: number;
+  certificateCount?: number;
+  totalEntries?: number;
+  processedEntries?: number;
+  // Validation statistics
+  validation?: {
+    validCount: number;
+    invalidCount: number;
+    pendingCount: number;
+    errorCount: number;
+    trustChainValidCount: number;
+    trustChainInvalidCount: number;
+    cscaNotFoundCount: number;
+    expiredCount: number;
+    revokedCount: number;
+  };
+  // LDAP upload status
+  ldapUploadedCount?: number;
+  ldapPendingCount?: number;
 }
 
 export interface UploadStatistics {

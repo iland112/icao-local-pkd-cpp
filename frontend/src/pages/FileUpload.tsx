@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
@@ -17,7 +17,7 @@ import {
   Server,
 } from 'lucide-react';
 import { uploadApi, createProgressEventSource } from '@/services/api';
-import type { ProcessingMode, UploadProgress } from '@/types';
+import type { ProcessingMode, UploadProgress, UploadedFile } from '@/types';
 import { cn } from '@/utils/cn';
 import { Stepper, type Step, type StepStatus } from '@/components/common/Stepper';
 
@@ -54,6 +54,99 @@ export function FileUpload() {
   const [overallStatus, setOverallStatus] = useState<'IDLE' | 'PROCESSING' | 'FINALIZED' | 'FAILED'>('IDLE');
   const [overallMessage, setOverallMessage] = useState('');
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
+
+  // Restore upload state on page load (for MANUAL mode)
+  useEffect(() => {
+    const restoreUploadState = async () => {
+      const savedUploadId = localStorage.getItem('currentUploadId');
+      if (!savedUploadId) return;
+
+      try {
+        const response = await uploadApi.getDetail(savedUploadId);
+        if (!response.data?.success || !response.data.data) {
+          localStorage.removeItem('currentUploadId');
+          return;
+        }
+
+        const upload: UploadedFile = response.data.data;
+
+        // Only restore MANUAL mode uploads that are not FAILED or fully COMPLETED
+        if (upload.processingMode !== 'MANUAL') {
+          localStorage.removeItem('currentUploadId');
+          return;
+        }
+
+        // Check if all stages are completed (including LDAP)
+        const allCompleted = upload.ldapUploadedCount !== undefined &&
+                           upload.ldapUploadedCount === upload.certificateCount;
+
+        if (upload.status === 'FAILED' || allCompleted) {
+          localStorage.removeItem('currentUploadId');
+          return;
+        }
+
+        // Restore state
+        setUploadId(savedUploadId);
+        setProcessingMode('MANUAL');
+        setSelectedFile(new File([], upload.fileName));  // Dummy file for display
+
+        // Determine stage states based on DB data
+        // Stage 1 (Upload & Parse): Always completed if we have the upload record
+        setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
+        setParseStage({
+          status: 'COMPLETED',
+          message: '파싱 완료',
+          percentage: 100,
+          details: `${upload.totalEntries}건 처리`
+        });
+
+        // Stage 2 (Validate & DB): Check if certificates exist in DB
+        const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) > 0;
+        if (hasCertificates) {
+          setDbSaveStage({
+            status: 'COMPLETED',
+            message: '검증 및 DB 저장 완료',
+            percentage: 100,
+            details: `DSC: ${upload.dscCount}, CRL: ${upload.crlCount}`
+          });
+        } else {
+          setDbSaveStage({
+            status: 'IDLE',
+            message: '검증 및 DB 저장 대기 중',
+            percentage: 0
+          });
+        }
+
+        // Stage 3 (LDAP): Check LDAP upload status
+        if (upload.ldapUploadedCount && upload.ldapUploadedCount > 0) {
+          const isComplete = upload.ldapUploadedCount === upload.certificateCount;
+          setLdapStage({
+            status: isComplete ? 'COMPLETED' : 'IN_PROGRESS',
+            message: isComplete ? 'LDAP 저장 완료' : 'LDAP 저장 진행 중',
+            percentage: isComplete ? 100 : Math.round((upload.ldapUploadedCount / (upload.certificateCount || 1)) * 100),
+            details: `${upload.ldapUploadedCount}/${upload.certificateCount}`
+          });
+        } else if (hasCertificates) {
+          setLdapStage({
+            status: 'IDLE',
+            message: 'LDAP 저장 대기 중',
+            percentage: 0,
+            details: `${upload.certificateCount}건 대기`
+          });
+        }
+
+        setOverallStatus('PROCESSING');
+        setOverallMessage(`업로드 재개: ${upload.fileName}`);
+
+        console.log('Upload state restored:', savedUploadId, upload);
+      } catch (error) {
+        console.error('Failed to restore upload state:', error);
+        localStorage.removeItem('currentUploadId');
+      }
+    };
+
+    restoreUploadState();
+  }, []);
 
   // Convert stage status to step status for Stepper
   const toStepStatus = (status: StageStatus['status']): StepStatus => {
@@ -176,6 +269,11 @@ export function FileUpload() {
         const fileId = (uploadedFile as { uploadId?: string }).uploadId || uploadedFile.id;
         setUploadId(fileId);
         setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
+
+        // Save uploadId to localStorage for MANUAL mode state restoration
+        if (processingMode === 'MANUAL') {
+          localStorage.setItem('currentUploadId', fileId);
+        }
 
         // Connect to SSE for progress updates (both AUTO and MANUAL modes)
         connectToProgressStream(fileId);
@@ -385,10 +483,14 @@ export function FileUpload() {
       setOverallStatus('FINALIZED');
       setOverallMessage(message || '모든 처리가 완료되었습니다.');
       setIsProcessing(false);
+      // Clear localStorage when all stages completed
+      localStorage.removeItem('currentUploadId');
     } else if (stage === 'FAILED') {
       setOverallStatus('FAILED');
       setOverallMessage(errorMessage || message);
       setIsProcessing(false);
+      // Clear localStorage on failure
+      localStorage.removeItem('currentUploadId');
     }
   };
 
