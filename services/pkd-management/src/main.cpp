@@ -5464,7 +5464,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.10 LDAP-UPLOAD-FIX ======");
+    spdlog::info("====== ICAO Local PKD v1.4.13 MASTER-LIST-STRATEGY-PATTERN ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
