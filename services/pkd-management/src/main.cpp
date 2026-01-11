@@ -2764,8 +2764,14 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
     }).detach();
 }
 
+}  // Close anonymous namespace to define external function
+
 /**
  * @brief Core Master List processing logic (called by Strategy Pattern)
+ *
+ * This function is declared in common.h and used by ProcessingStrategy implementations.
+ * It MUST be outside anonymous namespace to have external linkage.
+ *
  * @param uploadId Upload record UUID
  * @param content Raw Master List file content
  * @param conn PostgreSQL connection
@@ -2997,6 +3003,8 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
         updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
     }
 }
+
+namespace {  // Reopen anonymous namespace for internal functions
 
 /**
  * @brief Parse Master List (CMS SignedData) and extract CSCA certificates (DB + LDAP)
