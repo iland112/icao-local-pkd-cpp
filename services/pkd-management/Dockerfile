@@ -161,6 +161,11 @@ RUN echo "=== Forcing binary re-copy with bust: $CACHE_BUST ==="
 # Copy binary from builder (note: using build_fresh directory)
 COPY --from=builder /app/build_fresh/bin/pkd-management /app/
 
+# CRITICAL: Verify binary version immediately after COPY
+RUN apt-get update && apt-get install -y binutils && \
+    strings /app/pkd-management | grep "ICAO Local PKD v" && \
+    apt-get remove -y binutils && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
 # Copy Swagger UI static files
 COPY shared/static/swagger-ui/ /app/static/swagger-ui/
 
