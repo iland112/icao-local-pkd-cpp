@@ -1458,7 +1458,7 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
         dataContainer = "dc=data";
     }
 
-    return "cn=" + fingerprint.substr(0, 32) + ",o=" + ou + ",c=" + countryCode +
+    return "cn=" + fingerprint + ",o=" + ou + ",c=" + countryCode +
            "," + dataContainer + ",dc=download," + appConfig.ldapBaseDn;
 }
 
@@ -1466,7 +1466,7 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
  * @brief Build LDAP DN for CRL
  */
 std::string buildCrlDn(const std::string& countryCode, const std::string& fingerprint) {
-    return "cn=" + fingerprint.substr(0, 32) + ",o=crl,c=" + countryCode +
+    return "cn=" + fingerprint + ",o=crl,c=" + countryCode +
            ",dc=data,dc=download," + appConfig.ldapBaseDn;
 }
 
@@ -1745,7 +1745,7 @@ void updateCrlLdapStatus(PGconn* conn, const std::string& crlId, const std::stri
  * Format: cn={fingerprint},o=ml,c={country},dc=data,dc=download,dc=pkd,{baseDN}
  */
 std::string buildMasterListDn(const std::string& countryCode, const std::string& fingerprint) {
-    return "cn=" + fingerprint.substr(0, 32) + ",o=ml,c=" + countryCode +
+    return "cn=" + fingerprint + ",o=ml,c=" + countryCode +
            ",dc=data,dc=download," + appConfig.ldapBaseDn;
 }
 
@@ -5481,7 +5481,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.16 DEBUG-CN-ATTRIBUTE ======");
+    spdlog::info("====== ICAO Local PKD v1.4.17 FIX-DN-FULL-FINGERPRINT ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
