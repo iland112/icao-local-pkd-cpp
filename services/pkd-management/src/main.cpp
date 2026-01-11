@@ -5064,7 +5064,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.8 CLEANUP-FAILED-UPLOAD BUILD 20260111-013200 ======");
+    spdlog::info("====== ICAO Local PKD v1.4.8 CLEANUP-FAILED-UPLOAD BUILD 20260111-123800 ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

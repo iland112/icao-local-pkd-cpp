@@ -153,6 +153,11 @@ RUN useradd -m -s /bin/bash app
 RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
+# CRITICAL: Force re-copy by using CACHE_BUST before COPY
+# This prevents Docker from using cached COPY layer
+ARG CACHE_BUST
+RUN echo "=== Forcing binary re-copy with bust: $CACHE_BUST ==="
+
 # Copy binary from builder (note: using build_fresh directory)
 COPY --from=builder /app/build_fresh/bin/pkd-management /app/
 
