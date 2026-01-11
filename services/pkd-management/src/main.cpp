@@ -1423,13 +1423,62 @@ LDAP* getLdapReadConnection() {
 }
 
 /**
+ * @brief Escape special characters in LDAP DN attribute values (RFC 4514)
+ *
+ * Special characters that need escaping in LDAP DN values:
+ * - , (comma)
+ * - + (plus)
+ * - " (double quote)
+ * - \ (backslash)
+ * - < (less than)
+ * - > (greater than)
+ * - ; (semicolon)
+ * - Leading/trailing spaces
+ *
+ * @param value Unescaped DN attribute value
+ * @return Escaped DN attribute value safe for use in LDAP DN
+ */
+std::string escapeLdapDnValue(const std::string& value) {
+    if (value.empty()) return value;
+
+    std::string escaped;
+    escaped.reserve(value.size() * 2); // Reserve extra space for escapes
+
+    for (size_t i = 0; i < value.size(); ++i) {
+        char c = value[i];
+
+        // Escape special characters
+        if (c == ',' || c == '+' || c == '"' || c == '\\' ||
+            c == '<' || c == '>' || c == ';') {
+            escaped += '\\';
+            escaped += c;
+        }
+        // Escape leading space or hash
+        else if (i == 0 && (c == ' ' || c == '#')) {
+            escaped += '\\';
+            escaped += c;
+        }
+        // Escape trailing space
+        else if (i == value.size() - 1 && c == ' ') {
+            escaped += '\\';
+            escaped += c;
+        }
+        else {
+            escaped += c;
+        }
+    }
+
+    return escaped;
+}
+
+/**
  * @brief Build LDAP DN for certificate
  * @param certType CSCA, DSC, or DSC_NC
  * @param countryCode ISO country code
- * @param fingerprint Certificate fingerprint (used as CN)
+ * @param subjectDn Certificate Subject DN (used as CN for readability)
  */
 std::string buildCertificateDn(const std::string& certType, const std::string& countryCode,
-                                const std::string& fingerprint) {
+                                const std::string& subjectDn) {
     // ICAO PKD DIT structure:
     // dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     //   └── dc=download
@@ -1458,7 +1507,10 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
         dataContainer = "dc=data";
     }
 
-    return "cn=" + fingerprint + ",o=" + ou + ",c=" + countryCode +
+    // Escape Subject DN for safe use in LDAP DN (RFC 4514)
+    std::string escapedSubjectDn = escapeLdapDnValue(subjectDn);
+
+    return "cn=" + escapedSubjectDn + ",o=" + ou + ",c=" + countryCode +
            "," + dataContainer + ",dc=download," + appConfig.ldapBaseDn;
 }
 
@@ -1563,7 +1615,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
         // Continue anyway - the OU might exist even if we couldn't create it
     }
 
-    std::string dn = buildCertificateDn(certType, countryCode, fingerprint);
+    std::string dn = buildCertificateDn(certType, countryCode, subjectDn);
 
     // Build LDAP entry attributes
     // objectClass hierarchy: inetOrgPerson (structural) + pkdDownload (auxiliary, ICAO PKD custom schema)
@@ -1582,13 +1634,16 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     };
     modObjectClass.mod_values = ocVals;
 
-    // cn (fingerprint - required by person, must match DN's RDN)
-    spdlog::debug("[v1.4.16-DEBUG] Setting cn attribute to fingerprint: {}", fingerprint);
-    spdlog::debug("[v1.4.16-DEBUG] Subject DN (for description): {}", subjectDn);
+    // cn (Subject DN - required by person, must match DN's RDN)
+    // Escape Subject DN for LDAP DN attribute value (same as used in DN)
+    std::string escapedSubjectDn = escapeLdapDnValue(subjectDn);
+    spdlog::debug("[v1.4.18-DEBUG] Setting cn attribute to Subject DN: {}", subjectDn);
+    spdlog::debug("[v1.4.18-DEBUG] Escaped Subject DN for cn: {}", escapedSubjectDn);
+    spdlog::debug("[v1.4.18-DEBUG] Fingerprint (for reference): {}", fingerprint);
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
-    char* cnVals[] = {const_cast<char*>(fingerprint.c_str()), nullptr};
+    char* cnVals[] = {const_cast<char*>(escapedSubjectDn.c_str()), nullptr};
     modCn.mod_values = cnVals;
 
     // sn (serial number - required by person)
@@ -1598,11 +1653,11 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     char* snVals[] = {const_cast<char*>(serialNumber.c_str()), nullptr};
     modSn.mod_values = snVals;
 
-    // description (subject DN - for reference)
+    // description (fingerprint - for reference, since cn is now Subject DN)
     LDAPMod modDescription;
     modDescription.mod_op = LDAP_MOD_ADD;
     modDescription.mod_type = const_cast<char*>("description");
-    char* descVals[] = {const_cast<char*>(subjectDn.c_str()), nullptr};
+    char* descVals[] = {const_cast<char*>(fingerprint.c_str()), nullptr};
     modDescription.mod_values = descVals;
 
     // userCertificate;binary (inetOrgPerson attribute for certificates)
@@ -5481,7 +5536,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.17 FIX-DN-FULL-FINGERPRINT ======");
+    spdlog::info("====== ICAO Local PKD v1.4.18 SUBJECT-DN-AS-CN ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
