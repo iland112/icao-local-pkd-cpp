@@ -1635,15 +1635,15 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     modObjectClass.mod_values = ocVals;
 
     // cn (Subject DN - required by person, must match DN's RDN)
-    // Escape Subject DN for LDAP DN attribute value (same as used in DN)
-    std::string escapedSubjectDn = escapeLdapDnValue(subjectDn);
-    spdlog::debug("[v1.4.18-DEBUG] Setting cn attribute to Subject DN: {}", subjectDn);
-    spdlog::debug("[v1.4.18-DEBUG] Escaped Subject DN for cn: {}", escapedSubjectDn);
-    spdlog::debug("[v1.4.18-DEBUG] Fingerprint (for reference): {}", fingerprint);
+    // IMPORTANT: DN uses escaped value, but cn attribute uses UNESCAPED original value!
+    // DN RDN: cn=CN=CSCA Romania\,O=DGP\,C=ro (escaped for DN parsing)
+    // cn attribute: CN=CSCA Romania,O=DGP,C=ro (unescaped original value)
+    spdlog::debug("[v1.4.19-DEBUG] Setting cn attribute to Subject DN (unescaped): {}", subjectDn);
+    spdlog::debug("[v1.4.19-DEBUG] Fingerprint (for reference): {}", fingerprint);
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
-    char* cnVals[] = {const_cast<char*>(escapedSubjectDn.c_str()), nullptr};
+    char* cnVals[] = {const_cast<char*>(subjectDn.c_str()), nullptr};  // Use original unescaped value!
     modCn.mod_values = cnVals;
 
     // sn (serial number - required by person)
@@ -5536,7 +5536,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.18 SUBJECT-DN-AS-CN ======");
+    spdlog::info("====== ICAO Local PKD v1.4.19 FIX-CN-UNESCAPED ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
