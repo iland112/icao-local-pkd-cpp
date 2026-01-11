@@ -1582,11 +1582,11 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     };
     modObjectClass.mod_values = ocVals;
 
-    // cn (subject DN - required by person)
+    // cn (fingerprint - required by person, must match DN's RDN)
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
-    char* cnVals[] = {const_cast<char*>(subjectDn.c_str()), nullptr};
+    char* cnVals[] = {const_cast<char*>(fingerprint.c_str()), nullptr};
     modCn.mod_values = cnVals;
 
     // sn (serial number - required by person)
@@ -1595,6 +1595,13 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     modSn.mod_type = const_cast<char*>("sn");
     char* snVals[] = {const_cast<char*>(serialNumber.c_str()), nullptr};
     modSn.mod_values = snVals;
+
+    // description (subject DN - for reference)
+    LDAPMod modDescription;
+    modDescription.mod_op = LDAP_MOD_ADD;
+    modDescription.mod_type = const_cast<char*>("description");
+    char* descVals[] = {const_cast<char*>(subjectDn.c_str()), nullptr};
+    modDescription.mod_values = descVals;
 
     // userCertificate;binary (inetOrgPerson attribute for certificates)
     LDAPMod modCert;
@@ -1606,7 +1613,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     berval* certBvVals[] = {&certBv, nullptr};
     modCert.mod_bvalues = certBvVals;
 
-    LDAPMod* mods[] = {&modObjectClass, &modCn, &modSn, &modCert, nullptr};
+    LDAPMod* mods[] = {&modObjectClass, &modCn, &modSn, &modDescription, &modCert, nullptr};
 
     int rc = ldap_add_ext_s(ld, dn.c_str(), mods, nullptr, nullptr);
 
