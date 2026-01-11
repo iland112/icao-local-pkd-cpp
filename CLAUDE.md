@@ -495,6 +495,57 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 
 ## Change Log
 
+### 2026-01-11: MANUAL 모드 Race Condition 수정 (Frontend)
+
+**문제**:
+- MANUAL 모드에서 Stage 1 (파싱) 완료 직후 Stage 2 버튼을 클릭하면 오류 발생
+- 오류 메시지: "Stage 1 parsing not completed. Current status: PROCESSING"
+- 실제로는 파싱이 완료되었지만 DB 상태 업데이트가 완료되지 않은 상태
+
+**원인 분석**:
+```
+Timeline of Events (30,081 entries LDIF file):
+1. 15:58:24 - Stage 1 시작
+2. 15:58:25 - 파싱 완료 (30,081개 엔트리)
+3. 15:58:25 - SSE 이벤트 PARSING_COMPLETED 전송 → Frontend 즉시 수신
+4. 15:58:27 - ❌ 사용자가 Stage 2 버튼 클릭 (너무 빠름!)
+5. 15:58:28 - Temp 파일 저장 완료 (76MB)
+6. 15:58:29 - DB 상태 PROCESSING → PENDING 업데이트 완료
+```
+
+**Backend 코드 흐름** ([main.cpp:2564](services/pkd-management/src/main.cpp#L2564)):
+1. SSE `PARSING_COMPLETED` 이벤트 전송
+2. Strategy Pattern 실행 (processLdifEntries)
+3. Temp 파일 저장 (~1-2초, 큰 파일의 경우)
+4. DB UPDATE 쿼리 실행 (PROCESSING → PENDING)
+
+**문제**: SSE 이벤트가 먼저 전송되고, DB 업데이트는 나중에 완료됨
+
+**해결 방법** (Frontend - [FileUpload.tsx:340-349](frontend/src/pages/FileUpload.tsx#L340-L349)):
+```typescript
+} else if (stage.startsWith('PARSING')) {
+  setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+  // For PARSING_COMPLETED, add a small delay to ensure DB status is updated
+  if (stage === 'PARSING_COMPLETED') {
+    // Keep button disabled for 1 second after PARSING_COMPLETED to ensure DB update completes
+    setParseStage({ ...stageStatus, status: 'IN_PROGRESS' });
+    setTimeout(() => {
+      setParseStage(stageStatus);  // Set to COMPLETED after delay
+    }, 1000);
+  } else {
+    setParseStage(stageStatus);
+  }
+}
+```
+
+**효과**:
+- `PARSING_COMPLETED` SSE 이벤트 수신 후 1초 동안 Stage 2 버튼 비활성화 유지
+- DB 상태 업데이트 완료 후 버튼 활성화
+- 사용자가 버튼을 클릭할 수 있을 때는 항상 DB 상태가 PENDING으로 업데이트됨
+
+**커밋**: e5f6e2e
+**배포**: Luckfox ARM64 (Local Build)
+
 ### 2026-01-10: Docker Build Cache 문제 - 최종 해결 시도 (v1.4.7)
 
 **24시간 디버깅 요약**:
