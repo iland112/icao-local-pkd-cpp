@@ -1,5 +1,6 @@
 #include "processing_strategy.h"
 #include "ldif_processor.h"
+#include "common.h"
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
 #include <spdlog/spdlog.h>
@@ -38,13 +39,7 @@ extern void updateValidationStatistics(PGconn* conn, const std::string& uploadId
                                       int trustChainInvalidCount, int cscaNotFoundCount,
                                       int expiredCount, int revokedCount);
 
-// Master List processing helper (implemented in main.cpp)
-extern void processMasterListContentCore(
-    const std::string& uploadId,
-    const std::vector<uint8_t>& content,
-    PGconn* conn,
-    LDAP* ld  // Can be nullptr for MANUAL mode Stage 2
-);
+// processMasterListContentCore is now declared in common.h
 
 void AutoProcessingStrategy::processLdifEntries(
     const std::string& uploadId,

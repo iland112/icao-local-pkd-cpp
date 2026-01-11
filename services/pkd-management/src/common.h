@@ -39,3 +39,28 @@ struct ValidationStats {
     int expiredCount = 0;
     int revokedCount = 0;
 };
+
+// Forward declarations
+struct pg_conn;
+typedef struct pg_conn PGconn;
+struct ldap;
+typedef struct ldap LDAP;
+
+/**
+ * @brief Master List processing core function
+ *
+ * Processes ICAO Master List (CMS/PKCS7 format) containing CSCA certificates.
+ * Parses CMS structure, extracts certificates, validates, and saves to DB.
+ * Optionally uploads to LDAP if connection is provided.
+ *
+ * @param uploadId Upload record UUID
+ * @param content Raw Master List file content
+ * @param conn PostgreSQL connection
+ * @param ld LDAP connection (can be nullptr for MANUAL mode Stage 2)
+ */
+void processMasterListContentCore(
+    const std::string& uploadId,
+    const std::vector<uint8_t>& content,
+    PGconn* conn,
+    LDAP* ld
+);
