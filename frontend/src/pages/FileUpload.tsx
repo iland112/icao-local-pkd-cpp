@@ -68,7 +68,7 @@ export function FileUpload() {
           return;
         }
 
-        const upload: UploadedFile = response.data.data;
+        const upload = response.data.data as UploadedFile;
 
         // Only restore MANUAL mode uploads that are not FAILED or fully COMPLETED
         if (upload.processingMode !== 'MANUAL') {

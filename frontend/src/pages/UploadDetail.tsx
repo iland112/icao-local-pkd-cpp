@@ -233,7 +233,7 @@ export function UploadDetail() {
                 </div>
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">업로드 시작</p>
-                  <p className="text-sm text-gray-500">{formatDate(upload.uploadedAt)}</p>
+                  <p className="text-sm text-gray-500">{formatDate(upload.uploadedAt || upload.createdAt || '')}</p>
                 </div>
               </div>
               {upload.completedAt && (

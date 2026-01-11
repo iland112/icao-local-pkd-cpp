@@ -68,7 +68,7 @@ export const uploadApi = {
     api.get<PageResponse<UploadedFile>>('/upload/history', { params }),
 
   getDetail: (uploadId: string) =>
-    api.get<UploadedFile>(`/upload/${uploadId}`),
+    api.get<ApiResponse<UploadedFile>>(`/upload/${uploadId}`),
 
   getStatistics: () =>
     api.get<UploadStatisticsOverview>('/upload/statistics'),
