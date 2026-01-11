@@ -1583,6 +1583,8 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     modObjectClass.mod_values = ocVals;
 
     // cn (fingerprint - required by person, must match DN's RDN)
+    spdlog::debug("[v1.4.16-DEBUG] Setting cn attribute to fingerprint: {}", fingerprint);
+    spdlog::debug("[v1.4.16-DEBUG] Subject DN (for description): {}", subjectDn);
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
@@ -5479,7 +5481,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.15 LDAP-CN-FIX ======");
+    spdlog::info("====== ICAO Local PKD v1.4.16 DEBUG-CN-ATTRIBUTE ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
