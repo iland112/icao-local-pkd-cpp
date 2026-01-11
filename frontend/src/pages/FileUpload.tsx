@@ -103,11 +103,18 @@ export function FileUpload() {
         // Stage 2 (Validate & DB): Check if certificates exist in DB
         const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) > 0;
         if (hasCertificates) {
+          // Build detailed certificate breakdown
+          const certDetails = [];
+          if (upload.cscaCount) certDetails.push(`CSCA: ${upload.cscaCount}`);
+          if (upload.dscCount) certDetails.push(`DSC: ${upload.dscCount}`);
+          if (upload.dscNcCount) certDetails.push(`DSC_NC: ${upload.dscNcCount}`);
+          if (upload.crlCount) certDetails.push(`CRL: ${upload.crlCount}`);
+
           setDbSaveStage({
             status: 'COMPLETED',
             message: '검증 및 DB 저장 완료',
             percentage: 100,
-            details: `DSC: ${upload.dscCount}, CRL: ${upload.crlCount}`
+            details: certDetails.join(', ')
           });
         } else {
           setDbSaveStage({
@@ -124,7 +131,7 @@ export function FileUpload() {
             status: isComplete ? 'COMPLETED' : 'IN_PROGRESS',
             message: isComplete ? 'LDAP 저장 완료' : 'LDAP 저장 진행 중',
             percentage: isComplete ? 100 : Math.round((upload.ldapUploadedCount / (upload.certificateCount || 1)) * 100),
-            details: `${upload.ldapUploadedCount}/${upload.certificateCount}`
+            details: `${upload.ldapUploadedCount}/${upload.certificateCount}건`
           });
         } else if (hasCertificates) {
           setLdapStage({
