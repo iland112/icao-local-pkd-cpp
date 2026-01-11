@@ -41,7 +41,11 @@ export function UploadDetail() {
 
     try {
       const response = await uploadApi.getDetail(uploadId);
-      setUpload(response.data);
+      if (response.data?.success && response.data.data) {
+        setUpload(response.data.data);
+      } else {
+        setError('업로드 정보를 찾을 수 없습니다.');
+      }
     } catch (err) {
       setError('업로드 정보를 불러오는데 실패했습니다.');
       console.error('Failed to fetch upload detail:', err);
