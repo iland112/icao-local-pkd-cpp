@@ -105,16 +105,11 @@ RUN mkdir -p build_fresh && \
     -DCMAKE_VERBOSE_MAKEFILE=ON && \
     cmake --build build_fresh -j$(nproc) --verbose
 
-# CRITICAL: Verify binary contains correct version BEFORE copying to runtime
-RUN echo "=== VERIFYING COMPILED BINARY VERSION ===" && \
-    if [ -f build_fresh/bin/pkd-management ]; then \
-        strings build_fresh/bin/pkd-management | grep -i "ICAO.*PKD" | head -10 || \
-        echo "WARNING: No ICAO PKD version string found in binary!"; \
-    else \
-        echo "ERROR: Binary not found at expected location!"; \
-        exit 1; \
-    fi && \
-    echo "=== BINARY VERIFICATION COMPLETE ==="
+# CRITICAL: Copy binary with CACHE_BUST in filename to force cache invalidation
+ARG CACHE_BUST
+RUN cp build_fresh/bin/pkd-management build_fresh/bin/pkd-management-${CACHE_BUST} && \
+    echo "=== Created versioned binary: pkd-management-${CACHE_BUST} ===" && \
+    strings build_fresh/bin/pkd-management-${CACHE_BUST} | grep -i "ICAO.*PKD" | head -10
 
 # Stage 4: Runtime (production image)
 FROM debian:bookworm-slim AS runtime
@@ -153,16 +148,13 @@ RUN useradd -m -s /bin/bash app
 RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
-# CRITICAL: Force re-copy by using CACHE_BUST before COPY
-# This prevents Docker from using cached COPY layer
+# CRITICAL: Copy versioned binary - filename changes force cache invalidation
 ARG CACHE_BUST
-RUN echo "=== Forcing binary re-copy with bust: $CACHE_BUST ==="
+COPY --from=builder /app/build_fresh/bin/pkd-management-${CACHE_BUST} /app/pkd-management
 
-# Copy binary from builder (note: using build_fresh directory)
-COPY --from=builder /app/build_fresh/bin/pkd-management /app/
-
-# CRITICAL: Verify binary version immediately after COPY
+# Verify binary version immediately after COPY
 RUN apt-get update && apt-get install -y binutils && \
+    echo "=== Verifying copied binary version ===" && \
     strings /app/pkd-management | grep "ICAO Local PKD v" && \
     apt-get remove -y binutils && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
 
