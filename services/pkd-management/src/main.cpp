@@ -1427,6 +1427,7 @@ LDAP* getLdapReadConnection() {
  *
  * Special characters that need escaping in LDAP DN values:
  * - , (comma)
+ * - = (equals) - CRITICAL: Must be escaped for Subject DN in cn!
  * - + (plus)
  * - " (double quote)
  * - \ (backslash)
@@ -1434,6 +1435,9 @@ LDAP* getLdapReadConnection() {
  * - > (greater than)
  * - ; (semicolon)
  * - Leading/trailing spaces
+ * - Leading # (hash)
+ *
+ * Example: "CN=Test,O=Org" → "CN\\=Test\\,O\\=Org"
  *
  * @param value Unescaped DN attribute value
  * @return Escaped DN attribute value safe for use in LDAP DN
@@ -1447,8 +1451,8 @@ std::string escapeLdapDnValue(const std::string& value) {
     for (size_t i = 0; i < value.size(); ++i) {
         char c = value[i];
 
-        // Escape special characters
-        if (c == ',' || c == '+' || c == '"' || c == '\\' ||
+        // Escape special characters (RFC 4514 + LDAP DN requirements)
+        if (c == ',' || c == '=' || c == '+' || c == '"' || c == '\\' ||
             c == '<' || c == '>' || c == ';') {
             escaped += '\\';
             escaped += c;
@@ -1638,8 +1642,8 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     // IMPORTANT: DN uses escaped value, but cn attribute uses UNESCAPED original value!
     // DN RDN: cn=CN=CSCA Romania\,O=DGP\,C=ro (escaped for DN parsing)
     // cn attribute: CN=CSCA Romania,O=DGP,C=ro (unescaped original value)
-    spdlog::debug("[v1.4.19-DEBUG] Setting cn attribute to Subject DN (unescaped): {}", subjectDn);
-    spdlog::debug("[v1.4.19-DEBUG] Fingerprint (for reference): {}", fingerprint);
+    spdlog::debug("[v1.4.20-DEBUG] Setting cn attribute to Subject DN (unescaped): {}", subjectDn);
+    spdlog::debug("[v1.4.20-DEBUG] Fingerprint (for reference): {}", fingerprint);
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
@@ -5536,7 +5540,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.19 FIX-CN-UNESCAPED ======");
+    spdlog::info("====== ICAO Local PKD v1.4.20 ESCAPE-EQUALS-SIGN ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
