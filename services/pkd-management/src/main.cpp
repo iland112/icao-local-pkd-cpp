@@ -5504,7 +5504,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.2 FIX-METADATA-ERROR ======");
+    spdlog::info("====== ICAO Local PKD v1.5.2 ERROR-HANDLING-RETRY (Build 20260112-183400) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
