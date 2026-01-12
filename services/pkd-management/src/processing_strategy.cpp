@@ -272,7 +272,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
     const std::string& uploadId,
     PGconn* conn
 ) {
-    spdlog::info("MANUAL mode Stage 2: Validating and saving to DB for upload {}", uploadId);
+    spdlog::info("MANUAL mode Stage 2: Validating and saving to DB + LDAP for upload {}", uploadId);
 
     // Check upload status and file format
     std::string checkQuery = "SELECT file_format, status FROM uploaded_file WHERE id = '" + uploadId + "'";
@@ -291,14 +291,20 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         throw std::runtime_error("Stage 1 parsing not completed. Current status: " + status);
     }
 
+    // Connect to LDAP for write operations
+    LDAP* ld = getLdapWriteConnection();
+    if (!ld) {
+        throw std::runtime_error("LDAP write connection failed");
+    }
+
     if (fileFormat == "LDIF") {
         // Load LDIF entries from temp file
         auto entries = loadLdifEntriesFromTempFile(uploadId);
 
         ValidationStats stats;
 
-        // Process entries (save to DB with validation, but skip LDAP)
-        auto counts = LdifProcessor::processEntries(uploadId, entries, conn, nullptr, stats);
+        // Process entries (save to BOTH DB and LDAP simultaneously)
+        auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats);
 
         // Update database statistics
         updateUploadStatistics(conn, uploadId, "COMPLETED",
@@ -329,9 +335,9 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         // Load Master List from temp file
         auto content = loadMasterListFromTempFile(uploadId);
 
-        // Process Master List (save to DB with validation, LDAP=nullptr for MANUAL mode)
+        // Process Master List (save to BOTH DB and LDAP simultaneously)
         spdlog::info("MANUAL mode Stage 2: Processing Master List ({} bytes)", content.size());
-        processMasterListToDb(uploadId, content, conn);
+        processMasterListToDbAndLdap(uploadId, content, conn, ld);
 
         // Update upload status to COMPLETED
         std::string mlUpdateQuery = "UPDATE uploaded_file SET status = 'COMPLETED', completed_timestamp = NOW() "
@@ -342,28 +348,16 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         spdlog::info("MANUAL mode Stage 2: Master List processing completed");
 
     } else {
+        ldap_unbind_ext_s(ld, nullptr, nullptr);
         throw std::runtime_error("Unknown file format: " + fileFormat);
     }
 
-    spdlog::info("MANUAL mode Stage 2: Completed, DB save and validation done");
+    // Cleanup LDAP connection
+    ldap_unbind_ext_s(ld, nullptr, nullptr);
+
+    spdlog::info("MANUAL mode Stage 2: Completed, DB and LDAP save done");
 }
 
-void ManualProcessingStrategy::uploadToLdap(
-    const std::string& uploadId,
-    PGconn* conn,
-    LDAP* ld
-) {
-    if (!ld) {
-        throw std::runtime_error("LDAP connection not available");
-    }
-
-    spdlog::info("MANUAL mode Stage 3: Uploading to LDAP for upload {}", uploadId);
-
-    // Upload certificates from DB to LDAP
-    int uploadedCount = LdifProcessor::uploadToLdap(uploadId, conn, ld);
-
-    spdlog::info("MANUAL mode Stage 3: Completed, uploaded {} entries to LDAP", uploadedCount);
-}
 
 void ManualProcessingStrategy::cleanupFailedUpload(
     const std::string& uploadId,
@@ -429,17 +423,17 @@ void ManualProcessingStrategy::cleanupFailedUpload(
 // ManualProcessingStrategy - Helper: Process Master List to DB (Stage 2)
 // ============================================================================
 
-void ManualProcessingStrategy::processMasterListToDb(
+void ManualProcessingStrategy::processMasterListToDbAndLdap(
     const std::string& uploadId,
     const std::vector<uint8_t>& content,
-    PGconn* conn
+    PGconn* conn,
+    LDAP* ld
 ) {
-    spdlog::info("MANUAL mode Stage 2: Processing Master List to DB ({} bytes)", content.size());
+    spdlog::info("MANUAL mode Stage 2: Processing Master List to DB + LDAP ({} bytes)", content.size());
 
-    // Use core Master List processing function with LDAP=nullptr
-    // This will parse CMS, extract certificates, validate them, and save to DB
-    // but will NOT upload to LDAP
-    processMasterListContentCore(uploadId, content, conn, nullptr);
+    // Use core Master List processing function with LDAP connection
+    // This will parse CMS, extract certificates, validate them, and save to BOTH DB and LDAP
+    processMasterListContentCore(uploadId, content, conn, ld);
 
-    spdlog::info("MANUAL mode Stage 2: Master List saved to DB successfully");
+    spdlog::info("MANUAL mode Stage 2: Master List saved to DB and LDAP successfully");
 }

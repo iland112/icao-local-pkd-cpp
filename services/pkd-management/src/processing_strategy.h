@@ -74,10 +74,9 @@ public:
 /**
  * @brief MANUAL mode processing strategy
  *
- * Processes files in 3 stages:
+ * Processes files in 2 stages:
  * Stage 1 (parse):     Parse and save to temp file
- * Stage 2 (validate):  Load from temp, save to DB with validation
- * Stage 3 (ldap):      Load from DB and upload to LDAP
+ * Stage 2 (validate):  Load from temp, save to DB + LDAP with validation
  */
 class ManualProcessingStrategy : public ProcessingStrategy {
 public:
@@ -96,17 +95,10 @@ public:
         LDAP* ld
     ) override;
 
-    // Stage 2: Validate and save to DB
+    // Stage 2: Validate and save to DB + LDAP
     void validateAndSaveToDb(
         const std::string& uploadId,
         PGconn* conn
-    );
-
-    // Stage 3: Upload to LDAP
-    void uploadToLdap(
-        const std::string& uploadId,
-        PGconn* conn,
-        LDAP* ld
     );
 
     // Cleanup failed upload
@@ -121,7 +113,7 @@ private:
     std::vector<LdifEntry> loadLdifEntriesFromTempFile(const std::string& uploadId);
     void saveMasterListToTempFile(const std::string& uploadId, const std::vector<uint8_t>& content);
     std::vector<uint8_t> loadMasterListFromTempFile(const std::string& uploadId);
-    void processMasterListToDb(const std::string& uploadId, const std::vector<uint8_t>& content, PGconn* conn);
+    void processMasterListToDbAndLdap(const std::string& uploadId, const std::vector<uint8_t>& content, PGconn* conn, LDAP* ld);
 };
 
 /**
