@@ -44,12 +44,12 @@ export function FileUpload() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadId, setUploadId] = useState<string | null>(null);
 
-  // Stage statuses
-  // Note: VALIDATION and DB_SAVING are combined into dbSaveStage ("검증 및 DB 저장")
+  // Stage statuses for 2-stage MANUAL mode (v1.5.0)
+  // Stage 1: Upload & Parse
+  // Stage 2: Validate & Save (DB + LDAP simultaneously)
   const [uploadStage, setUploadStage] = useState<StageStatus>(initialStage);
   const [parseStage, setParseStage] = useState<StageStatus>(initialStage);
   const [dbSaveStage, setDbSaveStage] = useState<StageStatus>(initialStage);
-  const [ldapStage, setLdapStage] = useState<StageStatus>(initialStage);
 
   const [overallStatus, setOverallStatus] = useState<'IDLE' | 'PROCESSING' | 'FINALIZED' | 'FAILED'>('IDLE');
   const [overallMessage, setOverallMessage] = useState('');
@@ -76,11 +76,9 @@ export function FileUpload() {
           return;
         }
 
-        // Check if all stages are completed (including LDAP)
-        const allCompleted = upload.ldapUploadedCount !== undefined &&
-                           upload.ldapUploadedCount === upload.certificateCount;
-
-        if (upload.status === 'FAILED' || allCompleted) {
+        // v1.5.0: MANUAL mode is 2-stage, DB save = LDAP save (simultaneous)
+        // All stages completed if status is COMPLETED
+        if (upload.status === 'FAILED' || upload.status === 'COMPLETED') {
           localStorage.removeItem('currentUploadId');
           return;
         }
@@ -100,7 +98,8 @@ export function FileUpload() {
           details: `${upload.totalEntries}건 처리`
         });
 
-        // Stage 2 (Validate & DB): Check if certificates exist in DB
+        // Stage 2 (Validate & DB + LDAP): Check if certificates exist in DB
+        // v1.5.0: DB and LDAP are saved simultaneously, so DB save = completion
         const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) > 0;
         if (hasCertificates) {
           // Build detailed certificate breakdown
@@ -112,33 +111,15 @@ export function FileUpload() {
 
           setDbSaveStage({
             status: 'COMPLETED',
-            message: '검증 및 DB 저장 완료',
+            message: 'DB + LDAP 저장 완료',
             percentage: 100,
             details: certDetails.join(', ')
           });
         } else {
           setDbSaveStage({
             status: 'IDLE',
-            message: '검증 및 DB 저장 대기 중',
+            message: 'DB + LDAP 저장 대기 중',
             percentage: 0
-          });
-        }
-
-        // Stage 3 (LDAP): Check LDAP upload status
-        if (upload.ldapUploadedCount && upload.ldapUploadedCount > 0) {
-          const isComplete = upload.ldapUploadedCount === upload.certificateCount;
-          setLdapStage({
-            status: isComplete ? 'COMPLETED' : 'IN_PROGRESS',
-            message: isComplete ? 'LDAP 저장 완료' : 'LDAP 저장 진행 중',
-            percentage: isComplete ? 100 : Math.round((upload.ldapUploadedCount / (upload.certificateCount || 1)) * 100),
-            details: `${upload.ldapUploadedCount}/${upload.certificateCount}건`
-          });
-        } else if (hasCertificates) {
-          setLdapStage({
-            status: 'IDLE',
-            message: 'LDAP 저장 대기 중',
-            percentage: 0,
-            details: `${upload.certificateCount}건 대기`
           });
         }
 
@@ -192,24 +173,15 @@ export function FileUpload() {
       },
       {
         id: 'database',
-        label: '검증 및 DB 저장',
-        description: dbSaveStage.message || '인증서 검증 및 데이터베이스 저장',
+        label: '검증 및 저장 (DB + LDAP)',
+        description: dbSaveStage.message || '인증서 검증 및 DB/LDAP 동시 저장',
         status: toStepStatus(dbSaveStage.status),
         progress: dbSaveStage.percentage,
         details: dbSaveStage.details,
         icon: <Database className="w-3.5 h-3.5" />,
       },
-      {
-        id: 'ldap',
-        label: 'LDAP 저장',
-        description: ldapStage.message || 'OpenLDAP 디렉토리에 저장',
-        status: toStepStatus(ldapStage.status),
-        progress: ldapStage.percentage,
-        details: ldapStage.details,
-        icon: <Server className="w-3.5 h-3.5" />,
-      },
     ];
-  }, [uploadStage, parseStage, dbSaveStage, ldapStage]);
+  }, [uploadStage, parseStage, dbSaveStage]);
 
   const isValidFileType = useCallback((file: File) => {
     const name = file.name.toLowerCase();
@@ -526,17 +498,6 @@ export function FileUpload() {
     }
   };
 
-  const triggerLdapUpload = async () => {
-    if (!uploadId) return;
-    setLdapStage({ status: 'IN_PROGRESS', message: 'LDAP 저장 시작...', percentage: 0 });
-    try {
-      await uploadApi.triggerLdapUpload(uploadId);
-      // Note: Progress will be updated via SSE connection established during upload
-    } catch (error) {
-      setLdapStage({ status: 'FAILED', message: 'LDAP 저장 실패', percentage: 0 });
-      setErrorMessages(prev => [...prev, error instanceof Error ? error.message : 'LDAP 저장 요청 실패']);
-    }
-  };
 
   return (
     <div className="w-full px-4 lg:px-6 py-4">
@@ -785,28 +746,7 @@ export function FileUpload() {
                       ) : (
                         <Play className="w-3.5 h-3.5" />
                       )}
-                      {dbSaveStage.status === 'COMPLETED' ? '검증+DB 완료' : '2. 검증+DB'}
-                    </button>
-
-                    <button
-                      onClick={triggerLdapUpload}
-                      disabled={dbSaveStage.status !== 'COMPLETED' || ldapStage.status === 'COMPLETED' || ldapStage.status === 'IN_PROGRESS'}
-                      className={cn(
-                        'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
-                        ldapStage.status === 'COMPLETED'
-                          ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
-                        'disabled:opacity-50'
-                      )}
-                    >
-                      {ldapStage.status === 'IN_PROGRESS' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : ldapStage.status === 'COMPLETED' ? (
-                        <CheckCircle className="w-3.5 h-3.5" />
-                      ) : (
-                        <Play className="w-3.5 h-3.5" />
-                      )}
-                      {ldapStage.status === 'COMPLETED' ? 'LDAP 완료' : '3. LDAP'}
+                      {dbSaveStage.status === 'COMPLETED' ? '저장 완료' : '2. 저장 (DB+LDAP)'}
                     </button>
                   </div>
                 </div>
