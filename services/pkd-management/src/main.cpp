@@ -2933,14 +2933,20 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                                        validationStats.cscaNotFoundCount, validationStats.expiredCount,
                                        validationStats.revokedCount);
 
-            // Send completion progress with validation info
-            std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
-                                       "개, DSC " + std::to_string(dscCount) +
-                                       (dscNcCount > 0 ? "개, DSC_NC " + std::to_string(dscNcCount) : "") +
-                                       "개, CRL " + std::to_string(crlCount) + "개";
-            if (mlCount > 0) {
-                completionMsg += ", ML " + std::to_string(mlCount) + "개";
+            // v1.5.1: Send completion progress with validation info (only show non-zero counts)
+            std::string completionMsg = "처리 완료: ";
+            std::vector<std::string> completionParts;
+            if (cscaCount > 0) completionParts.push_back("CSCA " + std::to_string(cscaCount) + "개");
+            if (dscCount > 0) completionParts.push_back("DSC " + std::to_string(dscCount) + "개");
+            if (dscNcCount > 0) completionParts.push_back("DSC_NC " + std::to_string(dscNcCount) + "개");
+            if (crlCount > 0) completionParts.push_back("CRL " + std::to_string(crlCount) + "개");
+            if (mlCount > 0) completionParts.push_back("ML " + std::to_string(mlCount) + "개");
+
+            for (size_t i = 0; i < completionParts.size(); ++i) {
+                if (i > 0) completionMsg += ", ";
+                completionMsg += completionParts[i];
             }
+
             completionMsg += " (검증: " + std::to_string(validationStats.validCount) + " 성공, " +
                             std::to_string(validationStats.invalidCount) + " 실패, " +
                             std::to_string(validationStats.pendingCount) + " 보류)";
@@ -3120,11 +3126,15 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                         }
                                     }
 
-                                    // Progress update
+                                    // v1.5.1: Progress update with detailed breakdown
                                     if (totalCerts % 50 == 0) {
+                                        std::string mlProgressMsg = "처리 중: CSCA " + std::to_string(cscaCount);
+                                        if (ld) {
+                                            mlProgressMsg += ", LDAP 저장 " + std::to_string(ldapStoredCount);
+                                        }
                                         ProgressManager::getInstance().sendProgress(
                                             ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                                                totalCerts, totalCerts, "DB 저장 중: " + std::to_string(cscaCount) + " CSCA"));
+                                                totalCerts, totalCerts, mlProgressMsg));
                                     }
                                 }
                                 X509_free(cert);
@@ -3192,15 +3202,15 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
             }
         }
 
-        // v1.5.1: Enhanced Master List completion message
-        std::string mlCompletionMsg = "Master List 처리 완료: CSCA " + std::to_string(cscaCount) + "/" + std::to_string(totalCerts);
-        if (ld) {
+        // v1.5.1: Enhanced Master List completion message (only show actual counts)
+        std::string mlCompletionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) + "개";
+        if (ld && ldapStoredCount > 0) {
             mlCompletionMsg += ", LDAP 저장 " + std::to_string(ldapStoredCount) + "/" + std::to_string(cscaCount);
         }
 
         ProgressManager::getInstance().sendProgress(
-            ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                100, 100, mlCompletionMsg));
+            ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                cscaCount, cscaCount, mlCompletionMsg));
 
         spdlog::info("Extracted {} certificates from Master List", totalCerts);
         updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, totalCerts, totalCerts, "");
@@ -5474,7 +5484,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.1 NON-STANDARD-DN-ATTRS-FIX ======");
+    spdlog::info("====== ICAO Local PKD v1.5.1 PROGRESS-MSG-REFINEMENT ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

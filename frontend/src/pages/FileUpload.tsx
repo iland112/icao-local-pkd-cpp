@@ -391,6 +391,7 @@ export function FileUpload() {
     if (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('LDAP'))) {
       // Backend message contains detailed breakdown, use it directly
       details = message;
+      console.log(`[FileUpload] Using detailed message as details: "${details}"`);
     } else if (stage.endsWith('_COMPLETED') || stage === 'COMPLETED') {
       // Show final count on completion
       if (totalCount > 0) {
@@ -448,6 +449,18 @@ export function FileUpload() {
         details: stage === 'DB_SAVING_COMPLETED' ? `${totalCount}건 저장` : details,
       };
       setDbSaveStage(dbStatus);
+    } else if (stage.startsWith('LDAP_SAVING')) {
+      // v1.5.1: LDAP_SAVING is part of the combined "검증 및 DB 저장" step
+      // This stage is sent after DB saving completes to show LDAP save summary
+      setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      const ldapStatus: StageStatus = {
+        status: stage === 'LDAP_SAVING_COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
+        message: stageName || message,
+        percentage: stage === 'LDAP_SAVING_COMPLETED' ? 100 : stagePercent,
+        details: details || message,  // Use detailed LDAP message from backend
+      };
+      setDbSaveStage(ldapStatus);
     } else if (stage === 'COMPLETED') {
       // v1.5.0: DB save completed = LDAP also completed (simultaneous)
       // Mark all stages as completed with final message

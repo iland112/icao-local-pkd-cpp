@@ -290,6 +290,13 @@ function StepContent({ step, config, showProgress }: StepContentProps) {
         </div>
       )}
 
+      {/* Details for active status without progress bar (when progress is 0 or undefined but details exist) */}
+      {step.status === 'active' && step.details && !(step.progress !== undefined && step.progress > 0) && (
+        <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1">
+          {step.details}
+        </p>
+      )}
+
       {/* Error/Success Details */}
       {step.status === 'completed' && step.details && (
         <p className="text-xs text-teal-600 dark:text-teal-400 font-medium">
