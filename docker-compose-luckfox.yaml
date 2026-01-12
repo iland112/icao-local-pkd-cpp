@@ -67,8 +67,8 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./data/pkd-logs:/app/logs
-      - ./data/pkd-uploads:/app/uploads
+      - ./.docker-data/pkd-logs:/app/logs
+      - ./.docker-data/pkd-uploads:/app/uploads
       - ./data/cert:/app/data/cert:ro
     restart: unless-stopped
 
@@ -98,7 +98,7 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./data/pa-logs:/app/logs
+      - ./.docker-data/pa-logs:/app/logs
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ services:
     depends_on:
       - postgres
     volumes:
-      - ./data/sync-logs:/app/logs
+      - ./.docker-data/sync-logs:/app/logs
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -146,6 +146,6 @@ services:
       - POSTGRES_DB=localpkd
       - TZ=Asia/Seoul
     volumes:
-      - ./data/postgres:/var/lib/postgresql/data
+      - ./.docker-data/postgres:/var/lib/postgresql/data
       - ./docker/init-scripts:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
