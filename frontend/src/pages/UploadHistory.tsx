@@ -844,7 +844,7 @@ export function UploadHistory() {
                   </div>
 
                   {/* Certificate Type Breakdown */}
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-5 gap-2">
                     <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
                         {selectedUpload.cscaCount}
@@ -868,6 +868,12 @@ export function UploadHistory() {
                         {selectedUpload.crlCount}
                       </p>
                       <span className="text-xs text-amber-700 dark:text-amber-300">CRL</span>
+                    </div>
+                    <div className="bg-teal-50 dark:bg-teal-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-teal-600 dark:text-teal-400">
+                        {selectedUpload.mlCount || 0}
+                      </p>
+                      <span className="text-xs text-teal-700 dark:text-teal-300">ML</span>
                     </div>
                   </div>
 
