@@ -1701,7 +1701,22 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     }
 
     if (rc != LDAP_SUCCESS) {
-        spdlog::warn("Failed to save certificate to LDAP {}: {}", dn, ldap_err2string(rc));
+        spdlog::warn("Failed to save certificate to LDAP {}: {} (error code: {})", dn, ldap_err2string(rc), rc);
+
+        // v1.4.22: Get detailed error information from LDAP connection
+        char *matched_msg = nullptr;
+        char *error_msg = nullptr;
+        int ldap_rc = ldap_get_option(ld, LDAP_OPT_MATCHED_DN, &matched_msg);
+        if (ldap_rc == LDAP_SUCCESS && matched_msg) {
+            spdlog::warn("  LDAP matched DN: {}", matched_msg);
+            ldap_memfree(matched_msg);
+        }
+        ldap_rc = ldap_get_option(ld, LDAP_OPT_DIAGNOSTIC_MESSAGE, &error_msg);
+        if (ldap_rc == LDAP_SUCCESS && error_msg) {
+            spdlog::warn("  LDAP diagnostic: {}", error_msg);
+            ldap_memfree(error_msg);
+        }
+
         return "";
     }
 
@@ -5551,7 +5566,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.21 MULTI-VALUED-RDN-CN-SN ======");
+    spdlog::info("====== ICAO Local PKD v1.4.22 LDAP-ERROR-DETAIL ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
