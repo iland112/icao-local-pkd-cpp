@@ -115,6 +115,27 @@ void ManualProcessingStrategy::saveLdifEntriesToTempFile(
     // Create temp directory if not exists
     std::filesystem::create_directories(tempDir);
 
+    // Pre-calculate total counts for each type (for progress display in Stage 2)
+    int totalCerts = 0, totalCrl = 0, totalMl = 0;
+    for (const auto& entry : entries) {
+        if (entry.hasAttribute("userCertificate;binary") || entry.hasAttribute("cACertificate;binary")) {
+            totalCerts++;
+        }
+        if (entry.hasAttribute("certificateRevocationList;binary")) {
+            totalCrl++;
+        }
+        if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
+            totalMl++;
+        }
+    }
+
+    // Create root JSON with metadata
+    Json::Value root;
+    root["metadata"]["totalEntries"] = static_cast<int>(entries.size());
+    root["metadata"]["totalCerts"] = totalCerts;
+    root["metadata"]["totalCrl"] = totalCrl;
+    root["metadata"]["totalMl"] = totalMl;
+
     // Serialize LDIF entries to JSON
     Json::Value jsonEntries(Json::arrayValue);
     for (const auto& entry : entries) {
@@ -133,6 +154,7 @@ void ManualProcessingStrategy::saveLdifEntriesToTempFile(
         jsonEntry["attributes"] = jsonAttrs;
         jsonEntries.append(jsonEntry);
     }
+    root["entries"] = jsonEntries;
 
     // Write to file
     std::ofstream outFile(tempFile);
@@ -143,10 +165,11 @@ void ManualProcessingStrategy::saveLdifEntriesToTempFile(
     Json::StreamWriterBuilder writer;
     writer["indentation"] = "";  // Compact JSON
     std::unique_ptr<Json::StreamWriter> jsonWriter(writer.newStreamWriter());
-    jsonWriter->write(jsonEntries, &outFile);
+    jsonWriter->write(root, &outFile);
     outFile.close();
 
-    spdlog::info("MANUAL mode: Saved {} LDIF entries to {}", entries.size(), tempFile);
+    spdlog::info("MANUAL mode: Saved {} LDIF entries to {} (Certs: {}, CRL: {}, ML: {})",
+                entries.size(), tempFile, totalCerts, totalCrl, totalMl);
 }
 
 std::vector<LdifEntry> ManualProcessingStrategy::loadLdifEntriesFromTempFile(const std::string& uploadId) {
@@ -157,13 +180,16 @@ std::vector<LdifEntry> ManualProcessingStrategy::loadLdifEntriesFromTempFile(con
         throw std::runtime_error("Failed to open temp file: " + tempFile);
     }
 
-    Json::Value jsonEntries;
+    Json::Value root;
     Json::CharReaderBuilder reader;
     std::string errs;
-    if (!Json::parseFromStream(reader, inFile, &jsonEntries, &errs)) {
+    if (!Json::parseFromStream(reader, inFile, &root, &errs)) {
         throw std::runtime_error("Failed to parse JSON from temp file: " + errs);
     }
     inFile.close();
+
+    // Check if this is new format (with metadata) or old format (array only)
+    const Json::Value& jsonEntries = root.isMember("entries") ? root["entries"] : root;
 
     // Deserialize JSON to LdifEntry vector
     std::vector<LdifEntry> entries;
@@ -302,10 +328,28 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         // Load LDIF entries from temp file
         auto entries = loadLdifEntriesFromTempFile(uploadId);
 
+        // Load metadata for progress display (X/Total format)
+        LdifProcessor::TotalCounts totalCounts;
+        std::string tempFile = getTempFilePath(uploadId, "ldif");
+        std::ifstream metaFile(tempFile);
+        if (metaFile.is_open()) {
+            Json::Value root;
+            Json::CharReaderBuilder reader;
+            std::string errs;
+            if (Json::parseFromStream(reader, metaFile, &root, &errs) && root.isMember("metadata")) {
+                totalCounts.totalCerts = root["metadata"].get("totalCerts", 0).asInt();
+                totalCounts.totalCrl = root["metadata"].get("totalCrl", 0).asInt();
+                totalCounts.totalMl = root["metadata"].get("totalMl", 0).asInt();
+                spdlog::info("MANUAL mode Stage 2: Loaded metadata - Certs: {}, CRL: {}, ML: {}",
+                            totalCounts.totalCerts, totalCounts.totalCrl, totalCounts.totalMl);
+            }
+            metaFile.close();
+        }
+
         ValidationStats stats;
 
         // Process entries (save to BOTH DB and LDAP simultaneously)
-        auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats);
+        auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats, &totalCounts);
 
         // Update database statistics
         updateUploadStatistics(conn, uploadId, "COMPLETED",

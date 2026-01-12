@@ -45,12 +45,19 @@ public:
         int ldapMlStoredCount = 0;
     };
 
+    struct TotalCounts {
+        int totalCerts = 0;
+        int totalCrl = 0;
+        int totalMl = 0;
+    };
+
     static ProcessingCounts processEntries(
         const std::string& uploadId,
         const std::vector<LdifEntry>& entries,
         PGconn* conn,
         LDAP* ld,
-        ValidationStats& stats
+        ValidationStats& stats,
+        const TotalCounts* totalCounts = nullptr  // Optional: for "X/Total" progress display
     );
 
     /**

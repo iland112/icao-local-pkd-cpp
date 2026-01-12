@@ -35,7 +35,8 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     const std::vector<LdifEntry>& entries,
     PGconn* conn,
     LDAP* ld,
-    ValidationStats& stats
+    ValidationStats& stats,
+    const TotalCounts* totalCounts
 ) {
     ProcessingCounts counts;
     int processedEntries = 0;
@@ -76,16 +77,39 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
         processedEntries++;
 
-        // v1.5.1: Send progress update to frontend every 50 entries
+        // v1.5.2: Send progress update to frontend every 50 entries
         if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
-            // Build detailed progress message (only show non-zero counts)
+            // Build detailed progress message with X/Total format if totalCounts provided
             std::string progressMsg = "처리 중: ";
             std::vector<std::string> parts;
-            if (counts.cscaCount > 0) parts.push_back("CSCA " + std::to_string(counts.cscaCount));
-            if (counts.dscCount > 0) parts.push_back("DSC " + std::to_string(counts.dscCount));
-            if (counts.dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount));
-            if (counts.crlCount > 0) parts.push_back("CRL " + std::to_string(counts.crlCount));
-            if (counts.mlCount > 0) parts.push_back("ML " + std::to_string(counts.mlCount));
+
+            int totalCerts = totalCounts ? totalCounts->totalCerts : 0;
+            int totalCrl = totalCounts ? totalCounts->totalCrl : 0;
+            int totalMl = totalCounts ? totalCounts->totalMl : 0;
+
+            int currentCerts = counts.cscaCount + counts.dscCount + counts.dscNcCount;
+
+            if (totalCerts > 0) {
+                // Show combined cert count with total
+                parts.push_back("인증서 " + std::to_string(currentCerts) + "/" + std::to_string(totalCerts));
+            } else {
+                // Fallback: show individual counts without total
+                if (counts.cscaCount > 0) parts.push_back("CSCA " + std::to_string(counts.cscaCount));
+                if (counts.dscCount > 0) parts.push_back("DSC " + std::to_string(counts.dscCount));
+                if (counts.dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount));
+            }
+
+            if (totalCrl > 0 && counts.crlCount > 0) {
+                parts.push_back("CRL " + std::to_string(counts.crlCount) + "/" + std::to_string(totalCrl));
+            } else if (counts.crlCount > 0) {
+                parts.push_back("CRL " + std::to_string(counts.crlCount));
+            }
+
+            if (totalMl > 0 && counts.mlCount > 0) {
+                parts.push_back("ML " + std::to_string(counts.mlCount) + "/" + std::to_string(totalMl));
+            } else if (counts.mlCount > 0) {
+                parts.push_back("ML " + std::to_string(counts.mlCount));
+            }
 
             for (size_t i = 0; i < parts.size(); ++i) {
                 if (i > 0) progressMsg += ", ";
