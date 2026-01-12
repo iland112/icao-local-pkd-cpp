@@ -22,6 +22,9 @@ extern bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
 extern bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                                 const LdifEntry& entry, int& mlCount, int& ldapMlStoredCount);
 
+// Forward declaration for sendDbSavingProgress helper function (from main.cpp)
+extern void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message);
+
 std::vector<LdifEntry> LdifProcessor::parseLdifContent(const std::string& content) {
     // Call the existing function from main.cpp
     return ::parseLdifContent(content);
@@ -89,10 +92,8 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 progressMsg += parts[i];
             }
 
-            // Send progress to frontend via SSE
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                    processedEntries, totalEntries, progressMsg));
+            // Send progress to frontend via SSE (call helper function from main.cpp)
+            sendDbSavingProgress(uploadId, processedEntries, totalEntries, progressMsg);
 
             spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP), {} MLs ({} LDAP)",
                         processedEntries, totalEntries,

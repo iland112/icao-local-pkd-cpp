@@ -2559,6 +2559,16 @@ std::string extractCountryCodeFromDn(const std::string& dn) {
 }
 
 /**
+ * @brief Helper function to send DB_SAVING_IN_PROGRESS progress
+ * This is called from ldif_processor.cpp
+ */
+void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message) {
+    ProgressManager::getInstance().sendProgress(
+        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+            processedCount, totalCount, message));
+}
+
+/**
  * @brief Parse and save Master List from LDIF entry (DB + LDAP)
  * This handles entries with pkdMasterListContent attribute
  */
