@@ -2769,14 +2769,22 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
 
-            // Send parsing completed progress
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                    totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
-
             // Use Strategy Pattern to handle AUTO vs MANUAL modes
             auto strategy = ProcessingStrategyFactory::create(processingMode);
             strategy->processLdifEntries(uploadId, entries, conn, ld);
+
+            // Send parsing completed progress AFTER strategy completes (for MANUAL mode)
+            // This ensures temp file is saved and DB status is updated before frontend receives event
+            if (processingMode == "MANUAL") {
+                ProgressManager::getInstance().sendProgress(
+                    ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                        totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
+            } else {
+                // For AUTO mode, send progress immediately since processing continues
+                ProgressManager::getInstance().sendProgress(
+                    ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                        totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
+            }
 
             // For MANUAL mode, stop here (strategy already saved to temp file)
             if (processingMode == "MANUAL") {
@@ -5504,7 +5512,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.2 ERROR-HANDLING-RETRY (Build 20260112-183400) ======");
+    spdlog::info("====== ICAO Local PKD v1.5.3 FIX-RACE-CONDITION (Build 20260112-193000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
