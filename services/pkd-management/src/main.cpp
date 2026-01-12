@@ -1707,7 +1707,10 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
                                    const std::string& countryCode,
                                    const std::string& subjectDn, const std::string& issuerDn,
                                    const std::string& serialNumber, const std::string& fingerprint,
-                                   const std::vector<uint8_t>& certBinary) {
+                                   const std::vector<uint8_t>& certBinary,
+                                   const std::string& pkdConformanceCode = "",
+                                   const std::string& pkdConformanceText = "",
+                                   const std::string& pkdVersion = "") {
     bool isNcData = (certType == "DSC_NC");
 
     // Ensure country structure exists
@@ -1781,7 +1784,48 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     berval* certBvVals[] = {&certBv, nullptr};
     modCert.mod_bvalues = certBvVals;
 
-    LDAPMod* mods[] = {&modObjectClass, &modCn, &modSn, &modDescription, &modCert, nullptr};
+    // v1.5.6: DSC_NC specific attributes (pkdConformanceCode, pkdConformanceText, pkdVersion)
+    LDAPMod modConformanceCode, modConformanceText, modVersion;
+    char* conformanceCodeVals[] = {nullptr, nullptr};
+    char* conformanceTextVals[] = {nullptr, nullptr};
+    char* versionVals[] = {nullptr, nullptr};
+
+    std::vector<LDAPMod*> modsVec = {&modObjectClass, &modCn, &modSn, &modDescription, &modCert};
+
+    if (isNcData) {
+        // Add pkdConformanceCode if provided
+        if (!pkdConformanceCode.empty()) {
+            modConformanceCode.mod_op = LDAP_MOD_ADD;
+            modConformanceCode.mod_type = const_cast<char*>("pkdConformanceCode");
+            conformanceCodeVals[0] = const_cast<char*>(pkdConformanceCode.c_str());
+            modConformanceCode.mod_values = conformanceCodeVals;
+            modsVec.push_back(&modConformanceCode);
+            spdlog::debug("Adding pkdConformanceCode: {}", pkdConformanceCode);
+        }
+
+        // Add pkdConformanceText if provided
+        if (!pkdConformanceText.empty()) {
+            modConformanceText.mod_op = LDAP_MOD_ADD;
+            modConformanceText.mod_type = const_cast<char*>("pkdConformanceText");
+            conformanceTextVals[0] = const_cast<char*>(pkdConformanceText.c_str());
+            modConformanceText.mod_values = conformanceTextVals;
+            modsVec.push_back(&modConformanceText);
+            spdlog::debug("Adding pkdConformanceText: {}", pkdConformanceText.substr(0, 50) + "...");
+        }
+
+        // Add pkdVersion if provided
+        if (!pkdVersion.empty()) {
+            modVersion.mod_op = LDAP_MOD_ADD;
+            modVersion.mod_type = const_cast<char*>("pkdVersion");
+            versionVals[0] = const_cast<char*>(pkdVersion.c_str());
+            modVersion.mod_values = versionVals;
+            modsVec.push_back(&modVersion);
+            spdlog::debug("Adding pkdVersion: {}", pkdVersion);
+        }
+    }
+
+    modsVec.push_back(nullptr);
+    LDAPMod** mods = modsVec.data();
 
     int rc = ldap_add_ext_s(ld, dn.c_str(), mods, nullptr, nullptr);
 
@@ -2436,9 +2480,15 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
 
         // 4. Save to LDAP
         if (ld) {
+            // v1.5.6: Extract DSC_NC specific attributes from LDIF entry
+            std::string pkdConformanceCode = entry.getFirstAttribute("pkdConformanceCode");
+            std::string pkdConformanceText = entry.getFirstAttribute("pkdConformanceText");
+            std::string pkdVersion = entry.getFirstAttribute("pkdVersion");
+
             std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
                                                         subjectDn, issuerDn, serialNumber,
-                                                        fingerprint, derBytes);
+                                                        fingerprint, derBytes,
+                                                        pkdConformanceCode, pkdConformanceText, pkdVersion);
             if (!ldapDn.empty()) {
                 updateCertificateLdapStatus(conn, certId, ldapDn);
                 ldapStoredCount++;
@@ -5512,7 +5562,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.5 SSE-POLLING-HYBRID (Build 20260112-231904) ======");
+    spdlog::info("====== ICAO Local PKD v1.5.6 DSC-NC-ATTRIBUTES (Build 20260113-001756) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
