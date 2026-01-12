@@ -48,6 +48,7 @@
 #include <random>
 #include <map>
 #include <set>
+#include <algorithm>
 #include <optional>
 #include <regex>
 #include <algorithm>
@@ -1476,6 +1477,86 @@ std::string escapeLdapDnValue(const std::string& value) {
 }
 
 /**
+ * @brief Extract standard and non-standard attributes from Subject DN
+ *
+ * Standard LDAP DN attributes: CN, O, OU, C, L, ST, DC
+ * Non-standard attributes: emailAddress, street, telephoneNumber, serialNumber, postalCode, etc.
+ *
+ * @param subjectDn Full Subject DN (e.g., "CN=CSCA,O=Org,emailAddress=test@example.com")
+ * @return Pair of (standardDn, nonStandardAttrs)
+ */
+std::pair<std::string, std::string> extractStandardAttributes(const std::string& subjectDn) {
+    // Standard LDAP DN attribute types (case-insensitive)
+    static const std::set<std::string> standardAttrs = {
+        "CN", "O", "OU", "C", "L", "ST", "DC", "STREET"
+    };
+
+    std::string standardDn;
+    std::string nonStandardAttrs;
+
+    // Parse DN by splitting on comma (handle escaped commas)
+    std::vector<std::string> rdns;
+    std::string current;
+    bool escaped = false;
+
+    for (size_t i = 0; i < subjectDn.size(); ++i) {
+        char c = subjectDn[i];
+
+        if (escaped) {
+            current += c;
+            escaped = false;
+        } else if (c == '\\') {
+            current += c;
+            escaped = true;
+        } else if (c == ',') {
+            if (!current.empty()) {
+                rdns.push_back(current);
+                current.clear();
+            }
+        } else {
+            current += c;
+        }
+    }
+    if (!current.empty()) {
+        rdns.push_back(current);
+    }
+
+    // Classify each RDN as standard or non-standard
+    for (const auto& rdn : rdns) {
+        // Extract attribute type (before '=')
+        size_t eqPos = rdn.find('=');
+        if (eqPos == std::string::npos) continue;
+
+        std::string attrType = rdn.substr(0, eqPos);
+
+        // Trim whitespace
+        attrType.erase(0, attrType.find_first_not_of(" \t"));
+        attrType.erase(attrType.find_last_not_of(" \t") + 1);
+
+        // Convert to uppercase for comparison
+        std::string attrTypeUpper = attrType;
+        std::transform(attrTypeUpper.begin(), attrTypeUpper.end(), attrTypeUpper.begin(), ::toupper);
+
+        // Check if standard attribute
+        if (standardAttrs.find(attrTypeUpper) != standardAttrs.end()) {
+            if (!standardDn.empty()) standardDn += ",";
+            standardDn += rdn;
+        } else {
+            // Non-standard attribute
+            if (!nonStandardAttrs.empty()) nonStandardAttrs += ", ";
+            nonStandardAttrs += rdn;
+        }
+    }
+
+    // If no standard attributes found, use original DN to avoid empty DN
+    if (standardDn.empty()) {
+        standardDn = subjectDn;
+    }
+
+    return {standardDn, nonStandardAttrs};
+}
+
+/**
  * @brief Build LDAP DN for certificate
  * @param certType CSCA, DSC, or DSC_NC
  * @param countryCode ISO country code
@@ -1487,6 +1568,8 @@ std::string escapeLdapDnValue(const std::string& value) {
  *
  * This matches the working Java implementation which uses multi-valued RDN (cn+sn).
  * Multi-valued RDN is more robust when Subject DN contains LDAP special characters.
+ *
+ * v1.5.0: Extracts only standard LDAP attributes for DN to avoid LDAP error 80
  */
 std::string buildCertificateDn(const std::string& certType, const std::string& countryCode,
                                 const std::string& subjectDn, const std::string& serialNumber) {
@@ -1518,8 +1601,11 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
         dataContainer = "dc=data";
     }
 
+    // v1.5.0: Extract only standard attributes to avoid LDAP error 80
+    auto [standardDn, nonStandardAttrs] = extractStandardAttributes(subjectDn);
+
     // Escape Subject DN for safe use in LDAP DN (RFC 4514)
-    std::string escapedSubjectDn = escapeLdapDnValue(subjectDn);
+    std::string escapedSubjectDn = escapeLdapDnValue(standardDn);
 
     // CRITICAL FIX v1.4.21: Use multi-valued RDN (cn+sn) like Java project
     // This isolates the complex Subject DN structure and makes DN parsing more robust
@@ -1630,6 +1716,9 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
         // Continue anyway - the OU might exist even if we couldn't create it
     }
 
+    // v1.5.0: Extract standard and non-standard attributes
+    auto [standardDn, nonStandardAttrs] = extractStandardAttributes(subjectDn);
+
     std::string dn = buildCertificateDn(certType, countryCode, subjectDn, serialNumber);
 
     // Build LDAP entry attributes
@@ -1650,15 +1739,16 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     modObjectClass.mod_values = ocVals;
 
     // cn (Subject DN - required by person, must match DN's RDN)
+    // v1.5.0: Use standard attributes only for cn
     // IMPORTANT: DN uses escaped value, but cn attribute uses UNESCAPED original value!
-    // DN RDN: cn=CN=CSCA Romania\,O=DGP\,C=ro (escaped for DN parsing)
-    // cn attribute: CN=CSCA Romania,O=DGP,C=ro (unescaped original value)
-    spdlog::debug("[v1.4.20-DEBUG] Setting cn attribute to Subject DN (unescaped): {}", subjectDn);
-    spdlog::debug("[v1.4.20-DEBUG] Fingerprint (for reference): {}", fingerprint);
+    spdlog::debug("[v1.5.0] Setting cn attribute to standard DN: {}", standardDn);
+    if (!nonStandardAttrs.empty()) {
+        spdlog::debug("[v1.5.0] Non-standard attributes moved to description: {}", nonStandardAttrs);
+    }
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
-    char* cnVals[] = {const_cast<char*>(subjectDn.c_str()), nullptr};  // Use original unescaped value!
+    char* cnVals[] = {const_cast<char*>(standardDn.c_str()), nullptr};
     modCn.mod_values = cnVals;
 
     // sn (serial number - required by person)
@@ -1668,11 +1758,17 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     char* snVals[] = {const_cast<char*>(serialNumber.c_str()), nullptr};
     modSn.mod_values = snVals;
 
-    // description (fingerprint - for reference, since cn is now Subject DN)
+    // description (v1.5.0: Full Subject DN with non-standard attributes + fingerprint)
+    std::string descriptionValue;
+    if (!nonStandardAttrs.empty()) {
+        descriptionValue = "Full Subject DN: " + subjectDn + " | Non-standard attributes: " + nonStandardAttrs + " | Fingerprint: " + fingerprint;
+    } else {
+        descriptionValue = "Subject DN: " + subjectDn + " | Fingerprint: " + fingerprint;
+    }
     LDAPMod modDescription;
     modDescription.mod_op = LDAP_MOD_ADD;
     modDescription.mod_type = const_cast<char*>("description");
-    char* descVals[] = {const_cast<char*>(fingerprint.c_str()), nullptr};
+    char* descVals[] = {const_cast<char*>(descriptionValue.c_str()), nullptr};
     modDescription.mod_values = descVals;
 
     // userCertificate;binary (inetOrgPerson attribute for certificates)
@@ -5342,7 +5438,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.0 MANUAL-2STAGE-DB-LDAP-SIMULTANEOUS ======");
+    spdlog::info("====== ICAO Local PKD v1.5.1 NON-STANDARD-DN-ATTRS-FIX ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
