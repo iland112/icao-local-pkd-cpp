@@ -47,6 +47,12 @@ struct ldap;
 typedef struct ldap LDAP;
 
 /**
+ * @brief Get LDAP connection for write operations
+ * @return LDAP connection pointer or nullptr on failure
+ */
+LDAP* getLdapWriteConnection();
+
+/**
  * @brief Master List processing core function
  *
  * Processes ICAO Master List (CMS/PKCS7 format) containing CSCA certificates.
