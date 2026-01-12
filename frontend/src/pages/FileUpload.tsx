@@ -54,6 +54,11 @@ export function FileUpload() {
   const [overallMessage, setOverallMessage] = useState('');
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
 
+  // v1.5.5: SSE connection tracking and polling backup
+  const [sseConnected, setSseConnected] = useState(false);
+  const sseRef = useRef<EventSource | null>(null);
+  const pollingIntervalRef = useRef<number | null>(null);
+
   // Restore upload state on page load (for MANUAL mode)
   useEffect(() => {
     const restoreUploadState = async () => {
@@ -301,14 +306,134 @@ export function FileUpload() {
     }
   };
 
+  // v1.5.5: Polling backup mechanism - sync state from DB every 30s
+  const syncStateFromDB = async (id: string) => {
+    try {
+      const response = await uploadApi.getDetail(id);
+      if (!response.data?.success || !response.data.data) {
+        console.warn('[Polling] Failed to fetch upload details');
+        return;
+      }
+
+      const upload = response.data.data as UploadedFile;
+      console.log('[Polling] Syncing state from DB:', upload.status, upload);
+
+      // Update stage states based on DB data
+      // Stage 1: Upload & Parse (always completed if we have the record)
+      if (upload.status !== 'PENDING') {
+        setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
+        setParseStage({
+          status: 'COMPLETED',
+          message: '파싱 완료',
+          percentage: 100,
+          details: `${upload.totalEntries}건 처리`
+        });
+      }
+
+      // Stage 2: Validate & DB + LDAP (check certificate counts)
+      const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) > 0;
+
+      if (upload.status === 'COMPLETED' || hasCertificates) {
+        // Build detailed certificate breakdown
+        const parts: string[] = [];
+        if (upload.cscaCount) parts.push(`CSCA ${upload.cscaCount}`);
+        if (upload.dscCount) parts.push(`DSC ${upload.dscCount}`);
+        if (upload.dscNcCount) parts.push(`DSC_NC ${upload.dscNcCount}`);
+        if (upload.crlCount) parts.push(`CRL ${upload.crlCount}`);
+        const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${upload.totalEntries}건 저장 (DB+LDAP)`;
+
+        setDbSaveStage({
+          status: 'COMPLETED',
+          message: 'DB 및 LDAP 저장 완료',
+          percentage: 100,
+          details
+        });
+      }
+
+      // Handle completion states
+      if (upload.status === 'COMPLETED') {
+        setOverallStatus('FINALIZED');
+        setOverallMessage('모든 처리가 완료되었습니다.');
+        setIsProcessing(false);
+        localStorage.removeItem('currentUploadId');
+        // Stop polling when completed
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        // Close SSE connection
+        if (sseRef.current) {
+          sseRef.current.close();
+          sseRef.current = null;
+          setSseConnected(false);
+        }
+      } else if (upload.status === 'FAILED') {
+        setOverallStatus('FAILED');
+        setOverallMessage('처리 중 오류가 발생했습니다.');
+        setIsProcessing(false);
+        localStorage.removeItem('currentUploadId');
+        // Stop polling on failure
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
+        // Close SSE connection
+        if (sseRef.current) {
+          sseRef.current.close();
+          sseRef.current = null;
+          setSseConnected(false);
+        }
+      }
+    } catch (error) {
+      console.error('[Polling] Error syncing state from DB:', error);
+    }
+  };
+
+  // v1.5.5: Start polling backup mechanism (30s interval)
+  const startPolling = (id: string) => {
+    // Clear existing interval if any
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+
+    // Start polling every 30 seconds
+    console.log('[Polling] Starting 30s interval backup for uploadId:', id);
+    pollingIntervalRef.current = setInterval(() => {
+      if (!sseConnected) {
+        console.log('[Polling] SSE disconnected, using polling as primary source');
+      }
+      syncStateFromDB(id);
+    }, 30000); // 30 seconds
+
+    // Also sync immediately
+    syncStateFromDB(id);
+  };
+
+  // v1.5.5: Stop polling when component unmounts or upload completes
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      if (sseRef.current) {
+        sseRef.current.close();
+        sseRef.current = null;
+      }
+    };
+  }, []);
+
   const connectToProgressStream = (id: string) => {
     const eventSource = createProgressEventSource(id);
+    sseRef.current = eventSource;
     let reconnectAttempts = 0;
     const maxReconnectAttempts = 3;
 
     // Handle 'connected' event
     eventSource.addEventListener('connected', () => {
       reconnectAttempts = 0;
+      setSseConnected(true);
+      console.log('[SSE] Connected to progress stream');
     });
 
     // Handle 'progress' events from backend
@@ -333,16 +458,24 @@ export function FileUpload() {
     };
 
     eventSource.onerror = () => {
+      console.warn('[SSE] Connection error, closing...');
+      setSseConnected(false);
       eventSource.close();
 
       // Try to reconnect if not too many attempts
       if (reconnectAttempts < maxReconnectAttempts && isProcessing) {
         reconnectAttempts++;
+        console.log(`[SSE] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
         setTimeout(() => connectToProgressStream(id), 1000);
       } else {
-        setIsProcessing(false);
+        console.log('[SSE] Max reconnect attempts reached, relying on polling');
+        sseRef.current = null;
+        // Don't set isProcessing to false - let polling continue
       }
     };
+
+    // v1.5.5: Start polling backup alongside SSE
+    startPolling(id);
   };
 
   const handleProgressUpdate = (progress: UploadProgress) => {
