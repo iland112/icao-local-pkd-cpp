@@ -2844,8 +2844,9 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
             // For AUTO mode, strategy has already processed everything
             // No additional work needed here
+            spdlog::info("AUTO mode: Processing completed by Strategy Pattern");
 
-            /* OLD CODE - Replaced by Strategy Pattern
+            /* OLD CODE - Replaced by Strategy Pattern - KEEP THIS COMMENTED OUT!
             if (processingMode == "MANUAL_OLD") {
                 spdlog::info("MANUAL mode OLD: Saving parsed entries to temp file");
 
@@ -4582,9 +4583,73 @@ void registerRoutes() {
 
                 PQfinish(conn);
 
-                // Start async processing only in AUTO mode
+                // Start async processing only in AUTO mode using Strategy Pattern
                 if (processingMode == "AUTO" || processingMode == "auto") {
-                    processMasterListFileAsync(uploadId, contentBytes);
+                    // Use Strategy Pattern for Master List (same as LDIF)
+                    std::thread([uploadId, contentBytes]() {
+                        spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
+
+                        std::string conninfo = "host=" + appConfig.dbHost +
+                                              " port=" + std::to_string(appConfig.dbPort) +
+                                              " dbname=" + appConfig.dbName +
+                                              " user=" + appConfig.dbUser +
+                                              " password=" + appConfig.dbPassword;
+
+                        PGconn* conn = PQconnectdb(conninfo.c_str());
+                        if (PQstatus(conn) != CONNECTION_OK) {
+                            spdlog::error("Database connection failed for async processing: {}", PQerrorMessage(conn));
+                            PQfinish(conn);
+                            return;
+                        }
+
+                        // Get processing mode
+                        std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
+                        PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+                        std::string processingMode = "AUTO";
+                        if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
+                            processingMode = PQgetvalue(modeRes, 0, 0);
+                        }
+                        PQclear(modeRes);
+
+                        spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
+
+                        // Connect to LDAP only if AUTO mode
+                        LDAP* ld = nullptr;
+                        if (processingMode == "AUTO") {
+                            ld = getLdapWriteConnection();
+                            if (!ld) {
+                                spdlog::warn("LDAP write connection failed - will only save to DB");
+                            }
+                        }
+
+                        try {
+                            // Use Strategy Pattern
+                            auto strategy = ProcessingStrategyFactory::create(processingMode);
+                            strategy->processMasterListContent(uploadId, contentBytes, conn, ld);
+
+                            // Send appropriate progress based on mode
+                            if (processingMode == "MANUAL") {
+                                // MANUAL mode: Only parsing completed, waiting for Stage 2
+                                ProgressManager::getInstance().sendProgress(
+                                    ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                                        100, 100, "Master List 파싱 완료 - 검증 대기"));
+                            } else {
+                                // AUTO mode: All processing completed
+                                ProgressManager::getInstance().sendProgress(
+                                    ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                                        100, 100, "Master List 처리 완료"));
+                            }
+
+                        } catch (const std::exception& e) {
+                            spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
+                            ProgressManager::getInstance().sendProgress(
+                                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                                    0, 0, "처리 실패", e.what()));
+                        }
+
+                        if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                        PQfinish(conn);
+                    }).detach();
                 }
 
                 // Return success response
@@ -5562,7 +5627,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.6 DSC-NC-ATTRIBUTES (Build 20260113-001756) ======");
+    spdlog::info("====== ICAO Local PKD v1.5.8 AUTO-MODE-FIX (Build 20260113-152000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
