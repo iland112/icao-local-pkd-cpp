@@ -14,7 +14,6 @@ import {
   Upload as UploadIcon,
   FileSearch,
   Database,
-  Server,
 } from 'lucide-react';
 import { uploadApi, createProgressEventSource } from '@/services/api';
 import type { ProcessingMode, UploadProgress, UploadedFile } from '@/types';
@@ -219,7 +218,6 @@ export function FileUpload() {
     setUploadStage(initialStage);
     setParseStage(initialStage);
     setDbSaveStage(initialStage);
-    setLdapStage(initialStage);
     setOverallStatus('IDLE');
     setOverallMessage('');
     setErrorMessages([]);
@@ -447,18 +445,12 @@ export function FileUpload() {
         details: stage === 'DB_SAVING_COMPLETED' ? `${totalCount}건 저장` : details,
       };
       setDbSaveStage(dbStatus);
-    } else if (stage.startsWith('LDAP_SAVING')) {
-      // Mark previous stages as completed
-      setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setDbSaveStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setLdapStage(stageStatus);
     } else if (stage === 'COMPLETED') {
+      // v1.5.0: DB save completed = LDAP also completed (simultaneous)
       // Mark all stages as completed with final message
       setUploadStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setParseStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
-      setDbSaveStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
-      setLdapStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장` }));
+      setDbSaveStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장 (DB+LDAP)` }));
       setOverallStatus('FINALIZED');
       setOverallMessage(message || '모든 처리가 완료되었습니다.');
       setIsProcessing(false);
