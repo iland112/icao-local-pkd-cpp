@@ -1480,9 +1480,16 @@ std::string escapeLdapDnValue(const std::string& value) {
  * @param certType CSCA, DSC, or DSC_NC
  * @param countryCode ISO country code
  * @param subjectDn Certificate Subject DN (used as CN for readability)
+ * @param serialNumber Certificate serial number (used in multi-valued RDN)
+ *
+ * DN Structure (v1.4.21 - Multi-valued RDN like Java project):
+ * cn={ESCAPED-SUBJECT-DN}+sn={SERIAL},o={csca|dsc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
+ *
+ * This matches the working Java implementation which uses multi-valued RDN (cn+sn).
+ * Multi-valued RDN is more robust when Subject DN contains LDAP special characters.
  */
 std::string buildCertificateDn(const std::string& certType, const std::string& countryCode,
-                                const std::string& subjectDn) {
+                                const std::string& subjectDn, const std::string& serialNumber) {
     // ICAO PKD DIT structure:
     // dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     //   └── dc=download
@@ -1514,7 +1521,11 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
     // Escape Subject DN for safe use in LDAP DN (RFC 4514)
     std::string escapedSubjectDn = escapeLdapDnValue(subjectDn);
 
-    return "cn=" + escapedSubjectDn + ",o=" + ou + ",c=" + countryCode +
+    // CRITICAL FIX v1.4.21: Use multi-valued RDN (cn+sn) like Java project
+    // This isolates the complex Subject DN structure and makes DN parsing more robust
+    // Multi-valued RDN: cn={ESCAPED-SUBJECT-DN}+sn={SERIAL}
+    // Java DN: cn={ESCAPED-SUBJECT-DN}+sn={SERIAL},o={csca|dsc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
+    return "cn=" + escapedSubjectDn + "+sn=" + serialNumber + ",o=" + ou + ",c=" + countryCode +
            "," + dataContainer + ",dc=download," + appConfig.ldapBaseDn;
 }
 
@@ -1619,7 +1630,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
         // Continue anyway - the OU might exist even if we couldn't create it
     }
 
-    std::string dn = buildCertificateDn(certType, countryCode, subjectDn);
+    std::string dn = buildCertificateDn(certType, countryCode, subjectDn, serialNumber);
 
     // Build LDAP entry attributes
     // objectClass hierarchy: inetOrgPerson (structural) + pkdDownload (auxiliary, ICAO PKD custom schema)
@@ -5540,7 +5551,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.20 ESCAPE-EQUALS-SIGN ======");
+    spdlog::info("====== ICAO Local PKD v1.4.21 MULTI-VALUED-RDN-CN-SN ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
