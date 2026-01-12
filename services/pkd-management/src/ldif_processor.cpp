@@ -87,28 +87,46 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
             int totalCrl = totalCounts ? totalCounts->totalCrl : 0;
             int totalMl = totalCounts ? totalCounts->totalMl : 0;
 
-            int currentCerts = counts.cscaCount + counts.dscCount + counts.dscNcCount;
-
-            if (totalCerts > 0) {
-                // Show combined cert count with total
-                parts.push_back("인증서 " + std::to_string(currentCerts) + "/" + std::to_string(totalCerts));
-            } else {
-                // Fallback: show individual counts without total
-                if (counts.cscaCount > 0) parts.push_back("CSCA " + std::to_string(counts.cscaCount));
-                if (counts.dscCount > 0) parts.push_back("DSC " + std::to_string(counts.dscCount));
-                if (counts.dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount));
+            // v1.5.4: Show individual cert types (CSCA/DSC/DSC_NC) separately
+            // Only display items with count > 0
+            if (counts.cscaCount > 0) {
+                if (totalCerts > 0) {
+                    parts.push_back("CSCA " + std::to_string(counts.cscaCount) + "/" + std::to_string(totalCerts));
+                } else {
+                    parts.push_back("CSCA " + std::to_string(counts.cscaCount));
+                }
             }
 
-            if (totalCrl > 0 && counts.crlCount > 0) {
-                parts.push_back("CRL " + std::to_string(counts.crlCount) + "/" + std::to_string(totalCrl));
-            } else if (counts.crlCount > 0) {
-                parts.push_back("CRL " + std::to_string(counts.crlCount));
+            if (counts.dscCount > 0) {
+                if (totalCerts > 0) {
+                    parts.push_back("DSC " + std::to_string(counts.dscCount) + "/" + std::to_string(totalCerts));
+                } else {
+                    parts.push_back("DSC " + std::to_string(counts.dscCount));
+                }
             }
 
-            if (totalMl > 0 && counts.mlCount > 0) {
-                parts.push_back("ML " + std::to_string(counts.mlCount) + "/" + std::to_string(totalMl));
-            } else if (counts.mlCount > 0) {
-                parts.push_back("ML " + std::to_string(counts.mlCount));
+            if (counts.dscNcCount > 0) {
+                if (totalCerts > 0) {
+                    parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount) + "/" + std::to_string(totalCerts));
+                } else {
+                    parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount));
+                }
+            }
+
+            if (counts.crlCount > 0) {
+                if (totalCrl > 0) {
+                    parts.push_back("CRL " + std::to_string(counts.crlCount) + "/" + std::to_string(totalCrl));
+                } else {
+                    parts.push_back("CRL " + std::to_string(counts.crlCount));
+                }
+            }
+
+            if (counts.mlCount > 0) {
+                if (totalMl > 0) {
+                    parts.push_back("ML " + std::to_string(counts.mlCount) + "/" + std::to_string(totalMl));
+                } else {
+                    parts.push_back("ML " + std::to_string(counts.mlCount));
+                }
             }
 
             for (size_t i = 0; i < parts.size(); ++i) {
