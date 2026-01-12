@@ -117,16 +117,22 @@ void ManualProcessingStrategy::saveLdifEntriesToTempFile(
 
     // Pre-calculate total counts for each type (for progress display in Stage 2)
     int totalCerts = 0, totalCrl = 0, totalMl = 0;
-    for (const auto& entry : entries) {
-        if (entry.hasAttribute("userCertificate;binary") || entry.hasAttribute("cACertificate;binary")) {
-            totalCerts++;
+    try {
+        for (const auto& entry : entries) {
+            if (entry.hasAttribute("userCertificate;binary") || entry.hasAttribute("cACertificate;binary")) {
+                totalCerts++;
+            }
+            if (entry.hasAttribute("certificateRevocationList;binary")) {
+                totalCrl++;
+            }
+            if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
+                totalMl++;
+            }
         }
-        if (entry.hasAttribute("certificateRevocationList;binary")) {
-            totalCrl++;
-        }
-        if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
-            totalMl++;
-        }
+        spdlog::info("MANUAL mode Stage 1: Counted {} certs, {} CRLs, {} MLs", totalCerts, totalCrl, totalMl);
+    } catch (const std::exception& e) {
+        spdlog::error("Error counting entry types: {}", e.what());
+        throw;
     }
 
     // Create root JSON with metadata
@@ -330,20 +336,24 @@ void ManualProcessingStrategy::validateAndSaveToDb(
 
         // Load metadata for progress display (X/Total format)
         LdifProcessor::TotalCounts totalCounts;
-        std::string tempFile = getTempFilePath(uploadId, "ldif");
-        std::ifstream metaFile(tempFile);
-        if (metaFile.is_open()) {
-            Json::Value root;
-            Json::CharReaderBuilder reader;
-            std::string errs;
-            if (Json::parseFromStream(reader, metaFile, &root, &errs) && root.isMember("metadata")) {
-                totalCounts.totalCerts = root["metadata"].get("totalCerts", 0).asInt();
-                totalCounts.totalCrl = root["metadata"].get("totalCrl", 0).asInt();
-                totalCounts.totalMl = root["metadata"].get("totalMl", 0).asInt();
-                spdlog::info("MANUAL mode Stage 2: Loaded metadata - Certs: {}, CRL: {}, ML: {}",
-                            totalCounts.totalCerts, totalCounts.totalCrl, totalCounts.totalMl);
+        try {
+            std::string tempFile = getTempFilePath(uploadId, "ldif");
+            std::ifstream metaFile(tempFile);
+            if (metaFile.is_open()) {
+                Json::Value root;
+                Json::CharReaderBuilder reader;
+                std::string errs;
+                if (Json::parseFromStream(reader, metaFile, &root, &errs) && root.isMember("metadata")) {
+                    totalCounts.totalCerts = root["metadata"].get("totalCerts", 0).asInt();
+                    totalCounts.totalCrl = root["metadata"].get("totalCrl", 0).asInt();
+                    totalCounts.totalMl = root["metadata"].get("totalMl", 0).asInt();
+                    spdlog::info("MANUAL mode Stage 2: Loaded metadata - Certs: {}, CRL: {}, ML: {}",
+                                totalCounts.totalCerts, totalCounts.totalCrl, totalCounts.totalMl);
+                }
+                metaFile.close();
             }
-            metaFile.close();
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to load metadata for progress display: {}. Using simple format.", e.what());
         }
 
         ValidationStats stats;
