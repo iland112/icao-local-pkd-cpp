@@ -275,11 +275,6 @@ function StepContent({ step, config, showProgress }: StepContentProps) {
             <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
               {step.progress}%
             </span>
-            {step.details && (
-              <span className="text-xs text-gray-500 dark:text-neutral-500">
-                {step.details}
-              </span>
-            )}
           </div>
           <div className="h-1.5 w-full bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
             <div
@@ -287,6 +282,12 @@ function StepContent({ step, config, showProgress }: StepContentProps) {
               style={{ width: `${step.progress}%` }}
             />
           </div>
+          {/* Details below progress bar - always visible when present */}
+          {step.details && (
+            <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1.5">
+              {step.details}
+            </p>
+          )}
         </div>
       )}
 
