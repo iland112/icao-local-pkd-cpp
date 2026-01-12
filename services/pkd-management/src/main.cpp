@@ -2869,11 +2869,20 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
                 // Send progress update every 50 entries
                 if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
-                    std::string progressMsg = "처리 중: " + std::to_string(cscaCount + dscCount) + "개 인증서, " +
-                                             std::to_string(crlCount) + "개 CRL";
-                    if (mlCount > 0) {
-                        progressMsg += ", " + std::to_string(mlCount) + "개 ML";
+                    // v1.5.1: Enhanced progress message with detailed certificate type breakdown
+                    std::string progressMsg = "처리 중: ";
+                    std::vector<std::string> parts;
+                    if (cscaCount > 0) parts.push_back("CSCA " + std::to_string(cscaCount));
+                    if (dscCount > 0) parts.push_back("DSC " + std::to_string(dscCount));
+                    if (dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(dscNcCount));
+                    if (crlCount > 0) parts.push_back("CRL " + std::to_string(crlCount));
+                    if (mlCount > 0) parts.push_back("ML " + std::to_string(mlCount));
+
+                    for (size_t i = 0; i < parts.size(); ++i) {
+                        if (i > 0) progressMsg += ", ";
+                        progressMsg += parts[i];
                     }
+
                     ProgressManager::getInstance().sendProgress(
                         ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
                             processedEntries, totalEntries, progressMsg));
@@ -2886,12 +2895,19 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                 }
             }
 
-            // Send LDAP saving progress
-            std::string ldapProgressMsg = "LDAP 저장 완료: " + std::to_string(ldapCertStoredCount) + "개 인증서, " +
-                                          std::to_string(ldapCrlStoredCount) + "개 CRL";
-            if (ldapMlStoredCount > 0) {
-                ldapProgressMsg += ", " + std::to_string(ldapMlStoredCount) + "개 ML";
+            // v1.5.1: Enhanced LDAP progress message with detailed breakdown
+            std::string ldapProgressMsg = "LDAP 저장: ";
+            std::vector<std::string> ldapParts;
+            int totalCerts = cscaCount + dscCount + dscNcCount;
+            if (totalCerts > 0) ldapParts.push_back("인증서 " + std::to_string(ldapCertStoredCount) + "/" + std::to_string(totalCerts));
+            if (crlCount > 0) ldapParts.push_back("CRL " + std::to_string(ldapCrlStoredCount) + "/" + std::to_string(crlCount));
+            if (mlCount > 0) ldapParts.push_back("ML " + std::to_string(ldapMlStoredCount) + "/" + std::to_string(mlCount));
+
+            for (size_t i = 0; i < ldapParts.size(); ++i) {
+                if (i > 0) ldapProgressMsg += ", ";
+                ldapProgressMsg += ldapParts[i];
             }
+
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
                     ldapCertStoredCount + ldapCrlStoredCount + ldapMlStoredCount,
@@ -3176,10 +3192,15 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
             }
         }
 
-        // Update statistics
+        // v1.5.1: Enhanced Master List completion message
+        std::string mlCompletionMsg = "Master List 처리 완료: CSCA " + std::to_string(cscaCount) + "/" + std::to_string(totalCerts);
+        if (ld) {
+            mlCompletionMsg += ", LDAP 저장 " + std::to_string(ldapStoredCount) + "/" + std::to_string(cscaCount);
+        }
+
         ProgressManager::getInstance().sendProgress(
             ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                100, 100, "DB 저장 완료: " + std::to_string(cscaCount) + " CSCA"));
+                100, 100, mlCompletionMsg));
 
         spdlog::info("Extracted {} certificates from Master List", totalCerts);
         updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, totalCerts, totalCerts, "");
@@ -3578,10 +3599,25 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             // Only Country Master Lists from LDIF (pkdMasterListContent) are counted as ML
             updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, 1, 1, "");
 
-            // Send completion progress
-            std::string completionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) +
-                                       "개, DSC " + std::to_string(dscCount) +
-                                       "개 (중복 " + std::to_string(skippedDuplicates) + "개 건너뜀)";
+            // v1.5.1: Enhanced completion message with LDAP status
+            std::string completionMsg = "처리 완료: ";
+            std::vector<std::string> completionParts;
+            if (cscaCount > 0) completionParts.push_back("CSCA " + std::to_string(cscaCount));
+            if (dscCount > 0) completionParts.push_back("DSC " + std::to_string(dscCount));
+
+            for (size_t i = 0; i < completionParts.size(); ++i) {
+                if (i > 0) completionMsg += ", ";
+                completionMsg += completionParts[i];
+            }
+
+            if (skippedDuplicates > 0) {
+                completionMsg += " (중복 " + std::to_string(skippedDuplicates) + "개 건너뜀)";
+            }
+
+            if (ld) {
+                completionMsg += ", LDAP 저장 " + std::to_string(ldapStoredCount) + "/" + std::to_string(cscaCount + dscCount);
+            }
+
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
                     cscaCount + dscCount, totalCerts, completionMsg));
