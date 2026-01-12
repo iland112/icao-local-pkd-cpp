@@ -380,23 +380,26 @@ export function FileUpload() {
       return overallPercent;
     };
 
-    // Build details string with processing counts
-    const buildDetails = (stageStr: string, processed: number, total: number): string | undefined => {
-      if (stageStr.endsWith('_COMPLETED') || stageStr === 'COMPLETED') {
-        // Show final count on completion
-        if (total > 0) {
-          return `${total}건 처리`;
-        }
-      } else if (processed > 0 && total > 0) {
-        // Show progress during processing
-        return `${processed}/${total}`;
-      }
-      return undefined;
-    };
-
+    // v1.5.1: Use backend message directly for detailed breakdown
+    // Backend sends detailed messages like "처리 중: CSCA 525, DSC 0, CRL 0"
     const stagePercent = calculateStagePercentage(stage, percentage);
     const status = getStatus(stage);
-    const details = buildDetails(stage, processedCount, totalCount);
+
+    // Use backend message as details if it contains detailed information
+    // Otherwise fall back to simple count display
+    let details: string | undefined;
+    if (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('LDAP'))) {
+      // Backend message contains detailed breakdown, use it directly
+      details = message;
+    } else if (stage.endsWith('_COMPLETED') || stage === 'COMPLETED') {
+      // Show final count on completion
+      if (totalCount > 0) {
+        details = `${totalCount}건 처리`;
+      }
+    } else if (processedCount > 0 && totalCount > 0) {
+      // Show progress during processing
+      details = `${processedCount}/${totalCount}`;
+    }
 
     const stageStatus: StageStatus = {
       status,
