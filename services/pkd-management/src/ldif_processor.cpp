@@ -1,4 +1,5 @@
 #include "ldif_processor.h"
+#include "common.h"
 #include <spdlog/spdlog.h>
 #include <libpq-fe.h>
 #include <ldap.h>
@@ -72,8 +73,27 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
         processedEntries++;
 
-        // Progress logging every 50 entries
+        // v1.5.1: Send progress update to frontend every 50 entries
         if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
+            // Build detailed progress message (only show non-zero counts)
+            std::string progressMsg = "처리 중: ";
+            std::vector<std::string> parts;
+            if (counts.cscaCount > 0) parts.push_back("CSCA " + std::to_string(counts.cscaCount));
+            if (counts.dscCount > 0) parts.push_back("DSC " + std::to_string(counts.dscCount));
+            if (counts.dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount));
+            if (counts.crlCount > 0) parts.push_back("CRL " + std::to_string(counts.crlCount));
+            if (counts.mlCount > 0) parts.push_back("ML " + std::to_string(counts.mlCount));
+
+            for (size_t i = 0; i < parts.size(); ++i) {
+                if (i > 0) progressMsg += ", ";
+                progressMsg += parts[i];
+            }
+
+            // Send progress to frontend via SSE
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                    processedEntries, totalEntries, progressMsg));
+
             spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP), {} MLs ({} LDAP)",
                         processedEntries, totalEntries,
                         counts.cscaCount + counts.dscCount, counts.ldapCertStoredCount,

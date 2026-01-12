@@ -5484,7 +5484,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.1 PROGRESS-MSG-REFINEMENT ======");
+    spdlog::info("====== ICAO Local PKD v1.5.1 FIX-LDIF-PROGRESS ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
