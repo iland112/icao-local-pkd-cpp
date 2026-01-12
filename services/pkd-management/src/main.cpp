@@ -2569,6 +2569,16 @@ void sendDbSavingProgress(const std::string& uploadId, int processedCount, int t
 }
 
 /**
+ * @brief Helper function to send COMPLETED progress
+ * This is called from processing_strategy.cpp
+ */
+void sendCompletionProgress(const std::string& uploadId, int totalItems, const std::string& message) {
+    ProgressManager::getInstance().sendProgress(
+        ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+            totalItems, totalItems, message));
+}
+
+/**
  * @brief Parse and save Master List from LDIF entry (DB + LDAP)
  * This handles entries with pkdMasterListContent attribute
  */

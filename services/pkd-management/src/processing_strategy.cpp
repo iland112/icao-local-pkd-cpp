@@ -38,6 +38,7 @@ extern void updateValidationStatistics(PGconn* conn, const std::string& uploadId
                                       int errorCount, int trustChainValidCount,
                                       int trustChainInvalidCount, int cscaNotFoundCount,
                                       int expiredCount, int revokedCount);
+extern void sendCompletionProgress(const std::string& uploadId, int totalItems, const std::string& message);
 
 // processMasterListContentCore is now declared in common.h
 
@@ -330,6 +331,24 @@ void ManualProcessingStrategy::validateAndSaveToDb(
                     entries.size(), counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount);
         spdlog::info("MANUAL mode Stage 2: Validation - {} valid, {} invalid, {} pending",
                     stats.validCount, stats.invalidCount, stats.pendingCount);
+
+        // Send completion progress to frontend
+        std::string completionMsg = "처리 완료: ";
+        std::vector<std::string> completionParts;
+        if (counts.cscaCount > 0) completionParts.push_back("CSCA " + std::to_string(counts.cscaCount) + "개");
+        if (counts.dscCount > 0) completionParts.push_back("DSC " + std::to_string(counts.dscCount) + "개");
+        if (counts.dscNcCount > 0) completionParts.push_back("DSC_NC " + std::to_string(counts.dscNcCount) + "개");
+        if (counts.crlCount > 0) completionParts.push_back("CRL " + std::to_string(counts.crlCount) + "개");
+        if (counts.mlCount > 0) completionParts.push_back("ML " + std::to_string(counts.mlCount) + "개");
+
+        for (size_t i = 0; i < completionParts.size(); ++i) {
+            if (i > 0) completionMsg += ", ";
+            completionMsg += completionParts[i];
+        }
+
+        int totalItems = counts.cscaCount + counts.dscCount + counts.dscNcCount + counts.crlCount + counts.mlCount;
+        // Call helper function from main.cpp to send completion progress
+        sendCompletionProgress(uploadId, totalItems, completionMsg);
 
     } else if (fileFormat == "ML") {
         // Load Master List from temp file
