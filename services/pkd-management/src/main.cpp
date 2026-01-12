@@ -1675,10 +1675,21 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     char* descVals[] = {const_cast<char*>(fingerprint.c_str()), nullptr};
     modDescription.mod_values = descVals;
 
-    // userCertificate (inetOrgPerson attribute for certificates)
+    // v1.4.24: Verify certificate is valid DER format before LDAP save
+    const unsigned char* certPtr = certBinary.data();
+    X509* testCert = d2i_X509(nullptr, &certPtr, certBinary.size());
+    if (!testCert) {
+        spdlog::error("Certificate binary is not valid DER format (size: {}): {}",
+                     certBinary.size(), ERR_error_string(ERR_get_error(), nullptr));
+        return "";
+    }
+    X509_free(testCert);
+    spdlog::debug("Certificate binary validated as DER format (size: {})", certBinary.size());
+
+    // userCertificate;binary (inetOrgPerson attribute for certificates)
     LDAPMod modCert;
     modCert.mod_op = LDAP_MOD_ADD | LDAP_MOD_BVALUES;
-    modCert.mod_type = const_cast<char*>("userCertificate");
+    modCert.mod_type = const_cast<char*>("userCertificate;binary");
     berval certBv;
     certBv.bv_val = reinterpret_cast<char*>(const_cast<uint8_t*>(certBinary.data()));
     certBv.bv_len = certBinary.size();
@@ -1693,7 +1704,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
         // Try to update the certificate
         LDAPMod modCertReplace;
         modCertReplace.mod_op = LDAP_MOD_REPLACE | LDAP_MOD_BVALUES;
-        modCertReplace.mod_type = const_cast<char*>("userCertificate");
+        modCertReplace.mod_type = const_cast<char*>("userCertificate;binary");
         modCertReplace.mod_bvalues = certBvVals;
 
         LDAPMod* replaceMods[] = {&modCertReplace, nullptr};
@@ -2744,9 +2755,9 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             // Process each entry
             for (const auto& entry : entries) {
                 try {
-                    // Check for userCertificate
-                    if (entry.hasAttribute("userCertificate")) {
-                        parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate",
+                    // Check for userCertificate;binary
+                    if (entry.hasAttribute("userCertificate;binary")) {
+                        parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate;binary",
                                              cscaCount, dscCount, dscNcCount, ldapCertStoredCount, validationStats);
                     }
                     // Check for cACertificate;binary
@@ -5566,7 +5577,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.4.23 USERCERTIFICATE-NO-BINARY ======");
+    spdlog::info("====== ICAO Local PKD v1.4.24 VERIFY-CERT-DER-FORMAT ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
