@@ -149,7 +149,7 @@ deploy_service() {
     echo -e "${YELLOW}[5/5] Starting $service on Luckfox...${NC}"
     $SSH_CMD "
         cd $LUCKFOX_DIR
-        /home/luckfox/scripts/luckfox-start.sh
+        docker compose -f docker-compose-luckfox.yaml up -d $service
     "
     echo -e "${GREEN}✓ Service started${NC}"
 
