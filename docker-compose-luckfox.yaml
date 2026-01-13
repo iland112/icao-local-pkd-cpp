@@ -143,7 +143,7 @@ services:
     environment:
       - PORT=8888
       - BASE_URL=/api-docs
-      - URLS=[{"url":"http://192.168.100.11:8888/api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"http://192.168.100.11:8888/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"http://192.168.100.11:8888/api/docs/sync-service.yaml","name":"Sync Service API v1.2.0"}]
+      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"/api/docs/sync-service.yaml","name":"Sync Service API v1.2.0"}]
       - URLS_PRIMARY_NAME=PKD Management API v1.5.10
       - TZ=Asia/Seoul
     volumes:
