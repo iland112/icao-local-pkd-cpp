@@ -50,7 +50,9 @@ export default function APIDocs() {
   }
 
   const info = serviceInfo[service];
-  const swaggerUrl = `http://${window.location.hostname}:8888?url=http://${window.location.hostname}:8888/api/docs/${service}.yaml`;
+  // Swagger UI with explicit spec URL parameter
+  const specUrl = `http://${window.location.hostname}:8888/api/docs/${service}.yaml`;
+  const swaggerUrl = `http://${window.location.hostname}:8888/?url=${encodeURIComponent(specUrl)}`;
 
   return (
     <div className="flex flex-col h-full">
@@ -96,7 +98,8 @@ export default function APIDocs() {
           src={swaggerUrl}
           className="w-full h-full border-0"
           title={`${info.name} Documentation`}
-          sandbox="allow-same-origin allow-scripts allow-forms"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
+          allow="cross-origin-isolated"
         />
       </div>
     </div>
