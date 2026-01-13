@@ -4,7 +4,13 @@ info:
   description: |
     ICAO Local PKD Management Service API.
     Handles certificate upload, validation, and LDAP synchronization.
-  version: 1.0.0
+
+    **Version 1.5.10 Updates**:
+    - Added AUTO/MANUAL processing modes for LDIF and Master List uploads
+    - Enhanced progress tracking with detailed X/Total format
+    - Added file duplicate detection (SHA-256 based)
+    - Improved SSE progress events with completion signals
+  version: 1.5.10
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -76,7 +82,17 @@ paths:
     post:
       tags: [Upload]
       summary: Upload LDIF file
-      description: Upload and process an LDIF file containing certificates
+      description: |
+        Upload and process an LDIF file containing certificates.
+
+        **Processing Modes**:
+        - **AUTO** (default): Automatic 1-step processing (parse + validate + LDAP upload)
+        - **MANUAL**: 3-step manual processing
+          1. Parse and save to temp file
+          2. Validate and save to DB
+          3. Upload to LDAP
+
+        **Duplicate Detection**: Files are checked against SHA-256 hash before upload.
       operationId: uploadLdif
       requestBody:
         required: true
@@ -89,6 +105,14 @@ paths:
                   type: string
                   format: binary
                   description: LDIF file to upload
+                processing_mode:
+                  type: string
+                  enum: [AUTO, MANUAL]
+                  default: AUTO
+                  description: |
+                    Processing mode for the upload:
+                    - AUTO: Automatic full processing
+                    - MANUAL: Manual 3-step processing
               required:
                 - file
       responses:
@@ -104,12 +128,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate file detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateFileResponse'
 
   /api/upload/masterlist:
     post:
       tags: [Upload]
       summary: Upload Master List file
-      description: Upload and process an ICAO Master List file (CMS signed)
+      description: |
+        Upload and process an ICAO Master List file (CMS signed).
+
+        **Processing Modes**:
+        - **AUTO** (default): Automatic 1-step processing (parse + validate + LDAP upload)
+        - **MANUAL**: 3-step manual processing
+          1. Parse and save to temp file
+          2. Validate and save to DB
+          3. Upload to LDAP
+
+        **Note**: Master Lists contain only CSCA certificates per ICAO Doc 9303.
+        **Duplicate Detection**: Files are checked against SHA-256 hash before upload.
       operationId: uploadMasterList
       requestBody:
         required: true
@@ -122,6 +163,14 @@ paths:
                   type: string
                   format: binary
                   description: Master List file (.ml) to upload
+                processing_mode:
+                  type: string
+                  enum: [AUTO, MANUAL]
+                  default: AUTO
+                  description: |
+                    Processing mode for the upload:
+                    - AUTO: Automatic full processing
+                    - MANUAL: Manual 3-step processing
               required:
                 - file
       responses:
@@ -137,6 +186,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate file detected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DuplicateFileResponse'
 
   /api/upload/statistics:
     get:
@@ -276,7 +331,21 @@ paths:
     get:
       tags: [Progress]
       summary: SSE progress stream
-      description: Server-Sent Events stream for upload progress
+      description: |
+        Server-Sent Events stream for upload progress.
+
+        **Event Format**:
+        ```
+        event: progress
+        data: {"stage":"PROCESSING","percentage":50,"message":"처리 중: CSCA 100/500, DSC 200/1000, CRL 10/50"}
+
+        event: completed
+        data: {"stage":"COMPLETED","percentage":100,"message":"처리 완료: CSCA 500개, DSC 1000개 (검증: 800 성공, 200 실패)"}
+        ```
+
+        **Stages**: UPLOADING, PARSING, PROCESSING, DB_SAVING, LDAP_UPLOADING, COMPLETED, FAILED
+
+        **New in v1.5.10**: Detailed progress with X/Total format and completion signals
       operationId: getProgressStream
       parameters:
         - name: uploadId
@@ -284,6 +353,7 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
           description: Upload ID to track
       responses:
         '200':
@@ -292,6 +362,12 @@ paths:
             text/event-stream:
               schema:
                 type: string
+              example: |
+                event: progress
+                data: {"stage":"PROCESSING","percentage":30,"message":"처리 중: CSCA 50/500, DSC 100/1000"}
+
+                event: completed
+                data: {"stage":"COMPLETED","percentage":100,"message":"처리 완료"}
 
   /api/progress/status/{uploadId}:
     get:
@@ -398,6 +474,41 @@ components:
           type: string
         message:
           type: string
+
+    DuplicateFileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          default: false
+        error:
+          type: string
+          example: "DUPLICATE_FILE"
+        message:
+          type: string
+          example: "File already uploaded"
+        existingUpload:
+          type: object
+          properties:
+            uploadId:
+              type: string
+              format: uuid
+              description: UUID of the existing upload
+            filename:
+              type: string
+              description: Original filename of the existing upload
+            uploadTimestamp:
+              type: string
+              format: date-time
+              description: When the file was first uploaded
+            status:
+              type: string
+              enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+              description: Current processing status
+            processingMode:
+              type: string
+              enum: [AUTO, MANUAL]
+              description: Processing mode used
 
     UploadStatisticsResponse:
       type: object
