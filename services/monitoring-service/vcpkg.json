@@ -1,0 +1,11 @@
+{
+  "name": "monitoring-service",
+  "version": "1.0.0",
+  "dependencies": [
+    "drogon",
+    "spdlog",
+    "jsoncpp",
+    "libpq",
+    "curl"
+  ]
+}
