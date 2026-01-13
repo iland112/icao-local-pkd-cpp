@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.4
-**Last Updated**: 2026-01-04
+**Version**: 1.5.10
+**Last Updated**: 2026-01-13
 **Status**: Production Ready
 
 ---
@@ -443,9 +443,36 @@ CREATE TABLE sync_status (
 
 ### Luckfox Docker Management
 
+**통합 관리 스크립트** (2026-01-13):
+- 모든 Docker 관리 스크립트가 `/home/luckfox/icao-local-pkd-cpp-v2`에 통합
+- 상세 가이드: [LUCKFOX_README.md](LUCKFOX_README.md)
+
 ```bash
-# 서비스 시작
+# 프로젝트 디렉토리
 cd /home/luckfox/icao-local-pkd-cpp-v2
+
+# 서비스 시작
+./luckfox-start.sh
+
+# 헬스체크
+./luckfox-health.sh
+
+# 로그 확인
+./luckfox-logs.sh [서비스명]
+
+# 재시작
+./luckfox-restart.sh [서비스명]
+
+# 백업
+./luckfox-backup.sh
+
+# 복구
+./luckfox-restore.sh <백업파일>
+
+# 완전 초기화 (⚠️ 데이터 삭제)
+./luckfox-clean.sh
+
+# 기존 방법 (여전히 사용 가능)
 docker compose -f docker-compose-luckfox.yaml up -d
 
 # 서비스 중지
@@ -494,6 +521,44 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-13: Luckfox Docker 관리 스크립트 통합 및 AUTO MODE 완성 (v1.5.10)
+
+**Luckfox Docker 관리 스크립트 통합**:
+- `/home/luckfox/scripts` → `/home/luckfox/icao-local-pkd-cpp-v2`로 통합
+- 8개 관리 스크립트 생성 및 배포:
+  - `luckfox-start.sh` - 시스템 시작
+  - `luckfox-stop.sh` - 시스템 중지
+  - `luckfox-restart.sh` - 재시작 (전체 또는 특정 서비스)
+  - `luckfox-logs.sh` - 로그 확인
+  - `luckfox-health.sh` - 헬스체크 (DB/API/서비스 상태)
+  - `luckfox-clean.sh` - 완전 초기화 (데이터 삭제)
+  - `luckfox-backup.sh` - PostgreSQL + 업로드 파일 백업
+  - `luckfox-restore.sh` - 백업 복구 (DB DROP/CREATE)
+- `LUCKFOX_README.md` 작성 (사용법, 예제, 문제 해결)
+- 모든 스크립트 테스트 완료 및 권한 문제 해결
+
+**v1.5.10: AUTO MODE 진행 상태 상세 표시**:
+- Backend: Pre-scan으로 총 개수 계산 후 "X/Total" 형식으로 진행 상태 표시
+- `LdifProcessor::TotalCounts` 구조체 추가
+- AUTO 모드 SSE 메시지: "처리 중: CSCA 100/500, DSC 200/1000, CRL 10/50, ML 5/10"
+- 완료 메시지: "처리 완료: CSCA 500개, DSC 1000개, ... (검증: 800 성공, 200 실패)"
+
+**Frontend 개선**:
+- AUTO MODE ML (Master List) 감지 추가 (line 524)
+- 완료 메시지 상세 정보 표시 개선
+- TypeScript 스코프 오류 수정 (prev 변수)
+
+**테스트 결과**:
+- ✅ Collection 001, 002, 003 AUTO MODE 업로드 정상 완료
+- ✅ 진행 상태 "X/Total" 형식 정상 표시
+- ✅ 완료 시그널 정상 처리 (페이지 로딩 종료)
+- ✅ 완료 메시지 인증서 breakdown 표시
+
+**배포**:
+- Backend: v1.5.10 AUTO-PROGRESS-DISPLAY (Build 20260113-190000)
+- Frontend: v1.5.10 (ARM64)
+- Luckfox: 완전 테스트 완료
 
 ### 2026-01-11: MANUAL 모드 Race Condition 수정 (Frontend)
 

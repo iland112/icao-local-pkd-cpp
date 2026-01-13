@@ -518,10 +518,10 @@ export function FileUpload() {
     const stagePercent = calculateStagePercentage(stage, percentage);
     const status = getStatus(stage);
 
-    // Use backend message as details if it contains detailed information
-    // Otherwise fall back to simple count display
+    // v1.5.10: Use backend message as details if it contains detailed information
+    // Backend sends messages like "처리 중: CSCA 100/500, DSC 200/1000, DSC_NC 50/100, CRL 10/50, ML 5/10"
     let details: string | undefined;
-    if (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('LDAP'))) {
+    if (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('ML') || message.includes('LDAP'))) {
       // Backend message contains detailed breakdown, use it directly
       details = message;
       console.log(`[FileUpload] Using detailed message as details: "${details}"`);
@@ -595,11 +595,17 @@ export function FileUpload() {
       };
       setDbSaveStage(ldapStatus);
     } else if (stage === 'COMPLETED') {
-      // v1.5.0: DB save completed = LDAP also completed (simultaneous)
+      // v1.5.10: DB save completed = LDAP also completed (simultaneous)
       // Mark all stages as completed with final message
       setUploadStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
       setParseStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100 }));
-      setDbSaveStage(prev => ({ ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 저장 (DB+LDAP)` }));
+      // v1.5.10: Use backend completion message as details if it contains breakdown
+      setDbSaveStage(prev => {
+        const completionDetails = (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('ML')))
+          ? message
+          : (prev.details || `${totalCount}건 저장 (DB+LDAP)`);
+        return { ...prev, status: 'COMPLETED', percentage: 100, details: completionDetails };
+      });
       setOverallStatus('FINALIZED');
       setOverallMessage(message || '모든 처리가 완료되었습니다.');
       setIsProcessing(false);
