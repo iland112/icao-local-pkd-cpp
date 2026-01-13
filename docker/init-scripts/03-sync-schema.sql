@@ -56,3 +56,44 @@ CREATE INDEX IF NOT EXISTS idx_sync_status_status ON sync_status(status);
 
 COMMENT ON TABLE sync_status IS 'Periodic sync check results between PostgreSQL and LDAP';
 COMMENT ON COLUMN sync_status.db_stored_in_ldap_count IS 'Certificates marked as stored_in_ldap=TRUE in DB';
+
+-- =============================================================================
+-- Sync Configuration Table (user-configurable settings)
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS sync_config (
+    id SERIAL PRIMARY KEY,
+
+    -- Daily sync schedule
+    daily_sync_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    daily_sync_hour INTEGER NOT NULL DEFAULT 0,        -- 0-23
+    daily_sync_minute INTEGER NOT NULL DEFAULT 0,      -- 0-59
+
+    -- Feature toggles
+    auto_reconcile BOOLEAN NOT NULL DEFAULT FALSE,
+    revalidate_certs_on_sync BOOLEAN NOT NULL DEFAULT TRUE,
+
+    -- Reconciliation settings
+    max_reconcile_batch_size INTEGER NOT NULL DEFAULT 100,
+
+    -- Metadata
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(100),
+
+    -- Ensure only one config row exists
+    CONSTRAINT single_config_row CHECK (id = 1)
+);
+
+-- Insert default configuration
+INSERT INTO sync_config (id, daily_sync_enabled, daily_sync_hour, daily_sync_minute,
+                        auto_reconcile, revalidate_certs_on_sync, max_reconcile_batch_size)
+VALUES (1, TRUE, 0, 0, FALSE, TRUE, 100)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE INDEX IF NOT EXISTS idx_sync_config_updated_at ON sync_config(updated_at DESC);
+
+COMMENT ON TABLE sync_config IS 'User-configurable sync service settings (single row table)';
+COMMENT ON COLUMN sync_config.daily_sync_hour IS 'Hour of day for daily sync (0-23, default 0 = midnight)';
+COMMENT ON COLUMN sync_config.daily_sync_minute IS 'Minute of hour for daily sync (0-59, default 0)';
+COMMENT ON COLUMN sync_config.auto_reconcile IS 'Enable automatic reconciliation of discrepancies';
+COMMENT ON COLUMN sync_config.revalidate_certs_on_sync IS 'Re-validate certificate expiration during sync';

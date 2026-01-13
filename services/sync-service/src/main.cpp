@@ -1,10 +1,11 @@
 // =============================================================================
 // ICAO Local PKD - Sync Service
 // =============================================================================
-// Version: 1.2.0
+// Version: 1.3.0
 // Description: DB-LDAP synchronization checker, certificate re-validation
 // =============================================================================
 // Changelog:
+//   v1.3.0 (2026-01-13): User-configurable settings UI, dynamic config reload
 //   v1.2.0 (2026-01-07): Remove interval sync, keep only daily scheduler
 //   v1.1.0 (2026-01-06): Daily scheduler at midnight, certificate re-validation
 //   v1.0.0 (2026-01-03): Initial release
@@ -34,6 +35,8 @@
 #include <ctime>
 #include <iomanip>
 #include <sstream>
+#include <numeric>
+#include <algorithm>
 
 using namespace drogon;
 
@@ -93,6 +96,9 @@ struct Config {
         if (auto e = std::getenv("DAILY_SYNC_MINUTE")) dailySyncMinute = std::stoi(e);
         if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) revalidateCertsOnSync = (std::string(e) == "true");
     }
+
+    // Load user-configurable settings from database (defined after PgConnection)
+    bool loadFromDatabase();
 };
 
 Config g_config;
@@ -174,6 +180,39 @@ public:
 private:
     PGconn* conn_;
 };
+
+// =============================================================================
+// Config Database Operations
+// =============================================================================
+bool Config::loadFromDatabase() {
+    PgConnection conn;
+    if (!conn.connect()) {
+        spdlog::warn("Failed to connect to database for loading config");
+        return false;
+    }
+
+    const char* query = "SELECT daily_sync_enabled, daily_sync_hour, daily_sync_minute, "
+                       "auto_reconcile, revalidate_certs_on_sync, max_reconcile_batch_size "
+                       "FROM sync_config WHERE id = 1";
+
+    PGresult* res = PQexec(conn.get(), query);
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        dailySyncEnabled = std::string(PQgetvalue(res, 0, 0)) == "t";
+        dailySyncHour = std::stoi(PQgetvalue(res, 0, 1));
+        dailySyncMinute = std::stoi(PQgetvalue(res, 0, 2));
+        autoReconcile = std::string(PQgetvalue(res, 0, 3)) == "t";
+        revalidateCertsOnSync = std::string(PQgetvalue(res, 0, 4)) == "t";
+        maxReconcileBatchSize = std::stoi(PQgetvalue(res, 0, 5));
+
+        PQclear(res);
+        spdlog::info("Loaded configuration from database");
+        return true;
+    }
+
+    PQclear(res);
+    spdlog::warn("No configuration found in database, using defaults");
+    return false;
+}
 
 // =============================================================================
 // Database Operations
@@ -1098,11 +1137,171 @@ void handleSyncConfig(const HttpRequestPtr&, std::function<void(const HttpRespon
     config["autoReconcile"] = g_config.autoReconcile;
     config["maxReconcileBatchSize"] = g_config.maxReconcileBatchSize;
     config["dailySyncEnabled"] = g_config.dailySyncEnabled;
+    config["dailySyncHour"] = g_config.dailySyncHour;
+    config["dailySyncMinute"] = g_config.dailySyncMinute;
     config["dailySyncTime"] = formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute);
     config["revalidateCertsOnSync"] = g_config.revalidateCertsOnSync;
 
     auto resp = HttpResponse::newHttpJsonResponse(config);
     callback(resp);
+}
+
+// Update sync configuration
+void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    try {
+        auto jsonPtr = req->getJsonObject();
+        if (!jsonPtr) {
+            Json::Value error(Json::objectValue);
+            error["success"] = false;
+            error["error"] = "Invalid JSON request";
+            auto resp = HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        const Json::Value& json = *jsonPtr;
+
+        // Validate input
+        if (json.isMember("dailySyncHour")) {
+            int hour = json["dailySyncHour"].asInt();
+            if (hour < 0 || hour > 23) {
+                Json::Value error(Json::objectValue);
+                error["success"] = false;
+                error["error"] = "dailySyncHour must be between 0 and 23";
+                auto resp = HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(k400BadRequest);
+                callback(resp);
+                return;
+            }
+        }
+
+        if (json.isMember("dailySyncMinute")) {
+            int minute = json["dailySyncMinute"].asInt();
+            if (minute < 0 || minute > 59) {
+                Json::Value error(Json::objectValue);
+                error["success"] = false;
+                error["error"] = "dailySyncMinute must be between 0 and 59";
+                auto resp = HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(k400BadRequest);
+                callback(resp);
+                return;
+            }
+        }
+
+        // Connect to database
+        PgConnection conn;
+        if (!conn.connect()) {
+            Json::Value error(Json::objectValue);
+            error["success"] = false;
+            error["error"] = "Database connection failed";
+            auto resp = HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(k500InternalServerError);
+            callback(resp);
+            return;
+        }
+
+        // Build UPDATE query dynamically
+        std::vector<std::string> setClauses;
+        std::vector<std::string> paramValues;
+        int paramIndex = 1;
+
+        if (json.isMember("dailySyncEnabled")) {
+            setClauses.push_back("daily_sync_enabled = $" + std::to_string(paramIndex++));
+            paramValues.push_back(json["dailySyncEnabled"].asBool() ? "TRUE" : "FALSE");
+        }
+        if (json.isMember("dailySyncHour")) {
+            setClauses.push_back("daily_sync_hour = $" + std::to_string(paramIndex++));
+            paramValues.push_back(std::to_string(json["dailySyncHour"].asInt()));
+        }
+        if (json.isMember("dailySyncMinute")) {
+            setClauses.push_back("daily_sync_minute = $" + std::to_string(paramIndex++));
+            paramValues.push_back(std::to_string(json["dailySyncMinute"].asInt()));
+        }
+        if (json.isMember("autoReconcile")) {
+            setClauses.push_back("auto_reconcile = $" + std::to_string(paramIndex++));
+            paramValues.push_back(json["autoReconcile"].asBool() ? "TRUE" : "FALSE");
+        }
+        if (json.isMember("revalidateCertsOnSync")) {
+            setClauses.push_back("revalidate_certs_on_sync = $" + std::to_string(paramIndex++));
+            paramValues.push_back(json["revalidateCertsOnSync"].asBool() ? "TRUE" : "FALSE");
+        }
+        if (json.isMember("maxReconcileBatchSize")) {
+            setClauses.push_back("max_reconcile_batch_size = $" + std::to_string(paramIndex++));
+            paramValues.push_back(std::to_string(json["maxReconcileBatchSize"].asInt()));
+        }
+
+        if (setClauses.empty()) {
+            Json::Value error(Json::objectValue);
+            error["success"] = false;
+            error["error"] = "No fields to update";
+            auto resp = HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        // Add updated_at
+        setClauses.push_back("updated_at = NOW()");
+
+        std::string query = "UPDATE sync_config SET " +
+                           std::accumulate(setClauses.begin(), setClauses.end(), std::string(),
+                                         [](const std::string& a, const std::string& b) {
+                                             return a.empty() ? b : a + ", " + b;
+                                         }) +
+                           " WHERE id = 1";
+
+        // Convert to const char* array
+        std::vector<const char*> paramPtrs;
+        for (const auto& val : paramValues) {
+            paramPtrs.push_back(val.c_str());
+        }
+
+        PGresult* res = PQexecParams(conn.get(), query.c_str(), paramValues.size(),
+                                    nullptr, paramPtrs.data(), nullptr, nullptr, 0);
+
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            PQclear(res);
+            Json::Value error(Json::objectValue);
+            error["success"] = false;
+            error["error"] = "Failed to update configuration";
+            auto resp = HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(k500InternalServerError);
+            callback(resp);
+            return;
+        }
+        PQclear(res);
+
+        // Reload configuration from database
+        g_config.loadFromDatabase();
+
+        // Restart scheduler with new settings
+        spdlog::info("Configuration updated, restarting scheduler...");
+        g_scheduler.stop();
+        g_scheduler.start();
+
+        Json::Value response(Json::objectValue);
+        response["success"] = true;
+        response["message"] = "Configuration updated successfully";
+        response["config"]["autoReconcile"] = g_config.autoReconcile;
+        response["config"]["maxReconcileBatchSize"] = g_config.maxReconcileBatchSize;
+        response["config"]["dailySyncEnabled"] = g_config.dailySyncEnabled;
+        response["config"]["dailySyncHour"] = g_config.dailySyncHour;
+        response["config"]["dailySyncMinute"] = g_config.dailySyncMinute;
+        response["config"]["dailySyncTime"] = formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute);
+        response["config"]["revalidateCertsOnSync"] = g_config.revalidateCertsOnSync;
+
+        auto resp = HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        Json::Value error(Json::objectValue);
+        error["success"] = false;
+        error["error"] = std::string("Exception: ") + e.what();
+        auto resp = HttpResponse::newHttpJsonResponse(error);
+        resp->setStatusCode(k500InternalServerError);
+        callback(resp);
+    }
 }
 
 // Trigger manual certificate re-validation
@@ -1195,19 +1394,24 @@ void setupLogging() {
 // Main
 // =============================================================================
 int main() {
-    // Load configuration
+    // Load configuration from environment
     g_config.loadFromEnv();
 
     // Setup logging
     setupLogging();
 
     spdlog::info("===========================================");
-    spdlog::info("  ICAO Local PKD - Sync Service v1.2.0");
+    spdlog::info("  ICAO Local PKD - Sync Service v1.3.0");
     spdlog::info("===========================================");
     spdlog::info("Server port: {}", g_config.serverPort);
     spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
     spdlog::info("LDAP (read): {}:{}", g_config.ldapHost, g_config.ldapPort);
     spdlog::info("LDAP (write): {}:{}", g_config.ldapWriteHost, g_config.ldapWritePort);
+
+    // Load user-configurable settings from database
+    spdlog::info("Loading configuration from database...");
+    g_config.loadFromDatabase();
+
     spdlog::info("Daily sync: {} at {}", g_config.dailySyncEnabled ? "enabled" : "disabled",
                  formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute));
     spdlog::info("Certificate re-validation on sync: {}", g_config.revalidateCertsOnSync ? "enabled" : "disabled");
@@ -1228,6 +1432,8 @@ int main() {
         &handleReconcile, {Post});
     app().registerHandler("/api/sync/config",
         &handleSyncConfig, {Get});
+    app().registerHandler("/api/sync/config",
+        &handleUpdateSyncConfig, {Put});
 
     // Re-validation endpoints
     app().registerHandler("/api/sync/revalidate",

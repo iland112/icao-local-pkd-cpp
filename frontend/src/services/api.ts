@@ -163,8 +163,25 @@ export interface SyncConfigResponse {
   autoReconcile: boolean;
   maxReconcileBatchSize: number;
   dailySyncEnabled: boolean;
+  dailySyncHour: number;
+  dailySyncMinute: number;
   dailySyncTime: string;
   revalidateCertsOnSync: boolean;
+}
+
+export interface UpdateSyncConfigRequest {
+  dailySyncEnabled?: boolean;
+  dailySyncHour?: number;
+  dailySyncMinute?: number;
+  autoReconcile?: boolean;
+  revalidateCertsOnSync?: boolean;
+  maxReconcileBatchSize?: number;
+}
+
+export interface UpdateSyncConfigResponse {
+  success: boolean;
+  message: string;
+  config: SyncConfigResponse;
 }
 
 export interface RevalidationResult {
@@ -203,6 +220,9 @@ export const syncServiceApi = {
   getHealth: () => syncApi.get<{ status: string; database?: string }>('/health'),
 
   getConfig: () => syncApi.get<SyncConfigResponse>('/config'),
+
+  updateConfig: (data: UpdateSyncConfigRequest) =>
+    syncApi.put<UpdateSyncConfigResponse>('/config', data),
 
   // Certificate re-validation APIs (v1.1.0+)
   triggerRevalidation: () => syncApi.post<RevalidationResult>('/revalidate'),
