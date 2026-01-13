@@ -59,17 +59,14 @@ export default function APIDocs() {
   // User must manually select the desired API from the top-right dropdown
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)]">
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-4">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-2">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{info.name}</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              {info.description} • <span className="font-semibold">{info.version}</span>
-            </p>
-            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-              💡 Use the dropdown in the top-right of the API viewer below to select the API specification
+            <h1 className="text-xl font-bold text-gray-900 dark:text-white">{info.name} <span className="text-sm font-normal text-gray-500 dark:text-gray-400">{info.version}</span></h1>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+              💡 Use the dropdown in the top-right to select API specification
             </p>
           </div>
           <div className="flex gap-2">
