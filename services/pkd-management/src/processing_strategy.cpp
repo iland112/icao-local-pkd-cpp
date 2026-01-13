@@ -81,6 +81,26 @@ void AutoProcessingStrategy::processLdifEntries(
                 counts.ldapCertStoredCount, counts.ldapCrlStoredCount, counts.ldapMlStoredCount);
     spdlog::info("AUTO mode: Validation - {} valid, {} invalid, {} pending, {} CSCA not found, {} expired",
                 stats.validCount, stats.invalidCount, stats.pendingCount, stats.cscaNotFoundCount, stats.expiredCount);
+
+    // Send completion progress to frontend
+    std::string completionMsg = "처리 완료: ";
+    std::vector<std::string> parts;
+    if (counts.cscaCount > 0) parts.push_back("CSCA " + std::to_string(counts.cscaCount) + "개");
+    if (counts.dscCount > 0) parts.push_back("DSC " + std::to_string(counts.dscCount) + "개");
+    if (counts.dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(counts.dscNcCount) + "개");
+    if (counts.crlCount > 0) parts.push_back("CRL " + std::to_string(counts.crlCount) + "개");
+    if (counts.mlCount > 0) parts.push_back("ML " + std::to_string(counts.mlCount) + "개");
+
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i > 0) completionMsg += ", ";
+        completionMsg += parts[i];
+    }
+
+    completionMsg += " (검증: " + std::to_string(stats.validCount) + " 성공, " +
+                    std::to_string(stats.invalidCount) + " 실패, " +
+                    std::to_string(stats.pendingCount) + " 보류)";
+
+    sendCompletionProgress(uploadId, totalItems, completionMsg);
 }
 
 void AutoProcessingStrategy::processMasterListContent(

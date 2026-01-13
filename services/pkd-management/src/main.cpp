@@ -5627,7 +5627,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.8 AUTO-MODE-FIX (Build 20260113-152000) ======");
+    spdlog::info("====== ICAO Local PKD v1.5.9 AUTO-COMPLETION-SSE (Build 20260113-183000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
