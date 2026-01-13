@@ -27,6 +27,7 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <sys/statvfs.h>
 
 using namespace drogon;
 
@@ -172,6 +173,11 @@ private:
 // =============================================================================
 class SystemMetricsCollector {
 public:
+    SystemMetricsCollector() {
+        // Initialize previous CPU stats
+        updateCpuStats();
+    }
+
     SystemMetrics collect() {
         SystemMetrics metrics;
         metrics.timestamp = std::chrono::system_clock::now();
@@ -183,14 +189,85 @@ public:
     }
 
 private:
+    // CPU stat tracking
+    struct CpuStat {
+        uint64_t user = 0;
+        uint64_t nice = 0;
+        uint64_t system = 0;
+        uint64_t idle = 0;
+        uint64_t iowait = 0;
+        uint64_t irq = 0;
+        uint64_t softirq = 0;
+        uint64_t steal = 0;
+
+        uint64_t total() const {
+            return user + nice + system + idle + iowait + irq + softirq + steal;
+        }
+
+        uint64_t active() const {
+            return user + nice + system + irq + softirq + steal;
+        }
+    };
+
+    CpuStat prevCpuStat_;
+    std::mutex cpuMutex_;
+
+    void updateCpuStats() {
+        std::ifstream statFile("/proc/stat");
+        if (!statFile.is_open()) {
+            return;
+        }
+
+        std::string line;
+        if (std::getline(statFile, line)) {
+            std::istringstream iss(line);
+            std::string cpu;
+            CpuStat stat;
+
+            iss >> cpu >> stat.user >> stat.nice >> stat.system >> stat.idle
+                >> stat.iowait >> stat.irq >> stat.softirq >> stat.steal;
+
+            std::lock_guard<std::mutex> lock(cpuMutex_);
+            prevCpuStat_ = stat;
+        }
+    }
+
     CpuMetrics collectCpuMetrics() {
         CpuMetrics metrics;
-        // TODO: Parse /proc/stat for CPU usage
-        // TODO: Parse /proc/loadavg for load averages
-        metrics.usagePercent = 0.0f;  // Placeholder
-        metrics.load1min = 0.0f;
-        metrics.load5min = 0.0f;
-        metrics.load15min = 0.0f;
+
+        // Parse /proc/stat for CPU usage
+        std::ifstream statFile("/proc/stat");
+        if (statFile.is_open()) {
+            std::string line;
+            if (std::getline(statFile, line)) {
+                std::istringstream iss(line);
+                std::string cpu;
+                CpuStat currentStat;
+
+                iss >> cpu >> currentStat.user >> currentStat.nice >> currentStat.system
+                    >> currentStat.idle >> currentStat.iowait >> currentStat.irq
+                    >> currentStat.softirq >> currentStat.steal;
+
+                // Calculate CPU usage percentage
+                std::lock_guard<std::mutex> lock(cpuMutex_);
+
+                uint64_t totalDiff = currentStat.total() - prevCpuStat_.total();
+                uint64_t activeDiff = currentStat.active() - prevCpuStat_.active();
+
+                if (totalDiff > 0) {
+                    metrics.usagePercent = (float)activeDiff / totalDiff * 100.0f;
+                }
+
+                prevCpuStat_ = currentStat;
+            }
+        }
+
+        // Parse /proc/loadavg for load averages
+        std::ifstream loadavgFile("/proc/loadavg");
+        if (loadavgFile.is_open()) {
+            loadavgFile >> metrics.load1min >> metrics.load5min >> metrics.load15min;
+        }
+
         return metrics;
     }
 
@@ -229,24 +306,177 @@ private:
 
     DiskMetrics collectDiskMetrics() {
         DiskMetrics metrics;
-        // TODO: Parse /proc/diskstats or use statvfs()
-        metrics.totalGb = 0;
-        metrics.usedGb = 0;
-        metrics.freeGb = 0;
-        metrics.usagePercent = 0.0f;
+
+        // Use statvfs to get disk usage for root partition
+        struct statvfs stat;
+        if (statvfs("/", &stat) == 0) {
+            uint64_t blockSize = stat.f_frsize;
+            uint64_t totalBlocks = stat.f_blocks;
+            uint64_t freeBlocks = stat.f_bfree;
+            uint64_t availBlocks = stat.f_bavail;
+
+            uint64_t totalBytes = totalBlocks * blockSize;
+            uint64_t freeBytes = freeBlocks * blockSize;
+            uint64_t usedBytes = totalBytes - freeBytes;
+
+            metrics.totalGb = totalBytes / (1024 * 1024 * 1024);
+            metrics.freeGb = freeBytes / (1024 * 1024 * 1024);
+            metrics.usedGb = usedBytes / (1024 * 1024 * 1024);
+
+            if (totalBytes > 0) {
+                metrics.usagePercent = (float)usedBytes / totalBytes * 100.0f;
+            }
+        }
+
         return metrics;
     }
 
     NetworkMetrics collectNetworkMetrics() {
         NetworkMetrics metrics;
-        // TODO: Parse /proc/net/dev
-        metrics.bytesSent = 0;
-        metrics.bytesRecv = 0;
-        metrics.packetsSent = 0;
-        metrics.packetsRecv = 0;
+
+        // Parse /proc/net/dev
+        std::ifstream netFile("/proc/net/dev");
+        if (!netFile.is_open()) {
+            return metrics;
+        }
+
+        std::string line;
+        // Skip first two header lines
+        std::getline(netFile, line);
+        std::getline(netFile, line);
+
+        while (std::getline(netFile, line)) {
+            std::istringstream iss(line);
+            std::string interface;
+            uint64_t bytesRecv, packetsRecv, errsRecv, dropRecv;
+            uint64_t bytesSent, packetsSent, errsSent, dropSent;
+
+            // Skip dummy fields
+            uint64_t dummy;
+
+            iss >> interface >> bytesRecv >> packetsRecv >> errsRecv >> dropRecv;
+            for (int i = 0; i < 4; i++) iss >> dummy;  // Skip 4 fields
+            iss >> bytesSent >> packetsSent >> errsSent >> dropSent;
+
+            // Skip loopback interface
+            if (interface.find("lo:") != std::string::npos) {
+                continue;
+            }
+
+            // Aggregate all non-loopback interfaces
+            metrics.bytesRecv += bytesRecv;
+            metrics.packetsRecv += packetsRecv;
+            metrics.bytesSent += bytesSent;
+            metrics.packetsSent += packetsSent;
+        }
+
         return metrics;
     }
 };
+
+// =============================================================================
+// Database Operations
+// =============================================================================
+bool saveSystemMetrics(const SystemMetrics& metrics) {
+    PgConnection conn;
+    if (!conn.connect()) {
+        spdlog::error("Failed to connect to database for saving metrics");
+        return false;
+    }
+
+    const char* query = R"(
+        INSERT INTO system_metrics (
+            cpu_usage_percent, cpu_load_1min, cpu_load_5min, cpu_load_15min,
+            memory_total_mb, memory_used_mb, memory_free_mb, memory_usage_percent,
+            disk_total_gb, disk_used_gb, disk_free_gb, disk_usage_percent,
+            net_bytes_sent, net_bytes_recv, net_packets_sent, net_packets_recv
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    )";
+
+    std::string cpuUsage = std::to_string(metrics.cpu.usagePercent);
+    std::string cpuLoad1 = std::to_string(metrics.cpu.load1min);
+    std::string cpuLoad5 = std::to_string(metrics.cpu.load5min);
+    std::string cpuLoad15 = std::to_string(metrics.cpu.load15min);
+
+    std::string memTotal = std::to_string(metrics.memory.totalMb);
+    std::string memUsed = std::to_string(metrics.memory.usedMb);
+    std::string memFree = std::to_string(metrics.memory.freeMb);
+    std::string memUsage = std::to_string(metrics.memory.usagePercent);
+
+    std::string diskTotal = std::to_string(metrics.disk.totalGb);
+    std::string diskUsed = std::to_string(metrics.disk.usedGb);
+    std::string diskFree = std::to_string(metrics.disk.freeGb);
+    std::string diskUsage = std::to_string(metrics.disk.usagePercent);
+
+    std::string netSent = std::to_string(metrics.network.bytesSent);
+    std::string netRecv = std::to_string(metrics.network.bytesRecv);
+    std::string netPktSent = std::to_string(metrics.network.packetsSent);
+    std::string netPktRecv = std::to_string(metrics.network.packetsRecv);
+
+    const char* paramValues[16] = {
+        cpuUsage.c_str(), cpuLoad1.c_str(), cpuLoad5.c_str(), cpuLoad15.c_str(),
+        memTotal.c_str(), memUsed.c_str(), memFree.c_str(), memUsage.c_str(),
+        diskTotal.c_str(), diskUsed.c_str(), diskFree.c_str(), diskUsage.c_str(),
+        netSent.c_str(), netRecv.c_str(), netPktSent.c_str(), netPktRecv.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn.get(), query, 16, nullptr, paramValues, nullptr, nullptr, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+
+    if (!success) {
+        spdlog::error("Failed to save system metrics: {}", PQerrorMessage(conn.get()));
+    }
+
+    PQclear(res);
+    return success;
+}
+
+bool saveServiceHealth(const ServiceHealth& health) {
+    PgConnection conn;
+    if (!conn.connect()) {
+        spdlog::error("Failed to connect to database for saving service health");
+        return false;
+    }
+
+    const char* query = R"(
+        INSERT INTO service_health (service_name, status, response_time_ms, error_message)
+        VALUES ($1, $2, $3, $4)
+    )";
+
+    std::string statusStr;
+    switch (health.status) {
+        case ServiceStatus::UP:
+            statusStr = "UP";
+            break;
+        case ServiceStatus::DEGRADED:
+            statusStr = "DEGRADED";
+            break;
+        case ServiceStatus::DOWN:
+            statusStr = "DOWN";
+            break;
+        default:
+            statusStr = "UNKNOWN";
+    }
+
+    std::string responseTime = std::to_string(health.responseTimeMs);
+
+    const char* paramValues[4] = {
+        health.serviceName.c_str(),
+        statusStr.c_str(),
+        responseTime.c_str(),
+        health.errorMessage.empty() ? nullptr : health.errorMessage.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn.get(), query, 4, nullptr, paramValues, nullptr, nullptr, 0);
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+
+    if (!success) {
+        spdlog::error("Failed to save service health: {}", PQerrorMessage(conn.get()));
+    }
+
+    PQclear(res);
+    return success;
+}
 
 // =============================================================================
 // Service Health Checker
@@ -302,6 +532,141 @@ public:
         return health;
     }
 };
+
+// =============================================================================
+// Background Monitoring Manager
+// =============================================================================
+class MonitoringManager {
+public:
+    MonitoringManager() : running_(false) {}
+
+    void start() {
+        running_ = true;
+
+        // System metrics collection thread
+        metricsThread_ = std::thread([this]() {
+            spdlog::info("System metrics collection thread started (interval: {}s)", g_config.systemMetricsInterval);
+
+            while (running_) {
+                try {
+                    SystemMetrics metrics = collector_.collect();
+                    saveSystemMetrics(metrics);
+
+                    spdlog::debug("System metrics collected - CPU: {:.1f}%, MEM: {:.1f}%, DISK: {:.1f}%",
+                                 metrics.cpu.usagePercent, metrics.memory.usagePercent, metrics.disk.usagePercent);
+                } catch (const std::exception& e) {
+                    spdlog::error("System metrics collection failed: {}", e.what());
+                }
+
+                std::this_thread::sleep_for(std::chrono::seconds(g_config.systemMetricsInterval));
+            }
+
+            spdlog::info("System metrics collection thread stopped");
+        });
+
+        // Service health check thread
+        healthThread_ = std::thread([this]() {
+            spdlog::info("Service health check thread started (interval: {}s)", g_config.serviceHealthInterval);
+
+            while (running_) {
+                try {
+                    for (const auto& [name, url] : g_config.serviceEndpoints) {
+                        ServiceHealth health = checker_.checkService(name, url);
+                        saveServiceHealth(health);
+
+                        if (health.status != ServiceStatus::UP) {
+                            spdlog::warn("Service {} is {}: {}", name,
+                                       health.status == ServiceStatus::DOWN ? "DOWN" : "DEGRADED",
+                                       health.errorMessage);
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    spdlog::error("Service health check failed: {}", e.what());
+                }
+
+                std::this_thread::sleep_for(std::chrono::seconds(g_config.serviceHealthInterval));
+            }
+
+            spdlog::info("Service health check thread stopped");
+        });
+
+        // Cleanup thread (runs daily)
+        cleanupThread_ = std::thread([this]() {
+            spdlog::info("Database cleanup thread started");
+
+            while (running_) {
+                // Run cleanup at midnight
+                auto now = std::chrono::system_clock::now();
+                auto nowTime = std::chrono::system_clock::to_time_t(now);
+                std::tm* localTm = std::localtime(&nowTime);
+
+                // Calculate seconds until midnight
+                std::tm midnightTm = *localTm;
+                midnightTm.tm_hour = 0;
+                midnightTm.tm_min = 0;
+                midnightTm.tm_sec = 0;
+                midnightTm.tm_mday += 1;  // Next day
+
+                std::time_t midnightTime = std::mktime(&midnightTm);
+                int waitSeconds = static_cast<int>(midnightTime - nowTime);
+
+                spdlog::info("Next database cleanup in {} hours", waitSeconds / 3600);
+
+                // Wait until midnight or until stopped
+                for (int i = 0; i < waitSeconds && running_; i++) {
+                    std::this_thread::sleep_for(std::chrono::seconds(1));
+                }
+
+                if (!running_) break;
+
+                // Run cleanup
+                try {
+                    PgConnection conn;
+                    if (conn.connect()) {
+                        PGresult* res = PQexec(conn.get(), "SELECT cleanup_old_metrics()");
+                        if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                            spdlog::info("Database cleanup completed successfully");
+                        } else {
+                            spdlog::error("Database cleanup failed: {}", PQerrorMessage(conn.get()));
+                        }
+                        PQclear(res);
+                    }
+                } catch (const std::exception& e) {
+                    spdlog::error("Database cleanup exception: {}", e.what());
+                }
+            }
+
+            spdlog::info("Database cleanup thread stopped");
+        });
+    }
+
+    void stop() {
+        spdlog::info("Stopping monitoring threads...");
+        running_ = false;
+
+        if (metricsThread_.joinable()) {
+            metricsThread_.join();
+        }
+        if (healthThread_.joinable()) {
+            healthThread_.join();
+        }
+        if (cleanupThread_.joinable()) {
+            cleanupThread_.join();
+        }
+
+        spdlog::info("All monitoring threads stopped");
+    }
+
+private:
+    std::atomic<bool> running_;
+    std::thread metricsThread_;
+    std::thread healthThread_;
+    std::thread cleanupThread_;
+    SystemMetricsCollector collector_;
+    ServiceHealthChecker checker_;
+};
+
+MonitoringManager g_monitor;
 
 // =============================================================================
 // HTTP Handlers
@@ -473,11 +838,18 @@ int main() {
         resp->addHeader("Access-Control-Allow-Headers", "Content-Type");
     });
 
+    // Start background monitoring threads
+    spdlog::info("Starting background monitoring threads...");
+    g_monitor.start();
+
     // Start server
     spdlog::info("Starting HTTP server on port {}...", g_config.serverPort);
     app().addListener("0.0.0.0", g_config.serverPort)
         .setThreadNum(2)
         .run();
+
+    // Cleanup
+    g_monitor.stop();
 
     return 0;
 }
