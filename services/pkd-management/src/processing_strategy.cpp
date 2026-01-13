@@ -52,8 +52,27 @@ void AutoProcessingStrategy::processLdifEntries(
 
     ValidationStats stats;
 
-    // Process all entries (save to DB, validate, upload to LDAP)
-    auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats);
+    // v1.5.9: Pre-scan entries to calculate total counts for "X/Total" progress display
+    LdifProcessor::TotalCounts totalCounts;
+    for (const auto& entry : entries) {
+        // Count certificates (userCertificate or cACertificate)
+        if (entry.hasAttribute("userCertificate;binary") || entry.hasAttribute("cACertificate;binary")) {
+            totalCounts.totalCerts++;
+        }
+        // Count CRLs
+        if (entry.hasAttribute("certificateRevocationList;binary")) {
+            totalCounts.totalCrl++;
+        }
+        // Count Master Lists
+        if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
+            totalCounts.totalMl++;
+        }
+    }
+    spdlog::info("AUTO mode: Pre-scan complete - {} certs, {} CRLs, {} MLs",
+                totalCounts.totalCerts, totalCounts.totalCrl, totalCounts.totalMl);
+
+    // Process all entries (save to DB, validate, upload to LDAP) with total counts for progress display
+    auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats, &totalCounts);
 
     // Update database statistics
     int totalItems = counts.cscaCount + counts.dscCount + counts.dscNcCount + counts.crlCount + counts.mlCount;
