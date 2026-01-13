@@ -33,6 +33,8 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
+          # Compare with previous commit (HEAD^) instead of base branch
+          base: ${{ github.event.before }}
           filters: |
             pkd-management:
               - 'services/pkd-management/**'
