@@ -12,7 +12,7 @@
  *
  * @author SmartCore Inc.
  * @date 2026-01-01
- * @version 2.0.0
+ * @version 2.1.0
  */
 
 #include <drogon/drogon.h>
@@ -529,29 +529,50 @@ Json::Value checkLdap() {
 
 LDAP* getLdapConnection() {
     std::string ldapUri = "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort);
+    const int MAX_RETRIES = 3;
+    const int RETRY_DELAY_MS = 100;
 
-    LDAP* ld = nullptr;
-    int rc = ldap_initialize(&ld, ldapUri.c_str());
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP initialize failed: {}", ldap_err2string(rc));
-        return nullptr;
+    for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        LDAP* ld = nullptr;
+        int rc = ldap_initialize(&ld, ldapUri.c_str());
+        if (rc != LDAP_SUCCESS) {
+            spdlog::warn("LDAP initialize failed (attempt {}/{}): {}", attempt, MAX_RETRIES, ldap_err2string(rc));
+            if (attempt < MAX_RETRIES) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS));
+                continue;
+            }
+            return nullptr;
+        }
+
+        int version = LDAP_VERSION3;
+        ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
+
+        // Set network timeout
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+        ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &timeout);
+
+        struct berval cred;
+        cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
+        cred.bv_len = appConfig.ldapBindPassword.length();
+
+        rc = ldap_sasl_bind_s(ld, appConfig.ldapBindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
+        if (rc != LDAP_SUCCESS) {
+            spdlog::warn("LDAP bind failed (attempt {}/{}): {}", attempt, MAX_RETRIES, ldap_err2string(rc));
+            ldap_unbind_ext_s(ld, nullptr, nullptr);
+            if (attempt < MAX_RETRIES) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(RETRY_DELAY_MS));
+                continue;
+            }
+            return nullptr;
+        }
+
+        spdlog::debug("LDAP connection established (attempt {})", attempt);
+        return ld;
     }
 
-    int version = LDAP_VERSION3;
-    ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
-
-    struct berval cred;
-    cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
-    cred.bv_len = appConfig.ldapBindPassword.length();
-
-    rc = ldap_sasl_bind_s(ld, appConfig.ldapBindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP bind failed: {}", ldap_err2string(rc));
-        ldap_unbind_ext_s(ld, nullptr, nullptr);
-        return nullptr;
-    }
-
-    return ld;
+    return nullptr;
 }
 
 // =============================================================================
@@ -3466,7 +3487,7 @@ int main(int /* argc */, char* /* argv */[]) {
 
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("Starting PA Service v2.0.0...");
+    spdlog::info("Starting PA Service v2.1.0 LDAP-RETRY...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
