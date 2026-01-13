@@ -25,6 +25,7 @@ import {
   GraduationCap,
   RefreshCw,
   Zap,
+  BookOpen,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -77,6 +78,14 @@ const navSections: NavSection[] = [
     title: 'DB-LDAP Sync',
     items: [
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
+    ],
+  },
+  {
+    title: 'API Documentation',
+    items: [
+      { path: '/api-docs/pkd-management', label: 'PKD Management', icon: <BookOpen className="w-4 h-4" /> },
+      { path: '/api-docs/pa-service', label: 'PA Service', icon: <BookOpen className="w-4 h-4" /> },
+      { path: '/api-docs/sync-service', label: 'Sync Service', icon: <BookOpen className="w-4 h-4" /> },
     ],
   },
 ];

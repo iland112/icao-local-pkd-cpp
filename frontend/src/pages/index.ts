@@ -8,3 +8,4 @@ export { PAHistory } from './PAHistory';
 export { PADetail } from './PADetail';
 export { PADashboard } from './PADashboard';
 export { SyncDashboard } from './SyncDashboard';
+export { default as APIDocs } from './APIDocs';
