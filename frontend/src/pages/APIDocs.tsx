@@ -50,10 +50,10 @@ export default function APIDocs() {
   }
 
   const info = serviceInfo[service];
-  // Swagger UI base URL (no query params - they're disabled by queryConfigEnabled: false)
-  // Use the Swagger UI's built-in dropdown to select APIs
-  const swaggerUrl = `http://${window.location.hostname}:8888/`;
-  const specUrl = `http://${window.location.hostname}:8888/api/docs/${service}.yaml`;
+  // Swagger UI through API Gateway (proxied to allow iframe embedding)
+  // API Gateway overrides X-Frame-Options from DENY to SAMEORIGIN
+  const swaggerUrl = `http://${window.location.hostname}:8080/api-docs/`;
+  const specUrl = `http://${window.location.hostname}:8080/api-docs/api/docs/${service}.yaml`;
 
   // Note: iframe shows Swagger UI with all APIs in dropdown
   // User must manually select the desired API from the top-right dropdown
