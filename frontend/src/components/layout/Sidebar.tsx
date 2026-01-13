@@ -37,6 +37,7 @@ interface NavItem {
   path: string;
   label: string;
   icon: React.ReactNode;
+  external?: boolean; // For external links that open in new tab
 }
 
 interface NavSection {
@@ -83,9 +84,9 @@ const navSections: NavSection[] = [
   {
     title: 'API Documentation',
     items: [
-      { path: '/api-docs/pkd-management', label: 'PKD Management', icon: <BookOpen className="w-4 h-4" /> },
-      { path: '/api-docs/pa-service', label: 'PA Service', icon: <BookOpen className="w-4 h-4" /> },
-      { path: '/api-docs/sync-service', label: 'Sync Service', icon: <BookOpen className="w-4 h-4" /> },
+      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=PKD+Management+API+v1.5.10`, label: 'PKD Management', icon: <BookOpen className="w-4 h-4" />, external: true },
+      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=PA+Service+API+v1.2.0`, label: 'PA Service', icon: <BookOpen className="w-4 h-4" />, external: true },
+      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=Sync+Service+API+v1.2.0`, label: 'Sync Service', icon: <BookOpen className="w-4 h-4" />, external: true },
     ],
   },
 ];
@@ -261,20 +262,42 @@ export function Sidebar() {
                   <ul className="space-y-1">
                     {section.items.map((item) => (
                       <li key={item.path}>
-                        <Link
-                          to={item.path}
-                          className={cn(
-                            'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
-                            isActive(item.path)
-                              ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
-                            !expanded && 'lg:justify-center lg:px-2'
-                          )}
-                          title={!expanded ? item.label : undefined}
-                        >
-                          {item.icon}
-                          {expanded && <span>{item.label}</span>}
-                        </Link>
+                        {item.external ? (
+                          <a
+                            href={item.path}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className={cn(
+                              'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
+                              'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+                              !expanded && 'lg:justify-center lg:px-2'
+                            )}
+                            title={!expanded ? item.label : undefined}
+                          >
+                            {item.icon}
+                            {expanded && (
+                              <>
+                                <span>{item.label}</span>
+                                <ExternalLink className="w-3 h-3 ml-auto" />
+                              </>
+                            )}
+                          </a>
+                        ) : (
+                          <Link
+                            to={item.path}
+                            className={cn(
+                              'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
+                              isActive(item.path)
+                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+                              !expanded && 'lg:justify-center lg:px-2'
+                            )}
+                            title={!expanded ? item.label : undefined}
+                          >
+                            {item.icon}
+                            {expanded && <span>{item.label}</span>}
+                          </Link>
+                        )}
                       </li>
                     ))}
                   </ul>

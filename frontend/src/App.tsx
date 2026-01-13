@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from '@/components/layout';
 import { ToastContainer } from '@/components/common';
-import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, APIDocs } from '@/pages';
+import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard } from '@/pages';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -30,7 +30,6 @@ function App() {
             <Route path="pa/:paId" element={<PADetail />} />
             <Route path="pa/dashboard" element={<PADashboard />} />
             <Route path="sync" element={<SyncDashboard />} />
-            <Route path="api-docs/:service" element={<APIDocs />} />
           </Route>
         </Routes>
         <ToastContainer />
