@@ -142,11 +142,13 @@ services:
     network_mode: host
     environment:
       - PORT=8888
+      - BASE_URL=/api-docs
       - URLS=[{"url":"http://192.168.100.11:8888/api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"http://192.168.100.11:8888/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"http://192.168.100.11:8888/api/docs/sync-service.yaml","name":"Sync Service API v1.2.0"}]
       - URLS_PRIMARY_NAME=PKD Management API v1.5.10
       - TZ=Asia/Seoul
     volumes:
       - ./docs/openapi:/usr/share/nginx/html/api/docs:ro
+      - ./nginx/swagger-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
