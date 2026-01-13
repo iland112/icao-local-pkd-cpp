@@ -50,9 +50,13 @@ export default function APIDocs() {
   }
 
   const info = serviceInfo[service];
-  // Swagger UI with explicit spec URL parameter
+  // Swagger UI base URL (no query params - they're disabled by queryConfigEnabled: false)
+  // Use the Swagger UI's built-in dropdown to select APIs
+  const swaggerUrl = `http://${window.location.hostname}:8888/`;
   const specUrl = `http://${window.location.hostname}:8888/api/docs/${service}.yaml`;
-  const swaggerUrl = `http://${window.location.hostname}:8888/?url=${encodeURIComponent(specUrl)}`;
+
+  // Note: iframe shows Swagger UI with all APIs in dropdown
+  // User must manually select the desired API from the top-right dropdown
 
   return (
     <div className="flex flex-col h-full">
@@ -63,6 +67,9 @@ export default function APIDocs() {
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{info.name}</h1>
             <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {info.description} • <span className="font-semibold">{info.version}</span>
+            </p>
+            <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+              💡 Use the dropdown in the top-right of the API viewer below to select the API specification
             </p>
           </div>
           <div className="flex gap-2">
@@ -78,7 +85,7 @@ export default function APIDocs() {
               Open in New Tab
             </a>
             <a
-              href={`http://${window.location.hostname}:8888/api/docs/${service}.yaml`}
+              href={specUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
