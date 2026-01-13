@@ -522,6 +522,41 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 
 ## Change Log
 
+### 2026-01-13: API Documentation Integration & Deployment Process Documentation (v1.5.10)
+
+**API Documentation**:
+- Swagger UI 통합 완료 (OpenAPI 3.0 specifications)
+- 사이드바 메뉴에서 새 탭으로 Swagger UI 열기
+- 각 서비스별 API 문서 자동 선택
+  - PKD Management API v1.5.10
+  - PA Service API v1.2.0
+  - Sync Service API v1.2.0
+- API Gateway를 통한 프록시 제공 (포트 8080)
+- CORS 헤더 설정으로 크로스 오리진 접근 허용
+
+**배포 프로세스 문서화**:
+- `docs/DEPLOYMENT_PROCESS.md` 작성 완료
+- 전체 배포 파이프라인 상세 설명:
+  1. Code Modification (Local)
+  2. Git Commit & Push
+  3. GitHub Actions Build (Change Detection, Multi-stage Caching)
+  4. Artifact Download (OCI format)
+  5. Deploy to Luckfox (OCI→Docker 변환, 이미지 로드, 컨테이너 재생성)
+- 빌드 최적화 전략 문서화 (vcpkg 캐시, BuildKit inline cache)
+- 트러블슈팅 가이드 추가
+- 이미지 이름 매핑 테이블 (배포 스크립트 ↔ docker-compose)
+
+**기술적 세부사항**:
+- OCI (Open Container Initiative) format → Docker archive 변환 (skopeo)
+- GitHub Actions artifact 30일 보관
+- Change detection으로 변경된 서비스만 빌드 (10-15분)
+- 비대화형 SSH 인증 (sshpass)
+
+**문서 참조**:
+- [DEPLOYMENT_PROCESS.md](docs/DEPLOYMENT_PROCESS.md) - 배포 프로세스 완전 가이드
+- [LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md) - Luckfox 특화 배포
+- [DOCKER_BUILD_CACHE.md](docs/DOCKER_BUILD_CACHE.md) - 빌드 캐시 트러블슈팅
+
 ### 2026-01-13: Luckfox Docker 관리 스크립트 통합 및 AUTO MODE 완성 (v1.5.10)
 
 **Luckfox Docker 관리 스크립트 통합**:
