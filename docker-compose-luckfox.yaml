@@ -148,7 +148,6 @@ services:
       - TZ=Asia/Seoul
     volumes:
       - ./docs/openapi:/usr/share/nginx/html/api/docs:ro
-      - ./nginx/swagger-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
