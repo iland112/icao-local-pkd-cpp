@@ -507,6 +507,28 @@ services:
       - pkd-network
     restart: "no"
 
+  # ---------------------------------------------------------------------------
+  # Swagger UI (API Documentation)
+  # ---------------------------------------------------------------------------
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: icao-local-pkd-swagger
+    ports:
+      - "8888:8080"
+    environment:
+      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"/api/docs/sync-service.yaml","name":"Sync Service API v1.2.0"}]
+      - URLS_PRIMARY_NAME=PKD Management API v1.5.10
+    volumes:
+      - ../docs/openapi:/usr/share/nginx/html/api/docs:ro
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 # =============================================================================
 # Networks
 # =============================================================================
