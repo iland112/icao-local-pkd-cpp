@@ -66,6 +66,11 @@ RUN cmake -B build -S . \
 # Stage 4: Runtime
 FROM debian:bookworm-slim AS runtime
 
+# ARG to force cache invalidation (must be re-declared in each stage)
+ARG CACHE_BUST=unknown
+RUN echo "=== Runtime Cache Bust Token: $CACHE_BUST ===" && \
+    echo "This ensures fresh binary copy from builder"
+
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
 

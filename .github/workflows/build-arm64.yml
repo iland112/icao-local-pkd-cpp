@@ -1,4 +1,4 @@
-# ARM64 Docker Images Build Pipeline (Parallel Jobs)
+# ARM64 Docker Images Build Pipeline (Parallel Jobs with Change Detection)
 name: Build ARM64 Docker Images
 
 on:
@@ -16,9 +16,46 @@ on:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # Detect Changes (runs first to determine which services need building)
+  # ---------------------------------------------------------------------------
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      pkd-management: ${{ steps.filter.outputs.pkd-management }}
+      pa-service: ${{ steps.filter.outputs.pa-service }}
+      sync-service: ${{ steps.filter.outputs.sync-service }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pkd-management:
+              - 'services/pkd-management/**'
+              - 'shared/**'
+              - '.github/workflows/build-arm64.yml'
+            pa-service:
+              - 'services/pa-service/**'
+              - 'shared/**'
+              - '.github/workflows/build-arm64.yml'
+            sync-service:
+              - 'services/sync-service/**'
+              - 'shared/**'
+              - '.github/workflows/build-arm64.yml'
+            frontend:
+              - 'frontend/**'
+              - 'nginx/**'
+              - '.github/workflows/build-arm64.yml'
+  # ---------------------------------------------------------------------------
   # PKD Management Service
   # ---------------------------------------------------------------------------
   build-pkd-management:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.pkd-management == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -47,8 +84,15 @@ jobs:
           outputs: type=oci,dest=pkd-management-arm64.tar
           build-args: |
             CACHE_BUST=${{ github.sha }}
-          cache-from: type=gha,scope=pkd-mgmt
-          cache-to: type=gha,mode=max,scope=pkd-mgmt
+            BUILDKIT_INLINE_CACHE=1
+          cache-from: |
+            type=gha,scope=pkd-mgmt-vcpkg-base
+            type=gha,scope=pkd-mgmt-vcpkg-deps
+            type=gha,scope=pkd-mgmt-builder
+          cache-to: |
+            type=gha,mode=max,scope=pkd-mgmt-vcpkg-base
+            type=gha,mode=max,scope=pkd-mgmt-vcpkg-deps
+            type=gha,mode=max,scope=pkd-mgmt-builder
 
       - name: Compress Image
         run: gzip pkd-management-arm64.tar
@@ -64,6 +108,8 @@ jobs:
   # PA Service
   # ---------------------------------------------------------------------------
   build-pa-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.pa-service == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -87,6 +133,9 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-pa:arm64
           outputs: type=oci,dest=pkd-pa-arm64.tar
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
+            BUILDKIT_INLINE_CACHE=1
           cache-from: |
             type=gha,scope=pa-svc-vcpkg-base
             type=gha,scope=pa-svc-vcpkg-deps
@@ -108,6 +157,8 @@ jobs:
   # Sync Service
   # ---------------------------------------------------------------------------
   build-sync-service:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.sync-service == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -131,6 +182,9 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-sync:arm64
           outputs: type=oci,dest=pkd-sync-arm64.tar
+          build-args: |
+            CACHE_BUST=${{ github.sha }}
+            BUILDKIT_INLINE_CACHE=1
           cache-from: |
             type=gha,scope=sync-svc-vcpkg-base
             type=gha,scope=sync-svc-vcpkg-deps
@@ -152,6 +206,8 @@ jobs:
   # Frontend
   # ---------------------------------------------------------------------------
   build-frontend:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -193,7 +249,8 @@ jobs:
   # ---------------------------------------------------------------------------
   combine-artifacts:
     runs-on: ubuntu-latest
-    needs: [build-pkd-management, build-pa-service, build-sync-service, build-frontend]
+    needs: [detect-changes, build-pkd-management, build-pa-service, build-sync-service, build-frontend]
+    if: always() && (needs.build-pkd-management.result == 'success' || needs.build-pa-service.result == 'success' || needs.build-sync-service.result == 'success' || needs.build-frontend.result == 'success')
 
     steps:
       - name: Download all artifacts
