@@ -41,13 +41,31 @@ find_library(LDAP_LIBRARY ldap REQUIRED)
 find_library(LBER_LIBRARY lber REQUIRED)
 
 # =============================================================================
+# Source Files
+# =============================================================================
+set(SOURCE_FILES
+    src/main.cpp
+    src/reconciliation/ldap_operations.cpp
+    src/reconciliation/reconciliation_engine.cpp
+)
+
+set(HEADER_FILES
+    src/common/types.h
+    src/common/config.h
+    src/reconciliation/ldap_operations.h
+    src/reconciliation/reconciliation_engine.h
+)
+
+# =============================================================================
 # Main Application
 # =============================================================================
 add_executable(${PROJECT_NAME}
-    src/main.cpp
+    ${SOURCE_FILES}
+    ${HEADER_FILES}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${PostgreSQL_INCLUDE_DIRS}
 )

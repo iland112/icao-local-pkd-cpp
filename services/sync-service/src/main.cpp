@@ -145,6 +145,46 @@ struct SyncResult {
 };
 
 // =============================================================================
+// Reconciliation Structures
+// =============================================================================
+struct CertificateInfo {
+    int id = 0;
+    std::string certType;
+    std::string countryCode;
+    std::string subject;
+    std::string issuer;
+    std::vector<unsigned char> certData;
+    std::string ldapDn;  // Expected LDAP DN
+};
+
+struct ReconciliationFailure {
+    std::string certType;
+    std::string operation;  // ADD, DELETE
+    std::string countryCode;
+    std::string subject;
+    std::string error;
+};
+
+struct ReconciliationResult {
+    bool success = false;
+    int totalProcessed = 0;
+    int cscaAdded = 0;
+    int cscaDeleted = 0;
+    int dscAdded = 0;
+    int dscDeleted = 0;
+    int dscNcAdded = 0;
+    int dscNcDeleted = 0;
+    int crlAdded = 0;
+    int crlDeleted = 0;
+    int successCount = 0;
+    int failedCount = 0;
+    int durationMs = 0;
+    std::string status;  // COMPLETED, PARTIAL, FAILED
+    std::string errorMessage;
+    std::vector<ReconciliationFailure> failures;
+};
+
+// =============================================================================
 // PostgreSQL Connection
 // =============================================================================
 class PgConnection {
