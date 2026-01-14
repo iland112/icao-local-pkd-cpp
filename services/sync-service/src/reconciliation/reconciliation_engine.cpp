@@ -112,7 +112,8 @@ void ReconciliationEngine::processCertificateType(
     LDAP* ld,
     const std::string& certType,
     bool dryRun,
-    ReconciliationResult& result) const {
+    ReconciliationResult& result,
+    int reconciliationId) const {
 
     spdlog::info("Processing {} certificates...", certType);
 
@@ -123,6 +124,7 @@ void ReconciliationEngine::processCertificateType(
     for (const auto& cert : missingCerts) {
         result.totalProcessed++;
 
+        auto opStartTime = std::chrono::steady_clock::now();
         std::string errorMsg;
         bool success = false;
 
@@ -135,6 +137,17 @@ void ReconciliationEngine::processCertificateType(
             if (success) {
                 markAsStoredInLdap(pgConn, cert.id);
             }
+        }
+
+        auto opEndTime = std::chrono::steady_clock::now();
+        int opDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            opEndTime - opStartTime).count();
+
+        // Log operation to reconciliation_log table
+        if (reconciliationId > 0) {
+            logReconciliationOperation(
+                pgConn, reconciliationId, "ADD", certType, cert,
+                success ? "SUCCESS" : "FAILED", errorMsg, opDurationMs);
         }
 
         if (success) {
@@ -161,13 +174,26 @@ void ReconciliationEngine::processCertificateType(
 }
 
 ReconciliationResult ReconciliationEngine::performReconciliation(
-    PGconn* pgConn, bool dryRun) {
+    PGconn* pgConn,
+    bool dryRun,
+    const std::string& triggeredBy,
+    int syncStatusId) {
 
     auto startTime = std::chrono::steady_clock::now();
     ReconciliationResult result;
     result.status = "COMPLETED";
 
-    spdlog::info("Starting reconciliation (dryRun={})", dryRun);
+    spdlog::info("Starting reconciliation (dryRun={}, triggeredBy={}, syncStatusId={})",
+                dryRun, triggeredBy, syncStatusId);
+
+    // Create reconciliation summary record
+    int reconciliationId = createReconciliationSummary(pgConn, triggeredBy, dryRun, syncStatusId);
+    if (reconciliationId == 0) {
+        result.success = false;
+        result.status = "FAILED";
+        result.errorMessage = "Failed to create reconciliation_summary record";
+        return result;
+    }
 
     // Connect to LDAP (write host)
     std::string errorMsg;
@@ -184,7 +210,7 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
     std::vector<std::string> certTypes = {"CSCA", "DSC", "DSC_NC"};
 
     for (const auto& certType : certTypes) {
-        processCertificateType(pgConn, ld, certType, dryRun, result);
+        processCertificateType(pgConn, ld, certType, dryRun, result, reconciliationId);
     }
 
     // Cleanup LDAP connection
@@ -200,11 +226,162 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
         result.status = "FAILED";
     }
 
+    // Update reconciliation summary with final results
+    if (reconciliationId > 0) {
+        updateReconciliationSummary(pgConn, reconciliationId, result);
+    }
+
     spdlog::info("Reconciliation completed: {} processed, {} succeeded, {} failed ({}ms)",
                 result.totalProcessed, result.successCount, result.failedCount,
                 result.durationMs);
 
     return result;
+}
+
+int ReconciliationEngine::createReconciliationSummary(
+    PGconn* pgConn,
+    const std::string& triggeredBy,
+    bool dryRun,
+    int syncStatusId) const {
+
+    const char* query =
+        "INSERT INTO reconciliation_summary "
+        "(triggered_by, dry_run, sync_status_id, status) "
+        "VALUES ($1, $2, $3, 'IN_PROGRESS') "
+        "RETURNING id";
+
+    const char* paramValues[3];
+    paramValues[0] = triggeredBy.c_str();
+    std::string dryRunStr = dryRun ? "true" : "false";
+    paramValues[1] = dryRunStr.c_str();
+    std::string syncStatusIdStr = std::to_string(syncStatusId);
+    paramValues[2] = (syncStatusId > 0) ? syncStatusIdStr.c_str() : nullptr;
+
+    PGresult* res = PQexecParams(pgConn, query, 3, nullptr,
+                                paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        spdlog::error("Failed to create reconciliation_summary: {}",
+                     PQerrorMessage(pgConn));
+        PQclear(res);
+        return 0;
+    }
+
+    int reconciliationId = std::atoi(PQgetvalue(res, 0, 0));
+    PQclear(res);
+
+    spdlog::debug("Created reconciliation_summary id={}", reconciliationId);
+    return reconciliationId;
+}
+
+void ReconciliationEngine::updateReconciliationSummary(
+    PGconn* pgConn,
+    int reconciliationId,
+    const ReconciliationResult& result) const {
+
+    const char* query =
+        "UPDATE reconciliation_summary SET "
+        "completed_at = CURRENT_TIMESTAMP, "
+        "status = $1, "
+        "total_processed = $2, "
+        "success_count = $3, "
+        "failed_count = $4, "
+        "csca_added = $5, "
+        "csca_deleted = $6, "
+        "dsc_added = $7, "
+        "dsc_deleted = $8, "
+        "dsc_nc_added = $9, "
+        "dsc_nc_deleted = $10, "
+        "crl_added = $11, "
+        "crl_deleted = $12, "
+        "duration_ms = $13, "
+        "error_message = $14 "
+        "WHERE id = $15";
+
+    const char* paramValues[15];
+    paramValues[0] = result.status.c_str();
+    std::string totalProcessed = std::to_string(result.totalProcessed);
+    paramValues[1] = totalProcessed.c_str();
+    std::string successCount = std::to_string(result.successCount);
+    paramValues[2] = successCount.c_str();
+    std::string failedCount = std::to_string(result.failedCount);
+    paramValues[3] = failedCount.c_str();
+    std::string cscaAdded = std::to_string(result.cscaAdded);
+    paramValues[4] = cscaAdded.c_str();
+    std::string cscaDeleted = std::to_string(result.cscaDeleted);
+    paramValues[5] = cscaDeleted.c_str();
+    std::string dscAdded = std::to_string(result.dscAdded);
+    paramValues[6] = dscAdded.c_str();
+    std::string dscDeleted = std::to_string(result.dscDeleted);
+    paramValues[7] = dscDeleted.c_str();
+    std::string dscNcAdded = std::to_string(result.dscNcAdded);
+    paramValues[8] = dscNcAdded.c_str();
+    std::string dscNcDeleted = std::to_string(result.dscNcDeleted);
+    paramValues[9] = dscNcDeleted.c_str();
+    std::string crlAdded = std::to_string(result.crlAdded);
+    paramValues[10] = crlAdded.c_str();
+    std::string crlDeleted = std::to_string(result.crlDeleted);
+    paramValues[11] = crlDeleted.c_str();
+    std::string durationMs = std::to_string(result.durationMs);
+    paramValues[12] = durationMs.c_str();
+    paramValues[13] = result.errorMessage.empty() ? nullptr : result.errorMessage.c_str();
+    std::string idStr = std::to_string(reconciliationId);
+    paramValues[14] = idStr.c_str();
+
+    PGresult* res = PQexecParams(pgConn, query, 15, nullptr,
+                                paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update reconciliation_summary: {}",
+                     PQerrorMessage(pgConn));
+    } else {
+        spdlog::debug("Updated reconciliation_summary id={}", reconciliationId);
+    }
+
+    PQclear(res);
+}
+
+void ReconciliationEngine::logReconciliationOperation(
+    PGconn* pgConn,
+    int reconciliationId,
+    const std::string& operation,
+    const std::string& certType,
+    const CertificateInfo& cert,
+    const std::string& status,
+    const std::string& errorMsg,
+    int durationMs) const {
+
+    const char* query =
+        "INSERT INTO reconciliation_log "
+        "(reconciliation_id, operation, cert_type, cert_id, "
+        "country_code, subject, issuer, ldap_dn, status, error_message, duration_ms) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
+
+    const char* paramValues[11];
+    std::string reconIdStr = std::to_string(reconciliationId);
+    paramValues[0] = reconIdStr.c_str();
+    paramValues[1] = operation.c_str();
+    paramValues[2] = certType.c_str();
+    std::string certIdStr = std::to_string(cert.id);
+    paramValues[3] = certIdStr.c_str();
+    paramValues[4] = cert.countryCode.c_str();
+    paramValues[5] = cert.subject.c_str();
+    paramValues[6] = cert.issuer.c_str();
+    paramValues[7] = cert.ldapDn.c_str();
+    paramValues[8] = status.c_str();
+    paramValues[9] = errorMsg.empty() ? nullptr : errorMsg.c_str();
+    std::string durationStr = std::to_string(durationMs);
+    paramValues[10] = durationStr.c_str();
+
+    PGresult* res = PQexecParams(pgConn, query, 11, nullptr,
+                                paramValues, nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::warn("Failed to log reconciliation operation: {}",
+                    PQerrorMessage(pgConn));
+    }
+
+    PQclear(res);
 }
 
 } // namespace sync
