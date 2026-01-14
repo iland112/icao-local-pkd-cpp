@@ -19,7 +19,7 @@ public:
     // Build LDAP Distinguished Name for certificate
     std::string buildDn(const std::string& certType,
                        const std::string& countryCode,
-                       int certId) const;
+                       const std::string& certId) const;
 
     // Add certificate to LDAP
     bool addCertificate(LDAP* ld,

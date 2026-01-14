@@ -13,7 +13,7 @@ LdapOperations::LdapOperations(const Config& config)
 
 std::string LdapOperations::buildDn(const std::string& certType,
                                      const std::string& countryCode,
-                                    int certId) const {
+                                     const std::string& certId) const {
     std::string org;
     std::string dc = "dc=data";
 
@@ -30,7 +30,7 @@ std::string LdapOperations::buildDn(const std::string& certType,
         return "";
     }
 
-    return "cn=cert-" + std::to_string(certId) + "," + org + ",c=" + countryCode + "," +
+    return "cn=cert-" + certId + "," + org + ",c=" + countryCode + "," +
            dc + ",dc=download,dc=pkd," + config_.ldapBaseDn;
 }
 
@@ -98,7 +98,7 @@ bool LdapOperations::addCertificate(LDAP* ld,
     certValues.push_back(certValue);
     std::vector<berval*> certValuePtrs = {&certValues[0], nullptr};
 
-    std::string cnValue = "cert-" + std::to_string(cert.id);
+    std::string cnValue = "cert-" + cert.id;  // ID is already a string
     std::vector<const char*> cnValues = {cnValue.c_str(), nullptr};
 
     LDAPMod mod_oc = {LDAP_MOD_ADD,

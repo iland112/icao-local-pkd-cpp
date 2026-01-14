@@ -33,7 +33,7 @@ private:
         int limit) const;
 
     // Mark certificate as stored in LDAP
-    void markAsStoredInLdap(PGconn* pgConn, int certId) const;
+    void markAsStoredInLdap(PGconn* pgConn, const std::string& certId) const;
 
     // Connect to LDAP write host
     LDAP* connectToLdapWrite(std::string& errorMsg) const;

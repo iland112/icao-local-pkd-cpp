@@ -68,7 +68,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
         int rows = PQntuples(res);
         for (int i = 0; i < rows; i++) {
             CertificateInfo cert;
-            cert.id = std::stoi(PQgetvalue(res, i, 0));
+            cert.id = PQgetvalue(res, i, 0);  // ID as string (UUID or integer)
             cert.certType = PQgetvalue(res, i, 1);
             cert.countryCode = PQgetvalue(res, i, 2);
             cert.subject = PQgetvalue(res, i, 3);
@@ -97,10 +97,9 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
     return result;
 }
 
-void ReconciliationEngine::markAsStoredInLdap(PGconn* pgConn, int certId) const {
+void ReconciliationEngine::markAsStoredInLdap(PGconn* pgConn, const std::string& certId) const {
     const char* query = "UPDATE certificate SET stored_in_ldap = TRUE WHERE id = $1";
-    std::string idStr = std::to_string(certId);
-    const char* paramValues[] = {idStr.c_str()};
+    const char* paramValues[] = {certId.c_str()};
 
     PGresult* res = PQexecParams(pgConn, query, 1, nullptr, paramValues,
                                 nullptr, nullptr, 0);
@@ -362,8 +361,7 @@ void ReconciliationEngine::logReconciliationOperation(
     paramValues[0] = reconIdStr.c_str();
     paramValues[1] = operation.c_str();
     paramValues[2] = certType.c_str();
-    std::string certIdStr = std::to_string(cert.id);
-    paramValues[3] = certIdStr.c_str();
+    paramValues[3] = cert.id.c_str();  // ID is already a string
     paramValues[4] = cert.countryCode.c_str();
     paramValues[5] = cert.subject.c_str();
     paramValues[6] = cert.issuer.c_str();

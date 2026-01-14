@@ -52,7 +52,7 @@ struct SyncResult {
 // Certificate Information
 // =============================================================================
 struct CertificateInfo {
-    int id = 0;
+    std::string id;             // UUID or integer ID as string
     std::string certType;       // CSCA, DSC, DSC_NC, CRL
     std::string countryCode;
     std::string subject;
