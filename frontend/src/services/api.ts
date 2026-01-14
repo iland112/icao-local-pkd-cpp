@@ -205,6 +205,58 @@ export interface RevalidationHistoryItem {
   durationMs: number;
 }
 
+export interface ReconciliationSummary {
+  id: number;
+  startedAt: string;
+  completedAt: string | null;
+  triggeredBy: 'MANUAL' | 'AUTO' | 'DAILY_SYNC';
+  dryRun: boolean;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'FAILED' | 'PARTIAL' | 'ABORTED';
+  totalProcessed: number;
+  successCount: number;
+  failedCount: number;
+  cscaAdded: number;
+  cscaDeleted: number;
+  dscAdded: number;
+  dscDeleted: number;
+  dscNcAdded: number;
+  dscNcDeleted: number;
+  crlAdded: number;
+  crlDeleted: number;
+  durationMs: number;
+  errorMessage: string | null;
+  syncStatusId: number | null;
+}
+
+export interface ReconciliationLog {
+  id: number;
+  timestamp: string;
+  operation: 'ADD' | 'DELETE' | 'UPDATE' | 'SKIP';
+  certType: 'CSCA' | 'DSC' | 'DSC_NC' | 'CRL';
+  certId: number | null;
+  countryCode: string | null;
+  subject: string | null;
+  issuer: string | null;
+  ldapDn: string | null;
+  status: 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  errorMessage: string | null;
+  durationMs: number;
+}
+
+export interface ReconciliationHistoryResponse {
+  success: boolean;
+  history: ReconciliationSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface ReconciliationDetailsResponse {
+  success: boolean;
+  summary: ReconciliationSummary;
+  logs: ReconciliationLog[];
+}
+
 export const syncServiceApi = {
   getStatus: () => syncApi.get<SyncStatusResponse>('/status'),
 
@@ -231,6 +283,13 @@ export const syncServiceApi = {
     syncApi.get<RevalidationHistoryItem[]>('/revalidation-history', { params: { limit } }),
 
   triggerDailySync: () => syncApi.post<{ success: boolean; message: string }>('/trigger-daily'),
+
+  // Reconciliation APIs (v1.2.0+)
+  getReconciliationHistory: (params?: { limit?: number; offset?: number; status?: string; triggeredBy?: string }) =>
+    syncApi.get<ReconciliationHistoryResponse>('/reconcile/history', { params }),
+
+  getReconciliationDetails: (id: number) =>
+    syncApi.get<ReconciliationDetailsResponse>(`/reconcile/${id}`),
 };
 
 // Monitoring Service APIs (separate service on port 8084)

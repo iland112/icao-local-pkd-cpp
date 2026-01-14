@@ -24,6 +24,7 @@ import { syncServiceApi, type SyncConfigResponse, type RevalidationHistoryItem, 
 import type { SyncStatusResponse, SyncHistoryItem, SyncStatusType } from '@/types';
 import { cn } from '@/utils/cn';
 import { Dialog } from '@/components/common/Dialog';
+import { ReconciliationHistory } from '@/components/sync/ReconciliationHistory';
 
 export function SyncDashboard() {
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
@@ -788,6 +789,11 @@ export function SyncDashboard() {
           </div>
         </div>
       )}
+
+      {/* Reconciliation History */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+        <ReconciliationHistory />
+      </div>
 
       {/* Info */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4">
