@@ -837,13 +837,41 @@ public:
                         try {
                             // 1. Perform sync check
                             spdlog::info("[Daily] Step 1: Performing sync check...");
-                            performSyncCheck();
+                            SyncResult syncResult = performSyncCheck();
+                            int syncStatusId = syncResult.syncStatusId;
 
                             // 2. Re-validate certificates if enabled
                             if (g_config.revalidateCertsOnSync) {
                                 spdlog::info("[Daily] Step 2: Performing certificate re-validation...");
                                 RevalidationResult revalResult = performCertificateRevalidation();
                                 saveRevalidationResult(revalResult);
+                            }
+
+                            // 3. Auto reconcile if enabled and discrepancies detected
+                            if (g_config.autoReconcile && syncResult.totalDiscrepancy > 0) {
+                                spdlog::info("[Daily] Step 3: Auto reconcile triggered (discrepancy: {})",
+                                           syncResult.totalDiscrepancy);
+
+                                PgConnection pgConn;
+                                if (pgConn.connect()) {
+                                    ReconciliationEngine engine(g_config);
+                                    ReconciliationResult reconResult = engine.performReconciliation(
+                                        pgConn.get(), false, "DAILY_SYNC", syncStatusId);
+
+                                    if (reconResult.success) {
+                                        spdlog::info("[Daily] Auto reconcile completed: {} processed, {} succeeded, {} failed",
+                                                   reconResult.totalProcessed, reconResult.successCount,
+                                                   reconResult.failedCount);
+                                    } else {
+                                        spdlog::error("[Daily] Auto reconcile failed: {}", reconResult.errorMessage);
+                                    }
+                                } else {
+                                    spdlog::error("[Daily] Failed to connect to database for auto reconcile");
+                                }
+                            } else if (!g_config.autoReconcile) {
+                                spdlog::debug("[Daily] Auto reconcile disabled in configuration");
+                            } else {
+                                spdlog::info("[Daily] No discrepancies detected, skipping auto reconcile");
                             }
 
                             spdlog::info("=== Daily Sync Tasks Completed ===");
