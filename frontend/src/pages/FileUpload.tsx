@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   Upload,
@@ -35,6 +35,7 @@ const initialStage: StageStatus = {
 
 export function FileUpload() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -62,6 +63,14 @@ export function FileUpload() {
   // Restore upload state on page load (for MANUAL mode)
   useEffect(() => {
     const restoreUploadState = async () => {
+      // CRITICAL: URL parameter takes precedence over localStorage
+      const urlUploadId = searchParams.get('uploadId');
+      if (urlUploadId) {
+        // Clear localStorage to avoid conflict
+        localStorage.removeItem('currentUploadId');
+        return; // Let the URL parameter handling take over
+      }
+
       const savedUploadId = localStorage.getItem('currentUploadId');
       if (!savedUploadId) return;
 
@@ -93,14 +102,25 @@ export function FileUpload() {
         setSelectedFile(new File([], upload.fileName));  // Dummy file for display
 
         // Determine stage states based on DB data
-        // Stage 1 (Upload & Parse): Always completed if we have the upload record
+        // Stage 1 (Upload): Always completed if we have the upload record
         setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
-        setParseStage({
-          status: 'COMPLETED',
-          message: '파싱 완료',
-          percentage: 100,
-          details: `${upload.totalEntries}건 처리`
-        });
+
+        // Parse stage: Only completed if totalEntries > 0 (parsing was actually done)
+        if ((upload.totalEntries || 0) > 0) {
+          setParseStage({
+            status: 'COMPLETED',
+            message: '파싱 완료',
+            percentage: 100,
+            details: `${upload.totalEntries}건 처리`
+          });
+        } else {
+          // Parsing not started yet - keep IDLE state
+          setParseStage({
+            status: 'IDLE',
+            message: '파싱 대기 중',
+            percentage: 0
+          });
+        }
 
         // Stage 2 (Validate & DB + LDAP): Check if certificates exist in DB
         // v1.5.0: DB and LDAP are saved simultaneously, so DB save = completion
@@ -138,7 +158,7 @@ export function FileUpload() {
     };
 
     restoreUploadState();
-  }, []);
+  }, [searchParams]);
 
   // Convert stage status to step status for Stepper
   const toStepStatus = (status: StageStatus['status']): StepStatus => {
@@ -625,8 +645,9 @@ export function FileUpload() {
     if (!uploadId) return;
     setParseStage({ status: 'IN_PROGRESS', message: '파싱 시작...', percentage: 0 });
     try {
+      // Reconnect to SSE for progress updates
+      connectToProgressStream(uploadId);
       await uploadApi.triggerParse(uploadId);
-      // Note: Progress will be updated via SSE connection established during upload
     } catch (error) {
       setParseStage({ status: 'FAILED', message: '파싱 실패', percentage: 0 });
       setErrorMessages(prev => [...prev, error instanceof Error ? error.message : '파싱 요청 실패']);
@@ -637,8 +658,9 @@ export function FileUpload() {
     if (!uploadId) return;
     setDbSaveStage({ status: 'IN_PROGRESS', message: '검증 시작...', percentage: 0 });
     try {
+      // Reconnect to SSE for progress updates
+      connectToProgressStream(uploadId);
       await uploadApi.triggerValidate(uploadId);
-      // Note: Progress will be updated via SSE connection established during upload
     } catch (error) {
       setDbSaveStage({ status: 'FAILED', message: '검증 실패', percentage: 0 });
       setErrorMessages(prev => [...prev, error instanceof Error ? error.message : '검증 요청 실패']);

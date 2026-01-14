@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.5.10
-**Last Updated**: 2026-01-13
+**Version**: 1.5.11
+**Last Updated**: 2026-01-14
 **Status**: Production Ready
 
 ---
@@ -286,7 +286,33 @@ icao-local-pkd/
 
 ## Development
 
-### Build from Source
+### Frontend Development Workflow
+
+**IMPORTANT**: Frontend 수정 후 반드시 아래 방법으로 빌드/배포
+
+```bash
+# 1. 코드 수정
+vim frontend/src/pages/FileUpload.tsx
+
+# 2. 빌드 및 배포 (권장 - 자동화 스크립트)
+./scripts/frontend-rebuild.sh
+
+# 3. 브라우저 강제 새로고침
+# Ctrl + Shift + R (Windows/Linux)
+# Cmd + Shift + R (Mac)
+
+# 4. 검증 (선택사항)
+./scripts/verify-frontend-build.sh
+```
+
+**주의사항**:
+- ❌ `docker compose restart frontend` - 구 이미지로 재시작됨
+- ❌ `docker compose up -d --build frontend` - 모든 서비스가 함께 빌드됨 (10분+)
+- ✅ `./scripts/frontend-rebuild.sh` - Frontend만 빌드 및 배포 (~1분)
+
+**상세 가이드**: [docs/FRONTEND_BUILD_GUIDE.md](docs/FRONTEND_BUILD_GUIDE.md)
+
+### Backend Build from Source
 
 ```bash
 cd services/pkd-management
@@ -521,6 +547,46 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-14: Frontend Build Workflow Automation & MANUAL Mode localStorage Bug Fix (v1.5.11)
+
+**Frontend Build Workflow 자동화**:
+- `scripts/frontend-rebuild.sh` - Frontend 빌드 및 배포 자동화 스크립트
+  - 로컬 빌드 (npm run build)
+  - 구 컨테이너/이미지 삭제
+  - 새 이미지 빌드 (다른 서비스 영향 없음)
+  - 새 컨테이너 시작
+  - 자동 검증
+- `scripts/verify-frontend-build.sh` - 빌드 검증 스크립트
+  - 로컬 빌드와 컨테이너 빌드 비교
+  - 파일명 및 크기 검증
+- `docs/FRONTEND_BUILD_GUIDE.md` - 상세 가이드 문서
+  - Docker 빌드 함정 및 해결책
+  - 올바른 빌드 방법
+  - 문제 해결 체크리스트
+
+**문제 해결**:
+- ❌ 기존: `docker compose restart frontend` - 구 이미지로 재시작
+- ❌ 기존: `docker compose up -d --build frontend` - 모든 서비스 함께 빌드 (10분+)
+- ✅ 개선: `./scripts/frontend-rebuild.sh` - Frontend만 빌드 및 배포 (~1분)
+
+**MANUAL 모드 localStorage 복원 버그 수정**:
+- **문제**: 페이지 새로고침 시 localStorage에서 업로드 ID 복원 시, `totalEntries=0`인데도 "파싱 완료" 표시
+- **원인**: [FileUpload.tsx:96-103](frontend/src/pages/FileUpload.tsx#L96-L103)에서 무조건 parseStage를 COMPLETED로 설정
+- **수정**: `totalEntries > 0`일 때만 "파싱 완료", 그렇지 않으면 "파싱 대기 중" 표시
+- **영향**: MANUAL 모드 사용자 경험 개선 (올바른 단계 상태 표시)
+
+**DNS 해결 문제 재발 방지**:
+- Frontend nginx DNS resolver 설정 검증
+- 시스템 재시작 후에도 Docker 내부 DNS (127.0.0.11) 사용 확인
+
+**기술적 세부사항**:
+- Multi-stage Docker build 이해 및 캐시 전략
+- Docker Compose 서비스 의존성 관리
+- 브라우저 캐시 무효화 전략
+
+**문서 참조**:
+- [FRONTEND_BUILD_GUIDE.md](docs/FRONTEND_BUILD_GUIDE.md) - Frontend 빌드 완전 가이드
 
 ### 2026-01-13: API Documentation Integration & Deployment Process Documentation (v1.5.10)
 

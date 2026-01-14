@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl-dev \
     zlib1g-dev \
     libpq-dev \
+    bison \
+    flex \
     && rm -rf /var/lib/apt/lists/*
 
 # Install vcpkg
@@ -32,7 +34,7 @@ FROM vcpkg-base AS vcpkg-deps
 WORKDIR /build
 
 # Copy vcpkg manifest
-COPY vcpkg.json ./
+COPY services/monitoring-service/vcpkg.json ./
 
 # Install dependencies
 RUN ${VCPKG_ROOT}/vcpkg install \
@@ -46,8 +48,8 @@ FROM vcpkg-deps AS builder
 WORKDIR /build
 
 # Copy source code
-COPY CMakeLists.txt ./
-COPY src/ ./src/
+COPY services/monitoring-service/CMakeLists.txt ./
+COPY services/monitoring-service/src/ ./src/
 
 # Build application
 RUN cmake -B build_fresh -S . \

@@ -9,8 +9,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Drogon CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
-find_package(PostgreSQL REQUIRED)
 find_package(CURL REQUIRED)
+
+# PostgreSQL - use system package
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBPQ REQUIRED libpq)
 
 # Source files
 set(SOURCES
@@ -24,14 +27,14 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Drogon::Drogon
     spdlog::spdlog
-    jsoncpp_lib
-    PostgreSQL::PostgreSQL
+    JsonCpp::JsonCpp
+    ${LIBPQ_LIBRARIES}
     CURL::libcurl
 )
 
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE
-    ${PostgreSQL_INCLUDE_DIRS}
+    ${LIBPQ_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 

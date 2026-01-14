@@ -346,6 +346,65 @@ export function SyncDashboard() {
             >
               {status ? getStatusLabel(status.status) : '알 수 없음'}
             </div>
+
+            {/* Discrepancy Details in Current Status Card */}
+            {status?.status === 'DISCREPANCY' && status.discrepancy && status.discrepancy.total > 0 && (
+              <div className="mt-3 pt-3 border-t border-yellow-200 dark:border-yellow-800/50">
+                <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-2">
+                  불일치 상세:
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 text-xs">
+                  {status.discrepancy.csca !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">CSCA:</span>
+                      <span className={cn(
+                        'font-semibold',
+                        status.discrepancy.csca > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                      )}>
+                        {status.discrepancy.csca > 0 ? '+' : ''}{status.discrepancy.csca}
+                      </span>
+                    </div>
+                  )}
+                  {status.discrepancy.dsc !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">DSC:</span>
+                      <span className={cn(
+                        'font-semibold',
+                        status.discrepancy.dsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                      )}>
+                        {status.discrepancy.dsc > 0 ? '+' : ''}{status.discrepancy.dsc}
+                      </span>
+                    </div>
+                  )}
+                  {status.discrepancy.dscNc !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">DSC_NC:</span>
+                      <span className={cn(
+                        'font-semibold',
+                        status.discrepancy.dscNc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                      )}>
+                        {status.discrepancy.dscNc > 0 ? '+' : ''}{status.discrepancy.dscNc}
+                      </span>
+                    </div>
+                  )}
+                  {status.discrepancy.crl !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">CRL:</span>
+                      <span className={cn(
+                        'font-semibold',
+                        status.discrepancy.crl > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                      )}>
+                        {status.discrepancy.crl > 0 ? '+' : ''}{status.discrepancy.crl}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-400">
+                  + DB에만 있음 | - LDAP에만 있음
+                </div>
+              </div>
+            )}
+
             <div className="text-xs text-gray-500 dark:text-gray-400">
               마지막 검사: {formatTime(status?.checkedAt)}
             </div>
@@ -357,83 +416,135 @@ export function SyncDashboard() {
           </div>
         </div>
 
-        {/* DB Stats Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        {/* DB vs LDAP Comparison Table */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:col-span-2">
           <div className="flex items-center gap-2 mb-4">
-            <Database className="w-5 h-5 text-blue-500" />
+            <ArrowRightLeft className="w-5 h-5 text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              PostgreSQL
+              DB ↔ LDAP 비교
             </h3>
           </div>
-          {status?.dbStats ? (
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">CSCA:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.dbStats.csca?.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">DSC:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.dbStats.dsc?.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">DSC_NC:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.dbStats.dscNc?.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">CRL:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.dbStats.crl?.toLocaleString()}
-                </span>
+          {status?.dbStats && status?.ldapStats ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="text-left py-2 px-3 font-medium text-gray-500 dark:text-gray-400">
+                      인증서 타입
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-blue-600 dark:text-blue-400">
+                      <div className="flex items-center justify-end gap-1">
+                        <Database className="w-4 h-4" />
+                        PostgreSQL
+                      </div>
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-green-600 dark:text-green-400">
+                      <div className="flex items-center justify-end gap-1">
+                        <Server className="w-4 h-4" />
+                        LDAP
+                      </div>
+                    </th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-500 dark:text-gray-400">
+                      차이
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/50">
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">CSCA</td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.dbStats.csca?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.ldapStats.csca?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {status.discrepancy && status.discrepancy.csca !== 0 ? (
+                        <span className={cn(
+                          'font-mono font-semibold',
+                          status.discrepancy.csca > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        )}>
+                          {status.discrepancy.csca > 0 ? '+' : ''}{status.discrepancy.csca}
+                        </span>
+                      ) : (
+                        <span className="text-green-600 dark:text-green-400">✓</span>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/50">
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC</td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.dbStats.dsc?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.ldapStats.dsc?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {status.discrepancy && status.discrepancy.dsc !== 0 ? (
+                        <span className={cn(
+                          'font-mono font-semibold',
+                          status.discrepancy.dsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        )}>
+                          {status.discrepancy.dsc > 0 ? '+' : ''}{status.discrepancy.dsc}
+                        </span>
+                      ) : (
+                        <span className="text-green-600 dark:text-green-400">✓</span>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/50">
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC_NC</td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.dbStats.dscNc?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.ldapStats.dscNc?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {status.discrepancy && status.discrepancy.dscNc !== 0 ? (
+                        <span className={cn(
+                          'font-mono font-semibold',
+                          status.discrepancy.dscNc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        )}>
+                          {status.discrepancy.dscNc > 0 ? '+' : ''}{status.discrepancy.dscNc}
+                        </span>
+                      ) : (
+                        <span className="text-green-600 dark:text-green-400">✓</span>
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">CRL</td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.dbStats.crl?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.ldapStats.crl?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {status.discrepancy && status.discrepancy.crl !== 0 ? (
+                        <span className={cn(
+                          'font-mono font-semibold',
+                          status.discrepancy.crl > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        )}>
+                          {status.discrepancy.crl > 0 ? '+' : ''}{status.discrepancy.crl}
+                        </span>
+                      ) : (
+                        <span className="text-green-600 dark:text-green-400">✓</span>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
+                  <span>+ DB에 더 많음 | - LDAP에 더 많음</span>
+                  <span className="font-medium">✓ 일치</span>
+                </div>
               </div>
             </div>
           ) : (
-            <div className="text-gray-400">데이터 없음</div>
-          )}
-        </div>
-
-        {/* LDAP Stats Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Server className="w-5 h-5 text-green-500" />
-            <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              LDAP (OpenLDAP)
-            </h3>
-          </div>
-          {status?.ldapStats ? (
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">CSCA:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.ldapStats.csca?.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">DSC:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.ldapStats.dsc?.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">DSC_NC:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.ldapStats.dscNc?.toLocaleString()}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 dark:text-gray-400">CRL:</span>
-                <span className="ml-2 font-semibold text-gray-900 dark:text-white">
-                  {status.ldapStats.crl?.toLocaleString()}
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="text-gray-400">데이터 없음</div>
+            <div className="text-gray-400 text-center py-4">데이터 없음</div>
           )}
         </div>
       </div>

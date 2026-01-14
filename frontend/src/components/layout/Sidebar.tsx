@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Zap,
   BookOpen,
+  Activity,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -79,6 +80,12 @@ const navSections: NavSection[] = [
     title: 'DB-LDAP Sync',
     items: [
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
+    ],
+  },
+  {
+    title: 'System Monitoring',
+    items: [
+      { path: '/monitoring', label: '시스템 모니터링', icon: <Activity className="w-4 h-4" /> },
     ],
   },
   {

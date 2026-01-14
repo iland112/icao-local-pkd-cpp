@@ -4932,13 +4932,13 @@ void registerRoutes() {
         {drogon::Get}
     );
 
-    // Get individual upload status - GET /api/upload/{uploadId}
+    // Get individual upload status - GET /api/upload/detail/{uploadId}
     app.registerHandler(
-        "/api/upload/{uploadId}",
+        "/api/upload/detail/{uploadId}",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback,
            const std::string& uploadId) {
-            spdlog::info("GET /api/upload/{}", uploadId);
+            spdlog::info("GET /api/upload/detail/{}", uploadId);
 
             std::string conninfo = "host=" + appConfig.dbHost +
                                   " port=" + std::to_string(appConfig.dbPort) +
@@ -5002,12 +5002,12 @@ void registerRoutes() {
 
                     // Check LDAP upload status by querying certificate table
                     std::string ldapQuery = "SELECT COUNT(*) as total, "
-                                          "SUM(CASE WHEN stored_in_ldap = true THEN 1 ELSE 0 END) as in_ldap "
+                                          "COALESCE(SUM(CASE WHEN stored_in_ldap = true THEN 1 ELSE 0 END), 0) as in_ldap "
                                           "FROM certificate WHERE upload_id = '" + uploadId + "'";
                     PGresult* ldapRes = PQexec(conn, ldapQuery.c_str());
                     if (PQresultStatus(ldapRes) == PGRES_TUPLES_OK && PQntuples(ldapRes) > 0) {
                         int totalCerts = std::stoi(PQgetvalue(ldapRes, 0, 0));
-                        int ldapCerts = PQgetvalue(ldapRes, 0, 1) ? std::stoi(PQgetvalue(ldapRes, 0, 1)) : 0;
+                        int ldapCerts = std::stoi(PQgetvalue(ldapRes, 0, 1));
                         data["ldapUploadedCount"] = ldapCerts;
                         data["ldapPendingCount"] = totalCerts - ldapCerts;
                     } else {

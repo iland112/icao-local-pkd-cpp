@@ -68,7 +68,7 @@ export const uploadApi = {
     api.get<PageResponse<UploadedFile>>('/upload/history', { params }),
 
   getDetail: (uploadId: string) =>
-    api.get<ApiResponse<UploadedFile>>(`/upload/${uploadId}`),
+    api.get<ApiResponse<UploadedFile>>(`/upload/detail/${uploadId}`),
 
   getStatistics: () =>
     api.get<UploadStatisticsOverview>('/upload/statistics'),
@@ -231,6 +231,92 @@ export const syncServiceApi = {
     syncApi.get<RevalidationHistoryItem[]>('/revalidation-history', { params: { limit } }),
 
   triggerDailySync: () => syncApi.post<{ success: boolean; message: string }>('/trigger-daily'),
+};
+
+// Monitoring Service APIs (separate service on port 8084)
+const monitoringApi = axios.create({
+  baseURL: '/api/monitoring',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+monitoringApi.interceptors.response.use(
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
+    console.error('Monitoring API Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
+export interface CpuMetrics {
+  usagePercent: number;
+  load1min: number;
+  load5min: number;
+  load15min: number;
+}
+
+export interface MemoryMetrics {
+  totalMb: number;
+  usedMb: number;
+  freeMb: number;
+  usagePercent: number;
+}
+
+export interface DiskMetrics {
+  totalGb: number;
+  usedGb: number;
+  freeGb: number;
+  usagePercent: number;
+}
+
+export interface NetworkMetrics {
+  bytesSent: number;
+  bytesRecv: number;
+  packetsSent: number;
+  packetsRecv: number;
+}
+
+export interface SystemMetrics {
+  timestamp: string;
+  cpu: CpuMetrics;
+  memory: MemoryMetrics;
+  disk: DiskMetrics;
+  network: NetworkMetrics;
+}
+
+export interface ServiceHealth {
+  serviceName: string;
+  status: 'UP' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
+  responseTimeMs: number;
+  errorMessage?: string;
+  checkedAt: string;
+}
+
+export interface SystemOverview {
+  latestMetrics: SystemMetrics;
+  services: ServiceHealth[];
+}
+
+export interface MetricsHistoryItem {
+  timestamp: string;
+  cpuUsagePercent: number;
+  memoryUsagePercent: number;
+  diskUsagePercent: number;
+}
+
+export const monitoringServiceApi = {
+  getHealth: () => monitoringApi.get<{ status: string; uptime?: string }>('/health'),
+
+  getSystemOverview: () => monitoringApi.get<SystemOverview>('/system/overview'),
+
+  getServicesHealth: () => monitoringApi.get<ServiceHealth[]>('/services'),
+
+  getMetricsHistory: (params: { hours?: number; limit?: number }) =>
+    monitoringApi.get<MetricsHistoryItem[]>('/system/history', { params }),
+
+  getSystemMetricsLatest: () => monitoringApi.get<SystemMetrics>('/system/latest'),
 };
 
 export default api;

@@ -319,8 +319,9 @@ int saveSyncStatus(const SyncResult& result) {
     std::string query = "INSERT INTO sync_status ("
         "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
         "ldap_csca_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
+        "csca_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy, "
         "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms"
-        ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id";
+        ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id";
 
     std::string dbCsca = std::to_string(result.dbStats.cscaCount);
     std::string dbDsc = std::to_string(result.dbStats.dscCount);
@@ -332,18 +333,24 @@ int saveSyncStatus(const SyncResult& result) {
     std::string ldapDscNc = std::to_string(result.ldapStats.dscNcCount);
     std::string ldapCrl = std::to_string(result.ldapStats.crlCount);
     std::string ldapTotal = std::to_string(result.ldapStats.totalEntries);
+    std::string cscaDisc = std::to_string(result.cscaDiscrepancy);
+    std::string dscDisc = std::to_string(result.dscDiscrepancy);
+    std::string dscNcDisc = std::to_string(result.dscNcDiscrepancy);
+    std::string crlDisc = std::to_string(result.crlDiscrepancy);
+    std::string totalDisc = std::to_string(result.totalDiscrepancy);
     std::string durationMs = std::to_string(result.checkDurationMs);
 
-    const char* paramValues[15] = {
+    const char* paramValues[20] = {
         dbCsca.c_str(), dbDsc.c_str(), dbDscNc.c_str(), dbCrl.c_str(), dbStoredInLdap.c_str(),
         ldapCsca.c_str(), ldapDsc.c_str(), ldapDscNc.c_str(), ldapCrl.c_str(), ldapTotal.c_str(),
+        cscaDisc.c_str(), dscDisc.c_str(), dscNcDisc.c_str(), crlDisc.c_str(), totalDisc.c_str(),
         dbCountryStr.c_str(), ldapCountryStr.c_str(),
         result.status.c_str(),
         result.errorMessage.empty() ? nullptr : result.errorMessage.c_str(),
         durationMs.c_str()
     };
 
-    PGresult* res = PQexecParams(conn.get(), query.c_str(), 15, nullptr, paramValues, nullptr, nullptr, 0);
+    PGresult* res = PQexecParams(conn.get(), query.c_str(), 20, nullptr, paramValues, nullptr, nullptr, 0);
 
     int syncId = -1;
     if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
@@ -1602,7 +1609,7 @@ paths:
     // Start server
     spdlog::info("Starting HTTP server on port {}...", g_config.serverPort);
     app().addListener("0.0.0.0", g_config.serverPort)
-        .setThreadNum(2)
+        .setThreadNum(4)  // Increased from 2 to handle concurrent requests
         .run();
 
     // Cleanup

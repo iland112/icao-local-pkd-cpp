@@ -5,7 +5,6 @@
     "drogon",
     "spdlog",
     "jsoncpp",
-    "libpq",
     "curl"
   ]
 }

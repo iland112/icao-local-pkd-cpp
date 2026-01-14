@@ -21,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <chrono>
+#include <ctime>
 #include <thread>
 #include <atomic>
 #include <mutex>
@@ -69,6 +70,11 @@ struct Config {
         if (auto e = std::getenv("SERVICE_HEALTH_INTERVAL")) serviceHealthInterval = std::stoi(e);
         if (auto e = std::getenv("LOG_ANALYSIS_INTERVAL")) logAnalysisInterval = std::stoi(e);
         if (auto e = std::getenv("METRICS_RETENTION_DAYS")) metricsRetentionDays = std::stoi(e);
+
+        // Load service endpoints
+        if (auto e = std::getenv("SERVICE_PKD_MANAGEMENT")) serviceEndpoints["pkd-management"] = e;
+        if (auto e = std::getenv("SERVICE_PA_SERVICE")) serviceEndpoints["pa-service"] = e;
+        if (auto e = std::getenv("SERVICE_SYNC_SERVICE")) serviceEndpoints["sync-service"] = e;
     }
 };
 
@@ -235,37 +241,41 @@ private:
     CpuMetrics collectCpuMetrics() {
         CpuMetrics metrics;
 
-        // Parse /proc/stat for CPU usage
-        std::ifstream statFile("/proc/stat");
-        if (statFile.is_open()) {
-            std::string line;
-            if (std::getline(statFile, line)) {
-                std::istringstream iss(line);
-                std::string cpu;
-                CpuStat currentStat;
+        try {
+            // Parse /proc/stat for CPU usage
+            std::ifstream statFile("/proc/stat");
+            if (statFile.is_open()) {
+                std::string line;
+                if (std::getline(statFile, line)) {
+                    std::istringstream iss(line);
+                    std::string cpu;
+                    CpuStat currentStat;
 
-                iss >> cpu >> currentStat.user >> currentStat.nice >> currentStat.system
-                    >> currentStat.idle >> currentStat.iowait >> currentStat.irq
-                    >> currentStat.softirq >> currentStat.steal;
+                    iss >> cpu >> currentStat.user >> currentStat.nice >> currentStat.system
+                        >> currentStat.idle >> currentStat.iowait >> currentStat.irq
+                        >> currentStat.softirq >> currentStat.steal;
 
-                // Calculate CPU usage percentage
-                std::lock_guard<std::mutex> lock(cpuMutex_);
+                    // Calculate CPU usage percentage
+                    std::lock_guard<std::mutex> lock(cpuMutex_);
 
-                uint64_t totalDiff = currentStat.total() - prevCpuStat_.total();
-                uint64_t activeDiff = currentStat.active() - prevCpuStat_.active();
+                    uint64_t totalDiff = currentStat.total() - prevCpuStat_.total();
+                    uint64_t activeDiff = currentStat.active() - prevCpuStat_.active();
 
-                if (totalDiff > 0) {
-                    metrics.usagePercent = (float)activeDiff / totalDiff * 100.0f;
+                    if (totalDiff > 0) {
+                        metrics.usagePercent = (float)activeDiff / totalDiff * 100.0f;
+                    }
+
+                    prevCpuStat_ = currentStat;
                 }
-
-                prevCpuStat_ = currentStat;
             }
-        }
 
-        // Parse /proc/loadavg for load averages
-        std::ifstream loadavgFile("/proc/loadavg");
-        if (loadavgFile.is_open()) {
-            loadavgFile >> metrics.load1min >> metrics.load5min >> metrics.load15min;
+            // Parse /proc/loadavg for load averages
+            std::ifstream loadavgFile("/proc/loadavg");
+            if (loadavgFile.is_open()) {
+                loadavgFile >> metrics.load1min >> metrics.load5min >> metrics.load15min;
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to collect CPU metrics: {}", e.what());
         }
 
         return metrics;
@@ -273,32 +283,36 @@ private:
 
     MemoryMetrics collectMemoryMetrics() {
         MemoryMetrics metrics;
-        // TODO: Parse /proc/meminfo
-        std::ifstream meminfo("/proc/meminfo");
-        if (!meminfo.is_open()) {
-            return metrics;
-        }
 
-        std::string line;
-        while (std::getline(meminfo, line)) {
-            std::istringstream iss(line);
-            std::string key;
-            uint64_t value;
-            std::string unit;
+        try {
+            std::ifstream meminfo("/proc/meminfo");
+            if (!meminfo.is_open()) {
+                return metrics;
+            }
 
-            if (iss >> key >> value >> unit) {
-                if (key == "MemTotal:") {
-                    metrics.totalMb = value / 1024;
-                } else if (key == "MemFree:") {
-                    metrics.freeMb = value / 1024;
-                } else if (key == "MemAvailable:") {
+            std::string line;
+            while (std::getline(meminfo, line)) {
+                std::istringstream iss(line);
+                std::string key;
+                uint64_t value = 0;
+                std::string unit;
+
+                if (iss >> key >> value >> unit) {
+                    if (key == "MemTotal:") {
+                        metrics.totalMb = value / 1024;
+                    } else if (key == "MemFree:") {
+                        metrics.freeMb = value / 1024;
+                    } else if (key == "MemAvailable:") {
                     metrics.usedMb = metrics.totalMb - (value / 1024);
                 }
             }
         }
 
-        if (metrics.totalMb > 0) {
-            metrics.usagePercent = (float)metrics.usedMb / metrics.totalMb * 100.0f;
+            if (metrics.totalMb > 0) {
+                metrics.usagePercent = (float)metrics.usedMb / metrics.totalMb * 100.0f;
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to collect memory metrics: {}", e.what());
         }
 
         return metrics;
@@ -307,25 +321,29 @@ private:
     DiskMetrics collectDiskMetrics() {
         DiskMetrics metrics;
 
-        // Use statvfs to get disk usage for root partition
-        struct statvfs stat;
-        if (statvfs("/", &stat) == 0) {
-            uint64_t blockSize = stat.f_frsize;
-            uint64_t totalBlocks = stat.f_blocks;
-            uint64_t freeBlocks = stat.f_bfree;
-            uint64_t availBlocks = stat.f_bavail;
+        try {
+            // Use statvfs to get disk usage for root partition
+            struct statvfs stat;
+            if (statvfs("/", &stat) == 0) {
+                uint64_t blockSize = stat.f_frsize;
+                uint64_t totalBlocks = stat.f_blocks;
+                uint64_t freeBlocks = stat.f_bfree;
+                uint64_t availBlocks = stat.f_bavail;
 
-            uint64_t totalBytes = totalBlocks * blockSize;
-            uint64_t freeBytes = freeBlocks * blockSize;
-            uint64_t usedBytes = totalBytes - freeBytes;
+                uint64_t totalBytes = totalBlocks * blockSize;
+                uint64_t freeBytes = freeBlocks * blockSize;
+                uint64_t usedBytes = totalBytes - freeBytes;
 
-            metrics.totalGb = totalBytes / (1024 * 1024 * 1024);
-            metrics.freeGb = freeBytes / (1024 * 1024 * 1024);
-            metrics.usedGb = usedBytes / (1024 * 1024 * 1024);
+                metrics.totalGb = totalBytes / (1024 * 1024 * 1024);
+                metrics.freeGb = freeBytes / (1024 * 1024 * 1024);
+                metrics.usedGb = usedBytes / (1024 * 1024 * 1024);
 
-            if (totalBytes > 0) {
-                metrics.usagePercent = (float)usedBytes / totalBytes * 100.0f;
+                if (totalBytes > 0) {
+                    metrics.usagePercent = (float)usedBytes / totalBytes * 100.0f;
+                }
             }
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to collect disk metrics: {}", e.what());
         }
 
         return metrics;
@@ -334,40 +352,59 @@ private:
     NetworkMetrics collectNetworkMetrics() {
         NetworkMetrics metrics;
 
-        // Parse /proc/net/dev
-        std::ifstream netFile("/proc/net/dev");
-        if (!netFile.is_open()) {
-            return metrics;
-        }
-
-        std::string line;
-        // Skip first two header lines
-        std::getline(netFile, line);
-        std::getline(netFile, line);
-
-        while (std::getline(netFile, line)) {
-            std::istringstream iss(line);
-            std::string interface;
-            uint64_t bytesRecv, packetsRecv, errsRecv, dropRecv;
-            uint64_t bytesSent, packetsSent, errsSent, dropSent;
-
-            // Skip dummy fields
-            uint64_t dummy;
-
-            iss >> interface >> bytesRecv >> packetsRecv >> errsRecv >> dropRecv;
-            for (int i = 0; i < 4; i++) iss >> dummy;  // Skip 4 fields
-            iss >> bytesSent >> packetsSent >> errsSent >> dropSent;
-
-            // Skip loopback interface
-            if (interface.find("lo:") != std::string::npos) {
-                continue;
+        try {
+            // Parse /proc/net/dev
+            std::ifstream netFile("/proc/net/dev");
+            if (!netFile.is_open()) {
+                return metrics;
             }
 
-            // Aggregate all non-loopback interfaces
-            metrics.bytesRecv += bytesRecv;
-            metrics.packetsRecv += packetsRecv;
-            metrics.bytesSent += bytesSent;
-            metrics.packetsSent += packetsSent;
+            std::string line;
+            // Skip first two header lines
+            if (!std::getline(netFile, line)) return metrics;
+            if (!std::getline(netFile, line)) return metrics;
+
+            while (std::getline(netFile, line)) {
+                try {
+                    // Remove leading/trailing whitespace
+                    size_t start = line.find_first_not_of(" \t");
+                    if (start == std::string::npos) continue;
+
+                    std::istringstream iss(line.substr(start));
+                    std::string interface;
+                    uint64_t bytesRecv = 0, packetsRecv = 0, errsRecv = 0, dropRecv = 0;
+                    uint64_t bytesSent = 0, packetsSent = 0, errsSent = 0, dropSent = 0;
+                    uint64_t dummy = 0;
+
+                    // Parse interface name (ends with ':')
+                    if (!std::getline(iss, interface, ':')) continue;
+
+                    // Skip loopback interface
+                    if (interface == "lo") continue;
+
+                    // Parse receive stats
+                    if (!(iss >> bytesRecv >> packetsRecv >> errsRecv >> dropRecv)) continue;
+
+                    // Skip 4 fields (fifo, frame, compressed, multicast)
+                    for (int i = 0; i < 4; i++) {
+                        if (!(iss >> dummy)) break;
+                    }
+
+                    // Parse transmit stats
+                    if (!(iss >> bytesSent >> packetsSent >> errsSent >> dropSent)) continue;
+
+                    // Aggregate all non-loopback interfaces
+                    metrics.bytesRecv += bytesRecv;
+                    metrics.packetsRecv += packetsRecv;
+                    metrics.bytesSent += bytesSent;
+                    metrics.packetsSent += packetsSent;
+                } catch (const std::exception& e) {
+                    // Skip this interface on parse error
+                    continue;
+                }
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to collect network metrics: {}", e.what());
         }
 
         return metrics;
@@ -483,13 +520,8 @@ bool saveServiceHealth(const ServiceHealth& health) {
 // =============================================================================
 class ServiceHealthChecker {
 public:
-    ServiceHealthChecker() {
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-    }
-
-    ~ServiceHealthChecker() {
-        curl_global_cleanup();
-    }
+    ServiceHealthChecker() = default;
+    ~ServiceHealthChecker() = default;
 
     ServiceHealth checkService(const std::string& name, const std::string& url) {
         ServiceHealth health;
@@ -700,6 +732,14 @@ void handleSystemOverview(const HttpRequestPtr&, std::function<void(const HttpRe
 
     Json::Value response;
 
+    // Timestamp (ISO 8601 format)
+    auto now = std::chrono::system_clock::now();
+    auto now_time_t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm = *std::localtime(&now_time_t);
+    char timestamp[32];
+    std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &tm);
+    response["timestamp"] = timestamp;
+
     // CPU
     response["cpu"]["usagePercent"] = metrics.cpu.usagePercent;
     response["cpu"]["load1min"] = metrics.cpu.load1min;
@@ -730,46 +770,52 @@ void handleSystemOverview(const HttpRequestPtr&, std::function<void(const HttpRe
 
 // Get all services health
 void handleServicesHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
-    ServiceHealthChecker checker;
     Json::Value services(Json::arrayValue);
 
-    for (const auto& [name, url] : g_config.serviceEndpoints) {
-        ServiceHealth health = checker.checkService(name, url);
+    try {
+        ServiceHealthChecker checker;
 
-        Json::Value serviceJson;
-        serviceJson["name"] = health.serviceName;
+        for (const auto& [name, url] : g_config.serviceEndpoints) {
+            try {
+                ServiceHealth health = checker.checkService(name, url);
 
-        switch (health.status) {
-            case ServiceStatus::UP:
-                serviceJson["status"] = "UP";
-                break;
-            case ServiceStatus::DEGRADED:
-                serviceJson["status"] = "DEGRADED";
-                break;
-            case ServiceStatus::DOWN:
-                serviceJson["status"] = "DOWN";
-                break;
-            default:
-                serviceJson["status"] = "UNKNOWN";
+                Json::Value serviceJson;
+                serviceJson["serviceName"] = health.serviceName;
+
+                switch (health.status) {
+                    case ServiceStatus::UP:
+                        serviceJson["status"] = "UP";
+                        break;
+                    case ServiceStatus::DEGRADED:
+                        serviceJson["status"] = "DEGRADED";
+                        break;
+                    case ServiceStatus::DOWN:
+                        serviceJson["status"] = "DOWN";
+                        break;
+                    default:
+                        serviceJson["status"] = "UNKNOWN";
+                }
+
+                serviceJson["responseTimeMs"] = health.responseTimeMs;
+                if (!health.errorMessage.empty()) {
+                    serviceJson["errorMessage"] = health.errorMessage;
+                }
+
+                auto timeT = std::chrono::system_clock::to_time_t(health.checkedAt);
+                std::ostringstream oss;
+                oss << std::put_time(std::gmtime(&timeT), "%Y-%m-%d %H:%M:%S");
+                serviceJson["checkedAt"] = oss.str();
+
+                services.append(serviceJson);
+            } catch (const std::exception& e) {
+                spdlog::error("Failed to check service {}: {}", name, e.what());
+            }
         }
-
-        serviceJson["responseTimeMs"] = health.responseTimeMs;
-        if (!health.errorMessage.empty()) {
-            serviceJson["errorMessage"] = health.errorMessage;
-        }
-
-        auto timeT = std::chrono::system_clock::to_time_t(health.checkedAt);
-        std::ostringstream oss;
-        oss << std::put_time(std::gmtime(&timeT), "%Y-%m-%d %H:%M:%S");
-        serviceJson["checkedAt"] = oss.str();
-
-        services.append(serviceJson);
+    } catch (const std::exception& e) {
+        spdlog::error("Service health check failed: {}", e.what());
     }
 
-    Json::Value response;
-    response["services"] = services;
-
-    auto resp = HttpResponse::newHttpJsonResponse(response);
+    auto resp = HttpResponse::newHttpJsonResponse(services);
     callback(resp);
 }
 
@@ -809,6 +855,9 @@ void setupLogging() {
 // Main
 // =============================================================================
 int main() {
+    // Initialize CURL library (must be done before any threads)
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
     // Load configuration
     g_config.loadFromEnv();
 
@@ -838,18 +887,18 @@ int main() {
         resp->addHeader("Access-Control-Allow-Headers", "Content-Type");
     });
 
-    // Start background monitoring threads
-    spdlog::info("Starting background monitoring threads...");
-    g_monitor.start();
-
-    // Start server
+    // Start server (background monitoring disabled - metrics collected on-demand via API endpoints)
     spdlog::info("Starting HTTP server on port {}...", g_config.serverPort);
+    spdlog::warn("Background monitoring threads disabled - metrics collected on-demand");
+
     app().addListener("0.0.0.0", g_config.serverPort)
-        .setThreadNum(2)
+        .setThreadNum(4)  // Increased from 2 to handle concurrent requests
         .run();
 
-    // Cleanup
-    g_monitor.stop();
+    spdlog::info("Server stopped");
+
+    // Cleanup CURL library
+    curl_global_cleanup();
 
     return 0;
 }
