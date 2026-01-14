@@ -1,10 +1,11 @@
 // =============================================================================
 // ICAO Local PKD - Sync Service
 // =============================================================================
-// Version: 1.3.0
+// Version: 1.4.0
 // Description: DB-LDAP synchronization checker, certificate re-validation
 // =============================================================================
 // Changelog:
+//   v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
 //   v1.3.0 (2026-01-13): User-configurable settings UI, dynamic config reload
 //   v1.2.0 (2026-01-07): Remove interval sync, keep only daily scheduler
 //   v1.1.0 (2026-01-06): Daily scheduler at midnight, certificate re-validation
@@ -38,151 +39,18 @@
 #include <numeric>
 #include <algorithm>
 
+// Modularized components
+#include "common/types.h"
+#include "common/config.h"
+#include "reconciliation/reconciliation_engine.h"
+
 using namespace drogon;
+using namespace icao::sync;
 
 // =============================================================================
-// Global Configuration
+// Global Configuration Instance
 // =============================================================================
-struct Config {
-    // Server
-    int serverPort = 8083;
-
-    // Database
-    std::string dbHost = "postgres";
-    int dbPort = 5432;
-    std::string dbName = "pkd";
-    std::string dbUser = "pkd";
-    std::string dbPassword = "pkd123";
-
-    // LDAP (read)
-    std::string ldapHost = "haproxy";
-    int ldapPort = 389;
-
-    // LDAP (write - for reconciliation)
-    std::string ldapWriteHost = "openldap1";
-    int ldapWritePort = 389;
-    std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
-    std::string ldapBindPassword = "admin";
-    std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
-
-    // Sync settings
-    bool autoReconcile = true;
-    int maxReconcileBatchSize = 100;
-
-    // Daily scheduler settings
-    bool dailySyncEnabled = true;
-    int dailySyncHour = 0;      // 00:00 (midnight)
-    int dailySyncMinute = 0;
-    bool revalidateCertsOnSync = true;
-
-    void loadFromEnv() {
-        if (auto e = std::getenv("SERVER_PORT")) serverPort = std::stoi(e);
-        if (auto e = std::getenv("DB_HOST")) dbHost = e;
-        if (auto e = std::getenv("DB_PORT")) dbPort = std::stoi(e);
-        if (auto e = std::getenv("DB_NAME")) dbName = e;
-        if (auto e = std::getenv("DB_USER")) dbUser = e;
-        if (auto e = std::getenv("DB_PASSWORD")) dbPassword = e;
-        if (auto e = std::getenv("LDAP_HOST")) ldapHost = e;
-        if (auto e = std::getenv("LDAP_PORT")) ldapPort = std::stoi(e);
-        if (auto e = std::getenv("LDAP_WRITE_HOST")) ldapWriteHost = e;
-        if (auto e = std::getenv("LDAP_WRITE_PORT")) ldapWritePort = std::stoi(e);
-        if (auto e = std::getenv("LDAP_BIND_DN")) ldapBindDn = e;
-        if (auto e = std::getenv("LDAP_BIND_PASSWORD")) ldapBindPassword = e;
-        if (auto e = std::getenv("LDAP_BASE_DN")) ldapBaseDn = e;
-        if (auto e = std::getenv("AUTO_RECONCILE")) autoReconcile = (std::string(e) == "true");
-        if (auto e = std::getenv("MAX_RECONCILE_BATCH_SIZE")) maxReconcileBatchSize = std::stoi(e);
-        if (auto e = std::getenv("DAILY_SYNC_ENABLED")) dailySyncEnabled = (std::string(e) == "true");
-        if (auto e = std::getenv("DAILY_SYNC_HOUR")) dailySyncHour = std::stoi(e);
-        if (auto e = std::getenv("DAILY_SYNC_MINUTE")) dailySyncMinute = std::stoi(e);
-        if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) revalidateCertsOnSync = (std::string(e) == "true");
-    }
-
-    // Load user-configurable settings from database (defined after PgConnection)
-    bool loadFromDatabase();
-};
-
 Config g_config;
-
-// =============================================================================
-// Database Statistics
-// =============================================================================
-struct DbStats {
-    int cscaCount = 0;
-    int dscCount = 0;
-    int dscNcCount = 0;
-    int crlCount = 0;
-    int storedInLdapCount = 0;
-    std::map<std::string, std::map<std::string, int>> countryStats;
-};
-
-// =============================================================================
-// LDAP Statistics
-// =============================================================================
-struct LdapStats {
-    int cscaCount = 0;
-    int dscCount = 0;
-    int dscNcCount = 0;
-    int crlCount = 0;
-    int totalEntries = 0;
-    std::map<std::string, std::map<std::string, int>> countryStats;
-};
-
-// =============================================================================
-// Sync Result
-// =============================================================================
-struct SyncResult {
-    std::string status;  // SYNCED, DISCREPANCY, ERROR
-    DbStats dbStats;
-    LdapStats ldapStats;
-    int cscaDiscrepancy = 0;
-    int dscDiscrepancy = 0;
-    int dscNcDiscrepancy = 0;
-    int crlDiscrepancy = 0;
-    int totalDiscrepancy = 0;
-    int checkDurationMs = 0;
-    std::string errorMessage;
-    int syncStatusId = 0;
-};
-
-// =============================================================================
-// Reconciliation Structures
-// =============================================================================
-struct CertificateInfo {
-    int id = 0;
-    std::string certType;
-    std::string countryCode;
-    std::string subject;
-    std::string issuer;
-    std::vector<unsigned char> certData;
-    std::string ldapDn;  // Expected LDAP DN
-};
-
-struct ReconciliationFailure {
-    std::string certType;
-    std::string operation;  // ADD, DELETE
-    std::string countryCode;
-    std::string subject;
-    std::string error;
-};
-
-struct ReconciliationResult {
-    bool success = false;
-    int totalProcessed = 0;
-    int cscaAdded = 0;
-    int cscaDeleted = 0;
-    int dscAdded = 0;
-    int dscDeleted = 0;
-    int dscNcAdded = 0;
-    int dscNcDeleted = 0;
-    int crlAdded = 0;
-    int crlDeleted = 0;
-    int successCount = 0;
-    int failedCount = 0;
-    int durationMs = 0;
-    std::string status;  // COMPLETED, PARTIAL, FAILED
-    std::string errorMessage;
-    std::vector<ReconciliationFailure> failures;
-};
 
 // =============================================================================
 // PostgreSQL Connection
@@ -1165,17 +1033,89 @@ void handleDiscrepancies(const HttpRequestPtr&, std::function<void(const HttpRes
     callback(resp);
 }
 
-// Trigger reconciliation (placeholder for future implementation)
-void handleReconcile(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
-    // TODO: Implement reconciliation logic
-    // For now, just return a placeholder response
-    Json::Value response(Json::objectValue);
-    response["success"] = true;
-    response["message"] = "Reconciliation triggered (not yet implemented)";
-    response["autoReconcileEnabled"] = g_config.autoReconcile;
+// Trigger reconciliation
+void handleReconcile(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
+    // Check if auto reconcile is enabled
+    if (!g_config.autoReconcile) {
+        Json::Value error(Json::objectValue);
+        error["success"] = false;
+        error["error"] = "Auto reconcile is disabled";
+        auto resp = HttpResponse::newHttpJsonResponse(error);
+        resp->setStatusCode(k400BadRequest);
+        callback(resp);
+        return;
+    }
 
-    auto resp = HttpResponse::newHttpJsonResponse(response);
-    callback(resp);
+    // Check for dry-run parameter
+    bool dryRun = false;
+    if (auto param = req->getParameter("dryRun"); !param.empty()) {
+        dryRun = (param == "true" || param == "1");
+    }
+
+    try {
+        // Connect to PostgreSQL
+        PgConnection pgConn;
+        if (!pgConn.connect()) {
+            Json::Value error(Json::objectValue);
+            error["success"] = false;
+            error["error"] = "Database connection failed";
+            auto resp = HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(k500InternalServerError);
+            callback(resp);
+            return;
+        }
+
+        // Create reconciliation engine and perform reconciliation
+        ReconciliationEngine engine(g_config);
+        ReconciliationResult result = engine.performReconciliation(pgConn.get(), dryRun);
+
+        // Build JSON response
+        Json::Value response(Json::objectValue);
+        response["success"] = result.success;
+        response["message"] = dryRun ? "Dry-run reconciliation completed" : "Reconciliation completed";
+        response["dryRun"] = dryRun;
+
+        Json::Value summary(Json::objectValue);
+        summary["totalProcessed"] = result.totalProcessed;
+        summary["cscaAdded"] = result.cscaAdded;
+        summary["cscaDeleted"] = result.cscaDeleted;
+        summary["dscAdded"] = result.dscAdded;
+        summary["dscDeleted"] = result.dscDeleted;
+        summary["dscNcAdded"] = result.dscNcAdded;
+        summary["dscNcDeleted"] = result.dscNcDeleted;
+        summary["crlAdded"] = result.crlAdded;
+        summary["crlDeleted"] = result.crlDeleted;
+        summary["successCount"] = result.successCount;
+        summary["failedCount"] = result.failedCount;
+        summary["durationMs"] = result.durationMs;
+        summary["status"] = result.status;
+        response["summary"] = summary;
+
+        if (!result.failures.empty()) {
+            Json::Value failures(Json::arrayValue);
+            for (const auto& failure : result.failures) {
+                Json::Value f(Json::objectValue);
+                f["certType"] = failure.certType;
+                f["operation"] = failure.operation;
+                f["countryCode"] = failure.countryCode;
+                f["subject"] = failure.subject;
+                f["error"] = failure.error;
+                failures.append(f);
+            }
+            response["failures"] = failures;
+        }
+
+        auto resp = HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        Json::Value error(Json::objectValue);
+        error["success"] = false;
+        error["error"] = std::string("Reconciliation failed: ") + e.what();
+        auto resp = HttpResponse::newHttpJsonResponse(error);
+        resp->setStatusCode(k500InternalServerError);
+        callback(resp);
+    }
 }
 
 // Get sync configuration
