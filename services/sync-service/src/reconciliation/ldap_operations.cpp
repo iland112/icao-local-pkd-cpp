@@ -91,8 +91,11 @@ bool LdapOperations::addCertificate(LDAP* ld,
     }
     ocValues.push_back(nullptr);
 
-    std::vector<berval> certValues = {{const_cast<char*>(pemData.c_str()),
-                                      static_cast<ber_len_t>(pemData.size())}};
+    berval certValue;
+    certValue.bv_len = static_cast<ber_len_t>(pemData.size());
+    certValue.bv_val = const_cast<char*>(pemData.c_str());
+    std::vector<berval> certValues;
+    certValues.push_back(certValue);
     std::vector<berval*> certValuePtrs = {&certValues[0], nullptr};
 
     std::string cnValue = "cert-" + std::to_string(cert.id);

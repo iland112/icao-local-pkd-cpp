@@ -821,7 +821,7 @@ public:
 
                     // Wait until scheduled time
                     std::unique_lock<std::mutex> lock(dailyMutex_);
-                    bool signaled = dailyCv_.wait_for(lock, std::chrono::seconds(waitSeconds),
+                    dailyCv_.wait_for(lock, std::chrono::seconds(waitSeconds),
                                 [this]() { return !running_ || forceDailySync_; });
 
                     if (!running_) break;
