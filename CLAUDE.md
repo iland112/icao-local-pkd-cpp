@@ -1,6 +1,6 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.5.11
+**Version**: 1.6.0
 **Last Updated**: 2026-01-14
 **Status**: Production Ready
 
@@ -19,6 +19,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 | **LDAP Integration** | OpenLDAP 연동 (ICAO PKD DIT) | ✅ Complete |
 | **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | ✅ Complete |
 | **DB-LDAP Sync** | PostgreSQL-LDAP 동기화 모니터링 | ✅ Complete |
+| **Auto Reconcile** | DB-LDAP 불일치 자동 조정 (v1.6.0+) | ✅ Complete |
 | **React.js Frontend** | CSR 기반 웹 UI | ✅ Complete |
 
 ### Technology Stack
@@ -547,6 +548,84 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-14: Auto Reconcile Feature Complete Implementation (v1.6.0)
+
+**Auto Reconcile 완전 구현 (Phase 1-6 완료)**:
+
+**Phase 1: Core Reconciliation Logic**
+- 모듈화된 아키텍처 구현
+  - `src/reconciliation/ldap_operations.h/cpp` - LDAP 인증서 작업 클래스
+  - `src/reconciliation/reconciliation_engine.h/cpp` - 조정 엔진
+  - `src/common/types.h` - 공통 타입 정의
+  - `src/common/config.h` - 설정 관리
+- `LdapOperations` 클래스: 인증서 추가/삭제, DN 빌드, DER↔PEM 변환
+- `ReconciliationEngine` 클래스: PostgreSQL-LDAP 동기화 오케스트레이션
+- Batch processing (maxReconcileBatchSize: 100)
+- Dry-run mode 지원 (시뮬레이션)
+
+**Phase 2: Database Schema Migration**
+- `reconciliation_summary` 테이블: 고수준 실행 결과
+  - triggered_by (MANUAL/AUTO/DAILY_SYNC), status, counts, timing
+- `reconciliation_log` 테이블: 상세 작업 로그
+  - operation, cert details, status, errors, per-operation timing
+- Database logging 통합:
+  - `createReconciliationSummary()` - 시작 시 IN_PROGRESS 레코드 생성
+  - `logReconciliationOperation()` - 각 작업마다 로그 기록
+  - `updateReconciliationSummary()` - 완료 시 최종 결과 업데이트
+- 성능 최적화를 위한 인덱스 추가
+
+**Phase 3: API Endpoints**
+- `GET /api/sync/reconcile/history` - 페이지네이션 및 필터링 지원
+  - Query params: limit, offset, status, triggeredBy
+- `GET /api/sync/reconcile/{id}` - 상세 실행 정보 및 로그
+  - Summary + 모든 작업 로그 반환
+- HTTP 404 (not found), HTTP 400 (invalid params) 에러 처리
+
+**Phase 4: Frontend Integration**
+- `ReconciliationHistory.tsx` 컴포넌트 생성
+  - 테이블 뷰 (상태, 타임스탬프, 트리거 타입, 결과)
+  - 상태 아이콘 (✓ COMPLETED, ✗ FAILED, ⚠ PARTIAL, ⟳ IN_PROGRESS)
+  - 트리거 배지 (▶ MANUAL, ⚡ AUTO, 📅 DAILY_SYNC)
+  - 인증서 breakdown (CSCA/DSC/DSC_NC 추가 건수)
+  - Duration 포맷팅 (ms → seconds → minutes)
+- Details Dialog 모달:
+  - Summary 카드 (상태, 트리거, 건수, 소요시간)
+  - Results breakdown (성공/실패/추가된 인증서)
+  - Operation logs 테이블 (스크롤 지원)
+  - Per-operation 상태 및 타이밍 표시
+  - 실패한 작업 하이라이트
+- SyncDashboard에 통합 (Revalidation History와 Info 섹션 사이)
+
+**Phase 5: Daily Scheduler Integration**
+- Daily sync tasks에 Step 3 추가: Auto reconcile
+- 트리거 조건: `autoReconcile` enabled AND `discrepancies > 0`
+- `triggeredBy='DAILY_SYNC'` 로 소스 추적
+- `sync_status_id`와 연결하여 audit trail 제공
+- 불일치가 없으면 reconciliation 건너뛰기 (불필요한 작업 방지)
+- 에러 발생 시 daily sync 중단하지 않음
+
+**Phase 6: Testing and Documentation**
+- Docker 빌드: SUCCESSFUL (모든 phase)
+- `docs/AUTO_RECONCILE_DESIGN.md` - 12개 섹션, 2230+ 줄 설계 문서
+- `docs/AUTO_RECONCILE_IMPLEMENTATION.md` - 구현 완료 요약
+- CLAUDE.md 업데이트 (v1.6.0)
+
+**주요 기능**:
+- ✅ 자동화된 데이터 일관성 유지 (PostgreSQL ↔ LDAP)
+- ✅ 전체 Audit Trail (모든 작업의 상세 로그 및 히스토리)
+- ✅ 사용자 친화적 UI (직관적인 히스토리 및 상세 정보)
+- ✅ Daily Scheduler 통합 (일일 동기화 워크플로우)
+- ✅ 모듈화된 아키텍처 (유지보수 및 확장 가능)
+- ✅ Production Ready (완전한 에러 처리 및 로깅)
+
+**커밋 히스토리**:
+- 72b2802: refactor(sync): Integrate ReconciliationEngine into main.cpp
+- 351d8d4: fix(sync): Fix berval initialization and unused variable warning
+- 9c6f5fb: feat(sync): Add database schema and logging for Auto Reconcile
+- a8d0a95: feat(sync): Add reconciliation history API endpoints
+- 41be03d: feat(sync): Add reconciliation history frontend UI
+- ae6cd07: feat(sync): Integrate auto reconcile with daily sync scheduler
 
 ### 2026-01-14: Frontend Build Workflow Automation & MANUAL Mode localStorage Bug Fix (v1.5.11)
 
