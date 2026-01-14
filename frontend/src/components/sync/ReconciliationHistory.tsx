@@ -223,13 +223,13 @@ export function ReconciliationHistory() {
       {/* Details Dialog */}
       {selectedItem && (
         <Dialog
-          open={true}
+          isOpen={true}
           onClose={() => {
             setSelectedItem(null);
             setLogs([]);
           }}
           title={`자동 조정 상세 정보 #${selectedItem.id}`}
-          maxWidth="4xl"
+          size="4xl"
         >
           <div className="space-y-6">
             {/* Summary */}
