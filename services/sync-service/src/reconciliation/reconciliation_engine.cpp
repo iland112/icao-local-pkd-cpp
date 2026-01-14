@@ -50,7 +50,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
     std::vector<CertificateInfo> result;
 
     const char* query = R"(
-        SELECT id, certificate_type, country_code, subject, issuer, certificate_data
+        SELECT id, certificate_type, country_code, subject_dn, issuer_dn, certificate_data
         FROM certificate
         WHERE certificate_type = $1
           AND stored_in_ldap = FALSE
