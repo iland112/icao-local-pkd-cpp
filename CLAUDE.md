@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
 **Version**: 1.6.0
-**Last Updated**: 2026-01-14
+**Last Updated**: 2026-01-15
 **Status**: Production Ready
 
 ---
@@ -20,6 +20,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 | **Passive Authentication** | ICAO 9303 PA 검증 (SOD, DG 해시) | ✅ Complete |
 | **DB-LDAP Sync** | PostgreSQL-LDAP 동기화 모니터링 | ✅ Complete |
 | **Auto Reconcile** | DB-LDAP 불일치 자동 조정 (v1.6.0+) | ✅ Complete |
+| **Certificate Search** | LDAP 인증서 검색 및 내보내기 (v1.6.0+) | ✅ Complete |
 | **React.js Frontend** | CSR 기반 웹 UI | ✅ Complete |
 
 ### Technology Stack
@@ -176,7 +177,7 @@ icao-local-pkd/
 |---------|-----|
 | Frontend | http://localhost:3000 |
 | **API Gateway** | **http://localhost:8080/api** |
-| ├─ PKD Management | http://localhost:8080/api/upload, /api/health |
+| ├─ PKD Management | http://localhost:8080/api/upload, /api/health, /api/certificates |
 | ├─ PA Service | http://localhost:8080/api/pa/* |
 | └─ Sync Service | http://localhost:8080/api/sync/* |
 | HAProxy Stats | http://localhost:8404 |
@@ -203,6 +204,10 @@ icao-local-pkd/
 | GET | `/api/health` | Application health |
 | GET | `/api/health/database` | PostgreSQL status |
 | GET | `/api/health/ldap` | LDAP status |
+| **GET** | **`/api/certificates/search`** | **Search certificates (v1.6.0)** |
+| GET | `/api/certificates/detail` | Get certificate details by DN |
+| GET | `/api/certificates/export/file` | Export single certificate (DER/PEM) |
+| GET | `/api/certificates/export/country` | Export country certificates (ZIP) |
 
 ### PA Service (via Gateway)
 
@@ -548,6 +553,53 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-15: Certificate Search Feature - Scope Resolution & LDAP Auto-Reconnect (v1.6.0)
+
+**Certificate Search 기능 컴파일 오류 수정 및 LDAP 연결 안정화**:
+
+**Issue 1: Compilation Error - Scope Resolution**
+- **문제**: 빌드 실패 - `'certificateService' was not declared in this scope`
+- **원인**: 전역 변수 `certificateService`를 익명 네임스페이스 내부에서 스코프 지정 없이 접근
+- **해결**: 4곳에 전역 스코프 연산자 `::` 추가
+  - [main.cpp:5659](services/pkd-management/src/main.cpp#L5659): `::certificateService->searchCertificates()`
+  - [main.cpp:5738](services/pkd-management/src/main.cpp#L5738): `::certificateService->getCertificateDetail()`
+  - [main.cpp:5820](services/pkd-management/src/main.cpp#L5820): `::certificateService->exportCertificateFile()`
+  - [main.cpp:5878](services/pkd-management/src/main.cpp#L5878): `::certificateService->exportCountryCertificates()`
+
+**Issue 2: LDAP Connection Staleness**
+- **문제**: 프론트엔드에서 간헐적 500 에러 - `Can't contact LDAP server`
+- **원인**: `ensureConnected()`가 포인터만 체크, 실제 연결 상태 미검증
+- **해결**: LDAP whoami 연산으로 연결 상태 실제 테스트 및 자동 재연결
+  ```cpp
+  void ensureConnected() {
+      if (ldap_) {
+          struct berval* authzId = nullptr;
+          int rc = ldap_whoami_s(ldap_, &authzId, nullptr, nullptr);
+          if (rc == LDAP_SUCCESS) {
+              if (authzId) ber_bvfree(authzId);
+              return;  // Connection alive
+          }
+          // Connection stale - reconnect
+          disconnect();
+      }
+      if (!ldap_) connect();
+  }
+  ```
+
+**Test Results**:
+- ✅ 즉시 검색: success=true
+- ✅ 10초 후: success=true
+- ✅ 60초 후: success=true (자동 재연결 검증)
+- ✅ 프론트엔드: 500 에러 해결
+
+**배포**:
+- Backend: v1.6.0 CERTIFICATE-SEARCH-CLEAN-ARCH
+- Status: ✅ Fully Operational
+
+**문서**:
+- [CERTIFICATE_SEARCH_STATUS.md](docs/CERTIFICATE_SEARCH_STATUS.md) - 이슈 해결 내역 추가
+- [CERTIFICATE_SEARCH_QUICKSTART.md](docs/CERTIFICATE_SEARCH_QUICKSTART.md) - 사용 가이드
 
 ### 2026-01-14: Auto Reconcile Feature Complete Implementation (v1.6.0)
 

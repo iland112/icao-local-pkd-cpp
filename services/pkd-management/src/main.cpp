@@ -59,6 +59,14 @@
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
+// Clean Architecture layers
+#include "domain/models/certificate.h"
+#include "repositories/ldap_certificate_repository.h"
+#include "services/certificate_service.h"
+
+// Global certificate service (initialized in main(), used by all routes)
+std::shared_ptr<services::CertificateService> certificateService;
+
 namespace {
 
 /**
@@ -5598,6 +5606,308 @@ paths:
         {drogon::Get}
     );
 
+    // ==========================================================================
+    // Certificate Search APIs
+    // ==========================================================================
+
+    // GET /api/certificates/search - Search certificates from LDAP
+    app.registerHandler(
+        "/api/certificates/search",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                // Parse query parameters
+                std::string country = req->getOptionalParameter<std::string>("country").value_or("");
+                std::string certTypeStr = req->getOptionalParameter<std::string>("certType").value_or("");
+                std::string validityStr = req->getOptionalParameter<std::string>("validity").value_or("all");
+                std::string searchTerm = req->getOptionalParameter<std::string>("searchTerm").value_or("");
+                int limit = req->getOptionalParameter<int>("limit").value_or(50);
+                int offset = req->getOptionalParameter<int>("offset").value_or(0);
+
+                // Validate limit (max 200)
+                if (limit > 200) limit = 200;
+                if (limit < 1) limit = 50;
+                if (offset < 0) offset = 0;
+
+                spdlog::info("Certificate search: country={}, certType={}, validity={}, search={}, limit={}, offset={}",
+                            country, certTypeStr, validityStr, searchTerm, limit, offset);
+
+                // Build search criteria
+                domain::models::CertificateSearchCriteria criteria;
+                if (!country.empty()) criteria.country = country;
+                if (!searchTerm.empty()) criteria.searchTerm = searchTerm;
+                criteria.limit = limit;
+                criteria.offset = offset;
+
+                // Parse certificate type
+                if (!certTypeStr.empty()) {
+                    if (certTypeStr == "CSCA") criteria.certType = domain::models::CertificateType::CSCA;
+                    else if (certTypeStr == "DSC") criteria.certType = domain::models::CertificateType::DSC;
+                    else if (certTypeStr == "DSC_NC") criteria.certType = domain::models::CertificateType::DSC_NC;
+                    else if (certTypeStr == "CRL") criteria.certType = domain::models::CertificateType::CRL;
+                    else if (certTypeStr == "ML") criteria.certType = domain::models::CertificateType::ML;
+                }
+
+                // Parse validity status
+                if (validityStr != "all") {
+                    if (validityStr == "VALID") criteria.validity = domain::models::ValidityStatus::VALID;
+                    else if (validityStr == "EXPIRED") criteria.validity = domain::models::ValidityStatus::EXPIRED;
+                    else if (validityStr == "NOT_YET_VALID") criteria.validity = domain::models::ValidityStatus::NOT_YET_VALID;
+                }
+
+                // Execute search
+                auto result = ::certificateService->searchCertificates(criteria);
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["total"] = result.total;
+                response["limit"] = result.limit;
+                response["offset"] = result.offset;
+
+                Json::Value certs(Json::arrayValue);
+                for (const auto& cert : result.certificates) {
+                    Json::Value certJson;
+                    certJson["dn"] = cert.getDn();
+                    certJson["cn"] = cert.getCn();
+                    certJson["sn"] = cert.getSn();
+                    certJson["country"] = cert.getCountry();
+                    certJson["certType"] = cert.getCertTypeString();
+                    certJson["subjectDn"] = cert.getSubjectDn();
+                    certJson["issuerDn"] = cert.getIssuerDn();
+                    certJson["fingerprint"] = cert.getFingerprint();
+                    certJson["isSelfSigned"] = cert.isSelfSigned();
+
+                    // Convert time_point to ISO 8601 string
+                    auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
+                    auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
+                    char timeBuf[32];
+                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
+                    certJson["validFrom"] = timeBuf;
+                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
+                    certJson["validTo"] = timeBuf;
+
+                    // Validity status
+                    auto status = cert.getValidityStatus();
+                    if (status == domain::models::ValidityStatus::VALID) certJson["validity"] = "VALID";
+                    else if (status == domain::models::ValidityStatus::EXPIRED) certJson["validity"] = "EXPIRED";
+                    else if (status == domain::models::ValidityStatus::NOT_YET_VALID) certJson["validity"] = "NOT_YET_VALID";
+                    else certJson["validity"] = "UNKNOWN";
+
+                    certs.append(certJson);
+                }
+                response["certificates"] = certs;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate search error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/certificates/detail - Get certificate details
+    app.registerHandler(
+        "/api/certificates/detail",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                std::string dn = req->getOptionalParameter<std::string>("dn").value_or("");
+
+                if (dn.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "DN parameter is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                spdlog::info("Certificate detail request: dn={}", dn);
+
+                // Get certificate details
+                auto cert = ::certificateService->getCertificateDetail(dn);
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["dn"] = cert.getDn();
+                response["cn"] = cert.getCn();
+                response["sn"] = cert.getSn();
+                response["country"] = cert.getCountry();
+                response["certType"] = cert.getCertTypeString();
+                response["subjectDn"] = cert.getSubjectDn();
+                response["issuerDn"] = cert.getIssuerDn();
+                response["fingerprint"] = cert.getFingerprint();
+                response["isSelfSigned"] = cert.isSelfSigned();
+
+                // Convert time_point to ISO 8601 string
+                auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
+                auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
+                char timeBuf[32];
+                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
+                response["validFrom"] = timeBuf;
+                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
+                response["validTo"] = timeBuf;
+
+                // Validity status
+                auto status = cert.getValidityStatus();
+                if (status == domain::models::ValidityStatus::VALID) response["validity"] = "VALID";
+                else if (status == domain::models::ValidityStatus::EXPIRED) response["validity"] = "EXPIRED";
+                else if (status == domain::models::ValidityStatus::NOT_YET_VALID) response["validity"] = "NOT_YET_VALID";
+                else response["validity"] = "UNKNOWN";
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate detail error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/certificates/export/file - Export single certificate file
+    app.registerHandler(
+        "/api/certificates/export/file",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                std::string dn = req->getOptionalParameter<std::string>("dn").value_or("");
+                std::string format = req->getOptionalParameter<std::string>("format").value_or("pem");
+
+                if (dn.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "DN parameter is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                if (format != "der" && format != "pem") {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Invalid format. Use 'der' or 'pem'";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                spdlog::info("Certificate export file: dn={}, format={}", dn, format);
+
+                // Export certificate
+                services::ExportFormat exportFormat = (format == "der") ?
+                    services::ExportFormat::DER : services::ExportFormat::PEM;
+
+                auto result = ::certificateService->exportCertificateFile(dn, exportFormat);
+
+                if (!result.success) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = result.errorMessage;
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Return binary file
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setBody(std::string(result.data.begin(), result.data.end()));
+                resp->setContentTypeCode(drogon::CT_NONE);
+                resp->addHeader("Content-Type", result.contentType);
+                resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate export file error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/certificates/export/country - Export all certificates by country (ZIP)
+    app.registerHandler(
+        "/api/certificates/export/country",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                std::string country = req->getOptionalParameter<std::string>("country").value_or("");
+                std::string format = req->getOptionalParameter<std::string>("format").value_or("pem");
+
+                if (country.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Country parameter is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                spdlog::info("Certificate export country: country={}, format={}", country, format);
+
+                // Export all certificates for country
+                services::ExportFormat exportFormat = (format == "der") ?
+                    services::ExportFormat::DER : services::ExportFormat::PEM;
+
+                auto result = ::certificateService->exportCountryCertificates(country, exportFormat);
+
+                if (!result.success) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = result.errorMessage;
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Return ZIP file
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setBody(std::string(result.data.begin(), result.data.end()));
+                resp->setContentTypeCode(drogon::CT_NONE);
+                resp->addHeader("Content-Type", result.contentType);
+                resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate export country error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Swagger UI redirect
     app.registerHandler(
         "/api/docs",
@@ -5627,11 +5937,26 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.5.10 AUTO-PROGRESS-DISPLAY (Build 20260113-190000) ======");
+    spdlog::info("====== ICAO Local PKD v1.6.0 CERTIFICATE-SEARCH-CLEAN-ARCH (Build 20260114-000000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
     try {
+        // Initialize Certificate Service (Clean Architecture)
+        // Certificate search base DN: dc=download + configured base DN (which already includes dc=pkd)
+        std::string certSearchBaseDn = "dc=download," + appConfig.ldapBaseDn;
+
+        repositories::LdapConfig ldapConfig(
+            "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort),
+            appConfig.ldapBindDn,
+            appConfig.ldapBindPassword,
+            certSearchBaseDn,
+            30
+        );
+        auto repository = std::make_shared<repositories::LdapCertificateRepository>(ldapConfig);
+        certificateService = std::make_shared<services::CertificateService>(repository);
+        spdlog::info("Certificate service initialized with LDAP repository (baseDN: {})", certSearchBaseDn);
+
         auto& app = drogon::app();
 
         // Server settings

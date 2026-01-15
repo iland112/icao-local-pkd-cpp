@@ -89,6 +89,10 @@ COPY services/pkd-management/src/ ./src/
 # DEBUG: Verify source code was copied correctly
 RUN echo "=== VERIFYING COPIED SOURCE CODE ===" && \
     grep "spdlog::info.*ICAO" ./src/main.cpp | head -5 && \
+    echo "=== CHECKING LAMBDA CAPTURES ===" && \
+    grep -n "registerHandler" ./src/main.cpp | grep -A 1 "certificates" | head -20 && \
+    echo "=== CHECKING certificateService DECLARATION ===" && \
+    grep -n "std::shared_ptr<services::CertificateService> certificateService" ./src/main.cpp && \
     echo "=== END VERIFICATION ==="
 
 # CRITICAL: Touch all source files to force CMake to recompile

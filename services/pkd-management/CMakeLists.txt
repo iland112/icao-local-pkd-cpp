@@ -46,6 +46,9 @@ find_library(LBER_LIBRARY lber REQUIRED)
 # UUID
 find_library(UUID_LIBRARY uuid REQUIRED)
 
+# libzip (for certificate export)
+find_package(libzip CONFIG REQUIRED)
+
 # =============================================================================
 # Main Application
 # =============================================================================
@@ -53,6 +56,9 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/processing_strategy.cpp
     src/ldif_processor.cpp
+    # Clean Architecture Layers
+    src/repositories/ldap_certificate_repository.cpp
+    src/services/certificate_service.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -68,6 +74,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     PostgreSQL::PostgreSQL
     nlohmann_json::nlohmann_json
     spdlog::spdlog
+    libzip::zip
     ${LDAP_LIBRARY}
     ${LBER_LIBRARY}
     ${UUID_LIBRARY}

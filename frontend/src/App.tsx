@@ -4,6 +4,7 @@ import { Layout } from '@/components/layout';
 import { ToastContainer } from '@/components/common';
 import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard } from '@/pages';
 import MonitoringDashboard from '@/pages/MonitoringDashboard';
+import CertificateSearch from '@/pages/CertificateSearch';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -23,6 +24,7 @@ function App() {
           <Route path="/" element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="upload" element={<FileUpload />} />
+            <Route path="pkd/certificates" element={<CertificateSearch />} />
             <Route path="upload-history" element={<UploadHistory />} />
             <Route path="upload/:uploadId" element={<UploadDetail />} />
             <Route path="upload-dashboard" element={<UploadDashboard />} />

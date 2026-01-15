@@ -13,6 +13,7 @@
       "name": "spdlog",
       "features": ["fmt"]
     },
+    "libzip",
     "catch2"
   ]
 }
