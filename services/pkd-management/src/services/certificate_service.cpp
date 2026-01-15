@@ -292,30 +292,35 @@ std::vector<uint8_t> CertificateService::createZipArchive(
         throw std::runtime_error("No certificates added to ZIP archive");
     }
 
-    // Close archive and get buffer
+    // Close archive to finalize ZIP data
     if (zip_close(archive) != 0) {
         zip_discard(archive);
         throw std::runtime_error("Failed to close ZIP archive");
     }
 
-    // Read ZIP data from source
+    // Get ZIP buffer info
     zip_stat_t stat;
-    zip_source_stat(src, &stat);
-
-    void* buffer = nullptr;
-    zip_int64_t size = zip_source_read(src, &buffer, stat.size);
-
-    if (size < 0) {
+    if (zip_source_stat(src, &stat) != 0) {
         zip_source_free(src);
-        throw std::runtime_error("Failed to read ZIP data");
+        throw std::runtime_error("Failed to get ZIP source stats");
     }
 
-    std::vector<uint8_t> zipData(
-        reinterpret_cast<const uint8_t*>(buffer),
-        reinterpret_cast<const uint8_t*>(buffer) + size
-    );
+    // Open source for reading
+    if (zip_source_open(src) != 0) {
+        zip_source_free(src);
+        throw std::runtime_error("Failed to open ZIP source for reading");
+    }
 
+    // Allocate buffer and read ZIP data
+    std::vector<uint8_t> zipData(stat.size);
+    zip_int64_t bytesRead = zip_source_read(src, zipData.data(), stat.size);
+
+    zip_source_close(src);
     zip_source_free(src);
+
+    if (bytesRead < 0 || static_cast<zip_uint64_t>(bytesRead) != stat.size) {
+        throw std::runtime_error("Failed to read complete ZIP data");
+    }
 
     spdlog::info("ZIP archive created - {} certificates added", addedCount);
     return zipData;
