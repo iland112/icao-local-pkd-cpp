@@ -232,16 +232,20 @@ std::vector<uint8_t> CertificateService::createZipArchive(
     const std::vector<std::string>& dns,
     ExportFormat format
 ) {
-    // Create in-memory ZIP archive
-    zip_source_t* src = zip_source_buffer_create(nullptr, 0, 0, nullptr);
-    if (!src) {
-        throw std::runtime_error("Failed to create ZIP source buffer");
+    // Use temporary file for ZIP creation (more reliable than buffer source)
+    char tmpFilename[] = "/tmp/icao-export-XXXXXX";
+    int tmpFd = mkstemp(tmpFilename);
+    if (tmpFd == -1) {
+        throw std::runtime_error("Failed to create temporary file");
     }
+    close(tmpFd);  // libzip will reopen it
 
-    zip_t* archive = zip_open_from_source(src, ZIP_CREATE, nullptr);
+    // Create ZIP archive in temporary file
+    int error = 0;
+    zip_t* archive = zip_open(tmpFilename, ZIP_CREATE | ZIP_TRUNCATE, &error);
     if (!archive) {
-        zip_source_free(src);
-        throw std::runtime_error("Failed to create ZIP archive");
+        unlink(tmpFilename);
+        throw std::runtime_error("Failed to create ZIP archive: " + std::to_string(error));
     }
 
     // Add each certificate to ZIP
@@ -259,12 +263,20 @@ std::vector<uint8_t> CertificateService::createZipArchive(
             // Generate filename
             std::string filename = generateFilenameFromDn(dn, format);
 
-            // Add to ZIP
+            // Copy data to heap (ZIP will own and free it)
+            void* bufferCopy = malloc(certData.size());
+            if (!bufferCopy) {
+                spdlog::warn("Failed to allocate memory for: {}", filename);
+                continue;
+            }
+            memcpy(bufferCopy, certData.data(), certData.size());
+
+            // Add to ZIP with ownership transfer
             zip_source_t* fileSrc = zip_source_buffer(
                 archive,
-                certData.data(),
+                bufferCopy,
                 certData.size(),
-                0  // Do not free buffer (local variable)
+                1  // Free buffer when done
             );
 
             if (fileSrc) {
@@ -281,6 +293,8 @@ std::vector<uint8_t> CertificateService::createZipArchive(
                     zip_source_free(fileSrc);
                     spdlog::warn("Failed to add file to ZIP: {}", filename);
                 }
+            } else {
+                free(bufferCopy);  // Free if source creation failed
             }
         } catch (const std::exception& e) {
             spdlog::warn("Skipping certificate due to error: {} - {}", dn, e.what());
@@ -289,40 +303,42 @@ std::vector<uint8_t> CertificateService::createZipArchive(
 
     if (addedCount == 0) {
         zip_discard(archive);
+        unlink(tmpFilename);
         throw std::runtime_error("No certificates added to ZIP archive");
     }
 
     // Close archive to finalize ZIP data
     if (zip_close(archive) != 0) {
         zip_discard(archive);
+        unlink(tmpFilename);
         throw std::runtime_error("Failed to close ZIP archive");
     }
 
-    // Get ZIP buffer info
-    zip_stat_t stat;
-    if (zip_source_stat(src, &stat) != 0) {
-        zip_source_free(src);
-        throw std::runtime_error("Failed to get ZIP source stats");
+    // Read ZIP file into memory
+    FILE* f = fopen(tmpFilename, "rb");
+    if (!f) {
+        unlink(tmpFilename);
+        throw std::runtime_error("Failed to open temporary ZIP file");
     }
 
-    // Open source for reading
-    if (zip_source_open(src) != 0) {
-        zip_source_free(src);
-        throw std::runtime_error("Failed to open ZIP source for reading");
-    }
+    // Get file size
+    fseek(f, 0, SEEK_END);
+    long fileSize = ftell(f);
+    fseek(f, 0, SEEK_SET);
 
-    // Allocate buffer and read ZIP data
-    std::vector<uint8_t> zipData(stat.size);
-    zip_int64_t bytesRead = zip_source_read(src, zipData.data(), stat.size);
+    // Read entire file
+    std::vector<uint8_t> zipData(fileSize);
+    size_t bytesRead = fread(zipData.data(), 1, fileSize, f);
+    fclose(f);
 
-    zip_source_close(src);
-    zip_source_free(src);
+    // Clean up temporary file
+    unlink(tmpFilename);
 
-    if (bytesRead < 0 || static_cast<zip_uint64_t>(bytesRead) != stat.size) {
+    if (bytesRead != static_cast<size_t>(fileSize)) {
         throw std::runtime_error("Failed to read complete ZIP data");
     }
 
-    spdlog::info("ZIP archive created - {} certificates added", addedCount);
+    spdlog::info("ZIP archive created - {} certificates added, {} bytes", addedCount, zipData.size());
     return zipData;
 }
 

@@ -5979,7 +5979,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.6.0 CERTIFICATE-SEARCH-CLEAN-ARCH (Build 20260114-000000) ======");
+    spdlog::info("====== ICAO Local PKD v1.6.1 EXPORT-TMPFILE (Build 20260115-184500) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
