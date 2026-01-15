@@ -67,6 +67,10 @@
 // Global certificate service (initialized in main(), used by all routes)
 std::shared_ptr<services::CertificateService> certificateService;
 
+// Global cache for available countries (populated on startup)
+std::set<std::string> cachedCountries;
+std::mutex countriesCacheMutex;
+
 namespace {
 
 /**
@@ -5908,6 +5912,44 @@ paths:
         {drogon::Get}
     );
 
+    // GET /api/certificates/countries - Get list of available countries (from cache)
+    app.registerHandler(
+        "/api/certificates/countries",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                spdlog::debug("Fetching list of available countries from cache");
+
+                // Read from cache (thread-safe)
+                std::lock_guard<std::mutex> lock(countriesCacheMutex);
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["count"] = static_cast<int>(cachedCountries.size());
+
+                Json::Value countryList(Json::arrayValue);
+                for (const auto& country : cachedCountries) {
+                    countryList.append(country);
+                }
+                response["countries"] = countryList;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Error fetching countries: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Swagger UI redirect
     app.registerHandler(
         "/api/docs",
@@ -5956,6 +5998,45 @@ int main(int argc, char* argv[]) {
         auto repository = std::make_shared<repositories::LdapCertificateRepository>(ldapConfig);
         certificateService = std::make_shared<services::CertificateService>(repository);
         spdlog::info("Certificate service initialized with LDAP repository (baseDN: {})", certSearchBaseDn);
+
+        // Populate countries cache on startup
+        spdlog::info("Populating countries cache...");
+        try {
+            std::lock_guard<std::mutex> lock(countriesCacheMutex);
+            int batchSize = 200;
+            int offset = 0;
+            int totalProcessed = 0;
+
+            // Scan all certificates (no limit)
+            while (true) {
+                domain::models::CertificateSearchCriteria criteria;
+                criteria.limit = batchSize;
+                criteria.offset = offset;
+
+                auto result = certificateService->searchCertificates(criteria);
+
+                for (const auto& cert : result.certificates) {
+                    if (!cert.getCountry().empty()) {
+                        cachedCountries.insert(cert.getCountry());
+                    }
+                }
+
+                totalProcessed += result.certificates.size();
+
+                // Break if we got fewer results than requested (end of data)
+                if (result.certificates.size() < batchSize) {
+                    break;
+                }
+
+                offset += batchSize;
+            }
+
+            spdlog::info("Countries cache populated: {} countries from {} certificates",
+                cachedCountries.size(), totalProcessed);
+        } catch (const std::exception& e) {
+            spdlog::error("Failed to populate countries cache: {}", e.what());
+            spdlog::warn("Countries API will return empty list");
+        }
 
         auto& app = drogon::app();
 

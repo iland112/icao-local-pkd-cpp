@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Calendar, Shield, Key } from 'lucide-react';
+import { getFlagSvgPath } from '@/utils/countryCode';
 
 interface Certificate {
   dn: string;
@@ -30,6 +31,7 @@ const CertificateSearch: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [countries, setCountries] = useState<string[]>([]);
 
   // Search criteria
   const [criteria, setCriteria] = useState<SearchCriteria>({
@@ -45,6 +47,20 @@ const CertificateSearch: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+
+  // Fetch available countries
+  const fetchCountries = async () => {
+    try {
+      const response = await fetch('/api/certificates/countries');
+      const data = await response.json();
+
+      if (data.success) {
+        setCountries(data.countries);
+      }
+    } catch (err) {
+      console.error('Failed to fetch countries:', err);
+    }
+  };
 
   // Search certificates
   const searchCertificates = async () => {
@@ -78,6 +94,7 @@ const CertificateSearch: React.FC = () => {
 
   // Initial load
   useEffect(() => {
+    fetchCountries();
     searchCertificates();
   }, [criteria.offset]);
 
@@ -218,14 +235,31 @@ const CertificateSearch: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     국가 코드
                   </label>
-                  <input
-                    type="text"
-                    placeholder="US, KR, AE..."
+                  <select
                     value={criteria.country}
-                    onChange={(e) => setCriteria({ ...criteria, country: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    maxLength={2}
-                  />
+                    onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">전체 국가</option>
+                    {countries.map((country) => (
+                      <option key={country} value={country}>
+                        {country}
+                      </option>
+                    ))}
+                  </select>
+                  {criteria.country && getFlagSvgPath(criteria.country) && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <img
+                        src={getFlagSvgPath(criteria.country)}
+                        alt={criteria.country}
+                        className="w-8 h-6 object-cover rounded shadow-sm border border-gray-300"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="text-sm font-medium text-gray-700">{criteria.country}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Certificate Type */}
