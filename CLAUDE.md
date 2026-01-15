@@ -555,6 +555,65 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 
 ## Change Log
 
+### 2026-01-15: Countries API Performance Optimization - PostgreSQL Implementation (v1.6.2)
+
+**국가 목록 API 성능 개선: LDAP → PostgreSQL 전환**:
+
+**문제점**:
+- Certificate Search 페이지 첫 로딩 시 79초 소요
+- `/api/certificates/countries` API가 30,226개 LDAP 인증서 전체 스캔
+- 사용자 경험: 페이지 로딩 시 긴 대기 시간
+
+**성능 분석**:
+```bash
+# LDAP 방식 (기존)
+time curl /api/certificates/countries
+# Result: 79초 (30,226개 인증서 스캔)
+
+# PostgreSQL 방식 (개선)
+time curl /api/certificates/countries
+# Result: 67ms (DISTINCT 쿼리)
+
+# 개선율: 99.9% (1,179배 빠름)
+```
+
+**LDAP 인덱스 시도**:
+- `olcDbIndex: c eq` 추가 시도
+- 결과: 특정 국가 검색은 빠름 (227ms → 31ms)
+- 한계: LDAP는 DISTINCT aggregate 연산 미지원
+- 결론: 국가 목록 조회에는 PostgreSQL이 적합
+
+**최종 구현** ([main.cpp:5915-5983](services/pkd-management/src/main.cpp#L5915-L5983)):
+```cpp
+// PostgreSQL DISTINCT 쿼리 사용
+PGconn* conn = PQconnectdb(conninfo.c_str());
+const char* query = "SELECT DISTINCT country_code FROM certificate "
+                   "WHERE country_code IS NOT NULL "
+                   "ORDER BY country_code";
+PGresult* res = PQexec(conn, query);
+
+// 평균 응답 시간: 40ms (67ms → 32-35ms)
+// PostgreSQL Query Plan: HashAggregate (24kB Memory)
+```
+
+**개선 결과**:
+- ✅ 응답 시간: 79초 → 40ms (1,975배 개선)
+- ✅ 캐시 불필요 (실시간 최신 데이터)
+- ✅ 서버 시작 시간: 0초 유지
+- ✅ 일관된 성능 (30-70ms 범위)
+
+**기술적 선택 근거**:
+| 방법 | 속도 | 장점 | 단점 |
+|------|------|------|------|
+| **PostgreSQL** ✅ | **40ms** | DISTINCT 최적화, 실시간 | DB 의존성 |
+| LDAP 스캔 | 79,000ms | LDAP 일관성 | 너무 느림 |
+| 메모리 캐시 | 첫 59초, 이후 <1ms | 빠른 응답 | 재시작 시 초기화 |
+| Redis 캐시 | <10ms | 재시작 후 유지 | 인프라 추가 |
+
+**커밋**: [미정]
+
+---
+
 ### 2026-01-15: Certificate Export Crash Fix & LDAP Query Investigation (v1.6.1)
 
 **인증서 Export ZIP 생성 버그 수정 및 LDAP 조회 메커니즘 검증**:

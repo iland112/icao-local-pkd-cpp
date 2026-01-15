@@ -262,6 +262,84 @@ ldap_sasl_bind_s(
 
 **Status**: ✅ Verified - Application LDAP access working correctly
 
+### Issue 5: Countries API Performance - LDAP vs PostgreSQL (2026-01-15)
+
+**Problem**: Initial page load took 79 seconds due to LDAP full scan
+```
+Frontend: Certificate Search page loading spinner for 79 seconds
+API: /api/certificates/countries scanning 30,226 LDAP entries
+User Experience: Unacceptable delay on first page load
+```
+
+**Root Cause**: On-demand LDAP scan for country list
+```cpp
+// Previous implementation - LDAP full scan
+while (true) {
+    auto result = certificateService->searchCertificates(criteria);
+    for (const auto& cert : result.certificates) {
+        countries.insert(cert.getCountry());
+    }
+    criteria.offset += criteria.limit;
+}
+// Time: 79 seconds for 30,226 certificates
+```
+
+**LDAP Index Investigation**:
+- Added `olcDbIndex: c eq` to OpenLDAP configuration
+- Result: Country-specific searches improved (227ms → 31ms)
+- Issue: LDAP index doesn't help DISTINCT queries (aggregate operation)
+- Conclusion: LDAP not suitable for this use case
+
+**Performance Comparison**:
+| Method | Time | Notes |
+|--------|------|-------|
+| LDAP scan | 79,000ms | Full certificate scan required |
+| PostgreSQL | 67ms | `SELECT DISTINCT country_code` with HashAggregate |
+| **Improvement** | **99.9%** | **1,179x faster** |
+
+**Final Solution**: PostgreSQL-based country list ✅
+```cpp
+// Connect to PostgreSQL
+PGconn* conn = PQconnectdb(conninfo.c_str());
+
+// Query distinct countries (fast: ~67ms)
+const char* query = "SELECT DISTINCT country_code FROM certificate "
+                   "WHERE country_code IS NOT NULL "
+                   "ORDER BY country_code";
+
+PGresult* res = PQexec(conn, query);
+
+// Build JSON response
+int rowCount = PQntuples(res);
+for (int i = 0; i < rowCount; i++) {
+    std::string country = PQgetvalue(res, i, 0);
+    countryList.append(country);
+}
+```
+
+**Test Results**:
+```bash
+# Test 1 (first call): 70ms
+# Test 2-5 (subsequent): 32-35ms average
+# Average: ~40ms (consistent performance)
+```
+
+**Benefits**:
+- ✅ 1,975x faster than LDAP (79s → 40ms)
+- ✅ No cache needed (instant response)
+- ✅ Always returns latest data
+- ✅ Server starts instantly (no initialization)
+- ✅ Consistent performance (30-70ms)
+
+**PostgreSQL Query Plan**:
+```
+HashAggregate  (rows=92, Memory: 24kB)
+└── Seq Scan on certificate  (rows=30637)
+Execution Time: 67.049 ms
+```
+
+**Status**: ✅ Fixed and deployed (v1.6.2 COUNTRIES-POSTGRESQL)
+
 ---
 
 ## ⚠️ Known Limitation

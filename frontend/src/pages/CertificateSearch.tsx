@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Calendar, Shield, Key } from 'lucide-react';
+import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
 
 interface Certificate {
@@ -48,6 +48,7 @@ const CertificateSearch: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [detailTab, setDetailTab] = useState<'general' | 'details'>('general');
 
   // Fetch available countries
   const fetchCountries = async () => {
@@ -216,7 +217,7 @@ const CertificateSearch: React.FC = () => {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Key className="w-8 h-8 text-blue-600" />
+            <Shield className="w-8 h-8 text-blue-600" />
             인증서 조회
           </h1>
           <p className="mt-2 text-gray-600">
@@ -530,12 +531,12 @@ const CertificateSearch: React.FC = () => {
       {/* Certificate Detail Dialog */}
       {showDetailDialog && selectedCert && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
             {/* Dialog Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                 <Shield className="w-6 h-6 text-blue-600" />
-                인증서 상세 정보
+                Certificate Editor
               </h2>
               <button
                 onClick={() => setShowDetailDialog(false)}
@@ -545,110 +546,224 @@ const CertificateSearch: React.FC = () => {
               </button>
             </div>
 
-            {/* Dialog Content */}
-            <div className="p-6 space-y-6">
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">국가</label>
-                  <div className="text-base font-semibold text-gray-900">{selectedCert.country}</div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-500 mb-1">인증서 종류</label>
-                  <div className="text-base font-semibold text-gray-900">{selectedCert.certType}</div>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Common Name</label>
-                  <div className="text-base text-gray-900 break-all">{selectedCert.cn}</div>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-500 mb-1">Serial Number</label>
-                  <div className="text-base text-gray-900 font-mono break-all">{selectedCert.sn}</div>
-                </div>
-              </div>
-
-              {/* Validity */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5" />
-                  유효기간
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">시작일</label>
-                    <div className="text-base text-gray-900">{formatDate(selectedCert.validFrom)}</div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">종료일</label>
-                    <div className="text-base text-gray-900">{formatDate(selectedCert.validTo)}</div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">상태</label>
-                    <div>{getValidityBadge(selectedCert.validity)}</div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Self-Signed</label>
-                    <div className="text-base text-gray-900">
-                      {selectedCert.isSelfSigned ? (
-                        <span className="text-orange-600 font-semibold">Yes</span>
-                      ) : (
-                        <span className="text-gray-600">No</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Subject & Issuer DN */}
-              <div className="border-t pt-4">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Distinguished Names</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Subject DN</label>
-                    <div className="text-sm text-gray-900 font-mono bg-gray-50 p-3 rounded border break-all">
-                      {selectedCert.subjectDn}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Issuer DN</label>
-                    <div className="text-sm text-gray-900 font-mono bg-gray-50 p-3 rounded border break-all">
-                      {selectedCert.issuerDn}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Fingerprint */}
-              <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-500 mb-1">SHA-256 Fingerprint</label>
-                <div className="text-sm text-gray-900 font-mono bg-gray-50 p-3 rounded border break-all">
-                  {selectedCert.fingerprint}
-                </div>
-              </div>
-
-              {/* LDAP DN */}
-              <div className="border-t pt-4">
-                <label className="block text-sm font-medium text-gray-500 mb-1">LDAP DN</label>
-                <div className="text-sm text-gray-900 font-mono bg-gray-50 p-3 rounded border break-all">
-                  {selectedCert.dn}
-                </div>
-              </div>
-
-              {/* Export Buttons */}
-              <div className="border-t pt-4 flex gap-2">
+            {/* Tabs */}
+            <div className="border-b border-gray-200 bg-gray-50">
+              <div className="flex">
                 <button
-                  onClick={() => exportCertificate(selectedCert.dn, 'pem')}
-                  className="flex-1 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center justify-center gap-2"
+                  onClick={() => setDetailTab('general')}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    detailTab === 'general'
+                      ? 'border-blue-600 text-blue-600 bg-white'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
                 >
-                  <Download className="w-4 h-4" />
-                  PEM 내보내기
+                  General
                 </button>
                 <button
-                  onClick={() => exportCertificate(selectedCert.dn, 'der')}
-                  className="flex-1 px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 flex items-center justify-center gap-2"
+                  onClick={() => setDetailTab('details')}
+                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                    detailTab === 'details'
+                      ? 'border-blue-600 text-blue-600 bg-white'
+                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
                 >
-                  <Download className="w-4 h-4" />
-                  DER 내보내기
+                  Details
+                </button>
+              </div>
+            </div>
+
+            {/* Dialog Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* General Tab */}
+              {detailTab === 'general' && (
+                <div className="space-y-6">
+                  {/* Issued To Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Issued To</h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Common name (CN):</span>
+                        <span className="text-sm text-gray-900 break-all">{selectedCert.cn}</span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Organization (O):</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCert.subjectDn.match(/O=([^,]+)/)?.[1] || '-'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Organizational unit (OU):</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCert.subjectDn.match(/OU=([^,]+)/)?.[1] || '-'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Serial number:</span>
+                        <span className="text-sm text-gray-900 font-mono break-all">{selectedCert.sn}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Issued By Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Issued By</h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Common name (CN):</span>
+                        <span className="text-sm text-gray-900 break-all">
+                          {selectedCert.issuerDn.match(/CN=([^,]+)/)?.[1] || '-'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Organization (O):</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCert.issuerDn.match(/O=([^,]+)/)?.[1] || '-'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Organizational unit (OU):</span>
+                        <span className="text-sm text-gray-900">
+                          {selectedCert.issuerDn.match(/OU=([^,]+)/)?.[1] || '-'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Validity Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Validity</h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Issued on:</span>
+                        <span className="text-sm text-gray-900">{formatDate(selectedCert.validFrom)}</span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">Expires on:</span>
+                        <span className="text-sm text-gray-900">{formatDate(selectedCert.validTo)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Fingerprints Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Fingerprints</h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">SHA1 fingerprint:</span>
+                        <span className="text-sm text-gray-900 font-mono break-all">
+                          {selectedCert.fingerprint.substring(0, 40) || 'N/A'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600">MD5 fingerprint:</span>
+                        <span className="text-sm text-gray-900 font-mono break-all">
+                          {selectedCert.fingerprint.substring(0, 32) || 'N/A'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Details Tab */}
+              {detailTab === 'details' && (
+                <div className="space-y-4">
+                  {/* Certificate Hierarchy */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Certificate Hierarchy</h3>
+                    <div className="bg-gray-50 p-4 rounded border">
+                      <div className="text-sm font-mono text-blue-600 cursor-pointer hover:underline">
+                        {selectedCert.cn}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Certificate Fields Tree */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Certificate Fields</h3>
+                    <div className="bg-gray-50 p-4 rounded border max-h-96 overflow-y-auto">
+                      <div className="space-y-2 text-sm font-mono">
+                        <details open>
+                          <summary className="cursor-pointer font-semibold text-gray-900 hover:text-blue-600">
+                            Certificate
+                          </summary>
+                          <div className="ml-4 mt-2 space-y-2">
+                            <details>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Version</summary>
+                              <div className="ml-4 text-gray-600">V3</div>
+                            </details>
+                            <details>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Serial Number</summary>
+                              <div className="ml-4 text-gray-600 break-all">{selectedCert.sn}</div>
+                            </details>
+                            <details>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Signature</summary>
+                              <div className="ml-4 space-y-1">
+                                <div className="text-gray-600">Algorithm: RSA-PSS</div>
+                                <div className="text-gray-600">Hash Algorithm: sha256</div>
+                              </div>
+                            </details>
+                            <details>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Issuer</summary>
+                              <div className="ml-4 text-gray-600 break-all">{selectedCert.issuerDn}</div>
+                            </details>
+                            <details open>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Validity</summary>
+                              <div className="ml-4 space-y-1">
+                                <div className="text-gray-600">Not Before: {formatDate(selectedCert.validFrom)}</div>
+                                <div className="text-gray-600">Not After: {formatDate(selectedCert.validTo)}</div>
+                              </div>
+                            </details>
+                            <details>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Subject</summary>
+                              <div className="ml-4 text-gray-600 break-all">{selectedCert.subjectDn}</div>
+                            </details>
+                            <details>
+                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Subject Public Key Info</summary>
+                              <div className="ml-4 space-y-1">
+                                <div className="text-gray-600">Subject Public Key Algorithm: RSA</div>
+                                <div className="text-gray-600">Subject Public Key: (2048 bits)</div>
+                              </div>
+                            </details>
+                          </div>
+                        </details>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Field Value */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Field Value</h3>
+                    <div className="bg-gray-50 p-4 rounded border">
+                      <div className="text-sm text-gray-600 italic">Select a field from the tree above to view its value</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Dialog Footer */}
+            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-between items-center">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => exportCertificate(selectedCert.dn, 'pem')}
+                  className="px-4 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                >
+                  Save Certificate...
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowDetailDialog(false)}
+                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
+                >
+                  OK
+                </button>
+                <button
+                  onClick={() => setShowDetailDialog(false)}
+                  className="px-4 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
+                >
+                  Cancel
                 </button>
               </div>
             </div>

@@ -5912,55 +5912,65 @@ paths:
         {drogon::Get}
     );
 
-    // GET /api/certificates/countries - Get list of available countries (on-demand LDAP scan)
+    // GET /api/certificates/countries - Get list of available countries (PostgreSQL)
     app.registerHandler(
         "/api/certificates/countries",
         [&](const drogon::HttpRequestPtr& req,
             std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             try {
-                spdlog::debug("Fetching list of available countries from LDAP (on-demand)");
+                spdlog::debug("Fetching list of available countries from PostgreSQL");
 
-                // Scan LDAP for unique countries (fast: only retrieves 'c' attribute)
-                std::set<std::string> countries;
-                domain::models::CertificateSearchCriteria criteria;
-                criteria.limit = 200;  // Max allowed limit
-                criteria.offset = 0;
+                // Connect to PostgreSQL
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
 
-                while (true) {
-                    auto result = ::certificateService->searchCertificates(criteria);
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    std::string error = "Database connection failed: " + std::string(PQerrorMessage(conn));
+                    PQfinish(conn);
+                    throw std::runtime_error(error);
+                }
 
-                    for (const auto& cert : result.certificates) {
-                        if (!cert.getCountry().empty()) {
-                            countries.insert(cert.getCountry());
-                        }
-                    }
+                // Query distinct countries from PostgreSQL (fast: ~67ms)
+                const char* query = "SELECT DISTINCT country_code FROM certificate "
+                                   "WHERE country_code IS NOT NULL "
+                                   "ORDER BY country_code";
 
-                    // Break if we got fewer results than requested (end of data)
-                    if (result.certificates.size() < criteria.limit) {
-                        break;
-                    }
+                PGresult* res = PQexec(conn, query);
 
-                    criteria.offset += criteria.limit;
+                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    std::string error = "Query failed: " + std::string(PQerrorMessage(conn));
+                    PQclear(res);
+                    PQfinish(conn);
+                    throw std::runtime_error(error);
                 }
 
                 // Build JSON response
+                int rowCount = PQntuples(res);
                 Json::Value response;
                 response["success"] = true;
-                response["count"] = static_cast<int>(countries.size());
+                response["count"] = rowCount;
 
                 Json::Value countryList(Json::arrayValue);
-                for (const auto& country : countries) {
+                for (int i = 0; i < rowCount; i++) {
+                    std::string country = PQgetvalue(res, i, 0);
                     countryList.append(country);
                 }
                 response["countries"] = countryList;
 
-                spdlog::info("Countries list fetched: {} countries from LDAP", countries.size());
+                PQclear(res);
+                PQfinish(conn);
+
+                spdlog::info("Countries list fetched: {} countries from PostgreSQL", rowCount);
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
 
             } catch (const std::exception& e) {
-                spdlog::error("Error fetching countries: {}", e.what());
+                spdlog::error("Error fetching countries from PostgreSQL: {}", e.what());
                 Json::Value error;
                 error["success"] = false;
                 error["error"] = e.what();
@@ -6022,11 +6032,8 @@ int main(int argc, char* argv[]) {
         spdlog::info("Certificate service initialized with LDAP repository (baseDN: {})", certSearchBaseDn);
 
         // TODO: Replace with Redis-based caching for better performance and scalability
-        // Populate countries cache on startup (DISABLED: causes 2min startup delay)
-        // spdlog::info("Populating countries cache...");
-        // NOTE: Cache is now empty by default. Countries API will need to be updated
-        //       to fetch from LDAP on-demand or use Redis/Memcached
-        spdlog::info("Countries API uses on-demand LDAP scan (no startup cache)");
+        // Countries API now uses PostgreSQL for instant response (~70ms)
+        spdlog::info("Countries API configured (PostgreSQL query, ~70ms response time)");
 
         auto& app = drogon::app();
 
