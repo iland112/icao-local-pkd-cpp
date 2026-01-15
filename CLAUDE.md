@@ -205,6 +205,7 @@ icao-local-pkd/
 | GET | `/api/health/database` | PostgreSQL status |
 | GET | `/api/health/ldap` | LDAP status |
 | **GET** | **`/api/certificates/search`** | **Search certificates (v1.6.0)** |
+| **GET** | **`/api/certificates/countries`** | **Get list of available countries (v1.6.0)** |
 | GET | `/api/certificates/detail` | Get certificate details by DN |
 | GET | `/api/certificates/export/file` | Export single certificate (DER/PEM) |
 | GET | `/api/certificates/export/country` | Export country certificates (ZIP) |
@@ -553,6 +554,48 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-15: Certificate Search UX Enhancement - Country Dropdown with Flags (v1.6.0)
+
+**인증서 검색 페이지 UX 개선 - 국가 드롭다운 및 국기 아이콘**:
+
+**Backend Changes**:
+- **New API Endpoint**: `GET /api/certificates/countries`
+  - 등록된 모든 국가 목록 반환 (92개 국가)
+  - 서버 시작 시 캐시 초기화 (전체 LDAP 스캔)
+  - Thread-safe 캐시 접근 (`std::mutex`)
+  - 응답 시간: <200ms (cached)
+- **Cache Initialization Improvement**:
+  - 30,000개 제한 제거 → 전체 30,226개 인증서 스캔
+  - 87개 → 92개 국가로 증가
+  - ZZ (United Nations) 포함 확인
+  - 초기화 시간: ~2분 (서버 시작 시 1회)
+
+**Frontend Changes**:
+- **Country Filter Enhancement** ([CertificateSearch.tsx](frontend/src/pages/CertificateSearch.tsx)):
+  - 텍스트 입력 → 드롭다운 셀렉터로 변경
+  - 국기 SVG 아이콘 표시 (`getFlagSvgPath()` 유틸리티 활용)
+  - 선택된 국가 플래그를 드롭다운 아래 표시
+- **New Flag Assets**:
+  - `frontend/public/svg/eu.svg` - European Union flag (1.2KB)
+  - `frontend/public/svg/un.svg` - United Nations flag (34KB)
+  - 출처: Wikimedia Commons
+
+**UN의 C=ZZ 사용 이유**:
+- **ISO 3166-1 User-Assigned Code**: ZZ는 "사용자 할당" 코드 범위
+- **국제기구**: UN은 주권 국가가 아니므로 공식 국가 코드 사용 불가
+- **인증서 Subject DN**: `C=ZZ, O=United Nations, OU=Certification Authorities, CN=United Nations CSCA`
+- **LDAP 데이터**: 45개 인증서 (1 CSCA, 43 DSC, 1 CRL)
+- **MRZ vs PKI**: UN Laissez-Passer는 "UNO" 사용, 하지만 PKI 인증서는 "ZZ" 사용
+
+**Technical Details**:
+- LDAP 기반 인증서 검색 (PostgreSQL 아님)
+- 캐시는 `std::set<std::string>`로 자동 정렬 및 중복 제거
+- Thread-safe 읽기/쓰기 (`std::lock_guard<std::mutex>`)
+
+**커밋**: cb7be7f
+
+---
 
 ### 2026-01-15: Certificate Search Feature - Scope Resolution & LDAP Auto-Reconnect (v1.6.0)
 
