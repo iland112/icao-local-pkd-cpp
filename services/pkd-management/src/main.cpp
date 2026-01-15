@@ -5912,27 +5912,49 @@ paths:
         {drogon::Get}
     );
 
-    // GET /api/certificates/countries - Get list of available countries (from cache)
+    // GET /api/certificates/countries - Get list of available countries (on-demand LDAP scan)
     app.registerHandler(
         "/api/certificates/countries",
         [&](const drogon::HttpRequestPtr& req,
             std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             try {
-                spdlog::debug("Fetching list of available countries from cache");
+                spdlog::debug("Fetching list of available countries from LDAP (on-demand)");
 
-                // Read from cache (thread-safe)
-                std::lock_guard<std::mutex> lock(countriesCacheMutex);
+                // Scan LDAP for unique countries (fast: only retrieves 'c' attribute)
+                std::set<std::string> countries;
+                domain::models::CertificateSearchCriteria criteria;
+                criteria.limit = 200;  // Max allowed limit
+                criteria.offset = 0;
+
+                while (true) {
+                    auto result = ::certificateService->searchCertificates(criteria);
+
+                    for (const auto& cert : result.certificates) {
+                        if (!cert.getCountry().empty()) {
+                            countries.insert(cert.getCountry());
+                        }
+                    }
+
+                    // Break if we got fewer results than requested (end of data)
+                    if (result.certificates.size() < criteria.limit) {
+                        break;
+                    }
+
+                    criteria.offset += criteria.limit;
+                }
 
                 // Build JSON response
                 Json::Value response;
                 response["success"] = true;
-                response["count"] = static_cast<int>(cachedCountries.size());
+                response["count"] = static_cast<int>(countries.size());
 
                 Json::Value countryList(Json::arrayValue);
-                for (const auto& country : cachedCountries) {
+                for (const auto& country : countries) {
                     countryList.append(country);
                 }
                 response["countries"] = countryList;
+
+                spdlog::info("Countries list fetched: {} countries from LDAP", countries.size());
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
@@ -5979,7 +6001,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.6.1 EXPORT-TMPFILE (Build 20260115-184500) ======");
+    spdlog::info("====== ICAO Local PKD v1.6.1 COUNTRIES-ON-DEMAND (Build 20260115-190000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
@@ -6004,7 +6026,7 @@ int main(int argc, char* argv[]) {
         // spdlog::info("Populating countries cache...");
         // NOTE: Cache is now empty by default. Countries API will need to be updated
         //       to fetch from LDAP on-demand or use Redis/Memcached
-        spdlog::warn("Countries cache initialization disabled - API will return empty list until Redis is implemented");
+        spdlog::info("Countries API uses on-demand LDAP scan (no startup cache)");
 
         auto& app = drogon::app();
 
