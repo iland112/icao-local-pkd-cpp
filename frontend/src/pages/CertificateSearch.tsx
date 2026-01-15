@@ -235,31 +235,36 @@ const CertificateSearch: React.FC = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     국가 코드
                   </label>
-                  <select
-                    value={criteria.country}
-                    onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="">전체 국가</option>
-                    {countries.map((country) => (
-                      <option key={country} value={country}>
-                        {country}
-                      </option>
-                    ))}
-                  </select>
-                  {criteria.country && getFlagSvgPath(criteria.country) && (
-                    <div className="mt-2 flex items-center gap-2">
+                  <div className="relative">
+                    <select
+                      value={criteria.country}
+                      onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none"
+                      style={criteria.country && getFlagSvgPath(criteria.country) ? { paddingLeft: '2.5rem' } : {}}
+                    >
+                      <option value="">전체 국가</option>
+                      {countries.map((country) => (
+                        <option key={country} value={country}>
+                          {country}
+                        </option>
+                      ))}
+                    </select>
+                    {criteria.country && getFlagSvgPath(criteria.country) && (
                       <img
                         src={getFlagSvgPath(criteria.country)}
                         alt={criteria.country}
-                        className="w-8 h-6 object-cover rounded shadow-sm border border-gray-300"
+                        className="absolute left-2 top-1/2 transform -translate-y-1/2 w-6 h-4 object-cover rounded shadow-sm border border-gray-300 pointer-events-none"
                         onError={(e) => {
                           e.currentTarget.style.display = 'none';
                         }}
                       />
-                      <span className="text-sm font-medium text-gray-700">{criteria.country}</span>
+                    )}
+                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Certificate Type */}
@@ -444,7 +449,19 @@ const CertificateSearch: React.FC = () => {
                   {certificates.map((cert, index) => (
                     <tr key={index} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {cert.country}
+                        <div className="flex items-center gap-2">
+                          {getFlagSvgPath(cert.country) && (
+                            <img
+                              src={getFlagSvgPath(cert.country)}
+                              alt={cert.country}
+                              className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          )}
+                          <span>{cert.country}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <span className="px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800">
