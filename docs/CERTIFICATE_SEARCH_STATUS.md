@@ -1,9 +1,9 @@
 # Certificate Search Feature - Final Status Report
 
 **Date**: 2026-01-15
-**Version**: 1.6.0
+**Version**: 1.6.1
 **Status**: ✅ **PRODUCTION READY - FULLY OPERATIONAL**
-**Last Updated**: 2026-01-15 01:45 KST
+**Last Updated**: 2026-01-15 22:30 KST
 
 ---
 
@@ -145,6 +145,122 @@ void LdapCertificateRepository::ensureConnected() {
 - ✅ Frontend: success=true (no more 500 errors)
 
 **Status**: ✅ Fixed and deployed
+
+### Issue 3: Certificate Export Crash - ZIP Creation (2026-01-15)
+
+**Problem**: Country export functionality caused container crash with 502 Bad Gateway error
+```
+Frontend: 502 Bad Gateway
+Nginx: upstream prematurely closed connection
+Container: Restarting every ~2 minutes
+```
+
+**Root Cause**: Stack memory dangling pointer in `createZipArchive()`
+```cpp
+// Incorrect - certData destroyed at end of loop iteration
+for (const auto& dn : dns) {
+    std::vector<uint8_t> certData = repository_->getCertificateBinary(dn);
+    zip_source_buffer(archive, certData.data(), certData.size(), 0);
+    // certData destroyed here, but ZIP archive still references this memory!
+}
+```
+
+**Failed Solutions**:
+1. ❌ Attempt 1: Modified buffer allocation logic - Still crashed
+2. ❌ Attempt 2: Used malloc/memcpy with ownership transfer - Still crashed (ZIP buffer source issues)
+
+**Final Solution**: Temporary file approach ✅
+```cpp
+// Create temporary file
+char tmpFilename[] = "/tmp/icao-export-XXXXXX";
+int tmpFd = mkstemp(tmpFilename);
+
+// Write ZIP to file (not memory)
+zip_t* archive = zip_open(tmpFilename, ZIP_CREATE | ZIP_TRUNCATE, &error);
+
+// Add each certificate with heap-allocated buffer
+for (const auto& dn : dns) {
+    std::vector<uint8_t> certData = repository_->getCertificateBinary(dn);
+
+    void* bufferCopy = malloc(certData.size());
+    memcpy(bufferCopy, certData.data(), certData.size());
+
+    zip_source_buffer(archive, bufferCopy, certData.size(), 1);  // 1 = free on close
+    zip_file_add(archive, filename.c_str(), fileSrc, ZIP_FL_OVERWRITE);
+}
+
+// Finalize and read back into memory
+zip_close(archive);
+FILE* f = fopen(tmpFilename, "rb");
+std::vector<uint8_t> zipData(fileSize);
+fread(zipData.data(), 1, fileSize, f);
+fclose(f);
+unlink(tmpFilename);  // Clean up
+```
+
+**Additional Fixes**:
+- Healthcheck start_period: 10s → 180s (for cache initialization)
+- Nginx proxy timeouts: 60s → 300s (for large exports)
+- Disabled startup cache initialization (on-demand LDAP scan instead)
+
+**Test Results**:
+- ✅ KR Export: 227 files, 253KB ZIP created successfully
+- ✅ Container: Stable, no more restarts
+- ✅ All certificate types: CSCA (7) + DSC (219) + CRL (1) = 227 total
+
+**Status**: ✅ Fixed and deployed (v1.6.1 EXPORT-TMPFILE)
+
+### Issue 4: LDAP Query Investigation - Anonymous Bind vs Authenticated Bind (2026-01-15)
+
+**Background**: User observed CRL entries in LDAP browser, but developer's command-line queries returned "No such object" errors.
+
+**Investigation**:
+```bash
+# Anonymous bind - FAILED
+ldapsearch -x -H ldap://localhost:389 -b "c=KR,..." ...
+# Result: 32 No such object
+
+# Authenticated bind - SUCCESS
+ldapsearch -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin -b "c=KR,..." ...
+# Result: 227 entries found
+```
+
+**Root Cause**: OpenLDAP configured to reject anonymous bind access.
+
+**Application Behavior**: ✅ **Application uses authenticated bind correctly**
+```cpp
+// LdapCertificateRepository connection
+ldap_sasl_bind_s(
+    ldap_,
+    "cn=admin,dc=ldap,dc=smartcoreinc,dc=com",  // Bind DN
+    LDAP_SASL_SIMPLE,
+    &cred,  // Password credential
+    nullptr, nullptr, nullptr
+);
+```
+
+**Verification**:
+- ✅ Certificate Search: 100% LDAP-based, no PostgreSQL involvement
+- ✅ Certificate Export: Retrieves 227 DNs and binary data from LDAP
+- ✅ LDAP Connection: HAProxy load-balanced, auto-reconnect enabled
+- ✅ All ObjectClasses: `pkdDownload`, `cRLDistributionPoint` accessible
+
+**Data Flow Confirmed**:
+```
+1. API Request → Certificate Search/Export
+2. LdapCertificateRepository::getDnsByCountryAndType()
+   → LDAP Search: "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint))"
+   → Base DN: "c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com"
+   → Result: 227 DNs (7 CSCA + 219 DSC + 1 CRL)
+3. LdapCertificateRepository::getCertificateBinary(dn)
+   → Attributes: "userCertificate;binary", "cACertificate;binary", "certificateRevocationList;binary"
+4. Response: JSON or ZIP file
+```
+
+**Documentation Created**:
+- [LDAP_QUERY_GUIDE.md](./LDAP_QUERY_GUIDE.md) - Comprehensive LDAP query guide
+
+**Status**: ✅ Verified - Application LDAP access working correctly
 
 ---
 

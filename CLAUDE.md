@@ -1,6 +1,6 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.6.0
+**Version**: 1.6.1
 **Last Updated**: 2026-01-15
 **Status**: Production Ready
 
@@ -554,6 +554,156 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-15: Certificate Export Crash Fix & LDAP Query Investigation (v1.6.1)
+
+**인증서 Export ZIP 생성 버그 수정 및 LDAP 조회 메커니즘 검증**:
+
+**Issue: Export 기능 502 Bad Gateway 및 컨테이너 크래시**
+- **문제**: KR 국가 인증서 export 시 pkd-management 컨테이너 재시작 반복
+- **증상**:
+  - Frontend: `502 Bad Gateway`
+  - Nginx 로그: `upstream prematurely closed connection`
+  - 컨테이너: 2분마다 재시작
+- **Root Cause**: `createZipArchive()` 함수에서 stack memory dangling pointer
+  ```cpp
+  // 잘못된 코드 (기존)
+  zip_source_buffer(archive, certData.data(), certData.size(), 0);
+  // certData는 루프 종료 시 파괴되는 지역 변수
+  ```
+
+**해결 방법 (3차 시도 끝에 성공)**:
+1. ❌ **시도 1**: Buffer 할당 수정 - 실패
+2. ❌ **시도 2**: malloc/memcpy로 소유권 이전 - 실패
+3. ✅ **시도 3**: Temporary file 방식 - 성공
+   ```cpp
+   // 임시 파일 생성
+   char tmpFilename[] = "/tmp/icao-export-XXXXXX";
+   int tmpFd = mkstemp(tmpFilename);
+
+   // ZIP을 파일에 작성
+   zip_t* archive = zip_open(tmpFilename, ZIP_CREATE | ZIP_TRUNCATE, &error);
+
+   // 각 인증서 추가 (heap 메모리 사용)
+   void* bufferCopy = malloc(certData.size());
+   memcpy(bufferCopy, certData.data(), certData.size());
+   zip_source_buffer(archive, bufferCopy, certData.size(), 1);  // 1 = free on close
+
+   // ZIP 완료 후 메모리로 읽기
+   zip_close(archive);
+   FILE* f = fopen(tmpFilename, "rb");
+   fread(zipData.data(), 1, fileSize, f);
+   unlink(tmpFilename);  // 정리
+   ```
+
+**부가 수정사항**:
+- Healthcheck start_period: 10s → 180s (캐시 초기화 시간 확보)
+- Nginx proxy timeouts: 60s → 300s (대용량 export 지원)
+- Cache initialization 비활성화 → On-demand LDAP scan
+
+**LDAP 조회 메커니즘 검증**:
+
+**조사 배경**:
+- 사용자가 LDAP 브라우저에서 KR CRL 존재 확인
+- 개발자의 anonymous bind 조회는 "No such object" 실패
+- Export ZIP에는 CRL 정상 포함됨 (778 bytes)
+
+**발견 사항**:
+1. **Anonymous Bind 제한**:
+   ```bash
+   # 실패 - Anonymous bind
+   ldapsearch -x -H ldap://localhost:389 -b "c=KR,..." ...
+   # Result: 32 No such object
+
+   # 성공 - Authenticated bind
+   ldapsearch -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin -b "c=KR,..." ...
+   # Result: 227 entries found
+   ```
+
+2. **애플리케이션 LDAP 연결 방식**:
+   - ✅ **인증된 연결** 사용: `ldap_sasl_bind_s()` with credentials
+   - ✅ HAProxy 로드밸런싱: `ldap://haproxy:389`
+   - ✅ 자동 재연결: `ldap_whoami_s()` 테스트 후 재연결
+   - ✅ 모든 objectClass 조회 가능: `pkdDownload`, `cRLDistributionPoint`
+
+3. **Certificate Search/Export 데이터 흐름**:
+   ```
+   1. API 요청 (Search/Export)
+      ↓
+   2. LdapCertificateRepository::getDnsByCountryAndType()
+      → LDAP 검색: "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint))"
+      → Base DN: "c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com"
+      → 결과: 227개 DN (7 CSCA + 219 DSC + 1 CRL)
+      ↓
+   3. LdapCertificateRepository::getCertificateBinary(dn)
+      → 각 DN의 바이너리 데이터 조회
+      → Attributes: "userCertificate;binary", "cACertificate;binary", "certificateRevocationList;binary"
+      ↓
+   4. ZIP 생성 또는 JSON 응답
+   ```
+
+4. **PostgreSQL vs LDAP 역할 분리**:
+   | 기능 | 데이터 소스 | 용도 |
+   |------|------------|------|
+   | **Upload/Validation** | PostgreSQL | LDIF/ML 업로드 저장, Trust Chain 검증, History |
+   | **Certificate Search** | **LDAP Only** | 실시간 인증서 조회, 100% LDAP |
+   | **Certificate Export** | **LDAP Only** | DN 목록 + 바이너리 데이터, 100% LDAP |
+   | **Sync Monitoring** | Both | DB와 LDAP 통계 비교 |
+
+**CRL/ML 데이터 형식**:
+
+**LDAP 저장 형식**:
+- **CRL**: `certificateRevocationList;binary` attribute (X509_CRL DER binary)
+- **ML**: `userCertificate;binary` attribute (X.509 certificate DER binary)
+- objectClass: `cRLDistributionPoint` (CRL), `pkdDownload` (ML)
+
+**Export ZIP 형식**:
+- **DER 형식**:
+  - CRL: `cn_{SHA256_HASH}.der` (778 bytes, X509_CRL binary)
+  - ML: `{COUNTRY}_ML_{SERIAL}.crt` (X.509 certificate binary)
+  - Certificate: `{COUNTRY}_{TYPE}_{SERIAL}.crt`
+- **PEM 형식**:
+  - CRL: `-----BEGIN X509 CRL-----` (PEM_write_bio_X509_CRL)
+  - ML: `-----BEGIN CERTIFICATE-----` (PEM_write_bio_X509)
+  - Certificate: `-----BEGIN CERTIFICATE-----`
+
+**검증 결과**:
+```
+KR 국가 Export (v1.6.1):
+- Total: 227 files, 253KB
+- CSCA: 7개 (KR_CSCA_*.crt)
+- DSC: 219개 (KR_DSC_*.crt)
+- CRL: 1개 (cn_0f6c...der, CSCA-KOREA-2025 발행, 폐기 인증서 0개)
+- ML: 0개 (KR에는 Master List 없음)
+```
+
+**로그 증거**:
+```
+[LdapCertificateRepository] Found 227 DNs for country=KR, certType=ALL
+[LdapCertificateRepository] Fetching certificate binary for DN: cn=0f6c529d...
+[LdapCertificateRepository] Certificate binary fetched: 778 bytes
+ZIP archive created - 227 certificates added, 253946 bytes
+```
+
+**결론**:
+- ✅ Export 크래시 완전 해결 (temporary file 방식)
+- ✅ Certificate Search/Export는 100% LDAP 기반 동작 확인
+- ✅ CRL 포함 모든 타입 정상 export 확인
+- ✅ Anonymous bind 제한으로 인한 조회 실패는 애플리케이션에 영향 없음
+
+**배포**:
+- Backend: v1.6.1 EXPORT-TMPFILE → v1.6.1 COUNTRIES-ON-DEMAND
+- Status: ✅ Fully Operational
+
+**문서**:
+- [CERTIFICATE_SEARCH_STATUS.md](docs/CERTIFICATE_SEARCH_STATUS.md) - 이슈 해결 내역
+- [LDAP_QUERY_GUIDE.md](docs/LDAP_QUERY_GUIDE.md) - LDAP 조회 가이드 (신규)
+
+**커밋**:
+- 0ef958c: fix(cert): Use temporary file for ZIP creation to prevent crash
+- cb532f9: feat(cert): Change countries cache to on-demand LDAP scan
+
+---
 
 ### 2026-01-15: Certificate Search UX Enhancement - Country Dropdown with Flags (v1.6.0)
 

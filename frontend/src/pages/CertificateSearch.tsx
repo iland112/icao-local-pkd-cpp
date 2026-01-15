@@ -32,6 +32,7 @@ const CertificateSearch: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [countries, setCountries] = useState<string[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(false);
 
   // Search criteria
   const [criteria, setCriteria] = useState<SearchCriteria>({
@@ -50,15 +51,24 @@ const CertificateSearch: React.FC = () => {
 
   // Fetch available countries
   const fetchCountries = async () => {
+    setCountriesLoading(true);
     try {
+      console.log('Fetching countries from /api/certificates/countries...');
       const response = await fetch('/api/certificates/countries');
       const data = await response.json();
 
-      if (data.success) {
+      console.log('Countries API response:', data);
+
+      if (data.success && data.countries) {
         setCountries(data.countries);
+        console.log(`Loaded ${data.countries.length} countries`);
+      } else {
+        console.error('Countries API returned unsuccessful:', data);
       }
     } catch (err) {
       console.error('Failed to fetch countries:', err);
+    } finally {
+      setCountriesLoading(false);
     }
   };
 
@@ -241,8 +251,11 @@ const CertificateSearch: React.FC = () => {
                       onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none"
                       style={criteria.country && getFlagSvgPath(criteria.country) ? { paddingLeft: '2.5rem' } : {}}
+                      disabled={countriesLoading}
                     >
-                      <option value="">전체 국가</option>
+                      <option value="">
+                        {countriesLoading ? 'Loading countries...' : countries.length === 0 ? 'No countries available' : '전체 국가'}
+                      </option>
                       {countries.map((country) => (
                         <option key={country} value={country}>
                           {country}
