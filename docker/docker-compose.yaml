@@ -104,7 +104,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 180s  # Increased to 3min to allow cache initialization (~2min for 30k certs)
 
   # ---------------------------------------------------------------------------
   # PA Service (Passive Authentication Verification)

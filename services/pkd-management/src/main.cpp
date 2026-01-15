@@ -5999,44 +5999,12 @@ int main(int argc, char* argv[]) {
         certificateService = std::make_shared<services::CertificateService>(repository);
         spdlog::info("Certificate service initialized with LDAP repository (baseDN: {})", certSearchBaseDn);
 
-        // Populate countries cache on startup
-        spdlog::info("Populating countries cache...");
-        try {
-            std::lock_guard<std::mutex> lock(countriesCacheMutex);
-            int batchSize = 200;
-            int offset = 0;
-            int totalProcessed = 0;
-
-            // Scan all certificates (no limit)
-            while (true) {
-                domain::models::CertificateSearchCriteria criteria;
-                criteria.limit = batchSize;
-                criteria.offset = offset;
-
-                auto result = certificateService->searchCertificates(criteria);
-
-                for (const auto& cert : result.certificates) {
-                    if (!cert.getCountry().empty()) {
-                        cachedCountries.insert(cert.getCountry());
-                    }
-                }
-
-                totalProcessed += result.certificates.size();
-
-                // Break if we got fewer results than requested (end of data)
-                if (result.certificates.size() < batchSize) {
-                    break;
-                }
-
-                offset += batchSize;
-            }
-
-            spdlog::info("Countries cache populated: {} countries from {} certificates",
-                cachedCountries.size(), totalProcessed);
-        } catch (const std::exception& e) {
-            spdlog::error("Failed to populate countries cache: {}", e.what());
-            spdlog::warn("Countries API will return empty list");
-        }
+        // TODO: Replace with Redis-based caching for better performance and scalability
+        // Populate countries cache on startup (DISABLED: causes 2min startup delay)
+        // spdlog::info("Populating countries cache...");
+        // NOTE: Cache is now empty by default. Countries API will need to be updated
+        //       to fetch from LDAP on-demand or use Redis/Memcached
+        spdlog::warn("Countries cache initialization disabled - API will return empty list until Redis is implemented");
 
         auto& app = drogon::app();
 
