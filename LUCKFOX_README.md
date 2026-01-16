@@ -58,7 +58,7 @@ cd /home/luckfox/icao-local-pkd-cpp-v2
 
 | 서비스 | URL/주소 | 설명 |
 |--------|----------|------|
-| **Frontend** | http://192.168.100.11:3000 | 웹 UI |
+| **Frontend** | http://192.168.100.11 | 웹 UI (포트 80) |
 | **API Gateway** | http://192.168.100.11:8080/api | 통합 API 엔드포인트 |
 | **PostgreSQL** | 127.0.0.1:5432 | DB: localpkd, User: pkd, Pass: pkd |
 
