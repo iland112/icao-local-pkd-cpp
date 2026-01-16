@@ -3,7 +3,9 @@
 **Device**: Luckfox Pico (ARM64)
 **IP Address**: 192.168.100.11
 **Project Directory**: `/home/luckfox/icao-local-pkd-cpp-v2`
-**Updated**: 2026-01-13
+**Current Version**: v1.6.1 (PKD Management), v1.3.0 (Sync Service)
+**Last Deployed**: 2026-01-16 14:27:34 (KST)
+**Updated**: 2026-01-16
 
 ---
 
@@ -43,14 +45,14 @@ cd /home/luckfox/icao-local-pkd-cpp-v2
 
 ### 컨테이너 목록
 
-| 컨테이너명 | 서비스 | 포트 | 이미지 |
-|-----------|--------|------|--------|
-| **icao-pkd-postgres** | PostgreSQL DB | 5432 | postgres:15 |
-| **icao-pkd-management** | PKD 관리 API | 8081 | icao-local-management:arm64 |
-| **icao-pkd-pa-service** | PA 검증 API | 8082 | icao-local-pa:arm64-v3 |
-| **icao-pkd-sync-service** | DB-LDAP 동기화 | 8083 | icao-local-sync:arm64-v1.2.0 |
-| **icao-pkd-api-gateway** | Nginx 게이트웨이 | 8080 | nginx:alpine |
-| **icao-pkd-frontend** | React 프론트엔드 | 3000 | icao-local-pkd-frontend:arm64-fixed |
+| 컨테이너명 | 서비스 | 포트 | 이미지 | 현재 버전 |
+|-----------|--------|------|--------|----------|
+| **icao-pkd-postgres** | PostgreSQL DB | 5432 | postgres:15 | 15 |
+| **icao-pkd-management** | PKD 관리 API | 8081 | icao-local-management:arm64 | **v1.6.1** |
+| **icao-pkd-pa-service** | PA 검증 API | 8082 | icao-local-pa:arm64-v3 | v2.1.0 |
+| **icao-pkd-sync-service** | DB-LDAP 동기화 | 8083 | icao-local-sync:arm64-v1.2.0 | **v1.3.0** |
+| **icao-pkd-api-gateway** | Nginx 게이트웨이 | 8080 | nginx:alpine | alpine |
+| **icao-pkd-frontend** | React 프론트엔드 | 3000 | icao-local-pkd-frontend:arm64-fixed | Latest |
 
 ### 접속 정보
 
@@ -148,21 +150,56 @@ ls -lh backups/
 
 ## 🔄 새 버전 배포
 
-### GitHub Actions 빌드 후 배포 (권장)
+### 자동화 배포 스크립트 사용 (권장) ⭐
+
+**로컬 개발 환경에서 실행**:
+
+```bash
+# 1. GitHub Actions 빌드 완료 확인
+# https://github.com/iland112/icao-local-pkd-cpp/actions
+
+# 2. 자동 배포 스크립트 실행 (artifacts 자동 다운로드)
+./scripts/deploy-from-github-artifacts.sh all
+
+# 또는 개별 서비스만 배포
+./scripts/deploy-from-github-artifacts.sh pkd-management
+./scripts/deploy-from-github-artifacts.sh sync-service
+./scripts/deploy-from-github-artifacts.sh frontend
+```
+
+**배포 스크립트 기능**:
+- ✅ GitHub Actions artifacts 자동 다운로드 (main 브랜치)
+- ✅ 자동 백업 생성 (`/home/luckfox/icao-backup-YYYYMMDD_HHMMSS/`)
+- ✅ OCI 형식 → Docker 형식 자동 변환 (skopeo)
+- ✅ sshpass를 통한 비대화형 SSH/SCP 인증
+- ✅ 기존 컨테이너/이미지 자동 정리
+- ✅ 이미지 전송 및 로드
+- ✅ 서비스 시작 및 헬스체크
+
+**최근 배포 이력**:
+- **2026-01-16 14:27:34**: v1.6.1 (PKD Management), v1.3.0 (Sync Service)
+  - GitHub Actions Run ID: 21053986767
+  - 백업: `/home/luckfox/icao-backup-20260116_142626/`
+  - 새 기능: Certificate Search, Countries API, Export
+
+### 수동 배포 (대안)
 
 ```bash
 cd /home/luckfox/icao-local-pkd-cpp-v2
 
-# 1. 기존 컨테이너 중지
+# 1. 백업 생성
+./luckfox-backup.sh
+
+# 2. 기존 컨테이너 중지
 ./luckfox-stop.sh
 
-# 2. 새 이미지 로드 (개발자가 전송한 파일)
-docker load < /tmp/icao-management-v1.5.11.tar.gz
+# 3. 새 이미지 로드 (개발자가 전송한 파일)
+docker load < /tmp/icao-management-arm64.tar
 
-# 3. 서비스 시작
+# 4. 서비스 시작
 ./luckfox-start.sh
 
-# 4. 버전 확인
+# 5. 버전 확인
 ./luckfox-logs.sh pkd-management | grep "ICAO Local PKD"
 ```
 
@@ -286,5 +323,30 @@ docker images | grep icao
 
 ---
 
-**Last Updated**: 2026-01-13
-**Version**: 1.5.10 AUTO-PROGRESS-DISPLAY
+## 🆕 최신 기능 (v1.6.1)
+
+### Certificate Search (v1.6.0)
+- LDAP 기반 실시간 인증서 검색
+- 국가별, 타입별, 검증 상태별 필터링
+- Subject DN, Serial 텍스트 검색
+- 페이지네이션 지원
+
+### Countries API (v1.6.2)
+- PostgreSQL DISTINCT 쿼리 사용 (40ms 응답)
+- 92개 국가 목록 제공
+- 프론트엔드 드롭다운에 국기 아이콘 표시
+
+### Certificate Export (v1.6.0)
+- 단일 인증서 Export (DER/PEM 형식)
+- 국가별 전체 인증서 ZIP Export
+- CSCA, DSC, DSC_NC, CRL 모두 지원
+
+### Failed Upload Cleanup (v1.4.8)
+- 실패한 업로드 삭제 기능
+- DB 및 임시 파일 자동 정리
+
+---
+
+**Last Updated**: 2026-01-16
+**Current Version**: v1.6.1 (PKD Management), v1.3.0 (Sync Service)
+**Last Deployment**: 2026-01-16 14:27:34 (KST)
