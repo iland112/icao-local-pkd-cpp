@@ -42,6 +42,44 @@ fi
 echo -e "${YELLOW}Service to deploy: $SERVICE${NC}"
 echo ""
 
+# Backup current deployment before starting
+echo -e "${BLUE}========================================${NC}"
+echo -e "${BLUE}Backing up current Luckfox deployment${NC}"
+echo -e "${BLUE}========================================${NC}"
+BACKUP_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="icao-backup-${BACKUP_TIMESTAMP}"
+echo -e "${YELLOW}Creating backup: ${BACKUP_DIR}${NC}"
+
+$SSH_CMD "
+    cd /home/luckfox
+    if [ -d 'icao-local-pkd-cpp-v2' ]; then
+        # Create backup directory
+        mkdir -p ${BACKUP_DIR}
+
+        # Backup docker-compose file and configs
+        cp -r icao-local-pkd-cpp-v2/docker-compose-luckfox.yaml ${BACKUP_DIR}/ 2>/dev/null || true
+        cp -r icao-local-pkd-cpp-v2/nginx ${BACKUP_DIR}/ 2>/dev/null || true
+        cp -r icao-local-pkd-cpp-v2/docs/openapi ${BACKUP_DIR}/ 2>/dev/null || true
+
+        # Backup container logs
+        mkdir -p ${BACKUP_DIR}/logs
+        docker logs icao-pkd-management > ${BACKUP_DIR}/logs/pkd-management.log 2>&1 || true
+        docker logs icao-pkd-pa-service > ${BACKUP_DIR}/logs/pa-service.log 2>&1 || true
+        docker logs icao-pkd-sync-service > ${BACKUP_DIR}/logs/sync-service.log 2>&1 || true
+        docker logs icao-pkd-frontend > ${BACKUP_DIR}/logs/frontend.log 2>&1 || true
+
+        # Save current image versions
+        docker images --format '{{.Repository}}:{{.Tag}}\t{{.ID}}\t{{.CreatedAt}}' | grep icao-local > ${BACKUP_DIR}/images.txt || true
+
+        echo '${BACKUP_TIMESTAMP}' > ${BACKUP_DIR}/backup_timestamp.txt
+        echo 'Backup created successfully'
+    else
+        echo 'No existing deployment found - skipping backup'
+    fi
+"
+echo -e "${GREEN}✓ Backup complete: /home/luckfox/${BACKUP_DIR}${NC}"
+echo ""
+
 # Check if artifacts directory exists
 if [ ! -d "$ARTIFACTS_DIR" ]; then
     echo -e "${YELLOW}Artifacts directory not found. Attempting to download from GitHub Actions...${NC}"
@@ -49,7 +87,7 @@ if [ ! -d "$ARTIFACTS_DIR" ]; then
     # Check if gh CLI is available and authenticated
     if command -v gh >/dev/null 2>&1; then
         echo -e "${BLUE}Downloading latest artifacts...${NC}"
-        LATEST_RUN=$(gh run list --repo iland112/icao-local-pkd-cpp --branch feature/openapi-support --limit 1 --json databaseId --jq '.[0].databaseId')
+        LATEST_RUN=$(gh run list --repo iland112/icao-local-pkd-cpp --branch main --limit 1 --json databaseId --jq '.[0].databaseId')
 
         if [ -n "$LATEST_RUN" ]; then
             echo "Found workflow run: $LATEST_RUN"
