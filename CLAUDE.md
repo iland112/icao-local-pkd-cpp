@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.6.1
-**Last Updated**: 2026-01-15
+**Version**: 1.6.2
+**Last Updated**: 2026-01-16
 **Status**: Production Ready
 
 ---

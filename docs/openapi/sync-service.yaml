@@ -7,10 +7,11 @@ info:
     certificate expiration re-validation.
 
     ## Changelog
+    - **v1.6.0** (2026-01-14): Auto Reconcile feature complete (Phase 1-6)
     - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
     - **v1.1.0** (2026-01-06): Daily scheduler at midnight, certificate re-validation
     - **v1.0.0** (2026-01-03): Initial release
-  version: 1.2.0
+  version: 1.6.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -26,6 +27,8 @@ tags:
     description: Health check endpoints
   - name: Sync
     description: Synchronization operations
+  - name: Reconcile
+    description: Auto reconciliation operations
   - name: Revalidation
     description: Certificate re-validation operations
   - name: Config
@@ -102,9 +105,23 @@ paths:
 
   /api/sync/reconcile:
     post:
-      tags: [Sync]
+      tags: [Reconcile]
       summary: Reconcile discrepancies
-      description: Trigger reconciliation to fix discrepancies
+      description: |
+        Trigger auto reconciliation to fix DB-LDAP discrepancies (v1.6.0+).
+
+        **Features**:
+        - Modular ReconciliationEngine architecture
+        - Batch processing (default: 100 certificates)
+        - Database logging (reconciliation_summary, reconciliation_log)
+        - Dry-run mode support
+        - Integrated with daily scheduler
+
+        **Workflow**:
+        1. Identify missing certificates in LDAP
+        2. Add certificates in batches
+        3. Log each operation
+        4. Update summary with final results
       operationId: reconcile
       requestBody:
         content:
@@ -118,6 +135,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ReconcileResponse'
+
+  /api/sync/reconcile/history:
+    get:
+      tags: [Reconcile]
+      summary: Get reconciliation history
+      description: |
+        Get history of auto reconciliation executions with pagination (v1.6.0+).
+
+        **Filtering**:
+        - By status (COMPLETED, FAILED, PARTIAL, IN_PROGRESS)
+        - By trigger type (MANUAL, AUTO, DAILY_SYNC)
+      operationId: getReconcileHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+          description: Maximum number of records
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+            minimum: 0
+          description: Number of records to skip
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [COMPLETED, FAILED, PARTIAL, IN_PROGRESS]
+          description: Filter by status
+        - name: triggeredBy
+          in: query
+          schema:
+            type: string
+            enum: [MANUAL, AUTO, DAILY_SYNC]
+          description: Filter by trigger type
+      responses:
+        '200':
+          description: Reconciliation history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileHistoryResponse'
+
+  /api/sync/reconcile/{id}:
+    get:
+      tags: [Reconcile]
+      summary: Get reconciliation details
+      description: |
+        Get detailed information for a specific reconciliation execution (v1.6.0+).
+
+        **Includes**:
+        - Summary (status, trigger, counts, duration)
+        - Operation logs (all individual certificate operations)
+        - Per-operation timing and status
+      operationId: getReconcileDetails
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Reconciliation summary ID
+      responses:
+        '200':
+          description: Reconciliation details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileDetailResponse'
+        '404':
+          description: Reconciliation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/sync/history:
     get:
@@ -540,6 +637,94 @@ components:
         message:
           type: string
           description: Status message
+
+    ReconcileHistoryResponse:
+      type: object
+      description: Reconciliation history list (v1.6.0+)
+      properties:
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconcileHistoryItem'
+
+    ReconcileHistoryItem:
+      type: object
+      description: Single reconciliation execution summary (v1.6.0+)
+      properties:
+        id:
+          type: integer
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [COMPLETED, FAILED, PARTIAL, IN_PROGRESS]
+        triggeredBy:
+          type: string
+          enum: [MANUAL, AUTO, DAILY_SYNC]
+        totalProcessed:
+          type: integer
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+        cscaAdded:
+          type: integer
+        dscAdded:
+          type: integer
+        dscNcAdded:
+          type: integer
+        durationMs:
+          type: integer
+
+    ReconcileDetailResponse:
+      type: object
+      description: Detailed reconciliation execution information (v1.6.0+)
+      properties:
+        success:
+          type: boolean
+        summary:
+          $ref: '#/components/schemas/ReconcileHistoryItem'
+        operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconcileOperationLog'
+
+    ReconcileOperationLog:
+      type: object
+      description: Individual certificate reconciliation operation (v1.6.0+)
+      properties:
+        id:
+          type: integer
+        operation:
+          type: string
+          enum: [ADD_CERT_TO_LDAP, DELETE_CERT_FROM_LDAP]
+        certType:
+          type: string
+          enum: [CSCA, DSC, DSC_NC, CRL, ML]
+        countryCode:
+          type: string
+        subject:
+          type: string
+        serialNumber:
+          type: string
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+        errorMessage:
+          type: string
+        operationTimestampMs:
+          type: integer
+          description: Operation timestamp in milliseconds
 
     ErrorResponse:
       type: object

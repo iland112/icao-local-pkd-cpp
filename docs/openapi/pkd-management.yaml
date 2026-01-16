@@ -5,12 +5,15 @@ info:
     ICAO Local PKD Management Service API.
     Handles certificate upload, validation, and LDAP synchronization.
 
-    **Version 1.5.10 Updates**:
-    - Added AUTO/MANUAL processing modes for LDIF and Master List uploads
-    - Enhanced progress tracking with detailed X/Total format
-    - Added file duplicate detection (SHA-256 based)
-    - Improved SSE progress events with completion signals
-  version: 1.5.10
+    ## Changelog
+    - **v1.6.2** (2026-01-15): Countries API performance optimization (LDAP → PostgreSQL, 99.9% faster)
+    - **v1.6.1** (2026-01-15): Certificate export crash fix (temporary file approach)
+    - **v1.6.0** (2026-01-15): Certificate search/export feature, countries list API
+    - **v1.5.11** (2026-01-14): MANUAL mode localStorage bug fix
+    - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
+    - **v1.4.8** (2026-01-11): Failed upload cleanup feature
+    - **v1.2.0** (2026-01-09): File duplicate detection (SHA-256)
+  version: 1.6.2
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -28,6 +31,8 @@ tags:
     description: Certificate upload operations
   - name: Validation
     description: Certificate validation operations
+  - name: Certificates
+    description: Certificate search and export operations
   - name: PA
     description: Passive Authentication operations
   - name: Progress
@@ -261,6 +266,242 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RevalidateResponse'
+
+  /api/certificates/search:
+    get:
+      tags: [Certificates]
+      summary: Search certificates
+      description: |
+        Search certificates in LDAP by country and type (v1.6.0+).
+
+        **Data Source**: 100% LDAP-based (real-time search)
+
+        **Performance**: Authenticated bind with auto-reconnect
+
+        Returns list of certificate DNs matching the search criteria.
+      operationId: searchCertificates
+      parameters:
+        - name: country
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: ISO 3166-1 alpha-2 country code (e.g., KR, US)
+        - name: certType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CSCA, DSC, DSC_NC, CRL, ML, ALL]
+            default: ALL
+          description: Certificate type filter
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateSearchResponse'
+        '400':
+          description: Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/certificates/countries:
+    get:
+      tags: [Certificates]
+      summary: Get list of countries
+      description: |
+        Get list of all countries with registered certificates (v1.6.0+).
+
+        **Performance**: PostgreSQL DISTINCT query (40ms avg, 99.9% faster than LDAP)
+
+        **v1.6.2 Optimization**: Switched from LDAP scan to PostgreSQL for 1,975x speedup
+      operationId: getCountries
+      responses:
+        '200':
+          description: List of country codes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CountriesResponse'
+
+  /api/certificates/detail:
+    get:
+      tags: [Certificates]
+      summary: Get certificate details
+      description: Get detailed information for a specific certificate by DN (v1.6.0+)
+      operationId: getCertificateDetail
+      parameters:
+        - name: dn
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Distinguished Name of the certificate
+      responses:
+        '200':
+          description: Certificate details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CertificateDetailResponse'
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/certificates/export/file:
+    get:
+      tags: [Certificates]
+      summary: Export single certificate
+      description: |
+        Export a single certificate file in DER or PEM format (v1.6.0+).
+
+        **Formats**:
+        - DER: Binary format (application/x-x509-ca-cert)
+        - PEM: Base64 encoded with headers (application/x-pem-file)
+      operationId: exportCertificateFile
+      parameters:
+        - name: dn
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Distinguished Name of the certificate
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DER, PEM]
+            default: DER
+          description: Export format
+      responses:
+        '200':
+          description: Certificate file
+          content:
+            application/x-x509-ca-cert:
+              schema:
+                type: string
+                format: binary
+            application/x-pem-file:
+              schema:
+                type: string
+        '404':
+          description: Certificate not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/certificates/export/country:
+    get:
+      tags: [Certificates]
+      summary: Export country certificates
+      description: |
+        Export all certificates for a country as a ZIP archive (v1.6.0+).
+
+        **ZIP Contents**:
+        - CSCA: {COUNTRY}_CSCA_{SERIAL}.crt
+        - DSC: {COUNTRY}_DSC_{SERIAL}.crt
+        - DSC_NC: {COUNTRY}_DSC_NC_{SERIAL}.crt
+        - CRL: cn_{SHA256_HASH}.der
+        - ML: {COUNTRY}_ML_{SERIAL}.crt
+
+        **Format**: DER or PEM based on format parameter
+
+        **v1.6.1**: Fixed ZIP creation crash with temporary file approach
+      operationId: exportCountryCertificates
+      parameters:
+        - name: country
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+          description: ISO 3166-1 alpha-2 country code
+        - name: certType
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CSCA, DSC, DSC_NC, CRL, ML, ALL]
+            default: ALL
+          description: Certificate type filter
+        - name: format
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DER, PEM]
+            default: DER
+          description: Export format
+      responses:
+        '200':
+          description: ZIP archive
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: No certificates found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/upload/{uploadId}:
+    delete:
+      tags: [Upload]
+      summary: Delete failed upload
+      description: |
+        Delete a failed or pending upload and clean up associated data (v1.4.8+).
+
+        **Cleanup actions**:
+        - Delete certificates from DB
+        - Delete CRL records
+        - Delete master list records
+        - Delete upload record
+        - Delete temporary JSON file
+
+        **Note**: Only FAILED or PENDING uploads can be deleted
+      operationId: deleteFailedUpload
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Upload ID to delete
+      responses:
+        '200':
+          description: Upload deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteUploadResponse'
+        '400':
+          description: Cannot delete upload (not in FAILED/PENDING status)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/pa/verify:
     post:
@@ -699,3 +940,99 @@ components:
           type: string
         isComplete:
           type: boolean
+
+    CertificateSearchResponse:
+      type: object
+      description: Certificate search results (v1.6.0+)
+      properties:
+        success:
+          type: boolean
+        country:
+          type: string
+        certType:
+          type: string
+        total:
+          type: integer
+        certificates:
+          type: array
+          items:
+            type: object
+            properties:
+              dn:
+                type: string
+                description: Distinguished Name
+              cn:
+                type: string
+                description: Common Name
+              serialNumber:
+                type: string
+                description: Certificate serial number
+
+    CountriesResponse:
+      type: object
+      description: List of countries with certificates (v1.6.0+)
+      properties:
+        success:
+          type: boolean
+        total:
+          type: integer
+        countries:
+          type: array
+          items:
+            type: string
+            description: ISO 3166-1 alpha-2 country code
+          example: ["KR", "US", "JP", "CN"]
+
+    CertificateDetailResponse:
+      type: object
+      description: Detailed certificate information (v1.6.0+)
+      properties:
+        success:
+          type: boolean
+        dn:
+          type: string
+        certificate:
+          type: object
+          properties:
+            subject:
+              type: string
+            issuer:
+              type: string
+            serialNumber:
+              type: string
+            notBefore:
+              type: string
+              format: date-time
+            notAfter:
+              type: string
+              format: date-time
+            countryCode:
+              type: string
+            certificateType:
+              type: string
+              enum: [CSCA, DSC, DSC_NC, CRL, ML]
+            size:
+              type: integer
+              description: Certificate size in bytes
+
+    DeleteUploadResponse:
+      type: object
+      description: Result of upload deletion (v1.4.8+)
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        deletedRecords:
+          type: object
+          properties:
+            certificates:
+              type: integer
+            crls:
+              type: integer
+            masterLists:
+              type: integer
+            uploadRecord:
+              type: integer
+            tempFiles:
+              type: integer
