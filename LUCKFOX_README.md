@@ -9,6 +9,115 @@
 
 ---
 
+## 📖 프로젝트 개요
+
+**ICAO Local PKD**는 C++ REST API 기반의 ICAO 공개키 디렉토리(PKD) 관리 및 Passive Authentication (PA) 검증 시스템입니다.
+
+### 주요 목적
+- **전자여권(eMRTD) 인증서 관리**: CSCA/DSC 인증서, CRL, Master List 저장 및 검증
+- **Passive Authentication**: ICAO 9303 표준 기반 전자여권 데이터 검증
+- **PKI 인프라**: LDAP 기반 인증서 배포 및 PostgreSQL 기반 메타데이터 관리
+
+### 기술 스택
+- **Backend**: C++20, Drogon Framework, OpenSSL 3.x
+- **Database**: PostgreSQL 15 (메타데이터, 검증 이력)
+- **Directory**: OpenLDAP (ICAO PKD DIT 구조)
+- **Frontend**: React 19 + TypeScript + TailwindCSS 4
+- **Infrastructure**: Docker, Nginx API Gateway
+
+---
+
+## 🎯 핵심 기능
+
+### 1. PKD 관리 (PKD Management Service)
+
+**인증서 업로드 및 파싱**:
+- LDIF 파일 업로드 (CSCA, DSC, DSC_NC, CRL)
+- ICAO Master List 업로드 (CMS 서명된 CSCA 목록)
+- AUTO/MANUAL 처리 모드 지원
+- 업로드 이력 및 통계 관리
+
+**Trust Chain 검증**:
+- CSCA → DSC 인증서 체인 검증
+- X.509 서명 검증 (OpenSSL)
+- 유효기간 검증
+- 검증 결과 DB 저장
+
+**인증서 검색 및 Export** (v1.6.0+):
+- 국가별, 타입별, 검증 상태별 필터링
+- LDAP 실시간 검색
+- 단일 인증서 Export (DER/PEM)
+- 국가별 전체 인증서 ZIP Export
+
+### 2. Passive Authentication (PA Service)
+
+**전자여권 데이터 검증**:
+- SOD (Security Object Document) 검증
+- DG (Data Group) 해시 검증
+- CSCA/DSC Trust Chain 검증
+- CMS 서명 검증
+
+**데이터 파싱**:
+- DG1: MRZ (Machine Readable Zone) 파싱
+- DG2: 얼굴 이미지 추출 및 JPEG 변환
+- SOD 메타데이터 추출
+
+**검증 이력 관리**:
+- 검증 결과 저장 (성공/실패, 8단계 상세)
+- 검증 통계 (일별 추이, 성공률)
+- 검증 히스토리 조회
+
+### 3. DB-LDAP 동기화 (Sync Service)
+
+**동기화 모니터링**:
+- PostgreSQL ↔ LDAP 데이터 일치성 검증
+- 인증서 타입별 불일치 통계
+- 국가별 불일치 분석
+
+**자동 조정** (Auto Reconcile, v1.6.0+):
+- DB에만 존재하는 인증서 자동 LDAP 업로드
+- Batch 처리 (기본 100개씩)
+- 조정 히스토리 및 상세 로그
+- Daily Sync 통합 (매일 자정)
+
+**인증서 재검증**:
+- Daily Sync 시 전체 DSC Trust Chain 재검증
+- 만료된 인증서 자동 감지
+- 검증 상태 업데이트
+
+### 4. 통합 관리 UI (React Frontend)
+
+**대시보드**:
+- 시스템 상태 모니터링
+- 인증서 통계 (CSCA/DSC/CRL 현황)
+- 국가별 인증서 분포 (상위 18개국)
+
+**파일 업로드**:
+- LDIF/Master List 드래그 앤 드롭 업로드
+- AUTO/MANUAL 모드 선택
+- 실시간 진행 상태 표시 (SSE)
+- 업로드 이력 및 통계
+
+**인증서 검색** (v1.6.0+):
+- 92개 국가 필터링 (국기 아이콘 표시)
+- CSCA/DSC/DSC_NC/CRL 타입 필터
+- 검증 상태 필터 (Valid/Invalid/Not Found)
+- Export 기능 (개별/전체)
+
+**PA 검증**:
+- SOD, DG1, DG2 파일 업로드
+- 8단계 검증 프로세스 시각화
+- DG2 얼굴 이미지 미리보기
+- 검증 히스토리 및 통계
+
+**동기화 모니터링**:
+- DB/LDAP 통계 비교
+- 불일치 현황 (타입별, 국가별)
+- Reconciliation 히스토리
+- 수동 동기화 트리거
+
+---
+
 ## 🚀 빠른 시작
 
 ```bash
