@@ -21,6 +21,7 @@ services:
     volumes:
       - ../nginx/api-gateway.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - ../docs/openapi:/etc/nginx/openapi:ro
       - ../.docker-data/gateway-logs:/var/log/nginx
     depends_on:
       pkd-management:
@@ -563,8 +564,8 @@ services:
     ports:
       - "8090:8080"
     environment:
-      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"/api/docs/sync-service.yaml","name":"Sync Service API v1.2.0"}]
-      - URLS_PRIMARY_NAME=PKD Management API v1.5.10
+      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v1.6.2"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"/api/docs/sync-service.yaml","name":"Sync Service API v1.6.0"}]
+      - URLS_PRIMARY_NAME=PKD Management API v1.6.2
     volumes:
       - ../docs/openapi:/usr/share/nginx/html/api/docs:ro
     networks:
