@@ -555,6 +555,114 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 
 ## Change Log
 
+### 2026-01-16: ARM64 Production Deployment to Luckfox (v1.6.1)
+
+**Luckfox ARM64 전체 서비스 배포 완료**:
+
+**배포 일시**: 2026-01-16 14:27:34 (KST)
+**배포 대상**: Luckfox Pico ARM64 (192.168.100.11)
+**배포 방법**: GitHub Actions CI/CD → Automated Deployment Script
+
+**배포된 서비스 버전**:
+| Service | 이전 버전 | 배포 버전 | 빌드 ID | 상태 |
+|---------|----------|----------|---------|------|
+| **PKD Management** | v1.5.10 | **v1.6.1** | Build 20260115-190000 | ✅ Healthy |
+| **PA Service** | v2.1.0 | v2.1.0 | LDAP-RETRY | ✅ Healthy |
+| **Sync Service** | v1.2.0 | **v1.3.0** | - | ✅ Healthy |
+| **Frontend** | - | **Latest** | ARM64-FIXED | ✅ Running |
+
+**새로 추가된 기능 (Luckfox)**:
+1. **Certificate Search** (v1.6.0)
+   - LDAP 기반 실시간 인증서 검색
+   - 국가별, 타입별 필터링
+   - 검증 상태별 필터링
+   - 텍스트 검색 (Subject DN, Serial)
+
+2. **Countries API** (v1.6.2)
+   - PostgreSQL DISTINCT 쿼리 (40ms 응답)
+   - 92개 국가 목록 제공
+   - 프론트엔드 드롭다운에서 국기 아이콘 표시
+
+3. **Certificate Export** (v1.6.0)
+   - 단일 인증서 Export (DER/PEM)
+   - 국가별 전체 인증서 Export (ZIP)
+   - 227개 파일 (KR 기준, 253KB)
+
+4. **Failed Upload Cleanup** (v1.4.8)
+   - DELETE `/api/upload/{uploadId}` 엔드포인트
+   - DB 및 임시 파일 자동 정리
+
+**GitHub Actions 빌드 성과**:
+- **Run ID**: 21053986767
+- **Branch**: `main`
+- **Trigger**: Push (commit cc30e21)
+- **빌드 시간**:
+  - detect-changes: 4초
+  - build-frontend: 5분 2초
+  - build-pkd-management: 2시간 21분 30초 (vcpkg 캐시 활용)
+  - build-pa-service: 2시간 11분 8초
+  - build-sync-service: 2시간 35초
+  - combine-artifacts: 10초
+- **총 빌드 시간**: ~2시간 21분 (병렬 처리)
+
+**배포 프로세스**:
+1. ✅ **백업 생성**: `/home/luckfox/icao-backup-20260116_142626/`
+   - docker-compose-luckfox.yaml (5.8KB)
+   - nginx/, openapi/ 디렉토리
+   - 모든 서비스 로그 (총 63MB)
+   - Docker 이미지 버전 정보
+
+2. ✅ **Artifacts 다운로드**:
+   - `pkd-management-arm64.tar.gz` (125MB)
+   - `pkd-pa-arm64.tar.gz` (124MB)
+   - `pkd-sync-arm64.tar.gz` (124MB)
+   - `pkd-frontend-arm64.tar.gz` (66MB)
+
+3. ✅ **OCI → Docker 변환**: skopeo 사용
+4. ✅ **이미지 전송 및 로드**: sshpass 비대화형 인증
+5. ✅ **서비스 재시작**: 개별 컨테이너 재생성
+6. ✅ **Health Check**: 모든 서비스 정상 동작 확인
+
+**배포 후 조치**:
+- ✅ LDAP 인증 문제 해결 (컨테이너 재시작)
+- ✅ `reconciliation_summary`, `reconciliation_log` 테이블 생성
+- ✅ Countries API 테스트 통과 (92개 국가)
+- ✅ Certificate Search API 테스트 통과 (KR CSCA 7개 발견)
+
+**검증 결과**:
+```bash
+# Countries API
+curl http://192.168.100.11:8080/api/certificates/countries
+→ 92 countries (40ms 응답)
+
+# Certificate Search
+curl "http://192.168.100.11:8080/api/certificates/search?country=KR&certType=CSCA&limit=3"
+→ success: true, total: 7
+
+# Service Health
+docker ps | grep icao-pkd
+→ All services running (healthy)
+```
+
+**알려진 제한사항**:
+- Sync Service는 v1.3.0으로 배포 (소스 v1.4.0과 불일치)
+  - Auto Reconcile History API는 v1.4.0+에서 지원
+  - 기본 Sync 모니터링 및 설정 UI는 정상 동작
+  - 다음 배포 시 버전 문자열 업데이트 후 재빌드 권장
+
+**접속 정보**:
+- Frontend: http://192.168.100.11/
+- API Gateway: http://192.168.100.11:8080/api
+- API Documentation: http://192.168.100.11:8080/api-docs
+
+**문서 참조**:
+- [docs/LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md) - 배포 가이드
+- [scripts/deploy-from-github-artifacts.sh](scripts/deploy-from-github-artifacts.sh) - 자동화 스크립트
+
+**커밋**: cc30e21 (ci: Add main branch to ARM64 build workflow triggers)
+
+---
+
 ### 2026-01-15: Countries API Performance Optimization - PostgreSQL Implementation (v1.6.2)
 
 **국가 목록 API 성능 개선: LDAP → PostgreSQL 전환**:
