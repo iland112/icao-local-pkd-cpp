@@ -5,6 +5,7 @@ on:
   workflow_dispatch:  # Manual trigger
   push:
     branches:
+      - main
       - feature/arm64-support
       - feature/openapi-support
     paths:
