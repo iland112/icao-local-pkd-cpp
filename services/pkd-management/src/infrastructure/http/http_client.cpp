@@ -3,7 +3,6 @@
 #include <regex>
 #include <thread>
 #include <chrono>
-#include <promise>
 #include <future>
 
 namespace infrastructure {
@@ -24,7 +23,6 @@ std::optional<std::string> HttpClient::fetchHtml(const std::string& url, int tim
 
     // Create HTTP client
     auto client = drogon::HttpClient::newHttpClient(host);
-    client->setTimeout(timeoutSeconds);
 
     // Create request
     auto req = drogon::HttpRequest::newHttpRequest();
@@ -49,9 +47,8 @@ std::optional<std::string> HttpClient::fetchHtml(const std::string& url, int tim
                            html.size());
                 promise.set_value(html);
             } else {
-                spdlog::error("[HttpClient] HTTP error: {} {}",
-                            static_cast<int>(response->getStatusCode()),
-                            response->getReasonPhrase());
+                spdlog::error("[HttpClient] HTTP error: {}",
+                            static_cast<int>(response->getStatusCode()));
                 promise.set_value(std::nullopt);
             }
         } else {
