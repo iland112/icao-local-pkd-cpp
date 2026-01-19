@@ -32,7 +32,7 @@ struct IcaoVersion {
     std::optional<std::string> notificationSentAt;
 
     // Link to upload
-    std::optional<int> importUploadId;
+    std::optional<std::string> importUploadId;  // UUID string format
     std::optional<int> certificateCount;
     std::optional<std::string> errorMessage;
 

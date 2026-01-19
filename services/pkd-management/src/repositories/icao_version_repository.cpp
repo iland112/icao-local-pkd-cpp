@@ -129,7 +129,7 @@ bool IcaoVersionRepository::markNotificationSent(const std::string& fileName) {
 }
 
 bool IcaoVersionRepository::linkToUpload(const std::string& fileName,
-                                        int uploadId,
+                                        const std::string& uploadId,
                                         int certificateCount) {
     PGconn* conn = PQconnectdb(connInfo_.c_str());
     if (PQstatus(conn) != CONNECTION_OK) {
@@ -147,7 +147,7 @@ bool IcaoVersionRepository::linkToUpload(const std::string& fileName,
         "WHERE file_name = $3";
 
     const char* paramValues[3] = {
-        std::to_string(uploadId).c_str(),
+        uploadId.c_str(),  // UUID as string
         std::to_string(certificateCount).c_str(),
         fileName.c_str()
     };
@@ -349,7 +349,7 @@ domain::models::IcaoVersion IcaoVersionRepository::resultToVersion(PGresult* res
     version.status = PQgetvalue(res, row, 7);
     version.notificationSent = (std::string(PQgetvalue(res, row, 8)) == "t");
     version.notificationSentAt = getOptionalString(res, row, 9);
-    version.importUploadId = getOptionalInt(res, row, 10);
+    version.importUploadId = getOptionalString(res, row, 10);  // UUID as string
     version.certificateCount = getOptionalInt(res, row, 11);
     version.errorMessage = getOptionalString(res, row, 12);
 

@@ -42,7 +42,7 @@ public:
     /**
      * @brief Link version to uploaded file
      */
-    bool linkToUpload(const std::string& fileName, int uploadId,
+    bool linkToUpload(const std::string& fileName, const std::string& uploadId,
                      int certificateCount);
 
     /**
