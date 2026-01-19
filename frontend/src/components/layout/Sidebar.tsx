@@ -84,6 +84,12 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    title: 'ICAO Auto Sync',
+    items: [
+      { path: '/icao', label: 'ICAO 버전 상태', icon: <Zap className="w-4 h-4" /> },
+    ],
+  },
+  {
     title: 'System Monitoring',
     items: [
       { path: '/monitoring', label: '시스템 모니터링', icon: <Activity className="w-4 h-4" /> },
