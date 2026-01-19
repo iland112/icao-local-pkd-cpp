@@ -68,7 +68,7 @@ services:
     # build:
     #   context: ..
     #   dockerfile: services/pkd-management/Dockerfile
-    image: icao-pkd-management:test-v1.7.0-uuid  # Using test image with ICAO Auto Sync
+    image: icao-pkd-management:test-v1.7.0-parser-fix  # Using test image with ICAO Auto Sync
     container_name: icao-local-pkd-management
     # ports:
     #   - "8081:8081"  # Direct access (use API Gateway instead)
