@@ -340,7 +340,7 @@ services:
     container_name: icao-local-pkd-haproxy
     ports:
       - "389:389"
-      - "8404:8404"
+      # - "8404:8404"  # Stats page - temporarily disabled due to WSL2 port forwarding issue
     volumes:
       - ../haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:
