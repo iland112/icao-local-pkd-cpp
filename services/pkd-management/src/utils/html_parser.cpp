@@ -30,27 +30,19 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseVersions(const std::st
 std::vector<domain::models::IcaoVersion> HtmlParser::parseDscCrlVersions(const std::string& html) {
     std::vector<domain::models::IcaoVersion> versions;
 
-    // Regex pattern for DSC/CRL files
-    // Matches: icaopkd-001-dsccrl-005973.ldif
-    std::regex pattern(R"(icaopkd-001-dsccrl-(\d+)\.ldif)");
+    // NEW: Parse from table format (2026-01 portal update)
+    // HTML structure: <td>eMRTD Certificates (DSC, BCSC, BCSC-NC) and CRL</td><td>009668</td>
+    std::regex tablePattern(
+        R"(eMRTD Certificates.*?CRL</td>\s*<td>(\d+)</td>)",
+        std::regex::icase
+    );
 
-    std::sregex_iterator iter(html.begin(), html.end(), pattern);
-    std::sregex_iterator end;
-
-    std::set<int> seenVersions;  // Avoid duplicates
-
-    while (iter != end) {
-        std::smatch match = *iter;
-        int versionNumber = std::stoi(match.str(1));
-
-        // Check for duplicates
-        if (seenVersions.find(versionNumber) != seenVersions.end()) {
-            ++iter;
-            continue;
-        }
-        seenVersions.insert(versionNumber);
-
-        std::string fileName = match.str(0);
+    std::smatch tableMatch;
+    if (std::regex_search(html, tableMatch, tablePattern)) {
+        int versionNumber = std::stoi(tableMatch.str(1));
+        std::string fileName = "icaopkd-001-dsccrl-" +
+                              std::string(6 - std::to_string(versionNumber).length(), '0') +
+                              std::to_string(versionNumber) + ".ldif";
 
         auto version = domain::models::IcaoVersion::createDetected(
             "DSC_CRL",
@@ -58,12 +50,41 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseDscCrlVersions(const s
             versionNumber
         );
         version.detectedAt = getCurrentTimestamp();
-
         versions.push_back(version);
 
-        spdlog::debug("[HtmlParser] Found DSC/CRL: {} (version {})",
-                     fileName, versionNumber);
+        spdlog::info("[HtmlParser] Found DSC/CRL from table: {} (version {})",
+                    fileName, versionNumber);
+        return versions;
+    }
 
+    // FALLBACK: Old format with direct file links
+    // Matches: icaopkd-001-dsccrl-005973.ldif
+    std::regex pattern(R"(icaopkd-001-dsccrl-(\d+)\.ldif)");
+    std::sregex_iterator iter(html.begin(), html.end(), pattern);
+    std::sregex_iterator end;
+    std::set<int> seenVersions;
+
+    while (iter != end) {
+        std::smatch match = *iter;
+        int versionNumber = std::stoi(match.str(1));
+
+        if (seenVersions.find(versionNumber) != seenVersions.end()) {
+            ++iter;
+            continue;
+        }
+        seenVersions.insert(versionNumber);
+
+        std::string fileName = match.str(0);
+        auto version = domain::models::IcaoVersion::createDetected(
+            "DSC_CRL",
+            fileName,
+            versionNumber
+        );
+        version.detectedAt = getCurrentTimestamp();
+        versions.push_back(version);
+
+        spdlog::debug("[HtmlParser] Found DSC/CRL from link: {} (version {})",
+                     fileName, versionNumber);
         ++iter;
     }
 
@@ -73,27 +94,19 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseDscCrlVersions(const s
 std::vector<domain::models::IcaoVersion> HtmlParser::parseMasterListVersions(const std::string& html) {
     std::vector<domain::models::IcaoVersion> versions;
 
-    // Regex pattern for Master List files
-    // Matches: icaopkd-002-ml-000216.ldif
-    std::regex pattern(R"(icaopkd-002-ml-(\d+)\.ldif)");
+    // NEW: Parse from table format (2026-01 portal update)
+    // HTML structure: <td>CSCA MasterList</td><td>000334</td>
+    std::regex tablePattern(
+        R"(CSCA\s+MasterList</td>\s*<td>(\d+)</td>)",
+        std::regex::icase
+    );
 
-    std::sregex_iterator iter(html.begin(), html.end(), pattern);
-    std::sregex_iterator end;
-
-    std::set<int> seenVersions;  // Avoid duplicates
-
-    while (iter != end) {
-        std::smatch match = *iter;
-        int versionNumber = std::stoi(match.str(1));
-
-        // Check for duplicates
-        if (seenVersions.find(versionNumber) != seenVersions.end()) {
-            ++iter;
-            continue;
-        }
-        seenVersions.insert(versionNumber);
-
-        std::string fileName = match.str(0);
+    std::smatch tableMatch;
+    if (std::regex_search(html, tableMatch, tablePattern)) {
+        int versionNumber = std::stoi(tableMatch.str(1));
+        std::string fileName = "icaopkd-002-ml-" +
+                              std::string(6 - std::to_string(versionNumber).length(), '0') +
+                              std::to_string(versionNumber) + ".ldif";
 
         auto version = domain::models::IcaoVersion::createDetected(
             "MASTERLIST",
@@ -101,12 +114,41 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseMasterListVersions(con
             versionNumber
         );
         version.detectedAt = getCurrentTimestamp();
-
         versions.push_back(version);
 
-        spdlog::debug("[HtmlParser] Found Master List: {} (version {})",
-                     fileName, versionNumber);
+        spdlog::info("[HtmlParser] Found Master List from table: {} (version {})",
+                    fileName, versionNumber);
+        return versions;
+    }
 
+    // FALLBACK: Old format with direct file links
+    // Matches: icaopkd-002-ml-000216.ldif
+    std::regex pattern(R"(icaopkd-002-ml-(\d+)\.ldif)");
+    std::sregex_iterator iter(html.begin(), html.end(), pattern);
+    std::sregex_iterator end;
+    std::set<int> seenVersions;
+
+    while (iter != end) {
+        std::smatch match = *iter;
+        int versionNumber = std::stoi(match.str(1));
+
+        if (seenVersions.find(versionNumber) != seenVersions.end()) {
+            ++iter;
+            continue;
+        }
+        seenVersions.insert(versionNumber);
+
+        std::string fileName = match.str(0);
+        auto version = domain::models::IcaoVersion::createDetected(
+            "MASTERLIST",
+            fileName,
+            versionNumber
+        );
+        version.detectedAt = getCurrentTimestamp();
+        versions.push_back(version);
+
+        spdlog::debug("[HtmlParser] Found Master List from link: {} (version {})",
+                     fileName, versionNumber);
         ++iter;
     }
 
