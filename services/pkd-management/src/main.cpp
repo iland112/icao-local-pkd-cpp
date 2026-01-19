@@ -64,8 +64,18 @@
 #include "repositories/ldap_certificate_repository.h"
 #include "services/certificate_service.h"
 
+// ICAO Auto Sync Module (v1.7.0)
+#include "handlers/icao_handler.h"
+#include "services/icao_sync_service.h"
+#include "repositories/icao_version_repository.h"
+#include "infrastructure/http/http_client.h"
+#include "infrastructure/notification/email_sender.h"
+
 // Global certificate service (initialized in main(), used by all routes)
 std::shared_ptr<services::CertificateService> certificateService;
+
+// Global ICAO handler (initialized in main())
+std::shared_ptr<handlers::IcaoHandler> icaoHandler;
 
 // Global cache for available countries (populated on startup)
 std::set<std::string> cachedCountries;
@@ -117,6 +127,12 @@ struct AppConfig {
     // Trust Anchor for Master List CMS signature verification
     std::string trustAnchorPath = "/app/data/cert/UN_CSCA_2.pem";
 
+    // ICAO Auto Sync Configuration (v1.7.0)
+    std::string icaoPortalUrl = "https://pkddownloadsg.icao.int/";
+    std::string notificationEmail = "admin@localhost";
+    bool icaoAutoNotify = true;
+    int icaoHttpTimeout = 10;  // seconds
+
     int serverPort = 8081;
     int threadNum = 4;
 
@@ -140,6 +156,12 @@ struct AppConfig {
         if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
         if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
         if (auto val = std::getenv("TRUST_ANCHOR_PATH")) config.trustAnchorPath = val;
+
+        // ICAO Auto Sync environment variables
+        if (auto val = std::getenv("ICAO_PORTAL_URL")) config.icaoPortalUrl = val;
+        if (auto val = std::getenv("ICAO_NOTIFICATION_EMAIL")) config.notificationEmail = val;
+        if (auto val = std::getenv("ICAO_AUTO_NOTIFY")) config.icaoAutoNotify = (std::string(val) == "true");
+        if (auto val = std::getenv("ICAO_HTTP_TIMEOUT")) config.icaoHttpTimeout = std::stoi(val);
 
         return config;
     }
@@ -5993,6 +6015,12 @@ paths:
         {drogon::Get}
     );
 
+    // Register ICAO Auto Sync routes (v1.7.0)
+    if (icaoHandler) {
+        icaoHandler->registerRoutes(app);
+        spdlog::info("ICAO Auto Sync routes registered");
+    }
+
     spdlog::info("API routes registered");
 }
 
@@ -6034,6 +6062,40 @@ int main(int argc, char* argv[]) {
         // TODO: Replace with Redis-based caching for better performance and scalability
         // Countries API now uses PostgreSQL for instant response (~70ms)
         spdlog::info("Countries API configured (PostgreSQL query, ~70ms response time)");
+
+        // Initialize ICAO Auto Sync Module (v1.7.0)
+        spdlog::info("Initializing ICAO Auto Sync module...");
+
+        std::string dbConnInfo = "host=" + appConfig.dbHost +
+                                " port=" + std::to_string(appConfig.dbPort) +
+                                " dbname=" + appConfig.dbName +
+                                " user=" + appConfig.dbUser +
+                                " password=" + appConfig.dbPassword;
+
+        auto icaoRepo = std::make_shared<repositories::IcaoVersionRepository>(dbConnInfo);
+        auto httpClient = std::make_shared<infrastructure::http::HttpClient>();
+
+        infrastructure::notification::EmailSender::EmailConfig emailConfig;
+        emailConfig.smtpHost = "localhost";
+        emailConfig.smtpPort = 25;
+        emailConfig.fromAddress = appConfig.notificationEmail;
+        emailConfig.useTls = false;
+        auto emailSender = std::make_shared<infrastructure::notification::EmailSender>(emailConfig);
+
+        services::IcaoSyncService::Config icaoConfig;
+        icaoConfig.icaoPortalUrl = appConfig.icaoPortalUrl;
+        icaoConfig.notificationEmail = appConfig.notificationEmail;
+        icaoConfig.autoNotify = appConfig.icaoAutoNotify;
+        icaoConfig.httpTimeoutSeconds = appConfig.icaoHttpTimeout;
+
+        auto icaoService = std::make_shared<services::IcaoSyncService>(
+            icaoRepo, httpClient, emailSender, icaoConfig
+        );
+
+        icaoHandler = std::make_shared<handlers::IcaoHandler>(icaoService);
+        spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
+                    appConfig.icaoPortalUrl,
+                    appConfig.icaoAutoNotify ? "enabled" : "disabled");
 
         auto& app = drogon::app();
 
