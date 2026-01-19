@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.6.2
-**Last Updated**: 2026-01-16
+**Version**: 1.7.0
+**Last Updated**: 2026-01-20
 **Status**: Production Ready
 
 ---
@@ -21,6 +21,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 | **DB-LDAP Sync** | PostgreSQL-LDAP 동기화 모니터링 | ✅ Complete |
 | **Auto Reconcile** | DB-LDAP 불일치 자동 조정 (v1.6.0+) | ✅ Complete |
 | **Certificate Search** | LDAP 인증서 검색 및 내보내기 (v1.6.0+) | ✅ Complete |
+| **ICAO Auto Sync** | ICAO PKD 버전 자동 감지 및 알림 (v1.7.0+) | ✅ Complete |
 | **React.js Frontend** | CSR 기반 웹 UI | ✅ Complete |
 
 ### Technology Stack
@@ -50,6 +51,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                      API Gateway (Nginx :8080)                           │
 │  /api/upload, /api/health, /api/certificates → PKD Management           │
+│  /api/icao/*                                 → PKD Management (v1.7.0)  │
 │  /api/pa/*                                   → PA Service               │
 │  /api/sync/*                                 → Sync Service             │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -59,7 +61,8 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 ┌───────────────┐          ┌───────────────┐          ┌───────────────┐
 │ PKD Management│          │  PA Service   │          │ Sync Service  │
 │    (:8081)    │          │   (:8082)     │          │   (:8083)     │
-│  Upload/Cert  │          │ PA Verify/DG  │          │ DB-LDAP Sync  │
+│ Upload/Cert/  │          │ PA Verify/DG  │          │ DB-LDAP Sync  │
+│  ICAO Sync    │          │               │          │               │
 └───────────────┘          └───────────────┘          └───────────────┘
         │                           │                           │
         └───────────────────────────┼───────────────────────────┘
@@ -177,7 +180,7 @@ icao-local-pkd/
 |---------|-----|
 | Frontend | http://localhost:3000 |
 | **API Gateway** | **http://localhost:8080/api** |
-| ├─ PKD Management | http://localhost:8080/api/upload, /api/health, /api/certificates |
+| ├─ PKD Management | http://localhost:8080/api/upload, /api/health, /api/certificates, /api/icao |
 | ├─ PA Service | http://localhost:8080/api/pa/* |
 | └─ Sync Service | http://localhost:8080/api/sync/* |
 | HAProxy Stats | http://localhost:8404 |
@@ -209,6 +212,35 @@ icao-local-pkd/
 | GET | `/api/certificates/detail` | Get certificate details by DN |
 | GET | `/api/certificates/export/file` | Export single certificate (DER/PEM) |
 | GET | `/api/certificates/export/country` | Export country certificates (ZIP) |
+
+### ICAO Auto Sync (via Gateway) - v1.7.0
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| **GET** | **`/api/icao/latest`** | **Get latest detected versions per collection type** |
+| **GET** | **`/api/icao/history?limit=N`** | **Get version detection history** |
+| **POST** | **`/api/icao/check-updates`** | **Manual check for new versions (async)** |
+
+**Features**:
+
+- Automatic ICAO portal HTML parsing (table format + fallback)
+- DSC/CRL and Master List version detection
+- Database tracking with status lifecycle (DETECTED → NOTIFIED → DOWNLOADED → IMPORTED)
+- Email notification support (fallback to logging)
+- ICAO Terms of Service compliant (manual download only)
+
+**Usage Example**:
+
+```bash
+# Get latest versions
+curl http://localhost:8080/api/icao/latest
+
+# Get detection history
+curl http://localhost:8080/api/icao/history?limit=10
+
+# Trigger manual check
+curl -X POST http://localhost:8080/api/icao/check-updates
+```
 
 ### PA Service (via Gateway)
 
@@ -554,6 +586,109 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-20: ICAO Auto Sync Tier 1 Complete Implementation (v1.7.0)
+
+**ICAO PKD 버전 자동 감지 및 알림 기능 완료**:
+
+**구현 일시**: 2026-01-20
+**브랜치**: feature/icao-auto-sync-tier1 (15 commits)
+**상태**: ✅ Integration Testing Complete
+
+**핵심 기능**:
+
+1. **ICAO Portal Integration**
+   - HTML 파싱: 테이블 형식 + 링크 형식 (Dual-mode fallback)
+   - 버전 감지: DSC/CRL (009668), Master List (000334)
+   - HTTP Client: Drogon 기반 비동기 요청
+   - User-Agent: Mozilla/5.0 (compatible; ICAO-Local-PKD/1.7.0)
+
+2. **Clean Architecture Implementation**
+   - 6-layer 구조: Domain → Infrastructure → Repository → Service → Handler
+   - 14개 신규 파일, ~1,400 lines of code
+   - Domain Model: IcaoVersion (status lifecycle tracking)
+   - Repository: PostgreSQL with parameterized queries
+   - Service: IcaoSyncService (orchestration)
+   - Handler: REST API endpoints
+
+3. **Database Schema**
+   - `icao_pkd_versions` 테이블 생성
+   - UUID 호환성: `import_upload_id UUID` (uploaded_file 연동)
+   - 인덱스: collection_type, file_version, status
+   - Unique constraints: file_name, (collection_type, file_version)
+
+4. **API Endpoints** (API Gateway 통합)
+   - `GET /api/icao/latest` - 최신 버전 조회
+   - `GET /api/icao/history?limit=N` - 감지 이력 조회
+   - `POST /api/icao/check-updates` - 수동 버전 체크 (비동기)
+
+5. **Email Notification**
+   - EmailSender 클래스 (SMTP 지원)
+   - Fallback to console logging (SMTP 실패 시)
+   - 알림 포맷: HTML with action items
+
+**기술적 해결 사항**:
+
+1. **Drogon API 호환성**
+   - `setTimeout()` 제거 (API 미지원)
+   - `getReasonPhrase()` 제거 (API 미지원)
+   - Promise/Future 패턴으로 동기화
+
+2. **UUID Type Mismatch**
+   - Database: INTEGER → UUID 변경
+   - Domain Model: `std::optional<std::string> importUploadId`
+   - Repository: `linkToUpload(const std::string& uploadId)`
+
+3. **ICAO Portal Format Change**
+   - 기존: 직접 다운로드 링크 (`<a href="...ldif">`)
+   - 신규: 테이블 기반 (`<td>009668</td>`)
+   - 해결: Dual-mode 파서 (테이블 우선, 링크 폴백)
+
+4. **WSL2 Port Forwarding**
+   - HAProxy stats 포트(8404) 비활성화
+   - LDAP 포트(389) 정상 동작 확인
+
+**테스트 결과**:
+
+```bash
+# Latest versions
+curl http://localhost:8080/api/icao/latest
+# Response: 2 versions (DSC_CRL 9668, MASTERLIST 334)
+
+# History
+curl http://localhost:8080/api/icao/history?limit=5
+# Response: 2 records with full metadata
+
+# CORS verification
+# access-control-allow-origin: *
+# access-control-allow-methods: GET, POST, PUT, DELETE, OPTIONS
+```
+
+**문서화**:
+
+- `docs/ICAO_AUTO_SYNC_STATUS.md` - 구현 상태 (85% 완료)
+- `docs/ICAO_AUTO_SYNC_UUID_FIX.md` - UUID 호환성 해결
+- `docs/ICAO_AUTO_SYNC_INTEGRATION_ANALYSIS.md` - 통합 전략 분석
+- `docs/PKD_MANAGEMENT_REFACTORING_PLAN.md` - 향후 리팩토링 계획
+- CLAUDE.md 업데이트 (v1.7.0)
+
+**향후 작업** (Phase 7-8):
+
+- Frontend Dashboard Widget (ICAO 버전 상태 표시)
+- Cron Job Script (Daily version check)
+- Production Deployment
+
+**커밋**:
+
+- a39a490: feat: Implement ICAO Auto Sync Tier 1 with Clean Architecture
+- 0d1480e: fix: UUID type compatibility
+- c0af18d: fix: importUploadId string type
+- 53f4d35: fix: Drogon API compatibility
+- f17fa41: feat: Dual-mode HTML parser (table + link)
+- b34eee9: fix: WSL2 port forwarding (HAProxy stats disabled)
+- 38c2dd1: feat: Add ICAO routing to API Gateway
+
+---
 
 ### 2026-01-16: ARM64 Production Deployment to Luckfox (v1.6.1)
 
