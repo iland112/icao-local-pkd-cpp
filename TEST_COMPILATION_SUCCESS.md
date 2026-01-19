@@ -143,21 +143,30 @@ warning: unused parameter 'req' [-Wunused-parameter]
 ## Next Steps
 
 ### 1. Runtime Testing ✅ Ready
+
+**Compilation Phase Complete!**
+
+Binary verified at `/app/pkd-management` (14MB) with all ICAO modules compiled.
+
+**For detailed runtime testing procedures, see**: [docs/ICAO_AUTO_SYNC_RUNTIME_TESTING.md](docs/ICAO_AUTO_SYNC_RUNTIME_TESTING.md)
+
+**Quick Start**:
 ```bash
-# Test container startup
-docker run --rm -d --name icao-test \
-  -e DB_HOST=localhost \
-  -e LDAP_HOST=localhost \
-  icao-pkd-management:test-v1.7.0
+# 1. Start infrastructure services
+docker compose -f docker/docker-compose.yaml up -d postgres openldap1 openldap2 haproxy
 
-# Check logs
-docker logs icao-test
+# 2. Run database migration
+docker compose -f docker/docker-compose.yaml exec -T postgres psql -U pkd -d pkd < docker/init-scripts/004_create_icao_versions_table.sql
 
-# Test health endpoint
-curl http://localhost:8081/api/health
+# 3. Update docker-compose.yaml to use test image
+# image: icao-pkd-management:test-v1.7.0
 
-# Test ICAO endpoints
-curl http://localhost:8081/api/icao/latest
+# 4. Start PKD Management service
+docker compose -f docker/docker-compose.yaml up -d pkd-management
+
+# 5. Test ICAO endpoints (through API Gateway)
+curl http://localhost:8080/api/icao/latest
+curl http://localhost:8080/api/icao/check-updates
 ```
 
 ### 2. Integration Testing
