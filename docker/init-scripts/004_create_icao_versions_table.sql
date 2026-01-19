@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS icao_pkd_versions (
     -- Metadata
     notification_sent BOOLEAN DEFAULT FALSE,
     notification_sent_at TIMESTAMP,
-    import_upload_id INTEGER REFERENCES uploaded_file(id),  -- Link to existing upload
+    import_upload_id UUID REFERENCES uploaded_file(id),  -- Link to existing upload (UUID type)
     certificate_count INTEGER,  -- From upload stats
     error_message TEXT,
 
