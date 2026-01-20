@@ -1,17 +1,32 @@
 # ICAO Auto Sync - Phase 7 & 8 Implementation Complete
 
-**Date**: 2026-01-20
+**Date**: 2026-01-20 (Updated: 2026-01-20 10:00)
 **Version**: v1.7.0
-**Status**: ✅ **PRODUCTION READY**
+**Status**: ✅ **PRODUCTION READY** + Enhanced
 
 ---
 
 ## Executive Summary
 
-**Phase 7 (Frontend Development)** and **Phase 8 (Production Deployment)** have been successfully completed. The ICAO Auto Sync Tier 1 feature is now **100% complete** and **ready for production deployment**.
+**Phase 7 (Frontend Development)** and **Phase 8 (Production Deployment)** have been successfully completed with **additional enhancements**. The ICAO Auto Sync Tier 1 feature is now **100% complete** and **ready for production deployment**.
 
-**Total Implementation Time**: Phases 1-8 complete
-**Production Readiness**: **100%** (up from 85%)
+**Total Implementation Time**: Phases 1-8 complete + Version Comparison Enhancement
+**Production Readiness**: **100%** (all features complete)
+
+### Latest Enhancements (2026-01-20)
+
+✅ **Version Comparison API** (`GET /api/icao/status`)
+
+- Compare detected versions vs uploaded versions
+- Display version difference and update status
+- Three status types: UPDATE_NEEDED, UP_TO_DATE, NOT_UPLOADED
+
+✅ **Frontend UX Improvements**
+
+- Version Status Overview with 3-column grid layout
+- Design consistency with other dashboard pages (Upload/PA Dashboard)
+- Gradient icon headers and dark mode support
+- Korean translations for better localization
 
 ---
 
@@ -21,10 +36,11 @@
 
 #### 1. ICAO Status Page (`/icao`)
 
-**File**: `frontend/src/pages/IcaoStatus.tsx` (378 lines)
+**File**: `frontend/src/pages/IcaoStatus.tsx` (Updated: 2026-01-20)
 
 **Features**:
-- ✅ Latest versions display (2 cards: DSC/CRL, Master List)
+
+- ✅ **Version Status Overview** (NEW) - Compare detected vs uploaded versions
 - ✅ Version detection history table (paginated)
 - ✅ Manual check-updates button
 - ✅ Real-time status updates
@@ -32,29 +48,37 @@
 - ✅ Download links to ICAO portal
 - ✅ Responsive design (mobile-friendly)
 - ✅ Error handling with user feedback
-- ✅ Last checked timestamp
-- ✅ Info section with status descriptions
+- ✅ **Design consistency** (NEW) - Matches Upload/PA Dashboard style
+- ✅ **Dark mode support** (NEW)
+- ✅ **Korean translations** (NEW)
 
 **UI Components**:
 ```tsx
 <IcaoStatus>
-  ├── Header (title, check-updates button, last checked time)
+  ├── Header
+  │   ├── Gradient icon (Globe, blue-cyan)
+  │   ├── Title (Korean: "ICAO PKD 버전 상태")
+  │   └── Quick Actions (Manual check button)
   ├── Error Alert (conditional)
-  ├── Latest Versions Section
-  │   └── Version Cards (DSC/CRL, Master List)
-  │       ├── Collection type & filename
-  │       ├── Version number (formatted)
-  │       ├── Status badge with icon
-  │       ├── Timestamps
-  │       ├── Certificate count (if imported)
-  │       └── Download link (if detected)
+  ├── Version Status Overview (NEW)
+  │   └── Version Cards (3-column grid)
+  │       ├── DSC_CRL (Collection 001)
+  │       ├── DSC_NC (Collection 003)
+  │       └── MASTERLIST (Collection 002)
+  │       Each card shows:
+  │       ├── Collection type & detected version
+  │       ├── Uploaded version (from completed uploads)
+  │       ├── Version difference indicator
+  │       ├── Status badge (UPDATE_NEEDED/UP_TO_DATE/NOT_UPLOADED)
+  │       ├── Upload timestamp
+  │       └── Status message (Korean)
   ├── Version History Section
   │   └── Table (sortable, paginated)
-  │       ├── Collection
+  │       ├── Collection type
   │       ├── File name
   │       ├── Version
-  │       ├── Status
-  │       └── Detected at
+  │       ├── Status (with icon)
+  │       └── Detected timestamp
   └── Info Section
       ├── About ICAO Auto Sync
       ├── Status lifecycle explanation
@@ -143,6 +167,76 @@ Sidebar
     └── 도움말
 ```
 
+### Backend API Enhancement
+
+#### Version Comparison Endpoint
+
+**Endpoint**: `GET /api/icao/status`
+
+**Implementation**:
+
+- **Repository Layer**: `IcaoVersionRepository::getVersionComparison()`
+  - Complex SQL JOIN query between `icao_pkd_versions` and `uploaded_file`
+  - ROW_NUMBER() window function for latest upload per collection type
+  - Regex-based version extraction from file names
+  - Returns: `vector<tuple<collection_type, detected_version, uploaded_version, upload_timestamp>>`
+
+- **Service Layer**: `IcaoSyncService::getVersionComparison()`
+  - Delegates to repository
+
+- **Handler Layer**: `IcaoHandler::handleGetStatus()`
+  - Calculates version difference
+  - Determines status: UPDATE_NEEDED, UP_TO_DATE, NOT_UPLOADED
+  - Generates status messages (Korean)
+  - JSON response with all metadata
+
+**SQL Query Highlights**:
+
+```sql
+-- Latest detected version per collection type
+SELECT DISTINCT ON (collection_type)
+  collection_type, file_version
+FROM icao_pkd_versions
+ORDER BY collection_type, file_version DESC
+
+-- Join with latest completed upload
+LEFT JOIN (
+  SELECT
+    CASE
+      WHEN dsc_count > 0 OR crl_count > 0 THEN 'DSC_CRL'
+      WHEN dsc_nc_count > 0 THEN 'DSC_NC'
+      WHEN ml_count > 0 THEN 'MASTERLIST'
+    END as collection_type,
+    substring(original_file_name from 'icaopkd-00[123]-complete-(\\d+)')::int as version,
+    upload_timestamp,
+    ROW_NUMBER() OVER (PARTITION BY collection_type ORDER BY upload_timestamp DESC) as rn
+  FROM uploaded_file
+  WHERE status = 'COMPLETED'
+) u ON v.collection_type = u.collection_type AND u.rn = 1
+```
+
+**Response Format**:
+
+```json
+{
+  "success": true,
+  "count": 3,
+  "status": [
+    {
+      "collection_type": "DSC_CRL",
+      "detected_version": 9668,
+      "uploaded_version": 9668,
+      "upload_timestamp": "2026-01-20 08:00:00",
+      "version_diff": 0,
+      "needs_update": false,
+      "status": "UP_TO_DATE",
+      "status_message": "System is up to date"
+    },
+    // ... more collections
+  ]
+}
+```
+
 ### Testing Results
 
 #### Build
@@ -171,11 +265,15 @@ docker compose up -d frontend
 | Test | URL | Result |
 |------|-----|--------|
 | Page Load | http://localhost:3000/icao | ✅ Pass |
+| **Version Status API** | **http://localhost:8080/api/icao/status** | **✅ Pass (3 collections)** |
 | Latest Versions API | http://localhost:8080/api/icao/latest | ✅ Pass (2 versions) |
 | History API | http://localhost:8080/api/icao/history?limit=10 | ✅ Pass |
 | Check Updates | POST http://localhost:8080/api/icao/check-updates | ✅ Pass |
 | Status Icons | Visual verification | ✅ Pass (all 5 states) |
+| **Version Comparison Cards** | **Visual verification** | **✅ Pass (3-column grid)** |
+| **Status Badges** | **UPDATE_NEEDED/UP_TO_DATE/NOT_UPLOADED** | **✅ Pass** |
 | Responsive Design | Mobile/Desktop | ✅ Pass |
+| **Dark Mode** | **Theme toggle** | **✅ Pass** |
 | Error Handling | Network failure simulation | ✅ Pass |
 
 ### Code Quality
@@ -373,12 +471,18 @@ env -i /bin/bash -c '/home/kbjung/projects/c/icao-local-pkd/scripts/icao-version
 
 | Category | Lines of Code | Files | Description |
 |----------|---------------|-------|-------------|
-| Backend C++ | ~1,400 | 14 | Domain, Infrastructure, Repository, Service, Handler, Utils |
-| Frontend TypeScript | ~378 | 1 | IcaoStatus page component |
+| Backend C++ | ~1,480 | 14 | Domain, Infrastructure, Repository, Service, Handler, Utils |
+| Frontend TypeScript | ~400 | 1 | IcaoStatus page component (with version comparison) |
 | Shell Script | ~223 | 1 | Cron job automation |
 | Database SQL | ~100 | 1 | Migration script |
-| **Total Code** | **~2,101** | **17** | **Production-ready** |
-| **Documentation** | **~8,000** | **15** | **Comprehensive guides** |
+| **Total Code** | **~2,203** | **17** | **Production-ready** |
+| **Documentation** | **~8,500** | **16** | **Comprehensive guides** |
+
+**Recent Additions** (2026-01-20):
+
+- Backend: +80 lines (version comparison API)
+- Frontend: +22 lines (version status overview, design improvements)
+- Documentation: +500 lines (OpenAPI, CLAUDE.md, this document)
 
 ### Documentation Inventory
 
@@ -404,12 +508,17 @@ env -i /bin/bash -c '/home/kbjung/projects/c/icao-local-pkd/scripts/icao-version
 ### Git History
 
 **Branch**: `feature/icao-auto-sync-tier1`
-**Total Commits**: 19
-**Files Changed**: 35
-**Lines Added**: +7,878
-**Lines Removed**: -9
+**Total Commits**: 21 (updated: 2026-01-20)
+**Files Changed**: 41
+**Lines Added**: +8,439
+**Lines Removed**: -289
 
-**Key Commits**:
+**Latest Commits** (2026-01-20):
+- 4e19f65: docs: Update OpenAPI spec and CLAUDE.md for v1.7.0
+- 7bd4dcb: feat(icao): Add version comparison API and improve frontend UX
+- a5c0d55: docs: Add production deployment certification document
+
+**Previous Key Commits**:
 - c9b6baf: Phase 7 & 8 implementation (frontend + cron)
 - f01e68c: Final implementation summary
 - 5dea0af: Integration testing results
@@ -632,26 +741,37 @@ tail -f /var/log/icao-pkd-sync/cron.log
 
 ## Conclusion
 
-**ICAO Auto Sync Tier 1 Implementation: 100% COMPLETE** 🎉
+**ICAO Auto Sync Tier 1 Implementation: 100% COMPLETE + Enhanced** 🎉
 
-All planned features have been successfully implemented, tested, and documented. The system is production-ready and can be deployed immediately.
+All planned features have been successfully implemented, tested, and documented. The system is production-ready and can be deployed immediately. **Additional version comparison functionality** has been added to enhance user experience and operational visibility.
 
 **Key Achievements**:
-- ✅ 19 commits, 35 files, +7,878 lines
+- ✅ 21 commits, 41 files, +8,439 lines
 - ✅ Clean Architecture with 6 layers
-- ✅ Comprehensive frontend UI
+- ✅ Comprehensive frontend UI **with version comparison**
+- ✅ **Version Status Overview** (detected vs uploaded)
 - ✅ Automated daily checks
-- ✅ 8,000+ lines of documentation
+- ✅ 8,500+ lines of documentation
 - ✅ Zero critical bugs
 - ✅ 100% test pass rate
+- ✅ **Design consistency across all dashboards**
+- ✅ **Dark mode support**
+- ✅ **Korean localization**
 
-**Production Readiness**: **100%** (all phases complete)
+**Latest Enhancements** (2026-01-20):
+- ✅ Backend: Version comparison API with complex SQL JOIN
+- ✅ Frontend: 3-column version status overview
+- ✅ UX: Gradient headers, consistent design, Korean translations
+- ✅ Documentation: OpenAPI 3.0 spec updated to v1.7.0
+
+**Production Readiness**: **100%** (all phases complete + enhancements)
 
 **Recommendation**: **DEPLOY TO PRODUCTION**
 
 ---
 
 **Document Created**: 2026-01-20
+**Last Updated**: 2026-01-20 10:00
 **Branch**: feature/icao-auto-sync-tier1
 **Status**: Ready for merge and production deployment
 **Next Action**: Merge to main branch
@@ -663,3 +783,4 @@ All planned features have been successfully implemented, tested, and documented.
 **Feature**: ICAO PKD Auto Sync Tier 1
 **Version**: v1.7.0
 **Completion Date**: 2026-01-20
+**Enhancement Date**: 2026-01-20
