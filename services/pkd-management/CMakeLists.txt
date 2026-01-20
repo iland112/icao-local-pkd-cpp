@@ -56,9 +56,18 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/processing_strategy.cpp
     src/ldif_processor.cpp
-    # Clean Architecture Layers
+
+    # Clean Architecture Layers (Existing)
     src/repositories/ldap_certificate_repository.cpp
     src/services/certificate_service.cpp
+
+    # ICAO Auto Sync Module (NEW - v1.7.0)
+    src/infrastructure/http/http_client.cpp
+    src/infrastructure/notification/email_sender.cpp
+    src/utils/html_parser.cpp
+    src/repositories/icao_version_repository.cpp
+    src/services/icao_sync_service.cpp
+    src/handlers/icao_handler.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
