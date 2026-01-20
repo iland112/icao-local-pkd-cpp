@@ -65,6 +65,12 @@ public:
      */
     std::vector<domain::models::IcaoVersion> getVersionHistory(int limit);
 
+    /**
+     * @brief Get version comparison status (detected vs uploaded)
+     * @return Vector of tuples: (collection_type, detected_version, uploaded_version, upload_timestamp)
+     */
+    std::vector<std::tuple<std::string, int, int, std::string>> getVersionComparison();
+
 private:
     std::shared_ptr<repositories::IcaoVersionRepository> repo_;
     std::shared_ptr<infrastructure::http::HttpClient> httpClient_;

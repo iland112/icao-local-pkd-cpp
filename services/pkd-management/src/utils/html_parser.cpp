@@ -21,8 +21,12 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseVersions(const std::st
     auto mlVersions = parseMasterListVersions(html);
     versions.insert(versions.end(), mlVersions.begin(), mlVersions.end());
 
-    spdlog::info("[HtmlParser] Found {} total versions (DSC/CRL: {}, ML: {})",
-                versions.size(), dscVersions.size(), mlVersions.size());
+    // Parse DSC_NC (Non-Conformant) versions
+    auto dscNcVersions = parseDscNcVersions(html);
+    versions.insert(versions.end(), dscNcVersions.begin(), dscNcVersions.end());
+
+    spdlog::info("[HtmlParser] Found {} total versions (DSC/CRL: {}, ML: {}, DSC_NC: {})",
+                versions.size(), dscVersions.size(), mlVersions.size(), dscNcVersions.size());
 
     return versions;
 }
@@ -40,7 +44,7 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseDscCrlVersions(const s
     std::smatch tableMatch;
     if (std::regex_search(html, tableMatch, tablePattern)) {
         int versionNumber = std::stoi(tableMatch.str(1));
-        std::string fileName = "icaopkd-001-dsccrl-" +
+        std::string fileName = "icaopkd-001-complete-" +
                               std::string(6 - std::to_string(versionNumber).length(), '0') +
                               std::to_string(versionNumber) + ".ldif";
 
@@ -58,8 +62,8 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseDscCrlVersions(const s
     }
 
     // FALLBACK: Old format with direct file links
-    // Matches: icaopkd-001-dsccrl-005973.ldif
-    std::regex pattern(R"(icaopkd-001-dsccrl-(\d+)\.ldif)");
+    // Matches: icaopkd-001-complete-009668.ldif
+    std::regex pattern(R"(icaopkd-001-complete-(\d+)\.ldif)");
     std::sregex_iterator iter(html.begin(), html.end(), pattern);
     std::sregex_iterator end;
     std::set<int> seenVersions;
@@ -104,7 +108,7 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseMasterListVersions(con
     std::smatch tableMatch;
     if (std::regex_search(html, tableMatch, tablePattern)) {
         int versionNumber = std::stoi(tableMatch.str(1));
-        std::string fileName = "icaopkd-002-ml-" +
+        std::string fileName = "icaopkd-002-complete-" +
                               std::string(6 - std::to_string(versionNumber).length(), '0') +
                               std::to_string(versionNumber) + ".ldif";
 
@@ -116,14 +120,14 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseMasterListVersions(con
         version.detectedAt = getCurrentTimestamp();
         versions.push_back(version);
 
-        spdlog::info("[HtmlParser] Found Master List from table: {} (version {})",
+        spdlog::info("[HtmlParser] Found CSCA Master List from table: {} (version {})",
                     fileName, versionNumber);
         return versions;
     }
 
     // FALLBACK: Old format with direct file links
-    // Matches: icaopkd-002-ml-000216.ldif
-    std::regex pattern(R"(icaopkd-002-ml-(\d+)\.ldif)");
+    // Matches: icaopkd-002-complete-000334.ldif
+    std::regex pattern(R"(icaopkd-002-complete-(\d+)\.ldif)");
     std::sregex_iterator iter(html.begin(), html.end(), pattern);
     std::sregex_iterator end;
     std::set<int> seenVersions;
@@ -147,7 +151,71 @@ std::vector<domain::models::IcaoVersion> HtmlParser::parseMasterListVersions(con
         version.detectedAt = getCurrentTimestamp();
         versions.push_back(version);
 
-        spdlog::debug("[HtmlParser] Found Master List from link: {} (version {})",
+        spdlog::debug("[HtmlParser] Found CSCA Master List from link: {} (version {})",
+                     fileName, versionNumber);
+        ++iter;
+    }
+
+    return versions;
+}
+
+std::vector<domain::models::IcaoVersion> HtmlParser::parseDscNcVersions(const std::string& html) {
+    std::vector<domain::models::IcaoVersion> versions;
+
+    // NEW: Parse from table format (2026-01 portal update)
+    // HTML structure: <td>Non Conformant eMRTD PKI objects</td><td>000090</td>
+    std::regex tablePattern(
+        R"(Non\s+Conformant\s+eMRTD\s+PKI\s+objects</td>\s*<td>(\d+)</td>)",
+        std::regex::icase
+    );
+
+    std::smatch tableMatch;
+    if (std::regex_search(html, tableMatch, tablePattern)) {
+        int versionNumber = std::stoi(tableMatch.str(1));
+        std::string fileName = "icaopkd-003-complete-" +
+                              std::string(6 - std::to_string(versionNumber).length(), '0') +
+                              std::to_string(versionNumber) + ".ldif";
+
+        auto version = domain::models::IcaoVersion::createDetected(
+            "DSC_NC",
+            fileName,
+            versionNumber
+        );
+        version.detectedAt = getCurrentTimestamp();
+        versions.push_back(version);
+
+        spdlog::info("[HtmlParser] Found DSC_NC from table: {} (version {})",
+                    fileName, versionNumber);
+        return versions;
+    }
+
+    // FALLBACK: Old format with direct file links
+    // Matches: icaopkd-003-complete-000090.ldif
+    std::regex pattern(R"(icaopkd-003-complete-(\d+)\.ldif)");
+    std::sregex_iterator iter(html.begin(), html.end(), pattern);
+    std::sregex_iterator end;
+    std::set<int> seenVersions;
+
+    while (iter != end) {
+        std::smatch match = *iter;
+        int versionNumber = std::stoi(match.str(1));
+
+        if (seenVersions.find(versionNumber) != seenVersions.end()) {
+            ++iter;
+            continue;
+        }
+        seenVersions.insert(versionNumber);
+
+        std::string fileName = match.str(0);
+        auto version = domain::models::IcaoVersion::createDetected(
+            "DSC_NC",
+            fileName,
+            versionNumber
+        );
+        version.detectedAt = getCurrentTimestamp();
+        versions.push_back(version);
+
+        spdlog::debug("[HtmlParser] Found DSC_NC from link: {} (version {})",
                      fileName, versionNumber);
         ++iter;
     }

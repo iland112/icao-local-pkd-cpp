@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle, Clock, Download, FileText, Database } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2 } from 'lucide-react';
+import { cn } from '@/utils/cn';
 
 interface IcaoVersion {
   id: number;
@@ -18,6 +19,17 @@ interface IcaoVersion {
   error_message?: string;
 }
 
+interface VersionStatus {
+  collection_type: string;
+  detected_version: number;
+  uploaded_version: number;
+  upload_timestamp: string;
+  version_diff: number;
+  needs_update: boolean;
+  status: string;
+  status_message: string;
+}
+
 interface ApiResponse {
   success: boolean;
   count?: number;
@@ -27,35 +39,45 @@ interface ApiResponse {
   message?: string;
 }
 
+interface StatusApiResponse {
+  success: boolean;
+  count: number;
+  status: VersionStatus[];
+}
+
 export default function IcaoStatus() {
-  const [latestVersions, setLatestVersions] = useState<IcaoVersion[]>([]);
   const [versionHistory, setVersionHistory] = useState<IcaoVersion[]>([]);
+  const [versionStatus, setVersionStatus] = useState<VersionStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lastChecked, setLastChecked] = useState<Date | null>(null);
 
   useEffect(() => {
-    fetchLatestVersions();
-    fetchVersionHistory();
+    fetchDashboardData();
   }, []);
 
-  const fetchLatestVersions = async () => {
+  const fetchDashboardData = async () => {
+    setLoading(true);
     try {
-      const response = await fetch('http://localhost:8080/api/icao/latest');
-      const data: ApiResponse = await response.json();
-
-      if (data.success) {
-        setLatestVersions(data.versions);
-        setLastChecked(new Date());
-      } else {
-        setError(data.message || 'Failed to fetch latest versions');
-      }
-    } catch (err) {
-      setError('Network error: Unable to fetch latest versions');
-      console.error('Fetch error:', err);
+      await Promise.all([
+        fetchVersionStatus(),
+        fetchVersionHistory()
+      ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchVersionStatus = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/icao/status');
+      const data: StatusApiResponse = await response.json();
+
+      if (data.success) {
+        setVersionStatus(data.status);
+      }
+    } catch (err) {
+      console.error('Failed to fetch version status:', err);
     }
   };
 
@@ -77,14 +99,12 @@ export default function IcaoStatus() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8080/api/icao/check-updates', {
-        method: 'POST',
-      });
+      const response = await fetch('http://localhost:8080/api/icao/check-updates');
 
       if (response.ok) {
         // Wait a moment for async processing
         setTimeout(() => {
-          fetchLatestVersions();
+          fetchVersionStatus();
           fetchVersionHistory();
           setChecking(false);
         }, 2000);
@@ -99,40 +119,6 @@ export default function IcaoStatus() {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'DETECTED':
-        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-      case 'NOTIFIED':
-        return <Clock className="w-5 h-5 text-blue-500" />;
-      case 'DOWNLOADED':
-        return <Download className="w-5 h-5 text-indigo-500" />;
-      case 'IMPORTED':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'FAILED':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'DETECTED':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'NOTIFIED':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'DOWNLOADED':
-        return 'bg-indigo-100 text-indigo-800 border-indigo-300';
-      case 'IMPORTED':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'FAILED':
-        return 'bg-red-100 text-red-800 border-red-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
-
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString('ko-KR', {
       year: 'numeric',
@@ -144,241 +130,283 @@ export default function IcaoStatus() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">
-                ICAO PKD Auto Sync Status
-              </h1>
-              <p className="text-gray-600">
-                Monitor ICAO PKD version updates and download status
-              </p>
-            </div>
+    <div className="w-full px-4 lg:px-6 py-4">
+      {/* Page Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 shadow-lg">
+            <Globe className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD Auto Sync</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              ICAO PKD 포털의 버전 업데이트를 모니터링합니다.
+            </p>
+          </div>
+          {/* Quick Actions */}
+          <div className="flex gap-2">
             <button
               onClick={handleCheckUpdates}
               disabled={checking}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCw className={`w-5 h-5 ${checking ? 'animate-spin' : ''}`} />
-              {checking ? 'Checking...' : 'Check for Updates'}
+              <RefreshCw className={cn('w-4 h-4', checking && 'animate-spin')} />
+              {checking ? '확인 중...' : '업데이트 확인'}
             </button>
-          </div>
-          {lastChecked && (
-            <p className="text-sm text-gray-500 mt-2">
-              Last checked: {formatTimestamp(lastChecked.toISOString())}
-            </p>
-          )}
-        </div>
-
-        {/* Error Alert */}
-        {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-red-900">Error</h3>
-              <p className="text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Latest Versions Cards */}
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Latest Detected Versions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {latestVersions.length === 0 ? (
-              <div className="col-span-2 p-8 bg-white rounded-lg border border-gray-200 text-center">
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-                <p className="text-gray-500">No versions detected yet</p>
-                <p className="text-sm text-gray-400 mt-1">
-                  Click "Check for Updates" to fetch latest versions from ICAO portal
-                </p>
-              </div>
-            ) : (
-              latestVersions.map((version) => (
-                <div
-                  key={version.id}
-                  className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow p-6"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900 mb-1">
-                        {version.collection_type === 'DSC_CRL'
-                          ? 'DSC/CRL Collection'
-                          : 'CSCA Master List'}
-                      </h3>
-                      <p className="text-sm text-gray-500">{version.file_name}</p>
-                    </div>
-                    {getStatusIcon(version.status)}
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">Version</span>
-                      <span className="text-2xl font-bold text-blue-600">
-                        {version.file_version.toString().padStart(6, '0')}
-                      </span>
-                    </div>
-
-                    <div>
-                      <span
-                        className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-sm font-medium ${getStatusColor(
-                          version.status
-                        )}`}
-                      >
-                        {version.status}
-                      </span>
-                    </div>
-
-                    <div className="pt-3 border-t border-gray-200">
-                      <p className="text-sm text-gray-600 mb-2">
-                        {version.status_description}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Detected: {formatTimestamp(version.detected_at)}
-                      </p>
-                      {version.imported_at && (
-                        <p className="text-xs text-gray-500">
-                          Imported: {formatTimestamp(version.imported_at)}
-                        </p>
-                      )}
-                      {version.certificate_count && (
-                        <div className="mt-2 flex items-center gap-2 text-sm text-gray-700">
-                          <Database className="w-4 h-4" />
-                          <span>{version.certificate_count} certificates</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {version.status === 'DETECTED' && (
-                      <div className="pt-3 border-t border-gray-200">
-                        <a
-                          href="https://pkddownloadsg.icao.int/"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
-                        >
-                          <Download className="w-4 h-4" />
-                          Download from ICAO Portal
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Version History Table */}
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Version Detection History</h2>
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Collection
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      File Name
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Version
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Detected At
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {versionHistory.length === 0 ? (
-                    <tr>
-                      <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                        No version history available
-                      </td>
-                    </tr>
-                  ) : (
-                    versionHistory.map((version) => (
-                      <tr key={version.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-gray-900">
-                            {version.collection_type === 'DSC_CRL' ? 'DSC/CRL' : 'Master List'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-gray-700 font-mono">
-                            {version.file_name}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-semibold text-blue-600">
-                            {version.file_version.toString().padStart(6, '0')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-medium ${getStatusColor(
-                              version.status
-                            )}`}
-                          >
-                            {version.status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatTimestamp(version.detected_at)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Info Section */}
-        <div className="mt-8 p-6 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-lg font-semibold text-blue-900 mb-2">About ICAO Auto Sync</h3>
-          <div className="text-sm text-blue-800 space-y-2">
-            <p>
-              This system automatically monitors the ICAO PKD portal for new certificate versions.
-              When a new version is detected, you will be notified to download and import it manually.
-            </p>
-            <div className="mt-4">
-              <h4 className="font-semibold mb-1">Status Lifecycle:</h4>
-              <ul className="list-disc list-inside space-y-1 ml-2">
-                <li><strong>DETECTED</strong>: New version found on ICAO portal</li>
-                <li><strong>NOTIFIED</strong>: Administrator has been notified</li>
-                <li><strong>DOWNLOADED</strong>: File downloaded from portal</li>
-                <li><strong>IMPORTED</strong>: Successfully imported to Local PKD</li>
-                <li><strong>FAILED</strong>: Import failed (check error message)</li>
-              </ul>
-            </div>
-            <div className="mt-4 pt-4 border-t border-blue-300">
-              <p className="text-xs">
-                <strong>Note</strong>: This is Tier 1 implementation (Manual Download).
-                Automatic downloading is not enabled to comply with ICAO Terms of Service.
-              </p>
-            </div>
+            <button
+              onClick={fetchDashboardData}
+              disabled={loading}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+            </button>
           </div>
         </div>
       </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+        </div>
+      ) : (
+        <>
+          {/* Error Alert */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-red-900 dark:text-red-300">오류</h3>
+                <p className="text-red-700 dark:text-red-400">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Version Status Overview */}
+          {versionStatus.length > 0 && (
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">버전 상태 개요</h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {versionStatus.map((status) => (
+                  <div
+                    key={status.collection_type}
+                    className={cn(
+                      "bg-white dark:bg-gray-800 rounded-xl border-2 shadow-sm p-5 transition-all duration-200",
+                      status.needs_update
+                        ? 'border-orange-300 dark:border-orange-700'
+                        : 'border-green-300 dark:border-green-700'
+                    )}
+                  >
+                    <div className="flex items-start justify-between mb-4">
+                      <div>
+                        <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-1">
+                          {status.collection_type === 'DSC_CRL'
+                            ? 'DSC/CRL Collection'
+                            : status.collection_type === 'DSC_NC'
+                            ? 'DSC_NC (Non-Conformant)'
+                            : 'CSCA Master List'}
+                        </h3>
+                      </div>
+                      {status.needs_update ? (
+                        <AlertCircle className="w-5 h-5 text-orange-500" />
+                      ) : (
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                      )}
+                    </div>
+
+                    <div className="space-y-3">
+                      {/* Status Badge */}
+                      <div>
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-xs font-medium",
+                            status.status === 'UPDATE_NEEDED'
+                              ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-700'
+                              : status.status === 'UP_TO_DATE'
+                              ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700'
+                              : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
+                          )}
+                        >
+                          {status.status === 'UPDATE_NEEDED' ? '업데이트 필요' : '최신 상태'}
+                        </span>
+                      </div>
+
+                      {/* Version Comparison */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">감지된 버전</span>
+                          <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                            {status.detected_version.toString().padStart(6, '0')}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">업로드된 버전</span>
+                          <span className={cn(
+                            "text-lg font-bold",
+                            status.uploaded_version === 0
+                              ? 'text-gray-400 dark:text-gray-500'
+                              : 'text-gray-700 dark:text-gray-300'
+                          )}>
+                            {status.uploaded_version === 0
+                              ? 'N/A'
+                              : status.uploaded_version.toString().padStart(6, '0')}
+                          </span>
+                        </div>
+                        {status.version_diff > 0 && (
+                          <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">버전 차이</span>
+                            <span className="text-base font-bold text-orange-600 dark:text-orange-400">
+                              +{status.version_diff}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Status Message */}
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">{status.status_message}</p>
+                        {status.upload_timestamp !== 'N/A' && (
+                          <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                            마지막 업로드: {formatTimestamp(status.upload_timestamp)}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Download Link for Updates */}
+                      {status.needs_update && (
+                        <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <a
+                            href="https://pkddownloadsg.icao.int/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                          >
+                            <Download className="w-4 h-4" />
+                            ICAO 포털에서 다운로드
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Version History Table */}
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">버전 감지 이력</h2>
+            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Collection
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        File Name
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Version
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Detected At
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {versionHistory.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                          버전 이력이 없습니다
+                        </td>
+                      </tr>
+                    ) : (
+                      versionHistory.map((version) => (
+                        <tr key={version.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                              {version.collection_type === 'DSC_CRL'
+                                ? 'DSC/CRL'
+                                : version.collection_type === 'DSC_NC'
+                                ? 'DSC_NC'
+                                : 'Master List'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm text-gray-700 dark:text-gray-300 font-mono">
+                              {version.file_name}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                              {version.file_version.toString().padStart(6, '0')}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-medium",
+                                version.status === 'DETECTED'
+                                  ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700'
+                                  : version.status === 'NOTIFIED'
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 border-blue-300 dark:border-blue-700'
+                                  : version.status === 'DOWNLOADED'
+                                  ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-800 dark:text-indigo-300 border-indigo-300 dark:border-indigo-700'
+                                  : version.status === 'IMPORTED'
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700'
+                                  : version.status === 'FAILED'
+                                  ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 border-red-300 dark:border-red-700'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
+                              )}
+                            >
+                              {version.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            {formatTimestamp(version.detected_at)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* Info Section */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
+            <h3 className="text-base font-semibold text-blue-900 dark:text-blue-300 mb-3">ICAO Auto Sync 정보</h3>
+            <div className="text-sm text-blue-800 dark:text-blue-300 space-y-3">
+              <p>
+                이 시스템은 ICAO PKD 포털을 자동으로 모니터링하여 새로운 인증서 버전을 감지합니다.
+                새 버전이 감지되면 관리자에게 알림을 보내며, 수동으로 다운로드 및 가져오기를 수행해야 합니다.
+              </p>
+              <div>
+                <h4 className="font-semibold mb-2">상태 수명주기:</h4>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  <li><strong>DETECTED</strong>: ICAO 포털에서 새 버전 발견</li>
+                  <li><strong>NOTIFIED</strong>: 관리자에게 알림 전송 완료</li>
+                  <li><strong>DOWNLOADED</strong>: 포털에서 파일 다운로드 완료</li>
+                  <li><strong>IMPORTED</strong>: Local PKD로 가져오기 성공</li>
+                  <li><strong>FAILED</strong>: 가져오기 실패 (오류 메시지 확인)</li>
+                </ul>
+              </div>
+              <div className="pt-3 border-t border-blue-300 dark:border-blue-700">
+                <p className="text-xs">
+                  <strong>참고</strong>: 현재 구현은 Tier 1 (수동 다운로드)입니다.
+                  ICAO 이용 약관 준수를 위해 자동 다운로드 기능은 활성화되지 않았습니다.
+                </p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

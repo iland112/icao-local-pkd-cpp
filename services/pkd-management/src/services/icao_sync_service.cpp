@@ -91,6 +91,11 @@ std::vector<domain::models::IcaoVersion> IcaoSyncService::getVersionHistory(int 
     return repo_->getHistory(limit);
 }
 
+std::vector<std::tuple<std::string, int, int, std::string>>
+IcaoSyncService::getVersionComparison() {
+    return repo_->getVersionComparison();
+}
+
 // Private methods
 
 std::vector<domain::models::IcaoVersion> IcaoSyncService::fetchRemoteVersions() {

@@ -370,4 +370,85 @@ std::optional<int> IcaoVersionRepository::getOptionalInt(PGresult* res, int row,
     return std::stoi(PQgetvalue(res, row, col));
 }
 
+std::vector<std::tuple<std::string, int, int, std::string>>
+IcaoVersionRepository::getVersionComparison() {
+    PGconn* conn = PQconnectdb(connInfo_.c_str());
+    if (PQstatus(conn) != CONNECTION_OK) {
+        spdlog::error("[IcaoVersionRepository] DB connection failed");
+        PQfinish(conn);
+        return {};
+    }
+
+    // Query to join icao_pkd_versions with uploaded_file to compare versions
+    const char* query =
+        "SELECT "
+        "  v.collection_type, "
+        "  v.file_version as detected_version, "
+        "  CASE "
+        "    WHEN u.original_file_name ~ 'icaopkd-00[123]-complete-(\\d+)' THEN "
+        "      substring(u.original_file_name from 'icaopkd-00[123]-complete-(\\d+)')::int "
+        "    ELSE 0 "
+        "  END as uploaded_version, "
+        "  COALESCE(to_char(u.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS'), 'N/A') as upload_timestamp "
+        "FROM ( "
+        "  SELECT DISTINCT ON (collection_type) "
+        "    collection_type, file_version "
+        "  FROM icao_pkd_versions "
+        "  ORDER BY collection_type, file_version DESC "
+        ") v "
+        "LEFT JOIN ( "
+        "  SELECT "
+        "    CASE "
+        "      WHEN dsc_count > 0 OR crl_count > 0 THEN 'DSC_CRL' "
+        "      WHEN dsc_nc_count > 0 THEN 'DSC_NC' "
+        "      WHEN ml_count > 0 THEN 'MASTERLIST' "
+        "    END as collection_type, "
+        "    original_file_name, "
+        "    upload_timestamp, "
+        "    ROW_NUMBER() OVER (PARTITION BY "
+        "      CASE "
+        "        WHEN dsc_count > 0 OR crl_count > 0 THEN 'DSC_CRL' "
+        "        WHEN dsc_nc_count > 0 THEN 'DSC_NC' "
+        "        WHEN ml_count > 0 THEN 'MASTERLIST' "
+        "      END "
+        "      ORDER BY upload_timestamp DESC) as rn "
+        "  FROM uploaded_file "
+        "  WHERE status = 'COMPLETED' "
+        ") u ON v.collection_type = u.collection_type AND u.rn = 1 "
+        "ORDER BY v.collection_type";
+
+    PGresult* res = PQexec(conn, query);
+
+    std::vector<std::tuple<std::string, int, int, std::string>> comparisons;
+
+    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+        int rows = PQntuples(res);
+        spdlog::info("[IcaoVersionRepository] Version comparison returned {} rows", rows);
+
+        for (int i = 0; i < rows; i++) {
+            std::string collectionType = PQgetvalue(res, i, 0);
+            int detectedVersion = std::stoi(PQgetvalue(res, i, 1));
+            int uploadedVersion = std::stoi(PQgetvalue(res, i, 2));
+            std::string uploadTimestamp = PQgetvalue(res, i, 3);
+
+            comparisons.push_back(std::make_tuple(
+                collectionType,
+                detectedVersion,
+                uploadedVersion,
+                uploadTimestamp
+            ));
+
+            spdlog::debug("[IcaoVersionRepository] {}: detected={}, uploaded={}, timestamp={}",
+                         collectionType, detectedVersion, uploadedVersion, uploadTimestamp);
+        }
+    } else {
+        spdlog::error("[IcaoVersionRepository] Version comparison query failed: {}",
+                     PQerrorMessage(conn));
+    }
+
+    PQclear(res);
+    PQfinish(conn);
+    return comparisons;
+}
+
 } // namespace repositories

@@ -18,8 +18,11 @@ public:
      * @brief Parse ICAO portal HTML and extract version information
      *
      * Looks for patterns like:
-     * - icaopkd-001-dsccrl-NNNNNN.ldif (DSC/CRL collection)
-     * - icaopkd-002-ml-NNNNNN.ldif (Master List collection)
+     * - icaopkd-001-complete-NNNNNN.ldif (DSC/CRL collection)
+     * - icaopkd-002-complete-NNNNNN.ldif (CSCA Master List collection)
+     * - icaopkd-003-complete-NNNNNN.ldif (NC_DSC/NC_CRL - Non-Conformant collection)
+     *
+     * Note: ICAO Master List (ICAO_ml_*.ml) is from a different page and not auto-detected yet.
      *
      * @param html Raw HTML content from ICAO portal
      * @return Vector of detected ICAO versions
@@ -28,14 +31,19 @@ public:
 
 private:
     /**
-     * @brief Extract DSC/CRL file versions
+     * @brief Extract DSC/CRL file versions (icaopkd-001-complete-NNNNNN.ldif)
      */
     static std::vector<domain::models::IcaoVersion> parseDscCrlVersions(const std::string& html);
 
     /**
-     * @brief Extract Master List file versions
+     * @brief Extract CSCA Master List file versions (icaopkd-002-complete-NNNNNN.ldif)
      */
     static std::vector<domain::models::IcaoVersion> parseMasterListVersions(const std::string& html);
+
+    /**
+     * @brief Extract NC_DSC/NC_CRL file versions (icaopkd-003-complete-NNNNNN.ldif)
+     */
+    static std::vector<domain::models::IcaoVersion> parseDscNcVersions(const std::string& html);
 
     /**
      * @brief Get current timestamp in ISO 8601 format

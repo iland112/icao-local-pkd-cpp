@@ -55,6 +55,16 @@ private:
         int limit);
 
     /**
+     * @brief GET /api/icao/status
+     *
+     * Get version comparison status (detected vs uploaded).
+     * Shows which collections need updates.
+     */
+    void handleGetStatus(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /**
      * @brief Helper to convert IcaoVersion to JSON
      */
     Json::Value versionToJson(const domain::models::IcaoVersion& version);

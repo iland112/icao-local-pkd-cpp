@@ -6039,7 +6039,7 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.6.1 COUNTRIES-ON-DEMAND (Build 20260115-190000) ======");
+    spdlog::info("====== ICAO Local PKD v1.7.0 VERSION-COMPARISON (Build 20260120-120000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

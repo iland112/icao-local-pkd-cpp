@@ -55,8 +55,17 @@ void IcaoHandler::registerRoutes(HttpAppFramework& app) {
         },
         {Get});
 
+    // GET /api/icao/status
+    app.registerHandler(
+        "/api/icao/status",
+        [this](const HttpRequestPtr& req,
+               std::function<void(const HttpResponsePtr&)>&& callback) {
+            this->handleGetStatus(req, std::move(callback));
+        },
+        {Get});
+
     spdlog::info("[IcaoHandler] Routes registered: /api/icao/check-updates, "
-                "/api/icao/latest, /api/icao/history");
+                "/api/icao/latest, /api/icao/history, /api/icao/status");
 }
 
 void IcaoHandler::handleCheckUpdates(
@@ -151,6 +160,66 @@ void IcaoHandler::handleGetHistory(
             versionsArray.append(versionToJson(version));
         }
         response["versions"] = versionsArray;
+
+        auto resp = HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[IcaoHandler] Exception: {}", e.what());
+
+        Json::Value error;
+        error["success"] = false;
+        error["message"] = std::string("Error: ") + e.what();
+
+        auto resp = HttpResponse::newHttpJsonResponse(error);
+        resp->setStatusCode(k500InternalServerError);
+        callback(resp);
+    }
+}
+
+void IcaoHandler::handleGetStatus(
+    const HttpRequestPtr& req,
+    std::function<void(const HttpResponsePtr&)>&& callback) {
+
+    spdlog::info("[IcaoHandler] GET /api/icao/status");
+
+    try {
+        auto comparisons = service_->getVersionComparison();
+
+        Json::Value response;
+        response["success"] = true;
+        response["count"] = static_cast<int>(comparisons.size());
+
+        Json::Value statusArray(Json::arrayValue);
+        for (const auto& comp : comparisons) {
+            Json::Value item;
+            item["collection_type"] = std::get<0>(comp);
+            item["detected_version"] = std::get<1>(comp);
+            item["uploaded_version"] = std::get<2>(comp);
+            item["upload_timestamp"] = std::get<3>(comp);
+
+            // Calculate version difference
+            int detectedVersion = std::get<1>(comp);
+            int uploadedVersion = std::get<2>(comp);
+            item["version_diff"] = detectedVersion - uploadedVersion;
+            item["needs_update"] = (detectedVersion > uploadedVersion);
+
+            // Status message
+            if (uploadedVersion == 0) {
+                item["status"] = "NOT_UPLOADED";
+                item["status_message"] = "No upload found for this collection";
+            } else if (detectedVersion > uploadedVersion) {
+                item["status"] = "UPDATE_NEEDED";
+                item["status_message"] = "New version available (+" +
+                    std::to_string(detectedVersion - uploadedVersion) + " versions behind)";
+            } else {
+                item["status"] = "UP_TO_DATE";
+                item["status_message"] = "System is up to date";
+            }
+
+            statusArray.append(item);
+        }
+        response["status"] = statusArray;
 
         auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);
