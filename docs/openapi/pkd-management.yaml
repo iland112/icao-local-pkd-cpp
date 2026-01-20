@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, and LDAP synchronization.
 
     ## Changelog
+    - **v1.7.0** (2026-01-20): ICAO Auto Sync - Version comparison API and improved frontend UX
     - **v1.6.2** (2026-01-15): Countries API performance optimization (LDAP → PostgreSQL, 99.9% faster)
     - **v1.6.1** (2026-01-15): Certificate export crash fix (temporary file approach)
     - **v1.6.0** (2026-01-15): Certificate search/export feature, countries list API
@@ -13,7 +14,7 @@ info:
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
     - **v1.2.0** (2026-01-09): File duplicate detection (SHA-256)
-  version: 1.6.2
+  version: 1.7.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -33,6 +34,8 @@ tags:
     description: Certificate validation operations
   - name: Certificates
     description: Certificate search and export operations
+  - name: ICAO Auto Sync
+    description: ICAO PKD version monitoring and comparison
   - name: PA
     description: Passive Authentication operations
   - name: Progress
@@ -498,6 +501,203 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Upload not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/icao/check-updates:
+    post:
+      tags: [ICAO Auto Sync]
+      summary: Check for ICAO PKD updates
+      description: |
+        Manually trigger a check for new ICAO PKD versions (v1.7.0+).
+
+        **Workflow**:
+        1. Fetch ICAO portal HTML
+        2. Parse version numbers (DSC/CRL, Master List, DSC_NC)
+        3. Compare with local database
+        4. Save new versions with status DETECTED
+        5. Send email notification (if configured)
+
+        **Note**: This operation is asynchronous. Use `/api/icao/status` and `/api/icao/history` to check results.
+      operationId: checkIcaoUpdates
+      responses:
+        '200':
+          description: Check initiated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Version check completed"
+                  new_version_count:
+                    type: integer
+                    example: 2
+                  new_versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IcaoVersion'
+        '500':
+          description: Check failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/icao/status:
+    get:
+      tags: [ICAO Auto Sync]
+      summary: Get version comparison status
+      description: |
+        Compare detected ICAO PKD versions with uploaded versions (v1.7.0+).
+
+        **Returns**:
+        - Detected version (latest from ICAO portal)
+        - Uploaded version (latest completed upload)
+        - Version difference
+        - Update status (UPDATE_NEEDED, UP_TO_DATE, NOT_UPLOADED)
+
+        **Collections**:
+        - DSC_CRL: Document Signer Certificates and CRLs
+        - DSC_NC: Non-Conformant DSC
+        - MASTERLIST: CSCA Master List
+      operationId: getIcaoStatus
+      responses:
+        '200':
+          description: Version comparison status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  status:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        collection_type:
+                          type: string
+                          enum: [DSC_CRL, DSC_NC, MASTERLIST]
+                          example: "DSC_CRL"
+                        detected_version:
+                          type: integer
+                          example: 9668
+                        uploaded_version:
+                          type: integer
+                          example: 9514
+                        upload_timestamp:
+                          type: string
+                          format: date-time
+                          example: "2026-01-20 10:30:00"
+                        version_diff:
+                          type: integer
+                          example: 154
+                        needs_update:
+                          type: boolean
+                          example: true
+                        status:
+                          type: string
+                          enum: [UPDATE_NEEDED, UP_TO_DATE, NOT_UPLOADED]
+                          example: "UPDATE_NEEDED"
+                        status_message:
+                          type: string
+                          example: "New version available (+154 versions behind)"
+        '500':
+          description: Query failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/icao/latest:
+    get:
+      tags: [ICAO Auto Sync]
+      summary: Get latest detected versions
+      description: |
+        Get the latest detected version for each collection type (v1.7.0+).
+
+        **Note**: This shows what was detected from ICAO portal, not what is uploaded.
+        Use `/api/icao/status` for comparison.
+      operationId: getIcaoLatest
+      responses:
+        '200':
+          description: Latest versions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  count:
+                    type: integer
+                    example: 3
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IcaoVersion'
+        '500':
+          description: Query failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/icao/history:
+    get:
+      tags: [ICAO Auto Sync]
+      summary: Get version detection history
+      description: |
+        Get version detection history, ordered by detected_at DESC (v1.7.0+).
+
+        **Pagination**: Use limit parameter to control number of results.
+      operationId: getIcaoHistory
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          description: Maximum number of results to return
+      responses:
+        '200':
+          description: Version history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  limit:
+                    type: integer
+                    example: 10
+                  count:
+                    type: integer
+                    example: 10
+                  versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IcaoVersion'
+        '500':
+          description: Query failed
           content:
             application/json:
               schema:
@@ -1036,3 +1236,63 @@ components:
               type: integer
             tempFiles:
               type: integer
+
+    IcaoVersion:
+      type: object
+      description: ICAO PKD version information (v1.7.0+)
+      properties:
+        id:
+          type: integer
+          description: Unique identifier
+        collection_type:
+          type: string
+          enum: [DSC_CRL, DSC_NC, MASTERLIST]
+          description: Collection type
+        file_name:
+          type: string
+          description: LDIF filename (e.g., icaopkd-001-complete-009668.ldif)
+        file_version:
+          type: integer
+          description: Version number extracted from filename
+        status:
+          type: string
+          enum: [DETECTED, NOTIFIED, DOWNLOADED, IMPORTED, FAILED]
+          description: Version status
+        status_description:
+          type: string
+          description: Human-readable status description
+        detected_at:
+          type: string
+          format: date-time
+          description: When the version was detected
+        downloaded_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the file was downloaded (null if not downloaded)
+        imported_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the file was imported (null if not imported)
+        notification_sent:
+          type: boolean
+          description: Whether notification was sent
+        notification_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When notification was sent
+        import_upload_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: Upload ID if imported
+        certificate_count:
+          type: integer
+          nullable: true
+          description: Number of certificates imported
+        error_message:
+          type: string
+          nullable: true
+          description: Error message if status is FAILED
