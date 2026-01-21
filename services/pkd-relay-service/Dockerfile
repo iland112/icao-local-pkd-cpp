@@ -1,5 +1,5 @@
 # =============================================================================
-# Sync Service Dockerfile
+# PKD Relay Service Dockerfile
 # Multi-stage build for optimized production image with aggressive caching
 # Supports: linux/amd64, linux/arm64
 # =============================================================================
@@ -45,7 +45,7 @@ ENV PATH="${VCPKG_ROOT}:${PATH}"
 FROM vcpkg-base AS vcpkg-deps
 
 WORKDIR /app
-COPY services/sync-service/vcpkg.json ./
+COPY services/pkd-relay-service/vcpkg.json ./
 
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
@@ -54,9 +54,8 @@ RUN ARCH=$(uname -m) && \
 # Stage 3: Application Build (changes frequently)
 FROM vcpkg-deps AS builder
 
-COPY services/sync-service/CMakeLists.txt ./
-COPY shared/ ./shared/
-COPY services/sync-service/src/ ./src/
+COPY services/pkd-relay-service/CMakeLists.txt ./
+COPY services/pkd-relay-service/src/ ./src/
 
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
@@ -94,13 +93,12 @@ RUN useradd -m -s /bin/bash app
 RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
-COPY --from=builder /app/build/bin/sync-service /app/
-COPY shared/static/swagger-ui/ /app/static/swagger-ui/
+COPY --from=builder /app/build/bin/pkd-relay-service /app/
 
 WORKDIR /app
 
-ENV Sync Service=Sync Service
-ENV 8083=8083
+ENV SERVICE_NAME=pkd-relay
+ENV SERVER_PORT=8083
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_NAME=localpkd
@@ -116,7 +114,7 @@ ENV LDAP_BIND_PASSWORD=admin
 EXPOSE 8083
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8083/api/health || exit 1
+    CMD curl -f http://localhost:8083/api/sync/health || exit 1
 
 USER app
-CMD ["./sync-service"]
+CMD ["./pkd-relay-service"]

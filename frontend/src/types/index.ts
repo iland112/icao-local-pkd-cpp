@@ -311,6 +311,39 @@ export interface UploadStatisticsOverview {
   validation: ValidationStats;
 }
 
+// Upload changes tracking types
+export interface UploadChange {
+  uploadId: string;
+  fileName: string;
+  collectionNumber: string;
+  uploadTime: string;
+  counts: {
+    csca: number;
+    dsc: number;
+    dscNc: number;
+    crl: number;
+    ml: number;
+  };
+  changes: {
+    csca: number;
+    dsc: number;
+    dscNc: number;
+    crl: number;
+    ml: number;
+  };
+  totalChange: number;
+  previousUpload?: {
+    fileName: string;
+    uploadTime: string;
+  } | null;
+}
+
+export interface UploadChangesResponse {
+  success: boolean;
+  count: number;
+  changes: UploadChange[];
+}
+
 export interface PAStatisticsOverview {
   totalVerifications: number;
   validCount: number;

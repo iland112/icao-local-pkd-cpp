@@ -4,7 +4,7 @@
 #include <cstdlib>
 
 namespace icao {
-namespace sync {
+namespace relay {
 
 // =============================================================================
 // Global Configuration
@@ -67,5 +67,5 @@ struct Config {
     bool loadFromDatabase();
 };
 
-} // namespace sync
+} // namespace relay
 } // namespace icao
