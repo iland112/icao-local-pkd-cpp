@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(sync-service VERSION 1.0.0 LANGUAGES CXX)
+project(pkd-relay-service VERSION 2.0.0 LANGUAGES CXX)
 
 # =============================================================================
 # C++ Standard and Compiler Settings
@@ -45,15 +45,15 @@ find_library(LBER_LIBRARY lber REQUIRED)
 # =============================================================================
 set(SOURCE_FILES
     src/main.cpp
-    src/reconciliation/ldap_operations.cpp
-    src/reconciliation/reconciliation_engine.cpp
+    src/relay/sync/ldap_operations.cpp
+    src/relay/sync/reconciliation_engine.cpp
 )
 
 set(HEADER_FILES
-    src/common/types.h
-    src/common/config.h
-    src/reconciliation/ldap_operations.h
-    src/reconciliation/reconciliation_engine.h
+    src/relay/sync/common/types.h
+    src/relay/sync/common/config.h
+    src/relay/sync/ldap_operations.h
+    src/relay/sync/reconciliation_engine.h
 )
 
 # =============================================================================
@@ -84,11 +84,11 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 # Build Info
 # =============================================================================
 message(STATUS "")
-message(STATUS "=== Sync Service Build Configuration ===")
+message(STATUS "=== PKD Relay Service Build Configuration ===")
 message(STATUS "CMake version:      ${CMAKE_VERSION}")
 message(STATUS "C++ compiler:       ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "C++ standard:       ${CMAKE_CXX_STANDARD}")
 message(STATUS "Build type:         ${CMAKE_BUILD_TYPE}")
 message(STATUS "Install prefix:     ${CMAKE_INSTALL_PREFIX}")
-message(STATUS "=========================================")
+message(STATUS "==============================================")
 message(STATUS "")

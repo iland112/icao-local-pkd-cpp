@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ICAO Local PKD - Software Architecture v1.7.0</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/theme/white.css">
+    <style>
+        .reveal h1, .reveal h2, .reveal h3 { color: #003366; }
+        .reveal section { text-align: left; }
+        .reveal ul { font-size: 0.9em; }
+        .reveal .layer-box {
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 10px;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+        }
+        .reveal .service-box {
+            display: inline-block;
+            padding: 15px 30px;
+            margin: 10px;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
+        }
+        .mermaid { font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+            <!-- Title Slide -->
+            <section>
+                <h1>ICAO Local PKD</h1>
+                <h3>Software Architecture</h3>
+                <p>Version 1.7.0</p>
+            </section>
+
+            <!-- System Overview -->
+            <section>
+                <h2>시스템 개요</h2>
+            </section>
+
+            <section>
+                <h3>핵심 기능</h3>
+                <ul>
+                    <li>✅ LDIF/Master List 파일 업로드 및 파싱</li>
+                    <li>✅ Trust Chain 검증 (CSCA → DSC)</li>
+                    <li>✅ ICAO 9303 Passive Authentication</li>
+                    <li>✅ PostgreSQL + OpenLDAP MMR 클러스터</li>
+                    <li>✅ DB-LDAP 자동 동기화</li>
+                    <li>✅ React 19 기반 웹 인터페이스</li>
+                    <li>✅ ICAO Auto Sync (v1.7.0)</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>기술 스택</h3>
+                <ul>
+                    <li><strong>Backend:</strong> C++20 + Drogon Framework</li>
+                    <li><strong>Database:</strong> PostgreSQL 15</li>
+                    <li><strong>Directory:</strong> OpenLDAP MMR</li>
+                    <li><strong>Frontend:</strong> React 19 + TypeScript + Vite</li>
+                    <li><strong>Crypto:</strong> OpenSSL 3.x</li>
+                    <li><strong>Gateway:</strong> Nginx</li>
+                    <li><strong>Container:</strong> Docker Compose</li>
+                </ul>
+            </section>
+
+            <!-- Architecture -->
+            <section>
+                <h2>시스템 아키텍처</h2>
+            </section>
+
+            <section>
+                <h3>5계층 아키텍처</h3>
+                <div class="mermaid">
+flowchart TB
+    subgraph L1["레이어 1: 클라이언트"]
+        Browser["웹 브라우저"]
+        APIClient["API 클라이언트"]
+    end
+    subgraph L2["레이어 2: 프론트엔드"]
+        React["React 애플리케이션<br/>포트 3000"]
+    end
+    subgraph L3["레이어 3: API 게이트웨이"]
+        Nginx["Nginx<br/>포트 8080"]
+    end
+    subgraph L4["레이어 4: 마이크로서비스"]
+        PKD["PKD 서비스<br/>8081"]
+        PA["PA 서비스<br/>8082"]
+        Sync["Sync 서비스<br/>8083"]
+    end
+    subgraph L5["레이어 5: 데이터 저장소"]
+        PG[("PostgreSQL<br/>5432")]
+        LDAP[("LDAP<br/>389")]
+    end
+    Browser --> React
+    APIClient --> Nginx
+    React --> Nginx
+    Nginx --> PKD
+    Nginx --> PA
+    Nginx --> Sync
+    PKD --> PG
+    PKD --> LDAP
+    PA --> PG
+    PA --> LDAP
+    Sync --> PG
+    Sync --> LDAP
+    style L1 fill:#1565C0,stroke:#0D47A1,stroke-width:3px,color:#fff
+    style L2 fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#fff
+    style L3 fill:#E65100,stroke:#BF360C,stroke-width:3px,color:#fff
+    style L4 fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#fff
+    style L5 fill:#AD1457,stroke:#880E4F,stroke-width:3px,color:#fff
+                </div>
+            </section>
+
+            <section>
+                <h3>주요 데이터 흐름</h3>
+                <ul>
+                    <li><strong>업로드:</strong> Browser → React → Nginx → PKD → PostgreSQL + LDAP</li>
+                    <li><strong>PA 검증:</strong> Browser → React → Nginx → PA → PostgreSQL + LDAP</li>
+                    <li><strong>인증서 검색:</strong> Browser → React → Nginx → PKD → LDAP (읽기 전용)</li>
+                    <li><strong>동기화:</strong> Browser → React → Nginx → Sync → PostgreSQL + LDAP</li>
+                </ul>
+            </section>
+
+            <!-- Microservices -->
+            <section>
+                <h2>마이크로서비스</h2>
+            </section>
+
+            <section>
+                <h3>PKD Management Service (8081)</h3>
+                <ul>
+                    <li>Clean Architecture (6 Layers)</li>
+                    <li>LDIF/Master List 업로드</li>
+                    <li>Trust Chain 검증</li>
+                    <li>인증서 검색 및 내보내기</li>
+                    <li>ICAO Auto Sync 통합</li>
+                    <li>Strategy Pattern (AUTO/MANUAL)</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>PA Service (8082)</h3>
+                <ul>
+                    <li>ICAO 9303 PA 완전 준수</li>
+                    <li>SOD CMS 서명 검증</li>
+                    <li>DG 해시 검증</li>
+                    <li>Trust Chain 검증</li>
+                    <li>MRZ 파싱 (TD1/TD2/TD3)</li>
+                    <li>얼굴 이미지 추출</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Sync Service (8083)</h3>
+                <ul>
+                    <li>DB-LDAP 동기화 모니터링 (30초)</li>
+                    <li>Auto Reconcile (배치 100)</li>
+                    <li>Daily Sync (00:00 UTC)</li>
+                    <li>Trust Chain 재검증</li>
+                    <li>불일치 자동 조정</li>
+                    <li>조정 이력 추적</li>
+                </ul>
+            </section>
+
+            <!-- Database -->
+            <section>
+                <h2>데이터 계층</h2>
+            </section>
+
+            <section>
+                <h3>PostgreSQL 테이블 (9개)</h3>
+                <ul style="font-size: 0.8em;">
+                    <li><strong>uploaded_file:</strong> 업로드 파일 메타데이터</li>
+                    <li><strong>certificate:</strong> 인증서 (30,637개)</li>
+                    <li><strong>crl:</strong> 인증서 폐기 목록</li>
+                    <li><strong>master_list:</strong> ICAO Master List</li>
+                    <li><strong>validation_result:</strong> Trust Chain 검증</li>
+                    <li><strong>pa_verification:</strong> PA 검증 이력</li>
+                    <li><strong>sync_status:</strong> 동기화 상태</li>
+                    <li><strong>reconciliation_summary:</strong> 조정 요약</li>
+                    <li><strong>icao_pkd_versions:</strong> ICAO 버전 추적</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>LDAP 디렉토리 구조</h3>
+                <pre style="font-size: 0.7em;"><code>dc=ldap,dc=smartcoreinc,dc=com
+  └─ dc=pkd
+      └─ dc=download
+          ├─ dc=data (193개 국가)
+          │   └─ c=KR/US/JP...
+          │       ├─ o=csca (CSCA 인증서)
+          │       ├─ o=dsc (DSC 인증서)
+          │       ├─ o=crl (CRL)
+          │       └─ o=ml (Master List)
+          └─ dc=nc-data (Non-Conformant DSC)</code></pre>
+            </section>
+
+            <!-- Deployment -->
+            <section>
+                <h2>배포 아키텍처</h2>
+            </section>
+
+            <section>
+                <h3>Docker 컨테이너</h3>
+                <ul style="font-size: 0.85em;">
+                    <li>Frontend: Nginx + React (3000)</li>
+                    <li>API Gateway: Nginx (8080)</li>
+                    <li>PKD Management: C++ (8081)</li>
+                    <li>PA Service: C++ (8082)</li>
+                    <li>Sync Service: C++ (8083)</li>
+                    <li>PostgreSQL: DB (5432)</li>
+                    <li>OpenLDAP1/2: MMR (3891/3892)</li>
+                    <li>HAProxy: LDAP LB (389)</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Luckfox ARM64 배포</h3>
+                <ul>
+                    <li><strong>Device:</strong> Luckfox Pico</li>
+                    <li><strong>IP:</strong> 192.168.100.11</li>
+                    <li><strong>Network:</strong> Host Mode</li>
+                    <li><strong>Build:</strong> GitHub Actions</li>
+                    <li><strong>Deploy:</strong> OCI → Docker (skopeo)</li>
+                    <li><strong>Transfer:</strong> sshpass</li>
+                </ul>
+            </section>
+
+            <!-- Performance & Security -->
+            <section>
+                <h2>성능 및 보안</h2>
+            </section>
+
+            <section>
+                <h3>성능 지표</h3>
+                <ul>
+                    <li><strong>Certificate Search:</strong> 2,222 req/s</li>
+                    <li><strong>PA Verification:</strong> 416 req/s</li>
+                    <li><strong>API Latency:</strong> &lt;100ms</li>
+                    <li><strong>DB Query:</strong> 40ms</li>
+                    <li><strong>LDAP Search:</strong> &lt;200ms</li>
+                    <li><strong>Certificates:</strong> 30,637개</li>
+                    <li><strong>Concurrent Users:</strong> 1,000+ 테스트 완료</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>보안 레이어</h3>
+                <ul style="font-size: 0.85em;">
+                    <li><strong>네트워크:</strong> 방화벽 + Docker 격리</li>
+                    <li><strong>애플리케이션:</strong> Rate Limiting (100/s), CORS, CSP</li>
+                    <li><strong>데이터:</strong> PostgreSQL 인증, LDAP Bind, TLS/SSL</li>
+                    <li><strong>코드:</strong> SQL 인젝션 방지, XSS 방지, 매개변수화 쿼리</li>
+                </ul>
+            </section>
+
+            <!-- ICAO Auto Sync -->
+            <section>
+                <h2>ICAO Auto Sync v1.7.0</h2>
+            </section>
+
+            <section>
+                <h3>자동 동기화 기능</h3>
+                <ul>
+                    <li>매일 08:00 자동 버전 체크</li>
+                    <li>ICAO PKD 포털 HTML 파싱</li>
+                    <li>Collection 001/002/003 추적</li>
+                    <li>신규 버전 감지 시 알림</li>
+                    <li>이메일 발송 지원</li>
+                    <li>프론트엔드 배지 표시</li>
+                    <li>icao_pkd_versions 저장</li>
+                </ul>
+            </section>
+
+            <!-- Summary -->
+            <section>
+                <h2>요약</h2>
+            </section>
+
+            <section>
+                <h3>주요 성과</h3>
+                <ul>
+                    <li>✅ Production Ready (v1.7.0)</li>
+                    <li>✅ 30,637개 인증서 관리</li>
+                    <li>✅ 5,868개 Trust Chain 검증</li>
+                    <li>✅ ICAO 9303 완전 준수</li>
+                    <li>✅ 고성능 (2,222 req/s)</li>
+                    <li>✅ ARM64 배포 완료</li>
+                    <li>✅ 완전 자동화</li>
+                </ul>
+            </section>
+
+            <!-- End -->
+            <section>
+                <h1>감사합니다</h1>
+                <p>ICAO Local PKD v1.7.0</p>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.js"></script>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true, theme: 'default' });
+        
+        Reveal.initialize({
+            hash: true,
+            center: false,
+            transition: 'slide',
+            width: 1280,
+            height: 720,
+            margin: 0.1,
+            minScale: 0.2,
+            maxScale: 2.0
+        });
+    </script>
+</body>
+</html>

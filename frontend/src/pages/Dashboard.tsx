@@ -246,13 +246,26 @@ export function Dashboard() {
               </div>
               국가별 인증서 현황 (Top 18)
             </h3>
-            <Link
-              to="/upload-dashboard"
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-            >
-              <BarChart3 className="w-4 h-4" />
-              상세 통계
-            </Link>
+            <div className="flex items-center gap-4">
+              {/* Legend */}
+              <div className="flex items-center gap-3 text-xs text-gray-600 dark:text-gray-400">
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <Shield className="w-3.5 h-3.5 text-blue-500" />
+                  <span className="font-medium">CSCA</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <Key className="w-3.5 h-3.5 text-green-500" />
+                  <span className="font-medium">DSC</span>
+                </div>
+              </div>
+              <Link
+                to="/upload-dashboard"
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              >
+                <BarChart3 className="w-4 h-4" />
+                상세 통계
+              </Link>
+            </div>
           </div>
         </div>
         <div className="p-6">
@@ -347,24 +360,29 @@ export function Dashboard() {
           </h3>
         </div>
         <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* PKD Upload Card */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* PKD Relay Service - Upload & Processing Card */}
             <div className="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden bg-gradient-to-br from-violet-50/50 to-purple-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-violet-100 dark:border-gray-600 hover:border-violet-300">
               <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
-                <Database className="w-full h-full text-violet-500" />
+                <Upload className="w-full h-full text-violet-500" />
               </div>
               <div className="relative z-10">
                 <h4 className="font-semibold mb-2 flex items-center gap-2 text-gray-800 dark:text-gray-200">
                   <span className="shrink-0 p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
-                    <Database className="w-5 h-5 text-violet-500" />
+                    <Upload className="w-5 h-5 text-violet-500" />
                   </span>
-                  PKD Upload
+                  PKD 파일 업로드 및 처리
                 </h4>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  ICAO PKD에서 다운로드한 LDIF, Master List 파일을 업로드하고, CSCA/DSC/CRL 인증서를 파싱하여 검증 후 LDAP 서버에 저장합니다.
+                  ICAO PKD LDIF/Master List 파일을 업로드하고, 인증서를 파싱, 검증하여 DB 및 LDAP에 저장합니다.
                 </p>
                 <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 mb-4">
-                  {['LDIF / Master List 파일 파싱', '인증서 Trust Chain 검증', 'LDAP 자동 등록 + 실시간 진행 상황 (SSE)'].map((item) => (
+                  {[
+                    'LDIF / Master List 파일 업로드',
+                    'CSCA/DSC/CRL 파싱 및 검증',
+                    'Trust Chain 검증 (DSC → CSCA)',
+                    'PostgreSQL + LDAP 저장'
+                  ].map((item) => (
                     <li key={item} className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-violet-500" />
                       {item}
@@ -386,13 +404,6 @@ export function Dashboard() {
                     <Clock className="w-4 h-4" />
                     업로드 이력
                   </Link>
-                  <Link
-                    to="/upload-dashboard"
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    통계
-                  </Link>
                 </div>
               </div>
             </div>
@@ -413,7 +424,12 @@ export function Dashboard() {
                   전자여권 칩의 SOD(Security Object Document), DG(Data Group)를 업로드하여 ICAO 9303 표준에 따른 Passive Authentication을 수행합니다.
                 </p>
                 <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 mb-4">
-                  {['SOD CMS 서명 검증', 'DSC → CSCA Trust Chain 검증', 'Data Group 해시 무결성 검증'].map((item) => (
+                  {[
+                    'SOD CMS 서명 검증',
+                    'DSC → CSCA Trust Chain 검증',
+                    'Data Group 해시 무결성 검증',
+                    'DG1/DG2 파싱 및 시각화'
+                  ].map((item) => (
                     <li key={item} className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-teal-500" />
                       {item}
@@ -440,6 +456,53 @@ export function Dashboard() {
                     className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
                   >
                     <PresentationIcon className="w-4 h-4" />
+                    통계
+                  </Link>
+                </div>
+              </div>
+            </div>
+
+            {/* PKD Management - Certificate Search & Export Card */}
+            <div className="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-blue-100 dark:border-gray-600 hover:border-blue-300">
+              <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
+                <Database className="w-full h-full text-blue-500" />
+              </div>
+              <div className="relative z-10">
+                <h4 className="font-semibold mb-2 flex items-center gap-2 text-gray-800 dark:text-gray-200">
+                  <span className="shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
+                    <Database className="w-5 h-5 text-blue-500" />
+                  </span>
+                  인증서 관리 및 조회
+                </h4>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  저장된 CSCA/DSC/CRL 인증서를 검색하고, DER/PEM 형식으로 내보내기하거나 국가별 ZIP으로 다운로드할 수 있습니다.
+                </p>
+                <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 mb-4">
+                  {[
+                    'LDAP 기반 실시간 인증서 검색',
+                    '국가/타입별 필터링 및 정렬',
+                    '단일 인증서 Export (DER/PEM)',
+                    '국가별 전체 인증서 ZIP 다운로드'
+                  ].map((item) => (
+                    <li key={item} className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-blue-500" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+                <div className="flex flex-wrap gap-2">
+                  <Link
+                    to="/certificates"
+                    className="py-2.5 px-5 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 hover:shadow-md transition-all duration-200"
+                  >
+                    <Database className="w-4 h-4" />
+                    인증서 검색
+                  </Link>
+                  <Link
+                    to="/upload-dashboard"
+                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
+                  >
+                    <BarChart3 className="w-4 h-4" />
                     통계
                   </Link>
                 </div>

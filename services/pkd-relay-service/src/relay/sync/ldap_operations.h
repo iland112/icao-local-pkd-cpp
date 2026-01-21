@@ -2,11 +2,11 @@
 
 #include <ldap.h>
 #include <string>
-#include "../common/types.h"
-#include "../common/config.h"
+#include "relay/sync/common/types.h"
+#include "relay/sync/common/config.h"
 
 namespace icao {
-namespace sync {
+namespace relay {
 
 // =============================================================================
 // LDAP Operations - Certificate Management
@@ -38,5 +38,5 @@ private:
     const Config& config_;
 };
 
-} // namespace sync
+} // namespace relay
 } // namespace icao

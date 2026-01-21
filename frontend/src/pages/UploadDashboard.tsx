@@ -18,13 +18,26 @@ import {
   TrendingUp,
   Award,
   AlertCircle,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts';
 import { uploadApi } from '@/services/api';
-import type { UploadStatisticsOverview } from '@/types';
+import type { UploadStatisticsOverview, UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
 
 export function UploadDashboard() {
   const [stats, setStats] = useState<UploadStatisticsOverview | null>(null);
+  const [recentChanges, setRecentChanges] = useState<UploadChange[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,14 +47,36 @@ export function UploadDashboard() {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const statsResponse = await uploadApi.getStatistics();
+      const [statsResponse, changesResponse] = await Promise.all([
+        uploadApi.getStatistics(),
+        uploadApi.getChanges(10), // Get 10 most recent changes for chart
+      ]);
       setStats(statsResponse.data);
+      setRecentChanges(changesResponse.data.changes || []);
     } catch (error) {
       console.error('Failed to fetch upload dashboard data:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  // Transform data for timeline chart
+  const chartData = recentChanges
+    .map((change) => ({
+      date: new Date(change.uploadTime).toLocaleDateString('ko-KR', {
+        month: 'short',
+        day: 'numeric',
+      }),
+      fullDate: new Date(change.uploadTime).toLocaleDateString('ko-KR'),
+      DSC: change.counts.dsc,
+      CSCA: change.counts.csca,
+      CRL: change.counts.crl,
+      DSC_NC: change.counts.dscNc,
+      ML: change.counts.ml,
+      collection: change.collectionNumber,
+      fileName: change.fileName,
+    }))
+    .reverse(); // Chronological order (oldest to newest)
 
   // Calculate percentages
   const totalCerts = stats?.totalCertificates || 0;
@@ -186,7 +221,7 @@ export function UploadDashboard() {
               <Shield className="w-5 h-5 text-violet-500" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 유형별 현황</h3>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {/* CSCA */}
               <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30 p-4 border border-green-200 dark:border-green-800">
                 <div className="flex items-center gap-2 mb-2">
@@ -246,26 +281,230 @@ export function UploadDashboard() {
                   <span className="text-sm font-semibold text-teal-700 dark:text-teal-300">Master List</span>
                 </div>
                 <p className="text-2xl font-bold text-teal-800 dark:text-teal-200">{(stats?.mlCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">ICAO ML</p>
+                <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">Country CSCA ML</p>
                 <div className="absolute -right-2 -bottom-2 opacity-10">
                   <Database className="w-16 h-16 text-teal-600" />
                 </div>
               </div>
-
-              {/* Countries */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-900/20 dark:to-indigo-900/30 p-4 border border-blue-200 dark:border-blue-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <Globe className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  <span className="text-sm font-semibold text-blue-700 dark:text-blue-300">국가</span>
-                </div>
-                <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">{(stats?.countriesCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">등록 국가</p>
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <Globe className="w-16 h-16 text-blue-600" />
-                </div>
-              </div>
             </div>
           </div>
+
+          {/* Timeline Chart Section */}
+          {chartData.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
+              <div className="flex items-center gap-2 mb-6">
+                <TrendingUp className="w-5 h-5 text-violet-500" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 변동 추이</h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  (최근 {chartData.length}개 업로드)
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    stroke="#6B7280"
+                  />
+                  <YAxis
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    stroke="#6B7280"
+                    label={{
+                      value: '인증서 수',
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fill: '#6B7280', fontSize: 12 },
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1F2937',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#F9FAFB',
+                    }}
+                    labelStyle={{ color: '#F9FAFB', fontWeight: 'bold' }}
+                    formatter={(value: number | undefined) => value?.toLocaleString() || '0'}
+                  />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="line"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="DSC"
+                    stroke="#8B5CF6"
+                    strokeWidth={2}
+                    dot={{ fill: '#8B5CF6', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name="DSC"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="CSCA"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                    dot={{ fill: '#10B981', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name="CSCA"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="CRL"
+                    stroke="#F59E0B"
+                    strokeWidth={2}
+                    dot={{ fill: '#F59E0B', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name="CRL"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="DSC_NC"
+                    stroke="#EF4444"
+                    strokeWidth={2}
+                    dot={{ fill: '#EF4444', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name="DSC_NC"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="ML"
+                    stroke="#3B82F6"
+                    strokeWidth={2}
+                    dot={{ fill: '#3B82F6', r: 4 }}
+                    activeDot={{ r: 6 }}
+                    name="ML"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Recent Changes Section */}
+          {recentChanges.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-6">
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-blue-500" />
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">최근 변경사항 상세</h3>
+                </div>
+                <Link
+                  to="/upload-history"
+                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  전체 보기 →
+                </Link>
+              </div>
+              <div className="space-y-3">
+                {recentChanges.map((change) => (
+                  <div
+                    key={change.uploadId}
+                    className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {change.fileName}
+                        </span>
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                          Collection {change.collectionNumber}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <span>{new Date(change.uploadTime).toLocaleString('ko-KR')}</span>
+                        {change.previousUpload && (
+                          <span className="text-gray-400 dark:text-gray-500">
+                            vs {change.previousUpload.fileName}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap justify-end">
+                      {change.changes.dsc !== 0 && (
+                        <div className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                          change.changes.dsc > 0
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                        )}>
+                          {change.changes.dsc > 0 ? (
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          )}
+                          <span>DSC {Math.abs(change.changes.dsc).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {change.changes.csca !== 0 && (
+                        <div className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                          change.changes.csca > 0
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                        )}>
+                          {change.changes.csca > 0 ? (
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          )}
+                          <span>CSCA {Math.abs(change.changes.csca).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {change.changes.dscNc !== 0 && (
+                        <div className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                          change.changes.dscNc > 0
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                        )}>
+                          {change.changes.dscNc > 0 ? (
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          )}
+                          <span>DSC_NC {Math.abs(change.changes.dscNc).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {change.changes.crl !== 0 && (
+                        <div className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                          change.changes.crl > 0
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                        )}>
+                          {change.changes.crl > 0 ? (
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          )}
+                          <span>CRL {Math.abs(change.changes.crl).toLocaleString()}</span>
+                        </div>
+                      )}
+                      {change.changes.ml !== 0 && (
+                        <div className={cn(
+                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                          change.changes.ml > 0
+                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                        )}>
+                          {change.changes.ml > 0 ? (
+                            <ArrowUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <ArrowDown className="w-3.5 h-3.5" />
+                          )}
+                          <span>ML {Math.abs(change.changes.ml).toLocaleString()}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Validation Statistics */}
           {stats?.validation && (

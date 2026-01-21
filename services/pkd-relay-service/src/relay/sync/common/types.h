@@ -5,7 +5,7 @@
 #include <map>
 
 namespace icao {
-namespace sync {
+namespace relay {
 
 // =============================================================================
 // Database Statistics
@@ -94,5 +94,5 @@ struct ReconciliationResult {
     std::vector<ReconciliationFailure> failures;
 };
 
-} // namespace sync
+} // namespace relay
 } // namespace icao

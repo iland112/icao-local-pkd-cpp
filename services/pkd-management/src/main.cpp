@@ -4461,10 +4461,10 @@ void registerRoutes() {
 
                 PQfinish(conn);
 
-                // Start async processing only in AUTO mode
-                if (processingMode == "AUTO" || processingMode == "auto") {
-                    processLdifFileAsync(uploadId, contentBytes);
-                }
+                // Start async processing for both AUTO and MANUAL modes
+                // MANUAL mode: Stage 1 (parsing) runs automatically
+                // AUTO mode: All stages run automatically
+                processLdifFileAsync(uploadId, contentBytes);
 
                 // Return success response
                 Json::Value result;
@@ -4617,10 +4617,10 @@ void registerRoutes() {
 
                 PQfinish(conn);
 
-                // Start async processing only in AUTO mode using Strategy Pattern
-                if (processingMode == "AUTO" || processingMode == "auto") {
-                    // Use Strategy Pattern for Master List (same as LDIF)
-                    std::thread([uploadId, contentBytes]() {
+                // Start async processing for both AUTO and MANUAL modes using Strategy Pattern
+                // MANUAL mode: Stage 1 (parsing) runs automatically
+                // AUTO mode: All stages run automatically
+                std::thread([uploadId, contentBytes]() {
                         spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
                         std::string conninfo = "host=" + appConfig.dbHost +
@@ -4683,8 +4683,7 @@ void registerRoutes() {
 
                         if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                         PQfinish(conn);
-                    }).detach();
-                }
+                }).detach();
 
                 // Return success response
                 Json::Value result;
@@ -4753,13 +4752,13 @@ void registerRoutes() {
                 result["failedUploads"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
-                // Get total certificates (sum of certificate_count from all uploads)
-                res = PQexec(conn, "SELECT COALESCE(SUM(csca_count + dsc_count + dsc_nc_count), 0) FROM uploaded_file");
+                // Get total certificates from certificate table (after deduplication)
+                res = PQexec(conn, "SELECT COUNT(*) FROM certificate");
                 result["totalCertificates"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
-                // Get CRL count (sum of crl_count from all uploads)
-                res = PQexec(conn, "SELECT COALESCE(SUM(crl_count), 0) FROM uploaded_file");
+                // Get CRL count from crl table (after deduplication)
+                res = PQexec(conn, "SELECT COUNT(*) FROM crl");
                 result["crlCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
@@ -4783,8 +4782,8 @@ void registerRoutes() {
                 result["countriesCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
-                // Get Master List count (sum of ml_count from all uploads)
-                res = PQexec(conn, "SELECT COALESCE(SUM(ml_count), 0) FROM uploaded_file");
+                // Get Master List count from master_list table (after deduplication)
+                res = PQexec(conn, "SELECT COUNT(*) FROM master_list");
                 result["mlCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
@@ -5059,6 +5058,148 @@ void registerRoutes() {
             } else {
                 result["success"] = false;
                 result["error"] = "Database connection failed";
+            }
+
+            PQfinish(conn);
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // Upload changes endpoint - GET /api/upload/changes
+    app.registerHandler(
+        "/api/upload/changes",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/upload/changes - Calculate upload deltas");
+
+            // Get optional limit parameter (default: 10)
+            int limit = 10;
+            if (auto l = req->getParameter("limit"); !l.empty()) {
+                try {
+                    limit = std::stoi(l);
+                    if (limit <= 0 || limit > 100) limit = 10;
+                } catch (...) {
+                    limit = 10;
+                }
+            }
+
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            Json::Value result;
+            result["success"] = false;
+
+            if (PQstatus(conn) == CONNECTION_OK) {
+                // Query to calculate changes between consecutive uploads of the same collection
+                std::string query =
+                    "WITH ranked_uploads AS ( "
+                    "  SELECT "
+                    "    id, "
+                    "    original_file_name, "
+                    "    upload_timestamp, "
+                    "    csca_count, "
+                    "    dsc_count, "
+                    "    dsc_nc_count, "
+                    "    crl_count, "
+                    "    ml_count, "
+                    "    collection_number, "
+                    "    ROW_NUMBER() OVER ( "
+                    "      PARTITION BY collection_number "
+                    "      ORDER BY upload_timestamp DESC "
+                    "    ) as rn "
+                    "  FROM uploaded_file "
+                    "  WHERE status = 'COMPLETED' AND collection_number IS NOT NULL "
+                    ") "
+                    "SELECT "
+                    "  curr.id, "
+                    "  curr.original_file_name, "
+                    "  curr.collection_number, "
+                    "  to_char(curr.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as upload_time, "
+                    "  curr.csca_count, "
+                    "  curr.dsc_count, "
+                    "  curr.dsc_nc_count, "
+                    "  curr.crl_count, "
+                    "  curr.ml_count, "
+                    "  curr.csca_count - COALESCE(prev.csca_count, 0) as csca_change, "
+                    "  curr.dsc_count - COALESCE(prev.dsc_count, 0) as dsc_change, "
+                    "  curr.dsc_nc_count - COALESCE(prev.dsc_nc_count, 0) as dsc_nc_change, "
+                    "  curr.crl_count - COALESCE(prev.crl_count, 0) as crl_change, "
+                    "  curr.ml_count - COALESCE(prev.ml_count, 0) as ml_change, "
+                    "  prev.original_file_name as previous_file, "
+                    "  to_char(prev.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as previous_upload_time "
+                    "FROM ranked_uploads curr "
+                    "LEFT JOIN ranked_uploads prev "
+                    "  ON curr.collection_number = prev.collection_number "
+                    "  AND prev.rn = curr.rn + 1 "
+                    "WHERE curr.rn <= " + std::to_string(limit) + " "
+                    "ORDER BY curr.upload_timestamp DESC";
+
+                PGresult* res = PQexec(conn, query.c_str());
+                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                    result["success"] = true;
+                    result["count"] = PQntuples(res);
+
+                    Json::Value changes(Json::arrayValue);
+                    for (int i = 0; i < PQntuples(res); i++) {
+                        Json::Value change;
+                        change["uploadId"] = PQgetvalue(res, i, 0);
+                        change["fileName"] = PQgetvalue(res, i, 1);
+                        change["collectionNumber"] = PQgetvalue(res, i, 2);
+                        change["uploadTime"] = PQgetvalue(res, i, 3);
+
+                        // Current counts
+                        Json::Value counts;
+                        counts["csca"] = std::stoi(PQgetvalue(res, i, 4));
+                        counts["dsc"] = std::stoi(PQgetvalue(res, i, 5));
+                        counts["dscNc"] = std::stoi(PQgetvalue(res, i, 6));
+                        counts["crl"] = std::stoi(PQgetvalue(res, i, 7));
+                        counts["ml"] = std::stoi(PQgetvalue(res, i, 8));
+                        change["counts"] = counts;
+
+                        // Changes (deltas)
+                        Json::Value deltas;
+                        deltas["csca"] = std::stoi(PQgetvalue(res, i, 9));
+                        deltas["dsc"] = std::stoi(PQgetvalue(res, i, 10));
+                        deltas["dscNc"] = std::stoi(PQgetvalue(res, i, 11));
+                        deltas["crl"] = std::stoi(PQgetvalue(res, i, 12));
+                        deltas["ml"] = std::stoi(PQgetvalue(res, i, 13));
+                        change["changes"] = deltas;
+
+                        // Calculate total change
+                        int totalChange = std::abs(std::stoi(PQgetvalue(res, i, 9))) +
+                                        std::abs(std::stoi(PQgetvalue(res, i, 10))) +
+                                        std::abs(std::stoi(PQgetvalue(res, i, 11))) +
+                                        std::abs(std::stoi(PQgetvalue(res, i, 12))) +
+                                        std::abs(std::stoi(PQgetvalue(res, i, 13)));
+                        change["totalChange"] = totalChange;
+
+                        // Previous upload info (if exists)
+                        if (!PQgetisnull(res, i, 14)) {
+                            Json::Value previous;
+                            previous["fileName"] = PQgetvalue(res, i, 14);
+                            previous["uploadTime"] = PQgetvalue(res, i, 15);
+                            change["previousUpload"] = previous;
+                        } else {
+                            change["previousUpload"] = Json::Value::null;
+                        }
+
+                        changes.append(change);
+                    }
+                    result["changes"] = changes;
+                } else {
+                    result["error"] = "Query failed: " + std::string(PQerrorMessage(conn));
+                    spdlog::error("[UploadChanges] Query failed: {}", PQerrorMessage(conn));
+                }
+                PQclear(res);
+            } else {
+                result["error"] = "Database connection failed";
+                spdlog::error("[UploadChanges] DB connection failed");
             }
 
             PQfinish(conn);

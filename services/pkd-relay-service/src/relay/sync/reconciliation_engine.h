@@ -3,12 +3,12 @@
 #include <libpq-fe.h>
 #include <ldap.h>
 #include <memory>
-#include "../common/types.h"
-#include "../common/config.h"
+#include "relay/sync/common/types.h"
+#include "relay/sync/common/config.h"
 #include "ldap_operations.h"
 
 namespace icao {
-namespace sync {
+namespace relay {
 
 // =============================================================================
 // Reconciliation Engine - PostgreSQL-LDAP Synchronization
@@ -73,5 +73,5 @@ private:
     std::unique_ptr<LdapOperations> ldapOps_;
 };
 
-} // namespace sync
+} // namespace relay
 } // namespace icao

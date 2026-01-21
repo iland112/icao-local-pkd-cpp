@@ -1,6 +1,6 @@
 # =============================================================================
 # ICAO Local PKD - Docker Compose Configuration
-# Multi-Service Architecture: PKD Management + PA Service + Sync Service
+# Multi-Service Architecture: PKD Management + PA Service + PKD Relay Service
 # =============================================================================
 # Data Directory: .docker-data/ (bind mount for easy management)
 # To reset: rm -rf .docker-data && docker compose up -d
@@ -28,7 +28,7 @@ services:
         condition: service_healthy
       pa-service:
         condition: service_healthy
-      sync-service:
+      pkd-relay:
         condition: service_healthy
       monitoring-service:
         condition: service_started
@@ -150,18 +150,21 @@ services:
       start_period: 10s
 
   # ---------------------------------------------------------------------------
-  # Sync Service (DB-LDAP Synchronization Checker)
+  # PKD Relay Service (Data Relay Layer)
+  # - ICAO Portal Monitoring
+  # - File Upload & Parsing
+  # - DB-LDAP Sync Monitoring
   # ---------------------------------------------------------------------------
-  sync-service:
+  pkd-relay:
     build:
       context: ..
-      dockerfile: services/sync-service/Dockerfile
-    container_name: icao-local-pkd-sync-service
+      dockerfile: services/pkd-relay-service/Dockerfile
+    container_name: icao-local-pkd-relay
     # ports:
     #   - "8083:8083"  # Direct access (use API Gateway instead)
     environment:
       - TZ=Asia/Seoul
-      - SERVICE_NAME=sync-service
+      - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -218,7 +221,7 @@ services:
       - SERVICE_HEALTH_INTERVAL=30
       - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
       - SERVICE_PA_SERVICE=http://pa-service:8082/api/health
-      - SERVICE_SYNC_SERVICE=http://sync-service:8083/api/sync/health
+      - SERVICE_SYNC_SERVICE=http://pkd-relay:8083/api/sync/health
     depends_on:
       postgres:
         condition: service_healthy
@@ -226,7 +229,7 @@ services:
         condition: service_healthy
       pa-service:
         condition: service_healthy
-      sync-service:
+      pkd-relay:
         condition: service_healthy
     volumes:
       - ../.docker-data/monitoring-logs:/app/logs
@@ -565,8 +568,8 @@ services:
     ports:
       - "8090:8080"
     environment:
-      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v1.6.2"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"/api/docs/sync-service.yaml","name":"Sync Service API v1.6.0"}]
-      - URLS_PRIMARY_NAME=PKD Management API v1.6.2
+      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v1.7.0"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"/api/docs/pkd-relay.yaml","name":"PKD Relay Service API v2.0.0"}]
+      - URLS_PRIMARY_NAME=PKD Management API v1.7.0
     volumes:
       - ../docs/openapi:/usr/share/nginx/html/api/docs:ro
     networks:

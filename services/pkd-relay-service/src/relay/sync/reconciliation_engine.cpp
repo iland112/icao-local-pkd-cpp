@@ -3,7 +3,7 @@
 #include <chrono>
 
 namespace icao {
-namespace sync {
+namespace relay {
 
 ReconciliationEngine::ReconciliationEngine(const Config& config)
     : config_(config),
@@ -382,5 +382,5 @@ void ReconciliationEngine::logReconciliationOperation(
     PQclear(res);
 }
 
-} // namespace sync
+} // namespace relay
 } // namespace icao

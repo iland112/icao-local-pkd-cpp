@@ -5,7 +5,7 @@
 #include <openssl/bio.h>
 
 namespace icao {
-namespace sync {
+namespace relay {
 
 LdapOperations::LdapOperations(const Config& config)
     : config_(config) {
@@ -140,5 +140,5 @@ bool LdapOperations::deleteCertificate(LDAP* ld,
     return true;
 }
 
-} // namespace sync
+} // namespace relay
 } // namespace icao

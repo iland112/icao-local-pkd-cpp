@@ -1,8 +1,8 @@
 // =============================================================================
-// ICAO Local PKD - Sync Service
+// ICAO Local PKD - PKD Relay Service
 // =============================================================================
-// Version: 1.4.0
-// Description: DB-LDAP synchronization checker, certificate re-validation
+// Version: 2.0.0
+// Description: Data relay layer (ICAO portal monitoring, LDIF upload/parsing, DB-LDAP sync)
 // =============================================================================
 // Changelog:
 //   v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
@@ -40,12 +40,12 @@
 #include <algorithm>
 
 // Modularized components
-#include "common/types.h"
-#include "common/config.h"
-#include "reconciliation/reconciliation_engine.h"
+#include "relay/sync/common/types.h"
+#include "relay/sync/common/config.h"
+#include "relay/sync/reconciliation_engine.h"
 
 using namespace drogon;
-using namespace icao::sync;
+using namespace icao::relay;
 
 // =============================================================================
 // Global Configuration Instance
@@ -1690,9 +1690,9 @@ int main() {
     // Setup logging
     setupLogging();
 
-    spdlog::info("===========================================");
-    spdlog::info("  ICAO Local PKD - Sync Service v1.3.0");
-    spdlog::info("===========================================");
+    spdlog::info("=================================================");
+    spdlog::info("  ICAO Local PKD - PKD Relay Service v2.0.0");
+    spdlog::info("=================================================");
     spdlog::info("Server port: {}", g_config.serverPort);
     spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
     spdlog::info("LDAP (read): {}:{}", g_config.ldapHost, g_config.ldapPort);
@@ -1744,14 +1744,19 @@ int main() {
 
             std::string spec = R"(openapi: 3.0.3
 info:
-  title: Sync Service API
+  title: PKD Relay Service API
   description: |
-    DB-LDAP Synchronization and Certificate Re-validation Service.
+    Data Relay Layer for ICAO Local PKD System.
+    Handles ICAO portal monitoring, LDIF upload/parsing, and DB-LDAP synchronization.
 
     ## Changelog
+    - v2.0.0 (2026-01-20): Service reorganization - data relay layer separation
+    - v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
+    - v1.3.0 (2026-01-13): User-configurable settings UI
+    - v1.2.0 (2026-01-07): Daily scheduler only
     - v1.1.0 (2026-01-06): Daily scheduler, certificate re-validation
     - v1.0.0 (2026-01-03): Initial release
-  version: 1.1.0
+  version: 2.0.0
 servers:
   - url: /
 tags:
