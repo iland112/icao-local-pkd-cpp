@@ -970,87 +970,116 @@ sequenceDiagram
 
 ```mermaid
 graph TB
-    subgraph "Docker Network: icao-network"
-        subgraph "Frontend Container"
-            Frontend[icao-frontend<br/>Nginx and React SPA<br/>Port: 3000]
+    subgraph External["🌐 External Access"]
+        User["👤 User Browser<br/>Port 3000"]
+        APIClient["🔌 API Client<br/>Port 8080"]
+        LDAPClient["📂 LDAP Client<br/>Port 389"]
+    end
+
+    subgraph DockerNetwork["🐳 Docker Network: icao-network"]
+        subgraph Presentation["📱 Presentation Layer"]
+            Frontend["Frontend<br/>━━━━━━━━<br/>nginx:alpine<br/>React 19 SPA<br/>━━━━━━━━<br/>:3000"]
         end
 
-        subgraph "API Gateway Container"
-            APIGateway[api-gateway<br/>Nginx Reverse Proxy<br/>Port: 8080]
+        subgraph Gateway["🔀 Gateway Layer"]
+            APIGateway["API Gateway<br/>━━━━━━━━<br/>nginx:1.25<br/>Reverse Proxy<br/>━━━━━━━━<br/>:8080"]
+            HAProxy["HAProxy<br/>━━━━━━━━<br/>haproxy:2.8<br/>LDAP LB<br/>━━━━━━━━<br/>:389"]
         end
 
-        subgraph "Backend Containers"
-            PKD[pkd-management<br/>C++ Drogon Service<br/>Internal Port: 8081]
-            PA[pa-service<br/>C++ Drogon Service<br/>Internal Port: 8082]
-            Relay[pkd-relay<br/>C++ Drogon Service<br/>Internal Port: 8083]
+        subgraph Application["🔧 Application Layer"]
+            PKD["PKD Management<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8081"]
+            PA["PA Service<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8082"]
+            Relay["PKD Relay<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8083"]
         end
 
-        subgraph "Database Containers"
-            PG[postgres<br/>PostgreSQL 15<br/>Port: 5432]
-        end
-
-        subgraph "LDAP Cluster"
-            LDAP1[openldap1<br/>MMR Primary<br/>Internal Port: 3891]
-            LDAP2[openldap2<br/>MMR Secondary<br/>Internal Port: 3892]
-            HAProxy[haproxy<br/>LDAP Load Balancer<br/>Port: 389]
-        end
-
-        subgraph "Init Containers"
-            PGInit[postgres-init<br/>Schema + Data]
-            LDAPInit[ldap-init<br/>Bootstrap + Schema]
-            MMRSetup1[ldap-mmr-setup1<br/>Replication Config]
-            MMRSetup2[ldap-mmr-setup2<br/>Replication Config]
+        subgraph DataLayer["💾 Data Layer"]
+            PG["PostgreSQL<br/>━━━━━━━━<br/>postgres:15<br/>RDBMS<br/>━━━━━━━━<br/>:5432"]
+            LDAP1["OpenLDAP 1<br/>━━━━━━━━<br/>osixia:1.5.0<br/>MMR Primary<br/>━━━━━━━━<br/>:3891"]
+            LDAP2["OpenLDAP 2<br/>━━━━━━━━<br/>osixia:1.5.0<br/>MMR Secondary<br/>━━━━━━━━<br/>:3892"]
         end
     end
 
-    subgraph "Volumes (Bind Mounts)"
-        PGData[.docker-data/postgres<br/>Database Files]
-        LDAPData1[.docker-data/openldap1<br/>LDAP Files]
-        LDAPData2[.docker-data/openldap2<br/>LDAP Files]
-        Uploads[.docker-data/pkd-uploads<br/>Upload Files]
-        Logs[.docker-data/logs<br/>Service Logs]
+    subgraph Storage["💿 Persistent Storage"]
+        PGData[("📦 postgres<br/>Database Files")]
+        LDAP1Data[("📦 openldap1<br/>Directory Data")]
+        LDAP2Data[("📦 openldap2<br/>Directory Data")]
+        UploadData[("📦 pkd-uploads<br/>LDIF/ML Files")]
+        LogData[("📦 logs<br/>Service Logs")]
     end
 
-    Frontend --> APIGateway
-    APIGateway --> PKD
-    APIGateway --> PA
-    APIGateway --> Relay
+    %% External to Docker Network
+    User -->|HTTP/3000| Frontend
+    APIClient -->|HTTP/8080| APIGateway
+    LDAPClient -->|LDAP/389| HAProxy
 
-    PKD --> PG
-    PA --> PG
-    Relay --> PG
+    %% Presentation to Gateway
+    Frontend -->|proxy_pass| APIGateway
 
-    PKD --> HAProxy
-    PA --> HAProxy
-    Relay --> HAProxy
+    %% Gateway to Application
+    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/sync| PKD
+    APIGateway -->|/api/pa/*| PA
+    APIGateway -->|/api/relay/*| Relay
 
-    HAProxy --> LDAP1
-    HAProxy --> LDAP2
+    %% Application to Data Layer
+    PKD -->|SQL| PG
+    PA -->|SQL| PG
+    Relay -->|SQL| PG
 
-    LDAP1 <-.MMR Sync.-> LDAP2
+    PKD -->|LDAP Write| LDAP1
+    PKD -->|LDAP Read| HAProxy
+    PA -->|LDAP Read| HAProxy
+    Relay -->|LDAP Read| HAProxy
 
-    PG -.persists to.-> PGData
-    LDAP1 -.persists to.-> LDAPData1
-    LDAP2 -.persists to.-> LDAPData2
-    PKD -.uploads to.-> Uploads
-    PKD -.logs to.-> Logs
+    HAProxy -->|Round-robin| LDAP1
+    HAProxy -->|Round-robin| LDAP2
 
-    PGInit -.initializes.-> PG
-    LDAPInit -.initializes.-> LDAP1
-    LDAPInit -.initializes.-> LDAP2
-    MMRSetup1 -.configures.-> LDAP1
-    MMRSetup2 -.configures.-> LDAP2
+    %% Data Layer Replication
+    LDAP1 <-->|MMR Sync| LDAP2
 
-    style Frontend fill:#81C784,stroke:#388E3C,stroke-width:2px
+    %% Data Layer to Storage
+    PG -->|bind mount| PGData
+    LDAP1 -->|bind mount| LDAP1Data
+    LDAP2 -->|bind mount| LDAP2Data
+    PKD -->|bind mount| UploadData
+    PKD -->|bind mount| LogData
+
+    %% Styling - External
+    style User fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+    style APIClient fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+    style LDAPClient fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+
+    %% Styling - Presentation
+    style Frontend fill:#81C784,stroke:#388E3C,stroke-width:3px
+
+    %% Styling - Gateway
     style APIGateway fill:#FF9800,stroke:#F57C00,stroke-width:3px
-    style PKD fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style PA fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style Relay fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style PG fill:#7E57C2,stroke:#5E35B1,stroke-width:2px
-    style LDAP1 fill:#26A69A,stroke:#00796B,stroke-width:2px
-    style LDAP2 fill:#26A69A,stroke:#00796B,stroke-width:2px
-    style HAProxy fill:#FFA726,stroke:#F57C00,stroke-width:2px
+    style HAProxy fill:#FFA726,stroke:#F57C00,stroke-width:3px
+
+    %% Styling - Application
+    style PKD fill:#42A5F5,stroke:#1976D2,stroke-width:3px
+    style PA fill:#42A5F5,stroke:#1976D2,stroke-width:3px
+    style Relay fill:#42A5F5,stroke:#1976D2,stroke-width:3px
+
+    %% Styling - Data Layer
+    style PG fill:#7E57C2,stroke:#5E35B1,stroke-width:3px
+    style LDAP1 fill:#26A69A,stroke:#00796B,stroke-width:3px
+    style LDAP2 fill:#26A69A,stroke:#00796B,stroke-width:3px
+
+    %% Styling - Storage
+    style PGData fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style LDAP1Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style LDAP2Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style UploadData fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style LogData fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
 ```
+
+**Architecture Highlights**:
+
+1. **Layered Design**: 명확한 4계층 구조 (Presentation → Gateway → Application → Data)
+2. **Gateway Pattern**: API Gateway와 HAProxy로 트래픽 분산 및 로드밸런싱
+3. **Microservices**: 3개의 독립적인 C++ 서비스 (PKD, PA, Relay)
+4. **MMR Replication**: OpenLDAP Multi-Master 복제로 고가용성 보장
+5. **Bind Mounts**: 모든 데이터는 호스트 파일시스템에 영구 저장
 
 **Container Details**:
 
