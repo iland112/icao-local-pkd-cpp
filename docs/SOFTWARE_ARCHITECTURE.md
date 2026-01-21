@@ -42,33 +42,54 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ```mermaid
 graph TB
-    subgraph Layer1["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>🌐 Layer 1: External Access<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
+    subgraph Layer1[" "]
+        direction LR
+        L1Title["🌐 Layer 1: External Access"]
         User["👤 User<br/>Browser"]
         ICAOPortal["🌍 ICAO Portal<br/>pkd.icao.int"]
+        L1Title ~~~ User
+        User ~~~ ICAOPortal
     end
 
-    subgraph Layer2["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>🔒 Layer 2: DMZ (Public Ports)<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
-        Frontend["⚡ Frontend<br/>━━━━━━<br/>React 19<br/>:3000"]
-        APIGateway["🔀 API Gateway<br/>━━━━━━<br/>Nginx<br/>:8080"]
-        HAProxy["⚖️ HAProxy<br/>━━━━━━<br/>LDAP LB<br/>:389"]
+    subgraph Layer2[" "]
+        direction LR
+        L2Title["🔒 Layer 2: DMZ"]
+        Frontend["⚡ Frontend<br/>React 19<br/>:3000"]
+        APIGateway["🔀 API Gateway<br/>Nginx<br/>:8080"]
+        HAProxy["⚖️ HAProxy<br/>LDAP LB<br/>:389"]
+        L2Title ~~~ Frontend
+        Frontend ~~~ APIGateway
+        APIGateway ~~~ HAProxy
     end
 
-    subgraph Layer3["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>🔧 Layer 3: Application Services<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
-        PKD["📦 PKD<br/>━━━━━━<br/>C++20<br/>:8081"]
-        PA["🔐 PA<br/>━━━━━━<br/>C++20<br/>:8082"]
-        Relay["🔄 Relay<br/>━━━━━━<br/>C++20<br/>:8083"]
+    subgraph Layer3[" "]
+        direction LR
+        L3Title["🔧 Layer 3: Application"]
+        PKD["📦 PKD<br/>C++20<br/>:8081"]
+        PA["🔐 PA<br/>C++20<br/>:8082"]
+        Relay["🔄 Relay<br/>C++20<br/>:8083"]
+        L3Title ~~~ PKD
+        PKD ~~~ PA
+        PA ~~~ Relay
     end
 
-    subgraph Layer4["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>💾 Layer 4: Data Storage<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
-        PostgreSQL[("🗄️ PostgreSQL<br/>━━━━━━<br/>30,637 certs<br/>:5432")]
-        LDAPCluster[("📂 LDAP MMR<br/>━━━━━━<br/>Master 1+2<br/>:3891/:3892")]
+    subgraph Layer4[" "]
+        direction LR
+        L4Title["💾 Layer 4: Data"]
+        PostgreSQL[("🗄️ PostgreSQL<br/>30K certs<br/>:5432")]
+        LDAPCluster[("📂 LDAP MMR<br/>Master 1+2<br/>:3891/:3892")]
+        L4Title ~~~ PostgreSQL
+        PostgreSQL ~~~ LDAPCluster
     end
 
-    subgraph Layer5["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━<br/>🏗️ Layer 5: Infrastructure<br/>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]
-        Docker["🐳 Docker<br/>━━━━━━<br/>Compose<br/>Network"]
+    subgraph Layer5[" "]
+        direction LR
+        L5Title["🏗️ Layer 5: Infrastructure"]
+        Docker["🐳 Docker Compose<br/>Network"]
+        L5Title ~~~ Docker
     end
 
-    %% Vertical flow only - Layer by layer
+    %% Vertical flow - Layer by layer
     User -->|1. HTTPS| Frontend
     User -->|2. REST API| APIGateway
 
@@ -91,18 +112,20 @@ graph TB
 
     ICAOPortal -.->|Scraping| Relay
 
-    %% Styling - Simplified
+    %% Styling
     classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:3px,color:#000
     classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
     classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:3px,color:#000
     classDef data fill:#FCE4EC,stroke:#C2185B,stroke-width:3px,color:#000
     classDef infra fill:#F3E5F5,stroke:#7B1FA2,stroke-width:3px,color:#000
+    classDef title fill:#FFFFFF,stroke:#FFFFFF,color:#666,stroke-width:0
 
     class User,ICAOPortal external
     class Frontend,APIGateway,HAProxy dmz
     class PKD,PA,Relay app
     class PostgreSQL,LDAPCluster data
     class Docker infra
+    class L1Title,L2Title,L3Title,L4Title,L5Title title
 ```
 
 **Architecture Highlights**:
