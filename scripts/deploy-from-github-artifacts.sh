@@ -65,7 +65,7 @@ $SSH_CMD "
         mkdir -p ${BACKUP_DIR}/logs
         docker logs icao-pkd-management > ${BACKUP_DIR}/logs/pkd-management.log 2>&1 || true
         docker logs icao-pkd-pa-service > ${BACKUP_DIR}/logs/pa-service.log 2>&1 || true
-        docker logs icao-pkd-sync-service > ${BACKUP_DIR}/logs/sync-service.log 2>&1 || true
+        docker logs icao-pkd-relay > ${BACKUP_DIR}/logs/sync-service.log 2>&1 || true
         docker logs icao-pkd-frontend > ${BACKUP_DIR}/logs/frontend.log 2>&1 || true
 
         # Save current image versions
@@ -214,7 +214,7 @@ if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pa-service" ]; then
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "sync-service" ]; then
-    deploy_service "sync-service" "icao-local-sync:arm64-v1.2.0" "pkd-sync-arm64.tar.gz"
+    deploy_service "sync-service" "icao-local-pkd-relay:arm64" "pkd-relay-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "frontend" ]; then
