@@ -61,11 +61,18 @@ const getShortDbVersion = (version?: string): string => {
 
 const navSections: NavSection[] = [
   {
+    title: 'ICAO PKD 연계',
+    items: [
+      { path: '/icao', label: 'ICAO 버전 상태', icon: <Zap className="w-4 h-4" /> },
+    ],
+  },
+  {
     title: 'PKD Management',
     items: [
       { path: '/upload', label: '파일 업로드', icon: <Upload className="w-4 h-4" /> },
       { path: '/pkd/certificates', label: '인증서 조회', icon: <Key className="w-4 h-4" /> },
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" /> },
+      { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
       { path: '/upload-dashboard', label: '통계 대시보드', icon: <BarChart3 className="w-4 h-4" /> },
     ],
   },
@@ -75,18 +82,6 @@ const navSections: NavSection[] = [
       { path: '/pa/verify', label: 'PA 검증 수행', icon: <ShieldCheck className="w-4 h-4" /> },
       { path: '/pa/history', label: '검증 이력', icon: <History className="w-4 h-4" /> },
       { path: '/pa/dashboard', label: '통계 대시보드', icon: <PresentationIcon className="w-4 h-4" /> },
-    ],
-  },
-  {
-    title: 'DB-LDAP Sync',
-    items: [
-      { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
-    ],
-  },
-  {
-    title: 'ICAO Auto Sync',
-    items: [
-      { path: '/icao', label: 'ICAO 버전 상태', icon: <Zap className="w-4 h-4" /> },
     ],
   },
   {
