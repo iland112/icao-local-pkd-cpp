@@ -43,112 +43,112 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 ```mermaid
 graph TB
     subgraph External["🌐 외부 영역 (Public Internet)"]
-        User[👤 사용자<br/>웹 브라우저]
-        ExtAPI[🔌 외부 API 클라이언트<br/>REST/LDAP]
-        ICAOPortal[🌍 ICAO PKD Portal<br/>download.pkd.icao.int]
+        User["👤 사용자<br/>━━━━━━━━<br/>웹 브라우저"]
+        ExtAPI["🔌 외부 API 클라이언트<br/>━━━━━━━━<br/>REST/LDAP"]
+        ICAOPortal["🌍 ICAO PKD Portal<br/>━━━━━━━━<br/>download.pkd.icao.int"]
     end
 
     subgraph DMZ["🔒 DMZ 영역 (Exposed Ports)"]
-        Frontend[⚡ Frontend Service<br/>Nginx + React 19<br/>Port: 3000<br/>기술: TypeScript, Vite, TailwindCSS 4]
-        APIGateway[🔀 API Gateway<br/>Nginx Reverse Proxy<br/>Port: 8080<br/>기능: Rate Limit, CORS, SSE, Swagger UI]
-        HAProxy[⚖️ LDAP Load Balancer<br/>HAProxy<br/>Port: 389<br/>기능: Round-robin, Health Check]
+        Frontend["⚡ Frontend Service<br/>━━━━━━━━<br/>Nginx + React 19<br/>TypeScript, Vite, TailwindCSS 4<br/>━━━━━━━━<br/>:3000"]
+        APIGateway["🔀 API Gateway<br/>━━━━━━━━<br/>Nginx Reverse Proxy<br/>Rate Limit, CORS, SSE, Swagger UI<br/>━━━━━━━━<br/>:8080"]
+        HAProxy["⚖️ LDAP Load Balancer<br/>━━━━━━━━<br/>HAProxy 2.8<br/>Round-robin, Health Check<br/>━━━━━━━━<br/>:389"]
     end
 
     subgraph AppLayer["🔧 애플리케이션 계층 (Internal Network)"]
         subgraph Microservices["마이크로서비스 클러스터"]
-            PKD[📦 PKD Management<br/>C++ 20 + Drogon<br/>Port: 8081<br/>기능: Upload, Certificate, ICAO Sync]
-            PA[🔐 PA Service<br/>C++ 20 + Drogon<br/>Port: 8082<br/>기능: ICAO 9303 Verification]
-            Relay[🔄 PKD Relay Service<br/>C++ 20 + Drogon<br/>Port: 8083<br/>기능: External PKD Relay, Auto Sync]
-            Monitor[📊 Monitoring Service<br/>C++ 20 + Drogon<br/>Port: 8084<br/>기능: System Metrics, Service Health]
+            PKD["📦 PKD Management<br/>━━━━━━━━<br/>C++ 20 + Drogon<br/>Upload, Certificate, ICAO Sync<br/>━━━━━━━━<br/>:8081"]
+            PA["🔐 PA Service<br/>━━━━━━━━<br/>C++ 20 + Drogon<br/>ICAO 9303 Verification<br/>━━━━━━━━<br/>:8082"]
+            Relay["🔄 PKD Relay Service<br/>━━━━━━━━<br/>C++ 20 + Drogon<br/>External PKD Relay, Auto Sync<br/>━━━━━━━━<br/>:8083"]
+            Monitor["📊 Monitoring Service<br/>━━━━━━━━<br/>C++ 20 + Drogon<br/>System Metrics, Service Health<br/>━━━━━━━━<br/>:8084"]
         end
 
         subgraph Schedulers["스케줄러"]
-            CronJob[⏰ Cron Job<br/>icao-version-check.sh<br/>스케줄: 매일 08:00 KST]
-            DailySync[📅 Daily Sync<br/>Trust Chain Revalidation<br/>스케줄: 매일 00:00 UTC]
+            CronJob["⏰ Cron Job<br/>━━━━━━━━<br/>icao-version-check.sh<br/>━━━━━━━━<br/>Daily 08:00 KST"]
+            DailySync["📅 Daily Sync<br/>━━━━━━━━<br/>Trust Chain Revalidation<br/>━━━━━━━━<br/>Daily 00:00 UTC"]
         end
     end
 
     subgraph DataLayer["💾 데이터 계층 (Persistent Storage)"]
         subgraph Database["데이터베이스"]
-            PostgreSQL[(🗄️ PostgreSQL 15<br/>Port: 5432<br/>데이터: 30,637 certificates<br/>테이블: 9개)]
+            PostgreSQL[("🗄️ PostgreSQL 15<br/>━━━━━━━━<br/>30,637 certificates<br/>9 tables<br/>━━━━━━━━<br/>:5432")]
         end
 
         subgraph Directory["디렉토리 서비스"]
-            LDAP1[(📂 OpenLDAP Master 1<br/>Port: 3891<br/>역할: Primary Write<br/>복제: MMR)]
-            LDAP2[(📂 OpenLDAP Master 2<br/>Port: 3892<br/>역할: Secondary Write<br/>복제: MMR)]
+            LDAP1[("📂 OpenLDAP Master 1<br/>━━━━━━━━<br/>Primary Write<br/>MMR Replication<br/>━━━━━━━━<br/>:3891")]
+            LDAP2[("📂 OpenLDAP Master 2<br/>━━━━━━━━<br/>Secondary Write<br/>MMR Replication<br/>━━━━━━━━<br/>:3892")]
         end
 
         subgraph Storage["파일 저장소"]
-            Uploads[📁 Upload Files<br/>경로: /app/uploads<br/>형식: LDIF, ML, JSON]
-            Logs[📋 Application Logs<br/>경로: /app/logs<br/>프레임워크: spdlog]
+            Uploads[("📁 Upload Files<br/>━━━━━━━━<br/>/app/uploads<br/>LDIF, ML, JSON")]
+            Logs[("📋 Application Logs<br/>━━━━━━━━<br/>/app/logs<br/>spdlog")]
         end
     end
 
     subgraph Infrastructure["🏗️ 인프라스트럭처"]
-        Docker[🐳 Docker Compose<br/>네트워크: icao-network<br/>볼륨: bind mounts]
-        Platform[💻 배포 플랫폼<br/>AMD64: Development<br/>ARM64: Luckfox Pico]
+        Docker["🐳 Docker Compose<br/>━━━━━━━━<br/>Network: icao-network<br/>Volumes: bind mounts"]
+        Platform["💻 배포 플랫폼<br/>━━━━━━━━<br/>AMD64: Development<br/>ARM64: Luckfox Pico"]
     end
 
     subgraph CICD["🚀 CI/CD Pipeline"]
-        GitHub[📦 GitHub Actions<br/>빌드: Multi-arch<br/>아티팩트: 30일 보관]
-        Deploy[🎯 Automated Deploy<br/>도구: skopeo, sshpass<br/>대상: 192.168.100.11]
+        GitHub["📦 GitHub Actions<br/>━━━━━━━━<br/>Multi-arch Build<br/>30-day Artifacts"]
+        Deploy["🎯 Automated Deploy<br/>━━━━━━━━<br/>skopeo, sshpass<br/>192.168.100.11"]
     end
 
     %% External to DMZ
-    User -->|HTTPS| Frontend
-    User -->|HTTP| APIGateway
+    User -->|HTTPS :3000| Frontend
+    User -->|HTTP :8080| APIGateway
     ExtAPI -->|REST API| APIGateway
-    ExtAPI -->|LDAP Query| HAProxy
+    ExtAPI -->|LDAP :389| HAProxy
     ICAOPortal -.->|HTML Scraping| PKD
 
     %% DMZ to App Layer
-    Frontend -->|API Proxy| APIGateway
-    APIGateway -->|/api/upload, /api/cert, /api/icao| PKD
+    Frontend -->|/api/*| APIGateway
+    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/icao| PKD
     APIGateway -->|/api/pa/*| PA
     APIGateway -->|/api/relay/*| Relay
     APIGateway -->|/api/monitoring/*| Monitor
-    HAProxy -->|Load Balance| LDAP1
-    HAProxy -->|Load Balance| LDAP2
+    HAProxy -->|Round-robin| LDAP1
+    HAProxy -->|Round-robin| LDAP2
 
     %% App Layer to Data Layer
-    PKD -->|Write/Read| PostgreSQL
-    PKD -->|Direct Write| LDAP1
-    PKD -->|Read via HAProxy| HAProxy
-    PA -->|Read/Write| PostgreSQL
-    PA -->|Read via HAProxy| HAProxy
-    Relay -->|Read| PostgreSQL
-    Relay -->|Relay Requests| HAProxy
+    PKD -->|SQL Read/Write| PostgreSQL
+    PKD -->|LDAP Write| LDAP1
+    PKD -->|LDAP Read| HAProxy
+    PA -->|SQL Read/Write| PostgreSQL
+    PA -->|LDAP Read| HAProxy
+    Relay -->|SQL Read| PostgreSQL
+    Relay -->|LDAP Relay| HAProxy
     Monitor -->|Metrics Query| PostgreSQL
-    Monitor -->|Service Health Check| PKD
-    Monitor -->|Service Health Check| PA
-    Monitor -->|Service Health Check| Relay
+    Monitor -->|Health Check| PKD
+    Monitor -->|Health Check| PA
+    Monitor -->|Health Check| Relay
 
     %% Schedulers
-    CronJob -->|Trigger Check| PKD
-    DailySync -->|Trigger Sync| Relay
+    CronJob -->|Trigger| PKD
+    DailySync -->|Trigger| Relay
 
     %% Data Layer Replication
-    LDAP1 <-->|MMR Replication| LDAP2
+    LDAP1 <-->|MMR Sync<br/>Bi-directional| LDAP2
 
     %% File Storage
-    PKD -->|Store Files| Uploads
-    PKD -->|Write Logs| Logs
-    PA -->|Write Logs| Logs
-    Relay -->|Write Logs| Logs
+    PKD -->|Upload Files| Uploads
+    PKD -->|Logs| Logs
+    PA -->|Logs| Logs
+    Relay -->|Logs| Logs
 
     %% Infrastructure
-    Docker -.->|Container Runtime| Frontend
-    Docker -.->|Container Runtime| APIGateway
-    Docker -.->|Container Runtime| PKD
-    Docker -.->|Container Runtime| PA
-    Docker -.->|Container Runtime| Relay
-    Docker -.->|Container Runtime| PostgreSQL
-    Docker -.->|Container Runtime| LDAP1
-    Docker -.->|Container Runtime| LDAP2
-    Docker -.->|Container Runtime| HAProxy
+    Docker -.->|Runtime| Frontend
+    Docker -.->|Runtime| APIGateway
+    Docker -.->|Runtime| PKD
+    Docker -.->|Runtime| PA
+    Docker -.->|Runtime| Relay
+    Docker -.->|Runtime| PostgreSQL
+    Docker -.->|Runtime| LDAP1
+    Docker -.->|Runtime| LDAP2
+    Docker -.->|Runtime| HAProxy
 
     %% CI/CD
-    GitHub -->|Build Images| Deploy
+    GitHub -->|Build ARM64/AMD64| Deploy
     Deploy -->|SSH Deploy| Platform
 
     %% Styling
@@ -166,6 +166,15 @@ graph TB
     class Docker,Platform infra
     class GitHub,Deploy cicd
 ```
+
+**Architecture Highlights**:
+
+1. **5-Layer Design**: External → DMZ → Application → Data → Infrastructure로 명확한 계층 분리
+2. **Gateway Pattern**: API Gateway (HTTP)와 HAProxy (LDAP)로 모든 트래픽 제어
+3. **Microservices**: 4개의 독립적인 C++ 서비스 (PKD, PA, Relay, Monitor)
+4. **MMR Replication**: OpenLDAP Multi-Master 양방향 복제로 고가용성 보장
+5. **ICAO Integration**: 외부 ICAO Portal과 연동하여 자동 버전 감지 및 동기화
+6. **Scheduler Automation**: Cron Job과 Daily Sync로 자동화된 운영
 
 ### Layer Description
 
