@@ -1102,58 +1102,114 @@ graph TB
 ### Luckfox ARM64 Deployment
 
 ```mermaid
-graph TD
-    subgraph "Luckfox Pico ARM64"
-        subgraph "Host Network Mode"
-            Frontend2[Frontend<br/>Direct :3000]
-            APIGateway2[API Gateway<br/>Direct :8080]
-            PKD2[PKD Management<br/>Direct :8081]
-            PA2[PA Service<br/>Direct :8082]
-            Relay2[PKD Relay<br/>Direct :8083]
-            PG2[PostgreSQL<br/>Direct :5432]
-            LDAP3[OpenLDAP1<br/>Direct :3891]
-            LDAP4[OpenLDAP2<br/>Direct :3892]
-            HAProxy2[HAProxy<br/>Direct :389]
+graph TB
+    subgraph CICD["🚀 CI/CD Pipeline"]
+        GHA["GitHub Actions<br/>━━━━━━━━<br/>ARM64 Build<br/>QEMU + Buildx<br/>━━━━━━━━<br/>~2 hours"]
+        Artifacts["Artifacts<br/>━━━━━━━━<br/>OCI Format<br/>tar.gz<br/>━━━━━━━━<br/>30 days"]
+        Convert["skopeo<br/>━━━━━━━━<br/>OCI → Docker<br/>override-arch<br/>━━━━━━━━<br/>~30 sec"]
+    end
+
+    subgraph Deploy["📦 Deployment"]
+        Transfer["sshpass<br/>━━━━━━━━<br/>SCP Transfer<br/>to Luckfox<br/>━━━━━━━━<br/>~2 min"]
+        Load["Docker Load<br/>━━━━━━━━<br/>Import Images<br/>docker load<br/>━━━━━━━━<br/>~1 min"]
+    end
+
+    subgraph Luckfox["🖥️ Luckfox Pico ARM64 - 192.168.100.11"]
+        subgraph Network["Host Network Mode"]
+            Frontend3["Frontend<br/>:3000"]
+            APIGateway3["API Gateway<br/>:8080"]
+            PKD3["PKD Mgmt<br/>:8081"]
+            PA3["PA Service<br/>:8082"]
+            Relay3["PKD Relay<br/>:8083"]
+            PG3["PostgreSQL<br/>:5432"]
+            LDAP5["OpenLDAP1<br/>:3891"]
+            LDAP6["OpenLDAP2<br/>:3892"]
+            HAProxy3["HAProxy<br/>:389"]
         end
 
-        subgraph "Build Process"
-            GHA[GitHub Actions<br/>ARM64 Cross-Compile]
-            Artifacts[OCI Artifacts<br/>tar.gz]
-            Deploy[Deploy Script<br/>skopeo + sshpass]
-        end
-
-        subgraph "Data Storage"
-            LuckfoxData[/home/luckfox/<br/>icao-local-pkd-cpp-v2]
-            PGData2[postgres-data/<br/>localpkd DB]
-            LDAPData3[openldap1-data/]
-            LDAPData4[openldap2-data/]
+        subgraph Storage3["💾 Persistent Storage"]
+            ProjectDir[("Project Directory<br/>icao-local-pkd-cpp-v2")]
+            PGData3[("postgres-data<br/>localpkd DB")]
+            LDAP5Data[("openldap1-data<br/>Directory")]
+            LDAP6Data[("openldap2-data<br/>Directory")]
         end
     end
 
-    GHA --> Artifacts
-    Artifacts --> Deploy
-    Deploy --> Frontend2
-    Deploy --> PKD2
-    Deploy --> PA2
-    Deploy --> Relay2
+    %% CI/CD Flow
+    GHA -->|Build Complete| Artifacts
+    Artifacts -->|Download| Convert
+    Convert -->|OCI Archive| Transfer
+    Transfer -->|SSH/SCP| Load
 
-    PG2 --> PGData2
-    LDAP3 --> LDAPData3
-    LDAP4 --> LDAPData4
+    %% Deployment to Services
+    Load -->|docker load| Frontend3
+    Load -->|docker load| APIGateway3
+    Load -->|docker load| PKD3
+    Load -->|docker load| PA3
+    Load -->|docker load| Relay3
 
-    style GHA fill:#4CAF50,stroke:#388E3C,stroke-width:2px
-    style Deploy fill:#FF9800,stroke:#F57C00,stroke-width:2px
+    %% Services to Storage
+    PG3 -->|bind mount| PGData3
+    LDAP5 -->|bind mount| LDAP5Data
+    LDAP6 -->|bind mount| LDAP6Data
+    PKD3 -->|bind mount| ProjectDir
+
+    %% Styling - CI/CD
+    style GHA fill:#4CAF50,stroke:#388E3C,stroke-width:3px
+    style Artifacts fill:#2196F3,stroke:#1976D2,stroke-width:2px
+    style Convert fill:#FF9800,stroke:#F57C00,stroke-width:2px
+
+    %% Styling - Deploy
+    style Transfer fill:#9C27B0,stroke:#7B1FA2,stroke-width:2px
+    style Load fill:#F44336,stroke:#D32F2F,stroke-width:2px
+
+    %% Styling - Services
+    style Frontend3 fill:#81C784,stroke:#388E3C,stroke-width:2px
+    style APIGateway3 fill:#FF9800,stroke:#F57C00,stroke-width:2px
+    style PKD3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
+    style PA3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
+    style Relay3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
+    style PG3 fill:#7E57C2,stroke:#5E35B1,stroke-width:2px
+    style LDAP5 fill:#26A69A,stroke:#00796B,stroke-width:2px
+    style LDAP6 fill:#26A69A,stroke:#00796B,stroke-width:2px
+    style HAProxy3 fill:#FFA726,stroke:#F57C00,stroke-width:2px
+
+    %% Styling - Storage
+    style ProjectDir fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style PGData3 fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style LDAP5Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
+    style LDAP6Data fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
 ```
 
 **Deployment Workflow**:
-1. Code push to GitHub
-2. GitHub Actions builds ARM64 images (2.5 hours)
-3. Artifacts stored as OCI format
-4. Deploy script downloads artifacts
-5. `skopeo` converts OCI → Docker
-6. `sshpass` transfers images to Luckfox
-7. Docker load + container restart
-8. Health check verification
+
+1. **GitHub Actions Build** (~2 hours)
+   - Multi-stage Dockerfile with vcpkg caching
+   - QEMU emulation for ARM64 cross-compilation
+   - Output: OCI format images (tar.gz)
+
+2. **Artifact Conversion** (~30 seconds)
+   - `skopeo copy --override-arch arm64 oci-archive:... docker-archive:...`
+   - OCI format → Docker loadable format
+
+3. **Transfer to Luckfox** (~2 minutes)
+   - `sshpass -p "luckfox" scp image.tar luckfox@192.168.100.11:`
+   - Non-interactive SSH authentication
+
+4. **Load and Deploy** (~1 minute)
+   - `docker load < image.tar`
+   - `docker compose -f docker-compose-luckfox.yaml up -d`
+   - Health check verification
+
+**Key Differences from Development Environment**:
+
+| Aspect | Development (AMD64) | Luckfox (ARM64) |
+|--------|---------------------|-----------------|
+| **Network Mode** | bridge (icao-network) | host (direct port mapping) |
+| **PostgreSQL DB** | pkd | localpkd |
+| **Build Method** | Local build or Docker | GitHub Actions only |
+| **Deployment** | docker-compose.yaml | docker-compose-luckfox.yaml |
+| **Image Format** | Docker native | OCI → Docker conversion |
 
 ---
 
