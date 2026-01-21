@@ -1,8 +1,8 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 2.0.0
-**Last Updated**: 2026-01-21
-**Status**: Production Ready
+**Version**: v1.8.0 PHASE1-SECURITY-FIX
+**Last Updated**: 2026-01-22
+**Status**: Production Ready (Security Hardened)
 
 ---
 
@@ -22,6 +22,7 @@ C++ REST API 기반의 ICAO Local PKD 관리 및 Passive Authentication (PA) 검
 | **Auto Reconcile** | DB-LDAP 불일치 자동 조정 (v1.6.0+) | ✅ Complete |
 | **Certificate Search** | LDAP 인증서 검색 및 내보내기 (v1.6.0+) | ✅ Complete |
 | **ICAO Auto Sync** | ICAO PKD 버전 자동 감지 및 알림 (v1.7.0+) | ✅ Complete |
+| **Phase 1 Security** | Credential 외부화, SQL Injection 방지, 파일 업로드 보안 (v1.8.0) | ✅ Complete |
 | **React.js Frontend** | CSR 기반 웹 UI | ✅ Complete |
 
 ### Technology Stack
