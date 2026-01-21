@@ -2,6 +2,7 @@
 
 #include <string>
 #include <cstdlib>
+#include <stdexcept>
 
 namespace icao {
 namespace relay {
