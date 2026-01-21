@@ -272,3 +272,4 @@ jobs:
           name: arm64-docker-images-all
           path: artifacts/**/*.tar.gz
           retention-days: 30
+# Force rebuild - Phase 1 Security Hardening v1.8.0
