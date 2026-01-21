@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { cn } from '@/utils/cn';
 
 interface Certificate {
   dn: string;
@@ -82,7 +83,7 @@ const CertificateSearch: React.FC = () => {
       const params = new URLSearchParams();
       if (criteria.country) params.append('country', criteria.country);
       if (criteria.certType) params.append('certType', criteria.certType);
-      if (criteria.validity) params.append('validity', criteria.validity);
+      if (criteria.validity && criteria.validity !== 'all') params.append('validity', criteria.validity);
       if (criteria.searchTerm) params.append('searchTerm', criteria.searchTerm);
       params.append('limit', criteria.limit.toString());
       params.append('offset', criteria.offset.toString());
@@ -197,432 +198,566 @@ const CertificateSearch: React.FC = () => {
     });
   };
 
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const valid = certificates.filter((c) => c.validity === 'VALID').length;
+    const expired = certificates.filter((c) => c.validity === 'EXPIRED').length;
+    const notYetValid = certificates.filter((c) => c.validity === 'NOT_YET_VALID').length;
+    const unknown = certificates.filter((c) => c.validity === 'UNKNOWN').length;
+
+    return {
+      total,
+      valid,
+      expired,
+      notYetValid,
+      unknown,
+      validPercent: total > 0 ? Math.round((valid / total) * 100) : 0,
+      expiredPercent: total > 0 ? Math.round((expired / total) * 100) : 0,
+    };
+  }, [certificates, total]);
+
   // Get validity badge
   const getValidityBadge = (validity: string) => {
     switch (validity) {
       case 'VALID':
-        return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">유효</span>;
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            유효
+          </span>
+        );
       case 'EXPIRED':
-        return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800">만료</span>;
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+            <XCircle className="w-3 h-3 mr-1" />
+            만료
+          </span>
+        );
       case 'NOT_YET_VALID':
-        return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">유효 전</span>;
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400">
+            <Clock className="w-3 h-3 mr-1" />
+            유효 전
+          </span>
+        );
       default:
-        return <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">알 수 없음</span>;
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400">
+            알 수 없음
+          </span>
+        );
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Shield className="w-8 h-8 text-blue-600" />
-            인증서 조회
-          </h1>
-          <p className="mt-2 text-gray-600">
-            LDAP에 저장된 PKD 인증서를 검색하고 내보내기
-          </p>
+    <div className="w-full px-4 lg:px-6 py-4">
+      {/* Page Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+            <Shield className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">인증서 조회</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              LDAP에 저장된 PKD 인증서를 검색하고 내보내기
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setCriteria({ ...criteria, offset: 0 });
+              searchCertificates();
+            }}
+            disabled={loading}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+          >
+            <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
+          </button>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        {/* Total */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-blue-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+              <Shield className="w-5 h-5 text-blue-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 인증서</p>
+              <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
+            </div>
+          </div>
         </div>
 
-        {/* Search Filters */}
-        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        {/* Valid */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-green-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/30">
+              <CheckCircle className="w-5 h-5 text-green-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">유효</p>
+              <p className="text-xl font-bold text-green-600 dark:text-green-400">{stats.valid}</p>
+              <p className="text-xs text-gray-400">{stats.validPercent}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Expired */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-red-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30">
+              <XCircle className="w-5 h-5 text-red-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">만료</p>
+              <p className="text-xl font-bold text-red-600 dark:text-red-400">{stats.expired}</p>
+              <p className="text-xs text-gray-400">{stats.expiredPercent}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Not Yet Valid */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-yellow-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/30">
+              <Clock className="w-5 h-5 text-yellow-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">유효 전</p>
+              <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stats.notYetValid}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Filters Card */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter className="w-4 h-4 text-blue-500" />
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
           <button
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center justify-between w-full mb-4"
+            className="ml-auto p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
           >
-            <div className="flex items-center gap-2 text-lg font-semibold text-gray-900">
-              <Filter className="w-5 h-5" />
-              검색 필터
-            </div>
-            {showFilters ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
+        </div>
 
-          {showFilters && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Country */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    국가 코드
-                  </label>
-                  <div className="relative">
-                    <select
-                      value={criteria.country}
-                      onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white appearance-none"
-                      style={criteria.country && getFlagSvgPath(criteria.country) ? { paddingLeft: '2.5rem' } : {}}
-                      disabled={countriesLoading}
-                    >
-                      <option value="">
-                        {countriesLoading ? 'Loading countries...' : countries.length === 0 ? 'No countries available' : '전체 국가'}
+        {showFilters && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {/* Country */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  국가 코드
+                </label>
+                <div className="relative">
+                  <select
+                    value={criteria.country}
+                    onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
+                    style={criteria.country && getFlagSvgPath(criteria.country) ? { paddingLeft: '2.5rem' } : {}}
+                    disabled={countriesLoading}
+                  >
+                    <option value="">
+                      {countriesLoading ? 'Loading...' : countries.length === 0 ? 'No countries' : '전체 국가'}
+                    </option>
+                    {countries.map((country) => (
+                      <option key={country} value={country}>
+                        {country}
                       </option>
-                      {countries.map((country) => (
-                        <option key={country} value={country}>
-                          {country}
-                        </option>
-                      ))}
-                    </select>
-                    {criteria.country && getFlagSvgPath(criteria.country) && (
-                      <img
-                        src={getFlagSvgPath(criteria.country)}
-                        alt={criteria.country}
-                        className="absolute left-2 top-1/2 transform -translate-y-1/2 w-6 h-4 object-cover rounded shadow-sm border border-gray-300 pointer-events-none"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                    )}
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
-                      <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Certificate Type */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    인증서 종류
-                  </label>
-                  <select
-                    value={criteria.certType}
-                    onChange={(e) => setCriteria({ ...criteria, certType: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">전체</option>
-                    <option value="CSCA">CSCA</option>
-                    <option value="DSC">DSC</option>
-                    <option value="DSC_NC">DSC_NC</option>
-                    <option value="CRL">CRL</option>
-                    <option value="ML">ML</option>
+                    ))}
                   </select>
-                </div>
-
-                {/* Validity */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    유효성
-                  </label>
-                  <select
-                    value={criteria.validity}
-                    onChange={(e) => setCriteria({ ...criteria, validity: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="all">전체</option>
-                    <option value="VALID">유효</option>
-                    <option value="EXPIRED">만료</option>
-                    <option value="NOT_YET_VALID">유효 전</option>
-                  </select>
-                </div>
-
-                {/* Limit */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    표시 개수
-                  </label>
-                  <select
-                    value={criteria.limit}
-                    onChange={(e) => setCriteria({ ...criteria, limit: Number(e.target.value), offset: 0 })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="10">10</option>
-                    <option value="25">25</option>
-                    <option value="50">50</option>
-                    <option value="100">100</option>
-                    <option value="200">200</option>
-                  </select>
+                  {criteria.country && getFlagSvgPath(criteria.country) && (
+                    <img
+                      src={getFlagSvgPath(criteria.country)}
+                      alt={criteria.country}
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 w-6 h-4 object-cover rounded shadow-sm border border-gray-300 pointer-events-none"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
                 </div>
               </div>
 
-              {/* Search Term */}
+              {/* Certificate Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  키워드 검색 (CN)
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  인증서 종류
                 </label>
-                <div className="flex gap-2">
+                <select
+                  value={criteria.certType}
+                  onChange={(e) => setCriteria({ ...criteria, certType: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">전체</option>
+                  <option value="CSCA">CSCA</option>
+                  <option value="DSC">DSC</option>
+                  <option value="DSC_NC">DSC_NC</option>
+                  <option value="CRL">CRL</option>
+                  <option value="ML">ML</option>
+                </select>
+              </div>
+
+              {/* Validity */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  유효성
+                </label>
+                <select
+                  value={criteria.validity}
+                  onChange={(e) => setCriteria({ ...criteria, validity: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="all">전체</option>
+                  <option value="VALID">유효</option>
+                  <option value="EXPIRED">만료</option>
+                  <option value="NOT_YET_VALID">유효 전</option>
+                </select>
+              </div>
+
+              {/* Limit */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  표시 개수
+                </label>
+                <select
+                  value={criteria.limit}
+                  onChange={(e) => setCriteria({ ...criteria, limit: Number(e.target.value), offset: 0 })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="10">10</option>
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                </select>
+              </div>
+
+              {/* Search */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  키워드 검색
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="인증서 CN 검색..."
+                    placeholder="CN 검색..."
                     value={criteria.searchTerm}
                     onChange={(e) => setCriteria({ ...criteria, searchTerm: e.target.value })}
                     onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  <button
-                    onClick={handleSearch}
-                    disabled={loading}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
-                    <Search className="w-4 h-4" />
-                    검색
-                  </button>
                 </div>
               </div>
+            </div>
 
-              {/* Export Country Button */}
+            {/* Action Buttons */}
+            <div className="flex gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={handleSearch}
+                disabled={loading}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
+              >
+                <Search className="w-4 h-4" />
+                검색
+              </button>
               {criteria.country && (
-                <div className="flex gap-2 pt-2 border-t">
+                <>
                   <button
                     onClick={() => exportCountry(criteria.country, 'pem')}
-                    className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2"
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm font-medium transition-colors"
                   >
                     <Download className="w-4 h-4" />
-                    {criteria.country} 전체 내보내기 (PEM ZIP)
+                    {criteria.country} PEM ZIP
                   </button>
                   <button
                     onClick={() => exportCountry(criteria.country, 'der')}
-                    className="px-4 py-2 bg-green-700 text-white rounded-md hover:bg-green-800 flex items-center gap-2"
+                    className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 flex items-center gap-2 text-sm font-medium transition-colors"
                   >
                     <Download className="w-4 h-4" />
-                    {criteria.country} 전체 내보내기 (DER ZIP)
+                    {criteria.country} DER ZIP
                   </button>
-                </div>
+                </>
               )}
             </div>
-          )}
-        </div>
-
-        {/* Results */}
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          {/* Results Header */}
-          <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-gray-600">
-                총 <span className="font-semibold text-gray-900">{total.toLocaleString()}</span>개 인증서
-                {total > 0 && (
-                  <span className="ml-2">
-                    ({criteria.offset + 1}-{Math.min(criteria.offset + criteria.limit, total)})
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handlePrevPage}
-                  disabled={criteria.offset === 0}
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  이전
-                </button>
-                <button
-                  onClick={handleNextPage}
-                  disabled={criteria.offset + criteria.limit >= total}
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  다음
-                </button>
-              </div>
-            </div>
           </div>
+        )}
+      </div>
 
-          {/* Loading/Error States */}
-          {loading && (
-            <div className="p-12 text-center">
-              <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
-              <p className="mt-4 text-gray-600">검색 중...</p>
-            </div>
-          )}
-
-          {error && (
-            <div className="p-12 text-center">
-              <div className="text-red-600 font-semibold">{error}</div>
-            </div>
-          )}
-
-          {/* Results Table */}
-          {!loading && !error && certificates.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      국가
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      종류
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      CN
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Serial
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      유효기간
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      상태
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      작업
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {certificates.map((cert, index) => (
-                    <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        <div className="flex items-center gap-2">
-                          {getFlagSvgPath(cert.country) && (
-                            <img
-                              src={getFlagSvgPath(cert.country)}
-                              alt={cert.country}
-                              className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          )}
-                          <span>{cert.country}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span className="px-2 py-1 text-xs font-semibold rounded bg-blue-100 text-blue-800">
-                          {cert.certType}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate" title={cert.cn}>
-                        {cert.cn}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-mono">
-                        {cert.sn.substring(0, 12)}...
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(cert.validFrom)} ~ {formatDate(cert.validTo)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {getValidityBadge(cert.validity)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end gap-2">
-                          <button
-                            onClick={() => viewDetails(cert)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="상세보기"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => exportCertificate(cert.dn, 'pem')}
-                            className="text-green-600 hover:text-green-900"
-                            title="PEM 내보내기"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {/* No Results */}
-          {!loading && !error && certificates.length === 0 && (
-            <div className="p-12 text-center text-gray-500">
-              검색 결과가 없습니다.
-            </div>
-          )}
+      {/* Results Table */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        {/* Table Header */}
+        <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-blue-500" />
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 결과</h3>
+            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+              {certificates.length}건
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handlePrevPage}
+              disabled={criteria.offset === 0}
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {criteria.offset + 1}-{Math.min(criteria.offset + criteria.limit, total)} / {total.toLocaleString()}
+            </span>
+            <button
+              onClick={handleNextPage}
+              disabled={criteria.offset + criteria.limit >= total}
+              className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
+            <p className="ml-3 text-gray-600 dark:text-gray-400">검색 중...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="p-12 text-center">
+            <div className="text-red-600 dark:text-red-400 font-semibold">{error}</div>
+          </div>
+        )}
+
+        {/* Results Table */}
+        {!loading && !error && certificates.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-100 dark:bg-gray-700/50 border-b-2 border-gray-300 dark:border-gray-600">
+                <tr>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    국가
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    종류
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    CN
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    Serial
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    유효기간
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    상태
+                  </th>
+                  <th className="px-6 py-3 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
+                    작업
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                {certificates.map((cert, index) => (
+                  <tr
+                    key={index}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors border-b border-gray-100 dark:border-gray-700"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-100 dark:border-gray-700">
+                      <div className="flex items-center justify-center gap-2">
+                        {getFlagSvgPath(cert.country) && (
+                          <img
+                            src={getFlagSvgPath(cert.country)}
+                            alt={cert.country}
+                            className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        )}
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{cert.country}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-100 dark:border-gray-700">
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+                        {cert.certType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate border-r border-gray-100 dark:border-gray-700" title={cert.cn}>
+                      {cert.cn}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 font-mono border-r border-gray-100 dark:border-gray-700">
+                      {cert.sn.substring(0, 12)}...
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-xs">{formatDate(cert.validFrom)}</span>
+                        <span className="text-xs">~</span>
+                        <span className="text-xs">{formatDate(cert.validTo)}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-100 dark:border-gray-700">
+                      {getValidityBadge(cert.validity)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => viewDetails(cert)}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-transparent hover:border-blue-200 dark:hover:border-blue-700"
+                          title="상세보기"
+                        >
+                          <Eye className="w-4 h-4" />
+                          상세
+                        </button>
+                        <button
+                          onClick={() => exportCertificate(cert.dn, 'pem')}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-transparent hover:border-green-200 dark:hover:border-green-700"
+                          title="PEM 내보내기"
+                        >
+                          <Download className="w-4 h-4" />
+                          PEM
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* No Results */}
+        {!loading && !error && certificates.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
+            <Shield className="w-12 h-12 mb-4 opacity-50" />
+            <p className="text-lg font-medium">검색 결과가 없습니다.</p>
+            <p className="text-sm">필터를 조정하여 다시 검색하세요.</p>
+          </div>
+        )}
       </div>
 
       {/* Certificate Detail Dialog */}
       {showDetailDialog && selectedCert && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
-            {/* Dialog Header */}
-            <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Shield className="w-6 h-6 text-blue-600" />
-                Certificate Editor
-              </h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowDetailDialog(false)}
+          />
+
+          {/* Dialog Content */}
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    인증서 상세 정보
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md">
+                    {selectedCert.cn}
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={() => setShowDetailDialog(false)}
-                className="text-gray-400 hover:text-gray-600"
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
 
             {/* Tabs */}
-            <div className="border-b border-gray-200 bg-gray-50">
+            <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50">
               <div className="flex">
                 <button
                   onClick={() => setDetailTab('general')}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={cn(
+                    'px-6 py-3 text-sm font-medium border-b-2 transition-colors',
                     detailTab === 'general'
-                      ? 'border-blue-600 text-blue-600 bg-white'
-                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
+                      ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  )}
                 >
                   General
                 </button>
                 <button
                   onClick={() => setDetailTab('details')}
-                  className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  className={cn(
+                    'px-6 py-3 text-sm font-medium border-b-2 transition-colors',
                     detailTab === 'details'
-                      ? 'border-blue-600 text-blue-600 bg-white'
-                      : 'border-transparent text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                  }`}
+                      ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                      : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  )}
                 >
                   Details
                 </button>
               </div>
             </div>
 
-            {/* Dialog Content */}
+            {/* Content */}
             <div className="flex-1 overflow-y-auto p-6">
               {/* General Tab */}
               {detailTab === 'general' && (
                 <div className="space-y-6">
                   {/* Issued To Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Issued To</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Issued To</h3>
                     <div className="space-y-3">
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Common name (CN):</span>
-                        <span className="text-sm text-gray-900 break-all">{selectedCert.cn}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Common name (CN):</span>
+                        <span className="text-sm text-gray-900 dark:text-white break-all">{selectedCert.cn}</span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Organization (O):</span>
-                        <span className="text-sm text-gray-900">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Organization (O):</span>
+                        <span className="text-sm text-gray-900 dark:text-white">
                           {selectedCert.subjectDn.match(/O=([^,]+)/)?.[1] || '-'}
                         </span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Organizational unit (OU):</span>
-                        <span className="text-sm text-gray-900">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Organizational unit (OU):</span>
+                        <span className="text-sm text-gray-900 dark:text-white">
                           {selectedCert.subjectDn.match(/OU=([^,]+)/)?.[1] || '-'}
                         </span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Serial number:</span>
-                        <span className="text-sm text-gray-900 font-mono break-all">{selectedCert.sn}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Serial number:</span>
+                        <span className="text-sm text-gray-900 dark:text-white font-mono break-all">{selectedCert.sn}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Issued By Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Issued By</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Issued By</h3>
                     <div className="space-y-3">
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Common name (CN):</span>
-                        <span className="text-sm text-gray-900 break-all">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Common name (CN):</span>
+                        <span className="text-sm text-gray-900 dark:text-white break-all">
                           {selectedCert.issuerDn.match(/CN=([^,]+)/)?.[1] || '-'}
                         </span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Organization (O):</span>
-                        <span className="text-sm text-gray-900">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Organization (O):</span>
+                        <span className="text-sm text-gray-900 dark:text-white">
                           {selectedCert.issuerDn.match(/O=([^,]+)/)?.[1] || '-'}
                         </span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Organizational unit (OU):</span>
-                        <span className="text-sm text-gray-900">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Organizational unit (OU):</span>
+                        <span className="text-sm text-gray-900 dark:text-white">
                           {selectedCert.issuerDn.match(/OU=([^,]+)/)?.[1] || '-'}
                         </span>
                       </div>
@@ -631,32 +766,32 @@ const CertificateSearch: React.FC = () => {
 
                   {/* Validity Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Validity</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Validity</h3>
                     <div className="space-y-3">
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Issued on:</span>
-                        <span className="text-sm text-gray-900">{formatDate(selectedCert.validFrom)}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Issued on:</span>
+                        <span className="text-sm text-gray-900 dark:text-white">{formatDate(selectedCert.validFrom)}</span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">Expires on:</span>
-                        <span className="text-sm text-gray-900">{formatDate(selectedCert.validTo)}</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Expires on:</span>
+                        <span className="text-sm text-gray-900 dark:text-white">{formatDate(selectedCert.validTo)}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* Fingerprints Section */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Fingerprints</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Fingerprints</h3>
                     <div className="space-y-3">
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">SHA1 fingerprint:</span>
-                        <span className="text-sm text-gray-900 font-mono break-all">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">SHA1 fingerprint:</span>
+                        <span className="text-sm text-gray-900 dark:text-white font-mono break-all">
                           {selectedCert.fingerprint.substring(0, 40) || 'N/A'}
                         </span>
                       </div>
                       <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600">MD5 fingerprint:</span>
-                        <span className="text-sm text-gray-900 font-mono break-all">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">MD5 fingerprint:</span>
+                        <span className="text-sm text-gray-900 dark:text-white font-mono break-all">
                           {selectedCert.fingerprint.substring(0, 32) || 'N/A'}
                         </span>
                       </div>
@@ -670,9 +805,9 @@ const CertificateSearch: React.FC = () => {
                 <div className="space-y-4">
                   {/* Certificate Hierarchy */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Certificate Hierarchy</h3>
-                    <div className="bg-gray-50 p-4 rounded border">
-                      <div className="text-sm font-mono text-blue-600 cursor-pointer hover:underline">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Certificate Hierarchy</h3>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                      <div className="text-sm font-mono text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
                         {selectedCert.cn}
                       </div>
                     </div>
@@ -680,92 +815,60 @@ const CertificateSearch: React.FC = () => {
 
                   {/* Certificate Fields Tree */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Certificate Fields</h3>
-                    <div className="bg-gray-50 p-4 rounded border max-h-96 overflow-y-auto">
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Certificate Fields</h3>
+                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 max-h-96 overflow-y-auto">
                       <div className="space-y-2 text-sm font-mono">
                         <details open>
-                          <summary className="cursor-pointer font-semibold text-gray-900 hover:text-blue-600">
+                          <summary className="cursor-pointer font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
                             Certificate
                           </summary>
                           <div className="ml-4 mt-2 space-y-2">
                             <details>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Version</summary>
-                              <div className="ml-4 text-gray-600">V3</div>
+                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Version</summary>
+                              <div className="ml-4 text-gray-600 dark:text-gray-400">V3</div>
                             </details>
                             <details>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Serial Number</summary>
-                              <div className="ml-4 text-gray-600 break-all">{selectedCert.sn}</div>
+                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Serial Number</summary>
+                              <div className="ml-4 text-gray-600 dark:text-gray-400 break-all">{selectedCert.sn}</div>
                             </details>
                             <details>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Signature</summary>
-                              <div className="ml-4 space-y-1">
-                                <div className="text-gray-600">Algorithm: RSA-PSS</div>
-                                <div className="text-gray-600">Hash Algorithm: sha256</div>
-                              </div>
-                            </details>
-                            <details>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Issuer</summary>
-                              <div className="ml-4 text-gray-600 break-all">{selectedCert.issuerDn}</div>
+                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Issuer</summary>
+                              <div className="ml-4 text-gray-600 dark:text-gray-400 break-all">{selectedCert.issuerDn}</div>
                             </details>
                             <details open>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Validity</summary>
+                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Validity</summary>
                               <div className="ml-4 space-y-1">
-                                <div className="text-gray-600">Not Before: {formatDate(selectedCert.validFrom)}</div>
-                                <div className="text-gray-600">Not After: {formatDate(selectedCert.validTo)}</div>
+                                <div className="text-gray-600 dark:text-gray-400">Not Before: {formatDate(selectedCert.validFrom)}</div>
+                                <div className="text-gray-600 dark:text-gray-400">Not After: {formatDate(selectedCert.validTo)}</div>
                               </div>
                             </details>
                             <details>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Subject</summary>
-                              <div className="ml-4 text-gray-600 break-all">{selectedCert.subjectDn}</div>
-                            </details>
-                            <details>
-                              <summary className="cursor-pointer text-gray-700 hover:text-blue-600">Subject Public Key Info</summary>
-                              <div className="ml-4 space-y-1">
-                                <div className="text-gray-600">Subject Public Key Algorithm: RSA</div>
-                                <div className="text-gray-600">Subject Public Key: (2048 bits)</div>
-                              </div>
+                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Subject</summary>
+                              <div className="ml-4 text-gray-600 dark:text-gray-400 break-all">{selectedCert.subjectDn}</div>
                             </details>
                           </div>
                         </details>
                       </div>
                     </div>
                   </div>
-
-                  {/* Field Value */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 mb-3 pb-2 border-b">Field Value</h3>
-                    <div className="bg-gray-50 p-4 rounded border">
-                      <div className="text-sm text-gray-600 italic">Select a field from the tree above to view its value</div>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* Dialog Footer */}
-            <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-between items-center">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => exportCertificate(selectedCert.dn, 'pem')}
-                  className="px-4 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
-                >
-                  Save Certificate...
-                </button>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowDetailDialog(false)}
-                  className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700"
-                >
-                  OK
-                </button>
-                <button
-                  onClick={() => setShowDetailDialog(false)}
-                  className="px-4 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
+            {/* Footer */}
+            <div className="flex justify-between items-center gap-3 px-5 py-3 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => exportCertificate(selectedCert.dn, 'pem')}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                Save Certificate...
+              </button>
+              <button
+                onClick={() => setShowDetailDialog(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                닫기
+              </button>
             </div>
           </div>
         </div>

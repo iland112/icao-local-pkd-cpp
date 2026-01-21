@@ -15,7 +15,7 @@ import {
 import { paApi } from '@/services/api';
 import type { PAStatisticsOverview, PAHistoryItem } from '@/types';
 import { cn } from '@/utils/cn';
-import { getFlagSvgPath } from '@/utils/countryCode';
+import { getFlagSvgPath, getAlpha2Code } from '@/utils/countryCode';
 import { useThemeStore } from '@/stores/themeStore';
 
 export function PADashboard() {
@@ -55,11 +55,20 @@ export function PADashboard() {
       };
     }
 
-    // Country stats
+    // Country stats - normalize to 2-letter codes to combine KOR/KR
     const countryStats: Record<string, number> = {};
     recentVerifications.forEach((r) => {
       if (r.issuingCountry) {
-        countryStats[r.issuingCountry] = (countryStats[r.issuingCountry] || 0) + 1;
+        // Normalize country code: convert 3-letter to 2-letter (KOR -> kr, KR -> kr)
+        const alpha2 = getAlpha2Code(r.issuingCountry);
+        if (alpha2) {
+          // Use uppercase for display consistency
+          const normalizedCode = alpha2.toUpperCase();
+          countryStats[normalizedCode] = (countryStats[normalizedCode] || 0) + 1;
+        } else {
+          // Fallback: use original code if conversion fails
+          countryStats[r.issuingCountry] = (countryStats[r.issuingCountry] || 0) + 1;
+        }
       }
     });
 

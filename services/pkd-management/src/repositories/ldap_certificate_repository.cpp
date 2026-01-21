@@ -191,19 +191,21 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
     searchResult.limit = criteria.limit;
     searchResult.offset = criteria.offset;
 
+    // Post-filtering: When certType is specified without country, we search from dataTree
+    // and need to filter by DN to match the requested type
+    bool needsTypeFiltering = criteria.certType.has_value() &&
+                              (!criteria.country.has_value() || criteria.country->empty());
+    bool needsValidityFiltering = criteria.validity.has_value();
+
     // Efficient pagination: iterate through results and apply offset/limit
     int currentIndex = 0;
     int collected = 0;
+    int matchedCount = 0; // Count of entries matching all criteria (including filters)
 
     for (LDAPMessage* entry = ldap_first_entry(ldap_, result);
          entry != nullptr && collected < criteria.limit;
-         entry = ldap_next_entry(ldap_, entry), ++currentIndex)
+         entry = ldap_next_entry(ldap_, entry))
     {
-        // Skip entries before offset
-        if (currentIndex < criteria.offset) {
-            continue;
-        }
-
         // Get DN
         char* dnRaw = ldap_get_dn(ldap_, entry);
         if (!dnRaw) {
@@ -213,14 +215,46 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
         std::string dn(dnRaw);
         ldap_memfree(dnRaw);
 
+        // Apply type filtering if needed
+        if (needsTypeFiltering) {
+            domain::models::CertificateType dnType = extractCertTypeFromDn(dn);
+            if (dnType != *criteria.certType) {
+                continue; // Skip entries that don't match the requested type
+            }
+        }
+
+        // Parse entry (will need it for validity check or final result)
         try {
             // Parse entry into Certificate entity
             domain::models::Certificate cert = parseEntry(entry, dn);
+
+            // Apply validity filtering if needed
+            if (needsValidityFiltering) {
+                if (cert.getValidityStatus() != *criteria.validity) {
+                    continue; // Skip entries that don't match the requested validity status
+                }
+            }
+
+            // This entry matches all criteria
+            matchedCount++;
+
+            // Skip entries before offset
+            if (matchedCount <= criteria.offset) {
+                continue;
+            }
+
+            // Add to result
             searchResult.certificates.push_back(std::move(cert));
             ++collected;
         } catch (const std::exception& e) {
             spdlog::warn("[LdapCertificateRepository] Failed to parse entry {}: {}", dn, e.what());
+            continue;
         }
+    }
+
+    // Update total count if we applied any filtering
+    if (needsTypeFiltering || needsValidityFiltering) {
+        searchResult.total = matchedCount;
     }
 
     ldap_msgfree(result);
@@ -469,18 +503,24 @@ std::string LdapCertificateRepository::getSearchBaseDn(
     }
 
     // Build base DN
-    // Pattern: [o={type},]c={country},{dataTree},{baseDn}
-    // If no country, search from dataTree level
-    // If no type, search from country level (or dataTree if no country)
+    // Pattern: [o={type},][c={country},]{dataTree},{baseDn}
+    // Priority: certType + country > certType only > country only > all
 
     if (certType.has_value() && country.has_value() && !country->empty()) {
         // Both type and country specified: o={type},c={country},{dataTree},...
         baseDn = orgComponent + countryComponent + dataTree + "," + config_.baseDn;
+    } else if (certType.has_value()) {
+        // Only type specified: search all countries for this type
+        // We need to search under each country's o={type} branch
+        // Since LDAP doesn't support this easily, we'll search from dataTree and filter in-memory
+        // Better approach: search from o={type} level if it exists at top level
+        // For now, search all and filter by parsing DN
+        baseDn = dataTree + "," + config_.baseDn;
     } else if (country.has_value() && !country->empty()) {
         // Only country specified: c={country},{dataTree},...
         baseDn = countryComponent + dataTree + "," + config_.baseDn;
     } else {
-        // No country (or type without country): search all under dataTree
+        // No country and no type: search all under dataTree
         baseDn = dataTree + "," + config_.baseDn;
     }
 

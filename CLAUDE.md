@@ -1,7 +1,7 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.7.0
-**Last Updated**: 2026-01-20
+**Version**: 1.7.1
+**Last Updated**: 2026-01-21
 **Status**: Production Ready
 
 ---
@@ -592,6 +592,115 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-21: PA Dashboard Country Code Normalization & Certificate Search UI Enhancement (v1.7.1)
+
+**PA Dashboard 국가 코드 정규화 및 인증서 검색 UI 개선**:
+
+**구현 일시**: 2026-01-21
+**브랜치**: main
+**상태**: ✅ Complete
+
+**핵심 기능**:
+
+1. **PA Dashboard 국가 코드 정규화**
+   - 문제: KOR(3자리 ISO 3166-1 alpha-3)과 KR(2자리 ISO 3166-1 alpha-2)이 별도 통계로 집계
+   - 해결: `getAlpha2Code()` 유틸리티 함수를 사용하여 모든 국가 코드를 2자리로 정규화
+   - 결과: KOR(21건) + KR(1건) → KR(22건) 통합 표시
+   - 파일: [frontend/src/pages/PADashboard.tsx](frontend/src/pages/PADashboard.tsx#L58-L73)
+
+2. **Certificate Search 페이지 UI 개선**
+   - 테이블 테두리 명확화: `border-collapse`, vertical borders (`border-r`), horizontal borders (`border-b`)
+   - Dark mode 색상 완전 적용: `dark:bg-gray-800`, `dark:text-gray-100`, improved contrast
+   - 버튼 hover 스타일 개선: border 표시 추가
+   - 파일: [frontend/src/pages/CertificateSearch.tsx](frontend/src/pages/CertificateSearch.tsx#L543-L631)
+
+3. **Certificate Type Filtering 버그 수정**
+   - 문제: ML (Master List) 필터 선택 시 모든 30,465개 인증서 표시
+   - 해결: Post-filtering pattern 구현 - DN 파싱 기반 인증서 타입 필터링
+   - LDAP DIT 구조: `c={country}/o={type}` → 타입만 지정 시 전체 검색 후 DN 필터링
+   - 파일: [ldap_certificate_repository.cpp](services/pkd-management/src/repositories/ldap_certificate_repository.cpp#L194-L258)
+
+**기술적 세부사항**:
+
+**국가 코드 정규화 로직**:
+
+```typescript
+// PADashboard.tsx
+const countryStats: Record<string, number> = {};
+recentVerifications.forEach((r) => {
+  if (r.issuingCountry) {
+    const alpha2 = getAlpha2Code(r.issuingCountry); // KOR → 'kr', KR → 'kr'
+    if (alpha2) {
+      const normalizedCode = alpha2.toUpperCase(); // 'kr' → 'KR'
+      countryStats[normalizedCode] = (countryStats[normalizedCode] || 0) + 1;
+    } else {
+      // Fallback: use original code if conversion fails
+      countryStats[r.issuingCountry] = (countryStats[r.issuingCountry] || 0) + 1;
+    }
+  }
+});
+```
+
+**인증서 타입 필터링 (Post-filtering)**:
+```cpp
+// ldap_certificate_repository.cpp
+bool needsTypeFiltering = criteria.certType.has_value() &&
+                          (!criteria.country.has_value() || criteria.country->empty());
+
+for (LDAPMessage* entry = ldap_first_entry(ldap_, result); entry != nullptr; ...) {
+    // Get DN
+    std::string dn(ldap_get_dn(ldap_, entry));
+
+    // Apply type filtering if needed
+    if (needsTypeFiltering) {
+        domain::models::CertificateType dnType = extractCertTypeFromDn(dn);
+        if (dnType != *criteria.certType) {
+            continue; // Skip entries that don't match
+        }
+    }
+
+    // Parse entry and add to result
+    domain::models::Certificate cert = parseEntry(entry, dn);
+    searchResult.certificates.push_back(std::move(cert));
+}
+```
+
+**테스트 결과**:
+
+```bash
+# PA Dashboard - Country normalization
+Before: KOR (21), KR (1) - separate
+After:  KR (22) - unified
+
+# Certificate Search - Type filtering
+Before: ML filter → 30,465 certificates (all)
+After:  ML filter → 0 certificates (correct, no ML binary data in LDAP)
+       CSCA filter → 525 certificates
+       DSC filter → 29,610 certificates
+```
+
+**파일 변경 요약**:
+
+| File | Lines Changed | Purpose |
+|------|---------------|---------|
+| `frontend/src/pages/PADashboard.tsx` | +14 lines | Country code normalization |
+| `frontend/src/pages/CertificateSearch.tsx` | ~50 lines | Table borders, dark mode colors |
+| `services/pkd-management/src/repositories/ldap_certificate_repository.cpp` | +63 lines | Post-filtering for certificate type |
+
+**배포**:
+
+
+- Frontend: localhost:3000 (v1.7.1)
+- Backend: localhost:8081 (certificate search improvement)
+- Status: ✅ Deployed and Operational
+
+**문서**:
+- 없음 (소규모 UI/UX 개선)
+
+**커밋**: [Pending]
+
+---
 
 ### 2026-01-20: ICAO Auto Sync - Version Comparison API & Frontend UX Enhancement (v1.7.0)
 
