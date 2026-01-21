@@ -46,12 +46,11 @@
 #include <iomanip>
 #include <sstream>
 #include <random>
+#include <regex>
 #include <map>
 #include <set>
 #include <algorithm>
 #include <optional>
-#include <regex>
-#include <algorithm>
 #include <cctype>
 
 // Project headers
@@ -112,7 +111,7 @@ struct AppConfig {
     int dbPort = 5432;
     std::string dbName = "localpkd";
     std::string dbUser = "localpkd";
-    std::string dbPassword = "localpkd123";
+    std::string dbPassword;  // Must be set via environment variable
 
     // LDAP Read: HAProxy for load balancing across MMR nodes
     std::string ldapHost = "haproxy";
@@ -121,7 +120,7 @@ struct AppConfig {
     std::string ldapWriteHost = "openldap1";
     int ldapWritePort = 389;
     std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
-    std::string ldapBindPassword = "admin";
+    std::string ldapBindPassword;  // Must be set via environment variable
     std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
 
     // Trust Anchor for Master List CMS signature verification
@@ -164,6 +163,17 @@ struct AppConfig {
         if (auto val = std::getenv("ICAO_HTTP_TIMEOUT")) config.icaoHttpTimeout = std::stoi(val);
 
         return config;
+    }
+
+    // Validate required credentials are set
+    void validateRequiredCredentials() const {
+        if (dbPassword.empty()) {
+            throw std::runtime_error("FATAL: DB_PASSWORD environment variable not set");
+        }
+        if (ldapBindPassword.empty()) {
+            throw std::runtime_error("FATAL: LDAP_BIND_PASSWORD environment variable not set");
+        }
+        spdlog::info("✅ All required credentials loaded from environment");
     }
 };
 
@@ -894,6 +904,138 @@ void updateValidationStatistics(PGconn* conn, const std::string& uploadId,
 }
 
 // =============================================================================
+// Credential Scrubbing Utility
+// =============================================================================
+
+/**
+ * @brief Scrub sensitive credentials from log messages
+ * @param message Original message that may contain passwords
+ * @return Scrubbed message with credentials replaced by ***
+ */
+std::string scrubCredentials(const std::string& message) {
+    std::string scrubbed = message;
+
+    // Scrub PostgreSQL connection strings
+    // Pattern: password=<anything until space or end>
+    std::regex pgPasswordRegex(R"(password\s*=\s*[^\s]+)", std::regex::icase);
+    scrubbed = std::regex_replace(scrubbed, pgPasswordRegex, "password=***");
+
+    // Scrub LDAP URIs with credentials
+    // Pattern: ldap://user:password@host
+    std::regex ldapCredsRegex(R"(ldap://[^:]+:[^@]+@)");
+    scrubbed = std::regex_replace(scrubbed, ldapCredsRegex, "ldap://***:***@");
+
+    // Scrub LDAPS URIs with credentials
+    std::regex ldapsCredsRegex(R"(ldaps://[^:]+:[^@]+@)");
+    scrubbed = std::regex_replace(scrubbed, ldapsCredsRegex, "ldaps://***:***@");
+
+    // Scrub JSON password fields
+    // Pattern: "password":"value" or "password": "value"
+    std::regex jsonPasswordRegex(R"("password"\s*:\s*"[^"]+")");
+    scrubbed = std::regex_replace(scrubbed, jsonPasswordRegex, "\"password\":\"***\"");
+
+    // Scrub bind password fields (LDAP specific)
+    std::regex bindPasswordRegex(R"(bindPassword\s*=\s*[^\s,]+)", std::regex::icase);
+    scrubbed = std::regex_replace(scrubbed, bindPasswordRegex, "bindPassword=***");
+
+    return scrubbed;
+}
+
+// =============================================================================
+// File Upload Security
+// =============================================================================
+
+/**
+ * @brief Sanitize filename to prevent path traversal attacks
+ * @param filename Original filename from upload
+ * @return Sanitized filename (alphanumeric, dash, underscore, dot only)
+ */
+std::string sanitizeFilename(const std::string& filename) {
+    std::string sanitized;
+
+    // Only allow alphanumeric, dash, underscore, and dot
+    for (char c : filename) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.') {
+            sanitized += c;
+        } else {
+            sanitized += '_';  // Replace invalid chars with underscore
+        }
+    }
+
+    // Prevent path traversal
+    if (sanitized.find("..") != std::string::npos) {
+        throw std::runtime_error("Invalid filename: contains '..'");
+    }
+
+    // Limit length to 255 characters
+    if (sanitized.length() > 255) {
+        sanitized = sanitized.substr(0, 255);
+    }
+
+    // Ensure filename is not empty
+    if (sanitized.empty()) {
+        throw std::runtime_error("Invalid filename: empty after sanitization");
+    }
+
+    return sanitized;
+}
+
+/**
+ * @brief Validate LDIF file format
+ * @param content File content as string
+ * @return true if valid LDIF format
+ */
+bool isValidLdifFile(const std::string& content) {
+    // LDIF files must contain "dn:" or "version:" entries
+    if (content.find("dn:") == std::string::npos &&
+        content.find("version:") == std::string::npos) {
+        return false;
+    }
+
+    // Basic size check (should have at least some content)
+    if (content.size() < 10) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief Validate PKCS#7 (Master List) file format
+ * @param content File content as binary vector
+ * @return true if valid PKCS#7 DER format
+ */
+bool isValidP7sFile(const std::vector<uint8_t>& content) {
+    // Check for PKCS#7 ASN.1 DER magic bytes
+    // DER SEQUENCE: 0x30 followed by length encoding
+    if (content.size() < 4) {
+        return false;
+    }
+
+    // First byte should be 0x30 (SEQUENCE tag)
+    if (content[0] != 0x30) {
+        return false;
+    }
+
+    // Second byte should be length encoding
+    // DER length encoding:
+    // - 0x00-0x7F: short form (length <= 127 bytes)
+    // - 0x80: indefinite form (not used in DER, but accept for compatibility)
+    // - 0x81-0x84: long form (1-4 bytes for length)
+    if (content[1] >= 0x80 && content[1] <= 0x84) {
+        // Long form or indefinite form - valid
+        return true;
+    }
+    if (content[1] >= 0x01 && content[1] <= 0x7F) {
+        // Short form - valid
+        return true;
+    }
+
+    // Invalid length encoding
+    return false;
+}
+
+// =============================================================================
 // Certificate Duplicate Check
 // =============================================================================
 
@@ -901,8 +1043,10 @@ void updateValidationStatistics(PGconn* conn, const std::string& uploadId,
  * @brief Check if certificate with given fingerprint already exists in DB
  */
 bool certificateExistsByFingerprint(PGconn* conn, const std::string& fingerprint) {
-    std::string query = "SELECT 1 FROM certificate WHERE fingerprint_sha256 = '" + fingerprint + "' LIMIT 1";
-    PGresult* res = PQexec(conn, query.c_str());
+    const char* query = "SELECT 1 FROM certificate WHERE fingerprint_sha256 = $1 LIMIT 1";
+    const char* paramValues[1] = {fingerprint.c_str()};
+    PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
 
     bool exists = (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0);
     PQclear(res);
@@ -2812,14 +2956,16 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
         PGconn* conn = PQconnectdb(conninfo.c_str());
         if (PQstatus(conn) != CONNECTION_OK) {
-            spdlog::error("Database connection failed for async processing: {}", PQerrorMessage(conn));
+            spdlog::error("Database connection failed for async processing: {}", scrubCredentials(std::string(PQerrorMessage(conn))));
             PQfinish(conn);
             return;
         }
 
-        // Check processing_mode
-        std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
-        PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+        // Check processing_mode (parameterized query)
+        const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
+        const char* paramValues[1] = {uploadId.c_str()};
+        PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, paramValues,
+                                         nullptr, nullptr, 0);
         std::string processingMode = "AUTO";  // Default to AUTO
         if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
             processingMode = PQgetvalue(modeRes, 0, 0);
@@ -3357,14 +3503,16 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
         PGconn* conn = PQconnectdb(conninfo.c_str());
         if (PQstatus(conn) != CONNECTION_OK) {
-            spdlog::error("Database connection failed for async processing: {}", PQerrorMessage(conn));
+            spdlog::error("Database connection failed for async processing: {}", scrubCredentials(std::string(PQerrorMessage(conn))));
             PQfinish(conn);
             return;
         }
 
-        // Check processing_mode
-        std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
-        PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+        // Check processing_mode (parameterized query)
+        const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
+        const char* paramValues[1] = {uploadId.c_str()};
+        PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, paramValues,
+                                         nullptr, nullptr, 0);
         std::string processingMode = "AUTO";  // Default to AUTO
         if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
             processingMode = PQgetvalue(modeRes, 0, 0);
@@ -3829,9 +3977,11 @@ void registerRoutes() {
                 return;
             }
 
-            // Check if upload exists and get file path
-            std::string query = "SELECT id, file_path, file_format FROM uploaded_file WHERE id = '" + uploadId + "'";
-            PGresult* res = PQexec(conn, query.c_str());
+            // Check if upload exists and get file path (parameterized query)
+            const char* query = "SELECT id, file_path, file_format FROM uploaded_file WHERE id = $1";
+            const char* paramValues[1] = {uploadId.c_str()};
+            PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                         nullptr, nullptr, 0);
 
             if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
                 Json::Value error;
@@ -3913,9 +4063,11 @@ void registerRoutes() {
                         return;
                     }
 
-                    // Get processing mode
-                    std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
-                    PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+                    // Get processing mode (parameterized query)
+                    const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
+                    const char* modeParamValues[1] = {uploadId.c_str()};
+                    PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, modeParamValues,
+                                                     nullptr, nullptr, 0);
                     std::string processingMode = "AUTO";
                     if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
                         processingMode = PQgetvalue(modeRes, 0, 0);
@@ -4009,9 +4161,11 @@ void registerRoutes() {
                 return;
             }
 
-            // Check if upload exists
-            std::string query = "SELECT id FROM uploaded_file WHERE id = '" + uploadId + "'";
-            PGresult* res = PQexec(conn, query.c_str());
+            // Check if upload exists (parameterized query)
+            const char* query = "SELECT id FROM uploaded_file WHERE id = $1";
+            const char* paramValues[1] = {uploadId.c_str()};
+            PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                         nullptr, nullptr, 0);
 
             if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
                 Json::Value error;
@@ -4039,7 +4193,7 @@ void registerRoutes() {
 
                 PGconn* conn = PQconnectdb(conninfo.c_str());
                 if (PQstatus(conn) != CONNECTION_OK) {
-                    spdlog::error("Database connection failed for validation");
+                    spdlog::error("Database connection failed for validation: {}", scrubCredentials(std::string(PQerrorMessage(conn))));
                     PQfinish(conn);
                     return;
                 }
@@ -4111,9 +4265,11 @@ void registerRoutes() {
                 return;
             }
 
-            // Check if upload exists
-            std::string query = "SELECT id FROM uploaded_file WHERE id = '" + uploadId + "'";
-            PGresult* res = PQexec(conn, query.c_str());
+            // Check if upload exists (parameterized query)
+            const char* query = "SELECT id FROM uploaded_file WHERE id = $1";
+            const char* paramValues[1] = {uploadId.c_str()};
+            PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                         nullptr, nullptr, 0);
 
             if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
                 Json::Value error;
@@ -4377,10 +4533,37 @@ void registerRoutes() {
                 }
 
                 auto& file = files[0];
-                std::string fileName = file.getFileName();
+                std::string originalFileName = file.getFileName();
+
+                // Sanitize filename to prevent path traversal attacks
+                std::string fileName;
+                try {
+                    fileName = sanitizeFilename(originalFileName);
+                } catch (const std::exception& e) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = std::string("Invalid filename: ") + e.what();
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
                 std::string content = std::string(file.fileData(), file.fileLength());
                 std::vector<uint8_t> contentBytes(content.begin(), content.end());
                 int64_t fileSize = static_cast<int64_t>(content.size());
+
+                // Validate LDIF file format
+                if (!isValidLdifFile(content)) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Invalid LDIF file format. File must contain valid LDIF entries (dn: or version:).";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    spdlog::warn("Invalid LDIF file rejected: {}", originalFileName);
+                    return;
+                }
 
                 // Compute file hash
                 std::string fileHash = computeFileHash(contentBytes);
@@ -4398,10 +4581,11 @@ void registerRoutes() {
                     PQfinish(conn);
                     Json::Value errorResp;
                     errorResp["success"] = false;
-                    errorResp["message"] = "Database connection failed: " + error;
+                    errorResp["message"] = "Database connection failed: " + scrubCredentials(error);
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(errorResp);
                     resp->setStatusCode(drogon::k500InternalServerError);
                     callback(resp);
+                    spdlog::error("Database connection failed (LDIF upload): {}", scrubCredentials(error));
                     return;
                 }
 
@@ -4446,16 +4630,21 @@ void registerRoutes() {
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash, processingMode);
 
                 // Save file to disk for manual mode processing
-                std::string uploadDir = "./uploads";
+                std::string uploadDir = "/app/uploads";  // Absolute path for security
                 std::string filePath = uploadDir + "/" + uploadId + ".ldif";
                 std::ofstream outFile(filePath, std::ios::binary);
                 if (outFile.is_open()) {
                     outFile.write(reinterpret_cast<const char*>(contentBytes.data()), contentBytes.size());
                     outFile.close();
 
-                    // Update file_path in database
-                    std::string updateQuery = "UPDATE uploaded_file SET file_path = '" + filePath + "' WHERE id = '" + uploadId + "'";
-                    PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                    // Update file_path in database (parameterized query)
+                    const char* updateQuery = "UPDATE uploaded_file SET file_path = $1 WHERE id = $2";
+                    const char* updateParamValues[2] = {filePath.c_str(), uploadId.c_str()};
+                    PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr, updateParamValues,
+                                                       nullptr, nullptr, 0);
+                    if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
+                        spdlog::error("Failed to update file_path: {}", PQerrorMessage(conn));
+                    }
                     PQclear(updateRes);
                 }
 
@@ -4533,10 +4722,37 @@ void registerRoutes() {
                 }
 
                 auto& file = files[0];
-                std::string fileName = file.getFileName();
+                std::string originalFileName = file.getFileName();
+
+                // Sanitize filename to prevent path traversal attacks
+                std::string fileName;
+                try {
+                    fileName = sanitizeFilename(originalFileName);
+                } catch (const std::exception& e) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = std::string("Invalid filename: ") + e.what();
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
                 std::string content = std::string(file.fileData(), file.fileLength());
                 std::vector<uint8_t> contentBytes(content.begin(), content.end());
                 int64_t fileSize = static_cast<int64_t>(content.size());
+
+                // Validate PKCS#7/Master List file format
+                if (!isValidP7sFile(contentBytes)) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Invalid Master List file format. File must be a valid PKCS#7/CMS structure.";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    spdlog::warn("Invalid Master List file rejected: {}", originalFileName);
+                    return;
+                }
 
                 // Compute file hash
                 std::string fileHash = computeFileHash(contentBytes);
@@ -4554,10 +4770,11 @@ void registerRoutes() {
                     PQfinish(conn);
                     Json::Value errorResp;
                     errorResp["success"] = false;
-                    errorResp["message"] = "Database connection failed: " + error;
+                    errorResp["message"] = "Database connection failed: " + scrubCredentials(error);
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(errorResp);
                     resp->setStatusCode(drogon::k500InternalServerError);
                     callback(resp);
+                    spdlog::error("Database connection failed (Master List upload): {}", scrubCredentials(error));
                     return;
                 }
 
@@ -4602,16 +4819,21 @@ void registerRoutes() {
                 std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "ML", fileHash, processingMode);
 
                 // Save file to disk for manual mode processing
-                std::string uploadDir = "./uploads";
+                std::string uploadDir = "/app/uploads";  // Absolute path for security
                 std::string filePath = uploadDir + "/" + uploadId + ".ml";
                 std::ofstream outFile(filePath, std::ios::binary);
                 if (outFile.is_open()) {
                     outFile.write(reinterpret_cast<const char*>(contentBytes.data()), contentBytes.size());
                     outFile.close();
 
-                    // Update file_path in database
-                    std::string updateQuery = "UPDATE uploaded_file SET file_path = '" + filePath + "' WHERE id = '" + uploadId + "'";
-                    PGresult* updateRes = PQexec(conn, updateQuery.c_str());
+                    // Update file_path in database (parameterized query)
+                    const char* updateQuery = "UPDATE uploaded_file SET file_path = $1 WHERE id = $2";
+                    const char* updateParamValues[2] = {filePath.c_str(), uploadId.c_str()};
+                    PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr, updateParamValues,
+                                                       nullptr, nullptr, 0);
+                    if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
+                        spdlog::error("Failed to update file_path: {}", PQerrorMessage(conn));
+                    }
                     PQclear(updateRes);
                 }
 
@@ -4636,9 +4858,11 @@ void registerRoutes() {
                             return;
                         }
 
-                        // Get processing mode
-                        std::string modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = '" + uploadId + "'";
-                        PGresult* modeRes = PQexec(conn, modeQuery.c_str());
+                        // Get processing mode (parameterized query)
+                        const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
+                        const char* modeParamValues[1] = {uploadId.c_str()};
+                        PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, modeParamValues,
+                                                         nullptr, nullptr, 0);
                         std::string processingMode = "AUTO";
                         if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
                             processingMode = PQgetvalue(modeRes, 0, 0);
@@ -6180,7 +6404,15 @@ int main(int argc, char* argv[]) {
     // Load configuration from environment
     appConfig = AppConfig::fromEnvironment();
 
-    spdlog::info("====== ICAO Local PKD v1.7.0 VERSION-COMPARISON (Build 20260120-120000) ======");
+    // Validate required credentials
+    try {
+        appConfig.validateRequiredCredentials();
+    } catch (const std::exception& e) {
+        spdlog::critical("{}", e.what());
+        return 1;
+    }
+
+    spdlog::info("====== ICAO Local PKD v1.8.0 PHASE1-SECURITY-FIX (Build 20260121-223900) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
@@ -6247,7 +6479,7 @@ int main(int argc, char* argv[]) {
            .setThreadNum(appConfig.threadNum)
            .enableGzip(true)
            .setClientMaxBodySize(100 * 1024 * 1024)  // 100MB max upload
-           .setUploadPath("./uploads")
+           .setUploadPath("/app/uploads")  // Absolute path for security
            .setDocumentRoot("./static");
 
         // Enable CORS for React.js frontend

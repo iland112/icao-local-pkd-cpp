@@ -87,11 +87,16 @@ void AutoProcessingStrategy::processLdifEntries(
                               stats.trustChainInvalidCount, stats.cscaNotFoundCount,
                               stats.expiredCount, stats.revokedCount);
 
-    // Update ML count if any
+    // Update ML count if any (parameterized query)
     if (counts.mlCount > 0) {
-        std::string mlUpdateQuery = "UPDATE uploaded_file SET ml_count = " + std::to_string(counts.mlCount) +
-                                   " WHERE id = '" + uploadId + "'";
-        PGresult* res = PQexec(conn, mlUpdateQuery.c_str());
+        const char* mlUpdateQuery = "UPDATE uploaded_file SET ml_count = $1 WHERE id = $2";
+        std::string mlCountStr = std::to_string(counts.mlCount);
+        const char* paramValues[2] = {mlCountStr.c_str(), uploadId.c_str()};
+        PGresult* res = PQexecParams(conn, mlUpdateQuery, 2, nullptr, paramValues,
+                                     nullptr, nullptr, 0);
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            spdlog::error("Failed to update ML count: {}", PQerrorMessage(conn));
+        }
         PQclear(res);
     }
 
@@ -332,9 +337,14 @@ void ManualProcessingStrategy::processMasterListContent(
     // Save to temp file
     saveMasterListToTempFile(uploadId, content);
 
-    // Update upload status
-    std::string updateQuery = "UPDATE uploaded_file SET status = 'PENDING' WHERE id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, updateQuery.c_str());
+    // Update upload status (parameterized query)
+    const char* updateQuery = "UPDATE uploaded_file SET status = 'PENDING' WHERE id = $1";
+    const char* paramValues[1] = {uploadId.c_str()};
+    PGresult* res = PQexecParams(conn, updateQuery, 1, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update upload status: {}", PQerrorMessage(conn));
+    }
     PQclear(res);
 
     spdlog::info("MANUAL mode Stage 1: Completed, waiting for user to trigger validation");
@@ -412,11 +422,16 @@ void ManualProcessingStrategy::validateAndSaveToDb(
                                   stats.trustChainInvalidCount, stats.cscaNotFoundCount,
                                   stats.expiredCount, stats.revokedCount);
 
-        // Update ML count if any
+        // Update ML count if any (parameterized query)
         if (counts.mlCount > 0) {
-            std::string mlUpdateQuery = "UPDATE uploaded_file SET ml_count = " + std::to_string(counts.mlCount) +
-                                       " WHERE id = '" + uploadId + "'";
-            PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
+            const char* mlUpdateQuery = "UPDATE uploaded_file SET ml_count = $1 WHERE id = $2";
+            std::string mlCountStr = std::to_string(counts.mlCount);
+            const char* paramValues[2] = {mlCountStr.c_str(), uploadId.c_str()};
+            PGresult* mlRes = PQexecParams(conn, mlUpdateQuery, 2, nullptr, paramValues,
+                                           nullptr, nullptr, 0);
+            if (PQresultStatus(mlRes) != PGRES_COMMAND_OK) {
+                spdlog::error("Failed to update ML count: {}", PQerrorMessage(conn));
+            }
             PQclear(mlRes);
         }
 
@@ -477,36 +492,52 @@ void ManualProcessingStrategy::cleanupFailedUpload(
 ) {
     spdlog::info("Cleaning up failed upload: {}", uploadId);
 
-    // Delete certificates
-    std::string deleteCerts = "DELETE FROM certificate WHERE upload_id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, deleteCerts.c_str());
+    // Prepare parameter (used for all DELETE queries)
+    const char* paramValues[1] = {uploadId.c_str()};
+
+    // Delete certificates (parameterized query)
+    const char* deleteCerts = "DELETE FROM certificate WHERE upload_id = $1";
+    PGresult* res = PQexecParams(conn, deleteCerts, 1, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
     int certsDeleted = 0;
     if (PQresultStatus(res) == PGRES_COMMAND_OK) {
         certsDeleted = atoi(PQcmdTuples(res));
+    } else {
+        spdlog::error("Failed to delete certificates: {}", PQerrorMessage(conn));
     }
     PQclear(res);
 
-    // Delete CRLs
-    std::string deleteCrls = "DELETE FROM crl WHERE upload_id = '" + uploadId + "'";
-    res = PQexec(conn, deleteCrls.c_str());
+    // Delete CRLs (parameterized query)
+    const char* deleteCrls = "DELETE FROM crl WHERE upload_id = $1";
+    res = PQexecParams(conn, deleteCrls, 1, nullptr, paramValues,
+                       nullptr, nullptr, 0);
     int crlsDeleted = 0;
     if (PQresultStatus(res) == PGRES_COMMAND_OK) {
         crlsDeleted = atoi(PQcmdTuples(res));
+    } else {
+        spdlog::error("Failed to delete CRLs: {}", PQerrorMessage(conn));
     }
     PQclear(res);
 
-    // Delete master lists
-    std::string deleteMls = "DELETE FROM master_list WHERE upload_id = '" + uploadId + "'";
-    res = PQexec(conn, deleteMls.c_str());
+    // Delete master lists (parameterized query)
+    const char* deleteMls = "DELETE FROM master_list WHERE upload_id = $1";
+    res = PQexecParams(conn, deleteMls, 1, nullptr, paramValues,
+                       nullptr, nullptr, 0);
     int mlsDeleted = 0;
     if (PQresultStatus(res) == PGRES_COMMAND_OK) {
         mlsDeleted = atoi(PQcmdTuples(res));
+    } else {
+        spdlog::error("Failed to delete master lists: {}", PQerrorMessage(conn));
     }
     PQclear(res);
 
-    // Delete upload record
-    std::string deleteUpload = "DELETE FROM uploaded_file WHERE id = '" + uploadId + "'";
-    res = PQexec(conn, deleteUpload.c_str());
+    // Delete upload record (parameterized query)
+    const char* deleteUpload = "DELETE FROM uploaded_file WHERE id = $1";
+    res = PQexecParams(conn, deleteUpload, 1, nullptr, paramValues,
+                       nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to delete upload record: {}", PQerrorMessage(conn));
+    }
     PQclear(res);
 
     // Delete temp files

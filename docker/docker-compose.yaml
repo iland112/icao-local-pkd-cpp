@@ -80,13 +80,13 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       - LDAP_HOST=haproxy           # Read operations via load balancer
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
     depends_on:
@@ -126,11 +126,11 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       - LDAP_HOST=haproxy           # Read only via load balancer
       - LDAP_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
@@ -170,13 +170,13 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       - LDAP_HOST=haproxy
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - SYNC_INTERVAL_MINUTES=5
       - AUTO_RECONCILE=true
@@ -216,7 +216,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       - SYSTEM_METRICS_INTERVAL=5
       - SERVICE_HEALTH_INTERVAL=30
       - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
@@ -259,13 +259,13 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       - LDAP_HOST=haproxy
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
@@ -292,7 +292,7 @@ services:
       - "5432:5432"
     environment:
       - POSTGRES_USER=pkd
-      - POSTGRES_PASSWORD=pkd
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)
       - POSTGRES_DB=localpkd
       - TZ=Asia/Seoul
       - PGTZ=Asia/Seoul
@@ -327,7 +327,7 @@ services:
       - LDAP_HOST=openldap1
       - LDAP_PORT=389
       - LDAP_ADMIN_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}  # From .env file (same as LDAP_BIND_PASSWORD)
       - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
     volumes:
       - ../openldap/scripts:/scripts:ro
@@ -375,8 +375,8 @@ services:
       - LDAP_ORGANISATION=SmartCore Inc
       - LDAP_DOMAIN=ldap.smartcoreinc.com
       - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_ADMIN_PASSWORD=admin
-      - LDAP_CONFIG_PASSWORD=config
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}  # From .env file
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}  # From .env file
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
     volumes:
@@ -409,8 +409,8 @@ services:
       - LDAP_ORGANISATION=SmartCore Inc
       - LDAP_DOMAIN=ldap.smartcoreinc.com
       - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_ADMIN_PASSWORD=admin
-      - LDAP_CONFIG_PASSWORD=config
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}  # From .env file
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}  # From .env file
       - LDAP_READONLY_USER=false
       - LDAP_TLS=false
     volumes:
@@ -438,8 +438,8 @@ services:
       openldap2:
         condition: service_healthy
     environment:
-      - LDAP_CONFIG_PASSWORD=config
-      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}  # From .env file
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}    # From .env file
       - SERVER_ID=1
     entrypoint: ["/bin/bash", "-c"]
     command:
@@ -503,8 +503,8 @@ services:
       openldap2:
         condition: service_healthy
     environment:
-      - LDAP_CONFIG_PASSWORD=config
-      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}  # From .env file
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}    # From .env file
       - SERVER_ID=2
     entrypoint: ["/bin/bash", "-c"]
     command:

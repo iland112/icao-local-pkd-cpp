@@ -1690,6 +1690,14 @@ int main() {
     // Setup logging
     setupLogging();
 
+    // Validate required credentials
+    try {
+        g_config.validateRequiredCredentials();
+    } catch (const std::exception& e) {
+        spdlog::critical("{}", e.what());
+        return 1;
+    }
+
     spdlog::info("=================================================");
     spdlog::info("  ICAO Local PKD - PKD Relay Service v2.0.0");
     spdlog::info("=================================================");

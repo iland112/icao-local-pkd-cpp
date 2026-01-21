@@ -178,13 +178,13 @@ struct AppConfig {
     int dbPort = 5432;
     std::string dbName = "localpkd";
     std::string dbUser = "localpkd";
-    std::string dbPassword = "localpkd123";
+    std::string dbPassword;  // Must be set via environment variable
 
     // LDAP Read: HAProxy for load balancing
     std::string ldapHost = "haproxy";
     int ldapPort = 389;
     std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
-    std::string ldapBindPassword = "admin";
+    std::string ldapBindPassword;  // Must be set via environment variable
     std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
 
     int serverPort = 8082;
@@ -209,6 +209,17 @@ struct AppConfig {
         if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
 
         return config;
+    }
+
+    // Validate required credentials are set
+    void validateRequiredCredentials() const {
+        if (dbPassword.empty()) {
+            throw std::runtime_error("FATAL: DB_PASSWORD environment variable not set");
+        }
+        if (ldapBindPassword.empty()) {
+            throw std::runtime_error("FATAL: LDAP_BIND_PASSWORD environment variable not set");
+        }
+        spdlog::info("✅ All required credentials loaded from environment");
     }
 };
 
@@ -3486,6 +3497,14 @@ int main(int /* argc */, char* /* argv */[]) {
     initializeLogging();
 
     appConfig = AppConfig::fromEnvironment();
+
+    // Validate required credentials
+    try {
+        appConfig.validateRequiredCredentials();
+    } catch (const std::exception& e) {
+        spdlog::critical("{}", e.what());
+        return 1;
+    }
 
     spdlog::info("Starting PA Service v2.1.0 LDAP-RETRY...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);

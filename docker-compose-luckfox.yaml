@@ -53,7 +53,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       # LDAP Read via HAProxy on Master Node (port 10389)
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=10389
@@ -61,7 +61,7 @@ services:
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=core
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
     depends_on:
@@ -88,12 +88,12 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       # LDAP Read via HAProxy on Master Node (port 10389)
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=10389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=core
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - postgres
@@ -117,7 +117,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       # LDAP Read via HAProxy on Master Node (port 10389)
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=10389
@@ -125,7 +125,7 @@ services:
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=core
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - postgres
@@ -159,7 +159,7 @@ services:
     network_mode: host
     environment:
       - POSTGRES_USER=pkd
-      - POSTGRES_PASSWORD=pkd
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)
       - POSTGRES_DB=localpkd
       - TZ=Asia/Seoul
     volumes:

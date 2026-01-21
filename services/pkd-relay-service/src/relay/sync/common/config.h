@@ -18,7 +18,7 @@ struct Config {
     int dbPort = 5432;
     std::string dbName = "pkd";
     std::string dbUser = "pkd";
-    std::string dbPassword = "pkd123";
+    std::string dbPassword;  // Must be set via environment variable
 
     // LDAP (read)
     std::string ldapHost = "haproxy";
@@ -28,7 +28,7 @@ struct Config {
     std::string ldapWriteHost = "openldap1";
     int ldapWritePort = 389;
     std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
-    std::string ldapBindPassword = "admin";
+    std::string ldapBindPassword;  // Must be set via environment variable
     std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
 
     // Sync settings
@@ -61,6 +61,16 @@ struct Config {
         if (auto e = std::getenv("DAILY_SYNC_HOUR")) dailySyncHour = std::stoi(e);
         if (auto e = std::getenv("DAILY_SYNC_MINUTE")) dailySyncMinute = std::stoi(e);
         if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) revalidateCertsOnSync = (std::string(e) == "true");
+    }
+
+    // Validate required credentials are set
+    void validateRequiredCredentials() const {
+        if (dbPassword.empty()) {
+            throw std::runtime_error("FATAL: DB_PASSWORD environment variable not set");
+        }
+        if (ldapBindPassword.empty()) {
+            throw std::runtime_error("FATAL: LDAP_BIND_PASSWORD environment variable not set");
+        }
     }
 
     // Load user-configurable settings from database (implemented in config.cpp)
