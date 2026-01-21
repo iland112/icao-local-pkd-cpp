@@ -1,6 +1,6 @@
 # ICAO Local PKD - C++ Implementation
 
-**Version**: 1.7.1
+**Version**: 2.0.0
 **Last Updated**: 2026-01-21
 **Status**: Production Ready
 
@@ -592,6 +592,111 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 ---
 
 ## Change Log
+
+### 2026-01-21: PKD Relay Service v2.0.0 - Service Separation Complete (v2.0.0)
+
+**PKD Relay Service 서비스 분리 및 Clean Architecture 완성**:
+
+**구현 일시**: 2026-01-21
+**브랜치**: main (from feature/pkd-relay-service-v2)
+**상태**: ✅ Production Ready (Phase 1-8 Complete)
+
+**핵심 변경사항**:
+
+1. **Service Separation** - Clean Architectural Boundaries
+   - **Before**: Sync Service - 내부 동기화 + 외부 데이터 relay 혼재
+   - **After**: PKD Relay Service (외부) + PKD Management (내부) 명확한 분리
+   - **Service Rename**: `sync-service` → `pkd-relay` (port 8083)
+   - **Container Name**: `icao-pkd-sync-service` → `icao-pkd-relay`
+   - **Image Name**: `icao-local-pkd-sync:arm64` → `icao-local-pkd-relay:arm64`
+
+2. **PKD Relay Service v2.0.0**
+   - **Responsibility**: 외부 데이터 relay 전담
+   - **API Endpoints**: `/api/sync/*` (DB-LDAP 동기화 모니터링)
+   - **Version String**: "PKD Relay Service v2.0.0"
+   - **Source**: `services/pkd-relay-service/` (renamed from sync-service)
+   - **Features**:
+     - DB-LDAP Sync Monitoring
+     - Auto Reconciliation
+     - Trust Chain Revalidation
+     - Daily Sync Scheduler
+
+3. **Frontend Integration**
+   - **Sidebar Menu Reorganization**:
+     - "ICAO PKD 연계" moved to top position (first section)
+     - "동기화 상태" integrated into PKD Management section
+     - Removed standalone "DB-LDAP Sync" section
+   - **API Client Modules**:
+     - `frontend/src/api/relayApi.ts` - PKD Relay Service client (external operations)
+     - `frontend/src/api/pkdApi.ts` - PKD Management Service client (internal operations)
+     - Backward compatibility maintained via legacy `syncApi.ts`
+
+4. **Deployment**
+   - **Main Branch Merge**: ✅ Complete (commits 5789b2b, fdd35a5, 6457146, 4554936)
+   - **GitHub Actions Build**: ✅ Success (Run 21198014375)
+     - build-pkd-relay: 1h 58m (first full vcpkg build)
+     - build-frontend: 5m 25s
+     - build-pkd-management: 8m 38s
+     - build-pa-service: 1m 53s
+   - **Luckfox ARM64 Deployment**: ✅ Complete
+     - Service: `icao-pkd-relay` (v2.0.0, healthy)
+     - Database: Connected (localpkd)
+     - LDAP: Connected (192.168.100.10:10389)
+     - Auto Reconcile: Enabled
+     - Daily Sync: Enabled (00:00)
+
+5. **Configuration Updates**
+   - **docker-compose-luckfox.yaml**: Updated service name, image, container name
+   - **Swagger UI**: API documentation reference updated to "PKD Relay Service API v2.0.0"
+   - **GitHub Actions Workflow**: `.github/workflows/build-arm64.yml` updated
+     - Job name: `build-sync-service` → `build-pkd-relay`
+     - Dockerfile path: `services/sync-service/` → `services/pkd-relay-service/`
+     - Artifact name: `pkd-sync-arm64` → `pkd-relay-arm64`
+     - Cache scope: `sync-svc-*` → `pkd-relay-*`
+
+**Architectural Benefits**:
+- ✅ Clear Separation of Concerns (External vs Internal operations)
+- ✅ Improved Code Organization (Clean Architecture)
+- ✅ Better Maintainability (Independent service evolution)
+- ✅ Scalability Ready (Services can scale independently)
+- ✅ API Clarity (Endpoint responsibilities well-defined)
+
+**Backward Compatibility**:
+- ✅ API Endpoints: `/api/sync/*` maintained (no breaking changes)
+- ✅ Frontend: Gradual migration path via `relayApi.ts` + `pkdApi.ts`
+- ✅ Database Schema: No changes required
+- ✅ LDAP Structure: No changes required
+
+**Verification**:
+```bash
+# Luckfox Deployment Verification
+curl http://192.168.100.11:8083/api/sync/health
+# {"database":"UP","service":"sync-service","status":"UP","timestamp":"..."}
+
+curl http://192.168.100.11:8080/api/sync/status
+# {"checkDurationMs":1315,"checkedAt":"...","dbStats":{...},"ldapStats":{...}}
+
+docker logs icao-pkd-relay --tail 1 | grep version
+# [info] ICAO Local PKD - PKD Relay Service v2.0.0
+```
+
+**Commits**:
+- 5789b2b: feat(relay): Merge feature/pkd-relay-service-v2 to main
+- fdd35a5: refactor(frontend): Reorganize sidebar menu
+- 6457146: fix(ci): Update GitHub Actions workflow for PKD Relay Service v2.0.0
+- 4554936: feat(deploy): Update docker-compose-luckfox.yaml for PKD Relay Service v2.0.0
+
+**Documentation**:
+- ✅ `docs/PKD_RELAY_SERVICE_REFACTORING_STATUS.md` - Complete refactoring guide
+- ⏳ `docs/SOFTWARE_ARCHITECTURE.md` - Pending update to v2.0.0
+- ⏳ `CLAUDE.md` - This entry
+
+**Next Steps**:
+- Update `docs/SOFTWARE_ARCHITECTURE.md` to reflect v2.0.0 architecture
+- Monitor production performance on Luckfox
+- Consider Tier 2/3 features for ICAO Auto Sync
+
+---
 
 ### 2026-01-21: PA Dashboard Country Code Normalization & Certificate Search UI Enhancement (v1.7.1)
 

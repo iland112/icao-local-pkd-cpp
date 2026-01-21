@@ -1,7 +1,7 @@
 # ICAO Local PKD - Software Architecture
 
-**Version**: 1.7.0
-**Last Updated**: 2026-01-20
+**Version**: 2.0.0
+**Last Updated**: 2026-01-21
 **Status**: Production Ready
 
 ---
@@ -36,82 +36,164 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ---
 
-## High-Level Architecture
+## Technical Architecture Diagram
+
+### System Overview (v2.0.0)
 
 ```mermaid
-flowchart TB
-    subgraph L1["레이어 1: 클라이언트"]
-        Browser["웹 브라우저"]
-        APIClient["API 클라이언트"]
+graph TB
+    subgraph External["🌐 외부 영역 (Public Internet)"]
+        User[👤 사용자<br/>웹 브라우저]
+        ExtAPI[🔌 외부 API 클라이언트<br/>REST/LDAP]
+        ICAOPortal[🌍 ICAO PKD Portal<br/>download.pkd.icao.int]
     end
 
-    subgraph L2["레이어 2: 프론트엔드 - 포트 3000"]
-        React["React 애플리케이션"]
+    subgraph DMZ["🔒 DMZ 영역 (Exposed Ports)"]
+        Frontend[⚡ Frontend Service<br/>Nginx + React 19<br/>Port: 3000<br/>기술: TypeScript, Vite, TailwindCSS 4]
+        APIGateway[🔀 API Gateway<br/>Nginx Reverse Proxy<br/>Port: 8080<br/>기능: Rate Limit, CORS, SSE, Swagger UI]
+        HAProxy[⚖️ LDAP Load Balancer<br/>HAProxy<br/>Port: 389<br/>기능: Round-robin, Health Check]
     end
 
-    subgraph L3["레이어 3: API 게이트웨이 - 포트 8080"]
-        Nginx["Nginx 게이트웨이"]
+    subgraph AppLayer["🔧 애플리케이션 계층 (Internal Network)"]
+        subgraph Microservices["마이크로서비스 클러스터"]
+            PKD[📦 PKD Management<br/>C++ 20 + Drogon<br/>Port: 8081<br/>기능: Upload, Certificate, ICAO Sync]
+            PA[🔐 PA Service<br/>C++ 20 + Drogon<br/>Port: 8082<br/>기능: ICAO 9303 Verification]
+            Relay[🔄 PKD Relay Service<br/>C++ 20 + Drogon<br/>Port: 8083<br/>기능: External PKD Relay, Auto Sync]
+            Monitor[📊 Monitoring Service<br/>C++ 20 + Drogon<br/>Port: 8084<br/>기능: System Metrics, Service Health]
+        end
+
+        subgraph Schedulers["스케줄러"]
+            CronJob[⏰ Cron Job<br/>icao-version-check.sh<br/>스케줄: 매일 08:00 KST]
+            DailySync[📅 Daily Sync<br/>Trust Chain Revalidation<br/>스케줄: 매일 00:00 UTC]
+        end
     end
 
-    subgraph L4["레이어 4: 마이크로서비스"]
-        PKD["PKD 서비스<br/>포트 8081"]
-        PA["PA 서비스<br/>포트 8082"]
-        Sync["동기화 서비스<br/>포트 8083"]
+    subgraph DataLayer["💾 데이터 계층 (Persistent Storage)"]
+        subgraph Database["데이터베이스"]
+            PostgreSQL[(🗄️ PostgreSQL 15<br/>Port: 5432<br/>데이터: 30,637 certificates<br/>테이블: 9개)]
+        end
+
+        subgraph Directory["디렉토리 서비스"]
+            LDAP1[(📂 OpenLDAP Master 1<br/>Port: 3891<br/>역할: Primary Write<br/>복제: MMR)]
+            LDAP2[(📂 OpenLDAP Master 2<br/>Port: 3892<br/>역할: Secondary Write<br/>복제: MMR)]
+        end
+
+        subgraph Storage["파일 저장소"]
+            Uploads[📁 Upload Files<br/>경로: /app/uploads<br/>형식: LDIF, ML, JSON]
+            Logs[📋 Application Logs<br/>경로: /app/logs<br/>프레임워크: spdlog]
+        end
     end
 
-    subgraph L5["레이어 5: 데이터 저장소"]
-        PG[("PostgreSQL<br/>포트 5432")]
-        LDAP[("LDAP 클러스터<br/>포트 389")]
+    subgraph Infrastructure["🏗️ 인프라스트럭처"]
+        Docker[🐳 Docker Compose<br/>네트워크: icao-network<br/>볼륨: bind mounts]
+        Platform[💻 배포 플랫폼<br/>AMD64: Development<br/>ARM64: Luckfox Pico]
     end
 
-    Browser --> React
-    APIClient --> Nginx
-    React --> Nginx
+    subgraph CICD["🚀 CI/CD Pipeline"]
+        GitHub[📦 GitHub Actions<br/>빌드: Multi-arch<br/>아티팩트: 30일 보관]
+        Deploy[🎯 Automated Deploy<br/>도구: skopeo, sshpass<br/>대상: 192.168.100.11]
+    end
 
-    Nginx --> PKD
-    Nginx --> PA
-    Nginx --> Sync
+    %% External to DMZ
+    User -->|HTTPS| Frontend
+    User -->|HTTP| APIGateway
+    ExtAPI -->|REST API| APIGateway
+    ExtAPI -->|LDAP Query| HAProxy
+    ICAOPortal -.->|HTML Scraping| PKD
 
-    PKD --> PG
-    PKD --> LDAP
-    PA --> PG
-    PA --> LDAP
-    Sync --> PG
-    Sync --> LDAP
+    %% DMZ to App Layer
+    Frontend -->|API Proxy| APIGateway
+    APIGateway -->|/api/upload, /api/cert, /api/icao| PKD
+    APIGateway -->|/api/pa/*| PA
+    APIGateway -->|/api/relay/*| Relay
+    APIGateway -->|/api/monitoring/*| Monitor
+    HAProxy -->|Load Balance| LDAP1
+    HAProxy -->|Load Balance| LDAP2
 
-    style L1 fill:#1565C0,stroke:#0D47A1,stroke-width:3px,color:#fff
-    style L2 fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#fff
-    style L3 fill:#E65100,stroke:#BF360C,stroke-width:3px,color:#fff
-    style L4 fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style L5 fill:#AD1457,stroke:#880E4F,stroke-width:3px,color:#fff
+    %% App Layer to Data Layer
+    PKD -->|Write/Read| PostgreSQL
+    PKD -->|Direct Write| LDAP1
+    PKD -->|Read via HAProxy| HAProxy
+    PA -->|Read/Write| PostgreSQL
+    PA -->|Read via HAProxy| HAProxy
+    Relay -->|Read| PostgreSQL
+    Relay -->|Relay Requests| HAProxy
+    Monitor -->|Metrics Query| PostgreSQL
+    Monitor -->|Service Health Check| PKD
+    Monitor -->|Service Health Check| PA
+    Monitor -->|Service Health Check| Relay
 
-    style Browser fill:#42A5F5,stroke:#1976D2,stroke-width:2px,color:#000
-    style APIClient fill:#42A5F5,stroke:#1976D2,stroke-width:2px,color:#000
-    style React fill:#AB47BC,stroke:#7B1FA2,stroke-width:2px,color:#fff
-    style Nginx fill:#FF6F00,stroke:#E65100,stroke-width:2px,color:#fff
-    style PKD fill:#66BB6A,stroke:#388E3C,stroke-width:2px,color:#000
-    style PA fill:#66BB6A,stroke:#388E3C,stroke-width:2px,color:#000
-    style Sync fill:#66BB6A,stroke:#388E3C,stroke-width:2px,color:#000
-    style PG fill:#EC407A,stroke:#C2185B,stroke-width:2px,color:#fff
-    style LDAP fill:#EC407A,stroke:#C2185B,stroke-width:2px,color:#fff
+    %% Schedulers
+    CronJob -->|Trigger Check| PKD
+    DailySync -->|Trigger Sync| Relay
+
+    %% Data Layer Replication
+    LDAP1 <-->|MMR Replication| LDAP2
+
+    %% File Storage
+    PKD -->|Store Files| Uploads
+    PKD -->|Write Logs| Logs
+    PA -->|Write Logs| Logs
+    Relay -->|Write Logs| Logs
+
+    %% Infrastructure
+    Docker -.->|Container Runtime| Frontend
+    Docker -.->|Container Runtime| APIGateway
+    Docker -.->|Container Runtime| PKD
+    Docker -.->|Container Runtime| PA
+    Docker -.->|Container Runtime| Relay
+    Docker -.->|Container Runtime| PostgreSQL
+    Docker -.->|Container Runtime| LDAP1
+    Docker -.->|Container Runtime| LDAP2
+    Docker -.->|Container Runtime| HAProxy
+
+    %% CI/CD
+    GitHub -->|Build Images| Deploy
+    Deploy -->|SSH Deploy| Platform
+
+    %% Styling
+    classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:3px,color:#000
+    classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
+    classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:3px,color:#000
+    classDef data fill:#FCE4EC,stroke:#C2185B,stroke-width:3px,color:#000
+    classDef infra fill:#F3E5F5,stroke:#7B1FA2,stroke-width:3px,color:#000
+    classDef cicd fill:#E0F2F1,stroke:#00796B,stroke-width:3px,color:#000
+
+    class User,ExtAPI,ICAOPortal external
+    class Frontend,APIGateway,HAProxy dmz
+    class PKD,PA,Relay,Monitor,CronJob,DailySync app
+    class PostgreSQL,LDAP1,LDAP2,Uploads,Logs data
+    class Docker,Platform infra
+    class GitHub,Deploy cicd
 ```
 
 ### Layer Description
 
 | Layer | Purpose | Technology | Accessibility |
 |-------|---------|------------|---------------|
-| **🌐 Layer 1: Client** | User interaction and external integration | Web Browser, REST Client | Public (Internet) |
-| **⚡ Layer 2: Presentation** | UI rendering and user experience | React 19 + TypeScript + Vite | Public (Port 3000) |
-| **🔀 Layer 3: API Gateway** | Unified API entry point, security, routing | Nginx + Swagger UI | Public (Port 8080) |
-| **🔧 Layer 4: Microservices** | Business logic and data processing | C++20 + Drogon Framework | Internal (Docker Network) |
-| **💾 Layer 5: Data** | Data persistence and directory services | PostgreSQL + OpenLDAP MMR | Internal (Docker Network) |
+| **🌐 Layer 1: External** | User interaction and external integration | Web Browser, REST Client, ICAO Portal | Public (Internet) |
+| **🔒 Layer 2: DMZ** | Frontend, API Gateway, LDAP load balancing | React 19, Nginx, HAProxy | Public (Ports 3000, 8080, 389) |
+| **🔧 Layer 3: Application** | 4 microservices + 2 schedulers | C++20 + Drogon Framework | Internal (Docker Network) |
+| **💾 Layer 4: Data** | Data persistence and directory services | PostgreSQL + OpenLDAP MMR | Internal (Docker Network) |
+| **🏗️ Layer 5: Infrastructure** | Container runtime and CI/CD | Docker Compose + GitHub Actions | Internal (Platform) |
+
+### Microservices Overview (v2.0.0)
+
+| Service | Port | Description | Key Features |
+|---------|------|-------------|--------------|
+| **PKD Management** | 8081 | LDIF/ML upload, certificate management, DB-LDAP sync | Clean Architecture, Strategy Pattern, AUTO/MANUAL Mode, Auto Reconcile |
+| **PA Service** | 8082 | ICAO 9303 Passive Authentication | SOD verification, DG hash validation, MRZ parsing |
+| **PKD Relay** | 8083 | External PKD relay and ICAO auto-sync | HTML parsing, version detection, email notification |
+| **Monitoring** | 8084 | System metrics and service health monitoring | CPU/Memory/Disk metrics, service health checks |
 
 ### Key Data Flow Patterns
 
-1. **User Upload Flow**: Browser → React → Nginx → PKD Service → PostgreSQL + LDAP1 (Direct Write)
-2. **PA Verification Flow**: Browser → React → Nginx → PA Service → PostgreSQL + HAProxy → LDAP (Load Balanced Read)
-3. **Certificate Search Flow**: Browser → React → Nginx → PKD Service → HAProxy → LDAP (Read-only)
-4. **Sync Monitoring Flow**: Browser → React → Nginx → Sync Service → PostgreSQL + HAProxy → LDAP (Statistics)
+1. **User Upload Flow**: Browser → React → API Gateway → PKD Management → PostgreSQL + LDAP1 (Direct Write)
+2. **PA Verification Flow**: Browser → React → API Gateway → PA Service → PostgreSQL + HAProxy → LDAP (Load Balanced)
+3. **Certificate Search Flow**: Browser → React → API Gateway → PKD Management → HAProxy → LDAP (Read-only)
+4. **DB-LDAP Sync Flow**: Browser → React → API Gateway → PKD Management → PostgreSQL + HAProxy → LDAP (Sync Monitoring)
+5. **ICAO Relay Flow**: Cron Job (08:00 KST) → PKD Relay → ICAO Portal (HTML Scraping) → PostgreSQL → Email Notification
+6. **System Monitoring Flow**: Monitoring Service → PKD/PA/Relay Health Check → PostgreSQL Metrics → Dashboard
 
 ---
 
@@ -281,68 +363,79 @@ flowchart LR
 
 ---
 
-### 3. Sync Service (Port 8083)
+### 3. PKD Relay Service (Port 8083)
 
 ```mermaid
 flowchart LR
     subgraph API["API 레이어"]
-        Status["동기화 상태<br/>DB/LDAP"]
-        Trigger["수동 트리거<br/>강제"]
-        Config["설정 API<br/>옵션"]
+        RelayHealth["Relay Health<br/>상태"]
+        RelayStatus["Relay Status<br/>통계"]
+        IcaoCheck["ICAO Check<br/>버전"]
     end
 
-    subgraph Engine["동기화 엔진"]
-        Monitor["동기화 모니터<br/>30초"]
-        Comparator["데이터 비교<br/>카운트"]
-        Reconciler["자동 조정<br/>배치 100"]
+    subgraph Domain["도메인 레이어"]
+        IcaoDomain["ICAO 도메인<br/>버전 추적"]
+        RelayDomain["Relay 도메인<br/>외부 연계"]
     end
 
-    subgraph DataAccess["데이터 접근"]
-        SyncRepo["동기화 저장소<br/>PostgreSQL"]
-        LDAPSync["LDAP 동기화<br/>작업"]
+    subgraph Service["서비스 레이어"]
+        IcaoService["ICAO 서비스<br/>HTML 파싱"]
+        RelayService["Relay 서비스<br/>요청 중계"]
+    end
+
+    subgraph Repo["저장소 레이어"]
+        IcaoRepo["ICAO 저장소<br/>PostgreSQL"]
+    end
+
+    subgraph Infra["인프라스트럭처"]
+        HTTP["HTTP 클라이언트"]
+        HTML["HTML 파서"]
+        Email["이메일 발송"]
     end
 
     subgraph Scheduler["스케줄러"]
-        DailySync["일일 동기화<br/>00:00 UTC"]
-        Revalidation["재검증<br/>체인"]
+        CronJob["Cron Job<br/>08:00 KST"]
     end
 
     subgraph DataStore["데이터 저장소"]
         DB[("PostgreSQL")]
-        LDAPS[("LDAP")]
     end
 
-    Status --> Monitor
-    Trigger --> Monitor
-    Config --> Monitor
+    RelayHealth --> RelayService
+    RelayStatus --> IcaoService
+    IcaoCheck --> IcaoDomain
 
-    Monitor --> Comparator
-    Comparator --> Reconciler
+    IcaoDomain --> IcaoService
+    RelayDomain --> RelayService
 
-    Reconciler --> SyncRepo
-    Reconciler --> LDAPSync
+    IcaoService --> HTTP
+    IcaoService --> HTML
+    IcaoService --> Email
+    IcaoService --> IcaoRepo
 
-    DailySync --> Monitor
-    DailySync --> Revalidation
+    IcaoRepo --> DB
 
-    SyncRepo --> DB
-    LDAPSync --> LDAPS
+    CronJob --> IcaoCheck
 
     style API fill:#1976D2,stroke:#0D47A1,stroke-width:2px,color:#fff
-    style Engine fill:#7B1FA2,stroke:#4A148C,stroke-width:2px,color:#fff
-    style DataAccess fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#fff
+    style Domain fill:#388E3C,stroke:#1B5E20,stroke-width:2px,color:#fff
+    style Service fill:#7B1FA2,stroke:#4A148C,stroke-width:2px,color:#fff
+    style Repo fill:#E65100,stroke:#BF360C,stroke-width:2px,color:#fff
+    style Infra fill:#0097A7,stroke:#006064,stroke-width:2px,color:#fff
     style Scheduler fill:#00796B,stroke:#004D40,stroke-width:2px,color:#fff
     style DataStore fill:#C2185B,stroke:#880E4F,stroke-width:2px,color:#fff
 
-    style Reconciler fill:#BA68C8,stroke:#7B1FA2,stroke-width:2px,color:#fff
+    style IcaoCheck fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
+    style IcaoDomain fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
+    style IcaoService fill:#FFA726,stroke:#F57C00,stroke-width:2px,color:#000
 ```
 
 **Key Features**:
-- ✅ DB-LDAP 동기화 모니터링
-- ✅ Auto Reconcile (Batch 100)
-- ✅ Daily Sync Scheduler
-- ✅ Trust Chain Revalidation
-- ✅ 불일치 자동 조정
+- ✅ ICAO PKD 외부 연계 (Version Detection)
+- ✅ HTML Scraping (Table + Link Fallback)
+- ✅ Email Notification (SMTP)
+- ✅ Clean Architecture (4 Layers)
+- ✅ Cron Job Integration
 
 ---
 
@@ -626,9 +719,9 @@ graph TD
 graph TB
     subgraph Gateway["Nginx API 게이트웨이 포트 8080"]
         subgraph Routes["라우팅 규칙"]
-            Route1["PKD 라우트<br/>upload/cert/health/icao"]
+            Route1["PKD 라우트<br/>upload/cert/health/sync"]
             Route2["PA 라우트<br/>pa/*"]
-            Route3["Sync 라우트<br/>sync/*"]
+            Route3["Relay 라우트<br/>relay/*"]
             Route4["API 문서<br/>api-docs"]
         end
 
@@ -655,7 +748,7 @@ graph TB
 
     Route1 --> PKD["PKD 관리<br/>8081"]
     Route2 --> PA["PA 서비스<br/>8082"]
-    Route3 --> SyncSvc["Sync 서비스<br/>8083"]
+    Route3 --> RelaySvc["Relay 서비스<br/>8083"]
     Route4 --> Swagger
 
     RateLimit -.-> Route1
@@ -664,7 +757,7 @@ graph TB
 
     Gzip -.-> PKD
     Gzip -.-> PA
-    Gzip -.-> SyncSvc
+    Gzip -.-> RelaySvc
 
     SSE -.-> PKD
     Upload -.-> PKD
@@ -889,7 +982,7 @@ graph TB
         subgraph "Backend Containers"
             PKD[pkd-management<br/>C++ Drogon Service<br/>Internal Port: 8081]
             PA[pa-service<br/>C++ Drogon Service<br/>Internal Port: 8082]
-            Sync[sync-service<br/>C++ Drogon Service<br/>Internal Port: 8083]
+            Relay[pkd-relay<br/>C++ Drogon Service<br/>Internal Port: 8083]
         end
 
         subgraph "Database Containers"
@@ -921,15 +1014,15 @@ graph TB
     Frontend --> APIGateway
     APIGateway --> PKD
     APIGateway --> PA
-    APIGateway --> Sync
+    APIGateway --> Relay
 
     PKD --> PG
     PA --> PG
-    Sync --> PG
+    Relay --> PG
 
     PKD --> HAProxy
     PA --> HAProxy
-    Sync --> HAProxy
+    Relay --> HAProxy
 
     HAProxy --> LDAP1
     HAProxy --> LDAP2
@@ -952,7 +1045,7 @@ graph TB
     style APIGateway fill:#FF9800,stroke:#F57C00,stroke-width:3px
     style PKD fill:#42A5F5,stroke:#1976D2,stroke-width:2px
     style PA fill:#42A5F5,stroke:#1976D2,stroke-width:2px
-    style Sync fill:#42A5F5,stroke:#1976D2,stroke-width:2px
+    style Relay fill:#42A5F5,stroke:#1976D2,stroke-width:2px
     style PG fill:#7E57C2,stroke:#5E35B1,stroke-width:2px
     style LDAP1 fill:#26A69A,stroke:#00796B,stroke-width:2px
     style LDAP2 fill:#26A69A,stroke:#00796B,stroke-width:2px
@@ -967,7 +1060,7 @@ graph TB
 | api-gateway | nginx:1.25-alpine | 0.5 | 256MB | always |
 | pkd-management | Custom C++ (Debian) | 2.0 | 2GB | always |
 | pa-service | Custom C++ (Debian) | 2.0 | 2GB | always |
-| sync-service | Custom C++ (Debian) | 1.0 | 1GB | always |
+| pkd-relay | Custom C++ (Debian) | 1.0 | 1GB | always |
 | postgres | postgres:15-alpine | 2.0 | 2GB | always |
 | openldap1 | osixia/openldap:1.5.0 | 1.0 | 1GB | always |
 | openldap2 | osixia/openldap:1.5.0 | 1.0 | 1GB | always |
@@ -987,7 +1080,7 @@ graph TD
             APIGateway2[API Gateway<br/>Direct :8080]
             PKD2[PKD Management<br/>Direct :8081]
             PA2[PA Service<br/>Direct :8082]
-            Sync2[Sync Service<br/>Direct :8083]
+            Relay2[PKD Relay<br/>Direct :8083]
             PG2[PostgreSQL<br/>Direct :5432]
             LDAP3[OpenLDAP1<br/>Direct :3891]
             LDAP4[OpenLDAP2<br/>Direct :3892]
@@ -1013,7 +1106,7 @@ graph TD
     Deploy --> Frontend2
     Deploy --> PKD2
     Deploy --> PA2
-    Deploy --> Sync2
+    Deploy --> Relay2
 
     PG2 --> PGData2
     LDAP3 --> LDAPData3
@@ -1168,7 +1261,7 @@ graph LR
         GW[GET /health<br/>API Gateway]
         PKD_H[GET /api/health<br/>PKD Management]
         PA_H[GET /api/pa/health<br/>PA Service]
-        Sync_H[GET /api/sync/health<br/>Sync Service]
+        Relay_H[GET /api/relay/health<br/>PKD Relay Service]
         DB_H[GET /api/health/database<br/>PostgreSQL]
         LDAP_H[GET /api/health/ldap<br/>LDAP Status]
     end
@@ -1182,7 +1275,7 @@ graph LR
     GW --> Docker
     PKD_H --> Docker
     PA_H --> Docker
-    Sync_H --> Docker
+    Relay_H --> Docker
 
     DB_H --> Script
     LDAP_H --> Script
@@ -1198,8 +1291,8 @@ graph LR
 |-----------|-----------|-------------|-----------|
 | **PKD Management** | INFO | /var/log/pkd-management.log | 30 days |
 | **PA Service** | INFO | /var/log/pa-service.log | 30 days |
-| **Sync Service** | INFO | /var/log/sync-service.log | 30 days |
-| **ICAO Sync Cron** | INFO | /var/log/icao-sync/*.log | 30 days |
+| **PKD Relay Service** | INFO | /var/log/pkd-relay.log | 30 days |
+| **ICAO Relay Cron** | INFO | /var/log/icao-relay/*.log | 30 days |
 | **Nginx Access** | COMBINED | /var/log/nginx/access.log | 30 days |
 | **Nginx Error** | WARN | /var/log/nginx/error.log | 30 days |
 
@@ -1217,8 +1310,8 @@ graph LR
 
 ### Phase 2 (Research)
 
-- 🔍 ICAO Auto Sync Tier 2 (Semi-automated download)
-- 🔍 ICAO Auto Sync Tier 3 (Full LDAP sync with membership)
+- 🔍 PKD Relay Tier 2 (Semi-automated download from ICAO)
+- 🔍 PKD Relay Tier 3 (Full LDAP sync with ICAO membership)
 - 🔍 Kubernetes Deployment
 - 🔍 Prometheus + Grafana Monitoring
 - 🔍 ELK Stack (Elasticsearch, Logstash, Kibana)
@@ -1227,14 +1320,14 @@ graph LR
 
 ## Conclusion
 
-ICAO Local PKD v1.7.0은 **마이크로서비스 아키텍처**, **Clean Architecture**, **이중 저장소 전략**을 통해 높은 성능, 확장성, 안정성을 제공합니다.
+ICAO Local PKD v2.0.0은 **마이크로서비스 아키텍처**, **Clean Architecture**, **서비스 분리 원칙**을 통해 높은 성능, 확장성, 안정성을 제공합니다.
 
 **핵심 강점**:
 - ✅ 독립적으로 확장 가능한 마이크로서비스
-- ✅ PostgreSQL-LDAP 데이터 일관성 보장
+- ✅ PostgreSQL-LDAP 데이터 일관성 보장 (Auto Reconcile)
 - ✅ C++20 고성능 백엔드
 - ✅ React 19 모던 프론트엔드
-- ✅ ICAO Auto Sync (v1.7.0) 자동 버전 관리
+- ✅ PKD Relay Service (v2.0.0) 외부 연계 전담
 - ✅ Docker 기반 간편한 배포
 - ✅ 99.9% 업타임 목표 달성
 
