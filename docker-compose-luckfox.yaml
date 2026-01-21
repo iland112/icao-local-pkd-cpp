@@ -19,7 +19,7 @@ services:
     depends_on:
       - pkd-management
       - pa-service
-      - sync-service
+      - pkd-relay
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -102,15 +102,15 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Sync Service
+  # PKD Relay Service (formerly Sync Service)
   # ---------------------------------------------------------------------------
-  sync-service:
-    image: icao-local-sync:arm64-v1.2.0
-    container_name: icao-pkd-sync-service
+  pkd-relay:
+    image: icao-local-pkd-relay:arm64
+    container_name: icao-pkd-relay
     network_mode: host
     environment:
       - TZ=Asia/Seoul
-      - SERVICE_NAME=sync-service
+      - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
       # PostgreSQL (local)
       - DB_HOST=127.0.0.1
@@ -143,7 +143,7 @@ services:
     environment:
       - PORT=8888
       - BASE_URL=/api-docs
-      - URLS=[{"url":"api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"api/docs/sync-service.yaml","name":"Sync Service API v1.2.0"}]
+      - URLS=[{"url":"api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.0.0"}]
       - URLS_PRIMARY_NAME=PKD Management API v1.5.10
       - TZ=Asia/Seoul
     volumes:
