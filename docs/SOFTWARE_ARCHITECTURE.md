@@ -42,90 +42,109 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ```mermaid
 graph TB
-    subgraph Layer1[" "]
-        direction LR
+    %% Layer 1: External Access
+    subgraph L1[" "]
+        direction TB
         L1Title["🌐 Layer 1: External Access"]
-        User["👤 User<br/>Browser"]
-        ICAOPortal["🌍 ICAO Portal<br/>pkd.icao.int"]
-        L1Title ~~~ User
-        User ~~~ ICAOPortal
+        subgraph L1Nodes[" "]
+            direction LR
+            User["👤 User Browser"]
+            ICAOPortal["🌍 ICAO Portal<br/>pkd.icao.int"]
+        end
     end
 
-    subgraph Layer2[" "]
-        direction LR
-        L2Title["🔒 Layer 2: DMZ"]
-        Frontend["⚡ Frontend<br/>React 19<br/>:3000"]
-        APIGateway["🔀 API Gateway<br/>Nginx<br/>:8080"]
-        HAProxy["⚖️ HAProxy<br/>LDAP LB<br/>:389"]
-        L2Title ~~~ Frontend
-        Frontend ~~~ APIGateway
-        APIGateway ~~~ HAProxy
+    %% Layer 2: DMZ
+    subgraph L2[" "]
+        direction TB
+        L2Title["🔒 Layer 2: DMZ - Public Ports"]
+        subgraph L2Nodes[" "]
+            direction LR
+            Frontend["⚡ Frontend<br/>React 19 SPA<br/>Port 3000"]
+            APIGateway["🔀 API Gateway<br/>Nginx Reverse Proxy<br/>Port 8080"]
+        end
     end
 
-    subgraph Layer3[" "]
-        direction LR
-        L3Title["🔧 Layer 3: Application"]
-        PKD["📦 PKD<br/>C++20<br/>:8081"]
-        PA["🔐 PA<br/>C++20<br/>:8082"]
-        Relay["🔄 Relay<br/>C++20<br/>:8083"]
-        L3Title ~~~ PKD
-        PKD ~~~ PA
-        PA ~~~ Relay
+    %% Layer 3: Application Services
+    subgraph L3[" "]
+        direction TB
+        L3Title["🔧 Layer 3: Application Services - C++ Microservices"]
+        subgraph L3Nodes[" "]
+            direction LR
+            PKD["📦 PKD Management<br/>Upload & Validation<br/>Port 8081"]
+            PA["🔐 PA Service<br/>Passive Auth Verify<br/>Port 8082"]
+            Relay["🔄 PKD Relay<br/>ICAO Integration<br/>Port 8083"]
+        end
     end
 
-    subgraph Layer4[" "]
-        direction LR
-        L4Title["💾 Layer 4: Data"]
-        PostgreSQL[("🗄️ PostgreSQL<br/>30K certs<br/>:5432")]
-        LDAPCluster[("📂 LDAP MMR<br/>Master 1+2<br/>:3891/:3892")]
-        L4Title ~~~ PostgreSQL
-        PostgreSQL ~~~ LDAPCluster
+    %% Layer 4: Data Storage
+    subgraph L4[" "]
+        direction TB
+        L4Title["💾 Layer 4: Data Storage - Persistent Layer"]
+        subgraph L4Nodes[" "]
+            direction LR
+            PostgreSQL[("🗄️ PostgreSQL<br/>30K Certificates<br/>Port 5432")]
+            HAProxy["⚖️ HAProxy<br/>LDAP Load Balancer<br/>Port 389"]
+            LDAPCluster[("📂 LDAP MMR Cluster<br/>Master 1 + Master 2<br/>Ports 3891/3892")]
+        end
     end
 
-    subgraph Layer5[" "]
-        direction LR
-        L5Title["🏗️ Layer 5: Infrastructure"]
-        Docker["🐳 Docker Compose<br/>Network"]
-        L5Title ~~~ Docker
+    %% Layer 5: Infrastructure
+    subgraph L5[" "]
+        direction TB
+        L5Title["🏗️ Layer 5: Infrastructure - Docker Compose Runtime"]
+        Docker["🐳 Docker Compose Network"]
     end
 
-    %% Vertical flow - Layer by layer
+    %% Vertical connections - Layer by layer
     User -->|1. HTTPS| Frontend
     User -->|2. REST API| APIGateway
 
     Frontend -->|3. Proxy| APIGateway
 
     APIGateway -->|4. Route| PKD
-    APIGateway --> PA
-    APIGateway --> Relay
-    HAProxy --> LDAPCluster
+    APIGateway -.-> PA
+    APIGateway -.-> Relay
 
     PKD -->|5. Query| PostgreSQL
     PA --> PostgreSQL
     Relay --> PostgreSQL
+
     PKD --> HAProxy
     PA --> HAProxy
     Relay --> HAProxy
 
-    PostgreSQL -.->|6. Runtime| Docker
+    HAProxy -->|6. LB| LDAPCluster
+
+    PostgreSQL -.->|7. Runtime| Docker
+    HAProxy -.-> Docker
     LDAPCluster -.-> Docker
 
     ICAOPortal -.->|Scraping| Relay
 
-    %% Styling
-    classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:3px,color:#000
-    classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:3px,color:#000
-    classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:3px,color:#000
-    classDef data fill:#FCE4EC,stroke:#C2185B,stroke-width:3px,color:#000
-    classDef infra fill:#F3E5F5,stroke:#7B1FA2,stroke-width:3px,color:#000
-    classDef title fill:#FFFFFF,stroke:#FFFFFF,color:#666,stroke-width:0
+    %% Styling - Titles
+    classDef titleStyle fill:#37474F,stroke:#263238,stroke-width:2px,color:#fff,font-weight:bold
+    class L1Title,L2Title,L3Title,L4Title,L5Title titleStyle
+
+    %% Styling - Nodes
+    classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
+    classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#000
+    classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#000
+    classDef data fill:#FCE4EC,stroke:#C2185B,stroke-width:2px,color:#000
+    classDef infra fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px,color:#000
 
     class User,ICAOPortal external
-    class Frontend,APIGateway,HAProxy dmz
+    class Frontend,APIGateway dmz
     class PKD,PA,Relay app
-    class PostgreSQL,LDAPCluster data
+    class PostgreSQL,HAProxy,LDAPCluster data
     class Docker infra
-    class L1Title,L2Title,L3Title,L4Title,L5Title title
+
+    %% Styling - Containers (transparent borders)
+    classDef containerStyle fill:none,stroke:#546E7A,stroke-width:2px,stroke-dasharray:5 5
+    class L1,L2,L3,L4,L5 containerStyle
+
+    %% Styling - Node containers (invisible)
+    classDef nodeContainer fill:none,stroke:none
+    class L1Nodes,L2Nodes,L3Nodes,L4Nodes nodeContainer
 ```
 
 **Architecture Highlights**:
@@ -141,9 +160,9 @@ graph TB
 | Layer | Purpose | Components | Key Characteristics |
 |-------|---------|------------|---------------------|
 | **🌐 Layer 1: External** | 외부 접근 및 연계 | User, ICAO Portal | Public Internet |
-| **🔒 Layer 2: DMZ** | 공개 서비스 영역 | Frontend, API Gateway, HAProxy | Ports 3000, 8080, 389 |
+| **🔒 Layer 2: DMZ** | 공개 서비스 영역 | Frontend, API Gateway | Ports 3000, 8080 |
 | **🔧 Layer 3: Application** | 비즈니스 로직 처리 | PKD, PA, Relay (C++20 Microservices) | Internal Network |
-| **💾 Layer 4: Data** | 데이터 영속성 | PostgreSQL, LDAP MMR | Internal Storage |
+| **💾 Layer 4: Data** | 데이터 영속성 | HAProxy, PostgreSQL, LDAP MMR | Internal Storage + LB |
 | **🏗️ Layer 5: Infrastructure** | 컨테이너 런타임 | Docker Compose | Platform Layer |
 
 ### Data Flow Summary

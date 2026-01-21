@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ICAO Local PKD - Software Architecture v1.7.0</title>
+    <title>ICAO Local PKD - Software Architecture v1.7.1</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reset.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/reveal.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.0/dist/theme/white.css">
@@ -37,7 +37,7 @@
             <section>
                 <h1>ICAO Local PKD</h1>
                 <h3>Software Architecture</h3>
-                <p>Version 1.7.0</p>
+                <p>Version 1.7.1</p>
             </section>
 
             <!-- System Overview -->
@@ -77,55 +77,110 @@
             </section>
 
             <section>
-                <h3>5계층 아키텍처</h3>
+                <h3>기술 아키텍처 다이어그램 (v1.7.1)</h3>
                 <div class="mermaid">
-flowchart TB
-    subgraph L1["레이어 1: 클라이언트"]
-        Browser["웹 브라우저"]
-        APIClient["API 클라이언트"]
+graph TB
+    subgraph External["🌐 외부 영역"]
+        User["👤 사용자<br/>웹 브라우저"]
+        ExtAPI["🔌 외부 API<br/>클라이언트"]
+        ICAOPortal["🌍 ICAO Portal<br/>download.pkd.icao.int"]
     end
-    subgraph L2["레이어 2: 프론트엔드"]
-        React["React 애플리케이션<br/>포트 3000"]
+    subgraph DMZ["🔒 DMZ 영역"]
+        Frontend["⚡ Frontend<br/>React 19<br/>:3000"]
+        APIGateway["🔀 API Gateway<br/>Nginx<br/>:8080"]
+        HAProxy["⚖️ LDAP LB<br/>HAProxy<br/>:389"]
     end
-    subgraph L3["레이어 3: API 게이트웨이"]
-        Nginx["Nginx<br/>포트 8080"]
+    subgraph AppLayer["🔧 애플리케이션 계층"]
+        PKD["📦 PKD Management<br/>C++20<br/>:8081"]
+        PA["🔐 PA Service<br/>C++20<br/>:8082"]
+        Relay["🔄 PKD Relay<br/>C++20<br/>:8083"]
+        Monitor["📊 Monitoring<br/>C++20<br/>:8084"]
+        CronJob["⏰ Cron Job<br/>08:00 KST"]
+        DailySync["📅 Daily Sync<br/>00:00 UTC"]
     end
-    subgraph L4["레이어 4: 마이크로서비스"]
-        PKD["PKD 서비스<br/>8081"]
-        PA["PA 서비스<br/>8082"]
-        Sync["Sync 서비스<br/>8083"]
+    subgraph DataLayer["💾 데이터 계층"]
+        PostgreSQL[("🗄️ PostgreSQL<br/>:5432<br/>30,637 certs")]
+        LDAP1[("📂 LDAP Master 1<br/>:3891<br/>MMR")]
+        LDAP2[("📂 LDAP Master 2<br/>:3892<br/>MMR")]
+        Uploads["📁 Upload Files<br/>/app/uploads"]
+        Logs["📋 App Logs<br/>/app/logs"]
     end
-    subgraph L5["레이어 5: 데이터 저장소"]
-        PG[("PostgreSQL<br/>5432")]
-        LDAP[("LDAP<br/>389")]
+    subgraph Infrastructure["🏗️ 인프라"]
+        Docker["🐳 Docker Compose<br/>icao-network"]
+        Platform["💻 배포 플랫폼<br/>ARM64/AMD64"]
     end
-    Browser --> React
-    APIClient --> Nginx
-    React --> Nginx
-    Nginx --> PKD
-    Nginx --> PA
-    Nginx --> Sync
-    PKD --> PG
-    PKD --> LDAP
-    PA --> PG
-    PA --> LDAP
-    Sync --> PG
-    Sync --> LDAP
-    style L1 fill:#1565C0,stroke:#0D47A1,stroke-width:3px,color:#fff
-    style L2 fill:#6A1B9A,stroke:#4A148C,stroke-width:3px,color:#fff
-    style L3 fill:#E65100,stroke:#BF360C,stroke-width:3px,color:#fff
-    style L4 fill:#2E7D32,stroke:#1B5E20,stroke-width:3px,color:#fff
-    style L5 fill:#AD1457,stroke:#880E4F,stroke-width:3px,color:#fff
+    subgraph CICD["🚀 CI/CD"]
+        GitHub["📦 GitHub Actions<br/>Multi-arch"]
+        Deploy["🎯 Auto Deploy<br/>skopeo/sshpass"]
+    end
+    User --> Frontend
+    User --> APIGateway
+    ExtAPI --> APIGateway
+    ExtAPI --> HAProxy
+    ICAOPortal -.-> PKD
+    Frontend --> APIGateway
+    APIGateway --> PKD
+    APIGateway --> PA
+    APIGateway --> Relay
+    APIGateway --> Monitor
+    HAProxy --> LDAP1
+    HAProxy --> LDAP2
+    PKD --> PostgreSQL
+    PKD --> LDAP1
+    PKD --> HAProxy
+    PA --> PostgreSQL
+    PA --> HAProxy
+    Relay --> PostgreSQL
+    Relay --> HAProxy
+    Relay --> LDAP1
+    Monitor --> PostgreSQL
+    Monitor --> PKD
+    Monitor --> PA
+    Monitor --> Relay
+    CronJob --> PKD
+    DailySync --> Relay
+    LDAP1 <--> LDAP2
+    PKD --> Uploads
+    PKD --> Logs
+    PA --> Logs
+    Relay --> Logs
+    Monitor --> Logs
+    Docker -.-> Frontend
+    Docker -.-> APIGateway
+    Docker -.-> PKD
+    Docker -.-> PA
+    Docker -.-> Relay
+    Docker -.-> Monitor
+    Docker -.-> PostgreSQL
+    Docker -.-> LDAP1
+    Docker -.-> LDAP2
+    Docker -.-> HAProxy
+    GitHub --> Deploy
+    Deploy --> Platform
+    classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
+    classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:2px
+    classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:2px
+    classDef data fill:#FCE4EC,stroke:#C2185B,stroke-width:2px
+    classDef infra fill:#F3E5F5,stroke:#7B1FA2,stroke-width:2px
+    classDef cicd fill:#E0F2F1,stroke:#00796B,stroke-width:2px
+    class User,ExtAPI,ICAOPortal external
+    class Frontend,APIGateway,HAProxy dmz
+    class PKD,PA,Relay,Monitor,CronJob,DailySync app
+    class PostgreSQL,LDAP1,LDAP2,Uploads,Logs data
+    class Docker,Platform infra
+    class GitHub,Deploy cicd
                 </div>
             </section>
 
             <section>
-                <h3>주요 데이터 흐름</h3>
-                <ul>
-                    <li><strong>업로드:</strong> Browser → React → Nginx → PKD → PostgreSQL + LDAP</li>
-                    <li><strong>PA 검증:</strong> Browser → React → Nginx → PA → PostgreSQL + LDAP</li>
-                    <li><strong>인증서 검색:</strong> Browser → React → Nginx → PKD → LDAP (읽기 전용)</li>
-                    <li><strong>동기화:</strong> Browser → React → Nginx → Sync → PostgreSQL + LDAP</li>
+                <h3>주요 데이터 흐름 (v1.7.1)</h3>
+                <ul style="font-size: 0.85em;">
+                    <li><strong>업로드:</strong> Browser → React → API Gateway → PKD Management → PostgreSQL + LDAP</li>
+                    <li><strong>PA 검증:</strong> Browser → React → API Gateway → PA Service → PostgreSQL + LDAP</li>
+                    <li><strong>인증서 검색:</strong> Browser → React → API Gateway → PKD Management → LDAP (읽기 전용)</li>
+                    <li><strong>동기화:</strong> Browser → React → API Gateway → PKD Relay → PostgreSQL + LDAP</li>
+                    <li><strong>ICAO Auto Sync:</strong> Cron Job → PKD Management → ICAO Portal → PostgreSQL</li>
+                    <li><strong>시스템 모니터링:</strong> Monitoring Service → PKD/PA/Relay Health → PostgreSQL Metrics</li>
                 </ul>
             </section>
 
@@ -159,14 +214,26 @@ flowchart TB
             </section>
 
             <section>
-                <h3>Sync Service (8083)</h3>
+                <h3>PKD Relay Service (8083)</h3>
                 <ul>
-                    <li>DB-LDAP 동기화 모니터링 (30초)</li>
+                    <li>DB-LDAP 동기화 모니터링</li>
                     <li>Auto Reconcile (배치 100)</li>
                     <li>Daily Sync (00:00 UTC)</li>
                     <li>Trust Chain 재검증</li>
                     <li>불일치 자동 조정</li>
                     <li>조정 이력 추적</li>
+                </ul>
+            </section>
+
+            <section>
+                <h3>Monitoring Service (8084) - NEW</h3>
+                <ul>
+                    <li>시스템 리소스 모니터링 (5초 간격)</li>
+                    <li>CPU, Memory, Disk 사용률</li>
+                    <li>서비스 헬스 체크 (30초 간격)</li>
+                    <li>PKD/PA/Relay 상태 확인</li>
+                    <li>로그 분석 (60초 간격)</li>
+                    <li>메트릭 데이터 7일 보관</li>
                 </ul>
             </section>
 
@@ -210,16 +277,18 @@ flowchart TB
             </section>
 
             <section>
-                <h3>Docker 컨테이너</h3>
+                <h3>Docker 컨테이너 (v1.7.1)</h3>
                 <ul style="font-size: 0.85em;">
-                    <li>Frontend: Nginx + React (3000)</li>
+                    <li>Frontend: Nginx + React 19 (3000)</li>
                     <li>API Gateway: Nginx (8080)</li>
                     <li>PKD Management: C++ (8081)</li>
                     <li>PA Service: C++ (8082)</li>
-                    <li>Sync Service: C++ (8083)</li>
+                    <li>PKD Relay: C++ (8083)</li>
+                    <li>Monitoring: C++ (8084) - NEW</li>
                     <li>PostgreSQL: DB (5432)</li>
                     <li>OpenLDAP1/2: MMR (3891/3892)</li>
                     <li>HAProxy: LDAP LB (389)</li>
+                    <li>Swagger UI: API Documentation (8080)</li>
                 </ul>
             </section>
 
@@ -302,7 +371,8 @@ flowchart TB
             <!-- End -->
             <section>
                 <h1>감사합니다</h1>
-                <p>ICAO Local PKD v1.7.0</p>
+                <p>ICAO Local PKD v1.7.1</p>
+                <p style="font-size: 0.8em;">4 Microservices + 2 Schedulers + Full Observability</p>
             </section>
         </div>
     </div>
