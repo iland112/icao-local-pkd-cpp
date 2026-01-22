@@ -23,7 +23,7 @@ namespace middleware {
  * Protected endpoints require valid JWT token in Authorization header:
  * - Format: "Bearer <token>"
  */
-class AuthMiddleware : public drogon::HttpFilter<AuthMiddleware> {
+class AuthMiddleware : public drogon::HttpFilterBase {
 public:
     /**
      * @brief Construct AuthMiddleware

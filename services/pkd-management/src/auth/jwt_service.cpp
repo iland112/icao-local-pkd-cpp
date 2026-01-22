@@ -1,4 +1,10 @@
 #include "jwt_service.h"
+
+// Undefine JWT_DISABLE_PICOJSON to enable picojson support
+#ifdef JWT_DISABLE_PICOJSON
+#undef JWT_DISABLE_PICOJSON
+#endif
+
 #include <jwt-cpp/jwt.h>
 #include <spdlog/spdlog.h>
 
