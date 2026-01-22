@@ -64,6 +64,11 @@ services:
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+      # JWT Authentication (Phase 3)
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}          # From .env file (REQUIRED)
+      - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}        # Default: icao-pkd
+      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}  # Default: 3600 (1 hour)
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
     depends_on:
       - postgres
     volumes:
