@@ -75,12 +75,16 @@
 #include "middleware/permission_filter.h"
 #include "auth/jwt_service.h"
 #include "auth/password_hash.h"
+#include "handlers/auth_handler.h"
 
 // Global certificate service (initialized in main(), used by all routes)
 std::shared_ptr<services::CertificateService> certificateService;
 
 // Global ICAO handler (initialized in main())
 std::shared_ptr<handlers::IcaoHandler> icaoHandler;
+
+// Global Auth handler (initialized in main())
+std::shared_ptr<handlers::AuthHandler> authHandler;
 
 // Global cache for available countries (populated on startup)
 std::set<std::string> cachedCountries;
@@ -4029,6 +4033,13 @@ void registerRoutes() {
     }
 
     // =========================================================================
+    // Authentication Routes (Phase 3)
+    // =========================================================================
+    if (authHandler) {
+        authHandler->registerRoutes(app);
+    }
+
+    // =========================================================================
     // API Routes
     // =========================================================================
 
@@ -6551,6 +6562,11 @@ int main(int argc, char* argv[]) {
         spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
                     appConfig.icaoPortalUrl,
                     appConfig.icaoAutoNotify ? "enabled" : "disabled");
+
+        // Initialize Authentication Handler (Phase 3)
+        spdlog::info("Initializing Authentication module...");
+        authHandler = std::make_shared<handlers::AuthHandler>(dbConnInfo);
+        spdlog::info("Authentication module initialized");
 
         auto& app = drogon::app();
 

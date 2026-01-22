@@ -77,6 +77,7 @@ add_executable(${PROJECT_NAME}
     src/auth/jwt_service.cpp
     src/middleware/auth_middleware.cpp
     src/middleware/permission_filter.cpp
+    src/handlers/auth_handler.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
