@@ -806,62 +806,75 @@ struct ValidationResultRecord {
 bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
     if (!conn) return false;
 
-    // Escape strings for SQL
-    auto escapeStr = [](const std::string& str) -> std::string {
-        std::string result = str;
-        size_t pos = 0;
-        while ((pos = result.find("'", pos)) != std::string::npos) {
-            result.replace(pos, 1, "''");
-            pos += 2;
-        }
-        return result;
-    };
+    // Use parameterized query (Phase 2 - SQL Injection Prevention)
+    const char* query =
+        "INSERT INTO validation_result ("
+        "certificate_id, upload_id, certificate_type, country_code, "
+        "subject_dn, issuer_dn, serial_number, "
+        "validation_status, trust_chain_valid, trust_chain_message, "
+        "csca_found, csca_subject_dn, csca_fingerprint, signature_verified, signature_algorithm, "
+        "validity_check_passed, is_expired, is_not_yet_valid, not_before, not_after, "
+        "is_ca, is_self_signed, path_length_constraint, "
+        "key_usage_valid, key_usage_flags, "
+        "crl_check_status, crl_check_message, "
+        "error_code, error_message, validation_duration_ms"
+        ") VALUES ("
+        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
+        "$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, "
+        "$21, $22, $23, $24, $25, $26, $27, $28, $29, $30"
+        ")";
 
-    std::ostringstream sql;
-    sql << "INSERT INTO validation_result ("
-        << "certificate_id, upload_id, certificate_type, country_code, "
-        << "subject_dn, issuer_dn, serial_number, "
-        << "validation_status, trust_chain_valid, trust_chain_message, "
-        << "csca_found, csca_subject_dn, csca_fingerprint, signature_verified, signature_algorithm, "
-        << "validity_check_passed, is_expired, is_not_yet_valid, not_before, not_after, "
-        << "is_ca, is_self_signed, path_length_constraint, "
-        << "key_usage_valid, key_usage_flags, "
-        << "crl_check_status, crl_check_message, "
-        << "error_code, error_message, validation_duration_ms"
-        << ") VALUES ("
-        << "'" << escapeStr(record.certificateId) << "', "
-        << "'" << escapeStr(record.uploadId) << "', "
-        << "'" << escapeStr(record.certificateType) << "', "
-        << "'" << escapeStr(record.countryCode) << "', "
-        << "'" << escapeStr(record.subjectDn) << "', "
-        << "'" << escapeStr(record.issuerDn) << "', "
-        << "'" << escapeStr(record.serialNumber) << "', "
-        << "'" << escapeStr(record.validationStatus) << "', "
-        << (record.trustChainValid ? "TRUE" : "FALSE") << ", "
-        << "'" << escapeStr(record.trustChainMessage) << "', "
-        << (record.cscaFound ? "TRUE" : "FALSE") << ", "
-        << "'" << escapeStr(record.cscaSubjectDn) << "', "
-        << "'" << escapeStr(record.cscaFingerprint) << "', "
-        << (record.signatureVerified ? "TRUE" : "FALSE") << ", "
-        << "'" << escapeStr(record.signatureAlgorithm) << "', "
-        << (record.validityCheckPassed ? "TRUE" : "FALSE") << ", "
-        << (record.isExpired ? "TRUE" : "FALSE") << ", "
-        << (record.isNotYetValid ? "TRUE" : "FALSE") << ", "
-        << (record.notBefore.empty() ? "NULL" : ("'" + escapeStr(record.notBefore) + "'")) << ", "
-        << (record.notAfter.empty() ? "NULL" : ("'" + escapeStr(record.notAfter) + "'")) << ", "
-        << (record.isCa ? "TRUE" : "FALSE") << ", "
-        << (record.isSelfSigned ? "TRUE" : "FALSE") << ", "
-        << (record.pathLengthConstraint >= 0 ? std::to_string(record.pathLengthConstraint) : "NULL") << ", "
-        << (record.keyUsageValid ? "TRUE" : "FALSE") << ", "
-        << "'" << escapeStr(record.keyUsageFlags) << "', "
-        << "'" << escapeStr(record.crlCheckStatus) << "', "
-        << "'" << escapeStr(record.crlCheckMessage) << "', "
-        << "'" << escapeStr(record.errorCode) << "', "
-        << "'" << escapeStr(record.errorMessage) << "', "
-        << record.validationDurationMs
-        << ")";
+    // Prepare boolean strings (PostgreSQL requires lowercase 'true'/'false')
+    const std::string trustChainValidStr = record.trustChainValid ? "true" : "false";
+    const std::string cscaFoundStr = record.cscaFound ? "true" : "false";
+    const std::string signatureVerifiedStr = record.signatureVerified ? "true" : "false";
+    const std::string validityCheckPassedStr = record.validityCheckPassed ? "true" : "false";
+    const std::string isExpiredStr = record.isExpired ? "true" : "false";
+    const std::string isNotYetValidStr = record.isNotYetValid ? "true" : "false";
+    const std::string isCaStr = record.isCa ? "true" : "false";
+    const std::string isSelfSignedStr = record.isSelfSigned ? "true" : "false";
+    const std::string keyUsageValidStr = record.keyUsageValid ? "true" : "false";
 
-    PGresult* res = PQexec(conn, sql.str().c_str());
+    // Prepare integer strings
+    const std::string pathLengthConstraintStr = (record.pathLengthConstraint >= 0)
+        ? std::to_string(record.pathLengthConstraint) : "";
+    const std::string validationDurationMsStr = std::to_string(record.validationDurationMs);
+
+    // Build parameter array (30 parameters)
+    const char* paramValues[30];
+    paramValues[0] = record.certificateId.c_str();
+    paramValues[1] = record.uploadId.c_str();
+    paramValues[2] = record.certificateType.c_str();
+    paramValues[3] = record.countryCode.c_str();
+    paramValues[4] = record.subjectDn.c_str();
+    paramValues[5] = record.issuerDn.c_str();
+    paramValues[6] = record.serialNumber.c_str();
+    paramValues[7] = record.validationStatus.c_str();
+    paramValues[8] = trustChainValidStr.c_str();
+    paramValues[9] = record.trustChainMessage.c_str();
+    paramValues[10] = cscaFoundStr.c_str();
+    paramValues[11] = record.cscaSubjectDn.c_str();
+    paramValues[12] = record.cscaFingerprint.c_str();
+    paramValues[13] = signatureVerifiedStr.c_str();
+    paramValues[14] = record.signatureAlgorithm.c_str();
+    paramValues[15] = validityCheckPassedStr.c_str();
+    paramValues[16] = isExpiredStr.c_str();
+    paramValues[17] = isNotYetValidStr.c_str();
+    paramValues[18] = record.notBefore.empty() ? nullptr : record.notBefore.c_str();
+    paramValues[19] = record.notAfter.empty() ? nullptr : record.notAfter.c_str();
+    paramValues[20] = isCaStr.c_str();
+    paramValues[21] = isSelfSignedStr.c_str();
+    paramValues[22] = (record.pathLengthConstraint >= 0) ? pathLengthConstraintStr.c_str() : nullptr;
+    paramValues[23] = keyUsageValidStr.c_str();
+    paramValues[24] = record.keyUsageFlags.c_str();
+    paramValues[25] = record.crlCheckStatus.c_str();
+    paramValues[26] = record.crlCheckMessage.c_str();
+    paramValues[27] = record.errorCode.c_str();
+    paramValues[28] = record.errorMessage.c_str();
+    paramValues[29] = validationDurationMsStr.c_str();
+
+    PGresult* res = PQexecParams(conn, query, 30, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     if (!success) {
         spdlog::error("Failed to save validation result: {}", PQerrorMessage(conn));
@@ -883,20 +896,46 @@ void updateValidationStatistics(PGconn* conn, const std::string& uploadId,
                                  int validCount, int invalidCount, int pendingCount, int errorCount,
                                  int trustChainValidCount, int trustChainInvalidCount, int cscaNotFoundCount,
                                  int expiredCount, int revokedCount) {
-    std::ostringstream sql;
-    sql << "UPDATE uploaded_file SET "
-        << "validation_valid_count = " << validCount << ", "
-        << "validation_invalid_count = " << invalidCount << ", "
-        << "validation_pending_count = " << pendingCount << ", "
-        << "validation_error_count = " << errorCount << ", "
-        << "trust_chain_valid_count = " << trustChainValidCount << ", "
-        << "trust_chain_invalid_count = " << trustChainInvalidCount << ", "
-        << "csca_not_found_count = " << cscaNotFoundCount << ", "
-        << "expired_count = " << expiredCount << ", "
-        << "revoked_count = " << revokedCount
-        << " WHERE id = '" << uploadId << "'";
+    // Use parameterized query (Phase 2 - SQL Injection Prevention)
+    const char* query =
+        "UPDATE uploaded_file SET "
+        "validation_valid_count = $1, "
+        "validation_invalid_count = $2, "
+        "validation_pending_count = $3, "
+        "validation_error_count = $4, "
+        "trust_chain_valid_count = $5, "
+        "trust_chain_invalid_count = $6, "
+        "csca_not_found_count = $7, "
+        "expired_count = $8, "
+        "revoked_count = $9 "
+        "WHERE id = $10";
 
-    PGresult* res = PQexec(conn, sql.str().c_str());
+    // Prepare integer strings
+    std::string validCountStr = std::to_string(validCount);
+    std::string invalidCountStr = std::to_string(invalidCount);
+    std::string pendingCountStr = std::to_string(pendingCount);
+    std::string errorCountStr = std::to_string(errorCount);
+    std::string trustChainValidCountStr = std::to_string(trustChainValidCount);
+    std::string trustChainInvalidCountStr = std::to_string(trustChainInvalidCount);
+    std::string cscaNotFoundCountStr = std::to_string(cscaNotFoundCount);
+    std::string expiredCountStr = std::to_string(expiredCount);
+    std::string revokedCountStr = std::to_string(revokedCount);
+
+    const char* paramValues[10] = {
+        validCountStr.c_str(),
+        invalidCountStr.c_str(),
+        pendingCountStr.c_str(),
+        errorCountStr.c_str(),
+        trustChainValidCountStr.c_str(),
+        trustChainInvalidCountStr.c_str(),
+        cscaNotFoundCountStr.c_str(),
+        expiredCountStr.c_str(),
+        revokedCountStr.c_str(),
+        uploadId.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn, query, 10, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         spdlog::error("Failed to update validation statistics: {}", PQerrorMessage(conn));
     }
@@ -2117,13 +2156,17 @@ std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
 void updateCertificateLdapStatus(PGconn* conn, const std::string& certId, const std::string& ldapDn) {
     if (ldapDn.empty()) return;
 
-    std::string query = "UPDATE certificate SET "
-                       "ldap_dn = " + escapeSqlString(conn, ldapDn) + ", "
-                       "stored_in_ldap = TRUE, "
-                       "stored_at = NOW() "
-                       "WHERE id = '" + certId + "'";
+    // Use parameterized query (Phase 2 - SQL Injection Prevention)
+    const char* query = "UPDATE certificate SET "
+                       "ldap_dn = $1, stored_in_ldap = TRUE, stored_at = NOW() "
+                       "WHERE id = $2";
+    const char* paramValues[2] = {ldapDn.c_str(), certId.c_str()};
 
-    PGresult* res = PQexec(conn, query.c_str());
+    PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update certificate LDAP status: {}", PQerrorMessage(conn));
+    }
     PQclear(res);
 }
 
@@ -2133,13 +2176,17 @@ void updateCertificateLdapStatus(PGconn* conn, const std::string& certId, const 
 void updateCrlLdapStatus(PGconn* conn, const std::string& crlId, const std::string& ldapDn) {
     if (ldapDn.empty()) return;
 
-    std::string query = "UPDATE crl SET "
-                       "ldap_dn = " + escapeSqlString(conn, ldapDn) + ", "
-                       "stored_in_ldap = TRUE, "
-                       "stored_at = NOW() "
-                       "WHERE id = '" + crlId + "'";
+    // Use parameterized query (Phase 2 - SQL Injection Prevention)
+    const char* query = "UPDATE crl SET "
+                       "ldap_dn = $1, stored_in_ldap = TRUE, stored_at = NOW() "
+                       "WHERE id = $2";
+    const char* paramValues[2] = {ldapDn.c_str(), crlId.c_str()};
 
-    PGresult* res = PQexec(conn, query.c_str());
+    PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update CRL LDAP status: {}", PQerrorMessage(conn));
+    }
     PQclear(res);
 }
 
@@ -2306,13 +2353,17 @@ std::string saveMasterListToLdap(LDAP* ld, const std::string& countryCode,
 void updateMasterListLdapStatus(PGconn* conn, const std::string& mlId, const std::string& ldapDn) {
     if (ldapDn.empty()) return;
 
-    std::string query = "UPDATE master_list SET "
-                       "ldap_dn = " + escapeSqlString(conn, ldapDn) + ", "
-                       "stored_in_ldap = TRUE, "
-                       "stored_at = NOW() "
-                       "WHERE id = '" + mlId + "'";
+    // Use parameterized query (Phase 2 - SQL Injection Prevention)
+    const char* query = "UPDATE master_list SET "
+                       "ldap_dn = $1, stored_in_ldap = TRUE, stored_at = NOW() "
+                       "WHERE id = $2";
+    const char* paramValues[2] = {ldapDn.c_str(), mlId.c_str()};
 
-    PGresult* res = PQexec(conn, query.c_str());
+    PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update master list LDAP status: {}", PQerrorMessage(conn));
+    }
     PQclear(res);
 }
 
@@ -6412,7 +6463,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v1.8.0 PHASE1-SECURITY-FIX (Build 20260121-223900) ======");
+    spdlog::info("====== ICAO Local PKD v1.9.0 PHASE2-SQL-INJECTION-FIX (Build 20260122-140000) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

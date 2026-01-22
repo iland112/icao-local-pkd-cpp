@@ -316,11 +316,15 @@ void ManualProcessingStrategy::processLdifEntries(
     // Save to temp file
     saveLdifEntriesToTempFile(uploadId, entries);
 
-    // Update upload status
-    std::string updateQuery = "UPDATE uploaded_file SET status = 'PENDING', "
-                             "total_entries = " + std::to_string(entries.size()) + " "
-                             "WHERE id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, updateQuery.c_str());
+    // Update upload status (parameterized query - Phase 2)
+    const char* updateQuery = "UPDATE uploaded_file SET status = 'PENDING', total_entries = $1 WHERE id = $2";
+    std::string totalEntriesStr = std::to_string(entries.size());
+    const char* paramValues[2] = {totalEntriesStr.c_str(), uploadId.c_str()};
+    PGresult* res = PQexecParams(conn, updateQuery, 2, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update upload status: {}", PQerrorMessage(conn));
+    }
     PQclear(res);
 
     spdlog::info("MANUAL mode Stage 1: Completed, waiting for user to trigger validation");
@@ -356,9 +360,11 @@ void ManualProcessingStrategy::validateAndSaveToDb(
 ) {
     spdlog::info("MANUAL mode Stage 2: Validating and saving to DB + LDAP for upload {}", uploadId);
 
-    // Check upload status and file format
-    std::string checkQuery = "SELECT file_format, status FROM uploaded_file WHERE id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, checkQuery.c_str());
+    // Check upload status and file format (parameterized query - Phase 2)
+    const char* checkQuery = "SELECT file_format, status FROM uploaded_file WHERE id = $1";
+    const char* paramValues[1] = {uploadId.c_str()};
+    PGresult* res = PQexecParams(conn, checkQuery, 1, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
     if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
         PQclear(res);
         throw std::runtime_error("Upload not found: " + uploadId);
