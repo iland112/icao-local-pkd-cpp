@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from '@/components/layout';
-import { ToastContainer } from '@/components/common';
-import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard } from '@/pages';
+import { ToastContainer, PrivateRoute } from '@/components/common';
+import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login } from '@/pages';
 import MonitoringDashboard from '@/pages/MonitoringDashboard';
 import CertificateSearch from '@/pages/CertificateSearch';
 import IcaoStatus from '@/pages/IcaoStatus';
@@ -22,7 +22,11 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Layout />}>
+          {/* Public Route - Login */}
+          <Route path="/login" element={<Login />} />
+
+          {/* Protected Routes - Require Authentication */}
+          <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="upload" element={<FileUpload />} />
             <Route path="pkd/certificates" element={<CertificateSearch />} />

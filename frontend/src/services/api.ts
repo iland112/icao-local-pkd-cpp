@@ -41,6 +41,19 @@ import {
   ldapApi,
 } from './pkdApi';
 
+// Import authentication API
+import {
+  authApi,
+  createAuthenticatedClient,
+  type LoginRequest,
+  type LoginResponse,
+  type UserInfo,
+  type RefreshTokenRequest,
+  type RefreshTokenResponse,
+  type CurrentUserResponse,
+  type LogoutResponse,
+} from './authApi';
+
 // Merged uploadApi for backward compatibility
 // Combines write operations (relayApi) with read operations (pkdApi)
 export const uploadApi = {
@@ -61,6 +74,8 @@ export {
   certificateApi,
   uploadHistoryApi,
   ldapApi,
+  authApi,
+  createAuthenticatedClient,
 };
 
 // Re-export types
@@ -74,6 +89,13 @@ export type {
   ReconciliationLog,
   ReconciliationHistoryResponse,
   ReconciliationDetailsResponse,
+  LoginRequest,
+  LoginResponse,
+  UserInfo,
+  RefreshTokenRequest,
+  RefreshTokenResponse,
+  CurrentUserResponse,
+  LogoutResponse,
 };
 
 // Development warning (only once per app load)
