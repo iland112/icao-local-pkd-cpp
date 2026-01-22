@@ -1,9 +1,6 @@
 #include "jwt_service.h"
 #include <jwt-cpp/jwt.h>
-#include <nlohmann/json.hpp>
 #include <spdlog/spdlog.h>
-
-using json = nlohmann::json;
 
 namespace auth {
 
@@ -32,22 +29,22 @@ std::string JwtService::generateToken(
     auto now = std::chrono::system_clock::now();
     auto exp = now + std::chrono::seconds(expirationSeconds_);
 
-    // Build permissions array for JWT claims using nlohmann/json
-    json permsArray = json::array();
+    // Build permissions array for JWT claims
+    picojson::array permsArray;
     for (const auto& perm : permissions) {
-        permsArray.push_back(perm);
+        permsArray.push_back(picojson::value(perm));
     }
 
     try {
-        auto token = jwt::create<jwt::traits::nlohmann_json>()
+        auto token = jwt::create()
             .set_issuer(issuer_)
             .set_type("JWT")
             .set_issued_at(now)
             .set_expires_at(exp)
             .set_subject(userId)
-            .set_payload_claim("username", jwt::claim(std::string(username)))
-            .set_payload_claim("permissions", jwt::claim(permsArray.dump()))
-            .set_payload_claim("isAdmin", jwt::claim(std::string(isAdmin ? "true" : "false")))
+            .set_payload_claim("username", jwt::claim(username))
+            .set_payload_claim("permissions", jwt::claim(permsArray))
+            .set_payload_claim("isAdmin", jwt::claim(isAdmin))
             .sign(jwt::algorithm::hs256{secretKey_});
 
         spdlog::debug("[JwtService] Generated token for user={}, isAdmin={}, permissions={}",
@@ -55,8 +52,8 @@ std::string JwtService::generateToken(
 
         return token;
 
-    } catch (const std::exception& e) {
-        spdlog::error("[JwtService] Token generation failed: {}", e.what());
+    } catch (const std::exception& exc) {
+        spdlog::error("[JwtService] Token generation failed: {}", exc.what());
         throw;
     }
 }
@@ -64,39 +61,31 @@ std::string JwtService::generateToken(
 std::optional<JwtClaims> JwtService::validateToken(const std::string& token) {
     try {
         // Create verifier
-        auto verifier = jwt::verify<jwt::default_clock, jwt::traits::nlohmann_json>()
+        auto verifier = jwt::verify()
             .allow_algorithm(jwt::algorithm::hs256{secretKey_})
             .with_issuer(issuer_);
 
-        // Decode and verify token using nlohmann/json traits
-        auto decoded = jwt::decode<jwt::traits::nlohmann_json>(token);
+        // Decode and verify token
+        auto decoded = jwt::decode(token);
         verifier.verify(decoded);
 
         // Extract claims
         JwtClaims claims;
         claims.userId = decoded.get_subject();
         claims.username = decoded.get_payload_claim("username").as_string();
-
-        // Parse isAdmin (stored as string "true" or "false")
-        std::string isAdminStr = decoded.get_payload_claim("isAdmin").as_string();
-        claims.isAdmin = (isAdminStr == "true");
-
+        claims.isAdmin = decoded.get_payload_claim("isAdmin").as_bool();
         claims.exp = decoded.get_expires_at();
         claims.iat = decoded.get_issued_at();
 
-        // Extract permissions array (stored as JSON string)
-        std::string permsJsonStr = decoded.get_payload_claim("permissions").as_string();
-        try {
-            auto permsJson = json::parse(permsJsonStr);
-            if (permsJson.is_array()) {
-                for (const auto& perm : permsJson) {
-                    if (perm.is_string()) {
-                        claims.permissions.push_back(perm.get<std::string>());
-                    }
+        // Extract permissions array
+        auto permsJson = decoded.get_payload_claim("permissions");
+        if (permsJson.get_type() == jwt::json::type::array) {
+            auto permsArray = permsJson.as_array();
+            for (const auto& perm : permsArray) {
+                if (perm.is<std::string>()) {
+                    claims.permissions.push_back(perm.get<std::string>());
                 }
             }
-        } catch (const json::exception& e) {
-            spdlog::warn("[JwtService] Failed to parse permissions JSON: {}", e.what());
         }
 
         spdlog::debug("[JwtService] Token validated for user={}, permissions={}",
@@ -104,11 +93,11 @@ std::optional<JwtClaims> JwtService::validateToken(const std::string& token) {
 
         return claims;
 
-    } catch (const jwt::token_verification_exception& e) {
-        spdlog::warn("[JwtService] Token verification failed: {}", e.what());
+    } catch (const jwt::token_verification_exception& exc) {
+        spdlog::warn("[JwtService] Token verification failed: {}", exc.what());
         return std::nullopt;
-    } catch (const std::exception& e) {
-        spdlog::error("[JwtService] Token validation error: {}", e.what());
+    } catch (const std::exception& exc) {
+        spdlog::error("[JwtService] Token validation error: {}", exc.what());
         return std::nullopt;
     }
 }
@@ -130,22 +119,22 @@ std::string JwtService::refreshToken(const std::string& token) {
         spdlog::info("[JwtService] Token refreshed for user={}", claims->username);
         return newToken;
 
-    } catch (const std::exception& e) {
-        spdlog::error("[JwtService] Token refresh failed: {}", e.what());
+    } catch (const std::exception& exc) {
+        spdlog::error("[JwtService] Token refresh failed: {}", exc.what());
         return "";
     }
 }
 
 bool JwtService::isTokenExpired(const std::string& token) {
     try {
-        auto decoded = jwt::decode<jwt::traits::nlohmann_json>(token);
+        auto decoded = jwt::decode(token);
         auto exp = decoded.get_expires_at();
         auto now = std::chrono::system_clock::now();
 
         return now >= exp;
 
-    } catch (const std::exception& e) {
-        spdlog::error("[JwtService] Failed to check token expiration: {}", e.what());
+    } catch (const std::exception& exc) {
+        spdlog::error("[JwtService] Failed to check token expiration: {}", exc.what());
         return true; // Treat errors as expired
     }
 }

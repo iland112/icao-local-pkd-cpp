@@ -100,6 +100,9 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${UUID_LIBRARY}
 )
 
+# Remove JWT_DISABLE_PICOJSON to enable picojson support
+target_compile_definitions(${PROJECT_NAME} PRIVATE -UJWT_DISABLE_PICOJSON)
+
 # =============================================================================
 # Authentication Module Tests (Optional)
 # =============================================================================
