@@ -65,8 +65,8 @@ std::optional<JwtClaims> JwtService::validateToken(const std::string& token) {
             .allow_algorithm(jwt::algorithm::hs256{secretKey_})
             .with_issuer(issuer_);
 
-        // Decode and verify token
-        auto decoded = jwt::decode(token);
+        // Decode and verify token (use picojson traits explicitly)
+        auto decoded = jwt::decode<jwt::traits::kazuho_picojson>(token);
         verifier.verify(decoded);
 
         // Extract claims
@@ -79,10 +79,10 @@ std::optional<JwtClaims> JwtService::validateToken(const std::string& token) {
 
         // Extract permissions array
         auto permsJson = decoded.get_payload_claim("permissions");
-        if (permsJson.get_type() == jwt::json::type::array) {
+        if (permsJson.has_claim() && permsJson.get_type() == jwt::json::type::array) {
             auto permsArray = permsJson.as_array();
             for (const auto& perm : permsArray) {
-                if (perm.is_string()) {
+                if (perm.is<std::string>()) {
                     claims.permissions.push_back(perm.get<std::string>());
                 }
             }
@@ -127,7 +127,7 @@ std::string JwtService::refreshToken(const std::string& token) {
 
 bool JwtService::isTokenExpired(const std::string& token) {
     try {
-        auto decoded = jwt::decode(token);
+        auto decoded = jwt::decode<jwt::traits::kazuho_picojson>(token);
         auto exp = decoded.get_expires_at();
         auto now = std::chrono::system_clock::now();
 

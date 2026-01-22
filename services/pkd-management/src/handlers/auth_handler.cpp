@@ -276,11 +276,8 @@ void AuthHandler::handleLogout(
     try {
         // Get user from session (set by AuthMiddleware)
         auto session = req->getSession();
-        auto usernameAttr = session->get<std::string>("username");
-        auto userIdAttr = session->get<std::string>("user_id");
-
-        std::string username = usernameAttr ? usernameAttr.value() : "";
-        std::string userId = userIdAttr ? userIdAttr.value() : "";
+        std::string username = session->get<std::string>("username");
+        std::string userId = session->get<std::string>("user_id");
 
         // Log logout event
         if (!username.empty()) {
@@ -393,12 +390,12 @@ void AuthHandler::handleMe(
     try {
         // Get user from session (set by AuthMiddleware)
         auto session = req->getSession();
-        auto userIdAttr = session->get<std::string>("user_id");
-        auto usernameAttr = session->get<std::string>("username");
-        auto isAdminAttr = session->get<bool>("is_admin");
-        auto permsJsonAttr = session->get<std::string>("permissions");
+        std::string userId = session->get<std::string>("user_id");
+        std::string username = session->get<std::string>("username");
+        bool isAdmin = session->get<bool>("is_admin");
+        std::string permsJson = session->get<std::string>("permissions");
 
-        if (!userIdAttr || !usernameAttr || !isAdminAttr || !permsJsonAttr) {
+        if (userId.empty() || username.empty()) {
             Json::Value resp;
             resp["success"] = false;
             resp["error"] = "Not authenticated";
@@ -411,14 +408,14 @@ void AuthHandler::handleMe(
         // Parse permissions
         std::vector<std::string> permissions;
         try {
-            Json::Value permsJson;
+            Json::Value permsJsonValue;
             Json::CharReaderBuilder reader;
-            std::istringstream iss(permsJsonAttr.value());
+            std::istringstream iss(permsJson);
             std::string errs;
 
-            if (Json::parseFromStream(reader, iss, &permsJson, &errs)) {
-                if (permsJson.isArray()) {
-                    for (const auto& perm : permsJson) {
+            if (Json::parseFromStream(reader, iss, &permsJsonValue, &errs)) {
+                if (permsJsonValue.isArray()) {
+                    for (const auto& perm : permsJsonValue) {
                         if (perm.isString()) {
                             permissions.push_back(perm.asString());
                         }
@@ -433,9 +430,9 @@ void AuthHandler::handleMe(
         resp["success"] = true;
 
         Json::Value userJson;
-        userJson["id"] = userIdAttr.value();
-        userJson["username"] = usernameAttr.value();
-        userJson["is_admin"] = isAdminAttr.value();
+        userJson["id"] = userId;
+        userJson["username"] = username;
+        userJson["is_admin"] = isAdmin;
 
         Json::Value permsArray(Json::arrayValue);
         for (const auto& perm : permissions) {

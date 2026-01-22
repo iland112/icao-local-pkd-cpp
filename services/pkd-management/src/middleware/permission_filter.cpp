@@ -28,11 +28,11 @@ void PermissionFilter::doFilter(
     auto session = req->getSession();
 
     // Get user info from session (set by AuthMiddleware)
-    auto usernameAttr = session->get<std::string>("username");
-    auto isAdminAttr = session->get<bool>("is_admin");
-    auto permsJsonAttr = session->get<std::string>("permissions");
+    std::string username = session->get<std::string>("username");
+    bool isAdmin = session->get<bool>("is_admin");
+    std::string permsJson = session->get<std::string>("permissions");
 
-    if (!usernameAttr || !isAdminAttr || !permsJsonAttr) {
+    if (username.empty()) {
         Json::Value resp;
         resp["error"] = "Forbidden";
         resp["message"] = "User session not found. Authentication required.";
@@ -45,9 +45,6 @@ void PermissionFilter::doFilter(
         return;
     }
 
-    std::string username = usernameAttr.value();
-    bool isAdmin = isAdminAttr.value();
-
     // Admin bypasses all permission checks
     if (isAdmin) {
         spdlog::debug("[PermissionFilter] Admin user {} bypassing permission check for {}",
@@ -57,7 +54,7 @@ void PermissionFilter::doFilter(
     }
 
     // Parse user permissions from JSON
-    std::vector<std::string> userPermissions = parsePermissions(permsJsonAttr.value());
+    std::vector<std::string> userPermissions = parsePermissions(permsJson);
 
     // Check if user has any of the required permissions
     bool hasAnyPermission = false;

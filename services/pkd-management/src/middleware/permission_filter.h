@@ -27,7 +27,7 @@ namespace middleware {
  *      .addFilter(std::make_shared<PermissionFilter>(
  *          std::vector<std::string>{"upload:write"}));
  */
-class PermissionFilter : public drogon::HttpFilter<PermissionFilter> {
+class PermissionFilter : public drogon::HttpFilterBase {
 public:
     /**
      * @brief Construct PermissionFilter with required permissions
