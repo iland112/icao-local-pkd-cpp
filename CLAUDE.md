@@ -597,10 +597,11 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 
 ### 2026-01-22: Phase 2 Security Hardening - SQL Injection Complete Prevention (v1.9.0)
 
-**100% Parameterized Queries 달성**:
+**100% Parameterized Queries 달성 및 Luckfox 배포 완료**:
 
 **구현 일시**: 2026-01-22 10:00-14:00 (KST)
-**상태**: ✅ Local Testing Complete - Ready for Luckfox Deployment
+**배포 일시**: 2026-01-22 10:48 (KST)
+**상태**: ✅ Production Deployed on Luckfox ARM64
 
 **핵심 변경사항**:
 
@@ -643,15 +644,42 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 - ✅ 타입 안전 파라미터 바인딩
 
 **문서**:
+
 - `docs/PHASE2_SECURITY_IMPLEMENTATION.md` - 구현 보고서 (562 lines)
 - `docs/PHASE2_SQL_INJECTION_ANALYSIS.md` - 상세 분석 (343 lines)
 
+**배포 정보**:
+
+- GitHub Actions Run: 21232671746 (8분 빌드)
+- Build ID: 20260122-103553
+- Luckfox IP: 192.168.100.11
+- 배포 방식: OCI artifact → Docker conversion → scp → load
+- 백업: icao-backup-20260122_104810
+
+**Docker Build Cache 해결**:
+
+- 문제: 버전 문자열만 변경 시 CMake 객체 파일 캐시 재사용
+- 시도 1: BUILD_ID 업데이트 (01fc952) - 실패
+- 시도 2: Empty commit (abc0c98) - GitHub Actions 미트리거
+- **최종 해결**: BUILD_ID 타임스탬프 재업데이트 (ad41eec) - 성공
+- 핵심: Dockerfile의 CACHE_BUST 메커니즘은 있지만 BUILD_ID 파일 실제 변경 필요
+
+**검증 결과**:
+
+```log
+[2026-01-22 10:48:23] [info] ====== ICAO Local PKD v1.9.0 PHASE2-SQL-INJECTION-FIX (Build 20260122-140000) ======
+```
+
 **다음 단계**:
-- GitHub Actions ARM64 빌드
-- Luckfox 프로덕션 배포
+
 - Phase 3 (Authentication) 또는 Phase 4 (Hardening) 검토
 
-**커밋**: [Pending]
+**커밋**:
+
+- 3a4d6c0: feat(security): Phase 2 - Convert 7 SQL queries to parameterized statements
+- 01fc952: build: Force rebuild for Phase 2 v1.9.0 - Update BUILD_ID
+- abc0c98: build: Force CMake recompilation for v1.9.0
+- ad41eec: build: Update BUILD_ID timestamp to force v1.9.0 rebuild
 
 ---
 
