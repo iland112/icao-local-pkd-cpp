@@ -302,6 +302,94 @@ curl -X POST http://localhost:8080/api/icao/check-updates
 
 ---
 
+## Security Hardening
+
+**Current Status**: Phase 2 Complete (v1.9.0)
+**Next Phase**: Phase 3 - Authentication & Authorization (v2.0.0)
+**Branch**: `feature/phase3-authentication`
+
+### Completed Security Improvements
+
+#### Phase 1: Critical Security Fixes (v1.8.0) ✅
+
+1. **Credential Externalization**
+   - All hardcoded passwords removed (15+ locations)
+   - `.env` file-based management with validation
+   - Environment variable integration
+
+2. **SQL Injection Prevention (21 queries)**
+   - 4 DELETE operations (processing_strategy.cpp)
+   - 17 WHERE clauses with UUIDs (main.cpp)
+   - All use `PQexecParams` with parameterized binding
+
+3. **File Upload Security**
+   - Filename sanitization (alphanumeric + `-_.` only)
+   - MIME type validation (LDIF, PKCS#7)
+   - Absolute upload paths
+   - Path traversal prevention
+
+4. **Credential Scrubbing**
+   - `scrubCredentials()` utility
+   - PostgreSQL/LDAP connection logs sanitized
+   - Password fields masked in logs
+
+#### Phase 2: SQL Injection Complete Prevention (v1.9.0) ✅
+
+1. **100% Parameterized Queries**
+   - 7 additional queries converted
+   - Total: 28 queries (Phase 1: 21 + Phase 2: 7)
+   - Zero custom escaping functions
+
+2. **Complex Query Conversions**
+   - Validation Result INSERT (30 parameters)
+   - Validation Statistics UPDATE (10 parameters)
+   - LDAP Status UPDATEs (3 functions, 2 params each)
+   - MANUAL Mode queries (2 queries)
+
+3. **Type Safety**
+   - Boolean conversion (lowercase "true"/"false")
+   - Integer string conversion
+   - NULL handling for optional fields
+
+**Verification**:
+
+- ✅ Collection 001 (29,838 DSCs) processed successfully
+- ✅ Special characters in DN handled correctly
+- ✅ No SQL injection vulnerabilities
+- ✅ No performance degradation
+
+### Upcoming Security Work
+
+#### Phase 3: Authentication & Authorization (Planned)
+
+**Branch**: `feature/phase3-authentication`
+**Target Version**: v2.0.0
+
+- JWT-based authentication
+- RBAC permission system
+- Login/logout endpoints
+- Frontend integration
+- Session management
+
+⚠️ **Breaking Changes**: All APIs will require authentication
+
+#### Phase 4: Additional Hardening (Future)
+
+- LDAP DN/filter escaping (RFC 4514/4515)
+- TLS certificate validation
+- Network isolation (Luckfox bridge mode)
+- Audit logging system
+- Per-user rate limiting
+
+### Security Documentation
+
+- **Status Tracker**: [docs/SECURITY_HARDENING_STATUS.md](docs/SECURITY_HARDENING_STATUS.md)
+- **Phase 1 Report**: [docs/PHASE1_SECURITY_IMPLEMENTATION.md](docs/PHASE1_SECURITY_IMPLEMENTATION.md)
+- **Phase 2 Report**: [docs/PHASE2_SECURITY_IMPLEMENTATION.md](docs/PHASE2_SECURITY_IMPLEMENTATION.md)
+- **Phase 2 Analysis**: [docs/PHASE2_SQL_INJECTION_ANALYSIS.md](docs/PHASE2_SQL_INJECTION_ANALYSIS.md)
+
+---
+
 ## Key Technical Notes
 
 ### PostgreSQL Bytea Storage
