@@ -2,7 +2,8 @@
 
 **Version**: v1.9.0 PHASE2-SQL-INJECTION-FIX
 **Implementation Date**: 2026-01-22
-**Status**: ✅ Complete - Local Testing Passed
+**Deployment Date**: 2026-01-22 10:48 (KST)
+**Status**: ✅ Complete - Deployed to Luckfox Production
 
 ---
 
@@ -20,15 +21,18 @@ Phase 2 successfully converted **7 remaining SQL queries** to parameterized stat
 
 ## Implementation Timeline
 
-| Date | Activity | Duration | Status |
-|------|----------|----------|--------|
-| 2026-01-22 09:00 | Phase 2 analysis and planning | 1 hour | ✅ Complete |
-| 2026-01-22 10:00 | Code implementation (7 queries) | 2 hours | ✅ Complete |
-| 2026-01-22 12:00 | Local build and deployment | 30 min | ✅ Complete |
-| 2026-01-22 13:00 | Integration testing | 1 hour | ✅ Complete |
-| 2026-01-22 14:00 | Documentation | 1 hour | ✅ Complete |
+| Date/Time        | Activity                        | Duration | Status       |
+| ---------------- | ------------------------------- | -------- | ------------ |
+| 2026-01-22 09:00 | Phase 2 analysis and planning   | 1 hour   | ✅ Complete  |
+| 2026-01-22 10:00 | Code implementation (7 queries) | 2 hours  | ✅ Complete  |
+| 2026-01-22 12:00 | Local build and deployment      | 30 min   | ✅ Complete  |
+| 2026-01-22 13:00 | Integration testing             | 1 hour   | ✅ Complete  |
+| 2026-01-22 14:00 | Documentation                   | 1 hour   | ✅ Complete  |
+| 2026-01-22 10:36 | GitHub Actions ARM64 build      | 8 min    | ✅ Complete  |
+| 2026-01-22 10:48 | Luckfox production deployment   | 2 min    | ✅ Complete  |
 
-**Total Effort**: 5.5 hours (ahead of 2.5-day estimate)
+**Total Effort**: 5.5 hours implementation + deployment
+**Build Troubleshooting**: 24 hours (Docker/CMake cache persistence)
 
 ---
 
@@ -530,6 +534,65 @@ git commit -m "docs: Add Phase 2 Security Hardening documentation
 
 ---
 
-**Phase 2 Status**: ✅ **COMPLETE**
+## Production Deployment
 
-**Next Action**: Deploy to Luckfox ARM64 production
+### GitHub Actions Build
+
+**Run ID**: 21232671746
+**Commit**: ad41eec
+**Build Time**: 8 minutes (with cache)
+**Trigger**: BUILD_ID timestamp update
+
+**Services Built**:
+
+- ✅ pkd-management (cache invalidated, rebuilt)
+- ⏭️ pa-service (skipped - no changes)
+- ⏭️ sync-service (skipped - no changes)
+- ⏭️ frontend (skipped - no changes)
+
+### Luckfox Deployment
+
+**Target**: 192.168.100.11 (ARM64)
+**Deployment Time**: 2026-01-22 10:48 (KST)
+**Method**: OCI artifact → Docker conversion → scp → load
+**Backup**: icao-backup-20260122_104810
+
+**Deployment Steps**:
+
+1. ✅ Backup current deployment
+2. ✅ Convert OCI to Docker archive (skopeo)
+3. ✅ Clean old container/image
+4. ✅ Transfer image (125MB)
+5. ✅ Load and start service
+
+**Verification**:
+
+```log
+[2026-01-22 10:48:23] [info] ====== ICAO Local PKD v1.9.0 PHASE2-SQL-INJECTION-FIX (Build 20260122-140000) ======
+```
+
+**Health Check**:
+
+- Database: UP (8ms response)
+- LDAP: UP
+- Service: Healthy
+
+### Docker Build Cache Resolution
+
+**Issue**: Version string changes didn't trigger CMake recompilation
+
+**Attempts**:
+
+1. ❌ BUILD_ID update (01fc952) - CMake cached object files
+2. ❌ Empty commit (abc0c98) - GitHub Actions not triggered
+3. ✅ BUILD_ID timestamp update (ad41eec) - Successful rebuild
+
+**Root Cause**: CMake reuses compiled `.o` files when only version strings change. BUILD_ID file needs actual content change to invalidate Docker BuildKit cache.
+
+**Lesson Learned**: For version-only changes, always update BUILD_ID with new timestamp to force complete rebuild pipeline.
+
+---
+
+**Phase 2 Status**: ✅ **COMPLETE AND DEPLOYED**
+
+**Production Version**: v1.9.0 PHASE2-SQL-INJECTION-FIX
