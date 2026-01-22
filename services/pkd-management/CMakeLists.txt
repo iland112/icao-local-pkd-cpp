@@ -49,6 +49,9 @@ find_library(UUID_LIBRARY uuid REQUIRED)
 # libzip (for certificate export)
 find_package(libzip CONFIG REQUIRED)
 
+# jwt-cpp (for authentication)
+find_package(jwt-cpp CONFIG REQUIRED)
+
 # =============================================================================
 # Main Application
 # =============================================================================
@@ -68,6 +71,10 @@ add_executable(${PROJECT_NAME}
     src/repositories/icao_version_repository.cpp
     src/services/icao_sync_service.cpp
     src/handlers/icao_handler.cpp
+
+    # Authentication Module (NEW - Phase 3)
+    src/auth/password_hash.cpp
+    src/auth/jwt_service.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -84,6 +91,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     libzip::zip
+    jwt-cpp::jwt-cpp
     ${LDAP_LIBRARY}
     ${LBER_LIBRARY}
     ${UUID_LIBRARY}
