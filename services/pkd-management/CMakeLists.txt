@@ -75,6 +75,8 @@ add_executable(${PROJECT_NAME}
     # Authentication Module (NEW - Phase 3)
     src/auth/password_hash.cpp
     src/auth/jwt_service.cpp
+    src/middleware/auth_middleware.cpp
+    src/middleware/permission_filter.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -95,6 +97,26 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${LDAP_LIBRARY}
     ${LBER_LIBRARY}
     ${UUID_LIBRARY}
+)
+
+# =============================================================================
+# Authentication Module Tests (Optional)
+# =============================================================================
+add_executable(test_auth
+    src/auth/test_auth.cpp
+    src/auth/password_hash.cpp
+    src/auth/jwt_service.cpp
+)
+
+target_include_directories(test_auth PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(test_auth PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    jwt-cpp::jwt-cpp
+    spdlog::spdlog
 )
 
 # =============================================================================

@@ -70,6 +70,12 @@
 #include "infrastructure/http/http_client.h"
 #include "infrastructure/notification/email_sender.h"
 
+// Authentication Module (Phase 3)
+#include "middleware/auth_middleware.h"
+#include "middleware/permission_filter.h"
+#include "auth/jwt_service.h"
+#include "auth/password_hash.h"
+
 // Global certificate service (initialized in main(), used by all routes)
 std::shared_ptr<services::CertificateService> certificateService;
 
@@ -4000,6 +4006,31 @@ Json::Value checkLdap() {
 
 void registerRoutes() {
     auto& app = drogon::app();
+
+    // =========================================================================
+    // Phase 3: Register Authentication Middleware (Global)
+    // =========================================================================
+    // Note: Authentication is DISABLED by default for backward compatibility
+    // Enable by setting: AUTH_ENABLED=true in environment
+    try {
+        auto authMiddleware = std::make_shared<middleware::AuthMiddleware>();
+        app.registerFilter(authMiddleware);
+
+        if (middleware::AuthMiddleware::isAuthEnabled()) {
+            spdlog::info("✅ Authentication middleware registered (ENABLED)");
+            spdlog::warn("⚠️  All API endpoints require JWT token except public endpoints");
+        } else {
+            spdlog::warn("⚠️  Authentication middleware registered but DISABLED (AUTH_ENABLED=false)");
+            spdlog::warn("⚠️  All API endpoints are PUBLIC - Not for production use!");
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to initialize authentication middleware: {}", e.what());
+        spdlog::warn("Continuing without authentication (all endpoints public)");
+    }
+
+    // =========================================================================
+    // API Routes
+    // =========================================================================
 
     // Manual mode: Trigger parse endpoint
     app.registerHandler(
