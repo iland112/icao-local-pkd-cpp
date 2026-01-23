@@ -751,7 +751,116 @@ sshpass -p "luckfox" ssh luckfox@192.168.100.11 "docker logs icao-pkd-management
 - ✅ CLAUDE.md 업데이트 (this entry)
 
 **Next Steps**:
-- Sprint 2: Link Certificate Validation Core (Trust Chain)
+- Sprint 2: Link Certificate Validation Core (Trust Chain) → **✅ COMPLETE (see below)**
+
+---
+
+### 2026-01-24: Sprint 2 Complete - Link Certificate Validation Core
+
+**ICAO Doc 9303 Part 12 Link Certificate 검증 완료**:
+
+**구현 일시**: 2026-01-24
+**브랜치**: feature/phase3-authentication
+**상태**: ✅ Complete (Phase 1-4, Days 1-10)
+
+**핵심 기능**:
+
+1. **Link Certificate Trust Chain Validation**
+   - Trust Chain: CSCA (old) → LC → CSCA (new)
+   - 9-step validation workflow:
+     1. Parse LC binary (DER format)
+     2. Extract metadata (Subject DN, Issuer DN, Serial)
+     3. Find old CSCA by issuer DN
+     4. Verify LC signature with old CSCA public key (X509_verify)
+     5. Find new CSCA by LC subject DN (forward lookup)
+     6. Verify new CSCA signature with LC public key
+     7. Check LC validity period
+     8. Validate certificate extensions (BasicConstraints, KeyUsage)
+     9. Check CRL revocation status
+
+2. **CRL Revocation Checking** (RFC 5280)
+   - PostgreSQL CRL binary parsing (d2i_X509_CRL)
+   - Serial number lookup in revoked list (ASN1_INTEGER_cmp)
+   - Revocation reason extraction (NID_crl_reason extension)
+   - Audit logging (crl_revocation_log table)
+
+3. **Database Schema**
+   - `link_certificate` table (26 columns): LC 저장 및 검증 결과
+   - `crl_revocation_log` table (14 columns): CRL 감사 추적
+
+4. **LDAP Integration**
+   - New o=lc branch: `c={COUNTRY}/o=lc` organizational unit
+   - DN format: `cn={SHA256_FINGERPRINT},o=lc,c={COUNTRY},dc=data,...`
+   - Updated `buildCertificateDnV2()` for LC type support
+   - Updated `ensureCountryOuExists()` to create o=lc
+
+5. **REST API Endpoints**
+   - **POST /api/validate/link-cert**: LC 검증 (base64 DER binary)
+     - Returns: trust chain status, signatures, properties, extensions, revocation
+   - **GET /api/link-certs/search**: LC 검색 (country, validOnly, limit, offset)
+     - Paginated results with parameterized SQL
+   - **GET /api/link-certs/{id}**: LC 상세 정보 (UUID)
+     - Full details including LDAP DN
+
+6. **API Gateway Routing**
+   - `/api/link-certs/*`: 20 req/s per IP
+   - `/api/validate/link-cert`: 10 req/s per IP, 10MB max body size
+
+**기술적 세부사항**:
+
+**Files Created** (7):
+- `docker/init-scripts/06-link-certificate.sql` (400+ lines)
+- `src/common/crl_validator.h` (300 lines)
+- `src/common/crl_validator.cpp` (400 lines)
+- `src/common/lc_validator.h` (300 lines)
+- `src/common/lc_validator.cpp` (800 lines)
+- `tests/crl_validator_test.cpp` (412 lines, 16 test cases)
+- `openldap/bootstrap/02-lc-branch.ldif` (documentation)
+
+**Files Modified** (6):
+- `services/pkd-management/src/main.cpp` (+450 lines API endpoints)
+- `services/pkd-management/CMakeLists.txt` (CRL/LC validators + tests)
+- `nginx/api-gateway.conf` (+17 lines routing)
+- `lc_validator.h` (header fixes: `<vector>`, `<memory>`)
+- `crl_validator_test.cpp` (header fixes: `<iomanip>`, `<sstream>`)
+- `lc_validator.cpp` (static method call fix)
+
+**Security Hardening**:
+- 100% parameterized SQL queries (all 3 API endpoints)
+- No SQL injection vulnerabilities
+- Input validation (base64 decode, country code format)
+
+**Unit Tests**:
+- ✅ 16 test cases (CRL validator)
+- Coverage: utility functions, CRL creation/parsing, revocation logic, edge cases, performance
+- Performance target: 1000 revoked certs < 100ms
+
+**Documentation**:
+- ✅ [docs/SPRINT2_PLANNING.md](docs/SPRINT2_PLANNING.md) (300+ lines)
+- ✅ [docs/SPRINT2_COMPLETION_SUMMARY.md](docs/SPRINT2_COMPLETION_SUMMARY.md) (800+ lines)
+- ✅ CLAUDE.md 업데이트 (this entry)
+
+**Commits**:
+- `3bb2d84`: Phase 2 (LDAP o=lc branch support)
+- `30a61cc`: Phase 3 (API endpoints, compilation fixes)
+- `3b1116c`: Phase 3 (API Gateway routing)
+
+**Metrics**:
+| Metric | Value |
+|--------|-------|
+| Duration | 10 days |
+| Commits | 3 |
+| Files Created | 7 |
+| Files Modified | 6 |
+| Lines Added | ~3,000 |
+| API Endpoints | 3 |
+| Database Tables | 2 |
+| Unit Tests | 16 |
+| Security Fixes | 100% parameterized queries |
+
+**Next Steps**:
+- Sprint 3: Frontend Integration (LC upload UI, trust chain visualization)
+- OR: Advanced Features (LC expiration monitoring, auto-revalidation)
 
 ---
 
