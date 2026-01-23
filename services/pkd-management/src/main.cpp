@@ -1926,7 +1926,7 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
  */
 std::string buildCertificateDnV2(const std::string& fingerprint, const std::string& certType,
                                    const std::string& countryCode) {
-    // ICAO PKD DIT structure (same as v1)
+    // ICAO PKD DIT structure (updated for Sprint 2: added LC support)
     std::string ou;
     std::string dataContainer;
 
@@ -1939,6 +1939,10 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
     } else if (certType == "DSC_NC") {
         ou = "dsc_nc";  // Note: using dsc_nc for consistency with LDAP schema
         dataContainer = "dc=nc-data";
+    } else if (certType == "LC") {
+        // Sprint 2: Link Certificate support
+        ou = "lc";
+        dataContainer = "dc=data";
     } else {
         ou = "dsc";
         dataContainer = "dc=data";
@@ -2014,9 +2018,10 @@ bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcDa
         return false;
     }
 
-    // Create organizational units under country (csca, dsc, crl)
+    // Create organizational units under country (csca, dsc, lc, crl)
+    // Sprint 2: Added "lc" for Link Certificates
     std::vector<std::string> ous = isNcData ? std::vector<std::string>{"dsc"}
-                                            : std::vector<std::string>{"csca", "dsc", "crl"};
+                                            : std::vector<std::string>{"csca", "dsc", "lc", "crl"};
 
     for (const auto& ouName : ous) {
         std::string ouDn = "o=" + ouName + "," + countryDn;
