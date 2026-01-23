@@ -15,9 +15,6 @@
     },
     "libzip",
     "catch2",
-    {
-      "name": "jwt-cpp",
-      "features": []
-    }
+    "gtest"
   ]
 }

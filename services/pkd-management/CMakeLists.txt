@@ -49,9 +49,6 @@ find_library(UUID_LIBRARY uuid REQUIRED)
 # libzip (for certificate export)
 find_package(libzip CONFIG REQUIRED)
 
-# jwt-cpp (for authentication)
-find_package(jwt-cpp CONFIG REQUIRED)
-
 # =============================================================================
 # Main Application
 # =============================================================================
@@ -59,6 +56,10 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     src/processing_strategy.cpp
     src/ldif_processor.cpp
+
+    # Common Utilities (NEW - v2.0.0)
+    src/common/certificate_utils.cpp
+    src/common/masterlist_processor.cpp
 
     # Clean Architecture Layers (Existing)
     src/repositories/ldap_certificate_repository.cpp
@@ -94,14 +95,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     nlohmann_json::nlohmann_json
     spdlog::spdlog
     libzip::zip
-    jwt-cpp::jwt-cpp
     ${LDAP_LIBRARY}
     ${LBER_LIBRARY}
     ${UUID_LIBRARY}
 )
-
-# Enable picojson support in jwt-cpp (override vcpkg default)
-target_compile_options(${PROJECT_NAME} PRIVATE -UJWT_DISABLE_PICOJSON)
 
 # =============================================================================
 # Authentication Module Tests (Optional)
@@ -119,9 +116,34 @@ target_include_directories(test_auth PRIVATE
 target_link_libraries(test_auth PRIVATE
     OpenSSL::SSL
     OpenSSL::Crypto
-    jwt-cpp::jwt-cpp
     spdlog::spdlog
 )
+
+# =============================================================================
+# LDAP DN Migration Tests (Sprint 1)
+# =============================================================================
+# Enable testing
+enable_testing()
+
+# Find GTest
+find_package(GTest CONFIG REQUIRED)
+
+add_executable(test_ldap_dn
+    tests/ldap_dn_test.cpp
+)
+
+target_include_directories(test_ldap_dn PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(test_ldap_dn PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+
+# Register test with CTest
+add_test(NAME ldap_dn_test COMMAND test_ldap_dn)
 
 # =============================================================================
 # Build Info
