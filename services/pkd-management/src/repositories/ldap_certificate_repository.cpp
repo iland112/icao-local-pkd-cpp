@@ -7,6 +7,7 @@
  */
 
 #include "ldap_certificate_repository.h"
+#include "../common/ldap_utils.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/sha.h>
@@ -454,8 +455,9 @@ std::string LdapCertificateRepository::buildSearchFilter(
     std::string filter = "(|(objectClass=pkdDownload)(objectClass=cRLDistributionPoint))";
 
     // If search term is provided, add CN/serialNumber filter
+    // SECURITY: Escape filter value to prevent LDAP injection (RFC 4515)
     if (criteria.searchTerm.has_value() && !criteria.searchTerm->empty()) {
-        std::string searchTerm = *criteria.searchTerm;
+        std::string searchTerm = ldap_utils::escapeFilterValue(*criteria.searchTerm);
         filter = "(&" + filter + "(|(cn=*" + searchTerm + "*)(serialNumber=*" + searchTerm + "*)))";
     }
 

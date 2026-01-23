@@ -1,14 +1,153 @@
 #include "jwt_service.h"
-
-// Undefine JWT_DISABLE_PICOJSON to enable picojson support
-#ifdef JWT_DISABLE_PICOJSON
-#undef JWT_DISABLE_PICOJSON
-#endif
-
-#include <jwt-cpp/jwt.h>
 #include <spdlog/spdlog.h>
+#include <openssl/hmac.h>
+#include <openssl/evp.h>
+#include <cstring>
+#include <sstream>
+#include <iomanip>
 
 namespace auth {
+
+// Base64URL encoding (RFC 4648 Section 5)
+static std::string base64UrlEncode(const unsigned char* data, size_t length) {
+    static const char base64_chars[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789+/";
+
+    std::string result;
+    result.reserve(((length + 2) / 3) * 4);
+
+    for (size_t i = 0; i < length; i += 3) {
+        unsigned int b = (data[i] & 0xFC) >> 2;
+        result += base64_chars[b];
+
+        b = (data[i] & 0x03) << 4;
+        if (i + 1 < length) {
+            b |= (data[i + 1] & 0xF0) >> 4;
+            result += base64_chars[b];
+            b = (data[i + 1] & 0x0F) << 2;
+            if (i + 2 < length) {
+                b |= (data[i + 2] & 0xC0) >> 6;
+                result += base64_chars[b];
+                b = data[i + 2] & 0x3F;
+                result += base64_chars[b];
+            } else {
+                result += base64_chars[b];
+                result += '=';
+            }
+        } else {
+            result += base64_chars[b];
+            result += "==";
+        }
+    }
+
+    // Convert to Base64URL (replace + with -, / with _, remove =)
+    for (char& c : result) {
+        if (c == '+') c = '-';
+        else if (c == '/') c = '_';
+    }
+    result.erase(std::remove(result.begin(), result.end(), '='), result.end());
+
+    return result;
+}
+
+static std::string base64UrlEncode(const std::string& str) {
+    return base64UrlEncode(reinterpret_cast<const unsigned char*>(str.data()), str.length());
+}
+
+// Base64URL decoding
+static std::string base64UrlDecode(const std::string& input) {
+    static const unsigned char base64_table[256] = {
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 62, 64, 62, 64, 63,
+        52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 64, 64, 64, 64, 64, 64,
+        64,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14,
+        15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 64, 64, 64, 64, 63,
+        64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+        41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64
+    };
+
+    std::string b64 = input;
+    // Convert Base64URL to Base64
+    for (char& c : b64) {
+        if (c == '-') c = '+';
+        else if (c == '_') c = '/';
+    }
+
+    // Add padding
+    while (b64.length() % 4) {
+        b64 += '=';
+    }
+
+    std::string result;
+    result.reserve(b64.length() * 3 / 4);
+
+    unsigned int val = 0;
+    int valb = -8;
+    for (unsigned char c : b64) {
+        if (base64_table[c] == 64) break;
+        val = (val << 6) + base64_table[c];
+        valb += 6;
+        if (valb >= 0) {
+            result.push_back(char((val >> valb) & 0xFF));
+            valb -= 8;
+        }
+    }
+
+    return result;
+}
+
+// HMAC-SHA256 signing
+static std::string hmacSha256(const std::string& key, const std::string& data) {
+    unsigned char hash[EVP_MAX_MD_SIZE];
+    unsigned int hashLen = 0;
+
+    HMAC(EVP_sha256(),
+         key.data(), key.length(),
+         reinterpret_cast<const unsigned char*>(data.data()), data.length(),
+         hash, &hashLen);
+
+    return std::string(reinterpret_cast<char*>(hash), hashLen);
+}
+
+// Helper: Join permissions vector to comma-separated string
+static std::string joinPermissions(const std::vector<std::string>& permissions) {
+    std::ostringstream oss;
+    for (size_t i = 0; i < permissions.size(); ++i) {
+        oss << permissions[i];
+        if (i < permissions.size() - 1) {
+            oss << ",";
+        }
+    }
+    return oss.str();
+}
+
+// Helper: Split comma-separated string to permissions vector
+static std::vector<std::string> splitPermissions(const std::string& permsStr) {
+    std::vector<std::string> permissions;
+    if (permsStr.empty()) {
+        return permissions;
+    }
+
+    std::istringstream iss(permsStr);
+    std::string perm;
+    while (std::getline(iss, perm, ',')) {
+        if (!perm.empty()) {
+            permissions.push_back(perm);
+        }
+    }
+    return permissions;
+}
 
 JwtService::JwtService(
     const std::string& secretKey,
@@ -33,65 +172,144 @@ std::string JwtService::generateToken(
     bool isAdmin) {
 
     auto now = std::chrono::system_clock::now();
-    auto exp = now + std::chrono::seconds(expirationSeconds_);
+    auto iat = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+    auto exp = iat + expirationSeconds_;
 
-    // Build permissions array for JWT claims
-    picojson::array permsArray;
-    for (const auto& perm : permissions) {
-        permsArray.push_back(picojson::value(perm));
-    }
+    // Build JWT header
+    std::ostringstream header;
+    header << "{\"alg\":\"HS256\",\"typ\":\"JWT\"}";
 
-    try {
-        auto token = jwt::create()
-            .set_issuer(issuer_)
-            .set_type("JWT")
-            .set_issued_at(now)
-            .set_expires_at(exp)
-            .set_subject(userId)
-            .set_payload_claim("username", jwt::claim(username))
-            .set_payload_claim("permissions", jwt::claim(permsArray))
-            .set_payload_claim("isAdmin", jwt::claim(isAdmin))
-            .sign(jwt::algorithm::hs256{secretKey_});
+    // Build JWT payload
+    std::ostringstream payload;
+    payload << "{"
+            << "\"iss\":\"" << issuer_ << "\","
+            << "\"sub\":\"" << userId << "\","
+            << "\"iat\":" << iat << ","
+            << "\"exp\":" << exp << ","
+            << "\"username\":\"" << username << "\","
+            << "\"permissions\":\"" << joinPermissions(permissions) << "\","
+            << "\"isAdmin\":" << (isAdmin ? "true" : "false")
+            << "}";
 
-        spdlog::debug("[JwtService] Generated token for user={}, isAdmin={}, permissions={}",
-                      username, isAdmin, permissions.size());
+    // Encode header and payload
+    std::string encodedHeader = base64UrlEncode(header.str());
+    std::string encodedPayload = base64UrlEncode(payload.str());
 
-        return token;
+    // Create signature
+    std::string message = encodedHeader + "." + encodedPayload;
+    std::string signature = hmacSha256(secretKey_, message);
+    std::string encodedSignature = base64UrlEncode(
+        reinterpret_cast<const unsigned char*>(signature.data()), signature.length());
 
-    } catch (const std::exception& exc) {
-        spdlog::error("[JwtService] Token generation failed: {}", exc.what());
-        throw;
-    }
+    // Build final JWT
+    std::string token = message + "." + encodedSignature;
+
+    spdlog::debug("[JwtService] Generated token for user={}, isAdmin={}, permissions={}",
+                  username, isAdmin, permissions.size());
+
+    return token;
 }
 
 std::optional<JwtClaims> JwtService::validateToken(const std::string& token) {
     try {
-        // Create verifier
-        auto verifier = jwt::verify()
-            .allow_algorithm(jwt::algorithm::hs256{secretKey_})
-            .with_issuer(issuer_);
+        // Split token into parts
+        size_t firstDot = token.find('.');
+        size_t secondDot = token.find('.', firstDot + 1);
 
-        // Decode and verify token
-        auto decoded = jwt::decode(token);
-        verifier.verify(decoded);
+        if (firstDot == std::string::npos || secondDot == std::string::npos) {
+            spdlog::warn("[JwtService] Invalid token format");
+            return std::nullopt;
+        }
 
-        // Extract claims
+        std::string encodedHeader = token.substr(0, firstDot);
+        std::string encodedPayload = token.substr(firstDot + 1, secondDot - firstDot - 1);
+        std::string encodedSignature = token.substr(secondDot + 1);
+
+        // Verify signature
+        std::string message = encodedHeader + "." + encodedPayload;
+        std::string expectedSignature = hmacSha256(secretKey_, message);
+        std::string expectedEncoded = base64UrlEncode(
+            reinterpret_cast<const unsigned char*>(expectedSignature.data()),
+            expectedSignature.length());
+
+        if (encodedSignature != expectedEncoded) {
+            spdlog::warn("[JwtService] Invalid signature");
+            return std::nullopt;
+        }
+
+        // Decode payload
+        std::string payloadJson = base64UrlDecode(encodedPayload);
+
+        // Parse JSON manually (simple parser for our specific format)
         JwtClaims claims;
-        claims.userId = decoded.get_subject();
-        claims.username = decoded.get_payload_claim("username").as_string();
-        claims.isAdmin = decoded.get_payload_claim("isAdmin").as_bool();
-        claims.exp = decoded.get_expires_at();
-        claims.iat = decoded.get_issued_at();
 
-        // Extract permissions array
-        auto permsJson = decoded.get_payload_claim("permissions");
-        if (permsJson.get_type() == jwt::json::type::array) {
-            auto permsArray = permsJson.as_array();
-            for (const auto& perm : permsArray) {
-                if (perm.is<std::string>()) {
-                    claims.permissions.push_back(perm.get<std::string>());
-                }
+        // Extract issuer
+        size_t issPos = payloadJson.find("\"iss\":\"");
+        if (issPos != std::string::npos) {
+            size_t start = issPos + 7;
+            size_t end = payloadJson.find("\"", start);
+            std::string iss = payloadJson.substr(start, end - start);
+            if (iss != issuer_) {
+                spdlog::warn("[JwtService] Invalid issuer: {} (expected: {})", iss, issuer_);
+                return std::nullopt;
             }
+        }
+
+        // Extract subject (userId)
+        size_t subPos = payloadJson.find("\"sub\":\"");
+        if (subPos != std::string::npos) {
+            size_t start = subPos + 7;
+            size_t end = payloadJson.find("\"", start);
+            claims.userId = payloadJson.substr(start, end - start);
+        }
+
+        // Extract username
+        size_t userPos = payloadJson.find("\"username\":\"");
+        if (userPos != std::string::npos) {
+            size_t start = userPos + 12;
+            size_t end = payloadJson.find("\"", start);
+            claims.username = payloadJson.substr(start, end - start);
+        }
+
+        // Extract permissions
+        size_t permsPos = payloadJson.find("\"permissions\":\"");
+        if (permsPos != std::string::npos) {
+            size_t start = permsPos + 15;
+            size_t end = payloadJson.find("\"", start);
+            std::string permsStr = payloadJson.substr(start, end - start);
+            claims.permissions = splitPermissions(permsStr);
+        }
+
+        // Extract isAdmin
+        size_t adminPos = payloadJson.find("\"isAdmin\":");
+        if (adminPos != std::string::npos) {
+            size_t start = adminPos + 10;
+            claims.isAdmin = (payloadJson.substr(start, 4) == "true");
+        }
+
+        // Extract exp
+        size_t expPos = payloadJson.find("\"exp\":");
+        if (expPos != std::string::npos) {
+            size_t start = expPos + 6;
+            size_t end = payloadJson.find_first_of(",}", start);
+            long expSec = std::stol(payloadJson.substr(start, end - start));
+            claims.exp = std::chrono::system_clock::from_time_t(expSec);
+
+            // Check expiration
+            auto now = std::chrono::system_clock::now();
+            if (now >= claims.exp) {
+                spdlog::warn("[JwtService] Token expired");
+                return std::nullopt;
+            }
+        }
+
+        // Extract iat
+        size_t iatPos = payloadJson.find("\"iat\":");
+        if (iatPos != std::string::npos) {
+            size_t start = iatPos + 6;
+            size_t end = payloadJson.find_first_of(",}", start);
+            long iatSec = std::stol(payloadJson.substr(start, end - start));
+            claims.iat = std::chrono::system_clock::from_time_t(iatSec);
         }
 
         spdlog::debug("[JwtService] Token validated for user={}, permissions={}",
@@ -99,9 +317,6 @@ std::optional<JwtClaims> JwtService::validateToken(const std::string& token) {
 
         return claims;
 
-    } catch (const jwt::token_verification_exception& exc) {
-        spdlog::warn("[JwtService] Token verification failed: {}", exc.what());
-        return std::nullopt;
     } catch (const std::exception& exc) {
         spdlog::error("[JwtService] Token validation error: {}", exc.what());
         return std::nullopt;
@@ -132,17 +347,8 @@ std::string JwtService::refreshToken(const std::string& token) {
 }
 
 bool JwtService::isTokenExpired(const std::string& token) {
-    try {
-        auto decoded = jwt::decode(token);
-        auto exp = decoded.get_expires_at();
-        auto now = std::chrono::system_clock::now();
-
-        return now >= exp;
-
-    } catch (const std::exception& exc) {
-        spdlog::error("[JwtService] Failed to check token expiration: {}", exc.what());
-        return true; // Treat errors as expired
-    }
+    auto claims = validateToken(token);
+    return !claims.has_value();
 }
 
 } // namespace auth

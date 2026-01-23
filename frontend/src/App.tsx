@@ -1,11 +1,13 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useEffect } from 'react';
 import { Layout } from '@/components/layout';
 import { ToastContainer, PrivateRoute } from '@/components/common';
-import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login } from '@/pages';
+import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login, Profile, AuditLog, UserManagement } from '@/pages';
 import MonitoringDashboard from '@/pages/MonitoringDashboard';
 import CertificateSearch from '@/pages/CertificateSearch';
 import IcaoStatus from '@/pages/IcaoStatus';
+import { OperationAuditLog } from '@/pages/OperationAuditLog';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -17,10 +19,27 @@ const queryClient = new QueryClient({
   },
 });
 
+// Preline UI initializer component
+function PrelineInitializer() {
+  const location = useLocation();
+
+  useEffect(() => {
+    // Initialize Preline components on route change
+    if (typeof window !== 'undefined' && (window as any).HSStaticMethods) {
+      setTimeout(() => {
+        (window as any).HSStaticMethods.autoInit();
+      }, 100);
+    }
+  }, [location.pathname]);
+
+  return null;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <PrelineInitializer />
         <Routes>
           {/* Public Route - Login */}
           <Route path="/login" element={<Login />} />
@@ -40,6 +59,10 @@ function App() {
             <Route path="sync" element={<SyncDashboard />} />
             <Route path="icao" element={<IcaoStatus />} />
             <Route path="monitoring" element={<MonitoringDashboard />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="admin/users" element={<UserManagement />} />
+            <Route path="admin/operation-audit" element={<OperationAuditLog />} />
+            <Route path="admin/audit-log" element={<AuditLog />} />
           </Route>
         </Routes>
         <ToastContainer />

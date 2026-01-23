@@ -17,6 +17,8 @@
 #include "crl_validator.h"
 #include <string>
 #include <optional>
+#include <vector>
+#include <memory>
 #include <libpq-fe.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>

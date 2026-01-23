@@ -4,7 +4,20 @@
 # Network Architecture:
 #   192.168.100.10: HAProxy (:10389) + OpenLDAP1 (:389) - Master Node
 #   192.168.100.11: OpenLDAP2 (:389) + Docker Apps - This Node
+#
+# Network Isolation (Phase 4.3):
+#   - frontend network: External access (API Gateway, Frontend)
+#   - backend network: Internal only (PKD, PA, Sync services, PostgreSQL)
+#   - PostgreSQL and services not directly accessible from host
 # =============================================================================
+
+# Network definitions (Phase 4.3 - Security Hardening)
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true  # No internet access for backend services
 
 services:
   # ---------------------------------------------------------------------------
@@ -13,7 +26,11 @@ services:
   api-gateway:
     image: nginx:alpine
     container_name: icao-pkd-api-gateway
-    network_mode: host
+    networks:
+      - frontend
+      - backend
+    ports:
+      - "8080:8080"
     volumes:
       - ./nginx/api-gateway-luckfox.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -28,7 +45,10 @@ services:
   frontend:
     image: icao-local-pkd-frontend:arm64-fixed
     container_name: icao-pkd-frontend
-    network_mode: host
+    networks:
+      - frontend
+    ports:
+      - "80:80"
     environment:
       - TZ=Asia/Seoul
     volumes:
@@ -43,13 +63,14 @@ services:
   pkd-management:
     image: icao-local-management:arm64
     container_name: icao-pkd-management
-    network_mode: host
+    networks:
+      - backend
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-management
       - SERVER_PORT=8081
-      # PostgreSQL (local)
-      - DB_HOST=127.0.0.1
+      # PostgreSQL (bridge network - use service name)
+      - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
@@ -83,13 +104,14 @@ services:
   pa-service:
     image: icao-local-pa:arm64-v3
     container_name: icao-pkd-pa-service
-    network_mode: host
+    networks:
+      - backend
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pa-service
       - SERVER_PORT=8082
-      # PostgreSQL (local)
-      - DB_HOST=127.0.0.1
+      # PostgreSQL (bridge network - use service name)
+      - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
@@ -112,13 +134,14 @@ services:
   pkd-relay:
     image: icao-local-pkd-relay:arm64
     container_name: icao-pkd-relay
-    network_mode: host
+    networks:
+      - backend
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
-      # PostgreSQL (local)
-      - DB_HOST=127.0.0.1
+      # PostgreSQL (bridge network - use service name)
+      - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
@@ -144,7 +167,10 @@ services:
   swagger-ui:
     image: swaggerapi/swagger-ui:latest
     container_name: icao-pkd-swagger
-    network_mode: host
+    networks:
+      - frontend
+    ports:
+      - "8888:8888"
     environment:
       - PORT=8888
       - BASE_URL=/api-docs
@@ -161,7 +187,9 @@ services:
   postgres:
     image: postgres:15
     container_name: icao-pkd-postgres
-    network_mode: host
+    networks:
+      - backend
+    # No ports exposed - backend services only
     environment:
       - POSTGRES_USER=pkd
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)

@@ -82,6 +82,9 @@
 #include "auth/password_hash.h"
 #include "handlers/auth_handler.h"
 
+// Sprint 2: Link Certificate Validation
+#include "common/lc_validator.h"
+
 // Global certificate service (initialized in main(), used by all routes)
 std::shared_ptr<services::CertificateService> certificateService;
 
@@ -7571,6 +7574,402 @@ paths:
         icaoHandler->registerRoutes(app);
         spdlog::info("ICAO Auto Sync routes registered");
     }
+
+    // =========================================================================
+    // Sprint 2: Link Certificate Validation API
+    // =========================================================================
+
+    // POST /api/validate/link-cert - Validate Link Certificate trust chain
+    app.registerHandler(
+        "/api/validate/link-cert",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/validate/link-cert - Link Certificate validation");
+
+            // Parse JSON request body
+            auto json = req->getJsonObject();
+            if (!json) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid JSON body";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Get certificate binary (base64 encoded)
+            std::string certBase64 = (*json).get("certificateBinary", "").asString();
+            if (certBase64.empty()) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Missing certificateBinary field";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Decode base64
+            std::vector<uint8_t> certBinary;
+            try {
+                std::string decoded = drogon::utils::base64Decode(certBase64);
+                certBinary.assign(decoded.begin(), decoded.end());
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Base64 decode failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            try {
+                // Create LC validator
+                lc::LcValidator validator(conn);
+
+                // Validate Link Certificate
+                auto result = validator.validateLinkCertificate(certBinary);
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["trustChainValid"] = result.trustChainValid;
+                response["validationMessage"] = result.validationMessage;
+
+                // Signature validation
+                Json::Value signatures;
+                signatures["oldCscaSignatureValid"] = result.oldCscaSignatureValid;
+                signatures["oldCscaSubjectDn"] = result.oldCscaSubjectDn;
+                signatures["oldCscaFingerprint"] = result.oldCscaFingerprint;
+                signatures["newCscaSignatureValid"] = result.newCscaSignatureValid;
+                signatures["newCscaSubjectDn"] = result.newCscaSubjectDn;
+                signatures["newCscaFingerprint"] = result.newCscaFingerprint;
+                response["signatures"] = signatures;
+
+                // Certificate properties
+                Json::Value properties;
+                properties["validityPeriodValid"] = result.validityPeriodValid;
+                properties["notBefore"] = result.notBefore;
+                properties["notAfter"] = result.notAfter;
+                properties["extensionsValid"] = result.extensionsValid;
+                response["properties"] = properties;
+
+                // Extensions details
+                Json::Value extensions;
+                extensions["basicConstraintsCa"] = result.basicConstraintsCa;
+                extensions["basicConstraintsPathlen"] = result.basicConstraintsPathlen;
+                extensions["keyUsage"] = result.keyUsage;
+                extensions["extendedKeyUsage"] = result.extendedKeyUsage;
+                response["extensions"] = extensions;
+
+                // Revocation status
+                Json::Value revocation;
+                revocation["status"] = crl::revocationStatusToString(result.revocationStatus);
+                revocation["message"] = result.revocationMessage;
+                response["revocation"] = revocation;
+
+                // Metadata
+                response["validationDurationMs"] = result.validationDurationMs;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Validation failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Post}
+    );
+
+    // GET /api/link-certs/search - Search Link Certificates
+    app.registerHandler(
+        "/api/link-certs/search",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/link-certs/search - Search Link Certificates");
+
+            // Parse query parameters
+            std::string country = req->getParameter("country");
+            std::string validOnlyStr = req->getParameter("validOnly");
+            std::string limitStr = req->getParameter("limit");
+            std::string offsetStr = req->getParameter("offset");
+
+            bool validOnly = (validOnlyStr == "true");
+            int limit = limitStr.empty() ? 50 : std::stoi(limitStr);
+            int offset = offsetStr.empty() ? 0 : std::stoi(offsetStr);
+
+            // Validate parameters
+            if (limit <= 0 || limit > 1000) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid limit (must be 1-1000)";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            try {
+                // Build SQL query with parameterized parameters
+                std::ostringstream sql;
+                sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                    << "old_csca_subject_dn, new_csca_subject_dn, "
+                    << "trust_chain_valid, created_at, country_code "
+                    << "FROM link_certificate WHERE 1=1";
+
+                std::vector<std::string> paramValues;
+                int paramIndex = 1;
+
+                if (!country.empty()) {
+                    sql << " AND country_code = $" << paramIndex++;
+                    paramValues.push_back(country);
+                }
+
+                if (validOnly) {
+                    sql << " AND trust_chain_valid = true";
+                }
+
+                sql << " ORDER BY created_at DESC LIMIT $" << paramIndex++ << " OFFSET $" << paramIndex++;
+                paramValues.push_back(std::to_string(limit));
+                paramValues.push_back(std::to_string(offset));
+
+                // Prepare parameter pointers
+                std::vector<const char*> paramPointers;
+                for (const auto& pv : paramValues) {
+                    paramPointers.push_back(pv.c_str());
+                }
+
+                // Execute query
+                PGresult* res = PQexecParams(
+                    conn,
+                    sql.str().c_str(),
+                    paramPointers.size(),
+                    nullptr,
+                    paramPointers.data(),
+                    nullptr,
+                    nullptr,
+                    0
+                );
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    PQclear(res);
+                    throw std::runtime_error("Database query failed");
+                }
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["total"] = PQntuples(res);
+                response["limit"] = limit;
+                response["offset"] = offset;
+
+                Json::Value certificates(Json::arrayValue);
+                for (int i = 0; i < PQntuples(res); i++) {
+                    Json::Value cert;
+                    cert["id"] = PQgetvalue(res, i, 0);
+                    cert["subjectDn"] = PQgetvalue(res, i, 1);
+                    cert["issuerDn"] = PQgetvalue(res, i, 2);
+                    cert["serialNumber"] = PQgetvalue(res, i, 3);
+                    cert["fingerprint"] = PQgetvalue(res, i, 4);
+                    cert["oldCscaSubjectDn"] = PQgetvalue(res, i, 5);
+                    cert["newCscaSubjectDn"] = PQgetvalue(res, i, 6);
+                    cert["trustChainValid"] = (strcmp(PQgetvalue(res, i, 7), "t") == 0);
+                    cert["createdAt"] = PQgetvalue(res, i, 8);
+                    cert["countryCode"] = PQgetvalue(res, i, 9);
+
+                    certificates.append(cert);
+                }
+
+                response["certificates"] = certificates;
+
+                PQclear(res);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Search failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/link-certs/{id} - Get Link Certificate details by ID
+    app.registerHandler(
+        "/api/link-certs/{id}",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& id) {
+            spdlog::info("GET /api/link-certs/{} - Get Link Certificate details", id);
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            try {
+                // Query LC by ID (parameterized query)
+                const char* query =
+                    "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                    "old_csca_subject_dn, old_csca_fingerprint, "
+                    "new_csca_subject_dn, new_csca_fingerprint, "
+                    "trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
+                    "validity_period_valid, not_before, not_after, "
+                    "extensions_valid, basic_constraints_ca, basic_constraints_pathlen, "
+                    "key_usage, extended_key_usage, "
+                    "revocation_status, revocation_message, "
+                    "ldap_dn_v2, stored_in_ldap, created_at, country_code "
+                    "FROM link_certificate WHERE id = $1";
+
+                const char* paramValues[1] = {id.c_str()};
+                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                             nullptr, nullptr, 0);
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                    PQclear(res);
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Link Certificate not found";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    PQfinish(conn);
+                    return;
+                }
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+
+                Json::Value cert;
+                cert["id"] = PQgetvalue(res, 0, 0);
+                cert["subjectDn"] = PQgetvalue(res, 0, 1);
+                cert["issuerDn"] = PQgetvalue(res, 0, 2);
+                cert["serialNumber"] = PQgetvalue(res, 0, 3);
+                cert["fingerprint"] = PQgetvalue(res, 0, 4);
+
+                Json::Value signatures;
+                signatures["oldCscaSubjectDn"] = PQgetvalue(res, 0, 5);
+                signatures["oldCscaFingerprint"] = PQgetvalue(res, 0, 6);
+                signatures["newCscaSubjectDn"] = PQgetvalue(res, 0, 7);
+                signatures["newCscaFingerprint"] = PQgetvalue(res, 0, 8);
+                signatures["trustChainValid"] = (strcmp(PQgetvalue(res, 0, 9), "t") == 0);
+                signatures["oldCscaSignatureValid"] = (strcmp(PQgetvalue(res, 0, 10), "t") == 0);
+                signatures["newCscaSignatureValid"] = (strcmp(PQgetvalue(res, 0, 11), "t") == 0);
+                cert["signatures"] = signatures;
+
+                Json::Value properties;
+                properties["validityPeriodValid"] = (strcmp(PQgetvalue(res, 0, 12), "t") == 0);
+                properties["notBefore"] = PQgetvalue(res, 0, 13);
+                properties["notAfter"] = PQgetvalue(res, 0, 14);
+                properties["extensionsValid"] = (strcmp(PQgetvalue(res, 0, 15), "t") == 0);
+                cert["properties"] = properties;
+
+                Json::Value extensions;
+                extensions["basicConstraintsCa"] = (strcmp(PQgetvalue(res, 0, 16), "t") == 0);
+                extensions["basicConstraintsPathlen"] = std::stoi(PQgetvalue(res, 0, 17));
+                extensions["keyUsage"] = PQgetvalue(res, 0, 18);
+                extensions["extendedKeyUsage"] = PQgetvalue(res, 0, 19);
+                cert["extensions"] = extensions;
+
+                Json::Value revocation;
+                revocation["status"] = PQgetvalue(res, 0, 20);
+                revocation["message"] = PQgetvalue(res, 0, 21);
+                cert["revocation"] = revocation;
+
+                cert["ldapDn"] = PQgetvalue(res, 0, 22);
+                cert["storedInLdap"] = (strcmp(PQgetvalue(res, 0, 23), "t") == 0);
+                cert["createdAt"] = PQgetvalue(res, 0, 24);
+                cert["countryCode"] = PQgetvalue(res, 0, 25);
+
+                response["certificate"] = cert;
+
+                PQclear(res);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Query failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Get}
+    );
 
     // =========================================================================
     // Sprint 1: LDAP DN Migration API (Internal)

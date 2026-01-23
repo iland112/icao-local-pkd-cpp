@@ -279,7 +279,7 @@ std::string LcValidator::storeLinkCertificate(
     std::string notAfter = asn1TimeToIso8601(X509_getm_notAfter(linkCert));
 
     // Get certificate binary
-    std::vector<uint8_t> certBinary = getCertificateDer(linkCert);
+    std::vector<uint8_t> certBinary = LcValidator::getCertificateDer(linkCert);
 
     // Escape bytea
     unsigned char* byteaEscaped = PQescapeByteaConn(

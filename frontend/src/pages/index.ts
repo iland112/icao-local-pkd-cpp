@@ -9,3 +9,7 @@ export { PADetail } from './PADetail';
 export { PADashboard } from './PADashboard';
 export { SyncDashboard } from './SyncDashboard';
 export { Login } from './Login';
+export { Profile } from './Profile';
+export { AuditLog } from './AuditLog';
+export { OperationAuditLog } from './OperationAuditLog';
+export { UserManagement } from './UserManagement';

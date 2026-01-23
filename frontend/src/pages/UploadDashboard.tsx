@@ -18,6 +18,7 @@ import {
   TrendingUp,
   Award,
   AlertCircle,
+  Info,
   ArrowUp,
   ArrowDown,
 } from 'lucide-react';
@@ -215,13 +216,69 @@ export function UploadDashboard() {
             </div>
           </div>
 
+          {/* Collection 002 CSCA Extraction Statistics (v2.0.0) */}
+          {(stats?.cscaExtractedFromMl || stats?.cscaDuplicates) && (
+            <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl shadow-lg p-5 mb-6 border border-indigo-200 dark:border-indigo-800">
+              <div className="flex items-center gap-2 mb-4">
+                <Database className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Collection 002 CSCA 추출 통계</h3>
+                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                  v2.0.0
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Total Extracted */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-indigo-200 dark:border-indigo-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">추출된 CSCA</span>
+                  </div>
+                  <p className="text-3xl font-bold text-indigo-800 dark:text-indigo-200">
+                    {(stats?.cscaExtractedFromMl ?? 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">Master List에서 추출</p>
+                </div>
+
+                {/* Duplicates Detected */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-amber-200 dark:border-amber-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">중복 감지</span>
+                  </div>
+                  <p className="text-3xl font-bold text-amber-800 dark:text-amber-200">
+                    {(stats?.cscaDuplicates ?? 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">기존 인증서와 중복</p>
+                </div>
+
+                {/* Duplicate Rate */}
+                <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-violet-200 dark:border-violet-700">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Award className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">중복률</span>
+                  </div>
+                  <p className="text-3xl font-bold text-violet-800 dark:text-violet-200">
+                    {stats.cscaExtractedFromMl && stats.cscaExtractedFromMl > 0
+                      ? ((stats.cscaDuplicates ?? 0) / stats.cscaExtractedFromMl * 100).toFixed(1)
+                      : '0.0'}%
+                  </p>
+                  <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">
+                    {stats.cscaExtractedFromMl && stats.cscaExtractedFromMl > 0
+                      ? `${((stats.cscaExtractedFromMl - (stats.cscaDuplicates ?? 0)) / stats.cscaExtractedFromMl * 100).toFixed(1)}% 신규`
+                      : 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Certificate Breakdown */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-6">
             <div className="flex items-center gap-2 mb-5">
               <Shield className="w-5 h-5 text-violet-500" />
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 유형별 현황</h3>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {/* CSCA */}
               <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30 p-4 border border-green-200 dark:border-green-800">
                 <div className="flex items-center gap-2 mb-2">
@@ -274,18 +331,6 @@ export function UploadDashboard() {
                 </div>
               </div>
 
-              {/* Master List */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-teal-50 to-cyan-100 dark:from-teal-900/20 dark:to-cyan-900/30 p-4 border border-teal-200 dark:border-teal-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <Database className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                  <span className="text-sm font-semibold text-teal-700 dark:text-teal-300">Master List</span>
-                </div>
-                <p className="text-2xl font-bold text-teal-800 dark:text-teal-200">{(stats?.mlCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-teal-600 dark:text-teal-400 mt-1">Country CSCA ML</p>
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <Database className="w-16 h-16 text-teal-600" />
-                </div>
-              </div>
             </div>
           </div>
 
@@ -513,7 +558,7 @@ export function UploadDashboard() {
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
                 <div className="flex items-center gap-2 mb-5">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">검증 상태</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">DSC Trust Chain 검증 상황</h3>
                 </div>
                 <div className="space-y-4">
                   {/* Valid */}
@@ -521,6 +566,19 @@ export function UploadDashboard() {
                     <div className="flex items-center gap-2 w-24">
                       <CheckCircle className="w-4 h-4 text-green-500" />
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">유효</span>
+                      <div className="group relative">
+                        <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
+                          <div className="space-y-1">
+                            <div className="font-semibold mb-1">Trust Chain 검증 성공</div>
+                            <div>✓ CSCA 발견</div>
+                            <div>✓ DSC가 CSCA로 서명됨</div>
+                            <div>✓ 서명 유효</div>
+                            <div>✓ 유효기간 내</div>
+                          </div>
+                          <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex-1">
                       <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
@@ -540,6 +598,17 @@ export function UploadDashboard() {
                     <div className="flex items-center gap-2 w-24">
                       <XCircle className="w-4 h-4 text-red-500" />
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">무효</span>
+                      <div className="group relative">
+                        <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
+                          <div className="space-y-1">
+                            <div className="font-semibold mb-1">Trust Chain 검증 실패</div>
+                            <div>✓ CSCA 발견</div>
+                            <div className="text-red-400">✗ 서명 검증 실패 또는 만료됨</div>
+                          </div>
+                          <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex-1">
                       <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
@@ -560,7 +629,18 @@ export function UploadDashboard() {
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2 w-24">
                       <Clock className="w-4 h-4 text-yellow-500" />
-                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">대기</span>
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">CSCA 미등록</span>
+                      <div className="group relative">
+                        <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
+                          <div className="space-y-1">
+                            <div className="font-semibold mb-1">CSCA를 찾지 못함</div>
+                            <div>아직 해당 국가의 CSCA가 업로드되지 않았습니다.</div>
+                            <div className="text-yellow-400">즉, DSC는 있지만 발급한 CSCA가 시스템에 없습니다.</div>
+                          </div>
+                          <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex-1">
                       <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
@@ -582,6 +662,16 @@ export function UploadDashboard() {
                     <div className="flex items-center gap-2 w-24">
                       <AlertCircle className="w-4 h-4 text-gray-500" />
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">오류</span>
+                      <div className="group relative">
+                        <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
+                        <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-56 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
+                          <div className="space-y-1">
+                            <div className="font-semibold mb-1">검증 중 기술적 오류</div>
+                            <div>인증서 파싱 또는 검증 프로세스에서 오류가 발생했습니다.</div>
+                          </div>
+                          <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex-1">
                       <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">

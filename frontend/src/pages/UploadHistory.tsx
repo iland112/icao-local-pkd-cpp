@@ -6,6 +6,7 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  AlertTriangle,
   FileText,
   ChevronLeft,
   ChevronRight,
@@ -56,6 +57,11 @@ interface UploadHistoryItem {
   createdAt: string;
   updatedAt: string;
   validation?: ValidationStats;  // Validation statistics
+  // Collection 002 CSCA extraction statistics (v2.0.0)
+  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
+  cscaDuplicates?: number;       // Duplicate CSCAs detected
+  // LDAP storage status (v2.0.0 - Data Consistency)
+  ldapUploadedCount?: number;    // Number of certificates stored in LDAP
 }
 
 // 4-step status definition (simplified for table view)
@@ -876,6 +882,72 @@ export function UploadHistory() {
                       <span className="text-xs text-teal-700 dark:text-teal-300">ML</span>
                     </div>
                   </div>
+
+                  {/* Collection 002 CSCA Extraction Statistics (v2.0.0) */}
+                  {(selectedUpload.cscaExtractedFromMl || selectedUpload.cscaDuplicates) && (
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Collection 002 CSCA 추출</span>
+                        <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
+                          v2.0.0
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                          <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                            {selectedUpload.cscaExtractedFromMl || 0}
+                          </p>
+                          <span className="text-xs text-indigo-700 dark:text-indigo-300">추출됨</span>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                          <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                            {selectedUpload.cscaDuplicates || 0}
+                          </p>
+                          <span className="text-xs text-amber-700 dark:text-amber-300">중복</span>
+                        </div>
+                        <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                          <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                            {selectedUpload.cscaExtractedFromMl && selectedUpload.cscaExtractedFromMl > 0
+                              ? ((selectedUpload.cscaExtractedFromMl - (selectedUpload.cscaDuplicates || 0)) / selectedUpload.cscaExtractedFromMl * 100).toFixed(0)
+                              : '0'}%
+                          </p>
+                          <span className="text-xs text-green-700 dark:text-green-300">신규</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* LDAP Storage Warning - Data Consistency Check (v2.0.0) */}
+                  {selectedUpload.status === 'COMPLETED' &&
+                   selectedUpload.certificateCount &&
+                   selectedUpload.certificateCount > 0 &&
+                   (!selectedUpload.ldapUploadedCount || selectedUpload.ldapUploadedCount === 0) && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1">
+                          <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">
+                            ⚠️ LDAP 저장 실패 - 데이터 불일치 감지
+                          </h4>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                            {selectedUpload.certificateCount}개의 인증서가 PostgreSQL에는 저장되었지만 LDAP에는 저장되지 않았습니다.
+                          </p>
+                          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                            이 파일을 삭제하고 다시 업로드하거나, 관리자에게 문의하세요.
+                          </p>
+                          <div className="mt-2 flex gap-2">
+                            <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
+                              DB: {selectedUpload.certificateCount}개
+                            </span>
+                            <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
+                              LDAP: {selectedUpload.ldapUploadedCount || 0}개
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Upload ID - Compact */}
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">

@@ -47,6 +47,9 @@ export interface UploadedFile {
   certificateCount?: number;
   totalEntries?: number;
   processedEntries?: number;
+  // Collection 002 CSCA extraction statistics (v2.0.0)
+  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
+  cscaDuplicates?: number;       // Duplicate CSCAs detected
   // Validation statistics
   validation?: {
     validCount: number;
@@ -308,6 +311,9 @@ export interface UploadStatisticsOverview {
   crlCount: number;
   mlCount: number;  // Master List count
   countriesCount: number;
+  // Collection 002 CSCA extraction statistics (v2.0.0)
+  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
+  cscaDuplicates?: number;       // Duplicate CSCAs detected
   validation: ValidationStats;
 }
 

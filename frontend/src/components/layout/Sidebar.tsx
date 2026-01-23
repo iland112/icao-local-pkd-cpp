@@ -91,6 +91,13 @@ const navSections: NavSection[] = [
     ],
   },
   {
+    title: 'Admin & Security',
+    items: [
+      { path: '/admin/operation-audit', label: '운영 감사 로그', icon: <ShieldCheck className="w-4 h-4" /> },
+      { path: '/admin/audit-log', label: '인증 감사 로그', icon: <Key className="w-4 h-4" /> },
+    ],
+  },
+  {
     title: 'API Documentation',
     items: [
       { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=PKD+Management+API+v1.5.10`, label: 'PKD Management', icon: <BookOpen className="w-4 h-4" />, external: true },

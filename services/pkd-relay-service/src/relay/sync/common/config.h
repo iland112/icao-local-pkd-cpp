@@ -32,6 +32,10 @@ struct Config {
     std::string ldapBindPassword;  // Must be set via environment variable
     std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
 
+    // LDAP DIT Structure (runtime configurable)
+    std::string ldapDataContainer = "dc=data";       // Container for normal certificates
+    std::string ldapNcDataContainer = "dc=nc-data";  // Container for non-conformant DSC
+
     // Sync settings
     bool autoReconcile = true;
     int maxReconcileBatchSize = 100;
@@ -56,6 +60,8 @@ struct Config {
         if (auto e = std::getenv("LDAP_BIND_DN")) ldapBindDn = e;
         if (auto e = std::getenv("LDAP_BIND_PASSWORD")) ldapBindPassword = e;
         if (auto e = std::getenv("LDAP_BASE_DN")) ldapBaseDn = e;
+        if (auto e = std::getenv("LDAP_DATA_CONTAINER")) ldapDataContainer = e;
+        if (auto e = std::getenv("LDAP_NC_DATA_CONTAINER")) ldapNcDataContainer = e;
         if (auto e = std::getenv("AUTO_RECONCILE")) autoReconcile = (std::string(e) == "true");
         if (auto e = std::getenv("MAX_RECONCILE_BATCH_SIZE")) maxReconcileBatchSize = std::stoi(e);
         if (auto e = std::getenv("DAILY_SYNC_ENABLED")) dailySyncEnabled = (std::string(e) == "true");

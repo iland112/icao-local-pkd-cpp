@@ -15,7 +15,8 @@ std::string LdapOperations::buildDn(const std::string& certType,
                                      const std::string& countryCode,
                                      const std::string& certId) const {
     std::string org;
-    std::string dc = "dc=data";
+    // v2.0.0: Use configurable LDAP DIT structure (runtime environment variable)
+    std::string dc = config_.ldapDataContainer;
 
     if (certType == "CSCA") {
         org = "o=csca";
@@ -23,15 +24,16 @@ std::string LdapOperations::buildDn(const std::string& certType,
         org = "o=dsc";
     } else if (certType == "DSC_NC") {
         org = "o=dsc";
-        dc = "dc=nc-data";
+        dc = config_.ldapNcDataContainer;
     } else if (certType == "CRL") {
         org = "o=crl";
     } else {
         return "";
     }
 
+    // v2.0.0: Use configurable base DN (no more hardcoded dc=download,dc=pkd)
     return "cn=cert-" + certId + "," + org + ",c=" + countryCode + "," +
-           dc + ",dc=download,dc=pkd," + config_.ldapBaseDn;
+           dc + "," + config_.ldapBaseDn;
 }
 
 std::string LdapOperations::certToPem(const std::vector<unsigned char>& certData) {

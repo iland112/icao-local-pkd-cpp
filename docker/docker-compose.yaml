@@ -81,13 +81,12 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      - LDAP_HOST=haproxy           # Read operations via load balancer
-      - LDAP_PORT=389
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
       # JWT Authentication (Phase 3)
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}          # From .env file (REQUIRED)
@@ -132,11 +131,10 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      - LDAP_HOST=haproxy           # Read only via load balancer
-      - LDAP_PORT=389
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
         condition: service_healthy
@@ -176,13 +174,15 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      - LDAP_HOST=haproxy
-      - LDAP_PORT=389
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      # LDAP DIT Structure (runtime configurable)
+      - LDAP_DATA_CONTAINER=${LDAP_DATA_CONTAINER:-dc=data}         # Default: dc=data
+      - LDAP_NC_DATA_CONTAINER=${LDAP_NC_DATA_CONTAINER:-dc=nc-data}  # Default: dc=nc-data
       - SYNC_INTERVAL_MINUTES=5
       - AUTO_RECONCILE=true
       - MAX_RECONCILE_BATCH_SIZE=100
@@ -265,13 +265,12 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      - LDAP_HOST=haproxy
-      - LDAP_PORT=389
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
         condition: service_healthy
@@ -330,7 +329,6 @@ services:
         condition: service_completed_successfully
     environment:
       - LDAP_HOST=openldap1
-      - LDAP_PORT=389
       - LDAP_ADMIN_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}  # From .env file (same as LDAP_BIND_PASSWORD)
       - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com

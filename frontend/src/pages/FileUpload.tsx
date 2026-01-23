@@ -962,7 +962,49 @@ export function FileUpload() {
                 </div>
               )}
 
-              {/* Error Messages */}
+              {/* LDAP Connection Failure Warning (v2.0.0 - Data Consistency Protection) */}
+              {overallStatus === 'FAILED' && overallMessage &&
+               (overallMessage.includes('LDAP 연결') || overallMessage.includes('LDAP connection') ||
+                overallMessage.includes('데이터 일관성')) && (
+                <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl">
+                  <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-6 h-6 text-red-500 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h4 className="font-bold text-base text-red-800 dark:text-red-300 mb-2">
+                        ⚠️ LDAP 연결 실패 - 데이터 일관성 보장 불가
+                      </h4>
+                      <p className="text-sm text-red-700 dark:text-red-400 mb-2">
+                        {overallMessage}
+                      </p>
+                      <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3 mt-3">
+                        <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">
+                          💡 해결 방법:
+                        </p>
+                        <ul className="text-sm text-red-700 dark:text-red-400 space-y-1.5">
+                          <li className="flex items-start gap-2">
+                            <span className="text-red-500 mt-1">1.</span>
+                            <span>LDAP 서버 상태를 확인하세요 (시스템 정보 &gt; LDAP 연결 테스트)</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-red-500 mt-1">2.</span>
+                            <span>LDAP 서버가 정상이면 이 파일을 다시 업로드하세요</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-red-500 mt-1">3.</span>
+                            <span>문제가 계속되면 관리자에게 문의하세요</span>
+                          </li>
+                        </ul>
+                      </div>
+                      <p className="text-xs text-red-600 dark:text-red-500 mt-3 font-medium">
+                        ℹ️ 참고: 이 오류는 v2.0.0부터 데이터 일관성을 보장하기 위해 도입되었습니다.
+                        LDAP 저장 실패 시 자동으로 업로드가 중단되어 PostgreSQL과 LDAP 간 데이터 불일치를 방지합니다.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* General Error Messages */}
               {errorMessages.length > 0 && (
                 <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
                   <h4 className="font-bold text-sm text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">

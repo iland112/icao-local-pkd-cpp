@@ -12,6 +12,8 @@
 #include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/bn.h>
+#include <iomanip>
+#include <sstream>
 
 using namespace crl;
 

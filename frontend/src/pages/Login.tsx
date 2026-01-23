@@ -1,4 +1,4 @@
-import { useState, FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, User, AlertCircle, Loader2, Shield } from 'lucide-react';
 import { authApi } from '@/services/api';
