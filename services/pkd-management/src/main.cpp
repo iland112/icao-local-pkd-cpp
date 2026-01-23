@@ -549,7 +549,8 @@ struct CscaValidationResult {
 };
 
 /**
- * @brief DSC Trust Chain Validation Result
+ * @brief DSC Trust Chain Validation Result (Updated for Sprint 3)
+ * Added trustChainPath for link certificate support
  */
 struct DscValidationResult {
     bool isValid;
@@ -559,6 +560,7 @@ struct DscValidationResult {
     bool notRevoked;
     std::string cscaSubjectDn;
     std::string errorMessage;
+    std::string trustChainPath;  // Sprint 3: Human-readable chain path (e.g., "DSC → CN=CSCA_old → CN=Link → CN=CSCA_new")
 };
 
 CscaValidationResult validateCscaCertificate(X509* cert) {
@@ -732,6 +734,353 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
     return cert;
 }
 
+// =============================================================================
+// Sprint 2: Trust Chain Building Utilities
+// =============================================================================
+
+/**
+ * @brief Trust Chain structure for DSC → CSCA validation
+ * May include Link Certificates for CSCA key transitions
+ */
+struct TrustChain {
+    std::vector<X509*> certificates;  // DSC → CSCA_old → Link → CSCA_new
+    bool isValid;
+    std::string path;  // Human-readable: "DSC → CN=CSCA_old → CN=Link → CN=CSCA_new"
+    std::string errorMessage;
+};
+
+/**
+ * @brief Get certificate subject DN as string
+ * @param cert X509 certificate
+ * @return Subject DN string
+ */
+static std::string getCertSubjectDn(X509* cert) {
+    if (!cert) return "";
+
+    char buffer[512];
+    X509_NAME* subject = X509_get_subject_name(cert);
+    X509_NAME_oneline(subject, buffer, sizeof(buffer));
+
+    return std::string(buffer);
+}
+
+/**
+ * @brief Get certificate issuer DN as string
+ * @param cert X509 certificate
+ * @return Issuer DN string
+ */
+static std::string getCertIssuerDn(X509* cert) {
+    if (!cert) return "";
+
+    char buffer[512];
+    X509_NAME* issuer = X509_get_issuer_name(cert);
+    X509_NAME_oneline(issuer, buffer, sizeof(buffer));
+
+    return std::string(buffer);
+}
+
+/**
+ * @brief Check if certificate is self-signed (subject == issuer)
+ * @param cert X509 certificate
+ * @return true if self-signed, false otherwise
+ */
+static bool isSelfSigned(X509* cert) {
+    if (!cert) return false;
+
+    std::string subjectDn = getCertSubjectDn(cert);
+    std::string issuerDn = getCertIssuerDn(cert);
+
+    // Case-insensitive DN comparison (RFC 4517)
+    return (strcasecmp(subjectDn.c_str(), issuerDn.c_str()) == 0);
+}
+
+/**
+ * @brief Check if certificate is a Link Certificate (cross-signed CSCA)
+ * Link certificates have:
+ * - Subject != Issuer (not self-signed)
+ * - BasicConstraints: CA:TRUE
+ * - KeyUsage: Certificate Sign
+ * @param cert X509 certificate
+ * @return true if link certificate, false otherwise
+ */
+static bool isLinkCertificate(X509* cert) {
+    if (!cert) return false;
+
+    // Must NOT be self-signed
+    if (isSelfSigned(cert)) {
+        return false;
+    }
+
+    // Check BasicConstraints: CA:TRUE
+    BASIC_CONSTRAINTS* bc = (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, nullptr, nullptr);
+    if (!bc || !bc->ca) {
+        if (bc) BASIC_CONSTRAINTS_free(bc);
+        return false;
+    }
+    BASIC_CONSTRAINTS_free(bc);
+
+    // Check KeyUsage: keyCertSign
+    ASN1_BIT_STRING* usage = (ASN1_BIT_STRING*)X509_get_ext_d2i(cert, NID_key_usage, nullptr, nullptr);
+    if (!usage) {
+        return false;
+    }
+
+    bool hasKeyCertSign = (ASN1_BIT_STRING_get_bit(usage, 5) == 1);  // Bit 5 = keyCertSign
+    ASN1_BIT_STRING_free(usage);
+
+    return hasKeyCertSign;
+}
+
+/**
+ * @brief Find ALL CSCAs matching subject DN (including link certificates)
+ * @param conn PostgreSQL connection
+ * @param subjectDn Subject DN to search
+ * @return Vector of X509 certificates (caller must free)
+ */
+static std::vector<X509*> findAllCscasBySubjectDn(PGconn* conn, const std::string& subjectDn) {
+    std::vector<X509*> result;
+
+    if (!conn || subjectDn.empty()) {
+        return result;
+    }
+
+    // Escape DN for SQL (basic escaping)
+    std::string escapedDn = subjectDn;
+    size_t pos = 0;
+    while ((pos = escapedDn.find("'", pos)) != std::string::npos) {
+        escapedDn.replace(pos, 1, "''");
+        pos += 2;
+    }
+
+    // Case-insensitive search for all CSCAs (including link certificates)
+    std::string query = "SELECT certificate_binary FROM certificate WHERE "
+                        "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "')";
+
+    spdlog::debug("Find all CSCAs query: {}", query.substr(0, 200));
+
+    PGresult* res = PQexec(conn, query.c_str());
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        spdlog::error("Find all CSCAs query failed: {}", PQerrorMessage(conn));
+        PQclear(res);
+        return result;
+    }
+
+    int numRows = PQntuples(res);
+    spdlog::info("Found {} CSCA(s) for subject DN: {}", numRows, subjectDn.substr(0, 80));
+
+    for (int i = 0; i < numRows; i++) {
+        char* certData = PQgetvalue(res, i, 0);
+        int certLen = PQgetlength(res, i, 0);
+
+        if (!certData || certLen == 0) {
+            spdlog::warn("Find all CSCAs: row {} has empty certificate data", i);
+            continue;
+        }
+
+        // Parse bytea hex format
+        std::vector<uint8_t> derBytes;
+        if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
+            // Hex encoded
+            for (int j = 2; j < certLen; j += 2) {
+                char hex[3] = {certData[j], certData[j+1], 0};
+                derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+            }
+        } else {
+            // Raw binary
+            if (certLen > 0 && (unsigned char)certData[0] == 0x30) {
+                derBytes.assign(certData, certData + certLen);
+            }
+        }
+
+        if (derBytes.empty()) {
+            spdlog::warn("Find all CSCAs: row {} failed to parse binary data", i);
+            continue;
+        }
+
+        const uint8_t* data = derBytes.data();
+        X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+        if (!cert) {
+            unsigned long err = ERR_get_error();
+            char errBuf[256];
+            ERR_error_string_n(err, errBuf, sizeof(errBuf));
+            spdlog::error("Find all CSCAs: row {} d2i_X509 failed: {}", i, errBuf);
+            continue;
+        }
+
+        result.push_back(cert);
+        spdlog::debug("Find all CSCAs: row {} parsed successfully (selfSigned={})",
+                     i, isSelfSigned(cert));
+    }
+
+    PQclear(res);
+    return result;
+}
+
+/**
+ * @brief Build trust chain from DSC to root CSCA
+ * May traverse Link Certificates for CSCA key transitions
+ * @param dscCert DSC certificate to validate
+ * @param allCscas Vector of all available CSCA certificates
+ * @param maxDepth Maximum chain depth (default: 5)
+ * @return TrustChain structure with certificates and validity status
+ */
+static TrustChain buildTrustChain(X509* dscCert,
+                           const std::vector<X509*>& allCscas,
+                           int maxDepth = 5) {
+    TrustChain chain;
+    chain.isValid = false;
+
+    if (!dscCert) {
+        chain.errorMessage = "DSC certificate is null";
+        return chain;
+    }
+
+    // Step 1: Add DSC as first certificate in chain
+    chain.certificates.push_back(dscCert);
+
+    // Step 2: Build chain iteratively
+    X509* current = dscCert;
+    std::set<std::string> visitedDns;  // Prevent circular references
+    int depth = 0;
+
+    while (depth < maxDepth) {
+        depth++;
+
+        // Get issuer DN of current certificate
+        std::string currentIssuerDn = getCertIssuerDn(current);
+
+        if (currentIssuerDn.empty()) {
+            chain.errorMessage = "Failed to extract issuer DN";
+            return chain;
+        }
+
+        // Prevent circular references
+        if (visitedDns.count(currentIssuerDn) > 0) {
+            chain.errorMessage = "Circular reference detected at depth " + std::to_string(depth);
+            spdlog::error("Chain building: {}", chain.errorMessage);
+            return chain;
+        }
+        visitedDns.insert(currentIssuerDn);
+
+        // Check if current certificate is self-signed (root)
+        if (isSelfSigned(current)) {
+            chain.isValid = true;
+            spdlog::info("Chain building: Reached root CSCA at depth {}", depth);
+            break;
+        }
+
+        // Find issuer certificate in CSCA list
+        X509* issuer = nullptr;
+        for (X509* csca : allCscas) {
+            std::string cscaSubjectDn = getCertSubjectDn(csca);
+
+            // Case-insensitive DN comparison (RFC 4517)
+            if (strcasecmp(currentIssuerDn.c_str(), cscaSubjectDn.c_str()) == 0) {
+                issuer = csca;
+                spdlog::debug("Chain building: Found issuer at depth {}: {}",
+                              depth, cscaSubjectDn.substr(0, 50));
+                break;
+            }
+        }
+
+        if (!issuer) {
+            chain.errorMessage = "Chain broken: Issuer not found at depth " +
+                                 std::to_string(depth) + " (issuer: " +
+                                 currentIssuerDn.substr(0, 80) + ")";
+            spdlog::warn("Chain building: {}", chain.errorMessage);
+            return chain;
+        }
+
+        // Add issuer to chain
+        chain.certificates.push_back(issuer);
+        current = issuer;
+    }
+
+    if (depth >= maxDepth) {
+        chain.errorMessage = "Maximum chain depth exceeded (" + std::to_string(maxDepth) + ")";
+        chain.isValid = false;
+        return chain;
+    }
+
+    // Step 3: Build human-readable path
+    chain.path = "DSC";
+    for (size_t i = 1; i < chain.certificates.size(); i++) {
+        std::string subjectDn = getCertSubjectDn(chain.certificates[i]);
+        // Extract CN from DN for readability
+        size_t cnPos = subjectDn.find("CN=");
+        std::string cnPart = (cnPos != std::string::npos)
+                             ? subjectDn.substr(cnPos, 30)
+                             : subjectDn.substr(0, 30);
+        chain.path += " → " + cnPart;
+    }
+
+    return chain;
+}
+
+/**
+ * @brief Validate entire trust chain (signatures + expiration)
+ * @param chain TrustChain structure to validate
+ * @return true if all signatures and expiration checks pass, false otherwise
+ */
+static bool validateTrustChain(const TrustChain& chain) {
+    if (!chain.isValid) {
+        spdlog::warn("Chain validation: Chain is already marked as invalid");
+        return false;
+    }
+
+    if (chain.certificates.empty()) {
+        spdlog::error("Chain validation: No certificates in chain");
+        return false;
+    }
+
+    time_t now = time(nullptr);
+
+    // Validate each certificate in chain (except the first one, which is DSC - already validated)
+    for (size_t i = 1; i < chain.certificates.size(); i++) {
+        X509* cert = chain.certificates[i];
+        X509* issuer = (i + 1 < chain.certificates.size()) ? chain.certificates[i + 1] : cert;  // Last cert is self-signed
+
+        // Check expiration
+        if (X509_cmp_time(X509_get0_notAfter(cert), &now) < 0) {
+            spdlog::warn("Chain validation: Certificate {} is EXPIRED", i);
+            return false;
+        }
+        if (X509_cmp_time(X509_get0_notBefore(cert), &now) > 0) {
+            spdlog::warn("Chain validation: Certificate {} is NOT YET VALID", i);
+            return false;
+        }
+
+        // Verify signature (cert signed by issuer)
+        EVP_PKEY* issuerPubKey = X509_get_pubkey(issuer);
+        if (!issuerPubKey) {
+            spdlog::error("Chain validation: Failed to extract public key from issuer {}", i);
+            return false;
+        }
+
+        int verifyResult = X509_verify(cert, issuerPubKey);
+        EVP_PKEY_free(issuerPubKey);
+
+        if (verifyResult != 1) {
+            unsigned long err = ERR_get_error();
+            char errBuf[256];
+            ERR_error_string_n(err, errBuf, sizeof(errBuf));
+            spdlog::error("Chain validation: Signature verification FAILED at depth {}: {}",
+                         i, errBuf);
+            return false;
+        }
+
+        spdlog::debug("Chain validation: Certificate {} signature VALID", i);
+    }
+
+    spdlog::info("Chain validation: Trust chain VALID ({} certificates)",
+                 chain.certificates.size());
+    return true;
+}
+
+// =============================================================================
+// DSC Trust Chain Validation (Updated for Sprint 3)
+// =============================================================================
+
 /**
  * @brief Validate DSC certificate against its issuing CSCA
  * Checks:
@@ -740,62 +1089,71 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
  * 3. DSC is not expired
  */
 DscValidationResult validateDscCertificate(PGconn* conn, X509* dscCert, const std::string& issuerDn) {
-    DscValidationResult result = {false, false, false, false, false, "", ""};
+    DscValidationResult result = {false, false, false, false, false, "", "", ""};  // Added trustChainPath field
 
     if (!dscCert) {
         result.errorMessage = "DSC certificate is null";
         return result;
     }
 
-    // 1. Check expiration
+    // Step 1: Check DSC expiration
     time_t now = time(nullptr);
     if (X509_cmp_time(X509_get0_notAfter(dscCert), &now) < 0) {
         result.errorMessage = "DSC certificate is expired";
-        spdlog::warn("DSC validation: Certificate is EXPIRED");
+        spdlog::warn("DSC validation: DSC is EXPIRED");
         return result;
     }
     if (X509_cmp_time(X509_get0_notBefore(dscCert), &now) > 0) {
         result.errorMessage = "DSC certificate is not yet valid";
-        spdlog::warn("DSC validation: Certificate is NOT YET VALID");
+        spdlog::warn("DSC validation: DSC is NOT YET VALID");
         return result;
     }
     result.notExpired = true;
 
-    // 2. Find CSCA in DB
-    X509* cscaCert = findCscaByIssuerDn(conn, issuerDn);
-    if (!cscaCert) {
-        result.errorMessage = "CSCA not found for issuer: " + issuerDn.substr(0, 80);
-        spdlog::warn("DSC validation: CSCA NOT FOUND for issuer: {}", issuerDn.substr(0, 80));
+    // Step 2: Find ALL CSCAs matching issuer DN (including link certificates)
+    std::vector<X509*> allCscas = findAllCscasBySubjectDn(conn, issuerDn);
+
+    if (allCscas.empty()) {
+        result.errorMessage = "No CSCA found for issuer: " + issuerDn.substr(0, 80);
+        spdlog::warn("DSC validation: CSCA NOT FOUND");
         return result;
     }
     result.cscaFound = true;
     result.cscaSubjectDn = issuerDn;
 
-    spdlog::info("DSC validation: Found CSCA for issuer: {}", issuerDn.substr(0, 80));
+    spdlog::info("DSC validation: Found {} CSCA(s) for issuer (may include link certs)",
+                 allCscas.size());
 
-    // 3. Verify DSC signature with CSCA public key
-    EVP_PKEY* cscaPubKey = X509_get_pubkey(cscaCert);
-    if (!cscaPubKey) {
-        result.errorMessage = "Failed to extract CSCA public key";
-        X509_free(cscaCert);
+    // Step 3: Build trust chain (may traverse link certificates)
+    TrustChain chain = buildTrustChain(dscCert, allCscas);
+
+    if (!chain.isValid) {
+        result.errorMessage = "Failed to build trust chain: " + chain.errorMessage;
+        spdlog::warn("DSC validation: {}", result.errorMessage);
+
+        // Cleanup
+        for (X509* csca : allCscas) X509_free(csca);
         return result;
     }
 
-    int verifyResult = X509_verify(dscCert, cscaPubKey);
-    EVP_PKEY_free(cscaPubKey);
-    X509_free(cscaCert);
+    spdlog::info("DSC validation: Trust chain built successfully ({} steps)",
+                 chain.certificates.size());
+    result.trustChainPath = chain.path;  // Sprint 3: Store human-readable chain path
 
-    if (verifyResult == 1) {
+    // Step 4: Validate entire chain (signatures + expiration)
+    bool chainValid = validateTrustChain(chain);
+
+    if (chainValid) {
         result.signatureValid = true;
         result.isValid = true;
-        spdlog::info("DSC validation: Trust Chain VERIFIED - signature valid");
+        spdlog::info("DSC validation: Trust Chain VERIFIED - Path: {}", result.trustChainPath);
     } else {
-        unsigned long err = ERR_get_error();
-        char errBuf[256];
-        ERR_error_string_n(err, errBuf, sizeof(errBuf));
-        result.errorMessage = std::string("DSC signature verification failed: ") + errBuf;
+        result.errorMessage = "Trust chain validation failed (signature or expiration check)";
         spdlog::error("DSC validation: Trust Chain FAILED - {}", result.errorMessage);
     }
+
+    // Cleanup
+    for (X509* csca : allCscas) X509_free(csca);
 
     return result;
 }
@@ -822,6 +1180,7 @@ struct ValidationResultRecord {
     // Trust chain
     bool trustChainValid = false;
     std::string trustChainMessage;
+    std::string trustChainPath;  // Sprint 3: Human-readable chain path
     bool cscaFound = false;
     std::string cscaSubjectDn;
     std::string cscaFingerprint;
@@ -862,11 +1221,12 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
     if (!conn) return false;
 
     // Use parameterized query (Phase 2 - SQL Injection Prevention)
+    // Sprint 3: Added trust_chain_path field
     const char* query =
         "INSERT INTO validation_result ("
         "certificate_id, upload_id, certificate_type, country_code, "
         "subject_dn, issuer_dn, serial_number, "
-        "validation_status, trust_chain_valid, trust_chain_message, "
+        "validation_status, trust_chain_valid, trust_chain_message, trust_chain_path, "
         "csca_found, csca_subject_dn, csca_fingerprint, signature_verified, signature_algorithm, "
         "validity_check_passed, is_expired, is_not_yet_valid, not_before, not_after, "
         "is_ca, is_self_signed, path_length_constraint, "
@@ -874,9 +1234,9 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
         "crl_check_status, crl_check_message, "
         "error_code, error_message, validation_duration_ms"
         ") VALUES ("
-        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
-        "$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, "
-        "$21, $22, $23, $24, $25, $26, $27, $28, $29, $30"
+        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, "
+        "$22, $23, $24, $25, $26, $27, $28, $29, $30, $31"
         ")";
 
     // Prepare boolean strings (PostgreSQL requires lowercase 'true'/'false')
@@ -895,8 +1255,8 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
         ? std::to_string(record.pathLengthConstraint) : "";
     const std::string validationDurationMsStr = std::to_string(record.validationDurationMs);
 
-    // Build parameter array (30 parameters)
-    const char* paramValues[30];
+    // Build parameter array (31 parameters - Sprint 3: added trust_chain_path)
+    const char* paramValues[31];
     paramValues[0] = record.certificateId.c_str();
     paramValues[1] = record.uploadId.c_str();
     paramValues[2] = record.certificateType.c_str();
@@ -907,28 +1267,29 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
     paramValues[7] = record.validationStatus.c_str();
     paramValues[8] = trustChainValidStr.c_str();
     paramValues[9] = record.trustChainMessage.c_str();
-    paramValues[10] = cscaFoundStr.c_str();
-    paramValues[11] = record.cscaSubjectDn.c_str();
-    paramValues[12] = record.cscaFingerprint.c_str();
-    paramValues[13] = signatureVerifiedStr.c_str();
-    paramValues[14] = record.signatureAlgorithm.c_str();
-    paramValues[15] = validityCheckPassedStr.c_str();
-    paramValues[16] = isExpiredStr.c_str();
-    paramValues[17] = isNotYetValidStr.c_str();
-    paramValues[18] = record.notBefore.empty() ? nullptr : record.notBefore.c_str();
-    paramValues[19] = record.notAfter.empty() ? nullptr : record.notAfter.c_str();
-    paramValues[20] = isCaStr.c_str();
-    paramValues[21] = isSelfSignedStr.c_str();
-    paramValues[22] = (record.pathLengthConstraint >= 0) ? pathLengthConstraintStr.c_str() : nullptr;
-    paramValues[23] = keyUsageValidStr.c_str();
-    paramValues[24] = record.keyUsageFlags.c_str();
-    paramValues[25] = record.crlCheckStatus.c_str();
-    paramValues[26] = record.crlCheckMessage.c_str();
-    paramValues[27] = record.errorCode.c_str();
-    paramValues[28] = record.errorMessage.c_str();
-    paramValues[29] = validationDurationMsStr.c_str();
+    paramValues[10] = record.trustChainPath.c_str();  // Sprint 3: NEW field
+    paramValues[11] = cscaFoundStr.c_str();
+    paramValues[12] = record.cscaSubjectDn.c_str();
+    paramValues[13] = record.cscaFingerprint.c_str();
+    paramValues[14] = signatureVerifiedStr.c_str();
+    paramValues[15] = record.signatureAlgorithm.c_str();
+    paramValues[16] = validityCheckPassedStr.c_str();
+    paramValues[17] = isExpiredStr.c_str();
+    paramValues[18] = isNotYetValidStr.c_str();
+    paramValues[19] = record.notBefore.empty() ? nullptr : record.notBefore.c_str();
+    paramValues[20] = record.notAfter.empty() ? nullptr : record.notAfter.c_str();
+    paramValues[21] = isCaStr.c_str();
+    paramValues[22] = isSelfSignedStr.c_str();
+    paramValues[23] = (record.pathLengthConstraint >= 0) ? pathLengthConstraintStr.c_str() : nullptr;
+    paramValues[24] = keyUsageValidStr.c_str();
+    paramValues[25] = record.keyUsageFlags.c_str();
+    paramValues[26] = record.crlCheckStatus.c_str();
+    paramValues[27] = record.crlCheckMessage.c_str();
+    paramValues[28] = record.errorCode.c_str();
+    paramValues[29] = record.errorMessage.c_str();
+    paramValues[30] = validationDurationMsStr.c_str();
 
-    PGresult* res = PQexecParams(conn, query, 30, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn, query, 31, nullptr, paramValues,
                                  nullptr, nullptr, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     if (!success) {
@@ -2761,6 +3122,7 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         valRecord.signatureVerified = dscValidation.signatureValid;
         valRecord.validityCheckPassed = dscValidation.notExpired;
         valRecord.isExpired = !dscValidation.notExpired;
+        valRecord.trustChainPath = dscValidation.trustChainPath;  // Sprint 3: Chain path
 
         if (dscValidation.isValid) {
             validationStatus = "VALID";
@@ -2807,6 +3169,7 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         valRecord.signatureVerified = dscValidation.signatureValid;
         valRecord.validityCheckPassed = dscValidation.notExpired;
         valRecord.isExpired = !dscValidation.notExpired;
+        valRecord.trustChainPath = dscValidation.trustChainPath;  // Sprint 3: Chain path
 
         if (dscValidation.isValid) {
             validationStatus = "VALID";
