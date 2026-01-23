@@ -61,6 +61,9 @@ add_executable(${PROJECT_NAME}
     src/common/certificate_utils.cpp
     src/common/masterlist_processor.cpp
 
+    # Sprint 2: Link Certificate Validation (NEW)
+    src/common/crl_validator.cpp
+
     # Clean Architecture Layers (Existing)
     src/repositories/ldap_certificate_repository.cpp
     src/services/certificate_service.cpp
@@ -144,6 +147,32 @@ target_link_libraries(test_ldap_dn PRIVATE
 
 # Register test with CTest
 add_test(NAME ldap_dn_test COMMAND test_ldap_dn)
+
+# =============================================================================
+# CRL Validator Tests (Sprint 2)
+# =============================================================================
+add_executable(test_crl_validator
+    tests/crl_validator_test.cpp
+    src/common/crl_validator.cpp
+)
+
+target_include_directories(test_crl_validator PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${PostgreSQL_INCLUDE_DIRS}
+)
+
+target_link_libraries(test_crl_validator PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    PostgreSQL::PostgreSQL
+    spdlog::spdlog
+)
+
+# Register test with CTest
+add_test(NAME crl_validator_test COMMAND test_crl_validator)
 
 # =============================================================================
 # Build Info
