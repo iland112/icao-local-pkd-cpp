@@ -63,6 +63,7 @@ add_executable(${PROJECT_NAME}
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp
+    src/common/lc_validator.cpp
 
     # Clean Architecture Layers (Existing)
     src/repositories/ldap_certificate_repository.cpp
