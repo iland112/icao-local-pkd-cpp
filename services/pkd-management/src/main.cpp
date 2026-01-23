@@ -3960,11 +3960,23 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                     std::string countryCode = extractCountryCode(subjectDn);
                                     std::string certType = "CSCA";
 
-                                    // Validate certificate
+                                    // Sprint 3 Task 3.3: Validate both self-signed CSCAs and link certificates
                                     std::string validationStatus = "VALID";
-                                    if (subjectDn == issuerDn) {
+                                    if (isSelfSigned(cert)) {
+                                        // Self-signed CSCA: validate using existing function
                                         auto cscaValidation = validateCscaCertificate(cert);
                                         validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
+                                    } else if (isLinkCertificate(cert)) {
+                                        // Link Certificate: verify it has CA:TRUE and keyCertSign
+                                        // Link certificates are cross-signed CSCAs used for key transitions
+                                        // They cannot be validated independently (require old CSCA for signature check)
+                                        // For now, mark as VALID if it has correct extensions
+                                        validationStatus = "VALID";
+                                        spdlog::info("Master List: Link Certificate detected: {}", subjectDn);
+                                    } else {
+                                        // Neither self-signed CSCA nor link certificate
+                                        validationStatus = "INVALID";
+                                        spdlog::warn("Master List: Invalid certificate (not self-signed and not link cert): {}", subjectDn);
                                     }
 
                                     // Save to DB
