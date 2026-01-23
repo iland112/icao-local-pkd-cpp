@@ -86,6 +86,9 @@ COPY shared/ ./shared/
 # Copy source code (changes frequently) - AFTER CACHE_BUST
 COPY services/pkd-management/src/ ./src/
 
+# Copy tests directory (Sprint 1: Unit tests)
+COPY services/pkd-management/tests/ ./tests/
+
 # DEBUG: Verify source code was copied correctly
 RUN echo "=== VERIFYING COPIED SOURCE CODE ===" && \
     grep "spdlog::info.*ICAO" ./src/main.cpp | head -5 && \
@@ -93,6 +96,8 @@ RUN echo "=== VERIFYING COPIED SOURCE CODE ===" && \
     grep -n "registerHandler" ./src/main.cpp | grep -A 1 "certificates" | head -20 && \
     echo "=== CHECKING certificateService DECLARATION ===" && \
     grep -n "std::shared_ptr<services::CertificateService> certificateService" ./src/main.cpp && \
+    echo "=== CHECKING BASEDN FIX ===" && \
+    grep -A 2 "Certificate search base DN" ./src/main.cpp && \
     echo "=== END VERIFICATION ==="
 
 # CRITICAL: Touch all source files to force CMake to recompile
@@ -155,6 +160,9 @@ RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
 # CRITICAL: Copy versioned binary - filename changes force cache invalidation
 ARG CACHE_BUST
 COPY --from=builder /app/build_fresh/bin/pkd-management-${CACHE_BUST} /app/pkd-management
+
+# Copy test binary for Sprint 1 unit tests
+COPY --from=builder /app/build_fresh/bin/test_ldap_dn /app/test_ldap_dn
 
 # Verify binary version immediately after COPY
 RUN apt-get update && apt-get install -y binutils && \

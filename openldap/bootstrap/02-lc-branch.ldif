@@ -1,0 +1,59 @@
+# =============================================================================
+# ICAO Local PKD - Link Certificate (LC) Branch
+# =============================================================================
+# Version: 1.0
+# Created: 2026-01-24
+# Sprint: Sprint 2 - Link Certificate Validation Core
+# Description: Creates o=lc branch under each country for Link Certificates
+#
+# Link Certificates (LC) are used for CSCA key transitions:
+# Trust Chain: CSCA (old) → LC → CSCA (new)
+#
+# DN Format: cn={fingerprint},o=lc,c={COUNTRY},dc=data,dc=download,dc=pkd,...
+# =============================================================================
+
+# Note: Country-specific o=lc containers will be created dynamically when
+# the first LC is stored for that country. This file serves as documentation
+# for the expected structure.
+
+# Example structure (for reference, not created here):
+#
+# dn: c=US,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+# objectClass: top
+# objectClass: country
+# c: US
+#
+# dn: o=lc,c=US,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+# objectClass: top
+# objectClass: organization
+# o: lc
+# description: Link Certificates for CSCA transitions
+#
+# dn: cn=a1b2c3d4...{64chars},o=lc,c=US,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+# objectClass: top
+# objectClass: pkdDownload
+# cn: a1b2c3d4...{64chars}
+# userCertificate;binary:: {DER encoded LC binary}
+# cscaSubjectDN: CN=CSCA-US-OLD
+# cscaSerialNumber: 1A2B3C
+# cscaCountryCode: US
+
+# =============================================================================
+# LDAP DIT Structure After Sprint 2
+# =============================================================================
+#
+# dc=ldap,dc=smartcoreinc,dc=com (Base DN)
+# └── dc=pkd
+#     └── dc=download
+#         ├── dc=data
+#         │   └── c={COUNTRY}
+#         │       ├── o=csca    (CSCA certificates)
+#         │       ├── o=dsc     (DSC certificates)
+#         │       ├── o=lc      (Link Certificates) ← NEW
+#         │       ├── o=crl     (CRL)
+#         │       └── o=ml      (Master Lists)
+#         └── dc=nc-data
+#             └── c={COUNTRY}
+#                 └── o=dsc     (DSC_NC - Non-Conformant)
+#
+# =============================================================================

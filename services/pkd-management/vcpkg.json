@@ -14,6 +14,7 @@
       "features": ["fmt"]
     },
     "libzip",
-    "catch2"
+    "catch2",
+    "gtest"
   ]
 }

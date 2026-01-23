@@ -59,6 +59,9 @@
 #include <optional>
 #include <regex>
 
+// Audit logging (Phase 4.4)
+#include "common/audit_log.h"
+
 namespace {
 
 // =============================================================================
@@ -1939,6 +1942,53 @@ void registerRoutes() {
             spdlog::info("PA verification completed - Status: {}, ID: {}, Duration: {}ms",
                 status, verificationId, processingTimeMs);
 
+            // Phase 4.4: Audit logging - PA_VERIFY
+            std::string conninfo = "host=" + dbHost +
+                                  " port=" + std::to_string(dbPort) +
+                                  " dbname=" + dbName +
+                                  " user=" + dbUser +
+                                  " password=" + dbPassword;
+            PGconn* auditConn = PQconnectdb(conninfo.c_str());
+            if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                common::AuditLogEntry auditEntry;
+
+                // Extract user info from session (if authenticated)
+                auto session = req->getSession();
+                if (session) {
+                    auto [userId, username] = common::getUserInfoFromSession(session);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
+                }
+
+                auditEntry.operationType = common::OperationType::PA_VERIFY;
+                auditEntry.resourceId = verificationId;
+                auditEntry.resourceType = "PA_VERIFICATION";
+                auditEntry.ipAddress = common::getClientIpAddress(req);
+                auditEntry.userAgent = req->getHeader("User-Agent");
+                auditEntry.requestMethod = "POST";
+                auditEntry.requestPath = "/api/pa/verify";
+                auditEntry.success = (status != "ERROR");
+                auditEntry.statusCode = (status == "ERROR") ? 500 : 200;
+                if (status == "ERROR" && !errors.empty()) {
+                    auditEntry.errorMessage = errors[0].message;
+                }
+                auditEntry.durationMs = processingTimeMs;
+
+                // Metadata
+                Json::Value metadata;
+                metadata["issuingCountry"] = issuingCountry;
+                metadata["documentNumber"] = documentNumber;
+                metadata["verificationStatus"] = status;
+                metadata["chainValid"] = chainResult.valid;
+                metadata["sodSignatureValid"] = sodResult.valid;
+                metadata["dataGroupsValid"] = dgResult.validGroups;
+                metadata["dataGroupsInvalid"] = dgResult.invalidGroups;
+                auditEntry.metadata = metadata;
+
+                common::logOperation(auditConn, auditEntry);
+                PQfinish(auditConn);
+            }
+
             // Wrap response in {success: true/false, data: {...}} format for frontend compatibility
             Json::Value wrappedResponse;
             wrappedResponse["success"] = (status == "VALID" || status == "INVALID");
@@ -1953,6 +2003,37 @@ void registerRoutes() {
 
             } catch (const std::exception& e) {
                 spdlog::error("Exception in PA verify handler: {}", e.what());
+
+                // Phase 4.4: Audit logging - PA_VERIFY failure (exception)
+                std::string conninfo = "host=" + dbHost +
+                                      " port=" + std::to_string(dbPort) +
+                                      " dbname=" + dbName +
+                                      " user=" + dbUser +
+                                      " password=" + dbPassword;
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::PA_VERIFY;
+                    auditEntry.resourceType = "PA_VERIFICATION";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/pa/verify";
+                    auditEntry.success = false;
+                    auditEntry.statusCode = 500;
+                    auditEntry.errorMessage = e.what();
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
+                }
+
                 Json::Value error;
                 error["success"] = false;
                 error["error"] = "Internal Server Error";
@@ -1962,6 +2043,37 @@ void registerRoutes() {
                 callback(resp);
             } catch (...) {
                 spdlog::error("Unknown exception in PA verify handler");
+
+                // Phase 4.4: Audit logging - PA_VERIFY failure (unknown exception)
+                std::string conninfo = "host=" + dbHost +
+                                      " port=" + std::to_string(dbPort) +
+                                      " dbname=" + dbName +
+                                      " user=" + dbUser +
+                                      " password=" + dbPassword;
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::PA_VERIFY;
+                    auditEntry.resourceType = "PA_VERIFICATION";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/pa/verify";
+                    auditEntry.success = false;
+                    auditEntry.statusCode = 500;
+                    auditEntry.errorMessage = "Unknown error occurred";
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
+                }
+
                 Json::Value error;
                 error["success"] = false;
                 error["error"] = "Internal Server Error";

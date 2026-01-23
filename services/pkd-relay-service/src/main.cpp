@@ -389,6 +389,9 @@ LdapStats getLdapStats() {
     int version = LDAP_VERSION3;
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
+    // Enable referral chasing for HAProxy/MMR environments
+    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_ON);
+
     // Authenticated bind for read access
     struct berval cred;
     cred.bv_val = const_cast<char*>(g_config.ldapBindPassword.c_str());
@@ -401,17 +404,21 @@ LdapStats getLdapStats() {
         return stats;
     }
 
-    // Search under dc=data for certificates
+    // Search under data container for certificates
     LDAPMessage* result = nullptr;
     const char* attrs[] = {"dn", nullptr};
     struct timeval timeout = {60, 0};
 
-    std::string dataBase = "dc=data,dc=download," + g_config.ldapBaseDn;
+    // v2.0.0: Use configurable LDAP DIT structure (runtime environment variable)
+    std::string dataBase = g_config.ldapDataContainer + "," + g_config.ldapBaseDn;
+    spdlog::info("LDAP search base DN: {}", dataBase);
     rc = ldap_search_ext_s(ld, dataBase.c_str(), LDAP_SCOPE_SUBTREE,
                            "(objectClass=pkdDownload)", const_cast<char**>(attrs), 0,
                            nullptr, nullptr, &timeout, 0, &result);
 
     if (rc == LDAP_SUCCESS) {
+        int entryCount = result ? ldap_count_entries(ld, result) : 0;
+        spdlog::info("LDAP search successful, found {} entries", entryCount);
         LDAPMessage* entry = ldap_first_entry(ld, result);
         while (entry) {
             char* dn = ldap_get_dn(ld, entry);
@@ -444,17 +451,24 @@ LdapStats getLdapStats() {
             }
             entry = ldap_next_entry(ld, entry);
         }
+    } else {
+        spdlog::error("LDAP search failed for dataBase: {}, error: {}", dataBase, ldap_err2string(rc));
     }
     if (result) ldap_msgfree(result);
 
-    // Search under dc=nc-data for DSC_NC
-    std::string ncDataBase = "dc=nc-data,dc=download," + g_config.ldapBaseDn;
+    // Search under nc-data container for DSC_NC
+    // v2.0.0: Use configurable LDAP DIT structure (runtime environment variable)
+    std::string ncDataBase = g_config.ldapNcDataContainer + "," + g_config.ldapBaseDn;
+    spdlog::info("LDAP search nc-data base DN: {}", ncDataBase);
     rc = ldap_search_ext_s(ld, ncDataBase.c_str(), LDAP_SCOPE_SUBTREE,
                            "(objectClass=pkdDownload)", const_cast<char**>(attrs), 0,
                            nullptr, nullptr, &timeout, 0, &result);
 
     if (rc == LDAP_SUCCESS) {
         stats.dscNcCount = ldap_count_entries(ld, result);
+        spdlog::info("LDAP nc-data search successful, found {} entries", stats.dscNcCount);
+    } else {
+        spdlog::error("LDAP search failed for ncDataBase: {}, error: {}", ncDataBase, ldap_err2string(rc));
     }
     if (result) ldap_msgfree(result);
 

@@ -21,7 +21,7 @@ std::optional<std::string> HttpClient::fetchHtml(const std::string& url, int tim
 
     spdlog::debug("[HttpClient] Host: {}, Path: {}", host, path);
 
-    // Create HTTP client
+    // Create HTTP client (Drogon auto-enables SSL for https:// URLs)
     auto client = drogon::HttpClient::newHttpClient(host);
 
     // Create request

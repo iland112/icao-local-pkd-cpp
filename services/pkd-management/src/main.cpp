@@ -24,6 +24,7 @@
 #include <array>
 #include <thread>
 #include <future>
+#include <atomic>  // For application-level LDAP load balancing round-robin
 
 // PostgreSQL header for direct connection test
 #include <libpq-fe.h>
@@ -55,6 +56,10 @@
 
 // Project headers
 #include "common.h"
+#include "common/ldap_utils.h"
+#include "common/audit_log.h"
+#include "common/certificate_utils.h"
+#include "common/masterlist_processor.h"
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
@@ -70,11 +75,24 @@
 #include "infrastructure/http/http_client.h"
 #include "infrastructure/notification/email_sender.h"
 
+// Authentication Module (Phase 3)
+#include "middleware/auth_middleware.h"
+#include "middleware/permission_filter.h"
+#include "auth/jwt_service.h"
+#include "auth/password_hash.h"
+#include "handlers/auth_handler.h"
+
+// Sprint 2: Link Certificate Validation
+#include "common/lc_validator.h"
+
 // Global certificate service (initialized in main(), used by all routes)
 std::shared_ptr<services::CertificateService> certificateService;
 
 // Global ICAO handler (initialized in main())
 std::shared_ptr<handlers::IcaoHandler> icaoHandler;
+
+// Global Auth handler (initialized in main())
+std::shared_ptr<handlers::AuthHandler> authHandler;
 
 // Global cache for available countries (populated on startup)
 std::set<std::string> cachedCountries;
@@ -113,9 +131,16 @@ struct AppConfig {
     std::string dbUser = "localpkd";
     std::string dbPassword;  // Must be set via environment variable
 
-    // LDAP Read: HAProxy for load balancing across MMR nodes
-    std::string ldapHost = "haproxy";
+    // LDAP Read: Application-level load balancing (v2.0.1 - HAProxy removed)
+    // Format: "host1:port1,host2:port2,..."
+    std::string ldapReadHosts = "openldap1:389,openldap2:389";
+    std::vector<std::string> ldapReadHostList;  // Parsed from ldapReadHosts
+    // Note: ldapReadRoundRobinIndex is defined as a global variable (atomic cannot be copied)
+
+    // Legacy single host support (for backward compatibility)
+    std::string ldapHost = "openldap1";
     int ldapPort = 389;
+
     // LDAP Write: Direct connection to primary master (openldap1) for write operations
     std::string ldapWriteHost = "openldap1";
     int ldapWritePort = 389;
@@ -144,8 +169,35 @@ struct AppConfig {
         if (auto val = std::getenv("DB_USER")) config.dbUser = val;
         if (auto val = std::getenv("DB_PASSWORD")) config.dbPassword = val;
 
-        if (auto val = std::getenv("LDAP_HOST")) config.ldapHost = val;
-        if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = std::stoi(val);
+        // LDAP Read Hosts (v2.0.1 - Application-level load balancing)
+        if (auto val = std::getenv("LDAP_READ_HOSTS")) {
+            config.ldapReadHosts = val;
+            // Parse comma-separated host:port list
+            std::stringstream ss(config.ldapReadHosts);
+            std::string item;
+            while (std::getline(ss, item, ',')) {
+                // Trim whitespace
+                item.erase(0, item.find_first_not_of(" \t"));
+                item.erase(item.find_last_not_of(" \t") + 1);
+                if (!item.empty()) {
+                    config.ldapReadHostList.push_back(item);
+                }
+            }
+            if (config.ldapReadHostList.empty()) {
+                throw std::runtime_error("LDAP_READ_HOSTS is empty or invalid");
+            }
+            spdlog::info("LDAP Read: {} hosts configured for load balancing", config.ldapReadHostList.size());
+            for (const auto& host : config.ldapReadHostList) {
+                spdlog::info("  - {}", host);
+            }
+        } else {
+            // Fallback to single host for backward compatibility
+            if (auto val = std::getenv("LDAP_HOST")) config.ldapHost = val;
+            if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = std::stoi(val);
+            config.ldapReadHostList.push_back(config.ldapHost + ":" + std::to_string(config.ldapPort));
+            spdlog::warn("LDAP_READ_HOSTS not set, using single host: {}", config.ldapReadHostList[0]);
+        }
+
         if (auto val = std::getenv("LDAP_WRITE_HOST")) config.ldapWriteHost = val;
         if (auto val = std::getenv("LDAP_WRITE_PORT")) config.ldapWritePort = std::stoi(val);
         if (auto val = std::getenv("LDAP_BIND_DN")) config.ldapBindDn = val;
@@ -179,6 +231,9 @@ struct AppConfig {
 
 // Global configuration
 AppConfig appConfig;
+
+// LDAP Read Load Balancing: Thread-safe round-robin index (global variable)
+std::atomic<size_t> g_ldapReadRoundRobinIndex{0};
 
 // =============================================================================
 // SSE Progress Management
@@ -1596,6 +1651,9 @@ LDAP* getLdapWriteConnection() {
     int version = LDAP_VERSION3;
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
+    // Direct connection, no referral chasing needed
+    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+
     struct berval cred;
     cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
     cred.bv_len = appConfig.ldapBindPassword.length();
@@ -1607,24 +1665,41 @@ LDAP* getLdapWriteConnection() {
         return nullptr;
     }
 
+    spdlog::debug("LDAP write: Connected successfully to {}:{}", appConfig.ldapWriteHost, appConfig.ldapWritePort);
     return ld;
 }
 
 /**
- * @brief Get LDAP connection for read operations (via HAProxy load balancer)
+ * @brief Get LDAP connection for read operations with application-level load balancing
+ *
+ * v2.0.1: HAProxy removed, direct connection to MMR nodes with round-robin
+ * Round-robin across multiple LDAP servers configured in LDAP_READ_HOSTS
  */
 LDAP* getLdapReadConnection() {
-    LDAP* ld = nullptr;
-    std::string uri = "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort);
+    if (appConfig.ldapReadHostList.empty()) {
+        spdlog::error("LDAP read connection failed: No LDAP hosts configured");
+        return nullptr;
+    }
 
+    // Round-robin: Select next host in a thread-safe manner
+    size_t hostIndex = g_ldapReadRoundRobinIndex.fetch_add(1) % appConfig.ldapReadHostList.size();
+    std::string selectedHost = appConfig.ldapReadHostList[hostIndex];
+    std::string uri = "ldap://" + selectedHost;
+
+    spdlog::debug("LDAP read: Connecting to {} (round-robin index: {})", selectedHost, hostIndex);
+
+    LDAP* ld = nullptr;
     int rc = ldap_initialize(&ld, uri.c_str());
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP read connection initialize failed: {}", ldap_err2string(rc));
+        spdlog::error("LDAP read connection initialize failed for {}: {}", selectedHost, ldap_err2string(rc));
         return nullptr;
     }
 
     int version = LDAP_VERSION3;
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
+
+    // Referral chasing not needed for direct connections
+    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
     struct berval cred;
     cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
@@ -1632,11 +1707,12 @@ LDAP* getLdapReadConnection() {
 
     rc = ldap_sasl_bind_s(ld, appConfig.ldapBindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP read connection bind failed: {}", ldap_err2string(rc));
+        spdlog::error("LDAP read connection bind failed for {}: {}", selectedHost, ldap_err2string(rc));
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         return nullptr;
     }
 
+    spdlog::debug("LDAP read: Connected successfully to {}", selectedHost);
     return ld;
 }
 
@@ -1828,24 +1904,83 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
     // This isolates the complex Subject DN structure and makes DN parsing more robust
     // Multi-valued RDN: cn={ESCAPED-SUBJECT-DN}+sn={SERIAL}
     // Java DN: cn={ESCAPED-SUBJECT-DN}+sn={SERIAL},o={csca|dsc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
+    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
     return "cn=" + escapedSubjectDn + "+sn=" + serialNumber + ",o=" + ou + ",c=" + countryCode +
-           "," + dataContainer + ",dc=download," + appConfig.ldapBaseDn;
+           "," + dataContainer + "," + appConfig.ldapBaseDn;
+}
+
+/**
+ * @brief Build LDAP DN for certificate (v2 - Fingerprint-based)
+ * @param fingerprint SHA-256 fingerprint of the certificate
+ * @param certType CSCA, DSC, or DSC_NC
+ * @param countryCode ISO country code
+ *
+ * DN Structure (v2.2.0 - Sprint 1: Fingerprint-based DN):
+ * cn={SHA256-FINGERPRINT},o={csca|dsc|dsc_nc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
+ *
+ * Benefits:
+ * - Resolves RFC 5280 serial number uniqueness violations (serial number collisions across issuers)
+ * - Eliminates DN escaping complexity (fingerprint is hex string, no special characters)
+ * - Fixed DN length (~130 chars), well under LDAP 255-char limit
+ * - Consistent with Master List and CRL DN structure
+ *
+ * Example:
+ * cn=0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b,o=csca,c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+ */
+std::string buildCertificateDnV2(const std::string& fingerprint, const std::string& certType,
+                                   const std::string& countryCode) {
+    // ICAO PKD DIT structure (updated for Sprint 2: added LC support)
+    std::string ou;
+    std::string dataContainer;
+
+    if (certType == "CSCA") {
+        ou = "csca";
+        dataContainer = "dc=data";
+    } else if (certType == "DSC") {
+        ou = "dsc";
+        dataContainer = "dc=data";
+    } else if (certType == "DSC_NC") {
+        ou = "dsc_nc";  // Note: using dsc_nc for consistency with LDAP schema
+        dataContainer = "dc=nc-data";
+    } else if (certType == "LC") {
+        // Sprint 2: Link Certificate support
+        ou = "lc";
+        dataContainer = "dc=data";
+    } else {
+        ou = "dsc";
+        dataContainer = "dc=data";
+    }
+
+    // Fingerprint is SHA-256 hex (64 chars), no escaping needed
+    // Example: 0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b
+    return "cn=" + fingerprint + ",o=" + ou + ",c=" + countryCode +
+           "," + dataContainer + "," + appConfig.ldapBaseDn;
 }
 
 /**
  * @brief Build LDAP DN for CRL
+ *
+ * SECURITY: Uses ldap_utils::escapeDnComponent for safe DN construction (RFC 4514)
  */
 std::string buildCrlDn(const std::string& countryCode, const std::string& fingerprint) {
-    return "cn=" + fingerprint + ",o=crl,c=" + countryCode +
-           ",dc=data,dc=download," + appConfig.ldapBaseDn;
+    // Fingerprint is SHA-256 hex (safe), but escape defensively
+    // Country code is ISO 3166-1 alpha-2 (safe), but escape defensively
+    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    return "cn=" + ldap_utils::escapeDnComponent(fingerprint) +
+           ",o=crl,c=" + ldap_utils::escapeDnComponent(countryCode) +
+           ",dc=data," + appConfig.ldapBaseDn;
 }
 
 /**
  * @brief Ensure country organizational unit exists in LDAP
+ *
+ * SECURITY: Uses ldap_utils::escapeDnComponent for safe DN construction (RFC 4514)
  */
 bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcData = false) {
     std::string dataContainer = isNcData ? "dc=nc-data" : "dc=data";
-    std::string countryDn = "c=" + countryCode + "," + dataContainer + ",dc=download," + appConfig.ldapBaseDn;
+    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    std::string countryDn = "c=" + ldap_utils::escapeDnComponent(countryCode) +
+                           "," + dataContainer + "," + appConfig.ldapBaseDn;
 
     // Check if country entry exists
     LDAPMessage* result = nullptr;
@@ -1886,9 +2021,10 @@ bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcDa
         return false;
     }
 
-    // Create organizational units under country (csca, dsc, crl)
+    // Create organizational units under country (csca, dsc, lc, crl)
+    // Sprint 2: Added "lc" for Link Certificates
     std::vector<std::string> ous = isNcData ? std::vector<std::string>{"dsc"}
-                                            : std::vector<std::string>{"csca", "dsc", "crl"};
+                                            : std::vector<std::string>{"csca", "dsc", "lc", "crl"};
 
     for (const auto& ouName : ous) {
         std::string ouDn = "o=" + ouName + "," + countryDn;
@@ -1927,7 +2063,8 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
                                    const std::vector<uint8_t>& certBinary,
                                    const std::string& pkdConformanceCode = "",
                                    const std::string& pkdConformanceText = "",
-                                   const std::string& pkdVersion = "") {
+                                   const std::string& pkdVersion = "",
+                                   bool useLegacyDn = true) {  // Sprint 1: Dual-mode DN support
     bool isNcData = (certType == "DSC_NC");
 
     // Ensure country structure exists
@@ -1939,7 +2076,15 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     // v1.5.0: Extract standard and non-standard attributes
     auto [standardDn, nonStandardAttrs] = extractStandardAttributes(subjectDn);
 
-    std::string dn = buildCertificateDn(certType, countryCode, subjectDn, serialNumber);
+    // Sprint 1 (Week 5): Support both legacy (Subject DN + Serial) and new (Fingerprint) DN formats
+    std::string dn;
+    if (useLegacyDn) {
+        dn = buildCertificateDn(certType, countryCode, subjectDn, serialNumber);
+        spdlog::debug("[Legacy DN] Using Subject DN + Serial: {}", dn);
+    } else {
+        dn = buildCertificateDnV2(fingerprint, certType, countryCode);
+        spdlog::debug("[v2 DN] Using Fingerprint-based DN: {}", dn);
+    }
 
     // Build LDAP entry attributes
     // objectClass hierarchy: inetOrgPerson (structural) + pkdDownload (auxiliary, ICAO PKD custom schema)
@@ -2193,17 +2338,27 @@ void updateCrlLdapStatus(PGconn* conn, const std::string& crlId, const std::stri
 /**
  * @brief Build DN for Master List entry in LDAP (o=ml node)
  * Format: cn={fingerprint},o=ml,c={country},dc=data,dc=download,dc=pkd,{baseDN}
+ *
+ * SECURITY: Uses ldap_utils::escapeDnComponent for safe DN construction (RFC 4514)
  */
 std::string buildMasterListDn(const std::string& countryCode, const std::string& fingerprint) {
-    return "cn=" + fingerprint + ",o=ml,c=" + countryCode +
-           ",dc=data,dc=download," + appConfig.ldapBaseDn;
+    // Fingerprint is SHA-256 hex (safe), but escape defensively
+    // Country code is ISO 3166-1 alpha-2 (safe), but escape defensively
+    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    return "cn=" + ldap_utils::escapeDnComponent(fingerprint) +
+           ",o=ml,c=" + ldap_utils::escapeDnComponent(countryCode) +
+           ",dc=data," + appConfig.ldapBaseDn;
 }
 
 /**
  * @brief Ensure Master List OU (o=ml) exists under country entry
+ *
+ * SECURITY: Uses ldap_utils::escapeDnComponent for safe DN construction (RFC 4514)
  */
 bool ensureMasterListOuExists(LDAP* ld, const std::string& countryCode) {
-    std::string countryDn = "c=" + countryCode + ",dc=data,dc=download," + appConfig.ldapBaseDn;
+    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    std::string countryDn = "c=" + ldap_utils::escapeDnComponent(countryCode) +
+                           ",dc=data," + appConfig.ldapBaseDn;
 
     // First ensure country exists
     LDAPMessage* result = nullptr;
@@ -2858,9 +3013,17 @@ void sendCompletionProgress(const std::string& uploadId, int totalItems, const s
 }
 
 /**
- * @brief Parse and save Master List from LDIF entry (DB + LDAP)
- * This handles entries with pkdMasterListContent attribute
+ * @brief Parse and save Master List from LDIF entry (DB + LDAP) - DEPRECATED v2.0.0
+ *
+ * @deprecated This function is deprecated since v2.0.0.
+ *             Use parseMasterListEntryV2() instead which extracts individual CSCAs.
+ *
+ * This handles entries with pkdMasterListContent attribute.
+ * LIMITATION: Only stores the entire Master List CMS without extracting individual CSCAs.
+ *
+ * @note Kept for backward compatibility. Will be removed in future versions.
  */
+[[deprecated("Use parseMasterListEntryV2() from masterlist_processor.h instead")]]
 bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                           const LdifEntry& entry, int& mlCount, int& ldapMlStoredCount) {
     // Check for pkdMasterListContent;binary (LDIF parser adds ;binary suffix for base64 values)
@@ -3030,10 +3193,28 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
         if (processingMode == "AUTO") {
             ld = getLdapWriteConnection();
             if (!ld) {
-                spdlog::warn("LDAP write connection failed - will only save to DB");
-            } else {
-                spdlog::info("LDAP write connection established for upload {}", uploadId);
+                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for upload {}", uploadId);
+                spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
+
+                // Update upload status to FAILED
+                const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
+                                       "error_message = 'LDAP connection failure - cannot ensure data consistency', "
+                                       "updated_at = NOW() WHERE id = $1";
+                const char* failParams[1] = {uploadId.c_str()};
+                PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
+                                                nullptr, nullptr, 0);
+                PQclear(failRes);
+
+                // Send failure progress
+                ProgressManager::getInstance().sendProgress(
+                    ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                        0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
+
+                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                PQfinish(conn);
+                return;
             }
+            spdlog::info("LDAP write connection established successfully for AUTO mode upload {}", uploadId);
         }
 
         try {
@@ -3146,6 +3327,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             int ldapCrlStoredCount = 0;
             int ldapMlStoredCount = 0;  // LDAP Master List count
             ValidationStats validationStats;  // Track validation statistics
+            MasterListStats mlStats;  // Master List processing statistics (v2.0.0)
 
             // Process each entry
             for (const auto& entry : entries) {
@@ -3167,8 +3349,14 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                     }
 
                     // Check for Master List (pkdMasterListContent;binary - LDIF parser adds ;binary for base64 values)
+                    // v2.0.0: Use new processor that extracts individual CSCAs
                     if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
-                        parseMasterListEntry(conn, ld, uploadId, entry, mlCount, ldapMlStoredCount);
+                        parseMasterListEntryV2(conn, ld, uploadId, entry, mlStats);
+                        // Update legacy counters for backward compatibility
+                        mlCount = mlStats.mlCount;
+                        ldapMlStoredCount = mlStats.ldapMlStoredCount;
+                        cscaCount += mlStats.cscaNewCount;  // Add new CSCAs to count
+                        ldapCertStoredCount += mlStats.ldapCscaStoredCount;  // Add LDAP stored CSCAs
                     }
 
                 } catch (const std::exception& e) {
@@ -3577,10 +3765,27 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
         if (processingMode == "AUTO") {
             ld = getLdapWriteConnection();
             if (!ld) {
-                spdlog::warn("LDAP write connection failed - will only save to DB");
-            } else {
-                spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
+                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
+                spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
+
+                // Update upload status to FAILED
+                const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
+                                       "error_message = 'LDAP connection failure - cannot ensure data consistency', "
+                                       "updated_at = NOW() WHERE id = $1";
+                const char* failParams[1] = {uploadId.c_str()};
+                PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
+                                                nullptr, nullptr, 0);
+                PQclear(failRes);
+
+                // Send failure progress
+                ProgressManager::getInstance().sendProgress(
+                    ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                        0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
+
+                PQfinish(conn);
+                return;
             }
+            spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
         }
 
         try {
@@ -4001,6 +4206,37 @@ Json::Value checkLdap() {
 void registerRoutes() {
     auto& app = drogon::app();
 
+    // =========================================================================
+    // Phase 3: Register Authentication Middleware (Global)
+    // =========================================================================
+    // Note: Authentication is DISABLED by default for backward compatibility
+    // Enable by setting: AUTH_ENABLED=true in environment
+    //
+    // IMPORTANT: AuthMiddleware uses HttpFilterBase (not HttpFilter<T>) for manual
+    // instantiation with parameters. It cannot be registered globally via registerFilter().
+    // Instead, apply it to individual routes using .addFilter() method.
+    //
+    // Example:
+    //   app.registerHandler("/api/upload/ldif", handler)
+    //      .addFilter(std::make_shared<middleware::AuthMiddleware>());
+    //
+    // For now, authentication is OPTIONAL per-route.
+    // TODO: Apply AuthMiddleware to all protected routes after testing.
+
+    spdlog::warn("⚠️  Phase 3 Authentication implementation complete (per-route filtering)");
+    spdlog::warn("⚠️  Apply .addFilter<AuthMiddleware>() to protected routes manually");
+
+    // =========================================================================
+    // Authentication Routes (Phase 3)
+    // =========================================================================
+    if (authHandler) {
+        authHandler->registerRoutes(app);
+    }
+
+    // =========================================================================
+    // API Routes
+    // =========================================================================
+
     // Manual mode: Trigger parse endpoint
     app.registerHandler(
         "/api/upload/{uploadId}/parse",
@@ -4132,8 +4368,27 @@ void registerRoutes() {
                     if (processingMode == "AUTO") {
                         ld = getLdapWriteConnection();
                         if (!ld) {
-                            spdlog::warn("LDAP write connection failed - will only save to DB");
+                            spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
+                            spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
+
+                            // Update upload status to FAILED
+                            const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
+                                                   "error_message = 'LDAP connection failure - cannot ensure data consistency', "
+                                                   "updated_at = NOW() WHERE id = $1";
+                            const char* failParams[1] = {uploadId.c_str()};
+                            PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
+                                                            nullptr, nullptr, 0);
+                            PQclear(failRes);
+
+                            // Send failure progress
+                            ProgressManager::getInstance().sendProgress(
+                                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                                    0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
+
+                            PQfinish(conn);
+                            return;
                         }
+                        spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
                     }
 
                     try {
@@ -4346,8 +4601,63 @@ void registerRoutes() {
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 callback(resp);
+
+                // Phase 4.4: Audit logging - UPLOAD_DELETE success
+                common::AuditLogEntry auditEntry;
+                auto session = req->getSession();
+                if (session) {
+                    auto [userId, username] = common::getUserInfoFromSession(session);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
+                }
+
+                auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
+                auditEntry.operationSubtype = "FAILED_UPLOAD";
+                auditEntry.resourceId = uploadId;
+                auditEntry.resourceType = "UPLOADED_FILE";
+                auditEntry.ipAddress = common::getClientIpAddress(req);
+                auditEntry.userAgent = req->getHeader("User-Agent");
+                auditEntry.requestMethod = "DELETE";
+                auditEntry.requestPath = "/api/upload/" + uploadId;
+                auditEntry.success = true;
+                auditEntry.statusCode = 200;
+
+                Json::Value metadata;
+                metadata["uploadId"] = uploadId;
+                auditEntry.metadata = metadata;
+
+                common::logOperation(conn, auditEntry);
+
             } catch (const std::exception& e) {
                 spdlog::error("Failed to cleanup upload {}: {}", uploadId, e.what());
+
+                // Phase 4.4: Audit logging - UPLOAD_DELETE failed
+                common::AuditLogEntry auditEntry;
+                auto session = req->getSession();
+                if (session) {
+                    auto [userId, username] = common::getUserInfoFromSession(session);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
+                }
+
+                auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
+                auditEntry.operationSubtype = "FAILED_UPLOAD";
+                auditEntry.resourceId = uploadId;
+                auditEntry.resourceType = "UPLOADED_FILE";
+                auditEntry.ipAddress = common::getClientIpAddress(req);
+                auditEntry.userAgent = req->getHeader("User-Agent");
+                auditEntry.requestMethod = "DELETE";
+                auditEntry.requestPath = "/api/upload/" + uploadId;
+                auditEntry.success = false;
+                auditEntry.statusCode = 500;
+                auditEntry.errorMessage = e.what();
+
+                Json::Value metadata;
+                metadata["uploadId"] = uploadId;
+                auditEntry.metadata = metadata;
+
+                common::logOperation(conn, auditEntry);
+
                 Json::Value error;
                 error["success"] = false;
                 error["message"] = std::string("Cleanup failed: ") + e.what();
@@ -4361,6 +4671,253 @@ void registerRoutes() {
         {drogon::Delete}
     );
 
+    // =========================================================================
+    // Audit Log API Endpoints (Phase 4.4)
+    // =========================================================================
+
+    // GET /api/audit/operations - List audit log entries with filtering
+    app.registerHandler(
+        "/api/audit/operations",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/audit/operations - List audit logs");
+
+            try {
+                // Query parameters
+                int limit = req->getOptionalParameter<int>("limit").value_or(50);
+                int offset = req->getOptionalParameter<int>("offset").value_or(0);
+                std::string operationType = req->getOptionalParameter<std::string>("operationType").value_or("");
+                std::string username = req->getOptionalParameter<std::string>("username").value_or("");
+                std::string success = req->getOptionalParameter<std::string>("success").value_or("");
+
+                // Validate limit
+                if (limit > 100) limit = 100;
+                if (limit < 1) limit = 50;
+
+                // Connect to database
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Database connection failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    PQfinish(conn);
+                    return;
+                }
+
+                // Build query with filters
+                std::string query = "SELECT id::text, user_id::text, username, operation_type, operation_subtype, "
+                                   "resource_id, resource_type, ip_address, user_agent, "
+                                   "request_method, request_path, success, status_code, "
+                                   "error_message, metadata::text, duration_ms, created_at::text "
+                                   "FROM operation_audit_log WHERE 1=1";
+
+                std::vector<std::string> paramValues;
+                int paramIndex = 1;
+
+                if (!operationType.empty()) {
+                    query += " AND operation_type = $" + std::to_string(paramIndex++);
+                    paramValues.push_back(operationType);
+                }
+
+                if (!username.empty()) {
+                    query += " AND username = $" + std::to_string(paramIndex++);
+                    paramValues.push_back(username);
+                }
+
+                if (!success.empty()) {
+                    if (success == "true" || success == "1") {
+                        query += " AND success = true";
+                    } else if (success == "false" || success == "0") {
+                        query += " AND success = false";
+                    }
+                }
+
+                query += " ORDER BY created_at DESC LIMIT $" + std::to_string(paramIndex++);
+                paramValues.push_back(std::to_string(limit));
+
+                query += " OFFSET $" + std::to_string(paramIndex);
+                paramValues.push_back(std::to_string(offset));
+
+                // Execute query
+                std::vector<const char*> params;
+                for (const auto& p : paramValues) {
+                    params.push_back(p.c_str());
+                }
+
+                PGresult* res = PQexecParams(conn, query.c_str(), params.size(), nullptr,
+                                            params.data(), nullptr, nullptr, 0);
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Query failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    PQclear(res);
+                    PQfinish(conn);
+                    return;
+                }
+
+                // Build result
+                Json::Value result;
+                result["success"] = true;
+                result["limit"] = limit;
+                result["offset"] = offset;
+                result["count"] = PQntuples(res);
+
+                Json::Value operations(Json::arrayValue);
+                for (int i = 0; i < PQntuples(res); i++) {
+                    Json::Value op;
+                    op["id"] = PQgetvalue(res, i, 0);
+                    if (!PQgetisnull(res, i, 1)) op["userId"] = PQgetvalue(res, i, 1);
+                    if (!PQgetisnull(res, i, 2)) op["username"] = PQgetvalue(res, i, 2);
+                    op["operationType"] = PQgetvalue(res, i, 3);
+                    if (!PQgetisnull(res, i, 4)) op["operationSubtype"] = PQgetvalue(res, i, 4);
+                    if (!PQgetisnull(res, i, 5)) op["resourceId"] = PQgetvalue(res, i, 5);
+                    if (!PQgetisnull(res, i, 6)) op["resourceType"] = PQgetvalue(res, i, 6);
+                    if (!PQgetisnull(res, i, 7)) op["ipAddress"] = PQgetvalue(res, i, 7);
+                    if (!PQgetisnull(res, i, 8)) op["userAgent"] = PQgetvalue(res, i, 8);
+                    if (!PQgetisnull(res, i, 9)) op["requestMethod"] = PQgetvalue(res, i, 9);
+                    if (!PQgetisnull(res, i, 10)) op["requestPath"] = PQgetvalue(res, i, 10);
+                    op["success"] = strcmp(PQgetvalue(res, i, 11), "t") == 0;
+                    if (!PQgetisnull(res, i, 12)) op["statusCode"] = std::stoi(PQgetvalue(res, i, 12));
+                    if (!PQgetisnull(res, i, 13)) op["errorMessage"] = PQgetvalue(res, i, 13);
+                    if (!PQgetisnull(res, i, 14)) {
+                        Json::CharReaderBuilder builder;
+                        Json::Value metadata;
+                        std::string metadataStr = PQgetvalue(res, i, 14);
+                        std::istringstream iss(metadataStr);
+                        std::string errors;
+                        if (Json::parseFromStream(builder, iss, &metadata, &errors)) {
+                            op["metadata"] = metadata;
+                        }
+                    }
+                    if (!PQgetisnull(res, i, 15)) op["durationMs"] = std::stoi(PQgetvalue(res, i, 15));
+                    op["createdAt"] = PQgetvalue(res, i, 16);
+
+                    operations.append(op);
+                }
+
+                result["operations"] = operations;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+                PQclear(res);
+                PQfinish(conn);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Audit log query error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/audit/operations/stats - Audit log statistics
+    app.registerHandler(
+        "/api/audit/operations/stats",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/audit/operations/stats - Audit log statistics");
+
+            try {
+                // Connect to database
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Database connection failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    PQfinish(conn);
+                    return;
+                }
+
+                Json::Value result;
+                result["success"] = true;
+
+                // Total operations
+                const char* totalQuery = "SELECT COUNT(*) FROM operation_audit_log";
+                PGresult* res = PQexec(conn, totalQuery);
+                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+                    result["totalOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                }
+                PQclear(res);
+
+                // Success rate
+                const char* successQuery = "SELECT COUNT(*) FROM operation_audit_log WHERE success = true";
+                res = PQexec(conn, successQuery);
+                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+                    result["successfulOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                }
+                PQclear(res);
+
+                // By operation type
+                const char* typeQuery = "SELECT operation_type, COUNT(*) as count "
+                                       "FROM operation_audit_log GROUP BY operation_type "
+                                       "ORDER BY count DESC";
+                res = PQexec(conn, typeQuery);
+                Json::Value byType(Json::arrayValue);
+                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                    for (int i = 0; i < PQntuples(res); i++) {
+                        Json::Value item;
+                        item["operationType"] = PQgetvalue(res, i, 0);
+                        item["count"] = std::stoi(PQgetvalue(res, i, 1));
+                        byType.append(item);
+                    }
+                }
+                result["byOperationType"] = byType;
+                PQclear(res);
+
+                // Recent activity (last 24 hours)
+                const char* recentQuery = "SELECT COUNT(*) FROM operation_audit_log "
+                                         "WHERE created_at > NOW() - INTERVAL '24 hours'";
+                res = PQexec(conn, recentQuery);
+                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+                    result["last24Hours"] = std::stoi(PQgetvalue(res, 0, 0));
+                }
+                PQclear(res);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+                PQfinish(conn);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Audit stats query error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
 
     // Health check endpoint
     app.registerHandler(
@@ -4653,6 +5210,33 @@ void registerRoutes() {
                 // Check for duplicate file
                 Json::Value duplicateCheck = checkDuplicateFile(conn, fileHash);
                 if (!duplicateCheck.isNull()) {
+                    // Phase 4.4: Audit logging - FILE_UPLOAD failed (duplicate)
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                    auditEntry.operationSubtype = "LDIF";
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/upload/ldif";
+                    auditEntry.success = false;
+                    auditEntry.statusCode = 409;
+                    auditEntry.errorMessage = "Duplicate file detected";
+
+                    Json::Value metadata;
+                    metadata["fileName"] = fileName;
+                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                    metadata["fileHash"] = fileHash.substr(0, 16);
+                    metadata["existingUploadId"] = duplicateCheck["uploadId"].asString();
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(conn, auditEntry);
                     PQfinish(conn);
 
                     Json::Value error;
@@ -4727,6 +5311,40 @@ void registerRoutes() {
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 resp->setStatusCode(drogon::k201Created);
                 callback(resp);
+
+                // Phase 4.4: Audit logging - FILE_UPLOAD success
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditLogEntry auditEntry;
+                    // Extract user info from session (if authenticated)
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                    auditEntry.operationSubtype = "LDIF";
+                    auditEntry.resourceId = uploadId;
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/upload/ldif";
+                    auditEntry.success = true;
+                    auditEntry.statusCode = 201;
+
+                    // Metadata
+                    Json::Value metadata;
+                    metadata["fileName"] = fileName;
+                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                    metadata["processingMode"] = processingMode;
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
+                }
 
             } catch (const std::exception& e) {
                 spdlog::error("LDIF upload failed: {}", e.what());
@@ -4842,6 +5460,33 @@ void registerRoutes() {
                 // Check for duplicate file
                 Json::Value duplicateCheck = checkDuplicateFile(conn, fileHash);
                 if (!duplicateCheck.isNull()) {
+                    // Phase 4.4: Audit logging - FILE_UPLOAD failed (duplicate)
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                    auditEntry.operationSubtype = "MASTER_LIST";
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/upload/masterlist";
+                    auditEntry.success = false;
+                    auditEntry.statusCode = 409;
+                    auditEntry.errorMessage = "Duplicate file detected";
+
+                    Json::Value metadata;
+                    metadata["fileName"] = fileName;
+                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                    metadata["fileHash"] = fileHash.substr(0, 16);
+                    metadata["existingUploadId"] = duplicateCheck["uploadId"].asString();
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(conn, auditEntry);
                     PQfinish(conn);
 
                     Json::Value error;
@@ -4927,8 +5572,27 @@ void registerRoutes() {
                         if (processingMode == "AUTO") {
                             ld = getLdapWriteConnection();
                             if (!ld) {
-                                spdlog::warn("LDAP write connection failed - will only save to DB");
+                                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for upload {}", uploadId);
+                                spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
+
+                                // Update upload status to FAILED
+                                const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
+                                                       "error_message = 'LDAP connection failure - cannot ensure data consistency', "
+                                                       "updated_at = NOW() WHERE id = $1";
+                                const char* failParams[1] = {uploadId.c_str()};
+                                PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
+                                                                nullptr, nullptr, 0);
+                                PQclear(failRes);
+
+                                // Send failure progress
+                                ProgressManager::getInstance().sendProgress(
+                                    ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                                        0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
+
+                                PQfinish(conn);
+                                return;
                             }
+                            spdlog::info("LDAP write connection established successfully for AUTO mode");
                         }
 
                         try {
@@ -4981,6 +5645,38 @@ void registerRoutes() {
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 resp->setStatusCode(drogon::k201Created);
                 callback(resp);
+
+                // Phase 4.4: Audit logging - FILE_UPLOAD success
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                    auditEntry.operationSubtype = "MASTER_LIST";
+                    auditEntry.resourceId = uploadId;
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/upload/masterlist";
+                    auditEntry.success = true;
+                    auditEntry.statusCode = 201;
+
+                    Json::Value metadata;
+                    metadata["fileName"] = fileName;
+                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                    metadata["processingMode"] = processingMode;
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
+                }
 
             } catch (const std::exception& e) {
                 spdlog::error("Master List upload failed: {}", e.what());
@@ -5764,6 +6460,368 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // GET /api/audit/operations - Query operation audit logs
+    app.registerHandler(
+        "/api/audit/operations",
+        [&appConfig](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/audit/operations");
+
+            // Get database connection
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword +
+                                  " connect_timeout=5";
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                spdlog::error("Database connection failed: {}", PQerrorMessage(conn));
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Extract query parameters
+            std::string operationType = req->getParameter("operationType");
+            std::string username = req->getParameter("username");
+            std::string successStr = req->getParameter("success");
+            std::string startDate = req->getParameter("startDate");
+            std::string endDate = req->getParameter("endDate");
+
+            int limit = 50;  // default
+            int offset = 0;  // default
+            if (auto l = req->getParameter("limit"); !l.empty()) {
+                limit = std::stoi(l);
+            }
+            if (auto o = req->getParameter("offset"); !o.empty()) {
+                offset = std::stoi(o);
+            }
+
+            // Build WHERE clause conditions
+            std::vector<std::string> conditions;
+            std::vector<std::string> paramValues;
+            int paramIndex = 1;
+
+            if (!operationType.empty()) {
+                conditions.push_back("operation_type = $" + std::to_string(paramIndex++));
+                paramValues.push_back(operationType);
+            }
+            if (!username.empty()) {
+                conditions.push_back("username ILIKE $" + std::to_string(paramIndex++));
+                paramValues.push_back("%" + username + "%");
+            }
+            if (!successStr.empty()) {
+                bool successBool = (successStr == "true" || successStr == "1");
+                conditions.push_back("success = $" + std::to_string(paramIndex++));
+                paramValues.push_back(successBool ? "true" : "false");
+            }
+            if (!startDate.empty()) {
+                conditions.push_back("created_at >= $" + std::to_string(paramIndex++) + "::timestamp");
+                paramValues.push_back(startDate);
+            }
+            if (!endDate.empty()) {
+                conditions.push_back("created_at <= $" + std::to_string(paramIndex++) + "::timestamp");
+                paramValues.push_back(endDate);
+            }
+
+            // Build main query
+            std::ostringstream queryBuilder;
+            queryBuilder << "SELECT id, user_id, username, operation_type, operation_subtype, "
+                        << "resource_id, resource_type, ip_address, user_agent, request_method, "
+                        << "request_path, success, status_code, error_message, metadata, "
+                        << "duration_ms, created_at "
+                        << "FROM operation_audit_log";
+
+            if (!conditions.empty()) {
+                queryBuilder << " WHERE " << conditions[0];
+                for (size_t i = 1; i < conditions.size(); ++i) {
+                    queryBuilder << " AND " << conditions[i];
+                }
+            }
+
+            queryBuilder << " ORDER BY created_at DESC LIMIT $" << paramIndex
+                        << " OFFSET $" << (paramIndex + 1);
+            paramIndex += 2;
+            paramValues.push_back(std::to_string(limit));
+            paramValues.push_back(std::to_string(offset));
+
+            // Convert to const char* array
+            std::vector<const char*> paramValuesPtrs;
+            for (const auto& val : paramValues) {
+                paramValuesPtrs.push_back(val.c_str());
+            }
+
+            // Execute query
+            std::string query = queryBuilder.str();
+            PGresult* res = PQexecParams(conn, query.c_str(), paramValuesPtrs.size(),
+                                        nullptr, paramValuesPtrs.data(),
+                                        nullptr, nullptr, 0);
+
+            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                spdlog::error("Query failed: {}", PQerrorMessage(conn));
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Query failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQclear(res);
+                PQfinish(conn);
+                return;
+            }
+
+            // Build JSON response
+            Json::Value data(Json::arrayValue);
+            int nrows = PQntuples(res);
+
+            for (int i = 0; i < nrows; ++i) {
+                Json::Value entry;
+                entry["id"] = std::stoi(PQgetvalue(res, i, 0));
+                entry["userId"] = PQgetisnull(res, i, 1) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 1));
+                entry["username"] = PQgetisnull(res, i, 2) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 2));
+                entry["operationType"] = PQgetvalue(res, i, 3);
+                entry["operationSubtype"] = PQgetisnull(res, i, 4) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 4));
+                entry["resourceId"] = PQgetisnull(res, i, 5) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 5));
+                entry["resourceType"] = PQgetisnull(res, i, 6) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 6));
+                entry["ipAddress"] = PQgetisnull(res, i, 7) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 7));
+                entry["userAgent"] = PQgetisnull(res, i, 8) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 8));
+                entry["requestMethod"] = PQgetisnull(res, i, 9) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 9));
+                entry["requestPath"] = PQgetisnull(res, i, 10) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 10));
+                entry["success"] = (std::string(PQgetvalue(res, i, 11)) == "t");
+                entry["statusCode"] = PQgetisnull(res, i, 12) ? Json::Value::null : std::stoi(PQgetvalue(res, i, 12));
+                entry["errorMessage"] = PQgetisnull(res, i, 13) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 13));
+
+                // Parse metadata JSON
+                if (!PQgetisnull(res, i, 14)) {
+                    Json::CharReaderBuilder builder;
+                    Json::CharReader* reader = builder.newCharReader();
+                    std::string metadataStr = PQgetvalue(res, i, 14);
+                    Json::Value metadata;
+                    std::string errs;
+                    if (reader->parse(metadataStr.c_str(), metadataStr.c_str() + metadataStr.size(), &metadata, &errs)) {
+                        entry["metadata"] = metadata;
+                    } else {
+                        entry["metadata"] = Json::Value::null;
+                    }
+                    delete reader;
+                } else {
+                    entry["metadata"] = Json::Value::null;
+                }
+
+                entry["durationMs"] = PQgetisnull(res, i, 15) ? Json::Value::null : std::stoi(PQgetvalue(res, i, 15));
+                entry["createdAt"] = PQgetvalue(res, i, 16);
+
+                data.append(entry);
+            }
+
+            PQclear(res);
+
+            // Get total count
+            std::ostringstream countQueryBuilder;
+            countQueryBuilder << "SELECT COUNT(*) FROM operation_audit_log";
+            if (!conditions.empty()) {
+                countQueryBuilder << " WHERE " << conditions[0];
+                for (size_t i = 1; i < conditions.size(); ++i) {
+                    countQueryBuilder << " AND " << conditions[i];
+                }
+            }
+
+            // Remove limit and offset params from paramValues for count query
+            std::vector<const char*> countParamsPtrs;
+            for (size_t i = 0; i < paramValuesPtrs.size() - 2; ++i) {
+                countParamsPtrs.push_back(paramValuesPtrs[i]);
+            }
+
+            PGresult* countRes = PQexecParams(conn, countQueryBuilder.str().c_str(),
+                                             countParamsPtrs.size(),
+                                             nullptr, countParamsPtrs.data(),
+                                             nullptr, nullptr, 0);
+
+            int total = 0;
+            if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
+                total = std::stoi(PQgetvalue(countRes, 0, 0));
+            }
+            PQclear(countRes);
+            PQfinish(conn);
+
+            // Build response
+            Json::Value result;
+            result["success"] = true;
+            result["data"] = data;
+            result["total"] = total;
+            result["limit"] = limit;
+            result["offset"] = offset;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/audit/operations/stats - Aggregate statistics
+    app.registerHandler(
+        "/api/audit/operations/stats",
+        [&appConfig](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/audit/operations/stats");
+
+            // Get database connection
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword +
+                                  " connect_timeout=5";
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                spdlog::error("Database connection failed: {}", PQerrorMessage(conn));
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Extract query parameters (optional date range)
+            std::string startDate = req->getParameter("startDate");
+            std::string endDate = req->getParameter("endDate");
+
+            // Build WHERE clause for date range
+            std::string whereClause;
+            std::vector<std::string> paramValues;
+            std::vector<const char*> paramValuesPtrs;
+
+            if (!startDate.empty() && !endDate.empty()) {
+                whereClause = " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp";
+                paramValues.push_back(startDate);
+                paramValues.push_back(endDate);
+                for (const auto& val : paramValues) {
+                    paramValuesPtrs.push_back(val.c_str());
+                }
+            } else if (!startDate.empty()) {
+                whereClause = " WHERE created_at >= $1::timestamp";
+                paramValues.push_back(startDate);
+                paramValuesPtrs.push_back(paramValues[0].c_str());
+            } else if (!endDate.empty()) {
+                whereClause = " WHERE created_at <= $1::timestamp";
+                paramValues.push_back(endDate);
+                paramValuesPtrs.push_back(paramValues[0].c_str());
+            }
+
+            Json::Value stats;
+
+            // Total operations
+            std::string totalQuery = "SELECT COUNT(*) FROM operation_audit_log" + whereClause;
+            PGresult* totalRes = PQexecParams(conn, totalQuery.c_str(), paramValuesPtrs.size(),
+                                             nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
+            if (PQresultStatus(totalRes) == PGRES_TUPLES_OK && PQntuples(totalRes) > 0) {
+                stats["totalOperations"] = std::stoi(PQgetvalue(totalRes, 0, 0));
+            } else {
+                stats["totalOperations"] = 0;
+            }
+            PQclear(totalRes);
+
+            // Successful operations
+            std::string successQuery = "SELECT COUNT(*) FROM operation_audit_log" + whereClause;
+            if (!whereClause.empty()) {
+                successQuery += " AND success = true";
+            } else {
+                successQuery += " WHERE success = true";
+            }
+            PGresult* successRes = PQexecParams(conn, successQuery.c_str(), paramValuesPtrs.size(),
+                                               nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
+            if (PQresultStatus(successRes) == PGRES_TUPLES_OK && PQntuples(successRes) > 0) {
+                stats["successfulOperations"] = std::stoi(PQgetvalue(successRes, 0, 0));
+            } else {
+                stats["successfulOperations"] = 0;
+            }
+            PQclear(successRes);
+
+            // Failed operations
+            std::string failedQuery = "SELECT COUNT(*) FROM operation_audit_log" + whereClause;
+            if (!whereClause.empty()) {
+                failedQuery += " AND success = false";
+            } else {
+                failedQuery += " WHERE success = false";
+            }
+            PGresult* failedRes = PQexecParams(conn, failedQuery.c_str(), paramValuesPtrs.size(),
+                                              nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
+            if (PQresultStatus(failedRes) == PGRES_TUPLES_OK && PQntuples(failedRes) > 0) {
+                stats["failedOperations"] = std::stoi(PQgetvalue(failedRes, 0, 0));
+            } else {
+                stats["failedOperations"] = 0;
+            }
+            PQclear(failedRes);
+
+            // Operations by type
+            std::string typeQuery = "SELECT operation_type, COUNT(*) FROM operation_audit_log" +
+                                   whereClause + " GROUP BY operation_type";
+            PGresult* typeRes = PQexecParams(conn, typeQuery.c_str(), paramValuesPtrs.size(),
+                                            nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
+            Json::Value operationsByType;
+            if (PQresultStatus(typeRes) == PGRES_TUPLES_OK) {
+                for (int i = 0; i < PQntuples(typeRes); ++i) {
+                    std::string opType = PQgetvalue(typeRes, i, 0);
+                    int count = std::stoi(PQgetvalue(typeRes, i, 1));
+                    operationsByType[opType] = count;
+                }
+            }
+            stats["operationsByType"] = operationsByType;
+            PQclear(typeRes);
+
+            // Top users
+            std::string userQuery = "SELECT username, COUNT(*) as op_count FROM operation_audit_log" +
+                                   whereClause + " WHERE username IS NOT NULL " +
+                                   "GROUP BY username ORDER BY op_count DESC LIMIT 10";
+            PGresult* userRes = PQexecParams(conn, userQuery.c_str(), paramValuesPtrs.size(),
+                                            nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
+            Json::Value topUsers(Json::arrayValue);
+            if (PQresultStatus(userRes) == PGRES_TUPLES_OK) {
+                for (int i = 0; i < PQntuples(userRes); ++i) {
+                    Json::Value user;
+                    user["username"] = PQgetvalue(userRes, i, 0);
+                    user["operationCount"] = std::stoi(PQgetvalue(userRes, i, 1));
+                    topUsers.append(user);
+                }
+            }
+            stats["topUsers"] = topUsers;
+            PQclear(userRes);
+
+            // Average duration
+            std::string durationQuery = "SELECT AVG(duration_ms) FROM operation_audit_log" +
+                                       whereClause + " WHERE duration_ms IS NOT NULL";
+            PGresult* durationRes = PQexecParams(conn, durationQuery.c_str(), paramValuesPtrs.size(),
+                                                nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
+            if (PQresultStatus(durationRes) == PGRES_TUPLES_OK && PQntuples(durationRes) > 0 &&
+                !PQgetisnull(durationRes, 0, 0)) {
+                stats["averageDurationMs"] = std::stoi(PQgetvalue(durationRes, 0, 0));
+            } else {
+                stats["averageDurationMs"] = 0;
+            }
+            PQclear(durationRes);
+
+            PQfinish(conn);
+
+            // Build response
+            Json::Value result;
+            result["success"] = true;
+            result["data"] = stats;
+
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     // Root endpoint
     app.registerHandler(
         "/",
@@ -6279,6 +7337,45 @@ paths:
                 resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
                 callback(resp);
 
+                // Phase 4.4: Audit logging - CERT_EXPORT success (single file)
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditTimer timer;
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::CERT_EXPORT;
+                    auditEntry.operationSubtype = "SINGLE_CERT";
+                    auditEntry.resourceId = dn;
+                    auditEntry.resourceType = "CERTIFICATE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "GET";
+                    auditEntry.requestPath = "/api/certificates/export/file";
+                    auditEntry.success = true;
+                    auditEntry.statusCode = 200;
+                    auditEntry.durationMs = timer.getDurationMs();
+
+                    Json::Value metadata;
+                    metadata["format"] = format;
+                    metadata["fileName"] = result.filename;
+                    metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
+                }
+
             } catch (const std::exception& e) {
                 spdlog::error("Certificate export file error: {}", e.what());
                 Json::Value error;
@@ -6336,6 +7433,47 @@ paths:
                 resp->addHeader("Content-Type", result.contentType);
                 resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
                 callback(resp);
+
+                // Phase 4.4: Audit logging - CERT_EXPORT success (country ZIP)
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditTimer timer;
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::CERT_EXPORT;
+                    auditEntry.operationSubtype = "COUNTRY_ZIP";
+                    auditEntry.resourceId = country;
+                    auditEntry.resourceType = "CERTIFICATE_COLLECTION";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "GET";
+                    auditEntry.requestPath = "/api/certificates/export/country";
+                    auditEntry.success = true;
+                    auditEntry.statusCode = 200;
+                    auditEntry.durationMs = timer.getDurationMs();
+
+                    Json::Value metadata;
+                    metadata["country"] = country;
+                    metadata["format"] = format;
+                    metadata["fileName"] = result.filename;
+                    metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
+                    // Parse certificate count from filename if available
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
+                }
 
             } catch (const std::exception& e) {
                 spdlog::error("Certificate export country error: {}", e.what());
@@ -6437,7 +7575,659 @@ paths:
         spdlog::info("ICAO Auto Sync routes registered");
     }
 
-    spdlog::info("API routes registered");
+    // =========================================================================
+    // Sprint 2: Link Certificate Validation API
+    // =========================================================================
+
+    // POST /api/validate/link-cert - Validate Link Certificate trust chain
+    app.registerHandler(
+        "/api/validate/link-cert",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/validate/link-cert - Link Certificate validation");
+
+            // Parse JSON request body
+            auto json = req->getJsonObject();
+            if (!json) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid JSON body";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Get certificate binary (base64 encoded)
+            std::string certBase64 = (*json).get("certificateBinary", "").asString();
+            if (certBase64.empty()) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Missing certificateBinary field";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Decode base64
+            std::vector<uint8_t> certBinary;
+            try {
+                std::string decoded = drogon::utils::base64Decode(certBase64);
+                certBinary.assign(decoded.begin(), decoded.end());
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Base64 decode failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            try {
+                // Create LC validator
+                lc::LcValidator validator(conn);
+
+                // Validate Link Certificate
+                auto result = validator.validateLinkCertificate(certBinary);
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["trustChainValid"] = result.trustChainValid;
+                response["validationMessage"] = result.validationMessage;
+
+                // Signature validation
+                Json::Value signatures;
+                signatures["oldCscaSignatureValid"] = result.oldCscaSignatureValid;
+                signatures["oldCscaSubjectDn"] = result.oldCscaSubjectDn;
+                signatures["oldCscaFingerprint"] = result.oldCscaFingerprint;
+                signatures["newCscaSignatureValid"] = result.newCscaSignatureValid;
+                signatures["newCscaSubjectDn"] = result.newCscaSubjectDn;
+                signatures["newCscaFingerprint"] = result.newCscaFingerprint;
+                response["signatures"] = signatures;
+
+                // Certificate properties
+                Json::Value properties;
+                properties["validityPeriodValid"] = result.validityPeriodValid;
+                properties["notBefore"] = result.notBefore;
+                properties["notAfter"] = result.notAfter;
+                properties["extensionsValid"] = result.extensionsValid;
+                response["properties"] = properties;
+
+                // Extensions details
+                Json::Value extensions;
+                extensions["basicConstraintsCa"] = result.basicConstraintsCa;
+                extensions["basicConstraintsPathlen"] = result.basicConstraintsPathlen;
+                extensions["keyUsage"] = result.keyUsage;
+                extensions["extendedKeyUsage"] = result.extendedKeyUsage;
+                response["extensions"] = extensions;
+
+                // Revocation status
+                Json::Value revocation;
+                revocation["status"] = crl::revocationStatusToString(result.revocationStatus);
+                revocation["message"] = result.revocationMessage;
+                response["revocation"] = revocation;
+
+                // Metadata
+                response["validationDurationMs"] = result.validationDurationMs;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Validation failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Post}
+    );
+
+    // GET /api/link-certs/search - Search Link Certificates
+    app.registerHandler(
+        "/api/link-certs/search",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/link-certs/search - Search Link Certificates");
+
+            // Parse query parameters
+            std::string country = req->getParameter("country");
+            std::string validOnlyStr = req->getParameter("validOnly");
+            std::string limitStr = req->getParameter("limit");
+            std::string offsetStr = req->getParameter("offset");
+
+            bool validOnly = (validOnlyStr == "true");
+            int limit = limitStr.empty() ? 50 : std::stoi(limitStr);
+            int offset = offsetStr.empty() ? 0 : std::stoi(offsetStr);
+
+            // Validate parameters
+            if (limit <= 0 || limit > 1000) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid limit (must be 1-1000)";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            try {
+                // Build SQL query with parameterized parameters
+                std::ostringstream sql;
+                sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                    << "old_csca_subject_dn, new_csca_subject_dn, "
+                    << "trust_chain_valid, created_at, country_code "
+                    << "FROM link_certificate WHERE 1=1";
+
+                std::vector<std::string> paramValues;
+                int paramIndex = 1;
+
+                if (!country.empty()) {
+                    sql << " AND country_code = $" << paramIndex++;
+                    paramValues.push_back(country);
+                }
+
+                if (validOnly) {
+                    sql << " AND trust_chain_valid = true";
+                }
+
+                sql << " ORDER BY created_at DESC LIMIT $" << paramIndex++ << " OFFSET $" << paramIndex++;
+                paramValues.push_back(std::to_string(limit));
+                paramValues.push_back(std::to_string(offset));
+
+                // Prepare parameter pointers
+                std::vector<const char*> paramPointers;
+                for (const auto& pv : paramValues) {
+                    paramPointers.push_back(pv.c_str());
+                }
+
+                // Execute query
+                PGresult* res = PQexecParams(
+                    conn,
+                    sql.str().c_str(),
+                    paramPointers.size(),
+                    nullptr,
+                    paramPointers.data(),
+                    nullptr,
+                    nullptr,
+                    0
+                );
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    PQclear(res);
+                    throw std::runtime_error("Database query failed");
+                }
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+                response["total"] = PQntuples(res);
+                response["limit"] = limit;
+                response["offset"] = offset;
+
+                Json::Value certificates(Json::arrayValue);
+                for (int i = 0; i < PQntuples(res); i++) {
+                    Json::Value cert;
+                    cert["id"] = PQgetvalue(res, i, 0);
+                    cert["subjectDn"] = PQgetvalue(res, i, 1);
+                    cert["issuerDn"] = PQgetvalue(res, i, 2);
+                    cert["serialNumber"] = PQgetvalue(res, i, 3);
+                    cert["fingerprint"] = PQgetvalue(res, i, 4);
+                    cert["oldCscaSubjectDn"] = PQgetvalue(res, i, 5);
+                    cert["newCscaSubjectDn"] = PQgetvalue(res, i, 6);
+                    cert["trustChainValid"] = (strcmp(PQgetvalue(res, i, 7), "t") == 0);
+                    cert["createdAt"] = PQgetvalue(res, i, 8);
+                    cert["countryCode"] = PQgetvalue(res, i, 9);
+
+                    certificates.append(cert);
+                }
+
+                response["certificates"] = certificates;
+
+                PQclear(res);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Search failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/link-certs/{id} - Get Link Certificate details by ID
+    app.registerHandler(
+        "/api/link-certs/{id}",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& id) {
+            spdlog::info("GET /api/link-certs/{} - Get Link Certificate details", id);
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            try {
+                // Query LC by ID (parameterized query)
+                const char* query =
+                    "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                    "old_csca_subject_dn, old_csca_fingerprint, "
+                    "new_csca_subject_dn, new_csca_fingerprint, "
+                    "trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
+                    "validity_period_valid, not_before, not_after, "
+                    "extensions_valid, basic_constraints_ca, basic_constraints_pathlen, "
+                    "key_usage, extended_key_usage, "
+                    "revocation_status, revocation_message, "
+                    "ldap_dn_v2, stored_in_ldap, created_at, country_code "
+                    "FROM link_certificate WHERE id = $1";
+
+                const char* paramValues[1] = {id.c_str()};
+                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                             nullptr, nullptr, 0);
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                    PQclear(res);
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Link Certificate not found";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    PQfinish(conn);
+                    return;
+                }
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+
+                Json::Value cert;
+                cert["id"] = PQgetvalue(res, 0, 0);
+                cert["subjectDn"] = PQgetvalue(res, 0, 1);
+                cert["issuerDn"] = PQgetvalue(res, 0, 2);
+                cert["serialNumber"] = PQgetvalue(res, 0, 3);
+                cert["fingerprint"] = PQgetvalue(res, 0, 4);
+
+                Json::Value signatures;
+                signatures["oldCscaSubjectDn"] = PQgetvalue(res, 0, 5);
+                signatures["oldCscaFingerprint"] = PQgetvalue(res, 0, 6);
+                signatures["newCscaSubjectDn"] = PQgetvalue(res, 0, 7);
+                signatures["newCscaFingerprint"] = PQgetvalue(res, 0, 8);
+                signatures["trustChainValid"] = (strcmp(PQgetvalue(res, 0, 9), "t") == 0);
+                signatures["oldCscaSignatureValid"] = (strcmp(PQgetvalue(res, 0, 10), "t") == 0);
+                signatures["newCscaSignatureValid"] = (strcmp(PQgetvalue(res, 0, 11), "t") == 0);
+                cert["signatures"] = signatures;
+
+                Json::Value properties;
+                properties["validityPeriodValid"] = (strcmp(PQgetvalue(res, 0, 12), "t") == 0);
+                properties["notBefore"] = PQgetvalue(res, 0, 13);
+                properties["notAfter"] = PQgetvalue(res, 0, 14);
+                properties["extensionsValid"] = (strcmp(PQgetvalue(res, 0, 15), "t") == 0);
+                cert["properties"] = properties;
+
+                Json::Value extensions;
+                extensions["basicConstraintsCa"] = (strcmp(PQgetvalue(res, 0, 16), "t") == 0);
+                extensions["basicConstraintsPathlen"] = std::stoi(PQgetvalue(res, 0, 17));
+                extensions["keyUsage"] = PQgetvalue(res, 0, 18);
+                extensions["extendedKeyUsage"] = PQgetvalue(res, 0, 19);
+                cert["extensions"] = extensions;
+
+                Json::Value revocation;
+                revocation["status"] = PQgetvalue(res, 0, 20);
+                revocation["message"] = PQgetvalue(res, 0, 21);
+                cert["revocation"] = revocation;
+
+                cert["ldapDn"] = PQgetvalue(res, 0, 22);
+                cert["storedInLdap"] = (strcmp(PQgetvalue(res, 0, 23), "t") == 0);
+                cert["createdAt"] = PQgetvalue(res, 0, 24);
+                cert["countryCode"] = PQgetvalue(res, 0, 25);
+
+                response["certificate"] = cert;
+
+                PQclear(res);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("Query failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+
+            PQfinish(conn);
+        },
+        {drogon::Get}
+    );
+
+    // =========================================================================
+    // Sprint 1: LDAP DN Migration API (Internal)
+    // =========================================================================
+
+    // POST /api/internal/migrate-ldap-dns - Migrate batch of certificates to v2 DN
+    app.registerHandler(
+        "/api/internal/migrate-ldap-dns",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/internal/migrate-ldap-dns - Batch migration");
+
+            auto json = req->getJsonObject();
+            if (!json) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid JSON body";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            int offset = (*json).get("offset", 0).asInt();
+            int limit = (*json).get("limit", 100).asInt();
+            std::string mode = (*json).get("mode", "test").asString();
+
+            // Validate parameters
+            if (limit <= 0 || limit > 1000) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid limit (must be 1-1000)";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            if (mode != "test" && mode != "production") {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Invalid mode (must be 'test' or 'production')";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k400BadRequest);
+                callback(resp);
+                return;
+            }
+
+            spdlog::info("Migration batch - offset: {}, limit: {}, mode: {}", offset, limit, mode);
+
+            // Connect to database
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            if (PQstatus(conn) != CONNECTION_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Database connection failed";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                PQfinish(conn);
+                return;
+            }
+
+            // Connect to LDAP (only in production mode)
+            LDAP* ld = nullptr;
+            if (mode == "production") {
+                std::string ldapUri = "ldap://" + appConfig.ldapWriteHost + ":" +
+                                     std::to_string(appConfig.ldapWritePort);
+                int rc = ldap_initialize(&ld, ldapUri.c_str());
+                if (rc != LDAP_SUCCESS) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "LDAP initialization failed";
+                    PQfinish(conn);
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Bind to LDAP
+                int version = LDAP_VERSION3;
+                ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
+
+                berval cred;
+                cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
+                cred.bv_len = appConfig.ldapBindPassword.length();
+
+                rc = ldap_sasl_bind_s(ld, appConfig.ldapBindDn.c_str(), LDAP_SASL_SIMPLE,
+                                     &cred, nullptr, nullptr, nullptr);
+                if (rc != LDAP_SUCCESS) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = std::string("LDAP bind failed: ") + ldap_err2string(rc);
+                    PQfinish(conn);
+                    ldap_unbind_ext_s(ld, nullptr, nullptr);
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+            }
+
+            // Fetch batch of certificates
+            const char* query =
+                "SELECT id, fingerprint_sha256, certificate_type, country_code, "
+                "       certificate_binary, subject_dn, serial_number, issuer_dn "
+                "FROM certificate "
+                "WHERE stored_in_ldap = true AND ldap_dn_v2 IS NULL "
+                "ORDER BY id "
+                "OFFSET $1 LIMIT $2";
+
+            std::string offsetStr = std::to_string(offset);
+            std::string limitStr = std::to_string(limit);
+            const char* paramValues[2] = {offsetStr.c_str(), limitStr.c_str()};
+
+            PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
+                                        nullptr, nullptr, 0);
+
+            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = std::string("DB query failed: ") + PQerrorMessage(conn);
+                PQclear(res);
+                PQfinish(conn);
+                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+
+            int rowCount = PQntuples(res);
+            int successCount = 0;
+            int failedCount = 0;
+            Json::Value errors(Json::arrayValue);
+
+            // Process each certificate
+            for (int i = 0; i < rowCount; i++) {
+                std::string certId = PQgetvalue(res, i, 0);
+                std::string fingerprint = PQgetvalue(res, i, 1);
+                std::string certType = PQgetvalue(res, i, 2);
+                std::string country = PQgetvalue(res, i, 3);
+
+                // Get binary certificate data
+                size_t certDataLen = 0;
+                unsigned char* certDataEscaped = PQunescapeBytea(
+                    reinterpret_cast<const unsigned char*>(PQgetvalue(res, i, 4)),
+                    &certDataLen
+                );
+
+                if (!certDataEscaped) {
+                    failedCount++;
+                    errors.append(certId + ": Failed to unescape certificate binary");
+                    continue;
+                }
+
+                std::vector<uint8_t> certData(certDataEscaped, certDataEscaped + certDataLen);
+                PQfreemem(certDataEscaped);
+
+                std::string subjectDn = PQgetvalue(res, i, 5);
+                std::string serialNumber = PQgetvalue(res, i, 6);
+                std::string issuerDn = PQgetvalue(res, i, 7);
+
+                // Build new DN
+                std::string newDn = buildCertificateDnV2(fingerprint, certType, country);
+
+                // In production mode, add to LDAP
+                bool ldapSuccess = true;
+                if (mode == "production") {
+                    try {
+                        saveCertificateToLdap(
+                            ld, certType, country, subjectDn, issuerDn,
+                            serialNumber, fingerprint, certData,
+                            "", "", "",  // pkdConformance fields
+                            false  // useLegacyDn = false (use v2 DN)
+                        );
+                    } catch (const std::exception& e) {
+                        ldapSuccess = false;
+                        failedCount++;
+                        errors.append(certId + ": LDAP add failed - " + std::string(e.what()));
+                        continue;
+                    }
+                }
+
+                // Update database with new DN
+                if (ldapSuccess || mode == "test") {
+                    const char* updateQuery = "UPDATE certificate SET ldap_dn_v2 = $1 WHERE id = $2";
+                    const char* updateParams[2] = {newDn.c_str(), certId.c_str()};
+
+                    PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr,
+                                                      updateParams, nullptr, nullptr, 0);
+
+                    if (PQresultStatus(updateRes) == PGRES_COMMAND_OK) {
+                        successCount++;
+                        spdlog::debug("Migrated certificate {} to new DN: {}", certId, newDn);
+                    } else {
+                        failedCount++;
+                        errors.append(certId + ": DB update failed");
+                    }
+                    PQclear(updateRes);
+                }
+            }
+
+            PQclear(res);
+            PQfinish(conn);
+            if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+
+            // Update migration status
+            std::string statusConninfo = "host=" + appConfig.dbHost +
+                                        " port=" + std::to_string(appConfig.dbPort) +
+                                        " dbname=" + appConfig.dbName +
+                                        " user=" + appConfig.dbUser +
+                                        " password=" + appConfig.dbPassword;
+            PGconn* statusConn = PQconnectdb(statusConninfo.c_str());
+            if (PQstatus(statusConn) == CONNECTION_OK) {
+                const char* statusQuery =
+                    "UPDATE ldap_migration_status "
+                    "SET migrated_records = migrated_records + $1, "
+                    "    failed_records = failed_records + $2, "
+                    "    updated_at = NOW() "
+                    "WHERE table_name = 'certificate' "
+                    "  AND status = 'IN_PROGRESS'";
+
+                std::string successStr = std::to_string(successCount);
+                std::string failedStr = std::to_string(failedCount);
+                const char* statusParams[2] = {successStr.c_str(), failedStr.c_str()};
+
+                PGresult* statusRes = PQexecParams(statusConn, statusQuery, 2, nullptr,
+                                                  statusParams, nullptr, nullptr, 0);
+                PQclear(statusRes);
+            }
+            PQfinish(statusConn);
+
+            // Return results
+            Json::Value resp;
+            resp["success"] = true;
+            resp["mode"] = mode;
+            resp["processed"] = successCount + failedCount;
+            resp["success_count"] = successCount;
+            resp["failed_count"] = failedCount;
+            resp["errors"] = errors;
+
+            spdlog::info("Migration batch complete - success: {}, failed: {}",
+                        successCount, failedCount);
+
+            callback(drogon::HttpResponse::newHttpJsonResponse(resp));
+        },
+        {drogon::Post}
+    );
+
+    spdlog::info("API routes registered (including Sprint 1 migration endpoints)");
 }
 
 } // anonymous namespace
@@ -6469,8 +8259,9 @@ int main(int argc, char* argv[]) {
 
     try {
         // Initialize Certificate Service (Clean Architecture)
-        // Certificate search base DN: dc=download + configured base DN (which already includes dc=pkd)
-        std::string certSearchBaseDn = "dc=download," + appConfig.ldapBaseDn;
+        // Certificate search base DN: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+        // Note: Repository will prepend dc=data,dc=download based on search criteria
+        std::string certSearchBaseDn = appConfig.ldapBaseDn;
 
         repositories::LdapConfig ldapConfig(
             "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort),
@@ -6520,6 +8311,11 @@ int main(int argc, char* argv[]) {
         spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
                     appConfig.icaoPortalUrl,
                     appConfig.icaoAutoNotify ? "enabled" : "disabled");
+
+        // Initialize Authentication Handler (Phase 3)
+        spdlog::info("Initializing Authentication module...");
+        authHandler = std::make_shared<handlers::AuthHandler>(dbConnInfo);
+        spdlog::info("Authentication module initialized");
 
         auto& app = drogon::app();
 
