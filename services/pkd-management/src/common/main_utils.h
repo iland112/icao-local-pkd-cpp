@@ -42,16 +42,42 @@ std::vector<uint8_t> base64Decode(const std::string& encoded);
 std::string computeFileHash(const std::vector<uint8_t>& content);
 
 /**
- * @brief Extract country code from LDAP DN
+ * @brief Extract country code from DN (Universal)
  *
- * Extracts 2 or 3 letter country code from DN patterns like:
- * - ",c=KR," or ",C=KR,"
- * - Case-insensitive
+ * Extracts 2 or 3 letter country code from DN patterns in both formats:
+ * - Comma-separated (RFC 4514): "C=KR, O=Gov" or "CN=Test, C=US, O=Org"
+ * - Slash-separated (OpenSSL): "/C=CR/O=Junta/CN=CSCA"
+ * - LDAP DN: "cn=test,o=ml,c=FR,dc=data"
  *
- * @param dn LDAP Distinguished Name
- * @return std::string Country code (2-3 uppercase letters), or empty if not found
+ * Special handling:
+ * - ZZ → UN: Normalizes ISO 3166-1 "Unknown Territory" to United Nations per ICAO Doc 9303
+ * - O=United Nations → UN: Detects UN organization name and forces UN country code
+ *
+ * @param dn Distinguished Name (X.509 Subject/Issuer DN or LDAP DN)
+ * @return std::string Country code (2-3 uppercase letters), "UN" for United Nations, "XX" if not found
  *
  * @note Thread-safe
+ * @note Case-insensitive
+ *
+ * Examples:
+ * - "/C=CR/O=Junta/CN=CSCA" → "CR"
+ * - "C=KR, O=Gov, CN=CSCA" → "KR"
+ * - "C=ZZ, O=United Nations, CN=CSCA" → "UN" (normalized)
+ * - "O=United Nations, CN=CSCA" → "UN" (org detection)
+ */
+std::string extractCountryCode(const std::string& dn);
+
+/**
+ * @brief Extract country code from LDAP DN (Backward Compatibility Alias)
+ *
+ * This function is now an alias for extractCountryCode() to maintain backward compatibility.
+ * Use extractCountryCode() for new code.
+ *
+ * @param dn LDAP Distinguished Name
+ * @return std::string Country code (2-3 uppercase letters), or "XX" if not found
+ *
+ * @note Thread-safe
+ * @deprecated Use extractCountryCode() instead
  */
 std::string extractCountryCodeFromDn(const std::string& dn);
 
@@ -126,13 +152,13 @@ void updateMasterListLdapStatus(
 );
 
 /**
- * @brief Save certificate to LDAP (o=csca, o=dsc, or o=crl branch)
+ * @brief Save certificate to LDAP (o=csca, o=dsc, o=lc, or o=crl branch)
  *
  * Stores X.509 certificate in LDAP for primary storage.
  * DN format: cn={fingerprint},o={type},c={country},dc=data,dc=download,dc=pkd,...
  *
  * @param ld LDAP connection (must be authenticated and connected)
- * @param certType Certificate type (CSCA, DSC, DSC_NC)
+ * @param certType Certificate type (CSCA, DSC, DSC_NC, LC)
  * @param countryCode ISO 3166-1 country code
  * @param subjectDn X.509 Subject DN
  * @param issuerDn X.509 Issuer DN
@@ -148,6 +174,7 @@ void updateMasterListLdapStatus(
  * @warning certBinary must be valid X.509 DER format
  * @note NOT thread-safe (requires exclusive LDAP connection)
  * @note Uses userCertificate;binary attribute for storage
+ * @note Link Certificates (LC) are Cross-signed CSCAs (subject_dn != issuer_dn) stored in o=lc
  */
 std::string saveCertificateToLdap(
     LDAP* ld,

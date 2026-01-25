@@ -14,10 +14,15 @@ import {
   Hash,
   Calendar,
   HardDrive,
+  Eye,
+  X,
 } from 'lucide-react';
 import { uploadApi } from '@/services/api';
 import type { UploadedFile, UploadStatus, FileFormat } from '@/types';
 import { cn } from '@/utils/cn';
+import { validationApi } from '@/api/validationApi';
+import type { ValidationResult } from '@/types/validation';
+import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 
 export function UploadDetail() {
   const { uploadId } = useParams<{ uploadId: string }>();
@@ -26,6 +31,15 @@ export function UploadDetail() {
   const [upload, setUpload] = useState<UploadedFile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Sprint 3 Task 3.6: Validation results
+  const [showValidationDialog, setShowValidationDialog] = useState(false);
+  const [validationResults, setValidationResults] = useState<ValidationResult[]>([]);
+  const [validationLoading, setValidationLoading] = useState(false);
+  const [validationTotal, setValidationTotal] = useState(0);
+  const [validationPage, setValidationPage] = useState(0);
+  const [validationLimit] = useState(20);
+  const [selectedValidation, setSelectedValidation] = useState<ValidationResult | null>(null);
 
   useEffect(() => {
     if (uploadId) {
@@ -52,6 +66,35 @@ export function UploadDetail() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Sprint 3 Task 3.6: Fetch validation results
+  const fetchValidationResults = async (page: number = 0) => {
+    if (!uploadId) return;
+
+    setValidationLoading(true);
+    try {
+      const response = await validationApi.getUploadValidations(uploadId, {
+        limit: validationLimit,
+        offset: page * validationLimit,
+      });
+
+      if (response.success) {
+        setValidationResults(response.validations);
+        setValidationTotal(response.total);
+        setValidationPage(page);
+      }
+    } catch (err) {
+      console.error('Failed to fetch validation results:', err);
+    } finally {
+      setValidationLoading(false);
+    }
+  };
+
+  // Open validation dialog
+  const openValidationDialog = () => {
+    setShowValidationDialog(true);
+    fetchValidationResults(0);
   };
 
   const getStatusBadge = (status: UploadStatus) => {
@@ -331,7 +374,7 @@ export function UploadDetail() {
                 {/* Validation Results */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">검증 결과</h3>
-                  <div className="space-y-2">
+                  <div className="space-y-2 mb-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-500">유효</span>
                       <span className="font-medium text-green-600 dark:text-green-400">
@@ -351,6 +394,16 @@ export function UploadDetail() {
                       </span>
                     </div>
                   </div>
+                  {/* Sprint 3 Task 3.6: View Validation Details Button */}
+                  {(upload.statistics.validCount > 0 || upload.statistics.invalidCount > 0) && (
+                    <button
+                      onClick={openValidationDialog}
+                      className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800"
+                    >
+                      <Eye className="w-4 h-4" />
+                      상세 결과 보기
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -381,6 +434,248 @@ export function UploadDetail() {
           </div>
         </div>
       </div>
+
+      {/* Sprint 3 Task 3.6: Validation Results Dialog */}
+      {showValidationDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setShowValidationDialog(false)}
+          />
+
+          {/* Dialog Content */}
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                  <Shield className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Validation Results
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    Total: {validationTotal} certificates
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowValidationDialog(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {validationLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                </div>
+              ) : validationResults.length > 0 ? (
+                <div className="space-y-3">
+                  {validationResults.map((result) => (
+                    <div
+                      key={result.id}
+                      className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-2">
+                          {/* Header */}
+                          <div className="flex items-center gap-2">
+                            {result.trustChainValid ? (
+                              <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            )}
+                            <span className="font-medium text-gray-900 dark:text-white">
+                              {result.subjectDn.match(/CN=([^,]+)/)?.[1] || 'Unknown'}
+                            </span>
+                            <span className={cn(
+                              'px-2 py-0.5 rounded text-xs font-medium',
+                              result.certificateType === 'CSCA'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                                : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                            )}>
+                              {result.certificateType}
+                            </span>
+                            <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                              {result.countryCode}
+                            </span>
+                          </div>
+
+                          {/* Trust Chain Path */}
+                          {result.trustChainPath && (
+                            <div className="ml-6">
+                              <TrustChainVisualization
+                                trustChainPath={result.trustChainPath}
+                                trustChainValid={result.trustChainValid}
+                                compact={true}
+                              />
+                            </div>
+                          )}
+
+                          {/* Message */}
+                          {result.trustChainMessage && (
+                            <p className="ml-6 text-sm text-gray-600 dark:text-gray-400">
+                              {result.trustChainMessage}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* View Details Button */}
+                        <button
+                          onClick={() => setSelectedValidation(result)}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                        >
+                          Details
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Pagination */}
+                  {validationTotal > validationLimit && (
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        Showing {validationPage * validationLimit + 1} - {Math.min((validationPage + 1) * validationLimit, validationTotal)} of {validationTotal}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => fetchValidationResults(validationPage - 1)}
+                          disabled={validationPage === 0}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => fetchValidationResults(validationPage + 1)}
+                          disabled={(validationPage + 1) * validationLimit >= validationTotal}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+                  <Shield className="w-12 h-12 mb-3 opacity-50" />
+                  <p className="text-sm">No validation results found</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Validation Detail Dialog */}
+      {selectedValidation && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setSelectedValidation(null)}
+          />
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Validation Details
+              </h3>
+              <button
+                onClick={() => setSelectedValidation(null)}
+                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Trust Chain Visualization */}
+              {selectedValidation.trustChainPath && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Trust Chain Path</h4>
+                  <TrustChainVisualization
+                    trustChainPath={selectedValidation.trustChainPath}
+                    trustChainValid={selectedValidation.trustChainValid}
+                    compact={false}
+                  />
+                </div>
+              )}
+
+              {/* Certificate Info */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Certificate Information</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Type:</span>
+                    <span className="text-gray-900 dark:text-white">{selectedValidation.certificateType}</span>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Country:</span>
+                    <span className="text-gray-900 dark:text-white">{selectedValidation.countryCode}</span>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Subject DN:</span>
+                    <span className="text-gray-900 dark:text-white break-all">{selectedValidation.subjectDn}</span>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Issuer DN:</span>
+                    <span className="text-gray-900 dark:text-white break-all">{selectedValidation.issuerDn}</span>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Serial Number:</span>
+                    <span className="text-gray-900 dark:text-white font-mono">{selectedValidation.serialNumber}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Validation Status */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Validation Status</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Overall Status:</span>
+                    <span className={cn(
+                      'font-medium',
+                      selectedValidation.validationStatus === 'VALID' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                    )}>
+                      {selectedValidation.validationStatus}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">Trust Chain:</span>
+                    <span className={cn(
+                      'font-medium',
+                      selectedValidation.trustChainValid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                    )}>
+                      {selectedValidation.trustChainValid ? 'Valid' : 'Invalid'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-[140px_1fr] gap-2">
+                    <span className="text-gray-600 dark:text-gray-400">CSCA Found:</span>
+                    <span className={cn(
+                      'font-medium',
+                      selectedValidation.cscaFound ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                    )}>
+                      {selectedValidation.cscaFound ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                  {selectedValidation.cscaSubjectDn && (
+                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                      <span className="text-gray-600 dark:text-gray-400">CSCA Subject:</span>
+                      <span className="text-gray-900 dark:text-white break-all">{selectedValidation.cscaSubjectDn}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

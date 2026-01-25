@@ -1,10 +1,11 @@
 // =============================================================================
 // ICAO Local PKD - PKD Relay Service
 // =============================================================================
-// Version: 2.0.0
+// Version: 2.0.5
 // Description: Data relay layer (ICAO portal monitoring, LDIF upload/parsing, DB-LDAP sync)
 // =============================================================================
 // Changelog:
+//   v2.0.5 (2026-01-25): CRL reconciliation support, reconciliation_log UUID fix
 //   v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
 //   v1.3.0 (2026-01-13): User-configurable settings UI, dynamic config reload
 //   v1.2.0 (2026-01-07): Remove interval sync, keep only daily scheduler
@@ -377,20 +378,52 @@ Json::Value getSyncHistory(int limit = 20) {
 LdapStats getLdapStats() {
     LdapStats stats;
 
-    std::string ldapUri = "ldap://" + g_config.ldapHost + ":" + std::to_string(g_config.ldapPort);
+    // Parse LDAP_READ_HOSTS (comma-separated list: "openldap1:389,openldap2:389")
+    std::vector<std::string> ldapHosts;
+    std::string hostsStr = g_config.ldapReadHosts;
+    std::istringstream ss(hostsStr);
+    std::string host;
+    while (std::getline(ss, host, ',')) {
+        // Trim whitespace
+        host.erase(0, host.find_first_not_of(" \t"));
+        host.erase(host.find_last_not_of(" \t") + 1);
+        if (!host.empty()) {
+            ldapHosts.push_back(host);
+        }
+    }
 
+    if (ldapHosts.empty()) {
+        spdlog::error("No LDAP hosts configured in LDAP_READ_HOSTS");
+        return stats;
+    }
+
+    // Try connecting to LDAP hosts in round-robin fashion
     LDAP* ld = nullptr;
-    int rc = ldap_initialize(&ld, ldapUri.c_str());
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP initialize failed: {}", ldap_err2string(rc));
+    int rc = LDAP_SERVER_DOWN;
+    std::string connectedHost;
+
+    for (const auto& hostPort : ldapHosts) {
+        std::string ldapUri = "ldap://" + hostPort;
+        rc = ldap_initialize(&ld, ldapUri.c_str());
+        if (rc == LDAP_SUCCESS) {
+            connectedHost = hostPort;
+            spdlog::debug("LDAP initialized successfully: {}", ldapUri);
+            break;
+        } else {
+            spdlog::warn("Failed to initialize LDAP {}: {}", ldapUri, ldap_err2string(rc));
+        }
+    }
+
+    if (rc != LDAP_SUCCESS || !ld) {
+        spdlog::error("Failed to connect to any LDAP host");
         return stats;
     }
 
     int version = LDAP_VERSION3;
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
-    // Enable referral chasing for HAProxy/MMR environments
-    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_ON);
+    // CRITICAL: Disable referrals to prevent MMR referral bypass (fixes LDAP count instability)
+    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
     // Authenticated bind for read access
     struct berval cred;
@@ -399,7 +432,7 @@ LdapStats getLdapStats() {
 
     rc = ldap_sasl_bind_s(ld, g_config.ldapBindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP bind failed: {}", ldap_err2string(rc));
+        spdlog::error("LDAP bind failed on {}: {}", connectedHost, ldap_err2string(rc));
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         return stats;
     }
@@ -1713,11 +1746,11 @@ int main() {
     }
 
     spdlog::info("=================================================");
-    spdlog::info("  ICAO Local PKD - PKD Relay Service v2.0.0");
+    spdlog::info("  ICAO Local PKD - PKD Relay Service v2.0.5");
     spdlog::info("=================================================");
     spdlog::info("Server port: {}", g_config.serverPort);
     spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
-    spdlog::info("LDAP (read): {}:{}", g_config.ldapHost, g_config.ldapPort);
+    spdlog::info("LDAP (read): {} (Software Load Balancing)", g_config.ldapReadHosts);
     spdlog::info("LDAP (write): {}:{}", g_config.ldapWriteHost, g_config.ldapWritePort);
 
     // Load user-configurable settings from database
@@ -1774,11 +1807,12 @@ info:
     ## Changelog
     - v2.0.0 (2026-01-20): Service reorganization - data relay layer separation
     - v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
+    - v2.0.5 (2026-01-25): CRL reconciliation support
     - v1.3.0 (2026-01-13): User-configurable settings UI
     - v1.2.0 (2026-01-07): Daily scheduler only
     - v1.1.0 (2026-01-06): Daily scheduler, certificate re-validation
     - v1.0.0 (2026-01-03): Initial release
-  version: 2.0.0
+  version: 2.0.5
 servers:
   - url: /
 tags:

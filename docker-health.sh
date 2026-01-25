@@ -74,14 +74,7 @@ else
     echo "  ❌ OpenLDAP 노드 확인 필요"
 fi
 
-# HAProxy 체크
-echo ""
-echo "🔀 HAProxy:"
-if curl -sf http://localhost:8404/stats > /dev/null 2>&1; then
-    echo "  ✅ 정상 (http://localhost:8404)"
-else
-    echo "  ❌ 오류 (stats page not responding)"
-fi
+# HAProxy removed - using direct OpenLDAP connections (v2.0.1+)
 
 # PKD Management API 체크
 echo ""

@@ -57,7 +57,20 @@ struct CertificateInfo {
     std::string countryCode;
     std::string subject;
     std::string issuer;
+    std::string fingerprint;    // SHA-256 fingerprint (hex) for DN
     std::vector<unsigned char> certData;
+    std::string ldapDn;         // LDAP Distinguished Name
+};
+
+// =============================================================================
+// CRL Information (v2.0.5)
+// =============================================================================
+struct CrlInfo {
+    std::string id;             // UUID
+    std::string countryCode;
+    std::string issuerDn;
+    std::string fingerprint;    // SHA-256 fingerprint (hex) for DN
+    std::vector<unsigned char> crlData;
     std::string ldapDn;         // LDAP Distinguished Name
 };
 

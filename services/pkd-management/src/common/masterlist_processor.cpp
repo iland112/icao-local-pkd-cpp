@@ -208,9 +208,24 @@ bool parseMasterListEntryV2(
             continue;
         }
 
+        // Extract country code from certificate Subject DN (not from LDAP Entry DN)
+        // This ensures correct country code for cross-border Master Lists
+        std::string certCountryCode = extractCountryCode(meta.subjectDn);
+        if (certCountryCode == "XX") {
+            // Fallback to LDAP Entry DN country code
+            certCountryCode = countryCode;
+        }
+
+        // Determine certificate type: Self-signed CSCA or Link Certificate (Cross-signed)
+        // Link Certificate: Subject DN != Issuer DN
+        // Self-signed CSCA: Subject DN == Issuer DN
+        bool isLinkCertificate = (meta.subjectDn != meta.issuerDn);
+        std::string certType = isLinkCertificate ? "CSCA" : "CSCA";  // DB always stores as CSCA
+        std::string ldapCertType = isLinkCertificate ? "LC" : "CSCA";  // LDAP uses LC for Link Certificates
+
         // Save with duplicate check
         auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
-            conn, uploadId, "CSCA", countryCode,
+            conn, uploadId, certType, certCountryCode,
             meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
             meta.notBefore, meta.notAfter, meta.derData,
             "UNKNOWN", ""
@@ -233,31 +248,33 @@ bool parseMasterListEntryV2(
             dupCount++;
             certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
 
-            spdlog::info("[ML] CSCA {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, subject: {}",
-                        i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
+            std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+            spdlog::info("[ML] {} {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, subject: {}",
+                        certTypeLabel, i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
                         certId, meta.subjectDn);
         } else {
             // New certificate
             newCount++;
 
-            spdlog::info("[ML] CSCA {}/{} - NEW - fingerprint: {}, cert_id: {}, subject: {}",
-                        i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
+            std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+            spdlog::info("[ML] {} {}/{} - NEW - fingerprint: {}, cert_id: {}, subject: {}",
+                        certTypeLabel, i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
                         certId, meta.subjectDn);
 
-            // Save to LDAP o=csca (only new certificates)
+            // Save to LDAP: o=lc for Link Certificates, o=csca for Self-signed CSCAs (only new certificates)
             if (ld) {
                 std::string ldapDn = saveCertificateToLdap(
-                    ld, "CSCA", countryCode,
+                    ld, ldapCertType, certCountryCode,  // Use LC or CSCA based on certificate type
                     meta.subjectDn, meta.issuerDn, meta.serialNumber,
                     meta.fingerprint,  // Add fingerprint parameter
                     meta.derData       // certBinary
                 );
 
                 if (!ldapDn.empty()) {
-                    stats.ldapCscaStoredCount++;
-                    spdlog::debug("[ML] CSCA {}/{} - Saved to LDAP: {}", i + 1, totalCscas, ldapDn);
+                    stats.ldapCscaStoredCount++;  // Include Link Certificates in CSCA statistics
+                    spdlog::debug("[ML] {} {}/{} - Saved to LDAP: {}", certTypeLabel, i + 1, totalCscas, ldapDn);
                 } else {
-                    spdlog::warn("[ML] CSCA {}/{} - Failed to save to LDAP", i + 1, totalCscas);
+                    spdlog::warn("[ML] {} {}/{} - Failed to save to LDAP", certTypeLabel, i + 1, totalCscas);
                 }
             }
         }

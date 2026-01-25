@@ -279,14 +279,51 @@ export function UploadDashboard() {
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 유형별 현황</h3>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {/* CSCA */}
+              {/* CSCA (v2.0.9: with breakdown) */}
               <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30 p-4 border border-green-200 dark:border-green-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  <span className="text-sm font-semibold text-green-700 dark:text-green-300">CSCA</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-semibold text-green-700 dark:text-green-300">CSCA</span>
+                  </div>
+                  <span className="text-xs text-green-600 dark:text-green-400">{cscaPercent}%</span>
                 </div>
-                <p className="text-2xl font-bold text-green-800 dark:text-green-200">{(stats?.cscaCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-1">{cscaPercent}%</p>
+                <p className="text-2xl font-bold text-green-800 dark:text-green-200 mb-3">{(stats?.cscaCount ?? 0).toLocaleString()}</p>
+
+                {/* Self-signed CSCA */}
+                <div className="mb-2">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-green-700 dark:text-green-300">Self-signed</span>
+                    <span className="font-medium text-green-800 dark:text-green-200">
+                      {(stats?.cscaBreakdown?.selfSigned ?? 0).toLocaleString()}
+                      {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.selfSigned / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-green-200 dark:bg-green-900/40 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-600 dark:bg-green-500 rounded-full transition-all duration-500"
+                      style={{ width: stats?.cscaBreakdown?.total ? `${(stats.cscaBreakdown.selfSigned / stats.cscaBreakdown.total) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </div>
+
+                {/* Link Certificates */}
+                <div className="mb-1">
+                  <div className="flex justify-between text-xs mb-1">
+                    <span className="text-green-700 dark:text-green-300">Link Certificates</span>
+                    <span className="font-medium text-green-800 dark:text-green-200">
+                      {(stats?.cscaBreakdown?.linkCertificates ?? 0).toLocaleString()}
+                      {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-green-200 dark:bg-green-900/40 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
+                      style={{ width: stats?.cscaBreakdown?.total ? `${(stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100}%` : '0%' }}
+                    />
+                  </div>
+                </div>
+
                 <div className="absolute -right-2 -bottom-2 opacity-10">
                   <Shield className="w-16 h-16 text-green-600" />
                 </div>

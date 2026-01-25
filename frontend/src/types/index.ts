@@ -314,6 +314,12 @@ export interface UploadStatisticsOverview {
   // Collection 002 CSCA extraction statistics (v2.0.0)
   cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
   cscaDuplicates?: number;       // Duplicate CSCAs detected
+  // CSCA breakdown (v2.0.9)
+  cscaBreakdown?: {
+    total: number;
+    selfSigned: number;
+    linkCertificates: number;
+  };
   validation: ValidationStats;
 }
 

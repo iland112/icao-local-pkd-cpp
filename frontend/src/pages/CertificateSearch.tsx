@@ -2,6 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { cn } from '@/utils/cn';
+import { TrustChainVisualization } from '@/components/TrustChainVisualization';
+import { validationApi } from '@/api/validationApi';
+import type { ValidationResult } from '@/types/validation';
 
 interface Certificate {
   dn: string;
@@ -50,6 +53,8 @@ const CertificateSearch: React.FC = () => {
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [detailTab, setDetailTab] = useState<'general' | 'details'>('general');
+  const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
+  const [validationLoading, setValidationLoading] = useState(false);
 
   // Fetch available countries
   const fetchCountries = async () => {
@@ -130,9 +135,23 @@ const CertificateSearch: React.FC = () => {
   };
 
   // View certificate details
-  const viewDetails = (cert: Certificate) => {
+  const viewDetails = async (cert: Certificate) => {
     setSelectedCert(cert);
     setShowDetailDialog(true);
+    setValidationResult(null);
+    setValidationLoading(true);
+
+    // Fetch validation result by fingerprint
+    try {
+      const response = await validationApi.getCertificateValidation(cert.fingerprint);
+      if (response.success && response.validation) {
+        setValidationResult(response.validation);
+      }
+    } catch (err) {
+      console.error('Failed to fetch validation result:', err);
+    } finally {
+      setValidationLoading(false);
+    }
   };
 
   // Export single certificate
@@ -803,6 +822,63 @@ const CertificateSearch: React.FC = () => {
               {/* Details Tab */}
               {detailTab === 'details' && (
                 <div className="space-y-4">
+                  {/* Trust Chain Validation (Sprint 3 Task 3.6) */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      Trust Chain Validation
+                    </h3>
+                    {validationLoading ? (
+                      <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Loading validation result...</span>
+                      </div>
+                    ) : validationResult ? (
+                      <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
+                        {/* Validation Status */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">Status:</span>
+                          {validationResult.trustChainValid ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Valid
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                              <XCircle className="w-3 h-3 mr-1" />
+                              Invalid
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Trust Chain Path Visualization */}
+                        {validationResult.trustChainPath && (
+                          <div>
+                            <span className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">Trust Chain Path:</span>
+                            <TrustChainVisualization
+                              trustChainPath={validationResult.trustChainPath}
+                              trustChainValid={validationResult.trustChainValid}
+                              compact={false}
+                            />
+                          </div>
+                        )}
+
+                        {/* Message */}
+                        {validationResult.trustChainMessage && (
+                          <div>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Message:</span>
+                            <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{validationResult.trustChainMessage}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                          No validation result available for this certificate.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Certificate Hierarchy */}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Certificate Hierarchy</h3>

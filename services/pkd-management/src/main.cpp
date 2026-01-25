@@ -3958,7 +3958,9 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                     std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
                                     std::string fingerprint = computeFileHash(derBytes);
                                     std::string countryCode = extractCountryCode(subjectDn);
-                                    std::string certType = "CSCA";
+                                    std::string certType = "CSCA";  // DB always stores as CSCA
+                                    std::string ldapCertType = "CSCA";  // LDAP cert type (CSCA or LC)
+                                    bool isLinkCert = false;
 
                                     // Sprint 3 Task 3.3: Validate both self-signed CSCAs and link certificates
                                     std::string validationStatus = "VALID";
@@ -3966,13 +3968,16 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                         // Self-signed CSCA: validate using existing function
                                         auto cscaValidation = validateCscaCertificate(cert);
                                         validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
+                                        ldapCertType = "CSCA";
                                     } else if (isLinkCertificate(cert)) {
                                         // Link Certificate: verify it has CA:TRUE and keyCertSign
                                         // Link certificates are cross-signed CSCAs used for key transitions
                                         // They cannot be validated independently (require old CSCA for signature check)
                                         // For now, mark as VALID if it has correct extensions
                                         validationStatus = "VALID";
-                                        spdlog::info("Master List: Link Certificate detected: {}", subjectDn);
+                                        isLinkCert = true;
+                                        ldapCertType = "LC";  // Store in o=lc branch
+                                        spdlog::info("Master List: Link Certificate detected (will save to o=lc): {}", subjectDn);
                                     } else {
                                         // Neither self-signed CSCA nor link certificate
                                         validationStatus = "INVALID";
@@ -3989,12 +3994,15 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
 
                                         // Save to LDAP if connection available
                                         if (ld) {
-                                            std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                            std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
                                                                                         subjectDn, issuerDn, serialNumber,
                                                                                         fingerprint, derBytes);
                                             if (!ldapDn.empty()) {
                                                 updateCertificateLdapStatus(conn, certId, ldapDn);
                                                 ldapStoredCount++;
+                                                if (isLinkCert) {
+                                                    spdlog::info("Master List: Link Certificate saved to LDAP o=lc: {}", ldapDn);
+                                                }
                                             }
                                         }
                                     }
@@ -4048,19 +4056,45 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            std::string certId = saveCertificate(conn, uploadId, "CSCA", countryCode,
+                            // Determine certificate type: Self-signed CSCA or Link Certificate
+                            std::string certType = "CSCA";  // DB always stores as CSCA
+                            std::string ldapCertType = "CSCA";  // LDAP cert type (CSCA or LC)
+                            bool isLinkCert = false;
+
+                            // Sprint 3 Task 3.3: Validate both self-signed CSCAs and link certificates
+                            std::string validationStatus = "VALID";
+                            if (isSelfSigned(cert)) {
+                                // Self-signed CSCA: validate using existing function
+                                auto cscaValidation = validateCscaCertificate(cert);
+                                validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
+                                ldapCertType = "CSCA";
+                            } else if (isLinkCertificate(cert)) {
+                                // Link Certificate: verify it has CA:TRUE and keyCertSign
+                                validationStatus = "VALID";
+                                isLinkCert = true;
+                                ldapCertType = "LC";  // Store in o=lc branch
+                                spdlog::info("Master List (PKCS7): Link Certificate detected (will save to o=lc): {}", subjectDn);
+                            } else {
+                                validationStatus = "INVALID";
+                                spdlog::warn("Master List (PKCS7): Invalid certificate (not self-signed and not link cert): {}", subjectDn);
+                            }
+
+                            std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
                                                                  notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
                                 cscaCount++;
                                 if (ld) {
-                                    std::string ldapDn = saveCertificateToLdap(ld, "CSCA", countryCode,
+                                    std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
                                                                                 subjectDn, issuerDn, serialNumber,
                                                                                 fingerprint, derBytes);
                                     if (!ldapDn.empty()) {
                                         updateCertificateLdapStatus(conn, certId, ldapDn);
                                         ldapStoredCount++;
+                                        if (isLinkCert) {
+                                            spdlog::info("Master List (PKCS7): Link Certificate saved to LDAP o=lc: {}", ldapDn);
+                                        }
                                     }
                                 }
                             }

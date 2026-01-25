@@ -51,7 +51,18 @@ mkdir -p ./.docker-data/pkd-logs
 mkdir -p ./.docker-data/pkd-uploads
 mkdir -p ./.docker-data/pa-logs
 mkdir -p ./.docker-data/sync-logs
-chmod 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs 2>/dev/null || true
+mkdir -p ./.docker-data/monitoring-logs
+mkdir -p ./.docker-data/gateway-logs
+
+# 권한 설정 (Docker 컨테이너에서 쓰기 가능하도록)
+echo "🔒 로그 디렉토리 권한 설정 중..."
+if [ -w ./.docker-data ]; then
+    chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs ./.docker-data/monitoring-logs ./.docker-data/gateway-logs 2>/dev/null || \
+    sudo chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs ./.docker-data/monitoring-logs ./.docker-data/gateway-logs
+else
+    echo "⚠️  .docker-data 디렉토리 쓰기 권한 필요 - sudo 사용"
+    sudo chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs ./.docker-data/monitoring-logs ./.docker-data/gateway-logs
+fi
 
 # 2. Docker Compose 시작
 echo "🐳 Docker Compose 시작..."
@@ -62,9 +73,9 @@ if [ -n "$SKIP_APP" ]; then
         # PostgreSQL만 시작
         docker compose up -d $BUILD_FLAG postgres
     else
-        # PostgreSQL, OpenLDAP, HAProxy 시작
+        # PostgreSQL, OpenLDAP 시작
         # MMR setup 컨테이너가 자동으로 실행되고, ldap-init이 PKD DIT 초기화
-        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2 haproxy
+        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2
     fi
 elif [ -n "$LEGACY" ]; then
     # Legacy 단일 앱 모드
@@ -72,7 +83,7 @@ elif [ -n "$LEGACY" ]; then
 else
     # 마이크로서비스 모드 (frontend + pkd-management + pa-service + sync-service)
     # 서비스 의존성 순서:
-    #   openldap1/2 -> ldap-mmr-setup1/2 -> ldap-init -> haproxy -> apps
+    #   openldap1/2 -> ldap-mmr-setup1/2 -> ldap-init -> apps
     docker compose up -d $BUILD_FLAG
 fi
 
@@ -110,10 +121,9 @@ echo ""
 echo "📌 접속 정보:"
 echo "   - PostgreSQL:    localhost:5432 (pkd/pkd)"
 if [ -z "$SKIP_LDAP" ]; then
-    echo "   - LDAP (HAProxy): ldap://localhost:389 (로드밸런싱)"
     echo "   - OpenLDAP 1:    ldap://localhost:3891 (직접 연결)"
     echo "   - OpenLDAP 2:    ldap://localhost:3892 (직접 연결)"
-    echo "   - HAProxy Stats: http://localhost:8404"
+    echo "   Note: Application uses direct connections to both LDAP servers"
 fi
 if [ -z "$SKIP_APP" ]; then
     echo "   - Frontend:      http://localhost:3000"

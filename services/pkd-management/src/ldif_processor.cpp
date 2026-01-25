@@ -1,5 +1,6 @@
 #include "ldif_processor.h"
 #include "common.h"
+#include "common/masterlist_processor.h"  // v2.0.7: For parseMasterListEntryV2
 #include <spdlog/spdlog.h>
 #include <libpq-fe.h>
 #include <ldap.h>
@@ -65,10 +66,17 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 parseCrlEntry(conn, ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount);
             }
 
-            // Check for Master List
+            // Check for Master List (v2.0.7: Use new CSCA extraction processor)
             if (entry.hasAttribute("pkdMasterListContent;binary") ||
                 entry.hasAttribute("pkdMasterListContent")) {
-                parseMasterListEntry(conn, ld, uploadId, entry, counts.mlCount, counts.ldapMlStoredCount);
+                MasterListStats mlStats;
+                parseMasterListEntryV2(conn, ld, uploadId, entry, mlStats);
+                // Update legacy counters for backward compatibility
+                counts.mlCount += mlStats.mlCount;
+                counts.ldapMlStoredCount += mlStats.ldapMlStoredCount;
+                // Add extracted CSCAs to counts
+                counts.cscaCount += mlStats.cscaNewCount;
+                counts.ldapCertStoredCount += mlStats.ldapCscaStoredCount;
             }
 
         } catch (const std::exception& e) {

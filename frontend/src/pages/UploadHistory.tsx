@@ -23,7 +23,7 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
-import { uploadApi } from '@/services/api';
+import { uploadApi, uploadHistoryApi } from '@/services/api';
 import type { PageResponse, UploadStatus, FileFormat } from '@/types';
 import { cn } from '@/utils/cn';
 
@@ -283,9 +283,19 @@ export function UploadHistory() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const handleViewDetail = (upload: UploadHistoryItem) => {
-    setSelectedUpload(upload);
-    setDialogOpen(true);
+  const handleViewDetail = async (upload: UploadHistoryItem) => {
+    try {
+      // Fetch full upload details including ldapUploadedCount
+      const response = await uploadHistoryApi.getDetail(upload.id);
+      const fullUploadData = response.data.data; // ApiResponse<UploadedFile> structure
+      setSelectedUpload(fullUploadData as UploadHistoryItem);
+      setDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch upload details:', error);
+      // Fallback to basic upload data from history list
+      setSelectedUpload(upload);
+      setDialogOpen(true);
+    }
   };
 
   const closeDialog = () => {

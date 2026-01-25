@@ -96,8 +96,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/pkd-logs:/app/logs
       - ../.docker-data/pkd-uploads:/app/uploads
@@ -138,8 +140,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/pa-logs:/app/logs
     networks:
@@ -159,6 +163,7 @@ services:
   # - DB-LDAP Sync Monitoring
   # ---------------------------------------------------------------------------
   pkd-relay:
+    image: icao-pkd-relay:v2.0.5
     build:
       context: ..
       dockerfile: services/pkd-relay-service/Dockerfile
@@ -189,8 +194,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/sync-logs:/app/logs
     networks:
@@ -274,8 +281,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/app-logs:/app/logs
       - ../.docker-data/app-uploads:/app/uploads
@@ -338,28 +347,6 @@ services:
     networks:
       - pkd-network
     restart: "no"
-
-  # ---------------------------------------------------------------------------
-  # HAProxy (LDAP Load Balancer - Shared)
-  # ---------------------------------------------------------------------------
-  haproxy:
-    image: haproxy:2.8
-    container_name: icao-local-pkd-haproxy
-    ports:
-      - "389:389"
-      # - "8404:8404"  # Stats page - temporarily disabled due to WSL2 port forwarding issue
-    volumes:
-      - ../haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-    depends_on:
-      openldap1:
-        condition: service_healthy
-      openldap2:
-        condition: service_healthy
-      ldap-init:
-        condition: service_completed_successfully
-    networks:
-      - pkd-network
-    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # OpenLDAP Node 1 (MMR Master - Shared)

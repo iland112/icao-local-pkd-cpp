@@ -123,8 +123,8 @@ if [ "$VERSION" = "cpp" ]; then
     echo ""
 fi
 
-# LDAP Entry Count (via HAProxy)
-echo "=== LDAP Entry Count (via HAProxy) ==="
+# LDAP Entry Count (Direct Connection)
+echo "=== LDAP Entry Count (Local OpenLDAP2) ==="
 ldapsearch -x -H ldap://localhost:389 \
     -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" -w admin123 \
     -b "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" "(objectClass=*)" dn 2>/dev/null | grep -c "^dn:" || echo "0 (LDAP unreachable)"
