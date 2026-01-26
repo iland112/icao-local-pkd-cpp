@@ -87,6 +87,8 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_DATA_CONTAINER=dc=data          # Container for normal certificates
+      - LDAP_NC_DATA_CONTAINER=dc=nc-data    # Container for non-conformant certificates
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
       # JWT Authentication (Phase 3)
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}          # From .env file (REQUIRED)

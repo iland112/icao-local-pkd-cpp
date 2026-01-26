@@ -148,6 +148,10 @@ struct AppConfig {
     std::string ldapBindPassword;  // Must be set via environment variable
     std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
 
+    // LDAP Container names (configurable via environment variables)
+    std::string ldapDataContainer = "dc=data";        // For CSCA, DSC, LC, CRL
+    std::string ldapNcDataContainer = "dc=nc-data";  // For non-conformant DSC
+
     // Trust Anchor for Master List CMS signature verification
     std::string trustAnchorPath = "/app/data/cert/UN_CSCA_2.pem";
 
@@ -203,6 +207,8 @@ struct AppConfig {
         if (auto val = std::getenv("LDAP_BIND_DN")) config.ldapBindDn = val;
         if (auto val = std::getenv("LDAP_BIND_PASSWORD")) config.ldapBindPassword = val;
         if (auto val = std::getenv("LDAP_BASE_DN")) config.ldapBaseDn = val;
+        if (auto val = std::getenv("LDAP_DATA_CONTAINER")) config.ldapDataContainer = val;
+        if (auto val = std::getenv("LDAP_NC_DATA_CONTAINER")) config.ldapNcDataContainer = val;
 
         if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
         if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
@@ -2243,20 +2249,20 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
 
     if (certType == "CSCA") {
         ou = "csca";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "DSC") {
         ou = "dsc";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "LC") {
         // Sprint 3: Link Certificate support
         ou = "lc";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "DSC_NC") {
         ou = "dsc";
-        dataContainer = "dc=nc-data";
+        dataContainer = appConfig.ldapNcDataContainer;
     } else {
         ou = "dsc";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     }
 
     // v1.5.0: Extract only standard attributes to avoid LDAP error 80
@@ -2300,20 +2306,20 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
 
     if (certType == "CSCA") {
         ou = "csca";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "DSC") {
         ou = "dsc";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "DSC_NC") {
         ou = "dsc_nc";  // Note: using dsc_nc for consistency with LDAP schema
-        dataContainer = "dc=nc-data";
+        dataContainer = appConfig.ldapNcDataContainer;
     } else if (certType == "LC") {
         // Sprint 2: Link Certificate support
         ou = "lc";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     } else {
         ou = "dsc";
-        dataContainer = "dc=data";
+        dataContainer = appConfig.ldapDataContainer;
     }
 
     // Fingerprint is SHA-256 hex (64 chars), no escaping needed
@@ -2333,7 +2339,7 @@ std::string buildCrlDn(const std::string& countryCode, const std::string& finger
     // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
     return "cn=" + ldap_utils::escapeDnComponent(fingerprint) +
            ",o=crl,c=" + ldap_utils::escapeDnComponent(countryCode) +
-           ",dc=data," + appConfig.ldapBaseDn;
+           "," + appConfig.ldapDataContainer + "," + appConfig.ldapBaseDn;
 }
 
 /**
@@ -2342,8 +2348,51 @@ std::string buildCrlDn(const std::string& countryCode, const std::string& finger
  * SECURITY: Uses ldap_utils::escapeDnComponent for safe DN construction (RFC 4514)
  */
 bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcData = false) {
-    std::string dataContainer = isNcData ? "dc=nc-data" : "dc=data";
+    std::string dataContainer = isNcData ? appConfig.ldapNcDataContainer : appConfig.ldapDataContainer;
     // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+
+    // Sprint 3 Fix: Ensure data container exists before creating country entry
+    std::string dataContainerDn = dataContainer + "," + appConfig.ldapBaseDn;
+    LDAPMessage* dcResult = nullptr;
+    int dcRc = ldap_search_ext_s(ld, dataContainerDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
+                                   nullptr, 0, nullptr, nullptr, nullptr, 1, &dcResult);
+    if (dcResult) {
+        ldap_msgfree(dcResult);
+    }
+
+    if (dcRc == LDAP_NO_SUCH_OBJECT) {
+        // Create data container (dc=data or dc=nc-data)
+        std::string dcValue = isNcData ? "nc-data" : "data";
+
+        LDAPMod dcObjClass;
+        dcObjClass.mod_op = LDAP_MOD_ADD;
+        dcObjClass.mod_type = const_cast<char*>("objectClass");
+        char* dcOcVals[] = {const_cast<char*>("top"), const_cast<char*>("dcObject"),
+                            const_cast<char*>("organization"), nullptr};
+        dcObjClass.mod_values = dcOcVals;
+
+        LDAPMod dcDc;
+        dcDc.mod_op = LDAP_MOD_ADD;
+        dcDc.mod_type = const_cast<char*>("dc");
+        char* dcVal[] = {const_cast<char*>(dcValue.c_str()), nullptr};
+        dcDc.mod_values = dcVal;
+
+        LDAPMod dcO;
+        dcO.mod_op = LDAP_MOD_ADD;
+        dcO.mod_type = const_cast<char*>("o");
+        char* oVal[] = {const_cast<char*>(dcValue.c_str()), nullptr};
+        dcO.mod_values = oVal;
+
+        LDAPMod* dcMods[] = {&dcObjClass, &dcDc, &dcO, nullptr};
+
+        int createRc = ldap_add_ext_s(ld, dataContainerDn.c_str(), dcMods, nullptr, nullptr);
+        if (createRc != LDAP_SUCCESS && createRc != LDAP_ALREADY_EXISTS) {
+            spdlog::warn("Failed to create data container {}: {}", dataContainerDn, ldap_err2string(createRc));
+            return false;
+        }
+        spdlog::info("Created LDAP data container: {}", dataContainerDn);
+    }
+
     std::string countryDn = "c=" + ldap_utils::escapeDnComponent(countryCode) +
                            "," + dataContainer + "," + appConfig.ldapBaseDn;
 
@@ -4005,9 +4054,12 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
 
                                         // Save to LDAP if connection available
                                         if (ld) {
+                                            // Sprint 3 Fix: Use fingerprint-based DN to avoid duplicates
+                                            // (Legacy DN with Subject DN + Serial can create duplicates when non-standard attributes differ)
                                             std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
                                                                                         subjectDn, issuerDn, serialNumber,
-                                                                                        fingerprint, derBytes);
+                                                                                        fingerprint, derBytes,
+                                                                                        "", "", "", false);  // useLegacyDn=false
                                             if (!ldapDn.empty()) {
                                                 updateCertificateLdapStatus(conn, certId, ldapDn);
                                                 ldapStoredCount++;
@@ -4097,9 +4149,11 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                             if (!certId.empty()) {
                                 cscaCount++;
                                 if (ld) {
+                                    // Sprint 3 Fix: Use fingerprint-based DN to avoid duplicates
                                     std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
                                                                                 subjectDn, issuerDn, serialNumber,
-                                                                                fingerprint, derBytes);
+                                                                                fingerprint, derBytes,
+                                                                                "", "", "", false);  // useLegacyDn=false
                                     if (!ldapDn.empty()) {
                                         updateCertificateLdapStatus(conn, certId, ldapDn);
                                         ldapStoredCount++;
@@ -8694,7 +8748,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v2.1.0 SPRINT3-LINK-CERT-VALIDATION (Build 20260126-125500) ======");
+    spdlog::info("====== ICAO Local PKD v2.1.0 SPRINT3-LINK-CERT-VALIDATION (Build 20260126-134714) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
