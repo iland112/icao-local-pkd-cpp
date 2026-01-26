@@ -20,6 +20,7 @@ namespace models {
  */
 enum class CertificateType {
     CSCA,      // Country Signing Certificate Authority
+    MLSC,      // Master List Signer Certificate
     DSC,       // Document Signer Certificate
     DSC_NC,    // Non-Conformant DSC
     CRL,       // Certificate Revocation List
@@ -110,6 +111,7 @@ public:
     std::string getCertTypeString() const {
         switch (certType_) {
             case CertificateType::CSCA: return "CSCA";
+            case CertificateType::MLSC: return "MLSC";
             case CertificateType::DSC: return "DSC";
             case CertificateType::DSC_NC: return "DSC_NC";
             case CertificateType::CRL: return "CRL";

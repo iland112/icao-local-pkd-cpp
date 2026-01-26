@@ -216,12 +216,12 @@ bool parseMasterListEntryV2(
             certCountryCode = countryCode;
         }
 
-        // Determine certificate type: Self-signed CSCA or Link Certificate (Cross-signed)
-        // Link Certificate: Subject DN != Issuer DN
+        // Determine certificate type: Self-signed CSCA or Master List Signer Certificate
+        // Master List Signer Certificate: Subject DN != Issuer DN (Cross-signed by CSCA)
         // Self-signed CSCA: Subject DN == Issuer DN
-        bool isLinkCertificate = (meta.subjectDn != meta.issuerDn);
-        std::string certType = isLinkCertificate ? "CSCA" : "CSCA";  // DB always stores as CSCA
-        std::string ldapCertType = isLinkCertificate ? "LC" : "CSCA";  // LDAP uses LC for Link Certificates
+        bool isMasterListSigner = (meta.subjectDn != meta.issuerDn);
+        std::string certType = isMasterListSigner ? "CSCA" : "CSCA";  // DB always stores as CSCA
+        std::string ldapCertType = isMasterListSigner ? "MLSC" : "CSCA";  // LDAP uses MLSC for Master List Signers
 
         // Save with duplicate check
         auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
@@ -248,7 +248,7 @@ bool parseMasterListEntryV2(
             dupCount++;
             certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
 
-            std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+            std::string certTypeLabel = isMasterListSigner ? "MLSC (Master List Signer)" : "CSCA (Self-signed)";
             spdlog::info("[ML] {} {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, subject: {}",
                         certTypeLabel, i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
                         certId, meta.subjectDn);
@@ -256,15 +256,15 @@ bool parseMasterListEntryV2(
             // New certificate
             newCount++;
 
-            std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+            std::string certTypeLabel = isMasterListSigner ? "MLSC (Master List Signer)" : "CSCA (Self-signed)";
             spdlog::info("[ML] {} {}/{} - NEW - fingerprint: {}, cert_id: {}, subject: {}",
                         certTypeLabel, i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
                         certId, meta.subjectDn);
 
-            // Save to LDAP: o=lc for Link Certificates, o=csca for Self-signed CSCAs (only new certificates)
+            // Save to LDAP: o=mlsc for Master List Signers, o=csca for Self-signed CSCAs (only new certificates)
             if (ld) {
                 std::string ldapDn = saveCertificateToLdap(
-                    ld, ldapCertType, certCountryCode,  // Use LC or CSCA based on certificate type
+                    ld, ldapCertType, certCountryCode,  // Use MLSC or CSCA based on certificate type
                     meta.subjectDn, meta.issuerDn, meta.serialNumber,
                     meta.fingerprint,  // Add fingerprint parameter
                     meta.derData,      // certBinary
@@ -273,7 +273,7 @@ bool parseMasterListEntryV2(
                 );
 
                 if (!ldapDn.empty()) {
-                    stats.ldapCscaStoredCount++;  // Include Link Certificates in CSCA statistics
+                    stats.ldapCscaStoredCount++;  // Include Master List Signers in CSCA statistics
                     spdlog::debug("[ML] {} {}/{} - Saved to LDAP: {}", certTypeLabel, i + 1, totalCscas, ldapDn);
 
                     // Update stored_in_ldap flag in DB

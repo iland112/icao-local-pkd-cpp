@@ -2317,6 +2317,10 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
         // Sprint 2: Link Certificate support
         ou = "lc";
         dataContainer = appConfig.ldapDataContainer;
+    } else if (certType == "MLSC") {
+        // Sprint 3: Master List Signer Certificate support
+        ou = "mlsc";
+        dataContainer = appConfig.ldapDataContainer;
     } else {
         ou = "dsc";
         dataContainer = appConfig.ldapDataContainer;
@@ -2435,10 +2439,11 @@ bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcDa
         return false;
     }
 
-    // Create organizational units under country (csca, dsc, lc, crl)
+    // Create organizational units under country (csca, dsc, lc, mlsc, crl)
     // Sprint 2: Added "lc" for Link Certificates
+    // Sprint 3: Added "mlsc" for Master List Signer Certificates
     std::vector<std::string> ous = isNcData ? std::vector<std::string>{"dsc"}
-                                            : std::vector<std::string>{"csca", "dsc", "lc", "crl"};
+                                            : std::vector<std::string>{"csca", "dsc", "lc", "mlsc", "crl"};
 
     for (const auto& ouName : ous) {
         std::string ouDn = "o=" + ouName + "," + countryDn;
@@ -2717,11 +2722,11 @@ void updateCertificateLdapStatus(PGconn* conn, const std::string& certId, const 
 
     // Use parameterized query (Phase 2 - SQL Injection Prevention)
     const char* query = "UPDATE certificate SET "
-                       "ldap_dn = $1, stored_in_ldap = TRUE, stored_at = NOW() "
-                       "WHERE id = $2";
-    const char* paramValues[2] = {ldapDn.c_str(), certId.c_str()};
+                       "ldap_dn = $1, ldap_dn_v2 = $2, stored_in_ldap = TRUE, stored_at = NOW() "
+                       "WHERE id = $3";
+    const char* paramValues[3] = {ldapDn.c_str(), ldapDn.c_str(), certId.c_str()};
 
-    PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn, query, 3, nullptr, paramValues,
                                  nullptr, nullptr, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
         spdlog::error("Failed to update certificate LDAP status: {}", PQerrorMessage(conn));
@@ -4030,14 +4035,14 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                         validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
                                         ldapCertType = "CSCA";
                                     } else if (isLinkCertificate(cert)) {
-                                        // Link Certificate: verify it has CA:TRUE and keyCertSign
-                                        // Link certificates are cross-signed CSCAs used for key transitions
-                                        // They cannot be validated independently (require old CSCA for signature check)
+                                        // Master List Signer Certificate: verify it has CA:TRUE and keyCertSign
+                                        // Master List Signer certificates are cross-signed by CSCAs
+                                        // They cannot be validated independently (require CSCA for signature check)
                                         // For now, mark as VALID if it has correct extensions
                                         validationStatus = "VALID";
                                         isLinkCert = true;
-                                        ldapCertType = "LC";  // Store in o=lc branch
-                                        spdlog::info("Master List: Link Certificate detected (will save to o=lc): {}", subjectDn);
+                                        ldapCertType = "MLSC";  // Store in o=mlsc branch
+                                        spdlog::info("Master List: Master List Signer Certificate detected (will save to o=mlsc): {}", subjectDn);
                                     } else {
                                         // Neither self-signed CSCA nor link certificate
                                         validationStatus = "INVALID";
@@ -4064,7 +4069,7 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                                 updateCertificateLdapStatus(conn, certId, ldapDn);
                                                 ldapStoredCount++;
                                                 if (isLinkCert) {
-                                                    spdlog::info("Master List: Link Certificate saved to LDAP o=lc: {}", ldapDn);
+                                                    spdlog::info("Master List: Master List Signer Certificate saved to LDAP o=mlsc: {}", ldapDn);
                                                 }
                                             }
                                         }
@@ -4132,11 +4137,11 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                 validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
                                 ldapCertType = "CSCA";
                             } else if (isLinkCertificate(cert)) {
-                                // Link Certificate: verify it has CA:TRUE and keyCertSign
+                                // Master List Signer Certificate: verify it has CA:TRUE and keyCertSign
                                 validationStatus = "VALID";
                                 isLinkCert = true;
-                                ldapCertType = "LC";  // Store in o=lc branch
-                                spdlog::info("Master List (PKCS7): Link Certificate detected (will save to o=lc): {}", subjectDn);
+                                ldapCertType = "MLSC";  // Store in o=mlsc branch
+                                spdlog::info("Master List (PKCS7): Master List Signer Certificate detected (will save to o=mlsc): {}", subjectDn);
                             } else {
                                 validationStatus = "INVALID";
                                 spdlog::warn("Master List (PKCS7): Invalid certificate (not self-signed and not link cert): {}", subjectDn);
@@ -4158,7 +4163,7 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                         updateCertificateLdapStatus(conn, certId, ldapDn);
                                         ldapStoredCount++;
                                         if (isLinkCert) {
-                                            spdlog::info("Master List (PKCS7): Link Certificate saved to LDAP o=lc: {}", ldapDn);
+                                            spdlog::info("Master List (PKCS7): Master List Signer Certificate saved to LDAP o=mlsc: {}", ldapDn);
                                         }
                                     }
                                 }
@@ -6700,12 +6705,14 @@ void registerRoutes() {
             if (PQstatus(conn) == CONNECTION_OK) {
                 // Query certificate counts by country, ordered by total count
                 // Note: ZZ (United Nations legacy code) is merged into UN
+                // Note: MLSC count is derived from LDAP o=mlsc entries
                 std::string query =
                     "SELECT CASE WHEN country_code = 'ZZ' THEN 'UN' ELSE country_code END as country_code, "
                     "SUM(CASE WHEN certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
                     "SUM(CASE WHEN certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
                     "SUM(CASE WHEN certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
-                    "COUNT(*) as total "
+                    "COUNT(*) as total, "
+                    "SUM(CASE WHEN ldap_dn_v2 LIKE '%o=mlsc%' THEN 1 ELSE 0 END) as mlsc_count "
                     "FROM certificate "
                     "WHERE country_code IS NOT NULL AND country_code != '' "
                     "GROUP BY CASE WHEN country_code = 'ZZ' THEN 'UN' ELSE country_code END "
@@ -6721,6 +6728,7 @@ void registerRoutes() {
                         item["dsc"] = std::stoi(PQgetvalue(res, i, 2));
                         item["dscNc"] = std::stoi(PQgetvalue(res, i, 3));
                         item["total"] = std::stoi(PQgetvalue(res, i, 4));
+                        item["mlsc"] = std::stoi(PQgetvalue(res, i, 5));
                         result.append(item);
                     }
                 }
@@ -7637,6 +7645,7 @@ paths:
                 // Parse certificate type
                 if (!certTypeStr.empty()) {
                     if (certTypeStr == "CSCA") criteria.certType = domain::models::CertificateType::CSCA;
+                    else if (certTypeStr == "MLSC") criteria.certType = domain::models::CertificateType::MLSC;
                     else if (certTypeStr == "DSC") criteria.certType = domain::models::CertificateType::DSC;
                     else if (certTypeStr == "DSC_NC") criteria.certType = domain::models::CertificateType::DSC_NC;
                     else if (certTypeStr == "CRL") criteria.certType = domain::models::CertificateType::CRL;
@@ -8748,7 +8757,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v2.1.0 SPRINT3-LINK-CERT-VALIDATION (Build 20260126-134714) ======");
+    spdlog::info("====== ICAO Local PKD v2.1.0 SPRINT3-LINK-CERT-VALIDATION (Build 20260126-224030) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

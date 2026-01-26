@@ -235,6 +235,54 @@ const CertificateSearch: React.FC = () => {
     };
   }, [certificates, total]);
 
+  // Get certificate type badge
+  const getCertTypeBadge = (certType: string) => {
+    switch (certType) {
+      case 'CSCA':
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+            CSCA
+          </span>
+        );
+      case 'MLSC':
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+            MLSC
+          </span>
+        );
+      case 'DSC':
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700">
+            DSC
+          </span>
+        );
+      case 'DSC_NC':
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-700">
+            DSC_NC
+          </span>
+        );
+      case 'CRL':
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-700">
+            CRL
+          </span>
+        );
+      case 'ML':
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
+            ML
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+            {certType}
+          </span>
+        );
+    }
+  };
+
   // Get validity badge
   const getValidityBadge = (validity: string) => {
     switch (validity) {
@@ -415,6 +463,7 @@ const CertificateSearch: React.FC = () => {
                 >
                   <option value="">전체</option>
                   <option value="CSCA">CSCA</option>
+                  <option value="MLSC">MLSC</option>
                   <option value="DSC">DSC</option>
                   <option value="DSC_NC">DSC_NC</option>
                   <option value="CRL">CRL</option>
@@ -607,9 +656,7 @@ const CertificateSearch: React.FC = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-center border-r border-gray-100 dark:border-gray-700">
-                      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
-                        {cert.certType}
-                      </span>
+                      {getCertTypeBadge(cert.certType)}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate border-r border-gray-100 dark:border-gray-700" title={cert.cn}>
                       {cert.cn}

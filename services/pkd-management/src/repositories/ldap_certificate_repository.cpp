@@ -591,9 +591,11 @@ domain::models::CertificateType LdapCertificateRepository::extractCertTypeFromDn
     std::string dnLower = dn;
     std::transform(dnLower.begin(), dnLower.end(), dnLower.begin(), ::tolower);
 
-    // Check for certificate type in DN (o=csca, o=dsc, o=crl, o=ml)
+    // Check for certificate type in DN (o=csca, o=mlsc, o=dsc, o=crl, o=ml)
     if (dnLower.find("o=csca") != std::string::npos) {
         return domain::models::CertificateType::CSCA;
+    } else if (dnLower.find("o=mlsc") != std::string::npos) {
+        return domain::models::CertificateType::MLSC;
     } else if (dnLower.find("o=dsc") != std::string::npos) {
         // Check if it's under nc-data (non-conformant)
         if (dnLower.find("dc=nc-data") != std::string::npos) {

@@ -27,6 +27,7 @@ import { cn } from '@/utils/cn';
 interface CountryStats {
   country: string;
   csca: number;
+  mlsc: number;
   dsc: number;
   dscNc: number;
   total: number;
@@ -86,8 +87,9 @@ export function Dashboard() {
       const countries = response.data;
       if (countries.length > 0) {
         const maxTotal = countries[0].total;
-        setCountryData(countries.map((item) => ({
+        setCountryData(countries.map((item: any) => ({
           ...item,
+          mlsc: item.mlsc || 0,
           percentage: Math.max(15, (item.total / maxTotal) * 100),
         })));
       }
@@ -253,6 +255,10 @@ export function Dashboard() {
                   <Shield className="w-3.5 h-3.5 text-blue-500" />
                   <span className="font-medium">CSCA</span>
                 </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                  <FileText className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="font-medium">MLSC</span>
+                </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <Key className="w-3.5 h-3.5 text-green-500" />
                   <span className="font-medium">DSC</span>
@@ -323,6 +329,12 @@ export function Dashboard() {
                       <Shield className="w-3 h-3 text-blue-500" />
                       {item.csca}
                     </span>
+                    {item.mlsc > 0 && (
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-purple-500" />
+                        {item.mlsc}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Key className="w-3 h-3 text-green-500" />
                       {item.dsc}
