@@ -28,11 +28,12 @@ namespace certificate_utils {
  * @param certData Certificate DER bytes
  * @param validationStatus Validation status (UNKNOWN, VALID, INVALID)
  * @param validationMessage Validation message
- * @return std::pair<int, bool> (certificate_id, isDuplicate)
+ * @return std::pair<std::string, bool> (certificate_id UUID, isDuplicate)
  *
  * @note This function uses parameterized queries to prevent SQL injection
+ * @note Returns empty string ("") on error
  */
-std::pair<int, bool> saveCertificateWithDuplicateCheck(
+std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     PGconn* conn,
     const std::string& uploadId,
     const std::string& certType,
@@ -56,7 +57,7 @@ std::pair<int, bool> saveCertificateWithDuplicateCheck(
  * that contain the same certificate.
  *
  * @param conn PostgreSQL connection
- * @param certificateId Certificate ID from certificate table
+ * @param certificateId Certificate UUID from certificate table
  * @param uploadId Upload UUID that contains this certificate
  * @param sourceType Source type (ML_FILE, LDIF_001, LDIF_002, LDIF_003)
  * @param sourceCountry Country code from source (optional)
@@ -66,7 +67,7 @@ std::pair<int, bool> saveCertificateWithDuplicateCheck(
  */
 bool trackCertificateDuplicate(
     PGconn* conn,
-    int certificateId,
+    const std::string& certificateId,
     const std::string& uploadId,
     const std::string& sourceType,
     const std::string& sourceCountry = "",
@@ -81,13 +82,13 @@ bool trackCertificateDuplicate(
  * fields when a duplicate certificate is detected.
  *
  * @param conn PostgreSQL connection
- * @param certificateId Certificate ID to update
+ * @param certificateId Certificate UUID to update
  * @param uploadId Current upload UUID
  * @return bool Success status
  */
 bool incrementDuplicateCount(
     PGconn* conn,
-    int certificateId,
+    const std::string& certificateId,
     const std::string& uploadId
 );
 
@@ -108,6 +109,22 @@ bool updateCscaExtractionStats(
     const std::string& uploadId,
     int extractedCount,
     int duplicateCount
+);
+
+/**
+ * @brief Update certificate LDAP storage status
+ *
+ * Marks a certificate as stored in LDAP with the LDAP DN.
+ *
+ * @param conn PostgreSQL connection
+ * @param certificateId Certificate UUID
+ * @param ldapDn LDAP DN where certificate is stored
+ * @return bool Success status
+ */
+bool updateCertificateLdapStatus(
+    PGconn* conn,
+    const std::string& certificateId,
+    const std::string& ldapDn
 );
 
 /**

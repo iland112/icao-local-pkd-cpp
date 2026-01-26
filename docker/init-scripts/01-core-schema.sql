@@ -86,6 +86,7 @@ CREATE TABLE IF NOT EXISTS certificate (
 
     -- LDAP DN for stored certificate
     ldap_dn TEXT,
+    ldap_dn_v2 VARCHAR(512),
     stored_in_ldap BOOLEAN DEFAULT FALSE,
     stored_at TIMESTAMP WITH TIME ZONE,
 
@@ -110,6 +111,7 @@ CREATE INDEX idx_certificate_issuer_dn ON certificate(issuer_dn);
 CREATE INDEX idx_certificate_serial ON certificate(serial_number);
 CREATE INDEX idx_certificate_stored_in_ldap ON certificate(stored_in_ldap);
 CREATE INDEX idx_certificate_first_upload ON certificate(first_upload_id);
+CREATE INDEX idx_certificate_ldap_dn_v2 ON certificate(ldap_dn_v2);
 CREATE UNIQUE INDEX idx_certificate_unique ON certificate(certificate_type, fingerprint_sha256);
 
 -- =============================================================================
@@ -263,7 +265,7 @@ CREATE TABLE IF NOT EXISTS certificate_duplicates (
     source_entry_dn TEXT,
     source_file_name VARCHAR(255),
     detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(certificate_id, upload_id)
+    UNIQUE(certificate_id, upload_id, source_type)
 );
 
 CREATE INDEX idx_cert_dup_cert_id ON certificate_duplicates(certificate_id);

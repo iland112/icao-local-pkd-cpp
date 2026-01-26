@@ -4,7 +4,7 @@
 
 namespace certificate_utils {
 
-std::pair<int, bool> saveCertificateWithDuplicateCheck(
+std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     PGconn* conn,
     const std::string& uploadId,
     const std::string& certType,
@@ -35,18 +35,18 @@ std::pair<int, bool> saveCertificateWithDuplicateCheck(
     if (PQresultStatus(checkRes) != PGRES_TUPLES_OK) {
         spdlog::error("[CertUtils] Failed to check duplicate: {}", PQerrorMessage(conn));
         PQclear(checkRes);
-        return {-1, false};
+        return std::make_pair(std::string(""), false);
     }
 
     // If certificate exists, return existing ID and isDuplicate=true
     if (PQntuples(checkRes) > 0) {
-        int existingId = std::atoi(PQgetvalue(checkRes, 0, 0));
+        std::string existingId = PQgetvalue(checkRes, 0, 0);
         PQclear(checkRes);
 
         spdlog::debug("[CertUtils] Duplicate certificate found: id={}, fingerprint={}",
-                     existingId, fingerprint.substr(0, 16) + "...");
+                     existingId.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
 
-        return {existingId, true};
+        return std::make_pair(existingId, true);
     }
 
     PQclear(checkRes);
@@ -60,7 +60,7 @@ std::pair<int, bool> saveCertificateWithDuplicateCheck(
 
     if (!byteaEscaped) {
         spdlog::error("[CertUtils] Failed to escape bytea data");
-        return {-1, false};
+        return std::make_pair(std::string(""), false);
     }
 
     std::string byteaStr = reinterpret_cast<const char*>(byteaEscaped);
@@ -98,39 +98,37 @@ std::pair<int, bool> saveCertificateWithDuplicateCheck(
     if (PQresultStatus(insertRes) != PGRES_TUPLES_OK) {
         spdlog::error("[CertUtils] Failed to insert certificate: {}", PQerrorMessage(conn));
         PQclear(insertRes);
-        return {-1, false};
+        return std::make_pair(std::string(""), false);
     }
 
-    int newId = std::atoi(PQgetvalue(insertRes, 0, 0));
+    std::string newId = PQgetvalue(insertRes, 0, 0);
     PQclear(insertRes);
 
     spdlog::debug("[CertUtils] New certificate inserted: id={}, type={}, country={}, fingerprint={}",
-                 newId, certType, countryCode, fingerprint.substr(0, 16) + "...");
+                 newId.substr(0, 8) + "...", certType, countryCode, fingerprint.substr(0, 16) + "...");
 
-    return {newId, false};
+    return std::make_pair(newId, false);
 }
 
 bool trackCertificateDuplicate(
     PGconn* conn,
-    int certificateId,
+    const std::string& certificateId,
     const std::string& uploadId,
     const std::string& sourceType,
     const std::string& sourceCountry,
     const std::string& sourceEntryDn,
     const std::string& sourceFileName
 ) {
-    std::string certIdStr = std::to_string(certificateId);
-
     const char* query =
         "INSERT INTO certificate_duplicates ("
         "certificate_id, upload_id, source_type, source_country, "
         "source_entry_dn, source_file_name, detected_at"
         ") VALUES ("
-        "$1, $2::uuid, $3, $4, $5, $6, NOW()"
+        "$1::uuid, $2::uuid, $3, $4, $5, $6, NOW()"
         ") ON CONFLICT (certificate_id, upload_id, source_type) DO NOTHING";
 
     const char* params[6] = {
-        certIdStr.c_str(),
+        certificateId.c_str(),
         uploadId.c_str(),
         sourceType.c_str(),
         !sourceCountry.empty() ? sourceCountry.c_str() : nullptr,
@@ -150,27 +148,25 @@ bool trackCertificateDuplicate(
     PQclear(res);
 
     spdlog::debug("[CertUtils] Tracked duplicate: cert_id={}, upload={}, source_type={}, country={}",
-                 certificateId, uploadId.substr(0, 8) + "...", sourceType, sourceCountry);
+                 certificateId.substr(0, 8) + "...", uploadId.substr(0, 8) + "...", sourceType, sourceCountry);
 
     return true;
 }
 
 bool incrementDuplicateCount(
     PGconn* conn,
-    int certificateId,
+    const std::string& certificateId,
     const std::string& uploadId
 ) {
-    std::string certIdStr = std::to_string(certificateId);
-
     const char* query =
         "UPDATE certificate "
         "SET duplicate_count = duplicate_count + 1, "
         "    last_seen_upload_id = $2::uuid, "
         "    last_seen_at = NOW() "
-        "WHERE id = $1";
+        "WHERE id = $1::uuid";
 
     const char* params[2] = {
-        certIdStr.c_str(),
+        certificateId.c_str(),
         uploadId.c_str()
     };
 
@@ -186,7 +182,7 @@ bool incrementDuplicateCount(
     PQclear(res);
 
     spdlog::debug("[CertUtils] Incremented duplicate count: cert_id={}, upload={}",
-                 certificateId, uploadId.substr(0, 8) + "...");
+                 certificateId.substr(0, 8) + "...", uploadId.substr(0, 8) + "...");
 
     return true;
 }
@@ -202,8 +198,8 @@ bool updateCscaExtractionStats(
 
     const char* query =
         "UPDATE uploaded_file "
-        "SET csca_extracted_from_ml = $2, "
-        "    csca_duplicates = $3 "
+        "SET csca_extracted_from_ml = csca_extracted_from_ml + $2, "
+        "    csca_duplicates = csca_duplicates + $3 "
         "WHERE id = $1::uuid";
 
     const char* params[3] = {
@@ -225,6 +221,40 @@ bool updateCscaExtractionStats(
 
     spdlog::info("[CertUtils] Updated CSCA extraction stats: upload={}, extracted={}, duplicates={}",
                 uploadId.substr(0, 8) + "...", extractedCount, duplicateCount);
+
+    return true;
+}
+
+bool updateCertificateLdapStatus(
+    PGconn* conn,
+    const std::string& certificateId,
+    const std::string& ldapDn
+) {
+    const char* query =
+        "UPDATE certificate "
+        "SET stored_in_ldap = TRUE, "
+        "    ldap_dn_v2 = $2, "
+        "    stored_at = NOW() "
+        "WHERE id = $1::uuid";
+
+    const char* params[2] = {
+        certificateId.c_str(),
+        ldapDn.c_str()
+    };
+
+    PGresult* res = PQexecParams(conn, query, 2, nullptr, params,
+                                 nullptr, nullptr, 0);
+
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::error("[CertUtils] Failed to update LDAP status: {}", PQerrorMessage(conn));
+        PQclear(res);
+        return false;
+    }
+
+    PQclear(res);
+
+    spdlog::debug("[CertUtils] Updated LDAP status: cert_id={}, ldap_dn={}",
+                 certificateId.substr(0, 8) + "...", ldapDn);
 
     return true;
 }

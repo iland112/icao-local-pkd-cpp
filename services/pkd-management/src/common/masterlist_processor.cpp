@@ -231,7 +231,7 @@ bool parseMasterListEntryV2(
             "UNKNOWN", ""
         );
 
-        if (certId < 0) {
+        if (certId.empty()) {
             spdlog::error("[ML] CSCA {}/{} - Failed to save to DB", i + 1, totalCscas);
             continue;
         }
@@ -267,12 +267,17 @@ bool parseMasterListEntryV2(
                     ld, ldapCertType, certCountryCode,  // Use LC or CSCA based on certificate type
                     meta.subjectDn, meta.issuerDn, meta.serialNumber,
                     meta.fingerprint,  // Add fingerprint parameter
-                    meta.derData       // certBinary
+                    meta.derData,      // certBinary
+                    "", "", "",        // pkdConformanceCode, pkdConformanceText, pkdVersion
+                    false              // useLegacyDn=false (use fingerprint-based DN)
                 );
 
                 if (!ldapDn.empty()) {
                     stats.ldapCscaStoredCount++;  // Include Link Certificates in CSCA statistics
                     spdlog::debug("[ML] {} {}/{} - Saved to LDAP: {}", certTypeLabel, i + 1, totalCscas, ldapDn);
+
+                    // Update stored_in_ldap flag in DB
+                    certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
                 } else {
                     spdlog::warn("[ML] {} {}/{} - Failed to save to LDAP", certTypeLabel, i + 1, totalCscas);
                 }

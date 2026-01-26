@@ -16,6 +16,7 @@
 
 #include <string>
 #include <vector>
+#include <cstdint>
 #include <libpq-fe.h>
 #include <ldap.h>
 
