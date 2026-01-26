@@ -53,7 +53,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
     // Query includes fingerprint_sha256 for proper DN construction
     const char* query = R"(
         SELECT id, certificate_type, country_code, subject_dn, issuer_dn,
-               fingerprint_sha256, certificate_binary
+               fingerprint_sha256, certificate_data
         FROM certificate
         WHERE certificate_type = $1
         ORDER BY id

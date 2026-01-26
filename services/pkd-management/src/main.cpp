@@ -652,7 +652,7 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
     }
 
     // Use case-insensitive comparison for DN matching (RFC 4517)
-    std::string query = "SELECT certificate_binary FROM certificate WHERE "
+    std::string query = "SELECT certificate_data FROM certificate WHERE "
                         "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "') LIMIT 1";
 
     spdlog::debug("CSCA lookup query: {}", query.substr(0, 200));
@@ -853,7 +853,7 @@ static std::vector<X509*> findAllCscasBySubjectDn(PGconn* conn, const std::strin
     }
 
     // Case-insensitive search for all CSCAs (including link certificates)
-    std::string query = "SELECT certificate_binary FROM certificate WHERE "
+    std::string query = "SELECT certificate_data FROM certificate WHERE "
                         "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "')";
 
     spdlog::debug("Find all CSCAs query: {}", query.substr(0, 200));
@@ -2247,6 +2247,10 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
     } else if (certType == "DSC") {
         ou = "dsc";
         dataContainer = "dc=data";
+    } else if (certType == "LC") {
+        // Sprint 3: Link Certificate support
+        ou = "lc";
+        dataContainer = "dc=data";
     } else if (certType == "DSC_NC") {
         ou = "dsc";
         dataContainer = "dc=nc-data";
@@ -2904,7 +2908,7 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
 
     std::string query = "INSERT INTO certificate (id, upload_id, certificate_type, country_code, "
                        "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-                       "not_before, not_after, certificate_binary, validation_status, validation_message, created_at) VALUES ("
+                       "not_before, not_after, certificate_data, validation_status, validation_message, created_at) VALUES ("
                        "'" + certId + "', "
                        "'" + uploadId + "', "
                        + escapeSqlString(conn, certType) + ", "
@@ -2921,7 +2925,14 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
                        "ON CONFLICT (certificate_type, fingerprint_sha256) DO NOTHING";
 
     PGresult* res = PQexec(conn, query.c_str());
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+    ExecStatusType status = PQresultStatus(res);
+    bool success = (status == PGRES_COMMAND_OK);
+
+    if (!success) {
+        spdlog::error("Failed to save certificate: {} (Status: {}, Error: {})",
+                     fingerprint, PQresStatus(status), PQerrorMessage(conn));
+    }
+
     PQclear(res);
 
     return success ? certId : "";
@@ -5412,7 +5423,7 @@ void registerRoutes() {
             }
 
             // Get DSC certificates that need re-validation (CSCA_NOT_FOUND)
-            std::string query = "SELECT c.id, c.issuer_dn, c.certificate_binary "
+            std::string query = "SELECT c.id, c.issuer_dn, c.certificate_data "
                                "FROM certificate c "
                                "JOIN validation_result vr ON c.id = vr.certificate_id "
                                "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
@@ -6147,6 +6158,26 @@ void registerRoutes() {
                 result["cscaCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
+                // Sprint 3: CSCA breakdown (self-signed vs link certificates)
+                Json::Value cscaBreakdown;
+                res = PQexec(conn,
+                    "SELECT "
+                    "COUNT(*) as total, "
+                    "SUM(CASE WHEN subject_dn = issuer_dn THEN 1 ELSE 0 END) as self_signed, "
+                    "SUM(CASE WHEN subject_dn != issuer_dn THEN 1 ELSE 0 END) as link_certs "
+                    "FROM certificate WHERE certificate_type = 'CSCA'");
+                if (PQntuples(res) > 0) {
+                    cscaBreakdown["total"] = std::stoi(PQgetvalue(res, 0, 0));
+                    cscaBreakdown["selfSigned"] = std::stoi(PQgetvalue(res, 0, 1));
+                    cscaBreakdown["linkCertificates"] = std::stoi(PQgetvalue(res, 0, 2));
+                } else {
+                    cscaBreakdown["total"] = 0;
+                    cscaBreakdown["selfSigned"] = 0;
+                    cscaBreakdown["linkCertificates"] = 0;
+                }
+                PQclear(res);
+                result["cscaBreakdown"] = cscaBreakdown;
+
                 // Get DSC count from certificate table (conformant DSC only)
                 res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'DSC'");
                 result["dscCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
@@ -6614,15 +6645,16 @@ void registerRoutes() {
 
             if (PQstatus(conn) == CONNECTION_OK) {
                 // Query certificate counts by country, ordered by total count
+                // Note: ZZ (United Nations legacy code) is merged into UN
                 std::string query =
-                    "SELECT country_code, "
+                    "SELECT CASE WHEN country_code = 'ZZ' THEN 'UN' ELSE country_code END as country_code, "
                     "SUM(CASE WHEN certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
                     "SUM(CASE WHEN certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
                     "SUM(CASE WHEN certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
                     "COUNT(*) as total "
                     "FROM certificate "
                     "WHERE country_code IS NOT NULL AND country_code != '' "
-                    "GROUP BY country_code "
+                    "GROUP BY CASE WHEN country_code = 'ZZ' THEN 'UN' ELSE country_code END "
                     "ORDER BY total DESC "
                     "LIMIT " + std::to_string(limit);
 
@@ -8491,7 +8523,7 @@ paths:
             // Fetch batch of certificates
             const char* query =
                 "SELECT id, fingerprint_sha256, certificate_type, country_code, "
-                "       certificate_binary, subject_dn, serial_number, issuer_dn "
+                "       certificate_data, subject_dn, serial_number, issuer_dn "
                 "FROM certificate "
                 "WHERE stored_in_ldap = true AND ldap_dn_v2 IS NULL "
                 "ORDER BY id "
@@ -8662,7 +8694,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v1.9.0 PHASE2-SQL-INJECTION-FIX (Build 20260122-140000) ======");
+    spdlog::info("====== ICAO Local PKD v2.1.0 SPRINT3-LINK-CERT-VALIDATION (Build 20260126-125500) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

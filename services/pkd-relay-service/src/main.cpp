@@ -460,6 +460,9 @@ LdapStats getLdapStats() {
                 // Count by OU type in DN
                 if (dnStr.find("o=csca,") != std::string::npos) {
                     stats.cscaCount++;
+                } else if (dnStr.find("o=lc,") != std::string::npos) {
+                    // Sprint 3: Count Link Certificates as CSCA
+                    stats.cscaCount++;
                 } else if (dnStr.find("o=dsc,") != std::string::npos) {
                     stats.dscCount++;
                 } else if (dnStr.find("o=crl,") != std::string::npos) {
