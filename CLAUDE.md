@@ -56,6 +56,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ├── dc=data
 │   └── c={COUNTRY}
 │       ├── o=csca (CSCA certificates)
+│       ├── o=mlsc (Master List Signer Certificates - Sprint 3)
 │       ├── o=dsc  (DSC certificates)
 │       ├── o=crl  (CRLs)
 │       └── o=ml   (Master Lists)
@@ -93,6 +94,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ CSCA in-memory cache (80% performance improvement)
 - ✅ Validation result APIs with trust chain path
 - ✅ Frontend trust chain visualization component
+- ✅ MLSC sync tracking and monitoring (DB-LDAP sync)
 
 ---
 
@@ -282,6 +284,14 @@ db_sync_status 10                # Sync history
   - Integration with Certificate Search and Upload Detail pages
   - Dark mode support and responsive design
 
+- ✅ **MLSC Sync Support** (DB-LDAP Synchronization Update)
+  - Added MLSC tracking to sync statistics and discrepancy monitoring
+  - Database migration: Added mlsc columns to sync_status table
+  - Backend: Updated sync statistics gathering (getDbStats, getLdapStats)
+  - Critical fix: CSCA counting bug resolved (excluded MLSC to prevent false +59 discrepancy)
+  - Frontend: Added MLSC row to sync comparison table with discrepancy indicators
+  - Result: Complete sync tracking for all certificate types (CSCA, MLSC, DSC, DSC_NC, CRL)
+
 **Sprint 3 Documentation**:
 
 - `docs/archive/SPRINT3_PHASE1_COMPLETION.md` - Trust chain building
@@ -289,6 +299,7 @@ db_sync_status 10                # Sync history
 - `docs/archive/SPRINT3_TASK34_COMPLETION.md` - CSCA cache optimization
 - `docs/archive/SPRINT3_TASK35_COMPLETION.md` - Validation result APIs
 - `docs/archive/SPRINT3_TASK36_COMPLETION.md` - Frontend visualization
+- `docs/MLSC_SYNC_UPDATE.md` - DB-LDAP sync MLSC support and CSCA counting fix
 
 ### v2.0.6 (2026-01-25)
 

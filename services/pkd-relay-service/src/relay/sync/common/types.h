@@ -12,6 +12,7 @@ namespace relay {
 // =============================================================================
 struct DbStats {
     int cscaCount = 0;
+    int mlscCount = 0;  // Master List Signer Certificates (Sprint 3)
     int dscCount = 0;
     int dscNcCount = 0;
     int crlCount = 0;
@@ -24,6 +25,7 @@ struct DbStats {
 // =============================================================================
 struct LdapStats {
     int cscaCount = 0;
+    int mlscCount = 0;  // Master List Signer Certificates (Sprint 3)
     int dscCount = 0;
     int dscNcCount = 0;
     int crlCount = 0;
@@ -39,6 +41,7 @@ struct SyncResult {
     DbStats dbStats;
     LdapStats ldapStats;
     int cscaDiscrepancy = 0;
+    int mlscDiscrepancy = 0;  // Master List Signer Certificates (Sprint 3)
     int dscDiscrepancy = 0;
     int dscNcDiscrepancy = 0;
     int crlDiscrepancy = 0;

@@ -370,6 +370,7 @@ export type SyncStatusType = 'SYNCED' | 'DISCREPANCY' | 'ERROR' | 'PENDING' | 'N
 
 export interface SyncStats {
   csca: number;
+  mlsc: number;  // Master List Signer Certificates (Sprint 3)
   dsc: number;
   dscNc: number;
   crl: number;
@@ -379,6 +380,7 @@ export interface SyncStats {
 
 export interface SyncDiscrepancy {
   csca: number;
+  mlsc: number;  // Master List Signer Certificates (Sprint 3)
   dsc: number;
   dscNc: number;
   crl: number;
