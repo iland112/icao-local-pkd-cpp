@@ -107,11 +107,14 @@ export function FileUpload() {
 
         // Parse stage: Only completed if totalEntries > 0 (parsing was actually done)
         if ((upload.totalEntries || 0) > 0) {
+          // For Master List: use processedEntries (extracted certificates)
+          // For LDIF: use totalEntries (LDIF entries)
+          const entriesCount = upload.fileFormat === 'ML' ? upload.processedEntries : upload.totalEntries;
           setParseStage({
             status: 'COMPLETED',
             message: '파싱 완료',
             percentage: 100,
-            details: `${upload.totalEntries}건 처리`
+            details: `${entriesCount}건 처리`
           });
         } else {
           // Parsing not started yet - keep IDLE state
@@ -124,14 +127,16 @@ export function FileUpload() {
 
         // Stage 2 (Validate & DB + LDAP): Check if certificates exist in DB
         // v1.5.0: DB and LDAP are saved simultaneously, so DB save = completion
-        const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) > 0;
+        const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) + (upload.mlscCount || 0) > 0;
         if (hasCertificates) {
           // Build detailed certificate breakdown
           const certDetails = [];
+          if (upload.mlscCount) certDetails.push(`MLSC: ${upload.mlscCount}`);  // Master List Signer Certificate (v2.1.1)
           if (upload.cscaCount) certDetails.push(`CSCA: ${upload.cscaCount}`);
           if (upload.dscCount) certDetails.push(`DSC: ${upload.dscCount}`);
           if (upload.dscNcCount) certDetails.push(`DSC_NC: ${upload.dscNcCount}`);
           if (upload.crlCount) certDetails.push(`CRL: ${upload.crlCount}`);
+          if (upload.mlCount) certDetails.push(`ML: ${upload.mlCount}`);
 
           setDbSaveStage({
             status: 'COMPLETED',

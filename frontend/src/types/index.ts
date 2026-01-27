@@ -44,6 +44,7 @@ export interface UploadedFile {
   dscNcCount?: number;
   crlCount?: number;
   mlCount?: number;
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
   certificateCount?: number;
   totalEntries?: number;
   processedEntries?: number;
@@ -93,7 +94,7 @@ export interface UploadProgress {
 }
 
 // Certificate types
-export type CertificateType = 'CSCA' | 'DSC' | 'DSC_NC' | 'DS' | 'ML_SIGNER';
+export type CertificateType = 'CSCA' | 'DSC' | 'DSC_NC' | 'DS' | 'ML_SIGNER' | 'MLSC';  // MLSC added in v2.1.1
 export type CertificateStatus = 'PENDING' | 'VALID' | 'INVALID' | 'EXPIRED' | 'REVOKED';
 
 export interface Certificate {
@@ -306,14 +307,15 @@ export interface UploadStatisticsOverview {
   failedUploads: number;
   totalCertificates: number;
   cscaCount: number;
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
   dscCount: number;
   dscNcCount: number;
   crlCount: number;
   mlCount: number;  // Master List count
   countriesCount: number;
-  // Collection 002 CSCA extraction statistics (v2.0.0)
-  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
-  cscaDuplicates?: number;       // Duplicate CSCAs detected
+  // Master List extraction statistics (v2.1.1)
+  cscaExtractedFromMl?: number;  // Total certificates extracted from Master Lists (MLSC + CSCA + LC)
+  cscaDuplicates?: number;       // Duplicate certificates detected
   // CSCA breakdown (v2.0.9)
   cscaBreakdown?: {
     total: number;
@@ -331,6 +333,7 @@ export interface UploadChange {
   uploadTime: string;
   counts: {
     csca: number;
+    mlsc?: number;
     dsc: number;
     dscNc: number;
     crl: number;

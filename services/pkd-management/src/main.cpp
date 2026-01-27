@@ -6260,6 +6260,11 @@ void registerRoutes() {
                 result["mlCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
+                // Get MLSC count from certificate table (Master List Signer Certificate)
+                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'MLSC'");
+                result["mlscCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
+                PQclear(res);
+
                 // Validation statistics from validation_result table
                 Json::Value validation;
 
@@ -6311,6 +6316,7 @@ void registerRoutes() {
                 result["dscNcCount"] = 0;
                 result["crlCount"] = 0;
                 result["mlCount"] = 0;
+                result["mlscCount"] = 0;
                 result["countriesCount"] = 0;
 
                 // Empty validation stats
@@ -6376,7 +6382,7 @@ void registerRoutes() {
                 // Get paginated results with validation statistics
                 int offset = page * size;
                 std::string query = "SELECT id, file_name, file_format, file_size, status, "
-                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), error_message, "
+                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), COALESCE(mlsc_count, 0), error_message, "
                                    "upload_timestamp, completed_timestamp, "
                                    "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
                                    "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
@@ -6403,21 +6409,22 @@ void registerRoutes() {
                         item["certificateCount"] = cscaCount + dscCount + dscNcCount;  // Keep for backward compatibility
                         item["crlCount"] = std::stoi(PQgetvalue(res, i, 8));
                         item["mlCount"] = std::stoi(PQgetvalue(res, i, 9));  // Master List count
-                        item["errorMessage"] = PQgetvalue(res, i, 10) ? PQgetvalue(res, i, 10) : "";
-                        item["createdAt"] = PQgetvalue(res, i, 11);
-                        item["updatedAt"] = PQgetvalue(res, i, 12);
+                        item["mlscCount"] = std::stoi(PQgetvalue(res, i, 10));  // Master List Signer Certificate count (v2.1.1)
+                        item["errorMessage"] = PQgetvalue(res, i, 11) ? PQgetvalue(res, i, 11) : "";
+                        item["createdAt"] = PQgetvalue(res, i, 12);
+                        item["updatedAt"] = PQgetvalue(res, i, 13);
 
                         // Validation statistics
                         Json::Value validation;
-                        validation["validCount"] = std::stoi(PQgetvalue(res, i, 13));
-                        validation["invalidCount"] = std::stoi(PQgetvalue(res, i, 14));
-                        validation["pendingCount"] = std::stoi(PQgetvalue(res, i, 15));
-                        validation["errorCount"] = std::stoi(PQgetvalue(res, i, 16));
-                        validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, i, 17));
-                        validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, i, 18));
-                        validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, i, 19));
-                        validation["expiredCount"] = std::stoi(PQgetvalue(res, i, 20));
-                        validation["revokedCount"] = std::stoi(PQgetvalue(res, i, 21));
+                        validation["validCount"] = std::stoi(PQgetvalue(res, i, 14));
+                        validation["invalidCount"] = std::stoi(PQgetvalue(res, i, 15));
+                        validation["pendingCount"] = std::stoi(PQgetvalue(res, i, 16));
+                        validation["errorCount"] = std::stoi(PQgetvalue(res, i, 17));
+                        validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, i, 18));
+                        validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, i, 19));
+                        validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, i, 20));
+                        validation["expiredCount"] = std::stoi(PQgetvalue(res, i, 21));
+                        validation["revokedCount"] = std::stoi(PQgetvalue(res, i, 22));
                         item["validation"] = validation;
 
                         result["content"].append(item);
@@ -6458,7 +6465,7 @@ void registerRoutes() {
             if (PQstatus(conn) == CONNECTION_OK) {
                 // Get upload details with validation statistics
                 std::string query = "SELECT id, file_name, file_format, file_size, status, processing_mode, "
-                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), "
+                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), COALESCE(mlsc_count, 0), "
                                    "total_entries, processed_entries, error_message, "
                                    "upload_timestamp, completed_timestamp, "
                                    "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
@@ -6487,23 +6494,24 @@ void registerRoutes() {
                     data["certificateCount"] = cscaCount + dscCount + dscNcCount;
                     data["crlCount"] = std::stoi(PQgetvalue(res, 0, 9));
                     data["mlCount"] = std::stoi(PQgetvalue(res, 0, 10));
-                    data["totalEntries"] = std::stoi(PQgetvalue(res, 0, 11));
-                    data["processedEntries"] = std::stoi(PQgetvalue(res, 0, 12));
-                    data["errorMessage"] = PQgetvalue(res, 0, 13) ? PQgetvalue(res, 0, 13) : "";
-                    data["createdAt"] = PQgetvalue(res, 0, 14);
-                    data["updatedAt"] = PQgetvalue(res, 0, 15);
+                    data["mlscCount"] = std::stoi(PQgetvalue(res, 0, 11));  // Master List Signer Certificate count (v2.1.1)
+                    data["totalEntries"] = std::stoi(PQgetvalue(res, 0, 12));
+                    data["processedEntries"] = std::stoi(PQgetvalue(res, 0, 13));
+                    data["errorMessage"] = PQgetvalue(res, 0, 14) ? PQgetvalue(res, 0, 14) : "";
+                    data["createdAt"] = PQgetvalue(res, 0, 15);
+                    data["updatedAt"] = PQgetvalue(res, 0, 16);
 
                     // Validation statistics
                     Json::Value validation;
-                    validation["validCount"] = std::stoi(PQgetvalue(res, 0, 16));
-                    validation["invalidCount"] = std::stoi(PQgetvalue(res, 0, 17));
-                    validation["pendingCount"] = std::stoi(PQgetvalue(res, 0, 18));
-                    validation["errorCount"] = std::stoi(PQgetvalue(res, 0, 19));
-                    validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, 0, 20));
-                    validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, 0, 21));
-                    validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, 0, 22));
-                    validation["expiredCount"] = std::stoi(PQgetvalue(res, 0, 23));
-                    validation["revokedCount"] = std::stoi(PQgetvalue(res, 0, 24));
+                    validation["validCount"] = std::stoi(PQgetvalue(res, 0, 17));
+                    validation["invalidCount"] = std::stoi(PQgetvalue(res, 0, 18));
+                    validation["pendingCount"] = std::stoi(PQgetvalue(res, 0, 19));
+                    validation["errorCount"] = std::stoi(PQgetvalue(res, 0, 20));
+                    validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, 0, 21));
+                    validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, 0, 22));
+                    validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, 0, 23));
+                    validation["expiredCount"] = std::stoi(PQgetvalue(res, 0, 24));
+                    validation["revokedCount"] = std::stoi(PQgetvalue(res, 0, 25));
                     data["validation"] = validation;
 
                     // Check LDAP upload status by querying certificate table

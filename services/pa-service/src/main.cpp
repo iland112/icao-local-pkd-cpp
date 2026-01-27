@@ -1943,11 +1943,11 @@ void registerRoutes() {
                 status, verificationId, processingTimeMs);
 
             // Phase 4.4: Audit logging - PA_VERIFY
-            std::string conninfo = "host=" + dbHost +
-                                  " port=" + std::to_string(dbPort) +
-                                  " dbname=" + dbName +
-                                  " user=" + dbUser +
-                                  " password=" + dbPassword;
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
             PGconn* auditConn = PQconnectdb(conninfo.c_str());
             if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
                 common::AuditLogEntry auditEntry;
@@ -2005,11 +2005,11 @@ void registerRoutes() {
                 spdlog::error("Exception in PA verify handler: {}", e.what());
 
                 // Phase 4.4: Audit logging - PA_VERIFY failure (exception)
-                std::string conninfo = "host=" + dbHost +
-                                      " port=" + std::to_string(dbPort) +
-                                      " dbname=" + dbName +
-                                      " user=" + dbUser +
-                                      " password=" + dbPassword;
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
                     common::AuditLogEntry auditEntry;
@@ -2045,11 +2045,11 @@ void registerRoutes() {
                 spdlog::error("Unknown exception in PA verify handler");
 
                 // Phase 4.4: Audit logging - PA_VERIFY failure (unknown exception)
-                std::string conninfo = "host=" + dbHost +
-                                      " port=" + std::to_string(dbPort) +
-                                      " dbname=" + dbName +
-                                      " user=" + dbUser +
-                                      " password=" + dbPassword;
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
                     common::AuditLogEntry auditEntry;

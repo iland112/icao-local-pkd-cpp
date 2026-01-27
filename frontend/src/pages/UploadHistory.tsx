@@ -54,13 +54,14 @@ interface UploadHistoryItem {
   certificateCount: number;  // Keep for backward compatibility
   crlCount: number;
   mlCount: number;  // Master List count
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
   errorMessage: string;
   createdAt: string;
   updatedAt: string;
   validation?: ValidationStats;  // Validation statistics
-  // Collection 002 CSCA extraction statistics (v2.0.0)
-  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
-  cscaDuplicates?: number;       // Duplicate CSCAs detected
+  // Collection 002 Master List extraction statistics (v2.1.1)
+  cscaExtractedFromMl?: number;  // Total certificates extracted from Master Lists (MLSC + CSCA + LC)
+  cscaDuplicates?: number;       // Duplicate certificates detected
   // LDAP storage status (v2.0.0 - Data Consistency)
   ldapUploadedCount?: number;    // Number of certificates stored in LDAP
 }
@@ -643,6 +644,12 @@ export function UploadHistory() {
                               CSCA {upload.cscaCount || upload.certificateCount}
                             </span>
                           )}
+                          {upload.mlscCount && upload.mlscCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                              <FileText className="w-3 h-3" />
+                              MLSC {upload.mlscCount}
+                            </span>
+                          )}
                           {upload.dscCount > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                               <HardDrive className="w-3 h-3" />
@@ -864,12 +871,18 @@ export function UploadHistory() {
                   </div>
 
                   {/* Certificate Type Breakdown */}
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                     <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
                         {selectedUpload.cscaCount}
                       </p>
                       <span className="text-xs text-purple-700 dark:text-purple-300">CSCA</span>
+                    </div>
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                        {selectedUpload.mlscCount || 0}
+                      </p>
+                      <span className="text-xs text-indigo-700 dark:text-indigo-300">MLSC</span>
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
@@ -897,14 +910,14 @@ export function UploadHistory() {
                     </div>
                   </div>
 
-                  {/* Collection 002 CSCA Extraction Statistics (v2.0.0) */}
+                  {/* Master List Extraction Statistics (v2.1.1) */}
                   {(selectedUpload.cscaExtractedFromMl || selectedUpload.cscaDuplicates) && (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Collection 002 CSCA 추출</span>
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Master List 인증서 추출 (MLSC + CSCA + LC)</span>
                         <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                          v2.0.0
+                          v2.1.1
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
@@ -912,7 +925,7 @@ export function UploadHistory() {
                           <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                             {selectedUpload.cscaExtractedFromMl || 0}
                           </p>
-                          <span className="text-xs text-indigo-700 dark:text-indigo-300">추출됨</span>
+                          <span className="text-xs text-indigo-700 dark:text-indigo-300">총 추출</span>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
                           <p className="text-lg font-bold text-amber-600 dark:text-amber-400">

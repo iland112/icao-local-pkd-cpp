@@ -146,6 +146,32 @@ void AutoProcessingStrategy::processMasterListContent(
 
     spdlog::info("AUTO mode: Master List processing completed - {} MLSC, {} CSCA/LC extracted ({} new, {} duplicate)",
                 stats.mlCount, stats.cscaExtractedCount, stats.cscaNewCount, stats.cscaDuplicateCount);
+
+    // Update uploaded_file table with final statistics
+    // Note: ml_count represents Master List files from LDIF entries, not the .ml file itself
+    // MLSC and CSCA certificates are counted separately
+    updateUploadStatistics(conn, uploadId, "COMPLETED",
+                          stats.cscaExtractedCount,  // csca_count (includes both MLSC and CSCA/LC)
+                          0,                          // dsc_count (Master Lists don't contain DSC)
+                          0,                          // dsc_nc_count
+                          0,                          // crl_count
+                          stats.mlCount,              // ml_count (stored Master List entries)
+                          stats.cscaExtractedCount,   // processed_entries
+                          "");                        // error_message
+
+    // Update MLSC-specific count (v2.1.1)
+    const char* mlscQuery = "UPDATE uploaded_file SET mlsc_count = $1 WHERE id = $2";
+    std::string mlscCountStr = std::to_string(stats.mlCount);
+    const char* mlscParams[2] = {mlscCountStr.c_str(), uploadId.c_str()};
+    PGresult* mlscRes = PQexecParams(conn, mlscQuery, 2, nullptr, mlscParams,
+                                     nullptr, nullptr, 0);
+    if (PQresultStatus(mlscRes) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update mlsc_count: {}", PQerrorMessage(conn));
+    }
+    PQclear(mlscRes);
+
+    spdlog::info("AUTO mode: Statistics updated - status=COMPLETED, mlsc_count={}, csca_count={}",
+                stats.mlCount, stats.cscaExtractedCount);
 }
 
 // ============================================================================
@@ -596,5 +622,29 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
     }
 
     spdlog::info("MANUAL mode Stage 2: Master List saved to DB and LDAP - {} MLSC, {} CSCA/LC extracted",
+                stats.mlCount, stats.cscaExtractedCount);
+
+    // Update uploaded_file table with final statistics
+    updateUploadStatistics(conn, uploadId, "COMPLETED",
+                          stats.cscaExtractedCount,  // csca_count
+                          0,                          // dsc_count
+                          0,                          // dsc_nc_count
+                          0,                          // crl_count
+                          stats.mlCount,              // ml_count
+                          stats.cscaExtractedCount,   // processed_entries
+                          "");                        // error_message
+
+    // Update MLSC-specific count (v2.1.1)
+    const char* mlscQuery = "UPDATE uploaded_file SET mlsc_count = $1 WHERE id = $2";
+    std::string mlscCountStr = std::to_string(stats.mlCount);
+    const char* mlscParams[2] = {mlscCountStr.c_str(), uploadId.c_str()};
+    PGresult* mlscRes = PQexecParams(conn, mlscQuery, 2, nullptr, mlscParams,
+                                     nullptr, nullptr, 0);
+    if (PQresultStatus(mlscRes) != PGRES_COMMAND_OK) {
+        spdlog::error("Failed to update mlsc_count: {}", PQerrorMessage(conn));
+    }
+    PQclear(mlscRes);
+
+    spdlog::info("MANUAL mode Stage 2: Statistics updated - mlsc_count={}, csca_count={}",
                 stats.mlCount, stats.cscaExtractedCount);
 }

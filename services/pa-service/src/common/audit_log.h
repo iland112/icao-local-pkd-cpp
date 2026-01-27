@@ -97,7 +97,7 @@ inline bool logOperation(PGconn* conn, const AuditLogEntry& entry) {
     }
 
     // Build parameterized query
-    const char* query =
+    std::string query =
         "INSERT INTO operation_audit_log ("
         "user_id, username, "
         "operation_type, operation_subtype, resource_id, resource_type, "
@@ -140,7 +140,7 @@ inline bool logOperation(PGconn* conn, const AuditLogEntry& entry) {
     paramValues[13] = durationMsStr.empty() ? nullptr : durationMsStr.c_str();
 
     // Execute query
-    PGresult* res = PQexecParams(conn, query, 14, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn, query.c_str(), 14, nullptr, paramValues,
                                  nullptr, nullptr, 0);
 
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -172,14 +172,16 @@ getUserInfoFromSession(const drogon::SessionPtr& session) {
     std::optional<std::string> username;
 
     if (session) {
-        auto userIdAttr = session->find("user_id");
-        if (userIdAttr != session->end()) {
-            userId = userIdAttr->second.asString();
+        try {
+            userId = session->get<std::string>("user_id");
+        } catch (...) {
+            // user_id not found in session
         }
 
-        auto usernameAttr = session->find("username");
-        if (usernameAttr != session->end()) {
-            username = usernameAttr->second.asString();
+        try {
+            username = session->get<std::string>("username");
+        } catch (...) {
+            // username not found in session
         }
     }
 

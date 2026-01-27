@@ -149,23 +149,53 @@ bool parseMasterListEntryV2(
 
     try {
         // ====================================================================
-        // Step 2a: Extract MLSC certificates from SignerInfo
+        // Step 2a: Extract MLSC certificates from CMS SignedData
         // ====================================================================
+        // First, get all certificates from the CMS SignedData.certificates field
+        STACK_OF(X509)* certs = CMS_get1_certs(cms);
+        int numCerts = certs ? sk_X509_num(certs) : 0;
+        spdlog::info("[ML-LDIF] CMS SignedData contains {} certificate(s)", numCerts);
+
+        // Get SignerInfo entries to match certificates
         STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
         if (signerInfos && sk_CMS_SignerInfo_num(signerInfos) > 0) {
             int numSigners = sk_CMS_SignerInfo_num(signerInfos);
-            spdlog::info("[ML-LDIF] Found {} SignerInfo entries", numSigners);
+            spdlog::info("[ML-LDIF] Found {} SignerInfo entry(ies)", numSigners);
 
             for (int i = 0; i < numSigners; i++) {
                 CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, i);
                 if (!si) continue;
 
-                // Get signer certificate from SignerInfo
+                // Try to find matching certificate from CMS certificates
                 X509* signerCert = nullptr;
-                CMS_SignerInfo_get0_algs(si, nullptr, &signerCert, nullptr, nullptr);
+
+                if (certs && numCerts > 0) {
+                    // Match certificate with SignerInfo using issuer and serial
+                    for (int j = 0; j < numCerts; j++) {
+                        X509* cert = sk_X509_value(certs, j);
+                        if (CMS_SignerInfo_cert_cmp(si, cert) == 0) {
+                            signerCert = cert;
+                            spdlog::info("[ML-LDIF] MLSC {}/{} - Matched certificate from CMS certificates field (index {})",
+                                        i + 1, numSigners, j);
+                            break;
+                        }
+                    }
+                }
 
                 if (!signerCert) {
-                    spdlog::warn("[ML-LDIF] MLSC {}/{} - No signer certificate in SignerInfo", i + 1, numSigners);
+                    // Get issuer and serial from SignerInfo for logging
+                    X509_NAME* issuer = nullptr;
+                    ASN1_INTEGER* serial = nullptr;
+                    CMS_SignerInfo_get0_signer_id(si, nullptr, &issuer, &serial);
+
+                    char issuerBuf[512] = {0};
+                    if (issuer) {
+                        X509_NAME_oneline(issuer, issuerBuf, sizeof(issuerBuf));
+                    }
+
+                    spdlog::warn("[ML-LDIF] MLSC {}/{} - No embedded certificate found (Issuer: {}). "
+                                "Master List only references MLSC, not embedding it.",
+                                i + 1, numSigners, issuerBuf);
                     continue;
                 }
 
@@ -239,6 +269,11 @@ bool parseMasterListEntryV2(
                     }
                 }
             }
+        }
+
+        // Free certificates stack
+        if (certs) {
+            sk_X509_pop_free(certs, X509_free);
         }
 
         // ====================================================================
@@ -516,24 +551,39 @@ bool processMasterListFile(
 
                 // Try to get certificate from SignerInfo's certificate chain
                 STACK_OF(X509)* certs = CMS_get1_certs(cms);
-                if (certs && sk_X509_num(certs) > 0) {
-                    // Use first certificate as signer (usually there's only 1 MLSC)
-                    signerCert = sk_X509_value(certs, 0);
-                    if (signerCert) {
-                        X509_up_ref(signerCert);  // Increment reference count
+                int numCerts = certs ? sk_X509_num(certs) : 0;
+
+                if (certs && numCerts > 0) {
+                    spdlog::info("[ML-FILE] CMS SignedData contains {} certificate(s)", numCerts);
+
+                    // Match certificate with SignerInfo using issuer and serial
+                    for (int j = 0; j < numCerts; j++) {
+                        X509* cert = sk_X509_value(certs, j);
+                        if (CMS_SignerInfo_cert_cmp(si, cert) == 0) {
+                            signerCert = cert;
+                            X509_up_ref(signerCert);  // Increment reference count
+                            spdlog::info("[ML-FILE] MLSC {}/{} - Matched certificate from CMS certificates field (index {})",
+                                        i + 1, numSigners, j);
+                            break;
+                        }
                     }
                     sk_X509_pop_free(certs, X509_free);
                 }
 
                 if (!signerCert) {
-                    // Fallback: try to find certificate using issuer/serial from SignerInfo
+                    // Get issuer and serial from SignerInfo for logging
                     X509_NAME* issuer = nullptr;
                     ASN1_INTEGER* serial = nullptr;
                     CMS_SignerInfo_get0_signer_id(si, nullptr, &issuer, &serial);
 
-                    if (issuer && serial) {
-                        spdlog::debug("[ML-FILE] SignerInfo {}/{}: Could not find certificate in CMS", i + 1, numSigners);
+                    char issuerBuf[512] = {0};
+                    if (issuer) {
+                        X509_NAME_oneline(issuer, issuerBuf, sizeof(issuerBuf));
                     }
+
+                    spdlog::warn("[ML-FILE] MLSC {}/{} - No embedded certificate found (Issuer: {}). "
+                                "Master List only references MLSC, not embedding it.",
+                                i + 1, numSigners, issuerBuf);
                     continue;
                 }
 

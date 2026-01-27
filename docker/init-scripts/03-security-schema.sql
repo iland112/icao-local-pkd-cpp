@@ -29,10 +29,11 @@ CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_is_active ON users(is_active);
 
 -- Create default admin user (password: admin123 - CHANGE IMMEDIATELY!)
+-- Password hash format: PBKDF2-HMAC-SHA256 with 100,000 iterations
 INSERT INTO users (username, password_hash, email, full_name, is_admin, permissions)
 VALUES (
     'admin',
-    '$2b$10$rO0C/vBfLPHUy8K4KpJxcOqYLbP.VtD3tQZnG9UvN7gJ0LQq7zqXi',
+    '$pbkdf2$100000$03c5e322f1241db72d2b7be0c8c0154b$3dc0c2016c69d98e81c41a2d9533b1808e07d465994fa57221aaf6122c6367c0',
     'admin@example.com',
     'System Administrator',
     true,

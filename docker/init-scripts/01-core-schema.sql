@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS uploaded_file (
     dsc_nc_count INTEGER DEFAULT 0,
     crl_count INTEGER DEFAULT 0,
     ml_count INTEGER DEFAULT 0,
+    mlsc_count INTEGER DEFAULT 0,  -- Master List Signer Certificate count (v2.1.1)
     validation_valid_count INTEGER DEFAULT 0,
     validation_invalid_count INTEGER DEFAULT 0,
     validation_pending_count INTEGER DEFAULT 0,
@@ -98,7 +99,7 @@ CREATE TABLE IF NOT EXISTS certificate (
     last_seen_upload_id UUID REFERENCES uploaded_file(id),
     last_seen_at TIMESTAMP,
 
-    CONSTRAINT chk_certificate_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC')),
+    CONSTRAINT chk_certificate_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
     CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'REVOKED', 'UNKNOWN'))
 );
 

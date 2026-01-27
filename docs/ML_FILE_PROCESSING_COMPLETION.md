@@ -460,6 +460,121 @@ export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST';
 
 ---
 
+## Additional Issues Fixed (2026-01-27 Session)
+
+### Issue 5: MLSC Extraction Logic Bug
+**Problem**: MLSC 추출 시 `CMS_SignerInfo_cert_cmp()` 미사용으로 잘못된 인증서 선택
+
+**Root Cause**: File processing에서 첫 번째 인증서를 무조건 선택
+```cpp
+// Before (WRONG)
+STACK_OF(X509)* certs = CMS_get1_certs(cms);
+if (certs && sk_X509_num(certs) > 0) {
+    signerCert = sk_X509_value(certs, 0);  // Just grab first cert!
+}
+```
+
+**Solution**: LDIF 처리와 동일하게 SignerInfo 매칭 로직 적용
+```cpp
+// After (CORRECT) - Line 517-536
+for (int j = 0; j < numCerts; j++) {
+    X509* cert = sk_X509_value(certs, j);
+    if (CMS_SignerInfo_cert_cmp(si, cert) == 0) {  // ✅ Proper matching
+        signerCert = cert;
+        X509_up_ref(signerCert);
+        spdlog::info("[ML-FILE] MLSC {}/{} - Matched certificate from CMS certificates field (index {})", i + 1, numSigners, j);
+        break;
+    }
+}
+```
+
+**Result**: 정확한 UN Signer Certificate 추출 보장
+
+---
+
+### Issue 6: Upload Statistics Not Updated
+**Problem**: Master List 처리 완료 후 `uploaded_file` 테이블 통계 업데이트 누락
+- `mlsc_count = 0`, `csca_count = 0`, `status = PROCESSING` (완료 후에도)
+
+**Root Cause**: `processing_strategy.cpp`에서 `updateUploadStatistics()` 호출 누락
+
+**Solution**: AUTO/MANUAL 모드 모두 통계 업데이트 추가
+```cpp
+// AUTO mode (Line 147-166)
+updateUploadStatistics(conn, uploadId, "COMPLETED",
+                      stats.cscaExtractedCount,  // csca_count: 536
+                      0, 0, 0,                    // dsc, dsc_nc, crl: 0
+                      stats.mlCount,              // ml_count: 1
+                      stats.cscaExtractedCount,   // processed_entries
+                      "");
+
+// Update MLSC-specific count (v2.1.1)
+const char* mlscQuery = "UPDATE uploaded_file SET mlsc_count = $1 WHERE id = $2";
+std::string mlscCountStr = std::to_string(stats.mlCount);
+const char* mlscParams[2] = {mlscCountStr.c_str(), uploadId.c_str()};
+PGresult* mlscRes = PQexecParams(conn, mlscQuery, 2, nullptr, mlscParams, nullptr, nullptr, 0);
+```
+
+**Result**: `uploaded_file` 테이블에 정확한 통계 저장
+
+---
+
+### Issue 7: Frontend UI Count Display Bug
+**Problem**: UI에서 모든 step별 카운트가 "0건" 표시
+
+**Root Cause 1**: Master List의 경우 `totalEntries`=1 (파일 개수)을 표시했지만, 실제로는 `processedEntries`=536 (추출된 인증서)를 표시해야 함
+
+**Root Cause 2**: TypeScript 타입에 `mlscCount` 누락 + UI 로직에서 MLSC/ML 카운트 미표시
+
+**Solution**:
+1. **types/index.ts**: `mlscCount` 타입 추가
+```typescript
+export interface UploadedFile {
+  // ...
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
+  // ...
+}
+
+export type CertificateType = 'CSCA' | 'DSC' | 'DSC_NC' | 'DS' | 'ML_SIGNER' | 'MLSC';
+```
+
+2. **FileUpload.tsx**: 파싱 단계 표시 수정 (Line 108-123)
+```typescript
+// Master List: use processedEntries (extracted certificates)
+// LDIF: use totalEntries (LDIF entries)
+const entriesCount = upload.fileFormat === 'ML' ? upload.processedEntries : upload.totalEntries;
+setParseStage({
+  status: 'COMPLETED',
+  message: '파싱 완료',
+  percentage: 100,
+  details: `${entriesCount}건 처리`  // ✅ 536건 표시
+});
+```
+
+3. **FileUpload.tsx**: 검증 및 저장 단계 상세 정보 수정 (Line 130-141)
+```typescript
+const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) + (upload.mlscCount || 0) > 0;
+
+const certDetails = [];
+if (upload.mlscCount) certDetails.push(`MLSC: ${upload.mlscCount}`);  // ✅ MLSC: 1
+if (upload.cscaCount) certDetails.push(`CSCA: ${upload.cscaCount}`);  // ✅ CSCA: 536
+if (upload.dscCount) certDetails.push(`DSC: ${upload.dscCount}`);
+if (upload.dscNcCount) certDetails.push(`DSC_NC: ${upload.dscNcCount}`);
+if (upload.crlCount) certDetails.push(`CRL: ${upload.crlCount}`);
+if (upload.mlCount) certDetails.push(`ML: ${upload.mlCount}`);
+
+setDbSaveStage({
+  status: 'COMPLETED',
+  message: 'DB + LDAP 저장 완료',
+  percentage: 100,
+  details: certDetails.join(', ')  // ✅ "MLSC: 1, CSCA: 536"
+});
+```
+
+**Result**: UI에 정확한 카운트 표시
+
+---
+
 ## Conclusion
 
 Master List 파일 처리 로직이 완전히 재구현되어 ICAO 표준을 정확히 준수합니다:
