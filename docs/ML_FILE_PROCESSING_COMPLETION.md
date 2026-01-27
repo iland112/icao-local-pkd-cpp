@@ -315,6 +315,126 @@ ICAO_ml_December2025.ml (CMS SignedData)
 
 ---
 
+---
+
+## Frontend Enhancements
+
+### Certificate Type Visualization
+
+**File**: `frontend/src/pages/CertificateSearch.tsx`
+
+**Link Certificate Detection** (cyan badge):
+```typescript
+// Helper function
+const isLinkCertificate = (cert: Certificate): boolean => {
+  return cert.subjectDn !== cert.issuerDn;
+};
+```
+
+**Features**:
+- Automatic Link Certificate detection
+- Cyan badge: "Link Certificate"
+- Information panel with purpose explanation
+- Use cases: CSCA infrastructure updates, org changes, policy updates
+- LDAP DN display
+
+**Master List Signer Certificate Detection** (purple badge):
+```typescript
+// Helper function
+const isMasterListSignerCertificate = (cert: Certificate): boolean => {
+  const ou = getOrganizationUnit(cert.dn);
+  return cert.subjectDn === cert.issuerDn && ou === 'mlsc';
+};
+```
+
+**Features**:
+- Automatic MLSC detection (self-signed + o=mlsc)
+- Purple badge: "Master List Signer"
+- Information panel with MLSC characteristics
+- Shows: digitalSignature key usage, embedded in ML CMS, issued by PKI authorities
+- Database vs LDAP storage clarification
+
+**Certificate Type Section** (new):
+- Certificate type badge (CSCA/DSC/DSC_NC/MLSC)
+- Link Certificate badge (if applicable)
+- MLSC badge (if applicable)
+- Self-signed status indicator with visual icon
+- Detailed explanations for special certificate types
+
+**UI Components**:
+- Color-coded badges:
+  - Cyan: Link Certificate (trust chain intermediate)
+  - Purple: Master List Signer Certificate (ML signature)
+  - Blue: Self-signed indicator
+- Dark mode support for all components
+- Responsive layout with proper spacing
+- Icons: Shield (Link), FileText (MLSC), CheckCircle (Self-signed)
+
+### Master List Structure Viewer
+
+**File**: `frontend/src/pages/UploadHistory.tsx`
+
+**Features**:
+- Toggle button: "Master List 구조 보기 (디버그)"
+- Shows MasterListStructure component (from previous commit)
+- Only visible for Master List uploads (ML/MASTER_LIST format)
+- Collapsible with max height and scroll
+- Debug feature for ML file analysis
+
+**Integration**:
+```tsx
+{(selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST') && (
+  <button onClick={() => setShowMasterListStructure(!showMasterListStructure)}>
+    Master List 구조 보기 (디버그)
+  </button>
+)}
+```
+
+### Type Definitions
+
+**File**: `frontend/src/types/index.ts`
+
+**FileFormat Update**:
+```typescript
+// Before
+export type FileFormat = 'LDIF' | 'MASTER_LIST';
+
+// After
+export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST';
+// Backend uses 'ML', some places use 'MASTER_LIST'
+```
+
+### Visual Design
+
+**Color Scheme**:
+- **Link Certificate**: Cyan/Teal
+  - Light: `bg-cyan-100`, `text-cyan-800`, `border-cyan-200`
+  - Dark: `bg-cyan-900/40`, `text-cyan-300`, `border-cyan-700`
+
+- **MLSC**: Purple
+  - Light: `bg-purple-100`, `text-purple-800`, `border-purple-200`
+  - Dark: `bg-purple-900/40`, `text-purple-300`, `border-purple-700`
+
+- **Self-signed**: Blue
+  - Light: `bg-blue-100`, `text-blue-700`
+  - Dark: `bg-blue-900/30`, `text-blue-400`
+
+**Information Panels**:
+- Icon-based headers (Shield, FileText)
+- Bulleted lists for use cases
+- Grid layout for metadata (LDAP DN, Storage, Self-signed status)
+- Responsive design with proper spacing
+
+### User Experience Improvements
+
+1. **Automatic Detection**: No manual classification needed
+2. **Visual Indicators**: Color-coded badges for quick identification
+3. **Educational Content**: Detailed explanations for each certificate type
+4. **Context-Aware**: Only shows relevant information
+5. **Debug Tools**: Master List structure viewer for troubleshooting
+
+---
+
 ## Related Documents
 
 - `docs/MLSC_ROOT_CAUSE_ANALYSIS.md` - 초기 버그 분석
