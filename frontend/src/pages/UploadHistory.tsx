@@ -26,6 +26,7 @@ import {
 import { uploadApi, uploadHistoryApi } from '@/services/api';
 import type { PageResponse, UploadStatus, FileFormat } from '@/types';
 import { cn } from '@/utils/cn';
+import { MasterListStructure } from '@/components/MasterListStructure';
 
 // Validation statistics interface
 interface ValidationStats {
@@ -105,6 +106,9 @@ export function UploadHistory() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [uploadToDelete, setUploadToDelete] = useState<UploadHistoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Master List structure state
+  const [showMasterListStructure, setShowMasterListStructure] = useState(false);
 
   const pageSize = 10;
 
@@ -1027,6 +1031,24 @@ export function UploadHistory() {
                 )}
               </div>
             </div>
+
+            {/* Master List Structure Section - Only for Master List files */}
+            {(selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST') && (
+              <div className="px-5 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                <button
+                  onClick={() => setShowMasterListStructure(!showMasterListStructure)}
+                  className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors mb-3"
+                >
+                  <FileText className="w-4 h-4" />
+                  {showMasterListStructure ? 'Master List 구조 숨기기' : 'Master List 구조 보기 (디버그)'}
+                </button>
+                {showMasterListStructure && (
+                  <div className="max-h-96 overflow-y-auto">
+                    <MasterListStructure uploadId={selectedUpload.id} />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Footer */}
             <div className="flex justify-end gap-3 px-5 py-3 border-t border-gray-200 dark:border-gray-700">

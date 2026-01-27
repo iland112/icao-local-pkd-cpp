@@ -20,7 +20,7 @@ export interface HealthStatus {
 }
 
 // Upload types
-export type FileFormat = 'LDIF' | 'MASTER_LIST';
+export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST';  // Backend uses 'ML', some places use 'MASTER_LIST'
 export type UploadStatus = 'PENDING' | 'UPLOADING' | 'PARSING' | 'VALIDATING' | 'SAVING_DB' | 'SAVING_LDAP' | 'COMPLETED' | 'FAILED';
 export type ProcessingMode = 'AUTO' | 'MANUAL';
 

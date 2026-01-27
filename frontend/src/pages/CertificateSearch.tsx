@@ -217,6 +217,25 @@ const CertificateSearch: React.FC = () => {
     });
   };
 
+  // Helper: Extract organization unit from DN (o=xxx)
+  const getOrganizationUnit = (dn: string): string => {
+    const match = dn.match(/o=([^,]+)/i);
+    return match ? match[1] : '';
+  };
+
+  // Helper: Check if certificate is a Link Certificate
+  // Link Certificate: NOT self-signed (subjectDn != issuerDn)
+  const isLinkCertificate = (cert: Certificate): boolean => {
+    return cert.subjectDn !== cert.issuerDn;
+  };
+
+  // Helper: Check if certificate is a Master List Signer Certificate
+  // MLSC: Self-signed (subjectDn = issuerDn) AND stored in o=mlsc
+  const isMasterListSignerCertificate = (cert: Certificate): boolean => {
+    const ou = getOrganizationUnit(cert.dn);
+    return cert.subjectDn === cert.issuerDn && ou === 'mlsc';
+  };
+
   // Calculate statistics
   const stats = useMemo(() => {
     const valid = certificates.filter((c) => c.validity === 'VALID').length;
@@ -778,6 +797,60 @@ const CertificateSearch: React.FC = () => {
               {/* General Tab */}
               {detailTab === 'general' && (
                 <div className="space-y-6">
+                  {/* Certificate Type Section */}
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      Certificate Type
+                    </h3>
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Type:</span>
+                        <div className="flex items-center gap-2">
+                          {getCertTypeBadge(selectedCert.certType)}
+                          {isLinkCertificate(selectedCert) && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700">
+                              Link Certificate
+                            </span>
+                          )}
+                          {isMasterListSignerCertificate(selectedCert) && (
+                            <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+                              Master List Signer
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {isLinkCertificate(selectedCert) && (
+                        <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-lg p-3">
+                          <p className="text-xs text-cyan-800 dark:text-cyan-300">
+                            <strong>Link Certificate:</strong> This certificate creates a trust link between different CSCA certificates, typically used when a country updates their CSCA infrastructure or changes organizational details.
+                          </p>
+                        </div>
+                      )}
+                      {isMasterListSignerCertificate(selectedCert) && (
+                        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3">
+                          <p className="text-xs text-purple-800 dark:text-purple-300">
+                            <strong>Master List Signer Certificate:</strong> This certificate is used to digitally sign Master List CMS structures. It is a self-signed certificate with digitalSignature key usage.
+                          </p>
+                        </div>
+                      )}
+                      <div className="grid grid-cols-[140px_1fr] gap-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Self-signed:</span>
+                        <span className="text-sm text-gray-900 dark:text-white">
+                          {selectedCert.isSelfSigned ? (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                              <CheckCircle className="w-3 h-3 mr-1" />
+                              Yes
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400">
+                              No
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Issued To Section */}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Issued To</h3>
@@ -925,6 +998,88 @@ const CertificateSearch: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* Link Certificate Information */}
+                  {isLinkCertificate(selectedCert) && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                        Link Certificate Information
+                      </h3>
+                      <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-lg p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <Shield className="w-5 h-5 text-cyan-600 dark:text-cyan-400 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-cyan-800 dark:text-cyan-300 mb-2">
+                              Purpose
+                            </h4>
+                            <p className="text-xs text-cyan-700 dark:text-cyan-400 leading-relaxed">
+                              Link Certificates create a cryptographic trust chain between different CSCA certificates. They are typically used when:
+                            </p>
+                            <ul className="mt-2 ml-4 space-y-1 text-xs text-cyan-700 dark:text-cyan-400">
+                              <li className="list-disc">• A country updates their CSCA infrastructure</li>
+                              <li className="list-disc">• Organizational details change (e.g., organization name)</li>
+                              <li className="list-disc">• Certificate policies are updated</li>
+                              <li className="list-disc">• Migration to new cryptographic algorithms</li>
+                            </ul>
+                          </div>
+                        </div>
+                        <div className="border-t border-cyan-200 dark:border-cyan-700 pt-3">
+                          <div className="grid grid-cols-[120px_1fr] gap-2 text-xs">
+                            <span className="text-cyan-600 dark:text-cyan-400 font-medium">LDAP DN:</span>
+                            <span className="text-cyan-800 dark:text-cyan-300 font-mono break-all">{selectedCert.dn}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Master List Signer Certificate Information */}
+                  {isMasterListSignerCertificate(selectedCert) && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                        Master List Signer Certificate Information
+                      </h3>
+                      <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 space-y-3">
+                        <div className="flex items-start gap-2">
+                          <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5" />
+                          <div className="flex-1">
+                            <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2">
+                              Purpose
+                            </h4>
+                            <p className="text-xs text-purple-700 dark:text-purple-400 leading-relaxed">
+                              Master List Signer Certificates (MLSC) are used to digitally sign Master List CMS structures. These certificates:
+                            </p>
+                            <ul className="mt-2 ml-4 space-y-1 text-xs text-purple-700 dark:text-purple-400">
+                              <li className="list-disc">• Are self-signed certificates</li>
+                              <li className="list-disc">• Have digitalSignature key usage (0x80 bit)</li>
+                              <li className="list-disc">• Are embedded in Master List CMS as signer certificates</li>
+                              <li className="list-disc">• Are issued by national PKI authorities</li>
+                            </ul>
+                          </div>
+                        </div>
+                        <div className="border-t border-purple-200 dark:border-purple-700 pt-3">
+                          <div className="space-y-2 text-xs">
+                            <div className="grid grid-cols-[120px_1fr] gap-2">
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">LDAP DN:</span>
+                              <span className="text-purple-800 dark:text-purple-300 font-mono break-all">{selectedCert.dn}</span>
+                            </div>
+                            <div className="grid grid-cols-[120px_1fr] gap-2">
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">Storage:</span>
+                              <span className="text-purple-800 dark:text-purple-300">
+                                Stored as CSCA type in database, but in <code className="bg-purple-100 dark:bg-purple-900/50 px-1 py-0.5 rounded">o=mlsc</code> organizational unit in LDAP
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-[120px_1fr] gap-2">
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">Self-signed:</span>
+                              <span className="text-purple-800 dark:text-purple-300">
+                                {selectedCert.isSelfSigned ? 'Yes (Subject DN = Issuer DN)' : 'No'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Certificate Hierarchy */}
                   <div>
