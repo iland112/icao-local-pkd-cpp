@@ -6082,17 +6082,43 @@ void registerRoutes() {
                             auto strategy = ProcessingStrategyFactory::create(processingMode);
                             strategy->processMasterListContent(uploadId, contentBytes, conn, ld);
 
-                            // Send appropriate progress based on mode
+                            // Query actual processed_entries from database (parameterized)
+                            const char* statsQuery = "SELECT processed_entries, total_entries FROM uploaded_file WHERE id = $1";
+                            const char* statsParams[1] = {uploadId.c_str()};
+                            PGresult* statsRes = PQexecParams(conn, statsQuery, 1, nullptr, statsParams, nullptr, nullptr, 0);
+
+                            int processedEntries = 0;
+                            int totalEntries = 0;
+                            if (PQresultStatus(statsRes) == PGRES_TUPLES_OK && PQntuples(statsRes) > 0) {
+                                const char* processedStr = PQgetvalue(statsRes, 0, 0);
+                                const char* totalStr = PQgetvalue(statsRes, 0, 1);
+                                if (processedStr && processedStr[0] != '\0') {
+                                    processedEntries = std::atoi(processedStr);
+                                }
+                                if (totalStr && totalStr[0] != '\0') {
+                                    totalEntries = std::atoi(totalStr);
+                                }
+                            }
+                            PQclear(statsRes);
+
+                            // For Master List: processed_entries contains extracted certificate count (e.g., 537)
+                            // totalEntries is 0 for ML files, so we use processedEntries as the count
+                            int count = processedEntries > 0 ? processedEntries : totalEntries;
+
+                            spdlog::info("Master List processing completed - processedEntries: {}, totalEntries: {}, using count: {}",
+                                        processedEntries, totalEntries, count);
+
+                            // Send appropriate progress based on mode with actual count
                             if (processingMode == "MANUAL") {
                                 // MANUAL mode: Only parsing completed, waiting for Stage 2
                                 ProgressManager::getInstance().sendProgress(
                                     ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                                        100, 100, "Master List 파싱 완료 - 검증 대기"));
+                                        count, count, "Master List 파싱 완료 - 검증 대기"));
                             } else {
                                 // AUTO mode: All processing completed
                                 ProgressManager::getInstance().sendProgress(
                                     ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                        100, 100, "Master List 처리 완료"));
+                                        count, count, "Master List 처리 완료"));
                             }
 
                         } catch (const std::exception& e) {

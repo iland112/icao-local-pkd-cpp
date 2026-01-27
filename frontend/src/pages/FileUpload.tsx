@@ -347,25 +347,30 @@ export function FileUpload() {
       // Stage 1: Upload & Parse (always completed if we have the record)
       if (upload.status !== 'PENDING') {
         setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
+        // For Master List: use processedEntries (extracted certificates)
+        // For LDIF: use totalEntries (LDIF entries)
+        const entriesCount = upload.fileFormat === 'ML' ? upload.processedEntries : upload.totalEntries;
         setParseStage({
           status: 'COMPLETED',
           message: '파싱 완료',
           percentage: 100,
-          details: `${upload.totalEntries}건 처리`
+          details: `${entriesCount}건 처리`
         });
       }
 
       // Stage 2: Validate & DB + LDAP (check certificate counts)
-      const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) > 0;
+      const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) + (upload.mlscCount || 0) > 0;
 
       if (upload.status === 'COMPLETED' || hasCertificates) {
         // Build detailed certificate breakdown
         const parts: string[] = [];
+        if (upload.mlscCount) parts.push(`MLSC ${upload.mlscCount}`);
         if (upload.cscaCount) parts.push(`CSCA ${upload.cscaCount}`);
         if (upload.dscCount) parts.push(`DSC ${upload.dscCount}`);
         if (upload.dscNcCount) parts.push(`DSC_NC ${upload.dscNcCount}`);
         if (upload.crlCount) parts.push(`CRL ${upload.crlCount}`);
-        const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${upload.totalEntries}건 저장 (DB+LDAP)`;
+        if (upload.mlCount) parts.push(`ML ${upload.mlCount}`);
+        const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${upload.processedEntries || upload.totalEntries}건 저장 (DB+LDAP)`;
 
         setDbSaveStage({
           status: 'COMPLETED',
@@ -551,9 +556,10 @@ export function FileUpload() {
       details = message;
       console.log(`[FileUpload] Using detailed message as details: "${details}"`);
     } else if (stage.endsWith('_COMPLETED') || stage === 'COMPLETED') {
-      // Show final count on completion
-      if (totalCount > 0) {
-        details = `${totalCount}건 처리`;
+      // Show final count on completion (use processedCount if available, fallback to totalCount)
+      const count = processedCount || totalCount;
+      if (count > 0) {
+        details = `${count}건 처리`;
       }
     } else if (processedCount > 0 && totalCount > 0) {
       // Show progress during processing
@@ -587,24 +593,27 @@ export function FileUpload() {
     } else if (stage.startsWith('VALIDATION')) {
       // VALIDATION is part of the combined "검증 및 DB 저장" step
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
-      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100, details: prev.details || `${totalCount}건 파싱` } : prev);
+      // Keep existing parseStage details if available
+      setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       // Update dbSaveStage with validation progress (0-50%)
+      const validationCount = processedCount || totalCount;
       const validationStatus: StageStatus = {
         status: stage === 'VALIDATION_COMPLETED' ? 'IN_PROGRESS' : stageStatus.status,  // Keep IN_PROGRESS until DB_SAVING_COMPLETED
         message: stageName || message,
         percentage: stagePercent,
-        details: stage === 'VALIDATION_COMPLETED' ? `검증: ${totalCount}건` : details,
+        details: stage === 'VALIDATION_COMPLETED' && validationCount > 0 ? `검증: ${validationCount}건` : details,
       };
       setDbSaveStage(validationStatus);
     } else if (stage.startsWith('DB_SAVING')) {
       // DB_SAVING continues the combined "검증 및 DB 저장" step (50-100%)
       setUploadStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
       setParseStage(prev => prev.status !== 'COMPLETED' ? { ...prev, status: 'COMPLETED', percentage: 100 } : prev);
+      const saveCount = processedCount || totalCount;
       const dbStatus: StageStatus = {
         status: stage === 'DB_SAVING_COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
         message: stageName || message,
         percentage: stage === 'DB_SAVING_COMPLETED' ? 100 : stagePercent,
-        details: stage === 'DB_SAVING_COMPLETED' ? `${totalCount}건 저장` : details,
+        details: stage === 'DB_SAVING_COMPLETED' && saveCount > 0 ? `${saveCount}건 저장` : details,
       };
       setDbSaveStage(dbStatus);
     } else if (stage.startsWith('LDAP_SAVING')) {
