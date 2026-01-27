@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.0
-**Last Updated**: 2026-01-26
+**Current Version**: v2.1.1
+**Last Updated**: 2026-01-27
 **Status**: Production Ready
 
 ---
@@ -67,10 +67,12 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.1.0)
+## Current Features (v2.1.1)
 
 ### Core Functionality
 - ✅ LDIF/Master List upload (AUTO/MANUAL modes)
+- ✅ **Master List file processing (537 certificates: 1 MLSC + 536 CSCA/LC)**
+- ✅ **Country-based LDAP storage (95 countries, o=mlsc/csca/lc per country)**
 - ✅ Certificate validation (Trust Chain, CRL, Link Certificates)
 - ✅ LDAP integration (MMR cluster, Software LB)
 - ✅ Passive Authentication (ICAO 9303)
@@ -88,13 +90,13 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.0)
-- ✅ Link certificate validation (Sprint 3)
-- ✅ Trust chain building and visualization
-- ✅ CSCA in-memory cache (80% performance improvement)
-- ✅ Validation result APIs with trust chain path
-- ✅ Frontend trust chain visualization component
-- ✅ MLSC sync tracking and monitoring (DB-LDAP sync)
+### Recent Changes (v2.1.1)
+- ✅ **Master List file processing complete overhaul**
+  - SignerInfo MLSC extraction (UN signed certificate)
+  - pkiData parsing (536 CSCA/LC certificates from 95 countries)
+  - Country-based LDAP structure: o=mlsc,c=UN / o=csca,c={country} / o=lc,c={country}
+  - Fixed extractCountryCode() regex for slash-separated DN
+  - Database constraint: Added MLSC certificate type
 
 ---
 

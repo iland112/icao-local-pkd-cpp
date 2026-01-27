@@ -1,6 +1,7 @@
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 #include "common.h"
+#include "common/masterlist_processor.h"
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
 #include <spdlog/spdlog.h>
@@ -135,10 +136,16 @@ void AutoProcessingStrategy::processMasterListContent(
 ) {
     spdlog::info("AUTO mode: Processing Master List ({} bytes) for upload {}", content.size(), uploadId);
 
-    // Use core Master List processing function from main.cpp
-    processMasterListContentCore(uploadId, content, conn, ld);
+    // v2.1.1: Use new masterlist_processor for correct MLSC/CSCA/LC extraction
+    MasterListStats stats;
+    bool success = processMasterListFile(conn, ld, uploadId, content, stats);
 
-    spdlog::info("AUTO mode: Master List processing completed");
+    if (!success) {
+        throw std::runtime_error("Failed to process Master List file");
+    }
+
+    spdlog::info("AUTO mode: Master List processing completed - {} MLSC, {} CSCA/LC extracted ({} new, {} duplicate)",
+                stats.mlCount, stats.cscaExtractedCount, stats.cscaNewCount, stats.cscaDuplicateCount);
 }
 
 // ============================================================================
@@ -580,9 +587,14 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
 ) {
     spdlog::info("MANUAL mode Stage 2: Processing Master List to DB + LDAP ({} bytes)", content.size());
 
-    // Use core Master List processing function with LDAP connection
-    // This will parse CMS, extract certificates, validate them, and save to BOTH DB and LDAP
-    processMasterListContentCore(uploadId, content, conn, ld);
+    // v2.1.1: Use new masterlist_processor for correct MLSC/CSCA/LC extraction
+    MasterListStats stats;
+    bool success = processMasterListFile(conn, ld, uploadId, content, stats);
 
-    spdlog::info("MANUAL mode Stage 2: Master List saved to DB and LDAP successfully");
+    if (!success) {
+        throw std::runtime_error("Failed to process Master List file");
+    }
+
+    spdlog::info("MANUAL mode Stage 2: Master List saved to DB and LDAP - {} MLSC, {} CSCA/LC extracted",
+                stats.mlCount, stats.cscaExtractedCount);
 }

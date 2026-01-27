@@ -1874,9 +1874,12 @@ std::string asn1TimeToIso8601(const ASN1_TIME* asn1Time) {
 
 /**
  * @brief Extract country code from DN
+ * Supports both slash-separated (/C=KR/O=...) and comma-separated (C=KR, O=...) formats
  */
 std::string extractCountryCode(const std::string& dn) {
-    static const std::regex countryRegex(R"((?:^|,\s*)C=([A-Z]{2,3})(?:,|$))", std::regex::icase);
+    // Match C= followed by 2-3 letter country code
+    // Supports: /C=KR/, C=KR,, or C=KR at end/start
+    static const std::regex countryRegex(R"((?:^|[/,]\s*)C=([A-Z]{2,3})(?:[/,\s]|$))", std::regex::icase);
     std::smatch match;
     if (std::regex_search(dn, match, countryRegex)) {
         std::string code = match[1].str();
