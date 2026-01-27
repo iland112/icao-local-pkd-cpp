@@ -246,10 +246,19 @@ db_sync_status 10                # Sync history
 
 ## Documentation
 
+### General Guides
+
 - **[DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md)** - Complete development guide (credentials, commands, troubleshooting)
 - **[LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md)** - ARM64 deployment guide
 - **[DOCKER_BUILD_CACHE.md](docs/DOCKER_BUILD_CACHE.md)** - Build cache troubleshooting
 - **[PA_API_GUIDE.md](docs/PA_API_GUIDE.md)** - PA Service API guide
+
+### Master List Processing (v2.1.1)
+
+- **[MASTER_LIST_PROCESSING_GUIDE.md](docs/MASTER_LIST_PROCESSING_GUIDE.md)** - **Comprehensive guide** (format, architecture, pitfalls, troubleshooting)
+- **[MASTER_LIST_PROCESSING_FINAL_SUMMARY.md](docs/MASTER_LIST_PROCESSING_FINAL_SUMMARY.md)** - Executive summary & project timeline
+- **[ML_FILE_PROCESSING_COMPLETION.md](docs/ML_FILE_PROCESSING_COMPLETION.md)** - Direct file processing completion
+- **[COLLECTION_002_LDIF_PROCESSING_COMPLETION.md](docs/COLLECTION_002_LDIF_PROCESSING_COMPLETION.md)** - LDIF processing completion
 
 ---
 
