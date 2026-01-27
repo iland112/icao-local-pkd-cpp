@@ -13,6 +13,7 @@ struct LdifEntry;
  */
 struct MasterListStats {
     int mlCount = 0;                    // Number of Master List entries processed
+    int mlscCount = 0;                  // Number of MLSCs extracted from all MLs (v2.1.1)
     int ldapMlStoredCount = 0;          // Number of ML stored in LDAP o=ml
     int cscaExtractedCount = 0;         // Number of CSCAs extracted from all MLs
     int cscaDuplicateCount = 0;         // Number of duplicate CSCAs detected

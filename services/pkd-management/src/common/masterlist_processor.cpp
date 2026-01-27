@@ -245,7 +245,7 @@ bool parseMasterListEntryV2(
                     spdlog::info("[ML-LDIF] MLSC {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, reason: Already exists in DB",
                                 i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
                 } else {
-                    stats.mlCount++;
+                    stats.mlscCount++;  // Track MLSC count (v2.1.1)
                     spdlog::info("[ML-LDIF] MLSC {}/{} - NEW - fingerprint: {}, cert_id: {}",
                                 i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
 

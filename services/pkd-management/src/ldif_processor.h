@@ -40,6 +40,7 @@ public:
         int dscNcCount = 0;
         int crlCount = 0;
         int mlCount = 0;
+        int mlscCount = 0;  // Master List Signer Certificate count (v2.1.1)
         int ldapCertStoredCount = 0;
         int ldapCrlStoredCount = 0;
         int ldapMlStoredCount = 0;

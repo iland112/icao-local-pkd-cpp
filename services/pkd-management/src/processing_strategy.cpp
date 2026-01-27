@@ -101,8 +101,21 @@ void AutoProcessingStrategy::processLdifEntries(
         PQclear(res);
     }
 
-    spdlog::info("AUTO mode: Completed - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}, LDAP: {} certs, {} CRLs, {} MLs",
-                counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount,
+    // Update MLSC count if any (v2.1.1)
+    if (counts.mlscCount > 0) {
+        const char* mlscUpdateQuery = "UPDATE uploaded_file SET mlsc_count = $1 WHERE id = $2";
+        std::string mlscCountStr = std::to_string(counts.mlscCount);
+        const char* paramValues[2] = {mlscCountStr.c_str(), uploadId.c_str()};
+        PGresult* res = PQexecParams(conn, mlscUpdateQuery, 2, nullptr, paramValues,
+                                     nullptr, nullptr, 0);
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            spdlog::error("Failed to update MLSC count: {}", PQerrorMessage(conn));
+        }
+        PQclear(res);
+    }
+
+    spdlog::info("AUTO mode: Completed - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}, MLSC: {}, LDAP: {} certs, {} CRLs, {} MLs",
+                counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount, counts.mlscCount,
                 counts.ldapCertStoredCount, counts.ldapCrlStoredCount, counts.ldapMlStoredCount);
     spdlog::info("AUTO mode: Validation - {} valid, {} invalid, {} pending, {} CSCA not found, {} expired",
                 stats.validCount, stats.invalidCount, stats.pendingCount, stats.cscaNotFoundCount, stats.expiredCount);
@@ -474,8 +487,21 @@ void ManualProcessingStrategy::validateAndSaveToDb(
             PQclear(mlRes);
         }
 
-        spdlog::info("MANUAL mode Stage 2: Processed {} LDIF entries - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}",
-                    entries.size(), counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount);
+        // Update MLSC count if any (v2.1.1)
+        if (counts.mlscCount > 0) {
+            const char* mlscUpdateQuery = "UPDATE uploaded_file SET mlsc_count = $1 WHERE id = $2";
+            std::string mlscCountStr = std::to_string(counts.mlscCount);
+            const char* paramValues[2] = {mlscCountStr.c_str(), uploadId.c_str()};
+            PGresult* mlscRes = PQexecParams(conn, mlscUpdateQuery, 2, nullptr, paramValues,
+                                             nullptr, nullptr, 0);
+            if (PQresultStatus(mlscRes) != PGRES_COMMAND_OK) {
+                spdlog::error("Failed to update MLSC count: {}", PQerrorMessage(conn));
+            }
+            PQclear(mlscRes);
+        }
+
+        spdlog::info("MANUAL mode Stage 2: Processed {} LDIF entries - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}, MLSC: {}",
+                    entries.size(), counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount, counts.mlscCount);
         spdlog::info("MANUAL mode Stage 2: Validation - {} valid, {} invalid, {} pending",
                     stats.validCount, stats.invalidCount, stats.pendingCount);
 

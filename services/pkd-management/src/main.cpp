@@ -6753,6 +6753,87 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // Detailed country statistics endpoint - GET /api/upload/countries/detailed
+    app.registerHandler(
+        "/api/upload/countries/detailed",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/upload/countries/detailed");
+
+            // Get query parameters for limit (default ALL countries)
+            int limit = 0;  // 0 = no limit
+            if (auto l = req->getParameter("limit"); !l.empty()) {
+                limit = std::stoi(l);
+            }
+
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            Json::Value result(Json::arrayValue);
+
+            if (PQstatus(conn) == CONNECTION_OK) {
+                // Query detailed certificate counts by country
+                // - MLSC: Master List Signer Certificates (certificate_type='MLSC')
+                // - CSCA Self-signed: subject_dn = issuer_dn (Self-signed root CAs)
+                // - CSCA Link Cert: subject_dn != issuer_dn (Cross-signed Link Certificates)
+                // - DSC: Document Signer Certificates
+                // - DSC_NC: Non-conformant DSC
+                // Note: CRL count from separate 'crl' table
+                // Note: ZZ (United Nations legacy code) is merged into UN
+                std::string query =
+                    "SELECT "
+                    "  CASE WHEN c.country_code = 'ZZ' THEN 'UN' ELSE c.country_code END as country_code, "
+                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'MLSC' THEN c.id END) as mlsc_count, "
+                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn = c.issuer_dn THEN c.id END) as csca_self_signed_count, "
+                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn != c.issuer_dn THEN c.id END) as csca_link_cert_count, "
+                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'DSC' THEN c.id END) as dsc_count, "
+                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'DSC_NC' THEN c.id END) as dsc_nc_count, "
+                    "  COUNT(DISTINCT crl.id) as crl_count, "
+                    "  COUNT(DISTINCT c.id) as total_certs "
+                    "FROM certificate c "
+                    "LEFT JOIN crl ON crl.country_code = c.country_code "
+                    "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
+                    "GROUP BY CASE WHEN c.country_code = 'ZZ' THEN 'UN' ELSE c.country_code END "
+                    "ORDER BY total_certs DESC";
+
+                if (limit > 0) {
+                    query += " LIMIT " + std::to_string(limit);
+                }
+
+                PGresult* res = PQexec(conn, query.c_str());
+                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                    for (int i = 0; i < PQntuples(res); i++) {
+                        Json::Value item;
+                        item["countryCode"] = PQgetvalue(res, i, 0);
+                        item["mlsc"] = std::stoi(PQgetvalue(res, i, 1));
+                        item["cscaSelfSigned"] = std::stoi(PQgetvalue(res, i, 2));
+                        item["cscaLinkCert"] = std::stoi(PQgetvalue(res, i, 3));
+                        item["dsc"] = std::stoi(PQgetvalue(res, i, 4));
+                        item["dscNc"] = std::stoi(PQgetvalue(res, i, 5));
+                        item["crl"] = std::stoi(PQgetvalue(res, i, 6));
+                        item["totalCerts"] = std::stoi(PQgetvalue(res, i, 7));
+                        result.append(item);
+                    }
+                    spdlog::info("Returned detailed statistics for {} countries", PQntuples(res));
+                } else {
+                    spdlog::error("Failed to query detailed country statistics: {}", PQerrorMessage(conn));
+                }
+                PQclear(res);
+            } else {
+                spdlog::error("Database connection failed: {}", PQerrorMessage(conn));
+            }
+
+            PQfinish(conn);
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     // SSE Progress stream endpoint - GET /api/progress/stream/{uploadId}
     app.registerHandler(
         "/api/progress/stream/{uploadId}",

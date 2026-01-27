@@ -312,6 +312,56 @@ db_sync_status 10                # Sync history
 - `docs/archive/SPRINT3_TASK36_COMPLETION.md` - Frontend visualization
 - `docs/MLSC_SYNC_UPDATE.md` - DB-LDAP sync MLSC support and CSCA counting fix
 
+### v2.1.1 (2026-01-28) - Master List Processing Refinements
+
+**LDIF Processing MLSC Count Tracking Fix**
+
+- ✅ **Problem Identified**: Collection 002 LDIF processing extracted MLSC certificates correctly but failed to update `uploaded_file.mlsc_count` in database
+- ✅ **Root Cause**: `ProcessingCounts` structure in ldif_processor.h was missing `mlscCount` field
+- ✅ **Fix Applied**:
+  - Added `mlscCount` field to `ProcessingCounts` (ldif_processor.h)
+  - Added `mlscCount` field to `MasterListStats` (masterlist_processor.h)
+  - Fixed masterlist_processor.cpp line 248: `stats.mlCount++` → `stats.mlscCount++`
+  - Updated ldif_processor.cpp to track mlscCount when processing Master Lists
+  - Updated processing_strategy.cpp to write mlsc_count to database (both AUTO and MANUAL modes)
+- ✅ **Result**: Collection 002 LDIF now correctly shows `mlsc_count = 26` (26 Master Lists with MLSC)
+- ✅ **Verification**: End-to-end tested with Collection 002 LDIF upload + direct ML file upload
+
+**Country-Level Detailed Statistics Dialog**
+
+- ✅ **New Backend API**: `GET /api/upload/countries/detailed?limit={n}`
+  - Returns comprehensive certificate breakdown by country
+  - Includes: MLSC, CSCA Self-signed, CSCA Link Cert, DSC, DSC_NC, CRL counts
+  - Supports all 137+ countries with single query
+  - Response time: ~50ms
+- ✅ **Frontend Enhancement**:
+  - New `CountryStatisticsDialog` component with full-screen modal
+  - Color-coded certificate type columns (Purple: MLSC, Blue: CSCA SS, Cyan: CSCA LC, Green: DSC, Amber: DSC_NC, Red: CRL)
+  - CSV export functionality
+  - Country flags display
+  - Totals footer row
+  - Dark mode support
+- ✅ **Dashboard Integration**: "상세 통계" button opens interactive dialog (replaces link to Upload Dashboard)
+- ✅ **User Impact**: Single-click access to detailed certificate statistics for all countries
+
+**Files Modified**:
+
+Backend:
+- `services/pkd-management/src/common/masterlist_processor.h` - Added mlscCount to MasterListStats
+- `services/pkd-management/src/common/masterlist_processor.cpp` - Fixed MLSC count increment
+- `services/pkd-management/src/ldif_processor.h` - Added mlscCount to ProcessingCounts
+- `services/pkd-management/src/ldif_processor.cpp` - Track MLSC count from Master Lists
+- `services/pkd-management/src/processing_strategy.cpp` - Update mlsc_count in database
+- `services/pkd-management/src/main.cpp` - New /api/upload/countries/detailed endpoint
+
+Frontend:
+- `frontend/src/services/pkdApi.ts` - Added getDetailedCountryStatistics() function
+- `frontend/src/components/CountryStatisticsDialog.tsx` - New statistics dialog component (NEW FILE)
+- `frontend/src/pages/Dashboard.tsx` - Integrated dialog with button trigger
+
+**Documentation**:
+- `docs/MLSC_EXTRACTION_FIX.md` - Updated with Country Statistics Dialog section
+
 ### v2.0.6 (2026-01-25)
 
 - **DSC_NC excluded from reconciliation** - ICAO deprecated nc-data in 2021

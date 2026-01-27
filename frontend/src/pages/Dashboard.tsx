@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { healthApi, ldapApi, uploadApi } from '@/services/api';
 import { cn } from '@/utils/cn';
+import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
 
 // Country statistics type
 interface CountryStats {
@@ -55,6 +56,7 @@ export function Dashboard() {
   });
   const [countryData, setCountryData] = useState<CountryStats[]>([]);
   const [countryLoading, setCountryLoading] = useState(true);
+  const [showCountryDialog, setShowCountryDialog] = useState(false);
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -264,13 +266,13 @@ export function Dashboard() {
                   <span className="font-medium">DSC</span>
                 </div>
               </div>
-              <Link
-                to="/upload-dashboard"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              <button
+                onClick={() => setShowCountryDialog(true)}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
                 상세 통계
-              </Link>
+              </button>
             </div>
           </div>
         </div>
@@ -523,6 +525,12 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Country Statistics Dialog */}
+      <CountryStatisticsDialog
+        isOpen={showCountryDialog}
+        onClose={() => setShowCountryDialog(false)}
+      />
     </div>
   );
 }

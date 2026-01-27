@@ -71,8 +71,10 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 entry.hasAttribute("pkdMasterListContent")) {
                 MasterListStats mlStats;
                 parseMasterListEntryV2(conn, ld, uploadId, entry, mlStats);
-                // Update legacy counters for backward compatibility
-                counts.mlCount += mlStats.mlCount;
+                // Track Master List file count (v2.1.1)
+                counts.mlCount++;
+                // Track MLSC count (v2.1.1)
+                counts.mlscCount += mlStats.mlscCount;
                 counts.ldapMlStoredCount += mlStats.ldapMlStoredCount;
                 // Add extracted CSCAs to counts
                 counts.cscaCount += mlStats.cscaNewCount;

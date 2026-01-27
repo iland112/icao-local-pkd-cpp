@@ -572,5 +572,110 @@ docker exec icao-local-pkd-openldap1 ldapsearch -x \
 
 ---
 
+## Country Statistics Dialog Enhancement (2026-01-28)
+
+### 9. Country-level Detailed Statistics Dialog
+
+**Feature**: Added comprehensive country-level certificate statistics dialog accessible from the Dashboard.
+
+**Motivation**: Provide users with detailed breakdown of all certificate types (MLSC, CSCA SS/LC, DSC, DSC_NC, CRL) by country.
+
+**Implementation**:
+
+#### Backend API Endpoint
+**Location**: [services/pkd-management/src/main.cpp:6755-6835](../services/pkd-management/src/main.cpp#L6755-L6835)
+
+**Endpoint**: `GET /api/upload/countries/detailed?limit={n}`
+- `limit=0`: Returns all countries (default)
+- `limit=N`: Returns top N countries by certificate count
+
+**Query Logic**:
+```sql
+SELECT
+  CASE WHEN c.country_code = 'ZZ' THEN 'UN' ELSE c.country_code END as country_code,
+  COUNT(DISTINCT CASE WHEN c.certificate_type = 'MLSC' THEN c.id END) as mlsc_count,
+  COUNT(DISTINCT CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn = c.issuer_dn THEN c.id END) as csca_self_signed_count,
+  COUNT(DISTINCT CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn != c.issuer_dn THEN c.id END) as csca_link_cert_count,
+  COUNT(DISTINCT CASE WHEN c.certificate_type = 'DSC' THEN c.id END) as dsc_count,
+  COUNT(DISTINCT CASE WHEN c.certificate_type = 'DSC_NC' THEN c.id END) as dsc_nc_count,
+  COUNT(DISTINCT crl.id) as crl_count,
+  COUNT(DISTINCT c.id) as total_certs
+FROM certificate c
+LEFT JOIN crl ON crl.country_code = c.country_code
+WHERE c.country_code IS NOT NULL AND c.country_code != ''
+GROUP BY CASE WHEN c.country_code = 'ZZ' THEN 'UN' ELSE c.country_code END
+ORDER BY total_certs DESC;
+```
+
+**Response Format**:
+```json
+[
+  {
+    "countryCode": "CN",
+    "mlsc": 0,
+    "cscaSelfSigned": 37,
+    "cscaLinkCert": 0,
+    "dsc": 0,
+    "dscNc": 0,
+    "crl": 0,
+    "totalCerts": 37
+  }
+]
+```
+
+#### Frontend API Service
+**Location**: [frontend/src/services/pkdApi.ts:227-237](../frontend/src/services/pkdApi.ts#L227-L237)
+
+**Function**: `uploadHistoryApi.getDetailedCountryStatistics(limit)`
+
+#### CountryStatisticsDialog Component
+**Location**: [frontend/src/components/CountryStatisticsDialog.tsx](../frontend/src/components/CountryStatisticsDialog.tsx)
+
+**Features**:
+- Full-screen modal dialog with responsive table
+- Color-coded certificate type columns (MLSC: Purple, CSCA SS: Blue, CSCA LC: Cyan, DSC: Green, DSC_NC: Amber, CRL: Red)
+- Country flags display
+- CSV export functionality
+- Totals footer row
+- Dark mode support
+- Real-time data loading with loading spinner
+
+**UI Elements**:
+- Header: Title, country count, close button
+- Table: 9 columns (Rank, Country, MLSC, CSCA SS, CSCA LC, DSC, DSC_NC, CRL, Total)
+- Footer: Legend ("SS: Self-signed", "LC: Link Certificate"), Close button
+- Export: CSV download button
+
+#### Dashboard Integration
+**Location**: [frontend/src/pages/Dashboard.tsx:269-275](../frontend/src/pages/Dashboard.tsx#L269-L275)
+
+**Change**: Replaced `<Link to="/upload-dashboard">` with button that opens dialog
+```tsx
+<button
+  onClick={() => setShowCountryDialog(true)}
+  className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
+>
+  <BarChart3 className="w-4 h-4" />
+  상세 통계
+</button>
+```
+
+**Result**: ✅ Users can now view detailed certificate statistics for all 137+ countries in a single interactive dialog
+
+**Test Results** (2026-01-28):
+```bash
+# API Test
+curl http://localhost:8080/api/upload/countries/detailed?limit=5
+
+# Response: ✅ 137 countries with detailed breakdowns
+# - CN: 37 certs (Self-signed CSCA only)
+# - HU: 36 certs (21 SS + 14 LC + 1 MLSC)
+# - BE: 22 certs (15 SS + 7 LC)
+# - LU: 18 certs (12 SS + 6 LC)
+# - LV: 17 certs (9 SS + 7 LC + 1 MLSC)
+```
+
+---
+
 **Status**: ✅ Fix Implemented and Deployed
-**Testing**: ⏳ Awaiting new upload for end-to-end verification
+**Testing**: ✅ End-to-end verified with Collection 002 LDIF (26 MLSC) and ICAO ML file (1 MLSC)

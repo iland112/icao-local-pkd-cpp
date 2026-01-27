@@ -220,6 +220,23 @@ export const uploadHistoryApi = {
     }>>('/upload/countries', { params: { limit } }),
 
   /**
+   * Get detailed country-level statistics
+   * @param limit - Number of countries to return (0 = all countries)
+   * @returns Detailed certificate statistics by country
+   */
+  getDetailedCountryStatistics: (limit: number = 0) =>
+    pkdApi.get<Array<{
+      countryCode: string;
+      mlsc: number;
+      cscaSelfSigned: number;
+      cscaLinkCert: number;
+      dsc: number;
+      dscNc: number;
+      crl: number;
+      totalCerts: number;
+    }>>('/upload/countries/detailed', { params: { limit } }),
+
+  /**
    * Get recent upload changes
    * @param limit - Number of recent uploads to return
    * @returns Recent uploads with change summary
