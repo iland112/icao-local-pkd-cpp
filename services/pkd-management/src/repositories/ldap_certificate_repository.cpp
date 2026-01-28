@@ -597,8 +597,11 @@ domain::models::CertificateType LdapCertificateRepository::extractCertTypeFromDn
     std::string dnLower = dn;
     std::transform(dnLower.begin(), dnLower.end(), dnLower.begin(), ::tolower);
 
-    // Check for certificate type in DN (o=csca, o=mlsc, o=dsc, o=crl, o=ml)
+    // Check for certificate type in DN (o=csca, o=lc, o=mlsc, o=dsc, o=crl, o=ml)
     if (dnLower.find("o=csca") != std::string::npos) {
+        return domain::models::CertificateType::CSCA;
+    } else if (dnLower.find("o=lc") != std::string::npos) {
+        // Link Certificates are stored as CSCA type in database
         return domain::models::CertificateType::CSCA;
     } else if (dnLower.find("o=mlsc") != std::string::npos) {
         return domain::models::CertificateType::MLSC;
