@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.2.7
+**Current Version**: v2.1.2.8
 **Last Updated**: 2026-01-28
-**Status**: Production Ready - Verified with 31,281 Certificates
+**Status**: Production Ready - Trust Chain Validation Active (17,869 DSCs validated)
 
 ---
 
@@ -91,7 +91,15 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.2.7)
+### Recent Changes (v2.1.2.8)
+
+- ✅ **Trust Chain Validation Fix - DN Normalization & Circular Reference** (v2.1.2.8)
+  - **Root Cause**: DN format mismatch between CSCAs (OpenSSL `/C=X/O=Y/CN=Z` slash format) and DSC issuer DNs (RFC2253 `CN=Z,O=Y,C=X` comma format). Direct SQL `LOWER(subject_dn) = LOWER(?)` comparison always failed → 0 validated DSCs.
+  - **Fix 1 - DN Normalization**: Added `normalizeDnForComparison()` — extracts RDN components (C=, O=, CN=, OU=, serialNumber=), lowercases all, sorts alphabetically, joins with `|` for format/order-independent comparison.
+  - **Fix 2 - Component-based SQL**: Updated `findCscaByIssuerDn()` and `findAllCscasBySubjectDn()` to use `LIKE '%cn=...%' AND LIKE '%c=...%'` broad candidate retrieval + C++ post-filter via normalized comparison. Eliminates LIKE false positives.
+  - **Fix 3 - Circular Reference Bug**: `buildTrustChain()` reported "Circular reference detected at depth 2" for every self-signed CSCA chain. Cause: `visitedDns` check ran before `isSelfSigned()` check. For self-signed CSCAs, issuer DN == subject DN matches the already-visited set. Fixed by reordering — `isSelfSigned()` checked first.
+  - **Results**: 17,869 VALID (59.3%), 6,354 PENDING (expired DSCs), 5,615 INVALID (missing link certs or expired CSCAs). Trust chain path included in validation response.
+  - **Commit**: bc03f2b
 
 - ✅ **Audit Log Recording & API Fix** (v2.1.2.7)
   - Fixed audit log INSERT failure: username NOT NULL constraint violated when no JWT auth (defaulted to "anonymous")
