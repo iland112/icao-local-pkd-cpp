@@ -109,11 +109,15 @@ const CertificateSearch: React.FC = () => {
     }
   };
 
-  // Initial load
+  // Initial load - fetch countries once
   useEffect(() => {
     fetchCountries();
+  }, []);
+
+  // Search when criteria changes
+  useEffect(() => {
     searchCertificates();
-  }, [criteria.offset]);
+  }, [criteria.country, criteria.certType, criteria.validity, criteria.searchTerm, criteria.limit, criteria.offset]);
 
   // Handle search button click
   const handleSearch = () => {

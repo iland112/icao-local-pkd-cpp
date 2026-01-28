@@ -203,8 +203,9 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
     int collected = 0;
     int matchedCount = 0; // Count of entries matching all criteria (including filters)
 
+    // Note: When filtering is needed, we must iterate through ALL entries to get accurate total count
     for (LDAPMessage* entry = ldap_first_entry(ldap_, result);
-         entry != nullptr && collected < criteria.limit;
+         entry != nullptr;
          entry = ldap_next_entry(ldap_, entry))
     {
         // Get DN
@@ -241,6 +242,11 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
 
             // Skip entries before offset
             if (matchedCount <= criteria.offset) {
+                continue;
+            }
+
+            // Check if we've collected enough (but keep counting for total)
+            if (collected >= criteria.limit) {
                 continue;
             }
 
