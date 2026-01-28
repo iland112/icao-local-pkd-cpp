@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.2.5
+**Current Version**: v2.1.2.6
 **Last Updated**: 2026-01-28
 **Status**: Production Ready - Verified with 31,281 Certificates
 
@@ -67,7 +67,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.1.2.5)
+## Current Features (v2.1.2.6)
 
 ### Core Functionality
 - ✅ LDIF/Master List upload (AUTO/MANUAL modes)
@@ -91,7 +91,14 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.2.5)
+### Recent Changes (v2.1.2.6)
+
+- ✅ **Database Schema Fixes for Sync Page** (v2.1.2.6)
+  - Added MLSC columns to sync_status table (db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy)
+  - Updated reconciliation_summary table: added dry_run, renamed total_success/total_failed → success_count/failed_count
+  - Added certificate deletion tracking: csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted
+  - Fixed sync page 500 errors: all APIs now working correctly
+  - Database migrations created for reproducible deployments
 
 - ✅ **DSC_NC Certificate Display Improvements** (v2.1.2.5)
   - Frontend: DSC_NC badge correctly displays "DSC_NC" instead of "DSC"
@@ -436,6 +443,50 @@ Backend:
 - ✅ Detail dialog shows "DSC_NC" type with full description
 - ✅ PKD Conformance section displays all three fields when available
 - ✅ Backend API returns pkdConformanceCode, pkdConformanceText, pkdVersion for DSC_NC certificates
+
+### v2.1.2.6 (2026-01-28) - Database Schema Fixes for Sync Page
+
+#### Database: PKD Relay Service Schema Compatibility
+
+- ✅ **sync_status Table Updates**
+  - Added `db_mlsc_count INTEGER NOT NULL DEFAULT 0` - Master List Signer Certificate count in PostgreSQL
+  - Added `ldap_mlsc_count INTEGER NOT NULL DEFAULT 0` - Master List Signer Certificate count in LDAP
+  - Added `mlsc_discrepancy INTEGER NOT NULL DEFAULT 0` - Discrepancy count between DB and LDAP for MLSC
+  - **Purpose**: Track MLSC certificates in synchronization monitoring (completes Sprint 3 MLSC support)
+
+- ✅ **reconciliation_summary Table Updates**
+  - Added `dry_run BOOLEAN NOT NULL DEFAULT FALSE` - Whether this was a dry run or actual reconciliation
+  - Renamed `total_success` → `success_count` - Number of certificates successfully reconciled
+  - Renamed `total_failed` → `failed_count` - Number of certificates that failed reconciliation
+  - Added `csca_deleted INTEGER NOT NULL DEFAULT 0` - Number of CSCA certificates deleted during reconciliation
+  - Added `dsc_deleted INTEGER NOT NULL DEFAULT 0` - Number of DSC certificates deleted during reconciliation
+  - Added `dsc_nc_deleted INTEGER NOT NULL DEFAULT 0` - Number of DSC_NC certificates deleted during reconciliation
+  - Added `crl_deleted INTEGER NOT NULL DEFAULT 0` - Number of CRLs deleted during reconciliation
+  - **Purpose**: Match PKD Relay Service v2.1.0 expected schema for reconciliation history and statistics
+
+**Database Migrations**:
+
+- `docker/db/migrations/add_mlsc_sync_columns.sql` - Adds MLSC tracking to sync_status table
+- `docker/db/migrations/add_dry_run_to_reconciliation.sql` - Comprehensive reconciliation_summary schema update
+
+**API Fixes**:
+
+- ✅ `GET /api/sync/status` - Now returns complete sync status with MLSC counts
+- ✅ `GET /api/sync/reconcile/history` - Fixed 500 error, now returns reconciliation history correctly
+- ✅ Manual sync check button on Sync page now works correctly
+
+**Verification**:
+
+- ✅ Sync page loads without errors
+- ✅ Manual sync check button triggers synchronization and updates statistics
+- ✅ Reconciliation history displays correctly with all columns
+- ✅ MLSC counts tracked in sync monitoring
+- ✅ All sync APIs return expected data structure
+
+**Documentation**:
+
+- Updated database schema with migration scripts for future deployments
+- Added comments to all new columns for clarity
 
 ### v2.1.2 - v2.1.2.4 (2026-01-28) - Critical Bug Fixes & Upload Verification
 
