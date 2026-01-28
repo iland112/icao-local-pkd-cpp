@@ -5191,6 +5191,199 @@ void registerRoutes() {
         {drogon::Post}
     );
 
+    // GET /api/upload/{uploadId}/validations - Get validation results for an upload
+    app.registerHandler(
+        "/api/upload/{uploadId}/validations",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            try {
+                spdlog::info("GET /api/upload/{}/validations", uploadId);
+
+                // Parse query parameters
+                std::string limitStr = req->getOptionalParameter<std::string>("limit").value_or("50");
+                std::string offsetStr = req->getOptionalParameter<std::string>("offset").value_or("0");
+                std::string status = req->getOptionalParameter<std::string>("status").value_or("");
+                std::string certType = req->getOptionalParameter<std::string>("certType").value_or("");
+
+                int limit = std::stoi(limitStr);
+                int offset = std::stoi(offsetStr);
+
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Database connection failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Build dynamic WHERE clause
+                std::string whereClause = "WHERE vr.upload_id = $1";
+                std::vector<std::string> paramValues;
+                paramValues.push_back(uploadId);
+                int paramIdx = 2;
+
+                if (!status.empty()) {
+                    whereClause += " AND vr.validation_status = $" + std::to_string(paramIdx);
+                    paramValues.push_back(status);
+                    paramIdx++;
+                }
+                if (!certType.empty()) {
+                    whereClause += " AND vr.certificate_type = $" + std::to_string(paramIdx);
+                    paramValues.push_back(certType);
+                    paramIdx++;
+                }
+
+                // Get total count
+                std::string countQuery = "SELECT COUNT(*) FROM validation_result vr " + whereClause;
+                std::vector<const char*> countParams;
+                for (auto& p : paramValues) countParams.push_back(p.c_str());
+
+                PGresult* countRes = PQexecParams(conn, countQuery.c_str(),
+                    static_cast<int>(countParams.size()), nullptr, countParams.data(),
+                    nullptr, nullptr, 0);
+
+                int total = 0;
+                if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
+                    total = std::stoi(PQgetvalue(countRes, 0, 0));
+                }
+                PQclear(countRes);
+
+                // Fetch validation results with JOIN to certificate for fingerprint
+                std::string dataQuery =
+                    "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                    "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                    "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                    "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
+                    "       vr.signature_valid, vr.signature_algorithm, "
+                    "       vr.validity_period_valid, vr.is_expired, vr.is_not_yet_valid, "
+                    "       vr.not_before, vr.not_after, "
+                    "       vr.revocation_status, vr.crl_checked, "
+                    "       vr.validation_timestamp, c.fingerprint_sha256 "
+                    "FROM validation_result vr "
+                    "LEFT JOIN certificate c ON vr.certificate_id = c.id "
+                    + whereClause +
+                    " ORDER BY vr.validation_status, vr.validation_timestamp DESC "
+                    " LIMIT " + std::to_string(limit) +
+                    " OFFSET " + std::to_string(offset);
+
+                PGresult* res = PQexecParams(conn, dataQuery.c_str(),
+                    static_cast<int>(countParams.size()), nullptr, countParams.data(),
+                    nullptr, nullptr, 0);
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    spdlog::error("Validations query failed: {}", PQerrorMessage(conn));
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Query failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    PQclear(res);
+                    PQfinish(conn);
+                    callback(resp);
+                    return;
+                }
+
+                Json::Value validations;
+                int rows = PQntuples(res);
+                for (int i = 0; i < rows; i++) {
+                    Json::Value v;
+                    v["id"] = PQgetisnull(res, i, 0) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 0)));
+                    v["certificateId"] = PQgetisnull(res, i, 1) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 1)));
+                    v["uploadId"] = PQgetisnull(res, i, 2) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 2)));
+                    v["certificateType"] = PQgetisnull(res, i, 3) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 3)));
+                    v["countryCode"] = PQgetisnull(res, i, 4) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 4)));
+                    v["subjectDn"] = PQgetisnull(res, i, 5) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 5)));
+                    v["issuerDn"] = PQgetisnull(res, i, 6) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 6)));
+                    v["serialNumber"] = PQgetisnull(res, i, 7) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 7)));
+                    v["validationStatus"] = PQgetisnull(res, i, 8) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 8)));
+
+                    std::string tcvStr = PQgetisnull(res, i, 9) ? "f" : std::string(PQgetvalue(res, i, 9));
+                    v["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+
+                    v["trustChainMessage"] = PQgetisnull(res, i, 10) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 10)));
+
+                    // Parse trust_chain_path JSONB
+                    std::string tcpRaw = PQgetisnull(res, i, 11) ? "[]" : std::string(PQgetvalue(res, i, 11));
+                    try {
+                        Json::Reader reader;
+                        Json::Value pathArray;
+                        if (reader.parse(tcpRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
+                            v["trustChainPath"] = pathArray[0].asString();
+                        } else {
+                            v["trustChainPath"] = "";
+                        }
+                    } catch (...) {
+                        v["trustChainPath"] = "";
+                    }
+
+                    std::string cfStr = PQgetisnull(res, i, 12) ? "f" : std::string(PQgetvalue(res, i, 12));
+                    v["cscaFound"] = (cfStr == "t" || cfStr == "true");
+                    v["cscaSubjectDn"] = PQgetisnull(res, i, 13) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 13)));
+
+                    std::string svStr = PQgetisnull(res, i, 14) ? "f" : std::string(PQgetvalue(res, i, 14));
+                    v["signatureVerified"] = (svStr == "t" || svStr == "true");
+
+                    v["signatureAlgorithm"] = PQgetisnull(res, i, 15) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 15)));
+
+                    std::string vpStr = PQgetisnull(res, i, 16) ? "f" : std::string(PQgetvalue(res, i, 16));
+                    v["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+
+                    std::string expStr = PQgetisnull(res, i, 17) ? "f" : std::string(PQgetvalue(res, i, 17));
+                    v["isExpired"] = (expStr == "t" || expStr == "true");
+
+                    std::string nysStr = PQgetisnull(res, i, 18) ? "f" : std::string(PQgetvalue(res, i, 18));
+                    v["isNotYetValid"] = (nysStr == "t" || nysStr == "true");
+
+                    v["notBefore"] = PQgetisnull(res, i, 19) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 19)));
+                    v["notAfter"] = PQgetisnull(res, i, 20) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 20)));
+                    v["crlCheckStatus"] = PQgetisnull(res, i, 21) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 21)));
+
+                    std::string ccStr = PQgetisnull(res, i, 22) ? "f" : std::string(PQgetvalue(res, i, 22));
+                    v["crlChecked"] = (ccStr == "t" || ccStr == "true");
+
+                    v["validatedAt"] = PQgetisnull(res, i, 23) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 23)));
+                    v["fingerprint"] = PQgetisnull(res, i, 24) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 24)));
+
+                    validations.append(v);
+                }
+
+                Json::Value response;
+                response["success"] = true;
+                response["count"] = rows;
+                response["total"] = total;
+                response["limit"] = limit;
+                response["offset"] = offset;
+                response["validations"] = validations;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+                PQclear(res);
+                PQfinish(conn);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Upload validations error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Cleanup failed upload endpoint
     app.registerHandler(
         "/api/upload/{uploadId}",
