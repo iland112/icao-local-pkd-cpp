@@ -642,24 +642,137 @@ CscaValidationResult validateCscaCertificate(X509* cert) {
 }
 
 /**
+ * @brief Extract DN components as a sorted, lowercase key for format-independent comparison.
+ * Handles both RFC 2253 comma-separated (CN=X,O=Y,C=Z) and OpenSSL slash-separated (/C=Z/O=Y/CN=X) formats.
+ * Returns a sorted string like "c=z|cn=x|o=y" for consistent comparison.
+ * @param dn Input DN string in either format
+ * @return Sorted lowercase pipe-separated DN components
+ */
+static std::string normalizeDnForComparison(const std::string& dn) {
+    if (dn.empty()) return dn;
+
+    std::vector<std::string> parts;
+
+    if (dn[0] == '/') {
+        // OpenSSL slash-separated format: /C=Z/O=Y/CN=X
+        std::istringstream stream(dn);
+        std::string segment;
+        while (std::getline(stream, segment, '/')) {
+            if (!segment.empty()) {
+                std::string lower;
+                for (char c : segment) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                size_t s = lower.find_first_not_of(" \t");
+                if (s != std::string::npos) parts.push_back(lower.substr(s));
+            }
+        }
+    } else {
+        // RFC 2253 comma-separated format: CN=X,O=Y,C=Z
+        std::string current;
+        bool inQuotes = false;
+        for (size_t i = 0; i < dn.size(); i++) {
+            char c = dn[i];
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                current += c;
+            } else if (c == ',' && !inQuotes) {
+                std::string lower;
+                for (char ch : current) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                size_t s = lower.find_first_not_of(" \t");
+                if (s != std::string::npos) parts.push_back(lower.substr(s));
+                current.clear();
+            } else if (c == '\\' && i + 1 < dn.size()) {
+                current += c;
+                current += dn[++i];
+            } else {
+                current += c;
+            }
+        }
+        if (!current.empty()) {
+            std::string lower;
+            for (char ch : current) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            size_t s = lower.find_first_not_of(" \t");
+            if (s != std::string::npos) parts.push_back(lower.substr(s));
+        }
+    }
+
+    // Sort components for order-independent comparison
+    std::sort(parts.begin(), parts.end());
+
+    // Join with pipe separator
+    std::string result;
+    for (size_t i = 0; i < parts.size(); i++) {
+        if (i > 0) result += "|";
+        result += parts[i];
+    }
+    return result;
+}
+
+/**
  * @brief Find CSCA certificate from DB by issuer DN
  * @return X509* pointer (caller must free) or nullptr if not found
  */
+/**
+ * @brief Extract a specific RDN attribute value from a DN string (either format).
+ * @param dn DN in any format
+ * @param attr Attribute name (e.g., "CN", "C", "O")
+ * @return Attribute value (lowercase), or empty string if not found
+ */
+static std::string extractDnAttribute(const std::string& dn, const std::string& attr) {
+    std::string searchKey = attr + "=";
+    // Uppercase variant for case-insensitive search
+    std::string dnLower = dn;
+    for (char& c : dnLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string keyLower = searchKey;
+    for (char& c : keyLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    size_t pos = 0;
+    while ((pos = dnLower.find(keyLower, pos)) != std::string::npos) {
+        // Verify it's at a boundary (start of string, after / or ,)
+        if (pos == 0 || dnLower[pos-1] == '/' || dnLower[pos-1] == ',') {
+            size_t valStart = pos + keyLower.size();
+            size_t valEnd = dn.find_first_of("/,", valStart);
+            if (valEnd == std::string::npos) valEnd = dn.size();
+            std::string val = dn.substr(valStart, valEnd - valStart);
+            // Trim and lowercase
+            size_t s = val.find_first_not_of(" \t");
+            size_t e = val.find_last_not_of(" \t");
+            if (s != std::string::npos) {
+                val = val.substr(s, e - s + 1);
+                for (char& c : val) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                return val;
+            }
+        }
+        pos++;
+    }
+    return "";
+}
+
 X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
     if (!conn || issuerDn.empty()) return nullptr;
 
-    // Query for CSCA with matching subject_dn
-    std::string escapedDn = issuerDn;
-    // Simple escape for SQL
-    size_t pos = 0;
-    while ((pos = escapedDn.find("'", pos)) != std::string::npos) {
-        escapedDn.replace(pos, 1, "''");
-        pos += 2;
-    }
+    // Extract key DN components for robust matching across formats
+    std::string cn = extractDnAttribute(issuerDn, "CN");
+    std::string country = extractDnAttribute(issuerDn, "C");
+    std::string org = extractDnAttribute(issuerDn, "O");
 
-    // Use case-insensitive comparison for DN matching (RFC 4517)
-    std::string query = "SELECT certificate_data FROM certificate WHERE "
-                        "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "') LIMIT 1";
+    // Build query using component-based matching (handles both /C=X/O=Y/CN=Z and CN=Z,O=Y,C=X formats)
+    std::string query = "SELECT certificate_data, subject_dn FROM certificate WHERE certificate_type = 'CSCA'";
+    if (!cn.empty()) {
+        std::string escaped = cn;
+        size_t pos = 0;
+        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
+        query += " AND LOWER(subject_dn) LIKE '%cn=" + escaped + "%'";
+    }
+    if (!country.empty()) {
+        query += " AND LOWER(subject_dn) LIKE '%c=" + country + "%'";
+    }
+    if (!org.empty()) {
+        std::string escaped = org;
+        size_t pos = 0;
+        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
+        query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
+    }
+    query += " LIMIT 20";  // Fetch candidates, post-filter for exact match
 
     spdlog::debug("CSCA lookup query: {}", query.substr(0, 200));
 
@@ -671,15 +784,29 @@ X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
         return nullptr;
     }
 
-    if (PQntuples(res) == 0) {
-        spdlog::warn("CSCA not found for issuer DN: {}", escapedDn.substr(0, 80));
+    // Post-filter: find exact DN match using normalized comparison
+    std::string targetNormalized = normalizeDnForComparison(issuerDn);
+    int matchedRow = -1;
+    for (int i = 0; i < PQntuples(res); i++) {
+        char* dbSubjectDn = PQgetvalue(res, i, 1);
+        if (dbSubjectDn) {
+            std::string dbNormalized = normalizeDnForComparison(std::string(dbSubjectDn));
+            if (dbNormalized == targetNormalized) {
+                matchedRow = i;
+                break;
+            }
+        }
+    }
+
+    if (matchedRow < 0) {
+        spdlog::warn("CSCA not found for issuer DN: {}", issuerDn.substr(0, 80));
         PQclear(res);
         return nullptr;
     }
 
-    // Get binary certificate data
-    char* certData = PQgetvalue(res, 0, 0);
-    int certLen = PQgetlength(res, 0, 0);
+    // Get binary certificate data from matched row
+    char* certData = PQgetvalue(res, matchedRow, 0);
+    int certLen = PQgetlength(res, matchedRow, 0);
 
     spdlog::debug("CSCA found: certLen={}, first4chars='{}{}{}{}' (codes: {} {} {} {})",
                  certLen,
@@ -850,17 +977,28 @@ static std::vector<X509*> findAllCscasBySubjectDn(PGconn* conn, const std::strin
         return result;
     }
 
-    // Escape DN for SQL (basic escaping)
-    std::string escapedDn = subjectDn;
-    size_t pos = 0;
-    while ((pos = escapedDn.find("'", pos)) != std::string::npos) {
-        escapedDn.replace(pos, 1, "''");
-        pos += 2;
-    }
+    // Extract key DN components for robust matching across formats
+    std::string cn = extractDnAttribute(subjectDn, "CN");
+    std::string country = extractDnAttribute(subjectDn, "C");
+    std::string org = extractDnAttribute(subjectDn, "O");
 
-    // Case-insensitive search for all CSCAs (including link certificates)
-    std::string query = "SELECT certificate_data FROM certificate WHERE "
-                        "certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER('" + escapedDn + "')";
+    // Build query using component-based matching (handles both /C=X/O=Y/CN=Z and CN=Z,O=Y,C=X formats)
+    std::string query = "SELECT certificate_data, subject_dn FROM certificate WHERE certificate_type = 'CSCA'";
+    if (!cn.empty()) {
+        std::string escaped = cn;
+        size_t pos = 0;
+        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
+        query += " AND LOWER(subject_dn) LIKE '%cn=" + escaped + "%'";
+    }
+    if (!country.empty()) {
+        query += " AND LOWER(subject_dn) LIKE '%c=" + country + "%'";
+    }
+    if (!org.empty()) {
+        std::string escaped = org;
+        size_t pos = 0;
+        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
+        query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
+    }
 
     spdlog::debug("Find all CSCAs query: {}", query.substr(0, 200));
 
@@ -872,9 +1010,21 @@ static std::vector<X509*> findAllCscasBySubjectDn(PGconn* conn, const std::strin
     }
 
     int numRows = PQntuples(res);
-    spdlog::info("Found {} CSCA(s) for subject DN: {}", numRows, subjectDn.substr(0, 80));
+    std::string targetNormalized = normalizeDnForComparison(subjectDn);
+    spdlog::info("Find all CSCAs: query returned {} candidates for DN: {}", numRows, subjectDn.substr(0, 80));
 
     for (int i = 0; i < numRows; i++) {
+        // Verify exact match using normalized comparison (post-filter for LIKE false positives)
+        char* dbSubjectDn = PQgetvalue(res, i, 1);
+        if (dbSubjectDn) {
+            std::string dbNormalized = normalizeDnForComparison(std::string(dbSubjectDn));
+            if (dbNormalized != targetNormalized) {
+                spdlog::debug("Find all CSCAs: row {} DN mismatch (candidate='{}', target='{}')",
+                             i, dbSubjectDn, subjectDn.substr(0, 80));
+                continue;
+            }
+        }
+
         char* certData = PQgetvalue(res, i, 0);
         int certLen = PQgetlength(res, i, 0);
 
@@ -919,6 +1069,7 @@ static std::vector<X509*> findAllCscasBySubjectDn(PGconn* conn, const std::strin
     }
 
     PQclear(res);
+    spdlog::info("Found {} CSCA(s) for subject DN: {}", result.size(), subjectDn.substr(0, 80));
     return result;
 }
 
@@ -952,6 +1103,13 @@ static TrustChain buildTrustChain(X509* dscCert,
     while (depth < maxDepth) {
         depth++;
 
+        // Check if current certificate is self-signed (root) — must be before circular ref check
+        if (isSelfSigned(current)) {
+            chain.isValid = true;
+            spdlog::info("Chain building: Reached root CSCA at depth {}", depth);
+            break;
+        }
+
         // Get issuer DN of current certificate
         std::string currentIssuerDn = getCertIssuerDn(current);
 
@@ -967,13 +1125,6 @@ static TrustChain buildTrustChain(X509* dscCert,
             return chain;
         }
         visitedDns.insert(currentIssuerDn);
-
-        // Check if current certificate is self-signed (root)
-        if (isSelfSigned(current)) {
-            chain.isValid = true;
-            spdlog::info("Chain building: Reached root CSCA at depth {}", depth);
-            break;
-        }
 
         // Find issuer certificate in CSCA list
         X509* issuer = nullptr;
@@ -1226,76 +1377,73 @@ struct ValidationResultRecord {
 bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
     if (!conn) return false;
 
-    // Use parameterized query (Phase 2 - SQL Injection Prevention)
-    // Sprint 3: Added trust_chain_path field
+    // Parameterized query matching actual validation_result table schema (23 columns)
     const char* query =
         "INSERT INTO validation_result ("
         "certificate_id, upload_id, certificate_type, country_code, "
         "subject_dn, issuer_dn, serial_number, "
-        "validation_status, trust_chain_valid, trust_chain_message, trust_chain_path, "
-        "csca_found, csca_subject_dn, csca_fingerprint, signature_verified, signature_algorithm, "
-        "validity_check_passed, is_expired, is_not_yet_valid, not_before, not_after, "
-        "is_ca, is_self_signed, path_length_constraint, "
-        "key_usage_valid, key_usage_flags, "
-        "crl_check_status, crl_check_message, "
-        "error_code, error_message, validation_duration_ms"
+        "validation_status, trust_chain_valid, trust_chain_message, "
+        "csca_found, csca_subject_dn, csca_serial_number, csca_country, "
+        "signature_valid, signature_algorithm, "
+        "validity_period_valid, not_before, not_after, "
+        "revocation_status, crl_checked, "
+        "trust_chain_path"
         ") VALUES ("
-        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, $17, $18, $19, $20, $21, "
-        "$22, $23, $24, $25, $26, $27, $28, $29, $30, $31"
+        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
+        "$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22"
         ")";
 
-    // Prepare boolean strings (PostgreSQL requires lowercase 'true'/'false')
+    // Prepare boolean strings
     const std::string trustChainValidStr = record.trustChainValid ? "true" : "false";
     const std::string cscaFoundStr = record.cscaFound ? "true" : "false";
-    const std::string signatureVerifiedStr = record.signatureVerified ? "true" : "false";
-    const std::string validityCheckPassedStr = record.validityCheckPassed ? "true" : "false";
-    const std::string isExpiredStr = record.isExpired ? "true" : "false";
-    const std::string isNotYetValidStr = record.isNotYetValid ? "true" : "false";
-    const std::string isCaStr = record.isCa ? "true" : "false";
-    const std::string isSelfSignedStr = record.isSelfSigned ? "true" : "false";
-    const std::string keyUsageValidStr = record.keyUsageValid ? "true" : "false";
+    const std::string signatureValidStr = record.signatureVerified ? "true" : "false";
+    const std::string validityPeriodValidStr = record.validityCheckPassed ? "true" : "false";
+    const std::string crlCheckedStr = (record.crlCheckStatus != "NOT_CHECKED") ? "true" : "false";
 
-    // Prepare integer strings
-    const std::string pathLengthConstraintStr = (record.pathLengthConstraint >= 0)
-        ? std::to_string(record.pathLengthConstraint) : "";
-    const std::string validationDurationMsStr = std::to_string(record.validationDurationMs);
+    // Map crlCheckStatus to revocation_status (schema uses UNKNOWN/NOT_REVOKED/REVOKED)
+    std::string revocationStatus = "UNKNOWN";
+    if (record.crlCheckStatus == "REVOKED") revocationStatus = "REVOKED";
+    else if (record.crlCheckStatus == "NOT_REVOKED" || record.crlCheckStatus == "VALID") revocationStatus = "NOT_REVOKED";
 
-    // Build parameter array (31 parameters - Sprint 3: added trust_chain_path)
-    const char* paramValues[31];
+    // Prepare trust_chain_path as JSON array (schema expects jsonb)
+    // chain.path is human-readable like "DSC → CN=CSCA → CN=Link"
+    // Wrap as JSON array for JSONB column
+    std::string trustChainPathJson;
+    if (record.trustChainPath.empty()) {
+        trustChainPathJson = "[]";
+    } else {
+        Json::Value pathArray(Json::arrayValue);
+        pathArray.append(record.trustChainPath);
+        Json::StreamWriterBuilder builder;
+        builder["indentation"] = "";
+        trustChainPathJson = Json::writeString(builder, pathArray);
+    }
+
+    const char* paramValues[22];
     paramValues[0] = record.certificateId.c_str();
     paramValues[1] = record.uploadId.c_str();
     paramValues[2] = record.certificateType.c_str();
-    paramValues[3] = record.countryCode.c_str();
+    paramValues[3] = record.countryCode.empty() ? nullptr : record.countryCode.c_str();
     paramValues[4] = record.subjectDn.c_str();
     paramValues[5] = record.issuerDn.c_str();
-    paramValues[6] = record.serialNumber.c_str();
+    paramValues[6] = record.serialNumber.empty() ? nullptr : record.serialNumber.c_str();
     paramValues[7] = record.validationStatus.c_str();
     paramValues[8] = trustChainValidStr.c_str();
-    paramValues[9] = record.trustChainMessage.c_str();
-    paramValues[10] = record.trustChainPath.c_str();  // Sprint 3: NEW field
-    paramValues[11] = cscaFoundStr.c_str();
-    paramValues[12] = record.cscaSubjectDn.c_str();
-    paramValues[13] = record.cscaFingerprint.c_str();
-    paramValues[14] = signatureVerifiedStr.c_str();
-    paramValues[15] = record.signatureAlgorithm.c_str();
-    paramValues[16] = validityCheckPassedStr.c_str();
-    paramValues[17] = isExpiredStr.c_str();
-    paramValues[18] = isNotYetValidStr.c_str();
-    paramValues[19] = record.notBefore.empty() ? nullptr : record.notBefore.c_str();
-    paramValues[20] = record.notAfter.empty() ? nullptr : record.notAfter.c_str();
-    paramValues[21] = isCaStr.c_str();
-    paramValues[22] = isSelfSignedStr.c_str();
-    paramValues[23] = (record.pathLengthConstraint >= 0) ? pathLengthConstraintStr.c_str() : nullptr;
-    paramValues[24] = keyUsageValidStr.c_str();
-    paramValues[25] = record.keyUsageFlags.c_str();
-    paramValues[26] = record.crlCheckStatus.c_str();
-    paramValues[27] = record.crlCheckMessage.c_str();
-    paramValues[28] = record.errorCode.c_str();
-    paramValues[29] = record.errorMessage.c_str();
-    paramValues[30] = validationDurationMsStr.c_str();
+    paramValues[9] = record.trustChainMessage.empty() ? nullptr : record.trustChainMessage.c_str();
+    paramValues[10] = cscaFoundStr.c_str();
+    paramValues[11] = record.cscaSubjectDn.empty() ? nullptr : record.cscaSubjectDn.c_str();
+    paramValues[12] = nullptr;  // csca_serial_number - not tracked in ValidationResultRecord
+    paramValues[13] = nullptr;  // csca_country - not tracked in ValidationResultRecord
+    paramValues[14] = signatureValidStr.c_str();
+    paramValues[15] = record.signatureAlgorithm.empty() ? nullptr : record.signatureAlgorithm.c_str();
+    paramValues[16] = validityPeriodValidStr.c_str();
+    paramValues[17] = record.notBefore.empty() ? nullptr : record.notBefore.c_str();
+    paramValues[18] = record.notAfter.empty() ? nullptr : record.notAfter.c_str();
+    paramValues[19] = revocationStatus.c_str();
+    paramValues[20] = crlCheckedStr.c_str();
+    paramValues[21] = trustChainPathJson.c_str();
 
-    PGresult* res = PQexecParams(conn, query, 31, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn, query, 22, nullptr, paramValues,
                                  nullptr, nullptr, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     if (!success) {
@@ -2990,20 +3138,26 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
                        "'" + byteaEscaped + "', "
                        + escapeSqlString(conn, validationStatus) + ", "
                        + escapeSqlString(conn, validationMessage) + ", NOW()) "
-                       "ON CONFLICT (certificate_type, fingerprint_sha256) DO NOTHING";
+                       "ON CONFLICT (certificate_type, fingerprint_sha256) "
+                       "DO UPDATE SET upload_id = EXCLUDED.upload_id "
+                       "RETURNING id";
 
     PGresult* res = PQexec(conn, query.c_str());
     ExecStatusType status = PQresultStatus(res);
-    bool success = (status == PGRES_COMMAND_OK);
 
-    if (!success) {
+    if (status == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        certId = PQgetvalue(res, 0, 0);
+        PQclear(res);
+        return certId;
+    }
+
+    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
         spdlog::error("Failed to save certificate: {} (Status: {}, Error: {})",
                      fingerprint, PQresStatus(status), PQerrorMessage(conn));
     }
 
     PQclear(res);
-
-    return success ? certId : "";
+    return "";
 }
 
 /**
@@ -6393,11 +6547,11 @@ void registerRoutes() {
                 validation["cscaNotFoundCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE is_expired = TRUE");
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validity_period_valid = FALSE AND validation_status != 'ERROR'");
                 validation["expiredCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE crl_check_status = 'REVOKED'");
+                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE revocation_status = 'REVOKED'");
                 validation["revokedCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
                 PQclear(res);
 
