@@ -50,14 +50,20 @@ echo ""
 # Step 3: Recreate data directories with proper permissions
 # =============================================================================
 echo -e "${YELLOW}[Step 3/6] Creating data directories with permissions...${NC}"
-mkdir -p .docker-data/postgres-data
-mkdir -p .docker-data/openldap1-data
-mkdir -p .docker-data/openldap2-data
+# Create directories matching docker-compose.yaml volume paths
+mkdir -p .docker-data/postgres
+mkdir -p .docker-data/openldap1/data
+mkdir -p .docker-data/openldap1/config
+mkdir -p .docker-data/openldap2/data
+mkdir -p .docker-data/openldap2/config
 mkdir -p .docker-data/pkd-uploads
 mkdir -p .docker-data/pkd-logs
 mkdir -p .docker-data/pa-logs
 mkdir -p .docker-data/sync-logs
+mkdir -p .docker-data/monitoring-logs
+mkdir -p .docker-data/gateway-logs
 
+# Set proper permissions (777 for all to avoid permission issues)
 sudo chmod -R 777 .docker-data/
 echo -e "${GREEN}✓ Data directories created and permissions set${NC}"
 echo ""
