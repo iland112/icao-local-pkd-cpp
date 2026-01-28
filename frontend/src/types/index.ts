@@ -78,6 +78,32 @@ export interface UploadStatistics {
   skippedCount: number;
 }
 
+// Upload Issues (v2.1.2.2) - Duplicates detected during upload
+export interface UploadDuplicate {
+  id: number;
+  certificateType: CertificateType;
+  country: string;
+  subjectDn: string;
+  fingerprint: string;
+  sourceType: string;
+  sourceCountry?: string;
+  detectedAt: string;
+}
+
+export interface UploadIssues {
+  success: boolean;
+  totalDuplicates: number;
+  duplicates: UploadDuplicate[];
+  byType: {
+    CSCA: number;
+    DSC: number;
+    DSC_NC: number;
+    MLSC: number;
+    CRL: number;
+  };
+  error?: string;
+}
+
 export interface UploadProgress {
   uploadId: string;
   stage: string;

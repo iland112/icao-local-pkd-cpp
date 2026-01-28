@@ -19,6 +19,7 @@ import type {
   UploadedFile,
   UploadStatisticsOverview,
   UploadChangesResponse,
+  UploadIssues,
   PageRequest,
   PageResponse,
 } from '@/types';
@@ -198,6 +199,14 @@ export const uploadHistoryApi = {
    */
   getDetail: (uploadId: string) =>
     pkdApi.get<ApiResponse<UploadedFile>>(`/upload/detail/${uploadId}`),
+
+  /**
+   * Get upload issues (duplicates) by upload ID (v2.1.2.2)
+   * @param uploadId - Upload record UUID
+   * @returns List of duplicate certificates detected during upload
+   */
+  getIssues: (uploadId: string) =>
+    pkdApi.get<UploadIssues>(`/upload/${uploadId}/issues`),
 
   /**
    * Get upload statistics overview

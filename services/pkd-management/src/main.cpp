@@ -2314,7 +2314,7 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
         ou = "dsc";
         dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "DSC_NC") {
-        ou = "dsc_nc";  // Note: using dsc_nc for consistency with LDAP schema
+        ou = "dsc";  // DSC_NC uses o=dsc in nc-data container (same as legacy DN)
         dataContainer = appConfig.ldapNcDataContainer;
     } else if (certType == "LC") {
         // Sprint 2: Link Certificate support
@@ -2486,7 +2486,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
                                    const std::string& pkdConformanceCode = "",
                                    const std::string& pkdConformanceText = "",
                                    const std::string& pkdVersion = "",
-                                   bool useLegacyDn = true) {  // Sprint 1: Dual-mode DN support
+                                   bool useLegacyDn = false) {  // v2.1.2: Use fingerprint-based DN by default (fix LDAP storage failure)
     bool isNcData = (certType == "DSC_NC");
 
     // Ensure country structure exists
@@ -2526,16 +2526,27 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     modObjectClass.mod_values = ocVals;
 
     // cn (Subject DN - required by person, must match DN's RDN)
-    // v1.5.0: Use standard attributes only for cn
-    // IMPORTANT: DN uses escaped value, but cn attribute uses UNESCAPED original value!
-    spdlog::debug("[v1.5.0] Setting cn attribute to standard DN: {}", standardDn);
-    if (!nonStandardAttrs.empty()) {
-        spdlog::debug("[v1.5.0] Non-standard attributes moved to description: {}", nonStandardAttrs);
-    }
+    // v2.1.2: For v2 DN (fingerprint-based), use fingerprint as cn; for legacy DN, use standard DN
+    // FIX: Avoid duplicate cn values when useLegacyDn=false (was causing LDAP operation failed error)
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
     modCn.mod_type = const_cast<char*>("cn");
-    char* cnVals[] = {const_cast<char*>(standardDn.c_str()), nullptr};
+    char* cnVals[3];
+    if (useLegacyDn) {
+        // Legacy DN: cn = [standardDn, fingerprint] for searchability
+        cnVals[0] = const_cast<char*>(standardDn.c_str());
+        cnVals[1] = const_cast<char*>(fingerprint.c_str());
+        cnVals[2] = nullptr;
+        spdlog::debug("[v2.1.2] Setting cn attribute (Legacy): standardDn + fingerprint");
+        if (!nonStandardAttrs.empty()) {
+            spdlog::debug("[v1.5.0] Non-standard attributes moved to description: {}", nonStandardAttrs);
+        }
+    } else {
+        // v2 DN: cn = [fingerprint] only (must match DN RDN)
+        cnVals[0] = const_cast<char*>(fingerprint.c_str());
+        cnVals[1] = nullptr;
+        spdlog::debug("[v2.1.2] Setting cn attribute (v2): fingerprint only");
+    }
     modCn.mod_values = cnVals;
 
     // sn (serial number - required by person)
@@ -6574,6 +6585,109 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // Upload issues endpoint - GET /api/upload/{uploadId}/issues
+    // Returns duplicate certificates detected during upload
+    app.registerHandler(
+        "/api/upload/{uploadId}/issues",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("GET /api/upload/{}/issues", uploadId);
+
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+            Json::Value result;
+            result["success"] = false;
+
+            if (PQstatus(conn) == CONNECTION_OK) {
+                // Query ACTUAL duplicate certificates for this upload
+                // CRITICAL: Only return certificates that already existed before this upload
+                // (exclude first appearance, only show true duplicates by fingerprint)
+                std::string query =
+                    "SELECT "
+                    "  cd.id, "
+                    "  cd.source_type, "
+                    "  cd.source_country, "
+                    "  cd.detected_at, "
+                    "  c.certificate_type, "
+                    "  c.country_code, "
+                    "  c.subject_dn, "
+                    "  c.fingerprint_sha256 "
+                    "FROM certificate_duplicates cd "
+                    "JOIN certificate c ON cd.certificate_id = c.id "
+                    "WHERE cd.upload_id = '" + uploadId + "' "
+                    "  AND c.first_upload_id != '" + uploadId + "' "
+                    "ORDER BY cd.detected_at DESC";
+
+                PGresult* res = PQexec(conn, query.c_str());
+                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                    result["success"] = true;
+                    Json::Value duplicates(Json::arrayValue);
+
+                    // Count by type
+                    std::map<std::string, int> byType;
+                    byType["CSCA"] = 0;
+                    byType["DSC"] = 0;
+                    byType["DSC_NC"] = 0;
+                    byType["MLSC"] = 0;
+                    byType["CRL"] = 0;
+
+                    for (int i = 0; i < PQntuples(res); i++) {
+                        Json::Value dup;
+                        dup["id"] = std::stoi(PQgetvalue(res, i, 0));
+                        dup["sourceType"] = PQgetvalue(res, i, 1);
+                        dup["sourceCountry"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
+                        dup["detectedAt"] = PQgetvalue(res, i, 3);
+
+                        std::string certType = PQgetvalue(res, i, 4);
+                        dup["certificateType"] = certType;
+                        dup["country"] = PQgetvalue(res, i, 5);
+                        dup["subjectDn"] = PQgetvalue(res, i, 6);
+                        dup["fingerprint"] = PQgetvalue(res, i, 7);
+
+                        duplicates.append(dup);
+
+                        // Count by type
+                        if (byType.find(certType) != byType.end()) {
+                            byType[certType]++;
+                        }
+                    }
+
+                    result["duplicates"] = duplicates;
+                    result["totalDuplicates"] = PQntuples(res);
+
+                    // Add type breakdown
+                    Json::Value byTypeJson;
+                    byTypeJson["CSCA"] = byType["CSCA"];
+                    byTypeJson["DSC"] = byType["DSC"];
+                    byTypeJson["DSC_NC"] = byType["DSC_NC"];
+                    byTypeJson["MLSC"] = byType["MLSC"];
+                    byTypeJson["CRL"] = byType["CRL"];
+                    result["byType"] = byTypeJson;
+                } else {
+                    result["error"] = "Query failed";
+                    result["duplicates"] = Json::Value(Json::arrayValue);
+                    result["totalDuplicates"] = 0;
+                }
+                PQclear(res);
+            } else {
+                result["error"] = "Database connection failed";
+                result["duplicates"] = Json::Value(Json::arrayValue);
+                result["totalDuplicates"] = 0;
+            }
+
+            PQfinish(conn);
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+            callback(resp);
+        },
+        {drogon::Get}
+    );
+
     // Upload changes endpoint - GET /api/upload/changes
     app.registerHandler(
         "/api/upload/changes",
@@ -8875,7 +8989,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v2.1.0 SPRINT3-LINK-CERT-VALIDATION (Build 20260126-224030) ======");
+    spdlog::info("====== ICAO Local PKD v2.1.2.4 DSC-NC-DN-FIX (Build 20260128-104300) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

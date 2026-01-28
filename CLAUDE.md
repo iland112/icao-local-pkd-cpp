@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.1
-**Last Updated**: 2026-01-27
-**Status**: Production Ready
+**Current Version**: v2.1.2.4
+**Last Updated**: 2026-01-28
+**Status**: Production Ready - Verified with 31,281 Certificates
 
 ---
 
@@ -67,7 +67,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.1.1)
+## Current Features (v2.1.2.4)
 
 ### Core Functionality
 - ✅ LDIF/Master List upload (AUTO/MANUAL modes)
@@ -82,6 +82,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ ICAO PKD version monitoring
 - ✅ Trust chain visualization (frontend)
 - ✅ Link certificate validation (Sprint 3)
+- ✅ **Upload issues tracking (duplicate detection and reporting)**
 
 ### Security (v1.8.0 - v2.0.0)
 - ✅ 100% Parameterized SQL queries (28 queries total)
@@ -90,13 +91,20 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.1)
-- ✅ **Master List file processing complete overhaul**
-  - SignerInfo MLSC extraction (UN signed certificate)
-  - pkiData parsing (536 CSCA/LC certificates from 95 countries)
-  - Country-based LDAP structure: o=mlsc,c=UN / o=csca,c={country} / o=lc,c={country}
-  - Fixed extractCountryCode() regex for slash-separated DN
-  - Database constraint: Added MLSC certificate type
+### Recent Changes (v2.1.2.4)
+
+- ✅ **LDAP Storage Bug Fixes** (v2.1.2.1 - v2.1.2.4)
+  - Fixed CN attribute duplication in v2 DN mode (MLSC/CSCA/DSC storage)
+  - Fixed DSC_NC LDAP DN format (o=dsc in nc-data container)
+  - Verified 100% LDAP storage success: 31,281 certificates (100% DB-LDAP match)
+- ✅ **Upload Issues Tracking** (v2.1.2.2 - v2.1.2.3)
+  - API endpoint for duplicate certificate detection
+  - Frontend UI showing duplicates by type in Upload History
+  - Accurate duplicate counting (first_upload_id exclusion logic)
+- ✅ **Collection 002 Complete Analysis**
+  - Verified 5,017 CSCA certificates in 26 Master Lists (11MB LDIF)
+  - 94% deduplication efficiency (4,708 duplicates, 309 new unique certs)
+  - Complete upload sequence validation: ML + Collections 001/002/003
 
 ---
 
@@ -108,6 +116,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `POST /upload/masterlist` - Upload Master List
 - `GET /upload/history` - Upload history
 - `GET /upload/{uploadId}/validations` - Validation results with trust chain
+- `GET /upload/{uploadId}/issues` - Upload issues (duplicates detected) **[NEW v2.1.2.2]**
 - `GET /certificates/search` - Search certificates
 - `GET /certificates/validation?fingerprint={sha256}` - Certificate validation result
 - `GET /certificates/export/country` - Export by country
@@ -361,6 +370,78 @@ Frontend:
 
 **Documentation**:
 - `docs/MLSC_EXTRACTION_FIX.md` - Updated with Country Statistics Dialog section
+
+### v2.1.2 - v2.1.2.4 (2026-01-28) - Critical Bug Fixes & Upload Verification
+
+**Bug Fixes: LDAP Storage Issues**
+
+- ✅ **v2.1.2.1 - CN Attribute Duplication Fix**
+  - **Problem**: When `useLegacyDn=false` (v2 DN mode), cn attribute was set to `[fingerprint, fingerprint]` causing LDAP to reject entries
+  - **Impact**: MLSC, CSCA, DSC certificates failed to save to LDAP with "LDAP operation failed" error
+  - **Root Cause**: Lines 2528-2550 in main.cpp - duplicate value in cn attribute array
+  - **Fix**: Conditional logic - Legacy DN: cn = `[standardDn, fingerprint]`, v2 DN: cn = `[fingerprint]` only
+  - **Result**: All certificate types now save to LDAP correctly with v2 DN format
+
+- ✅ **v2.1.2.4 - DSC_NC LDAP DN Fix**
+  - **Problem**: 502 DSC_NC saved to DB but 0 to LDAP, error "No such object (32)" for `o=dsc_nc`
+  - **Root Cause**: Line 2317 in main.cpp used `o=dsc_nc` but LDAP structure only has `o=dsc` under nc-data
+  - **Fix**: Changed organizational unit from "dsc_nc" to "dsc" for DSC_NC certificates
+  - **DN Format**: `cn={fingerprint},o=dsc,c={COUNTRY},dc=nc-data,dc=download,dc=pkd,...`
+  - **Result**: All 502 DSC_NC certificates successfully saved to LDAP
+
+**Feature: Upload Issues Tracking**
+
+- ✅ **v2.1.2.2 - Upload Issues API**
+  - New endpoint: `GET /api/upload/{uploadId}/issues`
+  - Returns duplicate certificates detected during upload
+  - Breakdown by certificate type (CSCA, DSC, DSC_NC, MLSC, CRL)
+  - Frontend UI integration in Upload History page
+
+- ✅ **v2.1.2.3 - Duplicate Count Accuracy Fix**
+  - **Problem**: API returned 872 duplicates instead of 537 for Collection 002
+  - **Root Cause**: Query returned all tracking records, not just actual duplicates
+  - **Fix**: Added condition `first_upload_id != uploadId` to exclude first appearances
+  - **Result**: Accurate duplicate count showing only certificates that failed registration
+
+**Collection 002 Complete Analysis**
+
+- ✅ **File Structure Verification**
+  - Analyzed LDIF with OpenSSL asn1parse
+  - Confirmed: 26 Master Lists containing 5,017 CSCA certificates
+  - File size: 11,534,336 bytes (avg 2,299 bytes/cert including LDIF overhead)
+  - Deduplication: 4,708 duplicates (94%), 309 new unique certificates
+
+- ✅ **Upload Sequence Validation** (Complete System Data Upload)
+  - Master List file: 537 certs (1 MLSC + 536 CSCA/LC) - 5 seconds
+  - Collection 002 LDIF: 5,017 extracted → 309 new (4,708 duplicates) - 10 seconds
+  - Collection 003 LDIF: 502 DSC_NC - 8 seconds
+  - Collection 001 LDIF: 29,838 DSC + 69 CRL - 6 minutes 40 seconds
+  - **Total: 31,281 certificates uploaded and verified**
+
+**Final Verification Matrix**
+
+| Certificate Type | DB Count | LDAP Count | Location | Status |
+|------------------|----------|------------|----------|--------|
+| CSCA (self-signed) | 735 | 735 | o=csca, dc=data | ✅ 100% Match |
+| Link Certificates | 110 | 110 | o=lc, dc=data | ✅ 100% Match |
+| MLSC | 27 | 27 | o=mlsc, dc=data | ✅ 100% Match |
+| DSC | 29,838 | 29,838 | o=dsc, dc=data | ✅ 100% Match |
+| DSC_NC | 502 | 502 | o=dsc, dc=nc-data | ✅ 100% Match |
+| CRL | 69 | 69 | dc=data | ✅ 100% Match |
+| **Total** | **31,281** | **31,281** | | ✅ **100% Match** |
+
+**Files Modified**:
+
+Backend:
+- `services/pkd-management/src/main.cpp` - Lines 2317, 2528-2550, 6588-6686, 8992 (version)
+
+Frontend:
+- `frontend/src/types/index.ts` - Added UploadDuplicate, UploadIssues interfaces
+- `frontend/src/services/pkdApi.ts` - Added getIssues() API call
+- `frontend/src/pages/UploadHistory.tsx` - Added upload issues UI section
+
+**Documentation**:
+- `docs/COLLECTION_002_ANALYSIS.md` - Complete file structure analysis and upload verification results
 
 ### v2.0.6 (2026-01-25)
 

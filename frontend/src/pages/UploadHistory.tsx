@@ -24,7 +24,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { uploadApi, uploadHistoryApi } from '@/services/api';
-import type { PageResponse, UploadStatus, FileFormat } from '@/types';
+import type { PageResponse, UploadStatus, FileFormat, UploadIssues } from '@/types';
 import { cn } from '@/utils/cn';
 import { MasterListStructure } from '@/components/MasterListStructure';
 
@@ -102,6 +102,8 @@ export function UploadHistory() {
   // Detail dialog state
   const [selectedUpload, setSelectedUpload] = useState<UploadHistoryItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadIssues, setUploadIssues] = useState<UploadIssues | null>(null);
+  const [loadingIssues, setLoadingIssues] = useState(false);
 
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -116,6 +118,29 @@ export function UploadHistory() {
   useEffect(() => {
     fetchUploads();
   }, [page]);
+
+  // Fetch upload issues when detail dialog is opened (v2.1.2.2)
+  useEffect(() => {
+    const fetchUploadIssues = async () => {
+      if (!selectedUpload || !dialogOpen) {
+        setUploadIssues(null);
+        return;
+      }
+
+      setLoadingIssues(true);
+      try {
+        const response = await uploadHistoryApi.getIssues(selectedUpload.id);
+        setUploadIssues(response.data);
+      } catch (error) {
+        console.error('Failed to fetch upload issues:', error);
+        setUploadIssues(null);
+      } finally {
+        setLoadingIssues(false);
+      }
+    };
+
+    fetchUploadIssues();
+  }, [selectedUpload, dialogOpen]);
 
   const fetchUploads = async () => {
     setLoading(true);
@@ -941,6 +966,99 @@ export function UploadHistory() {
                           </p>
                           <span className="text-xs text-green-700 dark:text-green-300">신규</span>
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Upload Issues - Duplicates (v2.1.2.2) */}
+                  {uploadIssues && uploadIssues.totalDuplicates > 0 && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle className="w-4 h-4 text-yellow-600 dark:text-yellow-400" />
+                        <span className="text-xs font-semibold text-yellow-700 dark:text-yellow-300">
+                          업로드 이슈 - 중복 감지
+                        </span>
+                        <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
+                          총 {uploadIssues.totalDuplicates}건
+                        </span>
+                      </div>
+
+                      {/* Summary by type */}
+                      <div className="grid grid-cols-5 gap-2 mb-2">
+                        {uploadIssues.byType.CSCA > 0 && (
+                          <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                            <p className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                              {uploadIssues.byType.CSCA}
+                            </p>
+                            <span className="text-xs text-blue-700 dark:text-blue-300">CSCA</span>
+                          </div>
+                        )}
+                        {uploadIssues.byType.MLSC > 0 && (
+                          <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                            <p className="text-sm font-bold text-purple-600 dark:text-purple-400">
+                              {uploadIssues.byType.MLSC}
+                            </p>
+                            <span className="text-xs text-purple-700 dark:text-purple-300">MLSC</span>
+                          </div>
+                        )}
+                        {uploadIssues.byType.DSC > 0 && (
+                          <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                            <p className="text-sm font-bold text-green-600 dark:text-green-400">
+                              {uploadIssues.byType.DSC}
+                            </p>
+                            <span className="text-xs text-green-700 dark:text-green-300">DSC</span>
+                          </div>
+                        )}
+                        {uploadIssues.byType.DSC_NC > 0 && (
+                          <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                            <p className="text-sm font-bold text-orange-600 dark:text-orange-400">
+                              {uploadIssues.byType.DSC_NC}
+                            </p>
+                            <span className="text-xs text-orange-700 dark:text-orange-300">DSC_NC</span>
+                          </div>
+                        )}
+                        {uploadIssues.byType.CRL > 0 && (
+                          <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
+                            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                              {uploadIssues.byType.CRL}
+                            </p>
+                            <span className="text-xs text-amber-700 dark:text-amber-300">CRL</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Top 5 duplicates preview */}
+                      <details className="mt-2">
+                        <summary className="text-xs cursor-pointer text-yellow-700 dark:text-yellow-300 hover:text-yellow-800 dark:hover:text-yellow-200">
+                          중복 인증서 목록 보기 (상위 5개)
+                        </summary>
+                        <div className="mt-2 space-y-1 max-h-40 overflow-y-auto">
+                          {uploadIssues.duplicates.slice(0, 5).map((dup) => (
+                            <div key={dup.id} className="bg-white dark:bg-gray-800 rounded p-2 text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className="px-1.5 py-0.5 rounded bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300 font-medium">
+                                  {dup.certificateType}
+                                </span>
+                                <span className="text-gray-600 dark:text-gray-400">{dup.country}</span>
+                                <span className="text-gray-400 dark:text-gray-500 text-xs">
+                                  {new Date(dup.detectedAt).toLocaleString('ko-KR')}
+                                </span>
+                              </div>
+                              <p className="text-gray-700 dark:text-gray-300 truncate mt-1">
+                                {dup.subjectDn}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  )}
+
+                  {loadingIssues && (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                      <div className="flex items-center gap-2 justify-center">
+                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        <span className="text-xs text-gray-500 dark:text-gray-400">업로드 이슈 조회 중...</span>
                       </div>
                     </div>
                   )}
