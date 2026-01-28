@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.2.8
-**Last Updated**: 2026-01-28
-**Status**: Production Ready - Trust Chain Validation Active (17,869 DSCs validated)
+**Current Version**: v2.1.2.9
+**Last Updated**: 2026-01-29
+**Status**: Production Ready - Trust Chain Validation Active (16,868 VALID / 30,340 total)
 
 ---
 
@@ -91,7 +91,26 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.2.8)
+### Recent Changes (v2.1.2.9)
+
+- ✅ **Upload Validations API & Trust Chain Visualization** (v2.1.2.9)
+  - **New Endpoint**: `GET /api/upload/{uploadId}/validations` — paginated trust chain validation results scoped to a specific upload
+    - Query params: `limit`, `offset`, `status` (VALID/INVALID/PENDING), `certType` (DSC/DSC_NC)
+    - Returns `trustChainPath`, `cscaSubjectDn`, `fingerprint`, signature/validity/CRL check results
+    - Matches `ValidationListResponse` frontend type
+  - **New Endpoint**: `GET /api/certificates/validation?fingerprint={sha256}` — single certificate validation detail by fingerprint
+    - JOIN between `validation_result` and `certificate` on `fingerprint_sha256`
+    - trust_chain_path JSONB parsed from `["DSC → CN=..."]` array to string
+  - **Frontend: CertificateSearch Trust Chain Card** — General tab now shows trust chain summary for DSC/DSC_NC certificates
+    - Compact TrustChainVisualization with color-coded status (green/yellow/red)
+    - Status badges: "신뢰 체인 유효" / "검증 대기 (만료됨)" / "신뢰 체인 유효하지 않음"
+  - **Fresh Data Upload Verified** (2026-01-29):
+    - Master List: 536 CSCA + 1 MLSC
+    - Collection-001 (DSC): 29,838 certs + 69 CRL → 16,788 VALID / 6,354 PENDING / 6,696 INVALID
+    - Collection-002 (CSCA): 309 additional CSCAs
+    - Collection-003 (DSC_NC): 502 certs → 80 VALID / 179 PENDING / 243 INVALID
+    - Total validation_result: 30,340 records (16,868 VALID)
+  - **Commits**: `41f4410`, `38f5b6a`
 
 - ✅ **Trust Chain Validation Fix - DN Normalization & Circular Reference** (v2.1.2.8)
   - **Root Cause**: DN format mismatch between CSCAs (OpenSSL `/C=X/O=Y/CN=Z` slash format) and DSC issuer DNs (RFC2253 `CN=Z,O=Y,C=X` comma format). Direct SQL `LOWER(subject_dn) = LOWER(?)` comparison always failed → 0 validated DSCs.
@@ -464,6 +483,50 @@ Backend:
 - ✅ Detail dialog shows "DSC_NC" type with full description
 - ✅ PKD Conformance section displays all three fields when available
 - ✅ Backend API returns pkdConformanceCode, pkdConformanceText, pkdVersion for DSC_NC certificates
+
+### v2.1.2.9 (2026-01-29) - Upload Validations API & Trust Chain Visualization
+
+#### Backend: Upload Validations Endpoint
+
+- ✅ **GET /api/upload/{uploadId}/validations** — paginated trust chain validation results
+  - Filterable by `status` (VALID/INVALID/PENDING) and `certType` (DSC/DSC_NC)
+  - Returns trust chain path, CSCA info, signature/validity check results, certificate fingerprint
+  - Dynamic WHERE clause with parameterized queries for status/certType filters
+  - Total count query for pagination metadata
+
+- ✅ **GET /api/certificates/validation?fingerprint={sha256}** — single certificate validation by fingerprint
+  - JOIN between validation_result and certificate on fingerprint_sha256
+  - trust_chain_path JSONB parsed from array to string format
+
+#### Frontend: Trust Chain Summary Card
+
+- ✅ **CertificateSearch General Tab** — Trust chain summary for DSC/DSC_NC certificates
+  - Compact TrustChainVisualization component with color-coded status
+  - Status badges: VALID (green) / PENDING/expired (yellow) / INVALID (red)
+  - Links to Details tab for full trust chain visualization
+
+#### Verification (Fresh Data Upload 2026-01-29)
+
+| Certificate Type | Count | VALID | PENDING | INVALID |
+|------------------|-------|-------|---------|---------|
+| DSC | 29,838 | 16,788 | 6,354 | 6,696 |
+| DSC_NC | 502 | 80 | 179 | 243 |
+| **Total** | **30,340** | **16,868** | **6,533** | **6,939** |
+
+**Files Modified**:
+- `services/pkd-management/src/main.cpp` — Upload validations endpoint + certificates validation endpoint
+- `frontend/src/pages/CertificateSearch.tsx` — Trust chain summary card in General tab
+
+### v2.1.2.8 (2026-01-28) - Trust Chain Validation Fix
+
+#### Trust Chain: DN Normalization & Circular Reference Fix
+
+- ✅ **DN Format Normalization** — `normalizeDnForComparison()` extracts RDN components, lowercases, sorts, joins with `|`
+- ✅ **Component-based SQL** — `findCscaByIssuerDn()` uses LIKE per component + C++ post-filter
+- ✅ **Circular Reference Fix** — `isSelfSigned()` check moved before `visitedDns` in `buildTrustChain()`
+- ✅ **Results**: 17,869 VALID DSCs validated (59.3%)
+
+**Commit**: `bc03f2b`
 
 ### v2.1.2.7 (2026-01-28) - Audit Log Recording & PA Service Fix
 
