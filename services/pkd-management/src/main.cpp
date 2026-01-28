@@ -7908,7 +7908,7 @@ paths:
                     certJson["cn"] = cert.getCn();
                     certJson["sn"] = cert.getSn();
                     certJson["country"] = cert.getCountry();
-                    certJson["certType"] = cert.getCertTypeString();
+                    certJson["type"] = cert.getCertTypeString();  // Changed from certType to type for frontend compatibility
                     certJson["subjectDn"] = cert.getSubjectDn();
                     certJson["issuerDn"] = cert.getIssuerDn();
                     certJson["fingerprint"] = cert.getFingerprint();

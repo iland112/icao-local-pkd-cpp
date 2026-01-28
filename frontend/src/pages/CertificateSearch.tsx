@@ -510,8 +510,6 @@ const CertificateSearch: React.FC = () => {
                   <option value="MLSC">MLSC</option>
                   <option value="DSC">DSC</option>
                   <option value="DSC_NC">DSC_NC</option>
-                  <option value="CRL">CRL</option>
-                  <option value="ML">ML</option>
                 </select>
               </div>
 
