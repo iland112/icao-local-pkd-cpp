@@ -3,22 +3,28 @@ import { Shield, Filter, User, Activity, CheckCircle, XCircle, Clock, ChevronLef
 
 interface AuditLogEntry {
   id: string;
-  user_id: string;
+  userId: string;
   username: string;
-  event_type: string;
-  ip_address: string;
-  user_agent: string;
+  operationType: string;
+  operationSubtype?: string;
+  ipAddress: string;
+  userAgent: string;
+  requestMethod?: string;
+  requestPath?: string;
   success: boolean;
-  error_message: string;
-  created_at: string;
+  statusCode?: number;
+  errorMessage?: string;
+  durationMs?: number;
+  createdAt: string;
 }
 
 interface AuditStats {
-  total_events: number;
-  by_event_type: Record<string, number>;
-  by_user: Record<string, number>;
-  recent_failed_logins: number;
-  last_24h_events: number;
+  totalOperations: number;
+  successfulOperations: number;
+  failedOperations: number;
+  operationsByType: Record<string, number>;
+  topUsers: { username: string; operationCount: number }[];
+  averageDurationMs: number;
 }
 
 export function AuditLog() {
@@ -53,10 +59,10 @@ export function AuditLog() {
       });
 
       if (username) params.append('username', username);
-      if (eventType) params.append('event_type', eventType);
+      if (eventType) params.append('operationType', eventType);
       if (successFilter) params.append('success', successFilter);
 
-      const response = await fetch(`/api/auth/audit-log?${params}`, {
+      const response = await fetch(`/api/audit/operations?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -65,7 +71,7 @@ export function AuditLog() {
       if (!response.ok) throw new Error('Failed to fetch audit logs');
 
       const data = await response.json();
-      setLogs(data.logs || []);
+      setLogs(data.data || []);
       setTotal(data.total || 0);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
@@ -77,7 +83,7 @@ export function AuditLog() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/auth/audit-log/stats', {
+      const response = await fetch('/api/audit/operations/stats', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -86,7 +92,7 @@ export function AuditLog() {
       if (!response.ok) throw new Error('Failed to fetch stats');
 
       const data = await response.json();
-      setStats(data.stats || null);
+      setStats(data.data || null);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -101,10 +107,12 @@ export function AuditLog() {
 
   const totalPages = Math.ceil(total / limit);
 
-  const getEventBadgeColor = (eventType: string) => {
-    if (eventType.includes('SUCCESS')) return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-    if (eventType.includes('FAILED')) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
-    if (eventType.includes('LOGOUT')) return 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-300';
+  const getEventBadgeColor = (operationType: string) => {
+    if (operationType === 'UPLOAD') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
+    if (operationType === 'PA_VERIFY') return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
+    if (operationType === 'RECONCILIATION') return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+    if (operationType === 'CERTIFICATE_SEARCH') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+    if (operationType === 'EXPORT') return 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300';
     return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
   };
 
@@ -147,7 +155,7 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.total_events.toLocaleString()}
+                  {stats.totalOperations.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">전체 이벤트</p>
               </div>
@@ -161,9 +169,9 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {(stats.by_event_type['LOGIN_SUCCESS'] || 0).toLocaleString()}
+                  {stats.successfulOperations.toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">성공한 로그인</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">성공한 작업</p>
               </div>
             </div>
           </div>
@@ -175,9 +183,9 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.recent_failed_logins.toLocaleString()}
+                  {stats.failedOperations.toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">실패한 로그인 (24h)</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">실패한 작업</p>
               </div>
             </div>
           </div>
@@ -189,9 +197,9 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.last_24h_events.toLocaleString()}
+                  {Math.round(stats.averageDurationMs).toLocaleString()}ms
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">24시간 이벤트</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">평균 처리 시간</p>
               </div>
             </div>
           </div>
@@ -229,10 +237,12 @@ export function AuditLog() {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">전체</option>
-              <option value="LOGIN_SUCCESS">로그인 성공</option>
-              <option value="LOGIN_FAILED">로그인 실패</option>
-              <option value="LOGOUT">로그아웃</option>
-              <option value="TOKEN_REFRESH">토큰 갱신</option>
+              <option value="UPLOAD">파일 업로드</option>
+              <option value="CERTIFICATE_SEARCH">인증서 검색</option>
+              <option value="PA_VERIFY">PA 검증</option>
+              <option value="ICAO_SYNC">ICAO 동기화</option>
+              <option value="RECONCILIATION">조정</option>
+              <option value="EXPORT">내보내기</option>
             </select>
           </div>
 
@@ -305,23 +315,23 @@ export function AuditLog() {
                 logs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {formatDate(log.created_at)}
+                      {formatDate(log.createdAt)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-gray-400" />
                         <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {log.username}
+                          {log.username || '시스템'}
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(log.event_type)}`}>
-                        {log.event_type}
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(log.operationType)}`}>
+                        {log.operationType}{log.operationSubtype ? ` / ${log.operationSubtype}` : ''}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 font-mono">
-                      {log.ip_address}
+                      {log.ipAddress}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       {log.success ? (
@@ -337,7 +347,7 @@ export function AuditLog() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                      {log.user_agent}
+                      {log.requestMethod} {log.requestPath || log.userAgent}
                     </td>
                   </tr>
                 ))
