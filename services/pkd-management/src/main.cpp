@@ -7881,6 +7881,158 @@ paths:
         {drogon::Get}
     );
 
+    // GET /api/certificates/validation - Get validation result by fingerprint
+    app.registerHandler(
+        "/api/certificates/validation",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                std::string fingerprint = req->getOptionalParameter<std::string>("fingerprint").value_or("");
+
+                if (fingerprint.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "fingerprint parameter is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                spdlog::info("Certificate validation request: fingerprint={}", fingerprint);
+
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+
+                PGconn* conn = PQconnectdb(conninfo.c_str());
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    spdlog::error("Database connection failed for validation query");
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Database connection failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Look up certificate_id by fingerprint, then fetch validation_result
+                const char* query =
+                    "SELECT vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                    "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
+                    "       vr.signature_valid, vr.validity_period_valid, "
+                    "       vr.revocation_status, vr.crl_checked, "
+                    "       vr.certificate_type, vr.country_code, "
+                    "       vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                    "       vr.not_before, vr.not_after, vr.validation_timestamp "
+                    "FROM validation_result vr "
+                    "JOIN certificate c ON vr.certificate_id = c.id "
+                    "WHERE c.fingerprint_sha256 = $1 "
+                    "ORDER BY vr.validation_timestamp DESC "
+                    "LIMIT 1";
+
+                const char* paramValues[1] = { fingerprint.c_str() };
+                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
+                                             nullptr, nullptr, 0);
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                    spdlog::error("Validation query failed: {}", PQerrorMessage(conn));
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Query failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    PQclear(res);
+                    PQfinish(conn);
+                    callback(resp);
+                    return;
+                }
+
+                int rows = PQntuples(res);
+                if (rows == 0) {
+                    Json::Value response;
+                    response["success"] = true;
+                    response["validation"] = Json::nullValue;
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                    callback(resp);
+                    PQclear(res);
+                    PQfinish(conn);
+                    return;
+                }
+
+                // Parse validation result row
+                Json::Value validation;
+                validation["validationStatus"] = PQgetvalue(res, 0, 0) ? std::string(PQgetvalue(res, 0, 0)) : "UNKNOWN";
+
+                std::string trustChainValidStr = PQgetvalue(res, 0, 1) ? PQgetvalue(res, 0, 1) : "f";
+                validation["trustChainValid"] = (trustChainValidStr == "t" || trustChainValidStr == "true");
+
+                validation["trustChainMessage"] = PQgetisnull(res, 0, 2) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 2)));
+
+                // Parse trust_chain_path JSONB — stored as ["DSC → CN=..."], extract first element as string
+                std::string trustChainPathRaw = PQgetisnull(res, 0, 3) ? "[]" : std::string(PQgetvalue(res, 0, 3));
+                try {
+                    Json::Reader reader;
+                    Json::Value pathArray;
+                    if (reader.parse(trustChainPathRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
+                        validation["trustChainPath"] = pathArray[0].asString();
+                    } else {
+                        validation["trustChainPath"] = "";
+                    }
+                } catch (...) {
+                    validation["trustChainPath"] = "";
+                }
+
+                std::string cscaFoundStr = PQgetvalue(res, 0, 4) ? PQgetvalue(res, 0, 4) : "f";
+                validation["cscaFound"] = (cscaFoundStr == "t" || cscaFoundStr == "true");
+                validation["cscaSubjectDn"] = PQgetisnull(res, 0, 5) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 5)));
+
+                std::string sigValidStr = PQgetvalue(res, 0, 6) ? PQgetvalue(res, 0, 6) : "f";
+                validation["signatureVerified"] = (sigValidStr == "t" || sigValidStr == "true");
+
+                std::string validityValidStr = PQgetvalue(res, 0, 7) ? PQgetvalue(res, 0, 7) : "f";
+                validation["validityCheckPassed"] = (validityValidStr == "t" || validityValidStr == "true");
+
+                validation["crlCheckStatus"] = PQgetisnull(res, 0, 8) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 8)));
+
+                std::string crlCheckedStr2 = PQgetvalue(res, 0, 9) ? PQgetvalue(res, 0, 9) : "f";
+                validation["crlChecked"] = (crlCheckedStr2 == "t" || crlCheckedStr2 == "true");
+
+                validation["certificateType"] = PQgetisnull(res, 0, 10) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 10)));
+                validation["countryCode"] = PQgetisnull(res, 0, 11) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 11)));
+                validation["subjectDn"] = PQgetisnull(res, 0, 12) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 12)));
+                validation["issuerDn"] = PQgetisnull(res, 0, 13) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 13)));
+                validation["serialNumber"] = PQgetisnull(res, 0, 14) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 14)));
+                validation["notBefore"] = PQgetisnull(res, 0, 15) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 15)));
+                validation["notAfter"] = PQgetisnull(res, 0, 16) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 16)));
+                validation["validatedAt"] = PQgetisnull(res, 0, 17) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 17)));
+
+                Json::Value response;
+                response["success"] = true;
+                response["validation"] = validation;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+                PQclear(res);
+                PQfinish(conn);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate validation error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // GET /api/certificates/export/file - Export single certificate file
     app.registerHandler(
         "/api/certificates/export/file",

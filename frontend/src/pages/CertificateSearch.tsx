@@ -1123,6 +1123,86 @@ const CertificateSearch: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  {/* Trust Chain Summary Card (DSC / DSC_NC only) */}
+                  {(getActualCertType(selectedCert) === 'DSC' || getActualCertType(selectedCert) === 'DSC_NC') && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                        Trust Chain Validation
+                      </h3>
+                      {validationLoading ? (
+                        <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                          <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
+                          <span className="text-sm text-gray-500 dark:text-gray-400">검증 결과 로드 중...</span>
+                        </div>
+                      ) : validationResult ? (
+                        <div className={`rounded-lg border p-4 space-y-3 ${
+                          validationResult.trustChainValid
+                            ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
+                            : validationResult.validationStatus === 'PENDING'
+                            ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-800'
+                            : 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                        }`}>
+                          {/* Status Badge Row */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {validationResult.trustChainValid ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
+                                  <CheckCircle className="w-3.5 h-3.5" />
+                                  신뢰 체인 유효
+                                </span>
+                              ) : validationResult.validationStatus === 'PENDING' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300">
+                                  <Clock className="w-3.5 h-3.5" />
+                                  검증 대기 (만료됨)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
+                                  <XCircle className="w-3.5 h-3.5" />
+                                  신뢰 체인 유효하지 않음
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => setDetailTab('details')}
+                              className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+                            >
+                              자세히 보기 <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          {/* Trust Chain Path (Compact) */}
+                          {validationResult.trustChainPath && (
+                            <div>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1.5">신뢰 체인 경로:</span>
+                              <TrustChainVisualization
+                                trustChainPath={validationResult.trustChainPath}
+                                trustChainValid={validationResult.trustChainValid}
+                                compact={true}
+                              />
+                            </div>
+                          )}
+
+                          {/* Validation Message */}
+                          {validationResult.trustChainMessage && (
+                            <p className={`text-xs ${
+                              validationResult.trustChainValid
+                                ? 'text-green-700 dark:text-green-400'
+                                : validationResult.validationStatus === 'PENDING'
+                                ? 'text-yellow-700 dark:text-yellow-400'
+                                : 'text-red-700 dark:text-red-400'
+                            }`}>
+                              {validationResult.trustChainMessage}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                          이 인증서에 대한 신뢰 체인 검증 결과가 없습니다.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
