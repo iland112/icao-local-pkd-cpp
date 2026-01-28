@@ -12,7 +12,7 @@
  *
  * @author SmartCore Inc.
  * @date 2026-01-01
- * @version 2.1.0
+ * @version 2.1.1
  */
 
 #include <drogon/drogon.h>
@@ -964,20 +964,10 @@ std::vector<uint8_t> calculateHash(const std::vector<uint8_t>& data, const std::
 // =============================================================================
 
 /**
- * @brief Retrieve CSCA certificate from LDAP by issuer DN
+ * @brief Helper function to search CSCA in a specific organizational unit
  */
-X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
-    if (!ld) return nullptr;
-
-    // Extract country code from issuer DN
-    std::string countryCode = extractCountryFromDn(issuerDn);
-    if (countryCode.empty()) {
-        spdlog::warn("Could not extract country code from issuer DN: {}", issuerDn);
-        return nullptr;
-    }
-
-    // Build LDAP search base for CSCA
-    std::string baseDn = "o=csca,c=" + countryCode + ",dc=data,dc=download," + appConfig.ldapBaseDn;
+X509* searchCscaInOu(LDAP* ld, const std::string& ou, const std::string& countryCode, const std::string& issuerCn) {
+    std::string baseDn = "o=" + ou + ",c=" + countryCode + ",dc=data," + appConfig.ldapBaseDn;
     std::string filter = "(objectClass=pkdDownload)";
     char* attrs[] = {const_cast<char*>("userCertificate;binary"), nullptr};
 
@@ -988,17 +978,14 @@ X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
                                attrs, 0, nullptr, nullptr, nullptr, 100, &res);
 
     if (rc != LDAP_SUCCESS) {
-        spdlog::warn("LDAP search failed: {}", ldap_err2string(rc));
+        spdlog::debug("LDAP search in {} failed: {}", baseDn, ldap_err2string(rc));
         if (res) ldap_msgfree(res);
         return nullptr;
     }
 
     X509* cscaCert = nullptr;
     X509* fallbackCsca = nullptr;
-    std::string issuerCn = extractCnFromDn(issuerDn);
     std::string issuerCnLower = toLower(issuerCn);
-
-    spdlog::debug("Looking for CSCA matching issuer CN: {}", issuerCn);
 
     // Iterate through all results to find matching CSCA
     LDAPMessage* entry = ldap_first_entry(ld, res);
@@ -1019,7 +1006,7 @@ X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
                 if (issuerCnLower == certCnLower) {
                     if (cscaCert) X509_free(cscaCert);
                     cscaCert = cert;
-                    spdlog::info("Found exact matching CSCA: {}", certSubject);
+                    spdlog::info("Found exact matching CSCA in {}: {}", baseDn, certSubject);
                     ldap_value_free_len(values);
                     break;  // Found exact match, stop searching
                 }
@@ -1028,7 +1015,7 @@ X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
                          certCnLower.find(issuerCnLower) != std::string::npos) {
                     if (!cscaCert) {
                         cscaCert = cert;
-                        spdlog::info("Found partial matching CSCA: {}", certSubject);
+                        spdlog::info("Found partial matching CSCA in {}: {}", baseDn, certSubject);
                     } else {
                         X509_free(cert);
                     }
@@ -1056,11 +1043,45 @@ X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
     }
 
     if (fallbackCsca) {
-        spdlog::warn("No exact CSCA match found for issuer CN '{}', using fallback", issuerCn);
+        spdlog::debug("No exact CSCA match found in {}, using fallback", baseDn);
         return fallbackCsca;
     }
 
-    spdlog::warn("No CSCA found for issuer: {}", issuerDn);
+    return nullptr;
+}
+
+/**
+ * @brief Retrieve CSCA certificate from LDAP by issuer DN
+ * Sprint 3 Update: Search in both o=csca (self-signed) and o=lc (link certificates)
+ */
+X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
+    if (!ld) return nullptr;
+
+    // Extract country code from issuer DN
+    std::string countryCode = extractCountryFromDn(issuerDn);
+    if (countryCode.empty()) {
+        spdlog::warn("Could not extract country code from issuer DN: {}", issuerDn);
+        return nullptr;
+    }
+
+    std::string issuerCn = extractCnFromDn(issuerDn);
+    spdlog::debug("Looking for CSCA matching issuer CN: {} in country: {}", issuerCn, countryCode);
+
+    // Sprint 3: Search in both o=csca (self-signed CSCA) and o=lc (Link Certificates)
+    // Try o=csca first (most CSCAs are self-signed, so this is more efficient)
+    X509* cscaCert = searchCscaInOu(ld, "csca", countryCode, issuerCn);
+    if (cscaCert) {
+        return cscaCert;
+    }
+
+    // If not found in o=csca, try o=lc (Link Certificate CSCA)
+    spdlog::debug("CSCA not found in o=csca, trying o=lc (Link Certificates)");
+    cscaCert = searchCscaInOu(ld, "lc", countryCode, issuerCn);
+    if (cscaCert) {
+        return cscaCert;
+    }
+
+    spdlog::warn("No CSCA found for issuer: {} in either o=csca or o=lc", issuerDn);
     return nullptr;
 }
 
@@ -1070,7 +1091,7 @@ X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
 X509_CRL* searchCrlFromLdap(LDAP* ld, const std::string& countryCode) {
     if (!ld) return nullptr;
 
-    std::string baseDn = "o=crl,c=" + countryCode + ",dc=data,dc=download," + appConfig.ldapBaseDn;
+    std::string baseDn = "o=crl,c=" + countryCode + ",dc=data," + appConfig.ldapBaseDn;
     std::string filter = "(objectClass=pkdDownload)";
     char* attrs[] = {const_cast<char*>("certificateRevocationList;binary"), nullptr};
 
@@ -1608,7 +1629,7 @@ void registerRoutes() {
             Json::Value result;
             result["service"] = "pa-service";
             result["status"] = "UP";
-            result["version"] = "2.0.0";
+            result["version"] = "2.1.1";
             result["timestamp"] = getCurrentTimestamp();
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -3336,7 +3357,7 @@ void registerRoutes() {
             Json::Value result;
             result["name"] = "PA Service";
             result["description"] = "ICAO Passive Authentication Service - ePassport PA Verification";
-            result["version"] = "2.0.0";
+            result["version"] = "2.1.1";
             result["endpoints"]["health"] = "/api/health";
             result["endpoints"]["pa"] = "/api/pa";
 
@@ -3618,7 +3639,7 @@ int main(int /* argc */, char* /* argv */[]) {
         return 1;
     }
 
-    spdlog::info("Starting PA Service v2.1.0 LDAP-RETRY...");
+    spdlog::info("Starting PA Service v2.1.1 Sprint3-CSCA-LC-Support...");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 

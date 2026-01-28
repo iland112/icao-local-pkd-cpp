@@ -135,6 +135,8 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
+      - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
+      - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
