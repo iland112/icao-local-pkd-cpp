@@ -5301,12 +5301,44 @@ void registerRoutes() {
                     operations.append(op);
                 }
 
-                result["operations"] = operations;
+                result["data"] = operations;
+                PQclear(res);
+
+                // Get total count (without pagination)
+                std::string countQuery = "SELECT COUNT(*) FROM operation_audit_log WHERE 1=1";
+                std::vector<std::string> countParamValues;
+                int countParamIndex = 1;
+                if (!operationType.empty()) {
+                    countQuery += " AND operation_type = $" + std::to_string(countParamIndex++);
+                    countParamValues.push_back(operationType);
+                }
+                if (!username.empty()) {
+                    countQuery += " AND username = $" + std::to_string(countParamIndex++);
+                    countParamValues.push_back(username);
+                }
+                if (!success.empty()) {
+                    if (success == "true" || success == "1") {
+                        countQuery += " AND success = true";
+                    } else if (success == "false" || success == "0") {
+                        countQuery += " AND success = false";
+                    }
+                }
+                std::vector<const char*> countParams;
+                for (const auto& p : countParamValues) {
+                    countParams.push_back(p.c_str());
+                }
+                PGresult* countRes = PQexecParams(conn, countQuery.c_str(), countParams.size(),
+                                                  nullptr, countParams.data(), nullptr, nullptr, 0);
+                int total = 0;
+                if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
+                    total = std::stoi(PQgetvalue(countRes, 0, 0));
+                }
+                PQclear(countRes);
+                result["total"] = total;
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 callback(resp);
 
-                PQclear(res);
                 PQfinish(conn);
 
             } catch (const std::exception& e) {
@@ -5349,50 +5381,78 @@ void registerRoutes() {
                     return;
                 }
 
-                Json::Value result;
-                result["success"] = true;
+                Json::Value stats;
 
                 // Total operations
-                const char* totalQuery = "SELECT COUNT(*) FROM operation_audit_log";
-                PGresult* res = PQexec(conn, totalQuery);
+                PGresult* res = PQexec(conn, "SELECT COUNT(*) FROM operation_audit_log");
                 if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["totalOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                    stats["totalOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                } else {
+                    stats["totalOperations"] = 0;
                 }
                 PQclear(res);
 
-                // Success rate
-                const char* successQuery = "SELECT COUNT(*) FROM operation_audit_log WHERE success = true";
-                res = PQexec(conn, successQuery);
+                // Successful operations
+                res = PQexec(conn, "SELECT COUNT(*) FROM operation_audit_log WHERE success = true");
                 if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["successfulOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                    stats["successfulOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                } else {
+                    stats["successfulOperations"] = 0;
                 }
                 PQclear(res);
 
-                // By operation type
-                const char* typeQuery = "SELECT operation_type, COUNT(*) as count "
-                                       "FROM operation_audit_log GROUP BY operation_type "
-                                       "ORDER BY count DESC";
-                res = PQexec(conn, typeQuery);
-                Json::Value byType(Json::arrayValue);
+                // Failed operations
+                res = PQexec(conn, "SELECT COUNT(*) FROM operation_audit_log WHERE success = false");
+                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+                    stats["failedOperations"] = std::stoi(PQgetvalue(res, 0, 0));
+                } else {
+                    stats["failedOperations"] = 0;
+                }
+                PQclear(res);
+
+                // Operations by type (as Record<string, number>)
+                res = PQexec(conn, "SELECT operation_type, COUNT(*) FROM operation_audit_log "
+                                   "GROUP BY operation_type ORDER BY COUNT(*) DESC");
+                Json::Value operationsByType;
                 if (PQresultStatus(res) == PGRES_TUPLES_OK) {
                     for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value item;
-                        item["operationType"] = PQgetvalue(res, i, 0);
-                        item["count"] = std::stoi(PQgetvalue(res, i, 1));
-                        byType.append(item);
+                        std::string opType = PQgetvalue(res, i, 0);
+                        operationsByType[opType] = std::stoi(PQgetvalue(res, i, 1));
                     }
                 }
-                result["byOperationType"] = byType;
+                stats["operationsByType"] = operationsByType;
                 PQclear(res);
 
-                // Recent activity (last 24 hours)
-                const char* recentQuery = "SELECT COUNT(*) FROM operation_audit_log "
-                                         "WHERE created_at > NOW() - INTERVAL '24 hours'";
-                res = PQexec(conn, recentQuery);
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["last24Hours"] = std::stoi(PQgetvalue(res, 0, 0));
+                // Top users
+                res = PQexec(conn, "SELECT username, COUNT(*) as op_count FROM operation_audit_log "
+                                   "WHERE username IS NOT NULL "
+                                   "GROUP BY username ORDER BY op_count DESC LIMIT 10");
+                Json::Value topUsers(Json::arrayValue);
+                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
+                    for (int i = 0; i < PQntuples(res); i++) {
+                        Json::Value user;
+                        user["username"] = PQgetvalue(res, i, 0);
+                        user["operationCount"] = std::stoi(PQgetvalue(res, i, 1));
+                        topUsers.append(user);
+                    }
+                }
+                stats["topUsers"] = topUsers;
+                PQclear(res);
+
+                // Average duration
+                res = PQexec(conn, "SELECT AVG(duration_ms) FROM operation_audit_log "
+                                   "WHERE duration_ms IS NOT NULL");
+                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0 &&
+                    !PQgetisnull(res, 0, 0)) {
+                    stats["averageDurationMs"] = std::stoi(PQgetvalue(res, 0, 0));
+                } else {
+                    stats["averageDurationMs"] = 0;
                 }
                 PQclear(res);
+
+                Json::Value result;
+                result["success"] = true;
+                result["data"] = stats;
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 callback(resp);
@@ -7188,368 +7248,6 @@ void registerRoutes() {
             result["totalPages"] = 0;
             result["first"] = true;
             result["last"] = true;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/audit/operations - Query operation audit logs
-    app.registerHandler(
-        "/api/audit/operations",
-        [&appConfig](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/audit/operations");
-
-            // Get database connection
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword +
-                                  " connect_timeout=5";
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
-                spdlog::error("Database connection failed: {}", PQerrorMessage(conn));
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Database connection failed";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                PQfinish(conn);
-                return;
-            }
-
-            // Extract query parameters
-            std::string operationType = req->getParameter("operationType");
-            std::string username = req->getParameter("username");
-            std::string successStr = req->getParameter("success");
-            std::string startDate = req->getParameter("startDate");
-            std::string endDate = req->getParameter("endDate");
-
-            int limit = 50;  // default
-            int offset = 0;  // default
-            if (auto l = req->getParameter("limit"); !l.empty()) {
-                limit = std::stoi(l);
-            }
-            if (auto o = req->getParameter("offset"); !o.empty()) {
-                offset = std::stoi(o);
-            }
-
-            // Build WHERE clause conditions
-            std::vector<std::string> conditions;
-            std::vector<std::string> paramValues;
-            int paramIndex = 1;
-
-            if (!operationType.empty()) {
-                conditions.push_back("operation_type = $" + std::to_string(paramIndex++));
-                paramValues.push_back(operationType);
-            }
-            if (!username.empty()) {
-                conditions.push_back("username ILIKE $" + std::to_string(paramIndex++));
-                paramValues.push_back("%" + username + "%");
-            }
-            if (!successStr.empty()) {
-                bool successBool = (successStr == "true" || successStr == "1");
-                conditions.push_back("success = $" + std::to_string(paramIndex++));
-                paramValues.push_back(successBool ? "true" : "false");
-            }
-            if (!startDate.empty()) {
-                conditions.push_back("created_at >= $" + std::to_string(paramIndex++) + "::timestamp");
-                paramValues.push_back(startDate);
-            }
-            if (!endDate.empty()) {
-                conditions.push_back("created_at <= $" + std::to_string(paramIndex++) + "::timestamp");
-                paramValues.push_back(endDate);
-            }
-
-            // Build main query
-            std::ostringstream queryBuilder;
-            queryBuilder << "SELECT id, user_id, username, operation_type, operation_subtype, "
-                        << "resource_id, resource_type, ip_address, user_agent, request_method, "
-                        << "request_path, success, status_code, error_message, metadata, "
-                        << "duration_ms, created_at "
-                        << "FROM operation_audit_log";
-
-            if (!conditions.empty()) {
-                queryBuilder << " WHERE " << conditions[0];
-                for (size_t i = 1; i < conditions.size(); ++i) {
-                    queryBuilder << " AND " << conditions[i];
-                }
-            }
-
-            queryBuilder << " ORDER BY created_at DESC LIMIT $" << paramIndex
-                        << " OFFSET $" << (paramIndex + 1);
-            paramIndex += 2;
-            paramValues.push_back(std::to_string(limit));
-            paramValues.push_back(std::to_string(offset));
-
-            // Convert to const char* array
-            std::vector<const char*> paramValuesPtrs;
-            for (const auto& val : paramValues) {
-                paramValuesPtrs.push_back(val.c_str());
-            }
-
-            // Execute query
-            std::string query = queryBuilder.str();
-            PGresult* res = PQexecParams(conn, query.c_str(), paramValuesPtrs.size(),
-                                        nullptr, paramValuesPtrs.data(),
-                                        nullptr, nullptr, 0);
-
-            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-                spdlog::error("Query failed: {}", PQerrorMessage(conn));
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Query failed";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                PQclear(res);
-                PQfinish(conn);
-                return;
-            }
-
-            // Build JSON response
-            Json::Value data(Json::arrayValue);
-            int nrows = PQntuples(res);
-
-            for (int i = 0; i < nrows; ++i) {
-                Json::Value entry;
-                entry["id"] = std::stoi(PQgetvalue(res, i, 0));
-                entry["userId"] = PQgetisnull(res, i, 1) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 1));
-                entry["username"] = PQgetisnull(res, i, 2) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 2));
-                entry["operationType"] = PQgetvalue(res, i, 3);
-                entry["operationSubtype"] = PQgetisnull(res, i, 4) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 4));
-                entry["resourceId"] = PQgetisnull(res, i, 5) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 5));
-                entry["resourceType"] = PQgetisnull(res, i, 6) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 6));
-                entry["ipAddress"] = PQgetisnull(res, i, 7) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 7));
-                entry["userAgent"] = PQgetisnull(res, i, 8) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 8));
-                entry["requestMethod"] = PQgetisnull(res, i, 9) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 9));
-                entry["requestPath"] = PQgetisnull(res, i, 10) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 10));
-                entry["success"] = (std::string(PQgetvalue(res, i, 11)) == "t");
-                entry["statusCode"] = PQgetisnull(res, i, 12) ? Json::Value::null : std::stoi(PQgetvalue(res, i, 12));
-                entry["errorMessage"] = PQgetisnull(res, i, 13) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 13));
-
-                // Parse metadata JSON
-                if (!PQgetisnull(res, i, 14)) {
-                    Json::CharReaderBuilder builder;
-                    Json::CharReader* reader = builder.newCharReader();
-                    std::string metadataStr = PQgetvalue(res, i, 14);
-                    Json::Value metadata;
-                    std::string errs;
-                    if (reader->parse(metadataStr.c_str(), metadataStr.c_str() + metadataStr.size(), &metadata, &errs)) {
-                        entry["metadata"] = metadata;
-                    } else {
-                        entry["metadata"] = Json::Value::null;
-                    }
-                    delete reader;
-                } else {
-                    entry["metadata"] = Json::Value::null;
-                }
-
-                entry["durationMs"] = PQgetisnull(res, i, 15) ? Json::Value::null : std::stoi(PQgetvalue(res, i, 15));
-                entry["createdAt"] = PQgetvalue(res, i, 16);
-
-                data.append(entry);
-            }
-
-            PQclear(res);
-
-            // Get total count
-            std::ostringstream countQueryBuilder;
-            countQueryBuilder << "SELECT COUNT(*) FROM operation_audit_log";
-            if (!conditions.empty()) {
-                countQueryBuilder << " WHERE " << conditions[0];
-                for (size_t i = 1; i < conditions.size(); ++i) {
-                    countQueryBuilder << " AND " << conditions[i];
-                }
-            }
-
-            // Remove limit and offset params from paramValues for count query
-            std::vector<const char*> countParamsPtrs;
-            for (size_t i = 0; i < paramValuesPtrs.size() - 2; ++i) {
-                countParamsPtrs.push_back(paramValuesPtrs[i]);
-            }
-
-            PGresult* countRes = PQexecParams(conn, countQueryBuilder.str().c_str(),
-                                             countParamsPtrs.size(),
-                                             nullptr, countParamsPtrs.data(),
-                                             nullptr, nullptr, 0);
-
-            int total = 0;
-            if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-                total = std::stoi(PQgetvalue(countRes, 0, 0));
-            }
-            PQclear(countRes);
-            PQfinish(conn);
-
-            // Build response
-            Json::Value result;
-            result["success"] = true;
-            result["data"] = data;
-            result["total"] = total;
-            result["limit"] = limit;
-            result["offset"] = offset;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/audit/operations/stats - Aggregate statistics
-    app.registerHandler(
-        "/api/audit/operations/stats",
-        [&appConfig](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/audit/operations/stats");
-
-            // Get database connection
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword +
-                                  " connect_timeout=5";
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
-                spdlog::error("Database connection failed: {}", PQerrorMessage(conn));
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Database connection failed";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                PQfinish(conn);
-                return;
-            }
-
-            // Extract query parameters (optional date range)
-            std::string startDate = req->getParameter("startDate");
-            std::string endDate = req->getParameter("endDate");
-
-            // Build WHERE clause for date range
-            std::string whereClause;
-            std::vector<std::string> paramValues;
-            std::vector<const char*> paramValuesPtrs;
-
-            if (!startDate.empty() && !endDate.empty()) {
-                whereClause = " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp";
-                paramValues.push_back(startDate);
-                paramValues.push_back(endDate);
-                for (const auto& val : paramValues) {
-                    paramValuesPtrs.push_back(val.c_str());
-                }
-            } else if (!startDate.empty()) {
-                whereClause = " WHERE created_at >= $1::timestamp";
-                paramValues.push_back(startDate);
-                paramValuesPtrs.push_back(paramValues[0].c_str());
-            } else if (!endDate.empty()) {
-                whereClause = " WHERE created_at <= $1::timestamp";
-                paramValues.push_back(endDate);
-                paramValuesPtrs.push_back(paramValues[0].c_str());
-            }
-
-            Json::Value stats;
-
-            // Total operations
-            std::string totalQuery = "SELECT COUNT(*) FROM operation_audit_log" + whereClause;
-            PGresult* totalRes = PQexecParams(conn, totalQuery.c_str(), paramValuesPtrs.size(),
-                                             nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
-            if (PQresultStatus(totalRes) == PGRES_TUPLES_OK && PQntuples(totalRes) > 0) {
-                stats["totalOperations"] = std::stoi(PQgetvalue(totalRes, 0, 0));
-            } else {
-                stats["totalOperations"] = 0;
-            }
-            PQclear(totalRes);
-
-            // Successful operations
-            std::string successQuery = "SELECT COUNT(*) FROM operation_audit_log" + whereClause;
-            if (!whereClause.empty()) {
-                successQuery += " AND success = true";
-            } else {
-                successQuery += " WHERE success = true";
-            }
-            PGresult* successRes = PQexecParams(conn, successQuery.c_str(), paramValuesPtrs.size(),
-                                               nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
-            if (PQresultStatus(successRes) == PGRES_TUPLES_OK && PQntuples(successRes) > 0) {
-                stats["successfulOperations"] = std::stoi(PQgetvalue(successRes, 0, 0));
-            } else {
-                stats["successfulOperations"] = 0;
-            }
-            PQclear(successRes);
-
-            // Failed operations
-            std::string failedQuery = "SELECT COUNT(*) FROM operation_audit_log" + whereClause;
-            if (!whereClause.empty()) {
-                failedQuery += " AND success = false";
-            } else {
-                failedQuery += " WHERE success = false";
-            }
-            PGresult* failedRes = PQexecParams(conn, failedQuery.c_str(), paramValuesPtrs.size(),
-                                              nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
-            if (PQresultStatus(failedRes) == PGRES_TUPLES_OK && PQntuples(failedRes) > 0) {
-                stats["failedOperations"] = std::stoi(PQgetvalue(failedRes, 0, 0));
-            } else {
-                stats["failedOperations"] = 0;
-            }
-            PQclear(failedRes);
-
-            // Operations by type
-            std::string typeQuery = "SELECT operation_type, COUNT(*) FROM operation_audit_log" +
-                                   whereClause + " GROUP BY operation_type";
-            PGresult* typeRes = PQexecParams(conn, typeQuery.c_str(), paramValuesPtrs.size(),
-                                            nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
-            Json::Value operationsByType;
-            if (PQresultStatus(typeRes) == PGRES_TUPLES_OK) {
-                for (int i = 0; i < PQntuples(typeRes); ++i) {
-                    std::string opType = PQgetvalue(typeRes, i, 0);
-                    int count = std::stoi(PQgetvalue(typeRes, i, 1));
-                    operationsByType[opType] = count;
-                }
-            }
-            stats["operationsByType"] = operationsByType;
-            PQclear(typeRes);
-
-            // Top users
-            std::string userQuery = "SELECT username, COUNT(*) as op_count FROM operation_audit_log" +
-                                   whereClause + " WHERE username IS NOT NULL " +
-                                   "GROUP BY username ORDER BY op_count DESC LIMIT 10";
-            PGresult* userRes = PQexecParams(conn, userQuery.c_str(), paramValuesPtrs.size(),
-                                            nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
-            Json::Value topUsers(Json::arrayValue);
-            if (PQresultStatus(userRes) == PGRES_TUPLES_OK) {
-                for (int i = 0; i < PQntuples(userRes); ++i) {
-                    Json::Value user;
-                    user["username"] = PQgetvalue(userRes, i, 0);
-                    user["operationCount"] = std::stoi(PQgetvalue(userRes, i, 1));
-                    topUsers.append(user);
-                }
-            }
-            stats["topUsers"] = topUsers;
-            PQclear(userRes);
-
-            // Average duration
-            std::string durationQuery = "SELECT AVG(duration_ms) FROM operation_audit_log" +
-                                       whereClause + " WHERE duration_ms IS NOT NULL";
-            PGresult* durationRes = PQexecParams(conn, durationQuery.c_str(), paramValuesPtrs.size(),
-                                                nullptr, paramValuesPtrs.data(), nullptr, nullptr, 0);
-            if (PQresultStatus(durationRes) == PGRES_TUPLES_OK && PQntuples(durationRes) > 0 &&
-                !PQgetisnull(durationRes, 0, 0)) {
-                stats["averageDurationMs"] = std::stoi(PQgetvalue(durationRes, 0, 0));
-            } else {
-                stats["averageDurationMs"] = 0;
-            }
-            PQclear(durationRes);
-
-            PQfinish(conn);
-
-            // Build response
-            Json::Value result;
-            result["success"] = true;
-            result["data"] = stats;
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);

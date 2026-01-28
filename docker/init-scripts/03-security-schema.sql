@@ -72,14 +72,18 @@ CREATE TABLE IF NOT EXISTS operation_audit_log (
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
     username VARCHAR(255) NOT NULL,
     operation_type VARCHAR(50) NOT NULL,
-    resource_type VARCHAR(50),
+    operation_subtype VARCHAR(100),
     resource_id VARCHAR(255),
-    action VARCHAR(50) NOT NULL,
-    status VARCHAR(20) NOT NULL,
-    details JSONB,
+    resource_type VARCHAR(50),
     ip_address VARCHAR(45),
     user_agent TEXT,
+    request_method VARCHAR(10),
+    request_path TEXT,
+    success BOOLEAN DEFAULT true,
+    status_code INTEGER,
     error_message TEXT,
+    metadata JSONB,
+    duration_ms INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -87,4 +91,4 @@ CREATE INDEX idx_op_audit_user_id ON operation_audit_log(user_id);
 CREATE INDEX idx_op_audit_operation_type ON operation_audit_log(operation_type);
 CREATE INDEX idx_op_audit_resource_type ON operation_audit_log(resource_type);
 CREATE INDEX idx_op_audit_created_at ON operation_audit_log(created_at);
-CREATE INDEX idx_op_audit_status ON operation_audit_log(status);
+CREATE INDEX idx_op_audit_success ON operation_audit_log(success);
