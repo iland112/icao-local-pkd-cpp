@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield, ShieldCheck, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, HardDrive } from 'lucide-react';
+import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield, ShieldCheck, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, HardDrive, AlertTriangle } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { cn } from '@/utils/cn';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
@@ -11,7 +11,7 @@ interface Certificate {
   cn: string;
   sn: string;
   country: string;
-  certType: string;
+  type: string;  // Changed from certType to type (backend uses 'type')
   subjectDn: string;
   issuerDn: string;
   fingerprint: string;
@@ -19,6 +19,10 @@ interface Certificate {
   validTo: string;
   validity: 'VALID' | 'EXPIRED' | 'NOT_YET_VALID' | 'UNKNOWN';
   isSelfSigned: boolean;
+  // DSC_NC specific attributes
+  pkdConformanceCode?: string;
+  pkdConformanceText?: string;
+  pkdVersion?: string;
 }
 
 interface SearchCriteria {
@@ -233,18 +237,19 @@ const CertificateSearch: React.FC = () => {
   const getActualCertType = (cert: Certificate): 'CSCA' | 'DSC' | 'DSC_NC' | 'MLSC' | 'UNKNOWN' => {
     const ou = getOrganizationUnit(cert.dn).toLowerCase();
 
-    if (ou === 'csca' || ou === 'lc') {
+    // Check nc-data FIRST (DSC_NC certificates have both o=dsc AND dc=nc-data)
+    if (ou === 'nc-data' || cert.dn.includes('nc-data')) {
+      return 'DSC_NC';
+    } else if (ou === 'csca' || ou === 'lc') {
       return 'CSCA';  // Both o=csca and o=lc are CSCA certificates
     } else if (ou === 'mlsc') {
       return 'MLSC';
     } else if (ou === 'dsc') {
       return 'DSC';
-    } else if (ou === 'nc-data' || cert.dn.includes('nc-data')) {
-      return 'DSC_NC';
     }
 
-    // Fallback to backend certType
-    return cert.certType as 'CSCA' | 'DSC' | 'DSC_NC' | 'MLSC' | 'UNKNOWN';
+    // Fallback to backend type field
+    return cert.type as 'CSCA' | 'DSC' | 'DSC_NC' | 'MLSC' | 'UNKNOWN';
   };
 
   // Helper: Check if certificate is a Link Certificate
@@ -946,6 +951,36 @@ const CertificateSearch: React.FC = () => {
                           </div>
                         </div>
                       )}
+                      {/* DSC_NC description */}
+                      {getActualCertType(selectedCert) === 'DSC_NC' && (
+                        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg p-3 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                            <div className="text-xs text-orange-800 dark:text-orange-300">
+                              <p className="font-semibold mb-1">비준수 문서 서명 인증서 (DSC_NC - Non-Conformant DSC)</p>
+                              <p className="mb-2">
+                                ICAO 9303 기술 표준을 완전히 준수하지 않는 DSC입니다.
+                                ICAO PKD의 nc-data 컨테이너에 별도 저장되며, 일부 국가의 레거시 시스템 호환성을 위해 유지됩니다.
+                              </p>
+                              <p className="font-semibold mb-1">비준수 이유 (예시):</p>
+                              <ul className="list-disc list-inside space-y-0.5 ml-2">
+                                <li>필수 X.509 확장(Extension) 누락 또는 잘못된 설정</li>
+                                <li>Key Usage, Extended Key Usage 미준수</li>
+                                <li>Subject DN 또는 Issuer DN 형식 오류</li>
+                                <li>유효기간(Validity Period) 정책 위반</li>
+                                <li>서명 알고리즘 비권장 또는 보안 취약</li>
+                              </ul>
+                              <p className="font-semibold mb-1 mt-2">주의사항:</p>
+                              <ul className="list-disc list-inside space-y-0.5 ml-2">
+                                <li>⚠️ 프로덕션 환경에서 사용 권장하지 않음</li>
+                                <li>⚠️ 일부 검증 시스템에서 거부될 수 있음</li>
+                                <li>📌 LDAP 저장: dc=nc-data 컨테이너</li>
+                                <li>📌 ICAO는 2021년부터 nc-data 폐기 권장</li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       <div className="grid grid-cols-[140px_1fr] gap-2">
                         <span className="text-sm text-gray-600 dark:text-gray-400">Self-signed:</span>
                         <span className="text-sm text-gray-900 dark:text-white">
@@ -1049,6 +1084,45 @@ const CertificateSearch: React.FC = () => {
                       </div>
                     </div>
                   </div>
+
+                  {/* PKD Conformance Section (DSC_NC only) */}
+                  {getActualCertType(selectedCert) === 'DSC_NC' && (selectedCert.pkdConformanceCode || selectedCert.pkdConformanceText || selectedCert.pkdVersion) && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                        PKD Conformance Information
+                      </h3>
+                      <div className="space-y-3">
+                        {selectedCert.pkdConformanceCode && (
+                          <div className="grid grid-cols-[140px_1fr] gap-2">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Conformance Code:</span>
+                            <span className="text-sm text-gray-900 dark:text-white font-mono">
+                              {selectedCert.pkdConformanceCode}
+                            </span>
+                          </div>
+                        )}
+                        {selectedCert.pkdVersion && (
+                          <div className="grid grid-cols-[140px_1fr] gap-2">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">PKD Version:</span>
+                            <span className="text-sm text-gray-900 dark:text-white">
+                              {selectedCert.pkdVersion}
+                            </span>
+                          </div>
+                        )}
+                        {selectedCert.pkdConformanceText && (
+                          <div className="grid grid-cols-[140px_1fr] gap-2">
+                            <span className="text-sm text-gray-600 dark:text-gray-400">Conformance Text:</span>
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700 rounded p-3">
+                                <pre className="whitespace-pre-wrap break-words text-xs font-mono">
+                                  {selectedCert.pkdConformanceText}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

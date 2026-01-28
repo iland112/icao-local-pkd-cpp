@@ -58,7 +58,10 @@ public:
         std::string issuerDn,
         std::string fingerprint,
         std::chrono::system_clock::time_point validFrom,
-        std::chrono::system_clock::time_point validTo
+        std::chrono::system_clock::time_point validTo,
+        std::optional<std::string> pkdConformanceCode = std::nullopt,
+        std::optional<std::string> pkdConformanceText = std::nullopt,
+        std::optional<std::string> pkdVersion = std::nullopt
     ) : dn_(std::move(dn)),
         cn_(std::move(cn)),
         sn_(std::move(sn)),
@@ -68,7 +71,10 @@ public:
         issuerDn_(std::move(issuerDn)),
         fingerprint_(std::move(fingerprint)),
         validFrom_(validFrom),
-        validTo_(validTo) {}
+        validTo_(validTo),
+        pkdConformanceCode_(std::move(pkdConformanceCode)),
+        pkdConformanceText_(std::move(pkdConformanceText)),
+        pkdVersion_(std::move(pkdVersion)) {}
 
     // Getters (immutable)
     const std::string& getDn() const { return dn_; }
@@ -81,6 +87,9 @@ public:
     const std::string& getFingerprint() const { return fingerprint_; }
     std::chrono::system_clock::time_point getValidFrom() const { return validFrom_; }
     std::chrono::system_clock::time_point getValidTo() const { return validTo_; }
+    const std::optional<std::string>& getPkdConformanceCode() const { return pkdConformanceCode_; }
+    const std::optional<std::string>& getPkdConformanceText() const { return pkdConformanceText_; }
+    const std::optional<std::string>& getPkdVersion() const { return pkdVersion_; }
 
     /**
      * @brief Business logic: Check if certificate is currently valid
@@ -131,6 +140,10 @@ private:
     std::string fingerprint_;     // SHA-256 fingerprint
     std::chrono::system_clock::time_point validFrom_;  // Not Before
     std::chrono::system_clock::time_point validTo_;    // Not After
+    // DSC_NC specific attributes (optional)
+    std::optional<std::string> pkdConformanceCode_;  // PKD conformance code
+    std::optional<std::string> pkdConformanceText_;  // PKD conformance text
+    std::optional<std::string> pkdVersion_;          // PKD version
 };
 
 /**

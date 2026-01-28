@@ -7930,6 +7930,17 @@ paths:
                     else if (status == domain::models::ValidityStatus::NOT_YET_VALID) certJson["validity"] = "NOT_YET_VALID";
                     else certJson["validity"] = "UNKNOWN";
 
+                    // DSC_NC specific attributes (optional)
+                    if (cert.getPkdConformanceCode().has_value()) {
+                        certJson["pkdConformanceCode"] = *cert.getPkdConformanceCode();
+                    }
+                    if (cert.getPkdConformanceText().has_value()) {
+                        certJson["pkdConformanceText"] = *cert.getPkdConformanceText();
+                    }
+                    if (cert.getPkdVersion().has_value()) {
+                        certJson["pkdVersion"] = *cert.getPkdVersion();
+                    }
+
                     certs.append(certJson);
                 }
                 response["certificates"] = certs;

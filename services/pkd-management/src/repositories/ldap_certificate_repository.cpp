@@ -151,10 +151,11 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
 
     spdlog::debug("[LdapCertificateRepository] Search - BaseDN: {}, Filter: {}", baseDn, filter);
 
-    // Attributes to retrieve
+    // Attributes to retrieve (including DSC_NC specific attributes)
     const char* attrs[] = {
         "cn", "serialNumber", "c", "o", "userCertificate;binary",
-        "cACertificate;binary", "certificateRevocationList;binary", nullptr
+        "cACertificate;binary", "certificateRevocationList;binary",
+        "pkdConformanceCode", "pkdConformanceText", "pkdVersion", nullptr
     };
 
     // Execute LDAP search
@@ -277,10 +278,11 @@ domain::models::Certificate LdapCertificateRepository::getByDn(const std::string
 
     spdlog::debug("[LdapCertificateRepository] Fetching certificate by DN: {}", dn);
 
-    // Attributes to retrieve
+    // Attributes to retrieve (including DSC_NC specific attributes)
     const char* attrs[] = {
         "cn", "serialNumber", "c", "o", "userCertificate;binary",
-        "cACertificate;binary", "certificateRevocationList;binary", nullptr
+        "cACertificate;binary", "certificateRevocationList;binary",
+        "pkdConformanceCode", "pkdConformanceText", "pkdVersion", nullptr
     };
 
     // Search for specific DN (base search)
@@ -577,6 +579,36 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         validTo
     );
 
+    // Read DSC_NC specific attributes (optional)
+    std::optional<std::string> pkdConformanceCode;
+    std::optional<std::string> pkdConformanceText;
+    std::optional<std::string> pkdVersion;
+
+    if (certType == domain::models::CertificateType::DSC_NC) {
+        std::string conformanceCode = getAttributeValue(entry, "pkdConformanceCode");
+        if (!conformanceCode.empty()) {
+            pkdConformanceCode = conformanceCode;
+            spdlog::debug("[LdapCertificateRepository] DSC_NC pkdConformanceCode: {}", conformanceCode);
+        }
+
+        std::string conformanceText = getAttributeValue(entry, "pkdConformanceText");
+        if (!conformanceText.empty()) {
+            pkdConformanceText = conformanceText;
+            spdlog::debug("[LdapCertificateRepository] DSC_NC pkdConformanceText: {}", conformanceText.substr(0, 50));
+        }
+
+        std::string version = getAttributeValue(entry, "pkdVersion");
+        if (!version.empty()) {
+            pkdVersion = version;
+            spdlog::debug("[LdapCertificateRepository] DSC_NC pkdVersion: {}", version);
+        }
+
+        spdlog::info("[LdapCertificateRepository] DSC_NC attributes read - Code:{}, Text:{}, Version:{}",
+            pkdConformanceCode.has_value() ? "YES" : "NO",
+            pkdConformanceText.has_value() ? "YES" : "NO",
+            pkdVersion.has_value() ? "YES" : "NO");
+    }
+
     // Create Certificate entity
     return domain::models::Certificate(
         dn,
@@ -588,7 +620,10 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         issuerDn,
         fingerprint,
         validFrom,
-        validTo
+        validTo,
+        pkdConformanceCode,
+        pkdConformanceText,
+        pkdVersion
     );
 }
 

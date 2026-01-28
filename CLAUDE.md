@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.2.4
+**Current Version**: v2.1.2.5
 **Last Updated**: 2026-01-28
 **Status**: Production Ready - Verified with 31,281 Certificates
 
@@ -67,7 +67,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.1.2.4)
+## Current Features (v2.1.2.5)
 
 ### Core Functionality
 - ✅ LDIF/Master List upload (AUTO/MANUAL modes)
@@ -91,16 +91,26 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.2.4)
+### Recent Changes (v2.1.2.5)
+
+- ✅ **DSC_NC Certificate Display Improvements** (v2.1.2.5)
+  - Frontend: DSC_NC badge correctly displays "DSC_NC" instead of "DSC"
+  - Detail dialog: Type field shows "DSC_NC" with complete description
+  - Added comprehensive DSC_NC description section with non-conformance reasons and warnings
+  - PKD Conformance Information section displays pkdConformanceCode, pkdConformanceText, pkdVersion
+  - Backend: Extended Certificate domain model and LDAP repository to read pkdConformance attributes
+  - Fixed: Certificate interface field name mismatch (certType → type to match backend API)
 
 - ✅ **LDAP Storage Bug Fixes** (v2.1.2.1 - v2.1.2.4)
   - Fixed CN attribute duplication in v2 DN mode (MLSC/CSCA/DSC storage)
   - Fixed DSC_NC LDAP DN format (o=dsc in nc-data container)
   - Verified 100% LDAP storage success: 31,281 certificates (100% DB-LDAP match)
+
 - ✅ **Upload Issues Tracking** (v2.1.2.2 - v2.1.2.3)
   - API endpoint for duplicate certificate detection
   - Frontend UI showing duplicates by type in Upload History
   - Accurate duplicate counting (first_upload_id exclusion logic)
+
 - ✅ **Collection 002 Complete Analysis**
   - Verified 5,017 CSCA certificates in 26 Master Lists (11MB LDIF)
   - 94% deduplication efficiency (4,708 duplicates, 309 new unique certs)
@@ -370,6 +380,62 @@ Frontend:
 
 **Documentation**:
 - `docs/MLSC_EXTRACTION_FIX.md` - Updated with Country Statistics Dialog section
+
+### v2.1.2.5 (2026-01-28) - DSC_NC Frontend Display Improvements
+
+#### Frontend: DSC_NC Certificate Display Enhancements
+
+- ✅ **Certificate Search Page Improvements**
+  - **Badge Display**: DSC_NC certificates now correctly display "DSC_NC" badge (orange) instead of "DSC"
+  - **Type Field Fix**: Detail dialog Type field shows "DSC_NC" matching the certificate type
+  - **Field Name Fix**: Changed Certificate interface from `certType` to `type` to match backend API response
+
+- ✅ **DSC_NC Description Section**
+  - Added comprehensive description explaining Non-Conformant DSC
+  - Lists common non-conformance reasons (X.509 extension issues, Key Usage violations, DN format errors, etc.)
+  - Warning indicators for production use and ICAO nc-data deprecation (2021)
+  - AlertTriangle icon for visual emphasis
+
+- ✅ **PKD Conformance Information Section**
+  - Displays pkdConformanceCode (e.g., "ERR:CSCA.CDP.14")
+  - Displays pkdConformanceText with detailed error descriptions
+  - Displays pkdVersion (ICAO PKD version number)
+  - Styled with orange theme for DSC_NC context
+
+#### Backend: PKD Conformance Fields Support
+
+- ✅ **Domain Model Extension**
+  - Updated Certificate class with optional pkdConformance fields
+  - Added getters: getPkdConformanceCode(), getPkdConformanceText(), getPkdVersion()
+
+- ✅ **LDAP Repository Enhancement**
+  - Added pkdConformanceCode, pkdConformanceText, pkdVersion to LDAP attribute request
+  - Reads and parses these attributes from LDAP entries
+  - Passes to Certificate constructor
+
+- ✅ **API Response Enhancement**
+  - Updated certificate search API to include pkdConformance fields in JSON response
+  - Conditional inclusion (only if present)
+
+**Files Modified**:
+
+Frontend:
+
+- `frontend/src/pages/CertificateSearch.tsx` - Updated Certificate interface (type field), added DSC_NC description and PKD conformance sections
+- `frontend/src/types/index.ts` - Already had pkdConformance fields in Certificate type
+
+Backend:
+
+- `services/pkd-management/src/domain/models/certificate.h` - Added pkdConformance fields to Certificate class
+- `services/pkd-management/src/repositories/ldap_certificate_repository.cpp` - Added LDAP attribute reading for pkdConformance
+- `services/pkd-management/src/main.cpp` - Updated API response to include pkdConformance fields
+
+**Verification**:
+
+- ✅ DSC_NC badge displays correctly in search results
+- ✅ Detail dialog shows "DSC_NC" type with full description
+- ✅ PKD Conformance section displays all three fields when available
+- ✅ Backend API returns pkdConformanceCode, pkdConformanceText, pkdVersion for DSC_NC certificates
 
 ### v2.1.2 - v2.1.2.4 (2026-01-28) - Critical Bug Fixes & Upload Verification
 
