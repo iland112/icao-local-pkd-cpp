@@ -12,6 +12,7 @@ out/
 
 # vcpkg
 vcpkg_installed/
+.vcpkg-cache/
 
 # Compiled files
 *.o
