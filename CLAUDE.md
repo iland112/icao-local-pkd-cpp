@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.2.6
+**Current Version**: v2.1.2.7
 **Last Updated**: 2026-01-28
 **Status**: Production Ready - Verified with 31,281 Certificates
 
@@ -91,7 +91,20 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.2.6)
+### Recent Changes (v2.1.2.7)
+
+- ✅ **Audit Log Recording & API Fix** (v2.1.2.7)
+  - Fixed audit log INSERT failure: username NOT NULL constraint violated when no JWT auth (defaulted to "anonymous")
+  - Fixed metadata JSONB security vulnerability: was string-interpolated into SQL, now uses parameterized query ($14::jsonb)
+  - Aligned /api/audit/operations response format with frontend (data array, total count, operationsByType as Record)
+  - Aligned /api/audit/operations/stats response (successfulOperations, failedOperations, topUsers, averageDurationMs)
+  - Fixed AuditLog.tsx page: wrong endpoint URLs (/api/auth/audit-log → /api/audit/operations), interface field names
+  - Verified: PA_VERIFY and FILE_UPLOAD operations now recorded with IP, duration, metadata
+
+- ✅ **PA Service CSCA Lookup Fix** (v2.1.1)
+  - Fixed LDAP base DN construction: doubled dc=download in searchCscaInOu() and searchCrlFromLdap()
+  - Fixed LDAP_HOST: PA service was connecting to non-existent haproxy container (set to openldap1 in compose)
+  - Verified: Korean DSC PA verification returns VALID (CSCA found in o=csca, CRL check passed)
 
 - ✅ **Database Schema Fixes for Sync Page** (v2.1.2.6)
   - Added MLSC columns to sync_status table (db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy)
@@ -443,6 +456,52 @@ Backend:
 - ✅ Detail dialog shows "DSC_NC" type with full description
 - ✅ PKD Conformance section displays all three fields when available
 - ✅ Backend API returns pkdConformanceCode, pkdConformanceText, pkdVersion for DSC_NC certificates
+
+### v2.1.2.7 (2026-01-28) - Audit Log Recording & PA Service Fix
+
+#### Audit Log: Recording and API Alignment
+
+- ✅ **audit_log.h Fix (both pkd-management & pa-service)**
+  - `username` defaults to `"anonymous"` — fixes NOT NULL constraint violation for unauthenticated requests
+  - Metadata JSONB now passed as parameterized query (`$14::jsonb`) instead of string interpolation (security fix)
+  - Parameter count: 14 → 15
+
+- ✅ **Audit API Response Alignment (main.cpp)**
+  - `/api/audit/operations`: returns `{ data: [...], total, count, limit, offset }` with camelCase fields
+  - `/api/audit/operations/stats`: returns `{ data: { totalOperations, successfulOperations, failedOperations, operationsByType, topUsers, averageDurationMs } }`
+
+- ✅ **AuditLog.tsx Frontend Fix**
+  - Corrected endpoint URLs (`/api/auth/audit-log` → `/api/audit/operations`)
+  - Updated interface types to match backend response (camelCase, operationsByType as Record)
+  - Filter options aligned to actual operation types (UPLOAD, PA_VERIFY, CERTIFICATE_SEARCH, etc.)
+
+#### PA Service: CSCA Lookup via LDAP
+
+- ✅ **Base DN Fix (pa-service main.cpp)**
+  - `searchCscaInOu()`: removed redundant `dc=download,` prefix (ldapBaseDn already contains it)
+  - `searchCrlFromLdap()`: same fix applied
+  - Root cause: DN was constructed as `o=csca,c=KR,dc=data,dc=download,dc=download,dc=pkd,...`
+
+- ✅ **LDAP_HOST Configuration (docker-compose.yaml)**
+  - Added `LDAP_HOST=openldap1` and `LDAP_PORT=389` to PA service environment
+  - Previously used Dockerfile default `LDAP_HOST=haproxy` (container doesn't exist)
+
+**Verification**:
+
+- ✅ PA verify with Korean DSC returns VALID (CSCA003, Serial 0101, CRL checked)
+- ✅ Audit log table records PA_VERIFY (36ms duration) and FILE_UPLOAD (LDIF) operations
+- ✅ `/api/audit/operations` and `/api/audit/operations/stats` return correct format
+
+**Files Modified**:
+
+- `services/pkd-management/src/common/audit_log.h` - username default, parameterized metadata
+- `services/pa-service/src/common/audit_log.h` - same fixes (shared code, separate copy)
+- `services/pkd-management/src/main.cpp` - audit API response format alignment
+- `services/pa-service/src/main.cpp` - CSCA/CRL base DN fix
+- `docker/docker-compose.yaml` - PA service LDAP_HOST env
+- `docker/init-scripts/03-security-schema.sql` - operation_audit_log schema update
+- `docker/db/migrations/fix_operation_audit_log_schema.sql` - migration for existing deployments
+- `frontend/src/pages/AuditLog.tsx` - endpoint URLs and interface types
 
 ### v2.1.2.6 (2026-01-28) - Database Schema Fixes for Sync Page
 
