@@ -75,6 +75,19 @@
 #include "infrastructure/http/http_client.h"
 #include "infrastructure/notification/email_sender.h"
 
+// Phase 1.5/1.6: Repository Pattern - Repositories
+#include "repositories/upload_repository.h"
+#include "repositories/certificate_repository.h"
+#include "repositories/validation_repository.h"
+#include "repositories/audit_repository.h"
+#include "repositories/statistics_repository.h"
+
+// Phase 1.5/1.6: Repository Pattern - Services
+#include "services/upload_service.h"
+#include "services/validation_service.h"
+#include "services/audit_service.h"
+#include "services/statistics_service.h"
+
 // Authentication Module (Phase 3)
 #include "middleware/auth_middleware.h"
 #include "middleware/permission_filter.h"
@@ -93,6 +106,18 @@ std::shared_ptr<handlers::IcaoHandler> icaoHandler;
 
 // Global Auth handler (initialized in main())
 std::shared_ptr<handlers::AuthHandler> authHandler;
+
+// Phase 1.6: Global Repositories and Services (Repository Pattern)
+PGconn* globalDbConn = nullptr;  // Persistent database connection
+std::shared_ptr<repositories::UploadRepository> uploadRepository;
+std::shared_ptr<repositories::CertificateRepository> certificateRepository;
+std::shared_ptr<repositories::ValidationRepository> validationRepository;
+std::shared_ptr<repositories::AuditRepository> auditRepository;
+std::shared_ptr<repositories::StatisticsRepository> statisticsRepository;
+std::shared_ptr<services::UploadService> uploadService;
+std::shared_ptr<services::ValidationService> validationService;
+std::shared_ptr<services::AuditService> auditService;
+std::shared_ptr<services::StatisticsService> statisticsService;
 
 // Global cache for available countries (populated on startup)
 std::set<std::string> cachedCountries;
@@ -5385,128 +5410,117 @@ void registerRoutes() {
     );
 
     // Cleanup failed upload endpoint
+    // Phase 3.1: Connected to UploadService (Repository Pattern)
+    // TODO Phase 4: Move cleanupFailedUpload() logic into UploadService
     app.registerHandler(
         "/api/upload/{uploadId}",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback,
            const std::string& uploadId) {
-            spdlog::info("DELETE /api/upload/{} - Cleanup failed upload", uploadId);
+            spdlog::info("DELETE /api/upload/{} - Delete upload", uploadId);
 
-            // Connect to database
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Database connection failed";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                PQfinish(conn);
-                return;
-            }
-
-            // Check if upload exists (parameterized query)
-            const char* query = "SELECT id FROM uploaded_file WHERE id = $1";
-            const char* paramValues[1] = {uploadId.c_str()};
-            PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                         nullptr, nullptr, 0);
-
-            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Upload not found";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k404NotFound);
-                callback(resp);
-                PQclear(res);
-                PQfinish(conn);
-                return;
-            }
-            PQclear(res);
-
-            // Cleanup failed upload
             try {
-                ManualProcessingStrategy::cleanupFailedUpload(uploadId, conn);
+                bool deleted = uploadService->deleteUpload(uploadId);
+
+                if (!deleted) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Upload not found or deletion failed";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    return;
+                }
 
                 Json::Value result;
                 result["success"] = true;
-                result["message"] = "Upload cleaned up successfully";
+                result["message"] = "Upload deleted successfully";
                 result["uploadId"] = uploadId;
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 callback(resp);
 
-                // Phase 4.4: Audit logging - UPLOAD_DELETE success
-                common::AuditLogEntry auditEntry;
-                auto session = req->getSession();
-                if (session) {
-                    auto [userId, username] = common::getUserInfoFromSession(session);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
+                // Phase 3.1: Audit logging - UPLOAD_DELETE success
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
+                    auditEntry.operationSubtype = "UPLOAD";
+                    auditEntry.resourceId = uploadId;
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "DELETE";
+                    auditEntry.requestPath = "/api/upload/" + uploadId;
+                    auditEntry.success = true;
+                    auditEntry.statusCode = 200;
+
+                    Json::Value metadata;
+                    metadata["uploadId"] = uploadId;
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
                 }
-
-                auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
-                auditEntry.operationSubtype = "FAILED_UPLOAD";
-                auditEntry.resourceId = uploadId;
-                auditEntry.resourceType = "UPLOADED_FILE";
-                auditEntry.ipAddress = common::getClientIpAddress(req);
-                auditEntry.userAgent = req->getHeader("User-Agent");
-                auditEntry.requestMethod = "DELETE";
-                auditEntry.requestPath = "/api/upload/" + uploadId;
-                auditEntry.success = true;
-                auditEntry.statusCode = 200;
-
-                Json::Value metadata;
-                metadata["uploadId"] = uploadId;
-                auditEntry.metadata = metadata;
-
-                common::logOperation(conn, auditEntry);
 
             } catch (const std::exception& e) {
-                spdlog::error("Failed to cleanup upload {}: {}", uploadId, e.what());
+                spdlog::error("Failed to delete upload {}: {}", uploadId, e.what());
 
-                // Phase 4.4: Audit logging - UPLOAD_DELETE failed
-                common::AuditLogEntry auditEntry;
-                auto session = req->getSession();
-                if (session) {
-                    auto [userId, username] = common::getUserInfoFromSession(session);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
+                // Phase 3.1: Audit logging - UPLOAD_DELETE failed
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+                PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    common::AuditLogEntry auditEntry;
+                    auto session = req->getSession();
+                    if (session) {
+                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auditEntry.userId = userId;
+                        auditEntry.username = username;
+                    }
+
+                    auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
+                    auditEntry.operationSubtype = "UPLOAD";
+                    auditEntry.resourceId = uploadId;
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "DELETE";
+                    auditEntry.requestPath = "/api/upload/" + uploadId;
+                    auditEntry.success = false;
+                    auditEntry.statusCode = 500;
+                    auditEntry.errorMessage = e.what();
+
+                    Json::Value metadata;
+                    metadata["uploadId"] = uploadId;
+                    auditEntry.metadata = metadata;
+
+                    common::logOperation(auditConn, auditEntry);
+                    PQfinish(auditConn);
                 }
-
-                auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
-                auditEntry.operationSubtype = "FAILED_UPLOAD";
-                auditEntry.resourceId = uploadId;
-                auditEntry.resourceType = "UPLOADED_FILE";
-                auditEntry.ipAddress = common::getClientIpAddress(req);
-                auditEntry.userAgent = req->getHeader("User-Agent");
-                auditEntry.requestMethod = "DELETE";
-                auditEntry.requestPath = "/api/upload/" + uploadId;
-                auditEntry.success = false;
-                auditEntry.statusCode = 500;
-                auditEntry.errorMessage = e.what();
-
-                Json::Value metadata;
-                metadata["uploadId"] = uploadId;
-                auditEntry.metadata = metadata;
-
-                common::logOperation(conn, auditEntry);
 
                 Json::Value error;
                 error["success"] = false;
-                error["message"] = std::string("Cleanup failed: ") + e.what();
+                error["message"] = std::string("Delete failed: ") + e.what();
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
             }
-
-            PQfinish(conn);
         },
         {drogon::Delete}
     );
@@ -6073,30 +6087,6 @@ void registerRoutes() {
                     return;
                 }
 
-                // Compute file hash
-                std::string fileHash = computeFileHash(contentBytes);
-
-                // Connect to database
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    std::string error = PQerrorMessage(conn);
-                    PQfinish(conn);
-                    Json::Value errorResp;
-                    errorResp["success"] = false;
-                    errorResp["message"] = "Database connection failed: " + scrubCredentials(error);
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(errorResp);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    spdlog::error("Database connection failed (LDIF upload): {}", scrubCredentials(error));
-                    return;
-                }
-
                 // Get processing mode from form data
                 std::string processingMode = "AUTO";  // default
                 auto& params = parser.getParameters();
@@ -6107,126 +6097,165 @@ void registerRoutes() {
                     }
                 }
 
-                // Check for duplicate file
-                Json::Value duplicateCheck = checkDuplicateFile(conn, fileHash);
-                if (!duplicateCheck.isNull()) {
-                    // Phase 4.4: Audit logging - FILE_UPLOAD failed (duplicate)
-                    common::AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
+                // Get username from session
+                std::string username = "anonymous";
+                auto session = req->getSession();
+                if (session) {
+                    auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                    username = sessionUsername.value_or("anonymous");
+                }
+
+                // Call UploadService to handle upload
+                auto result = uploadService->uploadLdif(fileName, contentBytes, processingMode, username);
+
+                // Handle duplicate file
+                if (result.status == "DUPLICATE") {
+                    // Phase 3.1: Audit logging - FILE_UPLOAD failed (duplicate)
+                    std::string conninfo = "host=" + appConfig.dbHost +
+                                          " port=" + std::to_string(appConfig.dbPort) +
+                                          " dbname=" + appConfig.dbName +
+                                          " user=" + appConfig.dbUser +
+                                          " password=" + appConfig.dbPassword;
+                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                        common::AuditLogEntry auditEntry;
+                        if (session) {
+                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auditEntry.userId = userId;
+                            auditEntry.username = sessionUsername;
+                        }
+                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationSubtype = "LDIF";
+                        auditEntry.resourceType = "UPLOADED_FILE";
+                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.userAgent = req->getHeader("User-Agent");
+                        auditEntry.requestMethod = "POST";
+                        auditEntry.requestPath = "/api/upload/ldif";
+                        auditEntry.success = false;
+                        auditEntry.statusCode = 409;
+                        auditEntry.errorMessage = "Duplicate file detected";
+
+                        Json::Value metadata;
+                        metadata["fileName"] = fileName;
+                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                        metadata["existingUploadId"] = result.uploadId;
+                        auditEntry.metadata = metadata;
+
+                        common::logOperation(auditConn, auditEntry);
+                        PQfinish(auditConn);
                     }
-                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
-                    auditEntry.operationSubtype = "LDIF";
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/upload/ldif";
-                    auditEntry.success = false;
-                    auditEntry.statusCode = 409;
-                    auditEntry.errorMessage = "Duplicate file detected";
-
-                    Json::Value metadata;
-                    metadata["fileName"] = fileName;
-                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                    metadata["fileHash"] = fileHash.substr(0, 16);
-                    metadata["existingUploadId"] = duplicateCheck["uploadId"].asString();
-                    auditEntry.metadata = metadata;
-
-                    common::logOperation(conn, auditEntry);
-                    PQfinish(conn);
 
                     Json::Value error;
                     error["success"] = false;
-                    error["message"] = "Duplicate file detected. This file has already been uploaded.";
+                    error["message"] = result.message.empty() ? "Duplicate file detected. This file has already been uploaded." : result.message;
 
                     Json::Value errorDetail;
                     errorDetail["code"] = "DUPLICATE_FILE";
                     errorDetail["detail"] = "A file with the same content (SHA-256 hash) already exists in the system.";
                     error["error"] = errorDetail;
 
-                    error["existingUpload"] = duplicateCheck;
+                    Json::Value existingUpload;
+                    existingUpload["uploadId"] = result.uploadId;
+                    error["existingUpload"] = existingUpload;
 
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                     resp->setStatusCode(drogon::k409Conflict);
                     callback(resp);
 
-                    spdlog::warn("Duplicate LDIF file upload rejected: hash={}, existing_upload_id={}, original_file={}",
-                                 fileHash.substr(0, 16),
-                                 duplicateCheck["uploadId"].asString(),
-                                 duplicateCheck["fileName"].asString());
+                    spdlog::warn("Duplicate LDIF file upload rejected: existing_upload_id={}", result.uploadId);
                     return;
                 }
 
-                // Save upload record with processing mode
-                std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "LDIF", fileHash, processingMode);
+                // Handle upload failure
+                if (!result.success) {
+                    // Phase 3.1: Audit logging - FILE_UPLOAD failed
+                    std::string conninfo = "host=" + appConfig.dbHost +
+                                          " port=" + std::to_string(appConfig.dbPort) +
+                                          " dbname=" + appConfig.dbName +
+                                          " user=" + appConfig.dbUser +
+                                          " password=" + appConfig.dbPassword;
+                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                        common::AuditLogEntry auditEntry;
+                        if (session) {
+                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auditEntry.userId = userId;
+                            auditEntry.username = sessionUsername;
+                        }
+                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationSubtype = "LDIF";
+                        auditEntry.resourceType = "UPLOADED_FILE";
+                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.userAgent = req->getHeader("User-Agent");
+                        auditEntry.requestMethod = "POST";
+                        auditEntry.requestPath = "/api/upload/ldif";
+                        auditEntry.success = false;
+                        auditEntry.statusCode = 500;
+                        auditEntry.errorMessage = result.errorMessage;
 
-                // Save file to disk for manual mode processing
-                std::string uploadDir = "/app/uploads";  // Absolute path for security
-                std::string filePath = uploadDir + "/" + uploadId + ".ldif";
-                std::ofstream outFile(filePath, std::ios::binary);
-                if (outFile.is_open()) {
-                    outFile.write(reinterpret_cast<const char*>(contentBytes.data()), contentBytes.size());
-                    outFile.close();
+                        Json::Value metadata;
+                        metadata["fileName"] = fileName;
+                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                        auditEntry.metadata = metadata;
 
-                    // Update file_path in database (parameterized query)
-                    const char* updateQuery = "UPDATE uploaded_file SET file_path = $1 WHERE id = $2";
-                    const char* updateParamValues[2] = {filePath.c_str(), uploadId.c_str()};
-                    PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr, updateParamValues,
-                                                       nullptr, nullptr, 0);
-                    if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
-                        spdlog::error("Failed to update file_path: {}", PQerrorMessage(conn));
+                        common::logOperation(auditConn, auditEntry);
+                        PQfinish(auditConn);
                     }
-                    PQclear(updateRes);
+
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = result.errorMessage.empty() ? "Upload failed" : result.errorMessage;
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
                 }
 
-                PQfinish(conn);
-
-                // Start async processing for both AUTO and MANUAL modes
+                // Success - Start async processing
                 // MANUAL mode: Stage 1 (parsing) runs automatically
                 // AUTO mode: All stages run automatically
-                processLdifFileAsync(uploadId, contentBytes);
+                processLdifFileAsync(result.uploadId, contentBytes);
 
                 // Return success response
-                Json::Value result;
-                result["success"] = true;
+                Json::Value response;
+                response["success"] = true;
                 if (processingMode == "MANUAL" || processingMode == "manual") {
-                    result["message"] = "LDIF file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
+                    response["message"] = "LDIF file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
                 } else {
-                    result["message"] = "LDIF file uploaded successfully. Processing started.";
+                    response["message"] = result.message.empty() ? "LDIF file uploaded successfully. Processing started." : result.message;
                 }
 
                 Json::Value data;
-                data["uploadId"] = uploadId;
+                data["uploadId"] = result.uploadId;
                 data["fileName"] = fileName;
                 data["fileSize"] = static_cast<Json::Int64>(fileSize);
-                data["status"] = "PROCESSING";
+                data["status"] = result.status;
                 data["createdAt"] = trantor::Date::now().toFormattedString(false);
 
-                result["data"] = data;
+                response["data"] = data;
 
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 resp->setStatusCode(drogon::k201Created);
                 callback(resp);
 
-                // Phase 4.4: Audit logging - FILE_UPLOAD success
+                // Phase 3.1: Audit logging - FILE_UPLOAD success
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
                     common::AuditLogEntry auditEntry;
-                    // Extract user info from session (if authenticated)
-                    auto session = req->getSession();
                     if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
                         auditEntry.userId = userId;
-                        auditEntry.username = username;
+                        auditEntry.username = sessionUsername;
                     }
 
                     auditEntry.operationType = common::OperationType::FILE_UPLOAD;
                     auditEntry.operationSubtype = "LDIF";
-                    auditEntry.resourceId = uploadId;
+                    auditEntry.resourceId = result.uploadId;
                     auditEntry.resourceType = "UPLOADED_FILE";
                     auditEntry.ipAddress = common::getClientIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
@@ -6323,30 +6352,6 @@ void registerRoutes() {
                     return;
                 }
 
-                // Compute file hash
-                std::string fileHash = computeFileHash(contentBytes);
-
-                // Connect to database
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    std::string error = PQerrorMessage(conn);
-                    PQfinish(conn);
-                    Json::Value errorResp;
-                    errorResp["success"] = false;
-                    errorResp["message"] = "Database connection failed: " + scrubCredentials(error);
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(errorResp);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    spdlog::error("Database connection failed (Master List upload): {}", scrubCredentials(error));
-                    return;
-                }
-
                 // Get processing mode from form data
                 std::string processingMode = "AUTO";  // default
                 auto& params = parser.getParameters();
@@ -6357,83 +6362,122 @@ void registerRoutes() {
                     }
                 }
 
-                // Check for duplicate file
-                Json::Value duplicateCheck = checkDuplicateFile(conn, fileHash);
-                if (!duplicateCheck.isNull()) {
-                    // Phase 4.4: Audit logging - FILE_UPLOAD failed (duplicate)
-                    common::AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
+                // Get username from session
+                std::string username = "anonymous";
+                auto session = req->getSession();
+                if (session) {
+                    auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                    username = sessionUsername.value_or("anonymous");
+                }
+
+                // Call UploadService to handle upload
+                auto uploadResult = uploadService->uploadMasterList(fileName, contentBytes, processingMode, username);
+
+                // Handle duplicate file
+                if (uploadResult.status == "DUPLICATE") {
+                    // Phase 3.1: Audit logging - FILE_UPLOAD failed (duplicate)
+                    std::string conninfo = "host=" + appConfig.dbHost +
+                                          " port=" + std::to_string(appConfig.dbPort) +
+                                          " dbname=" + appConfig.dbName +
+                                          " user=" + appConfig.dbUser +
+                                          " password=" + appConfig.dbPassword;
+                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                        common::AuditLogEntry auditEntry;
+                        if (session) {
+                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auditEntry.userId = userId;
+                            auditEntry.username = sessionUsername;
+                        }
+                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationSubtype = "MASTER_LIST";
+                        auditEntry.resourceType = "UPLOADED_FILE";
+                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.userAgent = req->getHeader("User-Agent");
+                        auditEntry.requestMethod = "POST";
+                        auditEntry.requestPath = "/api/upload/masterlist";
+                        auditEntry.success = false;
+                        auditEntry.statusCode = 409;
+                        auditEntry.errorMessage = "Duplicate file detected";
+
+                        Json::Value metadata;
+                        metadata["fileName"] = fileName;
+                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                        metadata["existingUploadId"] = uploadResult.uploadId;
+                        auditEntry.metadata = metadata;
+
+                        common::logOperation(auditConn, auditEntry);
+                        PQfinish(auditConn);
                     }
-                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
-                    auditEntry.operationSubtype = "MASTER_LIST";
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/upload/masterlist";
-                    auditEntry.success = false;
-                    auditEntry.statusCode = 409;
-                    auditEntry.errorMessage = "Duplicate file detected";
-
-                    Json::Value metadata;
-                    metadata["fileName"] = fileName;
-                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                    metadata["fileHash"] = fileHash.substr(0, 16);
-                    metadata["existingUploadId"] = duplicateCheck["uploadId"].asString();
-                    auditEntry.metadata = metadata;
-
-                    common::logOperation(conn, auditEntry);
-                    PQfinish(conn);
 
                     Json::Value error;
                     error["success"] = false;
-                    error["message"] = "Duplicate file detected. This file has already been uploaded.";
+                    error["message"] = uploadResult.message.empty() ? "Duplicate file detected. This file has already been uploaded." : uploadResult.message;
 
                     Json::Value errorDetail;
                     errorDetail["code"] = "DUPLICATE_FILE";
                     errorDetail["detail"] = "A file with the same content (SHA-256 hash) already exists in the system.";
                     error["error"] = errorDetail;
 
-                    error["existingUpload"] = duplicateCheck;
+                    Json::Value existingUpload;
+                    existingUpload["uploadId"] = uploadResult.uploadId;
+                    error["existingUpload"] = existingUpload;
 
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                     resp->setStatusCode(drogon::k409Conflict);
                     callback(resp);
 
-                    spdlog::warn("Duplicate Master List file upload rejected: hash={}, existing_upload_id={}, original_file={}",
-                                 fileHash.substr(0, 16),
-                                 duplicateCheck["uploadId"].asString(),
-                                 duplicateCheck["fileName"].asString());
+                    spdlog::warn("Duplicate Master List file upload rejected: existing_upload_id={}", uploadResult.uploadId);
                     return;
                 }
 
-                // Save upload record with processing mode
-                std::string uploadId = saveUploadRecord(conn, fileName, fileSize, "ML", fileHash, processingMode);
+                // Handle upload failure
+                if (!uploadResult.success) {
+                    // Phase 3.1: Audit logging - FILE_UPLOAD failed
+                    std::string conninfo = "host=" + appConfig.dbHost +
+                                          " port=" + std::to_string(appConfig.dbPort) +
+                                          " dbname=" + appConfig.dbName +
+                                          " user=" + appConfig.dbUser +
+                                          " password=" + appConfig.dbPassword;
+                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
+                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                        common::AuditLogEntry auditEntry;
+                        if (session) {
+                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auditEntry.userId = userId;
+                            auditEntry.username = sessionUsername;
+                        }
+                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationSubtype = "MASTER_LIST";
+                        auditEntry.resourceType = "UPLOADED_FILE";
+                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.userAgent = req->getHeader("User-Agent");
+                        auditEntry.requestMethod = "POST";
+                        auditEntry.requestPath = "/api/upload/masterlist";
+                        auditEntry.success = false;
+                        auditEntry.statusCode = 500;
+                        auditEntry.errorMessage = uploadResult.errorMessage;
 
-                // Save file to disk for manual mode processing
-                std::string uploadDir = "/app/uploads";  // Absolute path for security
-                std::string filePath = uploadDir + "/" + uploadId + ".ml";
-                std::ofstream outFile(filePath, std::ios::binary);
-                if (outFile.is_open()) {
-                    outFile.write(reinterpret_cast<const char*>(contentBytes.data()), contentBytes.size());
-                    outFile.close();
+                        Json::Value metadata;
+                        metadata["fileName"] = fileName;
+                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                        auditEntry.metadata = metadata;
 
-                    // Update file_path in database (parameterized query)
-                    const char* updateQuery = "UPDATE uploaded_file SET file_path = $1 WHERE id = $2";
-                    const char* updateParamValues[2] = {filePath.c_str(), uploadId.c_str()};
-                    PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr, updateParamValues,
-                                                       nullptr, nullptr, 0);
-                    if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
-                        spdlog::error("Failed to update file_path: {}", PQerrorMessage(conn));
+                        common::logOperation(auditConn, auditEntry);
+                        PQfinish(auditConn);
                     }
-                    PQclear(updateRes);
+
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = uploadResult.errorMessage.empty() ? "Upload failed" : uploadResult.errorMessage;
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
                 }
 
-                PQfinish(conn);
+                // Success - Get upload ID from Service result
+                std::string uploadId = uploadResult.uploadId;
 
                 // Start async processing for both AUTO and MANUAL modes using Strategy Pattern
                 // MANUAL mode: Stage 1 (parsing) runs automatically
@@ -6572,7 +6616,12 @@ void registerRoutes() {
                 resp->setStatusCode(drogon::k201Created);
                 callback(resp);
 
-                // Phase 4.4: Audit logging - FILE_UPLOAD success
+                // Phase 3.1: Audit logging - FILE_UPLOAD success
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
                     common::AuditLogEntry auditEntry;
@@ -6618,278 +6667,91 @@ void registerRoutes() {
     );
 
     // Upload statistics endpoint - returns UploadStatisticsOverview format
+    // Phase 3.1: Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/statistics",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             spdlog::info("GET /api/upload/statistics");
 
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
+            try {
+                Json::Value result = uploadService->getUploadStatistics();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
 
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            Json::Value result;
-
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Get total uploads
-                PGresult* res = PQexec(conn, "SELECT COUNT(*) FROM uploaded_file");
-                result["totalUploads"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get successful uploads
-                res = PQexec(conn, "SELECT COUNT(*) FROM uploaded_file WHERE status = 'COMPLETED'");
-                result["successfulUploads"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get failed uploads
-                res = PQexec(conn, "SELECT COUNT(*) FROM uploaded_file WHERE status = 'FAILED'");
-                result["failedUploads"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get total certificates from certificate table (after deduplication)
-                res = PQexec(conn, "SELECT COUNT(*) FROM certificate");
-                result["totalCertificates"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get CRL count from crl table (after deduplication)
-                res = PQexec(conn, "SELECT COUNT(*) FROM crl");
-                result["crlCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get CSCA count from certificate table
-                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA'");
-                result["cscaCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Sprint 3: CSCA breakdown (self-signed vs link certificates)
-                Json::Value cscaBreakdown;
-                res = PQexec(conn,
-                    "SELECT "
-                    "COUNT(*) as total, "
-                    "SUM(CASE WHEN subject_dn = issuer_dn THEN 1 ELSE 0 END) as self_signed, "
-                    "SUM(CASE WHEN subject_dn != issuer_dn THEN 1 ELSE 0 END) as link_certs "
-                    "FROM certificate WHERE certificate_type = 'CSCA'");
-                if (PQntuples(res) > 0) {
-                    cscaBreakdown["total"] = std::stoi(PQgetvalue(res, 0, 0));
-                    cscaBreakdown["selfSigned"] = std::stoi(PQgetvalue(res, 0, 1));
-                    cscaBreakdown["linkCertificates"] = std::stoi(PQgetvalue(res, 0, 2));
-                } else {
-                    cscaBreakdown["total"] = 0;
-                    cscaBreakdown["selfSigned"] = 0;
-                    cscaBreakdown["linkCertificates"] = 0;
-                }
-                PQclear(res);
-                result["cscaBreakdown"] = cscaBreakdown;
-
-                // Get DSC count from certificate table (conformant DSC only)
-                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'DSC'");
-                result["dscCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get DSC_NC count from certificate table (non-conformant DSC)
-                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'DSC_NC'");
-                result["dscNcCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get distinct country count from certificate table
-                res = PQexec(conn, "SELECT COUNT(DISTINCT country_code) FROM certificate");
-                result["countriesCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get Master List count from master_list table (after deduplication)
-                res = PQexec(conn, "SELECT COUNT(*) FROM master_list");
-                result["mlCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Get MLSC count from certificate table (Master List Signer Certificate)
-                res = PQexec(conn, "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'MLSC'");
-                result["mlscCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                // Validation statistics from validation_result table
-                Json::Value validation;
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'VALID'");
-                validation["validCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'INVALID'");
-                validation["invalidCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'PENDING'");
-                validation["pendingCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validation_status = 'ERROR'");
-                validation["errorCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE trust_chain_valid = TRUE");
-                validation["trustChainValidCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE trust_chain_valid = FALSE");
-                validation["trustChainInvalidCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE csca_found = FALSE AND certificate_type IN ('DSC', 'DSC_NC')");
-                validation["cscaNotFoundCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE validity_period_valid = FALSE AND validation_status != 'ERROR'");
-                validation["expiredCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                res = PQexec(conn, "SELECT COUNT(*) FROM validation_result WHERE revocation_status = 'REVOKED'");
-                validation["revokedCount"] = (PQntuples(res) > 0) ? std::stoi(PQgetvalue(res, 0, 0)) : 0;
-                PQclear(res);
-
-                result["validation"] = validation;
-
-            } else {
-                result["totalUploads"] = 0;
-                result["successfulUploads"] = 0;
-                result["failedUploads"] = 0;
-                result["totalCertificates"] = 0;
-                result["cscaCount"] = 0;
-                result["dscCount"] = 0;
-                result["dscNcCount"] = 0;
-                result["crlCount"] = 0;
-                result["mlCount"] = 0;
-                result["mlscCount"] = 0;
-                result["countriesCount"] = 0;
-
-                // Empty validation stats
-                Json::Value validation;
-                validation["validCount"] = 0;
-                validation["invalidCount"] = 0;
-                validation["pendingCount"] = 0;
-                validation["trustChainValidCount"] = 0;
-                validation["trustChainInvalidCount"] = 0;
-                validation["cscaNotFoundCount"] = 0;
-                validation["expiredCount"] = 0;
-                validation["revokedCount"] = 0;
-                result["validation"] = validation;
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/statistics failed: {}", e.what());
+                Json::Value error;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
             }
-
-            PQfinish(conn);
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
         },
         {drogon::Get}
     );
 
     // Upload history endpoint - returns PageResponse format
+    // Phase 3.1: Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/history",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             spdlog::info("GET /api/upload/history");
 
-            // Get query parameters
-            int page = 0;
-            int size = 20;
-            if (auto p = req->getParameter("page"); !p.empty()) {
-                page = std::stoi(p);
-            }
-            if (auto s = req->getParameter("size"); !s.empty()) {
-                size = std::stoi(s);
-            }
+            try {
+                // Parse query parameters
+                services::UploadService::UploadHistoryFilter filter;
+                filter.page = 0;
+                filter.size = 20;
+                filter.sort = "created_at";
+                filter.direction = "DESC";
 
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            Json::Value result;
-            result["content"] = Json::Value(Json::arrayValue);
-            result["page"] = page;
-            result["size"] = size;
-
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Get total count
-                PGresult* countRes = PQexec(conn, "SELECT COUNT(*) FROM uploaded_file");
-                int totalElements = (PQntuples(countRes) > 0) ? std::stoi(PQgetvalue(countRes, 0, 0)) : 0;
-                PQclear(countRes);
-
-                result["totalElements"] = totalElements;
-                result["totalPages"] = (totalElements + size - 1) / size;
-                result["first"] = (page == 0);
-                result["last"] = (page >= result["totalPages"].asInt() - 1);
-
-                // Get paginated results with validation statistics
-                int offset = page * size;
-                std::string query = "SELECT id, file_name, file_format, file_size, status, "
-                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), COALESCE(mlsc_count, 0), error_message, "
-                                   "upload_timestamp, completed_timestamp, "
-                                   "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
-                                   "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
-                                   "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
-                                   "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
-                                   "FROM uploaded_file ORDER BY upload_timestamp DESC "
-                                   "LIMIT " + std::to_string(size) + " OFFSET " + std::to_string(offset);
-
-                PGresult* res = PQexec(conn, query.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value item;
-                        item["id"] = PQgetvalue(res, i, 0);
-                        item["fileName"] = PQgetvalue(res, i, 1);
-                        item["fileFormat"] = PQgetvalue(res, i, 2);
-                        item["fileSize"] = static_cast<Json::Int64>(std::stoll(PQgetvalue(res, i, 3)));
-                        item["status"] = PQgetvalue(res, i, 4);
-                        int cscaCount = std::stoi(PQgetvalue(res, i, 5));
-                        int dscCount = std::stoi(PQgetvalue(res, i, 6));
-                        int dscNcCount = std::stoi(PQgetvalue(res, i, 7));
-                        item["cscaCount"] = cscaCount;
-                        item["dscCount"] = dscCount;
-                        item["dscNcCount"] = dscNcCount;
-                        item["certificateCount"] = cscaCount + dscCount + dscNcCount;  // Keep for backward compatibility
-                        item["crlCount"] = std::stoi(PQgetvalue(res, i, 8));
-                        item["mlCount"] = std::stoi(PQgetvalue(res, i, 9));  // Master List count
-                        item["mlscCount"] = std::stoi(PQgetvalue(res, i, 10));  // Master List Signer Certificate count (v2.1.1)
-                        item["errorMessage"] = PQgetvalue(res, i, 11) ? PQgetvalue(res, i, 11) : "";
-                        item["createdAt"] = PQgetvalue(res, i, 12);
-                        item["updatedAt"] = PQgetvalue(res, i, 13);
-
-                        // Validation statistics
-                        Json::Value validation;
-                        validation["validCount"] = std::stoi(PQgetvalue(res, i, 14));
-                        validation["invalidCount"] = std::stoi(PQgetvalue(res, i, 15));
-                        validation["pendingCount"] = std::stoi(PQgetvalue(res, i, 16));
-                        validation["errorCount"] = std::stoi(PQgetvalue(res, i, 17));
-                        validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, i, 18));
-                        validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, i, 19));
-                        validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, i, 20));
-                        validation["expiredCount"] = std::stoi(PQgetvalue(res, i, 21));
-                        validation["revokedCount"] = std::stoi(PQgetvalue(res, i, 22));
-                        item["validation"] = validation;
-
-                        result["content"].append(item);
-                    }
+                if (auto p = req->getParameter("page"); !p.empty()) {
+                    filter.page = std::stoi(p);
                 }
-                PQclear(res);
-            } else {
-                result["totalElements"] = 0;
-                result["totalPages"] = 0;
-                result["first"] = true;
-                result["last"] = true;
-            }
+                if (auto s = req->getParameter("size"); !s.empty()) {
+                    filter.size = std::stoi(s);
+                }
+                if (auto sort = req->getParameter("sort"); !sort.empty()) {
+                    filter.sort = sort;
+                }
+                if (auto dir = req->getParameter("direction"); !dir.empty()) {
+                    filter.direction = dir;
+                }
 
-            PQfinish(conn);
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
+                // Call Service method (uses Repository)
+                Json::Value result = uploadService->getUploadHistory(filter);
+
+                // Add PageResponse format compatibility fields
+                if (result.isMember("totalElements")) {
+                    int totalElements = result["totalElements"].asInt();
+                    int size = result["size"].asInt();
+                    int page = result["number"].asInt();
+                    result["page"] = page;
+                    result["totalPages"] = (totalElements + size - 1) / size;
+                    result["first"] = (page == 0);
+                    result["last"] = (page >= result["totalPages"].asInt() - 1);
+                }
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/history error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
         },
         {drogon::Get}
     );
 
     // Get individual upload status - GET /api/upload/detail/{uploadId}
+    // Phase 3.1: Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/detail/{uploadId}",
         [](const drogon::HttpRequestPtr& req,
@@ -6897,68 +6759,31 @@ void registerRoutes() {
            const std::string& uploadId) {
             spdlog::info("GET /api/upload/detail/{}", uploadId);
 
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
+            try {
+                // Call Service method (uses Repository)
+                Json::Value uploadData = uploadService->getUploadDetail(uploadId);
 
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            Json::Value result;
+                if (uploadData.isMember("error")) {
+                    // Upload not found
+                    Json::Value result;
+                    result["success"] = false;
+                    result["error"] = uploadData["error"].asString();
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    return;
+                }
 
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Get upload details with validation statistics
-                std::string query = "SELECT id, file_name, file_format, file_size, status, processing_mode, "
-                                   "csca_count, dsc_count, dsc_nc_count, crl_count, COALESCE(ml_count, 0), COALESCE(mlsc_count, 0), "
-                                   "total_entries, processed_entries, error_message, "
-                                   "upload_timestamp, completed_timestamp, "
-                                   "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
-                                   "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
-                                   "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
-                                   "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
-                                   "FROM uploaded_file WHERE id = '" + uploadId + "'";
+                // TODO Phase 4: Move LDAP status check to CertificateRepository
+                // For now, keep this as a separate query
+                std::string conninfo = "host=" + appConfig.dbHost +
+                                      " port=" + std::to_string(appConfig.dbPort) +
+                                      " dbname=" + appConfig.dbName +
+                                      " user=" + appConfig.dbUser +
+                                      " password=" + appConfig.dbPassword;
+                PGconn* conn = PQconnectdb(conninfo.c_str());
 
-                PGresult* res = PQexec(conn, query.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["success"] = true;
-                    Json::Value data;
-                    data["id"] = PQgetvalue(res, 0, 0);
-                    data["fileName"] = PQgetvalue(res, 0, 1);
-                    data["fileFormat"] = PQgetvalue(res, 0, 2);
-                    data["fileSize"] = static_cast<Json::Int64>(std::stoll(PQgetvalue(res, 0, 3)));
-                    data["status"] = PQgetvalue(res, 0, 4);
-                    data["processingMode"] = PQgetvalue(res, 0, 5);
-
-                    int cscaCount = std::stoi(PQgetvalue(res, 0, 6));
-                    int dscCount = std::stoi(PQgetvalue(res, 0, 7));
-                    int dscNcCount = std::stoi(PQgetvalue(res, 0, 8));
-                    data["cscaCount"] = cscaCount;
-                    data["dscCount"] = dscCount;
-                    data["dscNcCount"] = dscNcCount;
-                    data["certificateCount"] = cscaCount + dscCount + dscNcCount;
-                    data["crlCount"] = std::stoi(PQgetvalue(res, 0, 9));
-                    data["mlCount"] = std::stoi(PQgetvalue(res, 0, 10));
-                    data["mlscCount"] = std::stoi(PQgetvalue(res, 0, 11));  // Master List Signer Certificate count (v2.1.1)
-                    data["totalEntries"] = std::stoi(PQgetvalue(res, 0, 12));
-                    data["processedEntries"] = std::stoi(PQgetvalue(res, 0, 13));
-                    data["errorMessage"] = PQgetvalue(res, 0, 14) ? PQgetvalue(res, 0, 14) : "";
-                    data["createdAt"] = PQgetvalue(res, 0, 15);
-                    data["updatedAt"] = PQgetvalue(res, 0, 16);
-
-                    // Validation statistics
-                    Json::Value validation;
-                    validation["validCount"] = std::stoi(PQgetvalue(res, 0, 17));
-                    validation["invalidCount"] = std::stoi(PQgetvalue(res, 0, 18));
-                    validation["pendingCount"] = std::stoi(PQgetvalue(res, 0, 19));
-                    validation["errorCount"] = std::stoi(PQgetvalue(res, 0, 20));
-                    validation["trustChainValidCount"] = std::stoi(PQgetvalue(res, 0, 21));
-                    validation["trustChainInvalidCount"] = std::stoi(PQgetvalue(res, 0, 22));
-                    validation["cscaNotFoundCount"] = std::stoi(PQgetvalue(res, 0, 23));
-                    validation["expiredCount"] = std::stoi(PQgetvalue(res, 0, 24));
-                    validation["revokedCount"] = std::stoi(PQgetvalue(res, 0, 25));
-                    data["validation"] = validation;
-
-                    // Check LDAP upload status by querying certificate table
+                if (PQstatus(conn) == CONNECTION_OK) {
                     std::string ldapQuery = "SELECT COUNT(*) as total, "
                                           "COALESCE(SUM(CASE WHEN stored_in_ldap = true THEN 1 ELSE 0 END), 0) as in_ldap "
                                           "FROM certificate WHERE upload_id = '" + uploadId + "'";
@@ -6966,28 +6791,32 @@ void registerRoutes() {
                     if (PQresultStatus(ldapRes) == PGRES_TUPLES_OK && PQntuples(ldapRes) > 0) {
                         int totalCerts = std::stoi(PQgetvalue(ldapRes, 0, 0));
                         int ldapCerts = std::stoi(PQgetvalue(ldapRes, 0, 1));
-                        data["ldapUploadedCount"] = ldapCerts;
-                        data["ldapPendingCount"] = totalCerts - ldapCerts;
+                        uploadData["ldapUploadedCount"] = ldapCerts;
+                        uploadData["ldapPendingCount"] = totalCerts - ldapCerts;
                     } else {
-                        data["ldapUploadedCount"] = 0;
-                        data["ldapPendingCount"] = 0;
+                        uploadData["ldapUploadedCount"] = 0;
+                        uploadData["ldapPendingCount"] = 0;
                     }
                     PQclear(ldapRes);
-
-                    result["data"] = data;
-                } else {
-                    result["success"] = false;
-                    result["error"] = "Upload not found";
                 }
-                PQclear(res);
-            } else {
-                result["success"] = false;
-                result["error"] = "Database connection failed";
-            }
+                PQfinish(conn);
 
-            PQfinish(conn);
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
+                Json::Value result;
+                result["success"] = true;
+                result["data"] = uploadData;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/detail/{} error: {}", uploadId, e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
         },
         {drogon::Get}
     );
@@ -7238,145 +7067,57 @@ void registerRoutes() {
     );
 
     // Country statistics endpoint - GET /api/upload/countries
+    // Phase 3.1: Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/countries",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             spdlog::info("GET /api/upload/countries");
 
-            // Get query parameters for limit (default 20)
-            int limit = 20;
-            if (auto l = req->getParameter("limit"); !l.empty()) {
-                limit = std::stoi(l);
-                if (limit > 100) limit = 100;  // Cap at 100
+            try {
+                Json::Value result = uploadService->getCountryStatistics();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/countries failed: {}", e.what());
+                Json::Value error;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
             }
-
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            Json::Value result(Json::arrayValue);
-
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Query certificate counts by country, ordered by total count
-                // Note: ZZ (United Nations legacy code) is merged into UN
-                // Note: MLSC count is derived from LDAP o=mlsc entries
-                std::string query =
-                    "SELECT CASE WHEN country_code = 'ZZ' THEN 'UN' ELSE country_code END as country_code, "
-                    "SUM(CASE WHEN certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
-                    "SUM(CASE WHEN certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
-                    "SUM(CASE WHEN certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
-                    "COUNT(*) as total, "
-                    "SUM(CASE WHEN ldap_dn_v2 LIKE '%o=mlsc%' THEN 1 ELSE 0 END) as mlsc_count "
-                    "FROM certificate "
-                    "WHERE country_code IS NOT NULL AND country_code != '' "
-                    "GROUP BY CASE WHEN country_code = 'ZZ' THEN 'UN' ELSE country_code END "
-                    "ORDER BY total DESC "
-                    "LIMIT " + std::to_string(limit);
-
-                PGresult* res = PQexec(conn, query.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value item;
-                        item["country"] = PQgetvalue(res, i, 0);
-                        item["csca"] = std::stoi(PQgetvalue(res, i, 1));
-                        item["dsc"] = std::stoi(PQgetvalue(res, i, 2));
-                        item["dscNc"] = std::stoi(PQgetvalue(res, i, 3));
-                        item["total"] = std::stoi(PQgetvalue(res, i, 4));
-                        item["mlsc"] = std::stoi(PQgetvalue(res, i, 5));
-                        result.append(item);
-                    }
-                }
-                PQclear(res);
-            }
-
-            PQfinish(conn);
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
         },
         {drogon::Get}
     );
 
     // Detailed country statistics endpoint - GET /api/upload/countries/detailed
+    // Phase 3.1: Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/countries/detailed",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             spdlog::info("GET /api/upload/countries/detailed");
 
-            // Get query parameters for limit (default ALL countries)
-            int limit = 0;  // 0 = no limit
-            if (auto l = req->getParameter("limit"); !l.empty()) {
-                limit = std::stoi(l);
-            }
-
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            Json::Value result(Json::arrayValue);
-
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Query detailed certificate counts by country
-                // - MLSC: Master List Signer Certificates (certificate_type='MLSC')
-                // - CSCA Self-signed: subject_dn = issuer_dn (Self-signed root CAs)
-                // - CSCA Link Cert: subject_dn != issuer_dn (Cross-signed Link Certificates)
-                // - DSC: Document Signer Certificates
-                // - DSC_NC: Non-conformant DSC
-                // Note: CRL count from separate 'crl' table
-                // Note: ZZ (United Nations legacy code) is merged into UN
-                std::string query =
-                    "SELECT "
-                    "  CASE WHEN c.country_code = 'ZZ' THEN 'UN' ELSE c.country_code END as country_code, "
-                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'MLSC' THEN c.id END) as mlsc_count, "
-                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn = c.issuer_dn THEN c.id END) as csca_self_signed_count, "
-                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn != c.issuer_dn THEN c.id END) as csca_link_cert_count, "
-                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'DSC' THEN c.id END) as dsc_count, "
-                    "  COUNT(DISTINCT CASE WHEN c.certificate_type = 'DSC_NC' THEN c.id END) as dsc_nc_count, "
-                    "  COUNT(DISTINCT crl.id) as crl_count, "
-                    "  COUNT(DISTINCT c.id) as total_certs "
-                    "FROM certificate c "
-                    "LEFT JOIN crl ON crl.country_code = c.country_code "
-                    "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
-                    "GROUP BY CASE WHEN c.country_code = 'ZZ' THEN 'UN' ELSE c.country_code END "
-                    "ORDER BY total_certs DESC";
-
-                if (limit > 0) {
-                    query += " LIMIT " + std::to_string(limit);
+            try {
+                // Get query parameters for limit (default ALL countries)
+                int limit = 0;  // 0 = no limit
+                if (auto l = req->getParameter("limit"); !l.empty()) {
+                    limit = std::stoi(l);
                 }
 
-                PGresult* res = PQexec(conn, query.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value item;
-                        item["countryCode"] = PQgetvalue(res, i, 0);
-                        item["mlsc"] = std::stoi(PQgetvalue(res, i, 1));
-                        item["cscaSelfSigned"] = std::stoi(PQgetvalue(res, i, 2));
-                        item["cscaLinkCert"] = std::stoi(PQgetvalue(res, i, 3));
-                        item["dsc"] = std::stoi(PQgetvalue(res, i, 4));
-                        item["dscNc"] = std::stoi(PQgetvalue(res, i, 5));
-                        item["crl"] = std::stoi(PQgetvalue(res, i, 6));
-                        item["totalCerts"] = std::stoi(PQgetvalue(res, i, 7));
-                        result.append(item);
-                    }
-                    spdlog::info("Returned detailed statistics for {} countries", PQntuples(res));
-                } else {
-                    spdlog::error("Failed to query detailed country statistics: {}", PQerrorMessage(conn));
-                }
-                PQclear(res);
-            } else {
-                spdlog::error("Database connection failed: {}", PQerrorMessage(conn));
-            }
+                Json::Value result = uploadService->getDetailedCountryStatistics(limit);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
 
-            PQfinish(conn);
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/countries/detailed failed: {}", e.what());
+                Json::Value error;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
         },
         {drogon::Get}
     );
@@ -8075,6 +7816,7 @@ paths:
     );
 
     // GET /api/certificates/validation - Get validation result by fingerprint
+    // Phase 3.2: Connected to ValidationService (Repository Pattern)
     app.registerHandler(
         "/api/certificates/validation",
         [&](const drogon::HttpRequestPtr& req,
@@ -8092,126 +7834,11 @@ paths:
                     return;
                 }
 
-                spdlog::info("Certificate validation request: fingerprint={}", fingerprint);
+                spdlog::info("GET /api/certificates/validation - fingerprint: {}", fingerprint.substr(0, 16) + "...");
 
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    spdlog::error("Database connection failed for validation query");
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "Database connection failed";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Look up certificate_id by fingerprint, then fetch validation_result
-                const char* query =
-                    "SELECT vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
-                    "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
-                    "       vr.signature_valid, vr.validity_period_valid, "
-                    "       vr.revocation_status, vr.crl_checked, "
-                    "       vr.certificate_type, vr.country_code, "
-                    "       vr.subject_dn, vr.issuer_dn, vr.serial_number, "
-                    "       vr.not_before, vr.not_after, vr.validation_timestamp "
-                    "FROM validation_result vr "
-                    "JOIN certificate c ON vr.certificate_id = c.id "
-                    "WHERE c.fingerprint_sha256 = $1 "
-                    "ORDER BY vr.validation_timestamp DESC "
-                    "LIMIT 1";
-
-                const char* paramValues[1] = { fingerprint.c_str() };
-                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                             nullptr, nullptr, 0);
-
-                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-                    spdlog::error("Validation query failed: {}", PQerrorMessage(conn));
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "Query failed";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    PQclear(res);
-                    PQfinish(conn);
-                    callback(resp);
-                    return;
-                }
-
-                int rows = PQntuples(res);
-                if (rows == 0) {
-                    Json::Value response;
-                    response["success"] = true;
-                    response["validation"] = Json::nullValue;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                    callback(resp);
-                    PQclear(res);
-                    PQfinish(conn);
-                    return;
-                }
-
-                // Parse validation result row
-                Json::Value validation;
-                validation["validationStatus"] = PQgetvalue(res, 0, 0) ? std::string(PQgetvalue(res, 0, 0)) : "UNKNOWN";
-
-                std::string trustChainValidStr = PQgetvalue(res, 0, 1) ? PQgetvalue(res, 0, 1) : "f";
-                validation["trustChainValid"] = (trustChainValidStr == "t" || trustChainValidStr == "true");
-
-                validation["trustChainMessage"] = PQgetisnull(res, 0, 2) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 2)));
-
-                // Parse trust_chain_path JSONB — stored as ["DSC → CN=..."], extract first element as string
-                std::string trustChainPathRaw = PQgetisnull(res, 0, 3) ? "[]" : std::string(PQgetvalue(res, 0, 3));
-                try {
-                    Json::Reader reader;
-                    Json::Value pathArray;
-                    if (reader.parse(trustChainPathRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
-                        validation["trustChainPath"] = pathArray[0].asString();
-                    } else {
-                        validation["trustChainPath"] = "";
-                    }
-                } catch (...) {
-                    validation["trustChainPath"] = "";
-                }
-
-                std::string cscaFoundStr = PQgetvalue(res, 0, 4) ? PQgetvalue(res, 0, 4) : "f";
-                validation["cscaFound"] = (cscaFoundStr == "t" || cscaFoundStr == "true");
-                validation["cscaSubjectDn"] = PQgetisnull(res, 0, 5) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 5)));
-
-                std::string sigValidStr = PQgetvalue(res, 0, 6) ? PQgetvalue(res, 0, 6) : "f";
-                validation["signatureVerified"] = (sigValidStr == "t" || sigValidStr == "true");
-
-                std::string validityValidStr = PQgetvalue(res, 0, 7) ? PQgetvalue(res, 0, 7) : "f";
-                validation["validityCheckPassed"] = (validityValidStr == "t" || validityValidStr == "true");
-
-                validation["crlCheckStatus"] = PQgetisnull(res, 0, 8) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 8)));
-
-                std::string crlCheckedStr2 = PQgetvalue(res, 0, 9) ? PQgetvalue(res, 0, 9) : "f";
-                validation["crlChecked"] = (crlCheckedStr2 == "t" || crlCheckedStr2 == "true");
-
-                validation["certificateType"] = PQgetisnull(res, 0, 10) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 10)));
-                validation["countryCode"] = PQgetisnull(res, 0, 11) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 11)));
-                validation["subjectDn"] = PQgetisnull(res, 0, 12) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 12)));
-                validation["issuerDn"] = PQgetisnull(res, 0, 13) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 13)));
-                validation["serialNumber"] = PQgetisnull(res, 0, 14) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 14)));
-                validation["notBefore"] = PQgetisnull(res, 0, 15) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 15)));
-                validation["notAfter"] = PQgetisnull(res, 0, 16) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 16)));
-                validation["validatedAt"] = PQgetisnull(res, 0, 17) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 17)));
-
-                Json::Value response;
-                response["success"] = true;
-                response["validation"] = validation;
-
+                Json::Value response = validationService->getValidationByFingerprint(fingerprint);
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
-
-                PQclear(res);
-                PQfinish(conn);
 
             } catch (const std::exception& e) {
                 spdlog::error("Certificate validation error: {}", e.what());
@@ -9261,6 +8888,78 @@ int main(int argc, char* argv[]) {
         authHandler = std::make_shared<handlers::AuthHandler>(dbConnInfo);
         spdlog::info("Authentication module initialized");
 
+        // Phase 1.6: Initialize Repository Pattern - Repositories and Services
+        spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
+
+        // Create persistent database connection for Repositories
+        globalDbConn = PQconnectdb(dbConnInfo.c_str());
+        if (PQstatus(globalDbConn) != CONNECTION_OK) {
+            spdlog::critical("Failed to connect to PostgreSQL: {}", PQerrorMessage(globalDbConn));
+            PQfinish(globalDbConn);
+            return 1;
+        }
+        spdlog::info("PostgreSQL connection established for Repository layer");
+
+        // Create LDAP connection (for UploadService)
+        // Note: Using write host for upload operations
+        LDAP* ldapWriteConn = nullptr;
+        std::string ldapWriteUri = "ldap://" + appConfig.ldapWriteHost + ":" + std::to_string(appConfig.ldapWritePort);
+        int ldapResult = ldap_initialize(&ldapWriteConn, ldapWriteUri.c_str());
+        if (ldapResult != LDAP_SUCCESS) {
+            spdlog::error("Failed to initialize LDAP connection: {}", ldap_err2string(ldapResult));
+            PQfinish(globalDbConn);
+            return 1;
+        }
+
+        int version = LDAP_VERSION3;
+        ldap_set_option(ldapWriteConn, LDAP_OPT_PROTOCOL_VERSION, &version);
+
+        struct berval cred;
+        cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
+        cred.bv_len = appConfig.ldapBindPassword.length();
+
+        ldapResult = ldap_sasl_bind_s(ldapWriteConn, appConfig.ldapBindDn.c_str(),
+                                      LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
+        if (ldapResult != LDAP_SUCCESS) {
+            spdlog::error("LDAP bind failed: {}", ldap_err2string(ldapResult));
+            ldap_unbind_ext_s(ldapWriteConn, nullptr, nullptr);
+            PQfinish(globalDbConn);
+            return 1;
+        }
+        spdlog::info("LDAP write connection established for UploadService");
+
+        // Initialize Repositories
+        uploadRepository = std::make_shared<repositories::UploadRepository>(globalDbConn);
+        certificateRepository = std::make_shared<repositories::CertificateRepository>(globalDbConn);
+        validationRepository = std::make_shared<repositories::ValidationRepository>(globalDbConn);
+        auditRepository = std::make_shared<repositories::AuditRepository>(globalDbConn);
+        statisticsRepository = std::make_shared<repositories::StatisticsRepository>(globalDbConn);
+        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics)");
+
+        // Initialize Services with Repository dependencies
+        uploadService = std::make_shared<services::UploadService>(
+            uploadRepository.get(),
+            certificateRepository.get(),
+            ldapWriteConn
+        );
+
+        validationService = std::make_shared<services::ValidationService>(
+            validationRepository.get(),
+            certificateRepository.get()
+        );
+
+        auditService = std::make_shared<services::AuditService>(
+            auditRepository.get()
+        );
+
+        statisticsService = std::make_shared<services::StatisticsService>(
+            statisticsRepository.get(),
+            uploadRepository.get()
+        );
+
+        spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, Statistics)");
+        spdlog::info("Repository Pattern initialization complete - Ready for Oracle migration");
+
         auto& app = drogon::app();
 
         // Server settings
@@ -9303,8 +9002,24 @@ int main(int argc, char* argv[]) {
         // Run the server
         app.run();
 
+        // Phase 1.6: Cleanup - Close database and LDAP connections
+        spdlog::info("Shutting down Repository Pattern resources...");
+        if (globalDbConn) {
+            PQfinish(globalDbConn);
+            globalDbConn = nullptr;
+            spdlog::info("PostgreSQL connection closed");
+        }
+        spdlog::info("Repository Pattern resources cleaned up");
+
     } catch (const std::exception& e) {
         spdlog::error("Application error: {}", e.what());
+
+        // Cleanup on error
+        if (globalDbConn) {
+            PQfinish(globalDbConn);
+            globalDbConn = nullptr;
+        }
+
         return 1;
     }
 

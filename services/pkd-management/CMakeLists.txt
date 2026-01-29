@@ -69,6 +69,19 @@ add_executable(${PROJECT_NAME}
     src/repositories/ldap_certificate_repository.cpp
     src/services/certificate_service.cpp
 
+    # Repository Layer - main.cpp refactoring (v2.1.3 Phase 1.5)
+    src/repositories/upload_repository.cpp
+    src/repositories/certificate_repository.cpp
+    src/repositories/validation_repository.cpp
+    src/repositories/audit_repository.cpp
+    src/repositories/statistics_repository.cpp
+
+    # Service Layer - main.cpp refactoring (v2.1.3)
+    src/services/upload_service.cpp
+    src/services/validation_service.cpp
+    src/services/audit_service.cpp
+    src/services/statistics_service.cpp
+
     # ICAO Auto Sync Module (NEW - v1.7.0)
     src/infrastructure/http/http_client.cpp
     src/infrastructure/notification/email_sender.cpp

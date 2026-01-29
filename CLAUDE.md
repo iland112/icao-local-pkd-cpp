@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.2.9
-**Last Updated**: 2026-01-29
-**Status**: Production Ready - Trust Chain Validation Active (16,868 VALID / 30,340 total)
+**Current Version**: v2.1.3.1
+**Last Updated**: 2026-01-30
+**Status**: Production Ready - Repository Pattern Phase 3 Complete (9 endpoints migrated)
 
 ---
 
@@ -91,7 +91,19 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.2.9)
+### Recent Changes (v2.1.3.1)
+
+- ✅ **Repository Pattern Phase 3: API Route Integration** (v2.1.3.1)
+  - **9 Endpoints Connected**: Migrated from direct SQL to Service layer calls
+    - 8 Upload endpoints → UploadService (uploadLdif, uploadMasterList, getUploadHistory, getUploadDetail, getUploadStatistics, getCountryStatistics, getDetailedCountryStatistics, deleteUpload)
+    - 1 Validation endpoint → ValidationService (getValidationByFingerprint)
+  - **Code Reduction**: 467 lines removed from main.cpp (38% reduction in Controller code)
+  - **File Deduplication**: SHA-256 hash-based duplicate detection prevents re-upload of same files
+  - **Clean Architecture**: Zero SQL queries in connected endpoints, all database access through Repository layer
+  - **Oracle Migration Ready**: Endpoints are database-agnostic, only Repositories need updating for Oracle
+  - **Documentation**: Complete Phase 3 completion report at [docs/PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md](docs/PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md)
+  - **Deferred to Phase 4**: ValidationService re-validation logic, AuditService implementations, async processing logic
+  - **Commit**: Phase 3 completion with Docker build verification
 
 - ✅ **Upload Validations API & Trust Chain Visualization** (v2.1.2.9)
   - **New Endpoint**: `GET /api/upload/{uploadId}/validations` — paginated trust chain validation results scoped to a specific upload
@@ -329,6 +341,65 @@ db_sync_status 10                # Sync history
 ---
 
 ## Version History
+
+### v2.1.3.1 (2026-01-30) - Repository Pattern Phase 3 Complete
+
+#### Phase 3: API Route Integration to Service Layer
+
+- ✅ **9 Endpoints Migrated from Direct SQL to Service Calls**
+  - GET /api/upload/history → uploadService->getUploadHistory()
+  - POST /api/upload/ldif → uploadService->uploadLdif()
+  - POST /api/upload/masterlist → uploadService->uploadMasterList()
+  - GET /api/upload/:id → uploadService->getUploadDetail()
+  - GET /api/upload/statistics → uploadService->getUploadStatistics()
+  - GET /api/upload/countries → uploadService->getCountryStatistics()
+  - GET /api/upload/countries/detailed → uploadService->getDetailedCountryStatistics()
+  - DELETE /api/upload/:id → uploadService->deleteUpload()
+  - GET /api/certificates/validation → validationService->getValidationByFingerprint()
+
+- ✅ **Code Quality Improvements**
+  - **Code Reduction**: 467 lines removed from main.cpp (38% reduction in endpoint code)
+  - **SQL Elimination**: Zero SQL queries in connected endpoints
+  - **Error Handling**: Consistent exception handling in Service layer
+  - **Type Safety**: Strong typing with Repository domain models
+  - **100% Parameterized Queries**: All SQL in Repository layer uses prepared statements
+
+- ✅ **File Deduplication Feature**
+  - SHA-256 hash computation using OpenSSL (UploadService::computeFileHash())
+  - Duplicate detection before processing (UploadRepository::findByFileHash())
+  - Returns 409 Conflict with reference to existing upload ID
+  - Prevents wasted processing and storage
+
+- ✅ **Validation Statistics Integration**
+  - Extended Upload struct with 9 validation fields
+  - trustChainValidCount, trustChainInvalidCount, cscaNotFoundCount, expiredCount, revokedCount
+  - validationValidCount, validationInvalidCount, validationPendingCount, validationErrorCount
+  - Included in all upload history and detail responses
+
+- ✅ **Architecture Benefits**
+  - **Database Independence**: Endpoints have zero database knowledge
+  - **Oracle Migration Ready**: Only 5 Repository files need changing (67% effort reduction)
+  - **Testable**: Services can be unit tested with mock Repositories
+  - **Maintainable**: Clear Controller → Service → Repository separation
+
+**Deferred to Phase 4**:
+- POST /api/validation/revalidate - ValidationService::revalidateDscCertificates() not implemented
+- GET /api/audit/operations - AuditService::getOperationLogs() needs Repository support
+- processLdifFileAsync() - Move async processing logic into UploadService
+- processMasterListFileAsync() - Move async processing logic into UploadService
+
+**Files Modified**:
+
+- services/pkd-management/src/main.cpp - 9 endpoints connected to Services
+- services/pkd-management/src/repositories/upload_repository.{h,cpp} - findByFileHash(), updateFileHash()
+- services/pkd-management/src/services/upload_service.{h,cpp} - computeFileHash() implementation
+- docs/PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md - Complete phase documentation (NEW)
+
+**Documentation**:
+
+- [PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md](docs/PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md) - Comprehensive completion report
+- [PHASE_2_MAIN_INTEGRATION_COMPLETION.md](docs/PHASE_2_MAIN_INTEGRATION_COMPLETION.md) - Service initialization in main.cpp
+- [PHASE_1.6_SERVICE_REPOSITORY_INJECTION.md](docs/PHASE_1.6_SERVICE_REPOSITORY_INJECTION.md) - Service DI implementation
 
 ### v2.1.0 (2026-01-26) - Sprint 3 Complete
 

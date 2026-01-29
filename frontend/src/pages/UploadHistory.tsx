@@ -66,14 +66,6 @@ interface UploadHistoryItem {
   ldapUploadedCount?: number;    // Number of certificates stored in LDAP
 }
 
-// 4-step status definition (simplified for table view)
-const STATUS_STEPS_4: { key: string; label: string; shortLabel: string; icon: React.ReactNode; statuses: UploadStatus[] }[] = [
-  { key: 'UPLOAD', label: '업로드', shortLabel: '업로드', icon: <Upload className="w-3.5 h-3.5" />, statuses: ['PENDING', 'UPLOADING'] },
-  { key: 'PARSE', label: '파싱', shortLabel: '파싱', icon: <FileCheck className="w-3.5 h-3.5" />, statuses: ['PARSING'] },
-  { key: 'VALIDATE_DB', label: '검증/DB', shortLabel: '검증/DB', icon: <Database className="w-3.5 h-3.5" />, statuses: ['VALIDATING', 'SAVING_DB'] },
-  { key: 'LDAP', label: 'LDAP', shortLabel: 'LDAP', icon: <Server className="w-3.5 h-3.5" />, statuses: ['SAVING_LDAP', 'COMPLETED'] },
-];
-
 // Full status step definition (for dialog detail view)
 const STATUS_STEPS: { key: UploadStatus; label: string; icon: React.ReactNode }[] = [
   { key: 'PENDING', label: '대기', icon: <Clock className="w-4 h-4" /> },
@@ -210,81 +202,39 @@ export function UploadHistory() {
     }
   };
 
-  // Get current step index for status progress
+  // Get current step index for status progress (used in detail dialog)
   const getStatusStepIndex = (status: UploadStatus): number => {
     if (status === 'FAILED') return -1;
     return STATUS_STEPS.findIndex(step => step.key === status);
   };
 
-  // Get 4-step index from status
-  const get4StepIndex = (status: UploadStatus): number => {
-    if (status === 'FAILED') return -1;
-    for (let i = 0; i < STATUS_STEPS_4.length; i++) {
-      if (STATUS_STEPS_4[i].statuses.includes(status)) {
-        return i;
-      }
-    }
-    return -1;
-  };
-
-  // Check if step is completed
-  const isStepCompleted = (stepIndex: number, status: UploadStatus): boolean => {
-    if (status === 'COMPLETED') return true;
-    const currentIdx = get4StepIndex(status);
-    return stepIndex < currentIdx;
-  };
-
-  // Render 4-step status progress bar with labels
+  // Render simple status badge (진행 중 / 완료 / 실패)
   const renderStatusProgress = (status: UploadStatus) => {
+    // 실패
     if (status === 'FAILED') {
       return (
-        <div className="flex items-center gap-2">
-          <XCircle className="w-5 h-5 text-red-500" />
-          <span className="text-sm font-medium text-red-600 dark:text-red-400">실패</span>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+          <XCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">실패</span>
         </div>
       );
     }
 
-    const currentStepIdx = get4StepIndex(status);
-    const isAllCompleted = status === 'COMPLETED';
+    // 완료
+    if (status === 'COMPLETED') {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+          <CheckCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">완료</span>
+        </div>
+      );
+    }
 
+    // 진행 중 (PENDING, UPLOADING, PARSING, VALIDATING, SAVING_DB, SAVING_LDAP)
     return (
-      <div className="flex items-center gap-0.5">
-        {STATUS_STEPS_4.map((step, index) => {
-          const isPassed = isStepCompleted(index, status);
-          const isCurrent = index === currentStepIdx && !isAllCompleted;
-
-          return (
-            <div key={step.key} className="flex items-center">
-              <div
-                className={cn(
-                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium transition-all',
-                  isPassed && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-                  isCurrent && 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-                  !isPassed && !isCurrent && 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-                )}
-                title={step.label}
-              >
-                {isPassed ? (
-                  <CheckCircle className="w-3 h-3" />
-                ) : isCurrent ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  step.icon
-                )}
-                <span className="hidden sm:inline">{step.shortLabel}</span>
-              </div>
-              {index < STATUS_STEPS_4.length - 1 && (
-                <div
-                  className={cn(
-                    'w-2 h-0.5',
-                    isPassed ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-600'
-                  )}
-                />
-              )}
-            </div>
-          );
-        })}
+      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm font-medium">진행 중</span>
       </div>
     );
   };
