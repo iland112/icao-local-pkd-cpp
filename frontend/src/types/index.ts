@@ -104,6 +104,94 @@ export interface UploadIssues {
   error?: string;
 }
 
+// Phase 4.4: X.509 Certificate Metadata (from backend)
+export interface CertificateMetadata {
+  // Identity
+  subjectDn: string;
+  issuerDn: string;
+  serialNumber: string;
+  countryCode: string;
+
+  // Certificate type
+  certificateType: string;  // CSCA, DSC, DSC_NC, MLSC
+  isSelfSigned: boolean;
+  isLinkCertificate: boolean;
+
+  // Cryptographic details
+  signatureAlgorithm: string;     // e.g., "SHA256withRSA"
+  publicKeyAlgorithm: string;     // e.g., "RSA", "ECDSA"
+  keySize: number;                // e.g., 2048, 4096
+
+  // X.509 Extensions
+  isCa: boolean;
+  pathLengthConstraint?: number;
+  keyUsage: string[];             // e.g., ["digitalSignature", "keyCertSign"]
+  extendedKeyUsage: string[];     // e.g., ["1.3.6.1.5.5.7.3.2"]
+
+  // Validity period
+  notBefore: string;
+  notAfter: string;
+  isExpired: boolean;
+
+  // Fingerprints
+  fingerprintSha256: string;
+  fingerprintSha1: string;
+}
+
+// Phase 4.4: ICAO 9303 Compliance Status
+export interface IcaoComplianceStatus {
+  isCompliant: boolean;
+  complianceLevel: string;         // CONFORMANT, NON_CONFORMANT, WARNING
+  violations: string[];
+  pkdConformanceCode?: string;     // e.g., "ERR:CSCA.CDP.14"
+  pkdConformanceText?: string;
+  pkdVersion?: string;
+
+  // Specific compliance checks
+  keyUsageCompliant: boolean;
+  algorithmCompliant: boolean;
+  keySizeCompliant: boolean;
+  validityPeriodCompliant: boolean;
+  dnFormatCompliant: boolean;
+  extensionsCompliant: boolean;
+}
+
+// Phase 4.4: Real-time Validation Statistics
+export interface ValidationStatistics {
+  // Overall counts
+  totalCertificates: number;
+  processedCount: number;
+  validCount: number;
+  invalidCount: number;
+  pendingCount: number;
+
+  // Trust chain results
+  trustChainValidCount: number;
+  trustChainInvalidCount: number;
+  cscaNotFoundCount: number;
+
+  // Expiration status
+  expiredCount: number;
+  notYetValidCount: number;
+  validPeriodCount: number;
+
+  // CRL status
+  revokedCount: number;
+  notRevokedCount: number;
+  crlNotCheckedCount: number;
+
+  // ICAO compliance (Phase 4.4)
+  icaoCompliantCount: number;
+  icaoNonCompliantCount: number;
+  icaoWarningCount: number;
+  complianceViolations: Record<string, number>;  // violation type -> count
+
+  // Distribution maps
+  signatureAlgorithms: Record<string, number>;  // "SHA256withRSA" -> count
+  keySizes: Record<string, number>;             // "2048" -> count
+  certificateTypes: Record<string, number>;     // "DSC" -> count, "CSCA" -> count
+}
+
 export interface UploadProgress {
   uploadId: string;
   stage: string;
@@ -117,6 +205,11 @@ export interface UploadProgress {
   updatedAt?: string;
   // For backward compatibility with frontend stage handling
   status?: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+
+  // Phase 4.4: Enhanced metadata
+  currentCertificate?: CertificateMetadata;    // Currently processing certificate
+  currentCompliance?: IcaoComplianceStatus;    // Current cert compliance status
+  statistics?: ValidationStatistics;           // Aggregated statistics
 }
 
 // Certificate types

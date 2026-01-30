@@ -16,9 +16,11 @@ import {
   Database,
 } from 'lucide-react';
 import { uploadApi, createProgressEventSource } from '@/services/api';
-import type { ProcessingMode, UploadProgress, UploadedFile } from '@/types';
+import type { ProcessingMode, UploadProgress, UploadedFile, ValidationStatistics, CertificateMetadata, IcaoComplianceStatus } from '@/types';
 import { cn } from '@/utils/cn';
 import { Stepper, type Step, type StepStatus } from '@/components/common/Stepper';
+import { RealTimeStatisticsPanel } from '@/components/RealTimeStatisticsPanel';
+import { CurrentCertificateCard } from '@/components/CurrentCertificateCard';
 
 interface StageStatus {
   status: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
@@ -59,6 +61,11 @@ export function FileUpload() {
   const [sseConnected, setSseConnected] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
   const pollingIntervalRef = useRef<number | null>(null);
+
+  // Phase 4.4: Enhanced metadata tracking
+  const [statistics, setStatistics] = useState<ValidationStatistics | null>(null);
+  const [currentCertificate, setCurrentCertificate] = useState<CertificateMetadata | null>(null);
+  const [currentCompliance, setCurrentCompliance] = useState<IcaoComplianceStatus | null>(null);
 
   // Restore upload state on page load (for MANUAL mode)
   useEffect(() => {
@@ -225,6 +232,33 @@ export function FileUpload() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Phase 4.4: File-type-aware certificate type detection
+  const getExpectedCertificateTypes = useCallback((file: File | null): string[] => {
+    if (!file) return [];
+    const name = file.name.toLowerCase();
+
+    if (name.endsWith('.ml') || name.endsWith('.bin')) {
+      // Master List files contain MLSC + CSCA (including link certificates)
+      return ['MLSC', 'CSCA', 'Link Cert'];
+    } else if (name.endsWith('.ldif')) {
+      // LDIF files can contain DSC, DSC_NC, CSCA, CRL, and embedded Master Lists
+      return ['DSC', 'DSC_NC', 'CSCA', 'CRL', 'Master List'];
+    }
+    return [];
+  }, []);
+
+  const getFileTypeDescription = useCallback((file: File | null): string => {
+    if (!file) return '';
+    const name = file.name.toLowerCase();
+
+    if (name.endsWith('.ml') || name.endsWith('.bin')) {
+      return 'Master List 서명 인증서(MLSC)와 국가 인증 기관 인증서(CSCA)가 포함됩니다.';
+    } else if (name.endsWith('.ldif')) {
+      return 'LDIF 파일은 다양한 인증서 유형(DSC, CSCA, CRL 등)을 포함할 수 있습니다.';
+    }
+    return '';
+  }, []);
+
   const handleFileSelect = (file: File) => {
     if (isValidFileType(file)) {
       setSelectedFile(file);
@@ -252,6 +286,10 @@ export function FileUpload() {
     setOverallMessage('');
     setErrorMessages([]);
     setUploadId(null);
+    // Phase 4.4: Reset enhanced metadata
+    setStatistics(null);
+    setCurrentCertificate(null);
+    setCurrentCompliance(null);
   };
 
   const handleUpload = async () => {
@@ -510,6 +548,17 @@ export function FileUpload() {
 
   const handleProgressUpdate = (progress: UploadProgress) => {
     const { stage, stageName, message, percentage, processedCount, totalCount, errorMessage } = progress;
+
+    // Phase 4.4: Extract enhanced metadata fields
+    if (progress.statistics) {
+      setStatistics(progress.statistics);
+    }
+    if (progress.currentCertificate) {
+      setCurrentCertificate(progress.currentCertificate);
+    }
+    if (progress.currentCompliance) {
+      setCurrentCompliance(progress.currentCompliance);
+    }
 
     // Determine status from stage
     const getStatus = (stageStr: string): StageStatus['status'] => {
@@ -817,6 +866,30 @@ export function FileUpload() {
                 </div>
               )}
 
+              {/* Phase 4.4: File Type Information */}
+              {selectedFile && isValidFileType(selectedFile) && (
+                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                        {getFileTypeDescription(selectedFile)}
+                      </p>
+                      <div className="flex flex-wrap gap-1">
+                        {getExpectedCertificateTypes(selectedFile).map((type) => (
+                          <span
+                            key={type}
+                            className="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 font-medium"
+                          >
+                            {type}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-100 dark:border-gray-700">
                 <button
@@ -884,6 +957,28 @@ export function FileUpload() {
                   showProgress={true}
                 />
               </div>
+
+              {/* Phase 4.4: Currently Processing Certificate */}
+              {currentCertificate && (overallStatus === 'PROCESSING' || dbSaveStage.status === 'IN_PROGRESS') && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">처리 중인 인증서</h4>
+                  <CurrentCertificateCard
+                    certificate={currentCertificate}
+                    compliance={currentCompliance || undefined}
+                    compact={true}
+                  />
+                </div>
+              )}
+
+              {/* Phase 4.4: Real-time Statistics */}
+              {statistics && (overallStatus === 'PROCESSING' || overallStatus === 'FINALIZED') && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <RealTimeStatisticsPanel
+                    statistics={statistics}
+                    isProcessing={overallStatus === 'PROCESSING'}
+                  />
+                </div>
+              )}
 
               {/* Manual Mode Controls */}
               {processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED' && (
