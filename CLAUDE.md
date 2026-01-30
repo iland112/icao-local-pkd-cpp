@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.3.1
+**Current Version**: v2.1.4
 **Last Updated**: 2026-01-30
-**Status**: Production Ready - Repository Pattern Phase 3 Complete (9 endpoints migrated)
+**Status**: Production Ready - Repository Pattern Phase 4 In Progress (12+ APIs functional)
 
 ---
 
@@ -91,7 +91,33 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.3.1)
+### Recent Changes (v2.1.4)
+
+- ✅ **Repository Pattern Phase 4.2: AuditRepository & AuditService Implementation** (v2.1.4)
+  - **Complete Audit Log System**: Migrated from direct SQL to Repository Pattern
+    - AuditRepository: findAll(), countByOperationType(), getStatistics()
+    - AuditService: getOperationLogs(), getOperationStatistics()
+    - 2 API endpoints connected: GET /api/audit/operations, GET /api/audit/operations/stats
+  - **Dynamic Filtering**: Parameterized queries with optional operationType and username filters
+  - **Statistics Aggregation**: Total/successful/failed counts, operations by type, top users, average duration
+  - **Pagination Support**: Limit/offset with total count for frontend pagination
+  - **Verification**: 9 operations logged, 100% success rate, 41ms average duration
+  - **Commit**: 4ca1951 - Phase 4.2 AuditRepository and AuditService implementation
+
+- ✅ **Repository Pattern Phase 4.1: UploadRepository Statistics & Schema Fixes** (v2.1.4)
+  - **Database Column Mapping Fixes**: Resolved column name mismatches causing "column does not exist" errors
+    - Fixed sortBy mapping: createdAt→upload_timestamp, updatedAt→completed_timestamp
+    - Fixed country_code reference (was using non-existent "country" column)
+    - Fixed self-signed detection: subject_dn = issuer_dn (was using non-existent is_self_signed column)
+    - Updated resultToUpload() column indices from 14-22 to 17-25
+  - **Statistics Methods Implementation**:
+    - getStatisticsSummary(): Total certs by type (CSCA/DSC/DSC_NC/MLSC/CRL), upload count, date range
+    - getCountryStatistics(): Certificate counts grouped by country with sorting
+    - getDetailedCountryStatistics(): Complete breakdown including CSCA self-signed vs link cert split
+  - **SQL Aggregation Queries**: COALESCE, SUM, GROUP BY, CASE expressions for comprehensive statistics
+  - **Verification Results**: 31,212 total certificates across 7 uploads (872 CSCA, 29,838 DSC, 502 DSC_NC, 27 MLSC, 69 CRL)
+  - **Docker Deployment Fix**: Changed from `docker-compose restart` to `docker-compose up -d --force-recreate` for image reload
+  - **Commit**: 2b0e8f1 - Phase 4.1 UploadRepository statistics implementation and schema fixes
 
 - ✅ **Repository Pattern Phase 3: API Route Integration** (v2.1.3.1)
   - **9 Endpoints Connected**: Migrated from direct SQL to Service layer calls
@@ -341,6 +367,120 @@ db_sync_status 10                # Sync history
 ---
 
 ## Version History
+
+### v2.1.4 (2026-01-30) - Repository Pattern Phase 4 Progress: Statistics & Audit Implementation
+
+#### Phase 4.1: UploadRepository Statistics Methods & Database Schema Fixes
+
+- ✅ **Critical Schema Fixes**
+  - **Column Name Mapping**: Fixed mismatches between code expectations and actual database schema
+    - sortBy parameter mapping: createdAt/created_at → upload_timestamp, updatedAt/updated_at → completed_timestamp
+    - Country field: country → country_code (certificate table)
+    - Self-signed detection: Added DN comparison logic (subject_dn = issuer_dn) instead of non-existent is_self_signed column
+  - **Result Mapping Fix**: Updated resultToUpload() column indices from 14-22 to 17-25 to match extended SELECT query
+  - **Impact**: All 9 Phase 3 endpoints now functional (were failing with "column does not exist" errors)
+
+- ✅ **Statistics Methods Implementation**
+  - **getStatisticsSummary()**: Aggregate statistics across all uploads
+    - Total certificate counts by type (CSCA, DSC, DSC_NC, MLSC, CRL)
+    - Total upload count
+    - Date range (earliest/latest upload timestamps)
+    - SQL: COALESCE, SUM aggregations with JOIN to certificate table
+  - **getCountryStatistics()**: Certificate distribution by country
+    - Group by country_code with counts per certificate type
+    - Configurable sorting (country, total, csca, dsc, etc.)
+    - Pagination support (limit parameter)
+    - SQL: GROUP BY with multiple SUM CASE expressions
+  - **getDetailedCountryStatistics()**: Comprehensive country-level breakdown
+    - CSCA split: Self-signed vs Link Certificates (subject_dn = issuer_dn logic)
+    - All certificate types: MLSC, CSCA SS, CSCA LC, DSC, DSC_NC, CRL
+    - Full country coverage (137+ countries)
+    - SQL: Complex CASE expressions for CSCA type detection
+
+- ✅ **Verification Results** (Production Data)
+  - Total: 31,212 certificates across 7 uploads
+  - Breakdown: 872 CSCA, 29,838 DSC, 502 DSC_NC, 27 MLSC, 69 CRL
+  - Country distribution: 137 countries with certificates
+  - API response time: ~50ms for detailed statistics
+
+- ✅ **Docker Deployment Fix**
+  - Issue: `docker-compose restart` doesn't reload updated images
+  - Solution: Use `docker-compose up -d --force-recreate` to force image reload
+  - Result: Consistent deployments with latest code changes
+
+**Files Modified**:
+- services/pkd-management/src/repositories/upload_repository.cpp - Schema fixes and statistics implementation
+- services/pkd-management/src/repositories/upload_repository.h - Method declarations
+
+**Commit**: 2b0e8f1 - Phase 4.1 UploadRepository statistics implementation and schema fixes
+
+#### Phase 4.2: AuditRepository & AuditService Complete Implementation
+
+- ✅ **AuditRepository Methods**
+  - **findAll()**: Retrieve audit logs with dynamic filtering
+    - Optional filters: operationType, username
+    - Pagination: limit, offset
+    - ORDER BY created_at DESC for recent-first ordering
+    - Parameterized queries with dynamic WHERE clause construction
+  - **countByOperationType()**: Count logs by specific operation type
+    - Single parameterized query
+    - Used for statistics and analytics
+  - **getStatistics()**: Comprehensive audit statistics
+    - Total operations, successful/failed counts
+    - Average duration (milliseconds)
+    - Operations grouped by type with counts
+    - Top 10 users by activity
+    - Optional date range filtering (startDate, endDate)
+
+- ✅ **AuditService Integration**
+  - **getOperationLogs()**: Service layer wrapper for findAll()
+    - Accepts AuditLogFilter struct (limit, offset, operationType, username)
+    - Returns JSON with success flag, data array, count
+    - Error handling with exception catching
+  - **getOperationStatistics()**: Service layer wrapper for getStatistics()
+    - Date range support for time-bound analysis
+    - Returns JSON with success flag and nested data object
+    - Consistent response format with other endpoints
+
+- ✅ **API Integration** (2 endpoints connected)
+  - GET /api/audit/operations → auditService->getOperationLogs()
+  - GET /api/audit/operations/stats → auditService->getOperationStatistics()
+  - Zero SQL in main.cpp endpoints, all queries in Repository layer
+  - Consistent error handling and response formatting
+
+- ✅ **Verification Results** (Test Execution)
+  - GET /api/audit/operations: 9 operations returned
+    - Types: FILE_UPLOAD (6), CERTIFICATE_SEARCH (3)
+    - Users: 3 unique users (anonymous, admin, pkd_user)
+    - 100% success rate
+  - GET /api/audit/operations/stats:
+    - Total: 9 operations (9 successful, 0 failed)
+    - Average duration: 41ms
+    - Operations by type: FILE_UPLOAD (6), CERTIFICATE_SEARCH (3)
+    - Top users: anonymous (5), admin (2), pkd_user (2)
+
+**Files Modified**:
+- services/pkd-management/src/repositories/audit_repository.cpp - Complete implementation
+- services/pkd-management/src/repositories/audit_repository.h - Already complete from Phase 1.5
+- services/pkd-management/src/services/audit_service.cpp - Service methods implementation
+- services/pkd-management/src/services/audit_service.h - Already complete from Phase 1.6
+- services/pkd-management/src/main.cpp - 2 endpoints connected to AuditService
+
+**Commit**: 4ca1951 - Phase 4.2 AuditRepository and AuditService implementation
+
+#### Phase 4 Summary
+
+- ✅ **12+ API Endpoints Functional**: Phase 3 (9) + Phase 4.2 (2) + existing endpoints
+- ✅ **Database Schema Alignment**: All column name mismatches resolved
+- ✅ **Complete Statistics APIs**: Upload statistics, country breakdowns, audit logs all working
+- ✅ **100% Parameterized Queries**: All new SQL uses prepared statements with parameter binding
+- ✅ **Production Verified**: Tested with 31,212 real certificates and audit log data
+
+**Remaining Phase 4 Work**:
+- Phase 4.3: ValidationService::revalidateDscCertificates() - Complex X509 validation logic
+- Phase 4.4: Move async processing (processLdifFileAsync, processMasterListFileAsync) into UploadService
+
+---
 
 ### v2.1.3.1 (2026-01-30) - Repository Pattern Phase 3 Complete
 
