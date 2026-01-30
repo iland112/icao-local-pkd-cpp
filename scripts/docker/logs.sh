@@ -1,7 +1,7 @@
 #!/bin/bash
 # docker-logs.sh - 로그 확인 스크립트
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
 SERVICE=${1:-}

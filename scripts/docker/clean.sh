@@ -2,7 +2,7 @@
 # docker-clean.sh - 완전 삭제 스크립트 (PostgreSQL + OpenLDAP + 애플리케이션)
 # Updated: 2026-01-01 - Changed from Docker volumes to bind mounts (.docker-data/)
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
 echo "⚠️  경고: 모든 데이터가 삭제됩니다!"

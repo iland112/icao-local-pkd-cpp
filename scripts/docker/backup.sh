@@ -2,7 +2,7 @@
 # docker-backup.sh - 데이터 백업 스크립트
 # Updated: 2026-01-02 - Updated paths for bind mount structure
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
 BACKUP_DIR="./backups/$(date +%Y%m%d_%H%M%S)"

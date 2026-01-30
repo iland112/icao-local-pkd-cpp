@@ -355,25 +355,55 @@ db_latest_reconciliation_logs
 
 ---
 
-## Helper Scripts
+## Shell Scripts Organization
 
-### rebuild-pkd-relay.sh
-Rebuild and deploy PKD Relay service with optional --no-cache
+All scripts are organized in `scripts/` by functionality. Convenience wrappers are provided in project root for frequently used commands.
 
-### ldap-helpers.sh
-```bash
-source scripts/ldap-helpers.sh
+### Directory Structure
 
-ldap_info                  # Show connection info
-ldap_count_all             # Count all certificates
-ldap_count_certs CRL       # Count CRLs
-ldap_search_country KR     # Search by country
-ldap_delete_all_crls       # Delete all CRLs (testing)
+```
+scripts/
+├── docker/          # Docker management (local x86_64)
+│   ├── start.sh, stop.sh, restart.sh
+│   ├── clean-and-init.sh
+│   ├── health.sh, logs.sh
+│   └── backup.sh, restore.sh
+├── luckfox/         # ARM64 deployment
+│   ├── start.sh, stop.sh, restart.sh
+│   ├── clean.sh, health.sh, logs.sh
+│   └── backup.sh, restore.sh
+├── build/           # Build and verification
+│   ├── build.sh, build-arm64.sh
+│   ├── rebuild-pkd-relay.sh, rebuild-frontend.sh
+│   ├── check-freshness.sh
+│   └── verify-build.sh, verify-frontend.sh
+├── helpers/         # Utility functions (source these)
+│   ├── db-helpers.sh
+│   └── ldap-helpers.sh
+├── maintenance/     # Data management
+│   ├── reset-all-data.sh, reset-ldap-data.sh
+│   └── ldap-dn-migration.sh (+ dryrun, rollback)
+├── monitoring/      # System monitoring
+│   └── icao-version-check.sh
+└── deploy/          # Deployment automation
+    └── from-github-artifacts.sh
 ```
 
-### db-helpers.sh
+### Quick Commands (via convenience wrappers)
+
 ```bash
-source scripts/db-helpers.sh
+# Docker management (most common)
+./docker-start.sh              # Start all services
+./docker-stop.sh               # Stop all services
+./docker-health.sh             # Check service health
+./docker-clean-and-init.sh     # Complete reset and initialization
+```
+
+### Helper Functions (source to use)
+
+**Database helpers**:
+```bash
+source scripts/helpers/db-helpers.sh
 
 db_info                          # Show connection info
 db_count_certs                   # Count certificates
@@ -382,6 +412,46 @@ db_reset_crl_flags               # Reset CRL flags
 db_reconciliation_summary 10     # Last 10 reconciliations
 db_latest_reconciliation_logs    # Latest logs
 db_sync_status 10                # Sync history
+```
+
+**LDAP helpers**:
+```bash
+source scripts/helpers/ldap-helpers.sh
+
+ldap_info                  # Show connection info
+ldap_count_all             # Count all certificates
+ldap_count_certs CRL       # Count CRLs
+ldap_search_country KR     # Search by country
+ldap_delete_all_crls       # Delete all CRLs (testing)
+```
+
+### Build & Deployment
+
+```bash
+# Quick rebuild single service
+./scripts/build/rebuild-pkd-relay.sh [--no-cache]
+./scripts/build/rebuild-frontend.sh
+
+# Full build
+./scripts/build/build.sh              # x86_64
+./scripts/build/build-arm64.sh        # ARM64 (Luckfox)
+
+# Verification
+./scripts/build/check-freshness.sh    # Check if rebuild needed
+./scripts/build/verify-build.sh       # Verify build integrity
+```
+
+### Data Maintenance
+
+```bash
+# Reset data (use with caution!)
+./scripts/maintenance/reset-all-data.sh       # Reset DB + LDAP
+./scripts/maintenance/reset-ldap-data.sh      # Reset LDAP only
+
+# LDAP DN migration (for schema changes)
+./scripts/maintenance/ldap-dn-migration-dryrun.sh
+./scripts/maintenance/ldap-dn-migration.sh
+./scripts/maintenance/ldap-dn-rollback.sh
 ```
 
 ---
