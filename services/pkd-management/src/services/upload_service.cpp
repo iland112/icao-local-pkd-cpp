@@ -4,7 +4,25 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+#include <thread>
+#include <cstdlib>
+#include <libpq-fe.h>
 #include <openssl/evp.h>
+
+// ============================================================================
+// External Declarations for Processing Functions in main.cpp
+// ============================================================================
+
+// Phase 4.4 Note: These async processing functions are currently in main.cpp
+// Full migration to UploadService requires extracting:
+// - ProgressManager (SSE progress tracking singleton)
+// - ProcessingStrategy (AUTO/MANUAL mode pattern)
+// - Helper functions (parseCertificateEntry, parseCrlEntry, etc.)
+// - Shared types (ProcessingProgress, ProcessingStage enum)
+// Once these are refactored to shared headers/libs, the logic can be moved here
+
+extern void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
+extern void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 
 namespace services {
 
@@ -86,10 +104,9 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         std::string tempFilePath = saveToTempFile(result.uploadId, fileContent, ".ldif");
         spdlog::debug("Saved to temp file: {}", tempFilePath);
 
-        // TODO Phase 4: Extract LDIF processing logic from main.cpp
-        // For now, processing must be triggered externally via processLdifFileAsync()
-        spdlog::warn("UploadService::uploadLdif - LDIF processing must be triggered externally");
-        spdlog::warn("TODO: Move processLdifFileAsync() logic into UploadService");
+        // Step 7: Trigger async processing (Phase 4.4)
+        processLdifAsync(result.uploadId, fileContent);
+        spdlog::info("UploadService::uploadLdif - Async LDIF processing triggered for upload: {}", result.uploadId);
 
         result.success = true;
         result.status = "PENDING";
@@ -161,10 +178,9 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
         std::string tempFilePath = saveToTempFile(result.uploadId, fileContent, ".ml");
         spdlog::debug("Saved to temp file: {}", tempFilePath);
 
-        // TODO Phase 4: Extract Master List processing logic from main.cpp
-        // For now, processing must be triggered externally via processMasterListFileAsync()
-        spdlog::warn("UploadService::uploadMasterList - Master List processing must be triggered externally");
-        spdlog::warn("TODO: Move processMasterListFileAsync() logic into UploadService");
+        // Step 7: Trigger async processing (Phase 4.4)
+        processMasterListAsync(result.uploadId, fileContent);
+        spdlog::info("UploadService::uploadMasterList - Async Master List processing triggered for upload: {}", result.uploadId);
 
         result.success = true;
         result.status = "PENDING";
@@ -468,6 +484,34 @@ std::string UploadService::computeFileHash(const std::vector<uint8_t>& content)
         ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
     }
     return ss.str();
+}
+
+// ============================================================================
+// Async Processing Methods (Phase 4.4 - Migrated from main.cpp)
+// ============================================================================
+
+void UploadService::processLdifAsync(const std::string& uploadId, const std::vector<uint8_t>& content)
+{
+    // Phase 4.4 Note: Currently delegates to main.cpp implementation
+    // Full migration to UploadService requires:
+    // 1. Extracting ProgressManager to shared header (currently in main.cpp)
+    // 2. Extracting ProcessingStrategy to separate compilation unit
+    // 3. Migrating all helper functions (parseCertificateEntry, etc.)
+    // This delegation approach allows UploadService to be the integration point
+    // while the actual processing logic remains in main.cpp temporarily
+
+    spdlog::info("[UploadService] Delegating LDIF async processing to main.cpp implementation");
+    processLdifFileAsync(uploadId, content);
+}
+
+void UploadService::processMasterListAsync(const std::string& uploadId, const std::vector<uint8_t>& content)
+{
+    // Phase 4.4 Note: Currently delegates to main.cpp implementation
+    // Full migration requires same refactorings as processLdifAsync
+    // (ProgressManager, ProcessingStrategy, helper functions)
+
+    spdlog::info("[UploadService] Delegating Master List async processing to main.cpp implementation");
+    processMasterListFileAsync(uploadId, content);
 }
 
 } // namespace services

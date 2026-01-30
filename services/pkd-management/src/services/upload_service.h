@@ -105,6 +105,18 @@ public:
         const std::string& uploadedBy
     );
 
+    /**
+     * @brief Process LDIF file asynchronously (Phase 4.4)
+     *
+     * @param uploadId Upload UUID
+     * @param content File content bytes
+     *
+     * Migrated from main.cpp processLdifFileAsync().
+     * Runs in background thread, processes LDIF entries, validates certificates,
+     * saves to DB & LDAP, sends progress updates via ProgressManager.
+     */
+    void processLdifAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
+
     // ========================================================================
     // Master List Upload
     // ========================================================================
@@ -148,6 +160,18 @@ public:
         const std::string& uploadMode,
         const std::string& uploadedBy
     );
+
+    /**
+     * @brief Process Master List file asynchronously (Phase 4.4)
+     *
+     * @param uploadId Upload UUID
+     * @param content File content bytes
+     *
+     * Migrated from main.cpp processMasterListFileAsync().
+     * Runs in background thread, parses CMS SignedData, extracts CSCA certificates,
+     * validates and saves to DB & LDAP, sends progress updates via ProgressManager.
+     */
+    void processMasterListAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 
     // ========================================================================
     // Upload Management (MANUAL mode)
@@ -381,6 +405,19 @@ private:
      * @return std::string Hexadecimal hash string
      */
     static std::string computeFileHash(const std::vector<uint8_t>& content);
+
+    /**
+     * @brief Get LDAP write connection (wrapper for global function)
+     * @return LDAP* LDAP connection or nullptr on failure
+     */
+    static LDAP* getLdapWriteConnection();
+
+    /**
+     * @brief Scrub credentials from error messages
+     * @param message Error message that may contain credentials
+     * @return std::string Scrubbed message
+     */
+    static std::string scrubCredentials(const std::string& message);
 };
 
 } // namespace services

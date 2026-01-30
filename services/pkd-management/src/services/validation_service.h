@@ -370,6 +370,26 @@ private:
      * @brief Check if certificate is a Link Certificate
      */
     bool isLinkCertificate(X509* cert);
+
+    /**
+     * @brief Normalize DN for format-independent comparison
+     *
+     * Handles both OpenSSL slash format (/C=X/O=Y/CN=Z) and RFC2253 comma format (CN=Z,O=Y,C=X).
+     * Normalizes by lowercasing, sorting components, and joining with pipe separator.
+     *
+     * @param dn Distinguished Name in any format
+     * @return Normalized DN string for comparison
+     */
+    std::string normalizeDnForComparison(const std::string& dn);
+
+    /**
+     * @brief Extract RDN attribute value from DN string
+     *
+     * @param dn Distinguished Name (any format)
+     * @param attr Attribute name (e.g., "CN", "C", "O")
+     * @return Lowercase attribute value, or empty string if not found
+     */
+    std::string extractDnAttribute(const std::string& dn, const std::string& attr);
 };
 
 } // namespace services

@@ -5,6 +5,7 @@
 #include <libpq-fe.h>
 #include <ldap.h>
 #include "common.h"
+#include "common/progress_manager.h"  // For ValidationStatistics
 
 /**
  * @brief LDIF file processor
@@ -58,6 +59,7 @@ public:
         PGconn* conn,
         LDAP* ld,
         ValidationStats& stats,
+        common::ValidationStatistics& enhancedStats,
         const TotalCounts* totalCounts = nullptr  // Optional: for "X/Total" progress display
     );
 

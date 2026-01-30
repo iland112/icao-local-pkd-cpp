@@ -743,7 +743,8 @@ bool ValidationService::isSelfSigned(X509* cert)
 
     std::string subject = getSubjectDn(cert);
     std::string issuer = getIssuerDn(cert);
-    return subject == issuer;
+    // Case-insensitive DN comparison (RFC 4517)
+    return (strcasecmp(subject.c_str(), issuer.c_str()) == 0);
 }
 
 bool ValidationService::isLinkCertificate(X509* cert)
@@ -777,6 +778,121 @@ bool ValidationService::isLinkCertificate(X509* cert)
     ASN1_BIT_STRING_free(usage);
 
     return hasKeyCertSign;
+}
+
+std::string ValidationService::normalizeDnForComparison(const std::string& dn)
+{
+    if (dn.empty()) {
+        return dn;
+    }
+
+    std::vector<std::string> parts;
+
+    if (dn[0] == '/') {
+        // OpenSSL slash-separated format: /C=Z/O=Y/CN=X
+        std::istringstream stream(dn);
+        std::string segment;
+        while (std::getline(stream, segment, '/')) {
+            if (!segment.empty()) {
+                std::string lower;
+                for (char c : segment) {
+                    lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                size_t s = lower.find_first_not_of(" \t");
+                if (s != std::string::npos) {
+                    parts.push_back(lower.substr(s));
+                }
+            }
+        }
+    } else {
+        // RFC 2253 comma-separated format: CN=X,O=Y,C=Z
+        std::string current;
+        bool inQuotes = false;
+        for (size_t i = 0; i < dn.size(); i++) {
+            char c = dn[i];
+            if (c == '"') {
+                inQuotes = !inQuotes;
+                current += c;
+            } else if (c == ',' && !inQuotes) {
+                std::string lower;
+                for (char ch : current) {
+                    lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+                }
+                size_t s = lower.find_first_not_of(" \t");
+                if (s != std::string::npos) {
+                    parts.push_back(lower.substr(s));
+                }
+                current.clear();
+            } else if (c == '\\' && i + 1 < dn.size()) {
+                current += c;
+                current += dn[++i];
+            } else {
+                current += c;
+            }
+        }
+        if (!current.empty()) {
+            std::string lower;
+            for (char ch : current) {
+                lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+            }
+            size_t s = lower.find_first_not_of(" \t");
+            if (s != std::string::npos) {
+                parts.push_back(lower.substr(s));
+            }
+        }
+    }
+
+    // Sort components for order-independent comparison
+    std::sort(parts.begin(), parts.end());
+
+    // Join with pipe separator
+    std::string result;
+    for (size_t i = 0; i < parts.size(); i++) {
+        if (i > 0) {
+            result += "|";
+        }
+        result += parts[i];
+    }
+    return result;
+}
+
+std::string ValidationService::extractDnAttribute(const std::string& dn, const std::string& attr)
+{
+    std::string searchKey = attr + "=";
+    // Lowercase DN for case-insensitive search
+    std::string dnLower = dn;
+    for (char& c : dnLower) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+    std::string keyLower = searchKey;
+    for (char& c : keyLower) {
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+
+    size_t pos = 0;
+    while ((pos = dnLower.find(keyLower, pos)) != std::string::npos) {
+        // Verify it's at a boundary (start of string, after / or ,)
+        if (pos == 0 || dnLower[pos-1] == '/' || dnLower[pos-1] == ',') {
+            size_t valStart = pos + keyLower.size();
+            size_t valEnd = dn.find_first_of("/,", valStart);
+            if (valEnd == std::string::npos) {
+                valEnd = dn.size();
+            }
+            std::string val = dn.substr(valStart, valEnd - valStart);
+            // Trim and lowercase
+            size_t s = val.find_first_not_of(" \t");
+            size_t e = val.find_last_not_of(" \t");
+            if (s != std::string::npos) {
+                val = val.substr(s, e - s + 1);
+                for (char& c : val) {
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                return val;
+            }
+        }
+        pos++;
+    }
+    return "";
 }
 
 } // namespace services

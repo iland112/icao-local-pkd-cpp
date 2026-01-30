@@ -2,6 +2,7 @@
 #include "ldif_processor.h"
 #include "common.h"
 #include "common/masterlist_processor.h"
+#include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
 #include <spdlog/spdlog.h>
@@ -10,6 +11,12 @@
 #include <stdexcept>
 #include <libpq-fe.h>
 #include <ldap.h>
+
+// Phase 4.4: Using declarations for enhanced progress tracking
+using common::ValidationStatistics;
+using common::CertificateMetadata;
+using common::IcaoComplianceStatus;
+using common::ProcessingStage;
 
 // This file will be implemented in phases
 // For now, we provide the factory implementation
@@ -51,7 +58,8 @@ void AutoProcessingStrategy::processLdifEntries(
 ) {
     spdlog::info("AUTO mode: Processing {} LDIF entries for upload {}", entries.size(), uploadId);
 
-    ValidationStats stats;
+    ValidationStats stats;  // Existing validation statistics (legacy)
+    common::ValidationStatistics enhancedStats{};  // Phase 4.4: Enhanced statistics with metadata tracking
 
     // v1.5.9: Pre-scan entries to calculate total counts for "X/Total" progress display
     LdifProcessor::TotalCounts totalCounts;
@@ -73,7 +81,7 @@ void AutoProcessingStrategy::processLdifEntries(
                 totalCounts.totalCerts, totalCounts.totalCrl, totalCounts.totalMl);
 
     // Process all entries (save to DB, validate, upload to LDAP) with total counts for progress display
-    auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats, &totalCounts);
+    auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats, enhancedStats, &totalCounts);
 
     // Update database statistics
     int totalItems = counts.cscaCount + counts.dscCount + counts.dscNcCount + counts.crlCount + counts.mlCount;
@@ -458,9 +466,10 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         }
 
         ValidationStats stats;
+        common::ValidationStatistics enhancedStats{};  // Phase 4.4: Enhanced statistics with metadata tracking
 
         // Process entries (save to BOTH DB and LDAP simultaneously)
-        auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats, &totalCounts);
+        auto counts = LdifProcessor::processEntries(uploadId, entries, conn, ld, stats, enhancedStats, &totalCounts);
 
         // Update database statistics
         updateUploadStatistics(conn, uploadId, "COMPLETED",

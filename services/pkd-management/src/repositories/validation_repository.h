@@ -4,13 +4,15 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include "../domain/models/validation_result.h"
+#include "../domain/models/validation_statistics.h"
 
 /**
  * @file validation_repository.h
  * @brief Validation Repository - Database Access Layer for validation_result table
  *
- * @note Part of main.cpp refactoring Phase 1.5
- * @date 2026-01-29
+ * @note Part of main.cpp refactoring Phase 1.5 - Phase 4.4
+ * @date 2026-01-29 (Updated: 2026-01-30)
  */
 
 namespace repositories {
@@ -21,19 +23,26 @@ public:
     ~ValidationRepository() = default;
 
     /**
-     * @brief Save validation result
+     * @brief Save validation result (Phase 4.4)
+     * @param result ValidationResult domain model
+     * @return true if save successful, false otherwise
+     *
+     * Saves complete validation result with 22 fields including trust chain,
+     * signature verification, validity period, and CRL check status.
      */
-    bool save(
-        const std::string& fingerprint,
-        const std::string& uploadId,
-        const std::string& certificateType,
-        const std::string& validationStatus,
-        bool trustChainValid,
-        const std::string& trustChainPath,
-        bool signatureValid,
-        bool crlChecked,
-        bool revoked
-    );
+    bool save(const domain::models::ValidationResult& result);
+
+    /**
+     * @brief Update validation statistics for an upload
+     * @param uploadId Upload UUID
+     * @param stats ValidationStatistics with aggregated counts
+     * @return true if update successful, false otherwise
+     *
+     * Updates the uploaded_file table with validation statistics including
+     * validation status counts, trust chain counts, and specific failure counts.
+     */
+    bool updateStatistics(const std::string& uploadId,
+                         const domain::models::ValidationStatistics& stats);
 
     /**
      * @brief Find validation by fingerprint

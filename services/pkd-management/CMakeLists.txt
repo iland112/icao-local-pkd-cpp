@@ -61,6 +61,7 @@ add_executable(${PROJECT_NAME}
     src/common/certificate_utils.cpp
     src/common/masterlist_processor.cpp
     src/common/x509_metadata_extractor.cpp
+    src/common/progress_manager.cpp  # Phase 4.4: Enhanced progress tracking
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp

@@ -13,24 +13,172 @@ ValidationRepository::ValidationRepository(PGconn* dbConn)
     spdlog::debug("[ValidationRepository] Initialized");
 }
 
-bool ValidationRepository::save(
-    const std::string& fingerprint,
-    const std::string& uploadId,
-    const std::string& certificateType,
-    const std::string& validationStatus,
-    bool trustChainValid,
-    const std::string& trustChainPath,
-    bool signatureValid,
-    bool crlChecked,
-    bool revoked
-)
+bool ValidationRepository::save(const domain::models::ValidationResult& result)
 {
-    spdlog::debug("[ValidationRepository] Saving validation for: {}...", fingerprint.substr(0, 16));
+    spdlog::debug("[ValidationRepository] Saving validation for cert: {}...",
+                  result.certificateId.substr(0, 8));
 
-    // TODO: Implement validation result save
-    spdlog::warn("[ValidationRepository] save - TODO: Implement");
+    try {
+        // Parameterized query matching actual validation_result table schema (22 columns)
+        const char* query =
+            "INSERT INTO validation_result ("
+            "certificate_id, upload_id, certificate_type, country_code, "
+            "subject_dn, issuer_dn, serial_number, "
+            "validation_status, trust_chain_valid, trust_chain_message, "
+            "csca_found, csca_subject_dn, csca_serial_number, csca_country, "
+            "signature_valid, signature_algorithm, "
+            "validity_period_valid, not_before, not_after, "
+            "revocation_status, crl_checked, "
+            "trust_chain_path"
+            ") VALUES ("
+            "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
+            "$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22"
+            ")";
 
-    return false;
+        // Prepare boolean strings
+        const std::string trustChainValidStr = result.trustChainValid ? "true" : "false";
+        const std::string cscaFoundStr = result.cscaFound ? "true" : "false";
+        const std::string signatureValidStr = result.signatureVerified ? "true" : "false";
+        const std::string validityPeriodValidStr = result.validityCheckPassed ? "true" : "false";
+        const std::string crlCheckedStr = (result.crlCheckStatus != "NOT_CHECKED") ? "true" : "false";
+
+        // Map crlCheckStatus to revocation_status (schema uses UNKNOWN/NOT_REVOKED/REVOKED)
+        std::string revocationStatus = "UNKNOWN";
+        if (result.crlCheckStatus == "REVOKED") {
+            revocationStatus = "REVOKED";
+        } else if (result.crlCheckStatus == "NOT_REVOKED" || result.crlCheckStatus == "VALID") {
+            revocationStatus = "NOT_REVOKED";
+        }
+
+        // Prepare trust_chain_path as JSON array (schema expects jsonb)
+        // trustChainPath is human-readable like "DSC → CN=CSCA → CN=Link"
+        // Wrap as JSON array for JSONB column
+        std::string trustChainPathJson;
+        if (result.trustChainPath.empty()) {
+            trustChainPathJson = "[]";
+        } else {
+            Json::Value pathArray(Json::arrayValue);
+            pathArray.append(result.trustChainPath);
+            Json::StreamWriterBuilder builder;
+            builder["indentation"] = "";
+            trustChainPathJson = Json::writeString(builder, pathArray);
+        }
+
+        // Prepare parameter values
+        const char* paramValues[22];
+        paramValues[0] = result.certificateId.c_str();
+        paramValues[1] = result.uploadId.c_str();
+        paramValues[2] = result.certificateType.c_str();
+        paramValues[3] = result.countryCode.empty() ? nullptr : result.countryCode.c_str();
+        paramValues[4] = result.subjectDn.c_str();
+        paramValues[5] = result.issuerDn.c_str();
+        paramValues[6] = result.serialNumber.empty() ? nullptr : result.serialNumber.c_str();
+        paramValues[7] = result.validationStatus.c_str();
+        paramValues[8] = trustChainValidStr.c_str();
+        paramValues[9] = result.trustChainMessage.empty() ? nullptr : result.trustChainMessage.c_str();
+        paramValues[10] = cscaFoundStr.c_str();
+        paramValues[11] = result.cscaSubjectDn.empty() ? nullptr : result.cscaSubjectDn.c_str();
+        paramValues[12] = nullptr;  // csca_serial_number - not tracked in ValidationResult
+        paramValues[13] = nullptr;  // csca_country - not tracked in ValidationResult
+        paramValues[14] = signatureValidStr.c_str();
+        paramValues[15] = result.signatureAlgorithm.empty() ? nullptr : result.signatureAlgorithm.c_str();
+        paramValues[16] = validityPeriodValidStr.c_str();
+        paramValues[17] = result.notBefore.empty() ? nullptr : result.notBefore.c_str();
+        paramValues[18] = result.notAfter.empty() ? nullptr : result.notAfter.c_str();
+        paramValues[19] = revocationStatus.c_str();
+        paramValues[20] = crlCheckedStr.c_str();
+        paramValues[21] = trustChainPathJson.c_str();
+
+        // Execute parameterized query
+        PGresult* res = PQexecParams(dbConn_, query, 22, nullptr, paramValues,
+                                     nullptr, nullptr, 0);
+
+        bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+
+        if (!success) {
+            spdlog::error("[ValidationRepository] Failed to save validation result: {}",
+                         PQerrorMessage(dbConn_));
+        } else {
+            spdlog::debug("[ValidationRepository] Validation result saved successfully");
+        }
+
+        PQclear(res);
+        return success;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ValidationRepository] Exception in save: {}", e.what());
+        return false;
+    }
+}
+
+bool ValidationRepository::updateStatistics(const std::string& uploadId,
+                                           const domain::models::ValidationStatistics& stats)
+{
+    spdlog::debug("[ValidationRepository] Updating statistics for upload: {}...",
+                  uploadId.substr(0, 8));
+
+    try {
+        // Parameterized UPDATE query for uploaded_file table (10 parameters)
+        const char* query =
+            "UPDATE uploaded_file SET "
+            "validation_valid_count = $1, "
+            "validation_invalid_count = $2, "
+            "validation_pending_count = $3, "
+            "validation_error_count = $4, "
+            "trust_chain_valid_count = $5, "
+            "trust_chain_invalid_count = $6, "
+            "csca_not_found_count = $7, "
+            "expired_count = $8, "
+            "revoked_count = $9 "
+            "WHERE id = $10";
+
+        // Prepare integer strings for parameterized query
+        std::string validCountStr = std::to_string(stats.validCount);
+        std::string invalidCountStr = std::to_string(stats.invalidCount);
+        std::string pendingCountStr = std::to_string(stats.pendingCount);
+        std::string errorCountStr = std::to_string(stats.errorCount);
+        std::string trustChainValidCountStr = std::to_string(stats.trustChainValidCount);
+        std::string trustChainInvalidCountStr = std::to_string(stats.trustChainInvalidCount);
+        std::string cscaNotFoundCountStr = std::to_string(stats.cscaNotFoundCount);
+        std::string expiredCountStr = std::to_string(stats.expiredCount);
+        std::string revokedCountStr = std::to_string(stats.revokedCount);
+
+        const char* paramValues[10] = {
+            validCountStr.c_str(),
+            invalidCountStr.c_str(),
+            pendingCountStr.c_str(),
+            errorCountStr.c_str(),
+            trustChainValidCountStr.c_str(),
+            trustChainInvalidCountStr.c_str(),
+            cscaNotFoundCountStr.c_str(),
+            expiredCountStr.c_str(),
+            revokedCountStr.c_str(),
+            uploadId.c_str()
+        };
+
+        // Execute parameterized query
+        PGresult* res = PQexecParams(dbConn_, query, 10, nullptr, paramValues,
+                                     nullptr, nullptr, 0);
+
+        bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+
+        if (!success) {
+            spdlog::error("[ValidationRepository] Failed to update statistics: {}",
+                         PQerrorMessage(dbConn_));
+        } else {
+            spdlog::debug("[ValidationRepository] Statistics updated successfully "
+                         "(valid={}, invalid={}, pending={}, error={})",
+                         stats.validCount, stats.invalidCount,
+                         stats.pendingCount, stats.errorCount);
+        }
+
+        PQclear(res);
+        return success;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ValidationRepository] Exception in updateStatistics: {}", e.what());
+        return false;
+    }
 }
 
 Json::Value ValidationRepository::findByFingerprint(const std::string& fingerprint)

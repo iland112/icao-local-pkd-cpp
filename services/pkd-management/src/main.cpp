@@ -61,6 +61,7 @@
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
 #include "common/x509_metadata_extractor.h"
+#include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
@@ -271,229 +272,18 @@ std::atomic<size_t> g_ldapReadRoundRobinIndex{0};
 // SSE Progress Management
 // =============================================================================
 
-/**
- * @brief Processing stage enumeration
- */
-enum class ProcessingStage {
-    UPLOAD_COMPLETED,
-    PARSING_STARTED,
-    PARSING_IN_PROGRESS,
-    PARSING_COMPLETED,
-    VALIDATION_STARTED,
-    VALIDATION_IN_PROGRESS,
-    VALIDATION_COMPLETED,
-    DB_SAVING_STARTED,
-    DB_SAVING_IN_PROGRESS,
-    DB_SAVING_COMPLETED,
-    LDAP_SAVING_STARTED,
-    LDAP_SAVING_IN_PROGRESS,
-    LDAP_SAVING_COMPLETED,
-    COMPLETED,
-    FAILED
-};
+// ============================================================================
+// Progress Manager - Now imported from common/progress_manager.h (Phase 4.4)
+// ============================================================================
+// Enhanced with X.509 metadata tracking and ICAO 9303 compliance monitoring.
+// See common/progress_manager.h for full implementation.
 
-std::string stageToString(ProcessingStage stage) {
-    switch (stage) {
-        case ProcessingStage::UPLOAD_COMPLETED: return "UPLOAD_COMPLETED";
-        case ProcessingStage::PARSING_STARTED: return "PARSING_STARTED";
-        case ProcessingStage::PARSING_IN_PROGRESS: return "PARSING_IN_PROGRESS";
-        case ProcessingStage::PARSING_COMPLETED: return "PARSING_COMPLETED";
-        case ProcessingStage::VALIDATION_STARTED: return "VALIDATION_STARTED";
-        case ProcessingStage::VALIDATION_IN_PROGRESS: return "VALIDATION_IN_PROGRESS";
-        case ProcessingStage::VALIDATION_COMPLETED: return "VALIDATION_COMPLETED";
-        case ProcessingStage::DB_SAVING_STARTED: return "DB_SAVING_STARTED";
-        case ProcessingStage::DB_SAVING_IN_PROGRESS: return "DB_SAVING_IN_PROGRESS";
-        case ProcessingStage::DB_SAVING_COMPLETED: return "DB_SAVING_COMPLETED";
-        case ProcessingStage::LDAP_SAVING_STARTED: return "LDAP_SAVING_STARTED";
-        case ProcessingStage::LDAP_SAVING_IN_PROGRESS: return "LDAP_SAVING_IN_PROGRESS";
-        case ProcessingStage::LDAP_SAVING_COMPLETED: return "LDAP_SAVING_COMPLETED";
-        case ProcessingStage::COMPLETED: return "COMPLETED";
-        case ProcessingStage::FAILED: return "FAILED";
-        default: return "UNKNOWN";
-    }
-}
-
-std::string stageToKorean(ProcessingStage stage) {
-    switch (stage) {
-        case ProcessingStage::UPLOAD_COMPLETED: return "파일 업로드 완료";
-        case ProcessingStage::PARSING_STARTED: return "파일 파싱 시작";
-        case ProcessingStage::PARSING_IN_PROGRESS: return "파일 파싱 중";
-        case ProcessingStage::PARSING_COMPLETED: return "파일 파싱 완료";
-        case ProcessingStage::VALIDATION_STARTED: return "인증서 검증 시작";
-        case ProcessingStage::VALIDATION_IN_PROGRESS: return "인증서 검증 중";
-        case ProcessingStage::VALIDATION_COMPLETED: return "인증서 검증 완료";
-        case ProcessingStage::DB_SAVING_STARTED: return "DB 저장 시작";
-        case ProcessingStage::DB_SAVING_IN_PROGRESS: return "DB 저장 중";
-        case ProcessingStage::DB_SAVING_COMPLETED: return "DB 저장 완료";
-        case ProcessingStage::LDAP_SAVING_STARTED: return "LDAP 저장 시작";
-        case ProcessingStage::LDAP_SAVING_IN_PROGRESS: return "LDAP 저장 중";
-        case ProcessingStage::LDAP_SAVING_COMPLETED: return "LDAP 저장 완료";
-        case ProcessingStage::COMPLETED: return "처리 완료";
-        case ProcessingStage::FAILED: return "처리 실패";
-        default: return "알 수 없음";
-    }
-}
-
-int stageToBasePercentage(ProcessingStage stage) {
-    switch (stage) {
-        case ProcessingStage::UPLOAD_COMPLETED: return 5;
-        case ProcessingStage::PARSING_STARTED: return 10;
-        case ProcessingStage::PARSING_IN_PROGRESS: return 30;
-        case ProcessingStage::PARSING_COMPLETED: return 50;
-        case ProcessingStage::VALIDATION_STARTED: return 55;
-        case ProcessingStage::VALIDATION_IN_PROGRESS: return 60;
-        case ProcessingStage::VALIDATION_COMPLETED: return 70;
-        case ProcessingStage::DB_SAVING_STARTED: return 72;
-        case ProcessingStage::DB_SAVING_IN_PROGRESS: return 78;
-        case ProcessingStage::DB_SAVING_COMPLETED: return 85;
-        case ProcessingStage::LDAP_SAVING_STARTED: return 87;
-        case ProcessingStage::LDAP_SAVING_IN_PROGRESS: return 93;
-        case ProcessingStage::LDAP_SAVING_COMPLETED: return 100;
-        case ProcessingStage::COMPLETED: return 100;
-        case ProcessingStage::FAILED: return 0;
-        default: return 0;
-    }
-}
-
-/**
- * @brief Processing progress data
- */
-struct ProcessingProgress {
-    std::string uploadId;
-    ProcessingStage stage;
-    int percentage;
-    int processedCount;
-    int totalCount;
-    std::string message;
-    std::string errorMessage;
-    std::string details;
-    std::chrono::system_clock::time_point updatedAt;
-
-    std::string toJson() const {
-        Json::Value json;
-        json["uploadId"] = uploadId;
-        json["stage"] = stageToString(stage);
-        json["stageName"] = stageToKorean(stage);
-        json["percentage"] = percentage;
-        json["processedCount"] = processedCount;
-        json["totalCount"] = totalCount;
-        json["message"] = message;
-        json["errorMessage"] = errorMessage;
-        json["details"] = details;
-
-        auto time = std::chrono::system_clock::to_time_t(updatedAt);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
-        json["updatedAt"] = ss.str();
-
-        Json::StreamWriterBuilder writer;
-        writer["indentation"] = "";  // Single-line JSON for SSE compatibility
-        return Json::writeString(writer, json);
-    }
-
-    static ProcessingProgress create(
-        const std::string& uploadId,
-        ProcessingStage stage,
-        int processedCount,
-        int totalCount,
-        const std::string& message,
-        const std::string& errorMessage = "",
-        const std::string& details = ""
-    ) {
-        ProcessingProgress p;
-        p.uploadId = uploadId;
-        p.stage = stage;
-        p.processedCount = processedCount;
-        p.totalCount = totalCount;
-        p.message = message;
-        p.errorMessage = errorMessage;
-        p.details = details;
-        p.updatedAt = std::chrono::system_clock::now();
-
-        // Calculate percentage based on stage and progress
-        int basePercent = stageToBasePercentage(stage);
-        if (totalCount > 0 && processedCount > 0) {
-            // Scale within stage range
-            int nextPercent = 100;
-            if (stage == ProcessingStage::PARSING_IN_PROGRESS) nextPercent = 50;
-            else if (stage == ProcessingStage::DB_SAVING_IN_PROGRESS) nextPercent = 85;
-            else if (stage == ProcessingStage::LDAP_SAVING_IN_PROGRESS) nextPercent = 100;
-
-            int range = nextPercent - basePercent;
-            p.percentage = basePercent + (range * processedCount / totalCount);
-        } else {
-            p.percentage = basePercent;
-        }
-
-        return p;
-    }
-};
-
-/**
- * @brief SSE Progress Manager - Thread-safe progress tracking and SSE streaming
- */
-class ProgressManager {
-private:
-    std::mutex mutex_;
-    std::map<std::string, ProcessingProgress> progressCache_;
-    std::map<std::string, std::function<void(const std::string&)>> sseCallbacks_;
-
-public:
-    static ProgressManager& getInstance() {
-        static ProgressManager instance;
-        return instance;
-    }
-
-    void sendProgress(const ProcessingProgress& progress) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        progressCache_[progress.uploadId] = progress;
-
-        // Send to SSE callback if registered
-        auto it = sseCallbacks_.find(progress.uploadId);
-        if (it != sseCallbacks_.end()) {
-            try {
-                std::string sseData = "event: progress\ndata: " + progress.toJson() + "\n\n";
-                it->second(sseData);
-            } catch (...) {
-                sseCallbacks_.erase(it);
-            }
-        }
-
-        spdlog::debug("Progress: {} - {} ({}%)", progress.uploadId, stageToString(progress.stage), progress.percentage);
-    }
-
-    void registerSseCallback(const std::string& uploadId, std::function<void(const std::string&)> callback) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        sseCallbacks_[uploadId] = callback;
-
-        // Send cached progress if available
-        auto it = progressCache_.find(uploadId);
-        if (it != progressCache_.end()) {
-            std::string sseData = "event: progress\ndata: " + it->second.toJson() + "\n\n";
-            callback(sseData);
-        }
-    }
-
-    void unregisterSseCallback(const std::string& uploadId) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        sseCallbacks_.erase(uploadId);
-    }
-
-    std::optional<ProcessingProgress> getProgress(const std::string& uploadId) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        auto it = progressCache_.find(uploadId);
-        if (it != progressCache_.end()) {
-            return it->second;
-        }
-        return std::nullopt;
-    }
-
-    void clearProgress(const std::string& uploadId) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        progressCache_.erase(uploadId);
-        sseCallbacks_.erase(uploadId);
-    }
-};
+using common::ProcessingStage;
+using common::ProcessingProgress;
+using common::ProgressManager;
+using common::CertificateMetadata;
+using common::IcaoComplianceStatus;
+using common::ValidationStatistics;
 
 // =============================================================================
 // Trust Anchor & CMS Signature Verification
@@ -1921,6 +1711,47 @@ void updateUploadStatus(PGconn* conn, const std::string& uploadId,
 }
 
 /**
+ * @brief Send enhanced progress update with optional certificate metadata
+ *
+ * Phase 4.4 Task 3: Helper function for sending progress updates with
+ * certificate metadata, ICAO compliance status, and validation statistics.
+ *
+ * @param uploadId Upload UUID
+ * @param stage Current processing stage
+ * @param processedCount Number of items processed
+ * @param totalCount Total number of items
+ * @param message User-facing progress message
+ * @param metadata Optional certificate metadata
+ * @param compliance Optional ICAO compliance status
+ * @param stats Optional validation statistics
+ */
+void sendProgressWithMetadata(
+    const std::string& uploadId,
+    ProcessingStage stage,
+    int processedCount,
+    int totalCount,
+    const std::string& message,
+    const std::optional<CertificateMetadata>& metadata = std::nullopt,
+    const std::optional<IcaoComplianceStatus>& compliance = std::nullopt,
+    const std::optional<ValidationStatistics>& stats = std::nullopt
+) {
+    ProcessingProgress progress;
+
+    if (metadata.has_value()) {
+        progress = ProcessingProgress::createWithMetadata(
+            uploadId, stage, processedCount, totalCount, message,
+            metadata.value(), compliance, stats
+        );
+    } else {
+        progress = ProcessingProgress::create(
+            uploadId, stage, processedCount, totalCount, message
+        );
+    }
+
+    ProgressManager::getInstance().sendProgress(progress);
+}
+
+/**
  * @brief Count LDIF entries in content
  */
 int countLdifEntries(const std::string& content) {
@@ -3341,7 +3172,8 @@ std::string saveMasterList(PGconn* conn, const std::string& uploadId,
 bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                            const LdifEntry& entry, const std::string& attrName,
                            int& cscaCount, int& dscCount, int& dscNcCount, int& ldapStoredCount,
-                           ValidationStats& validationStats) {
+                           ValidationStats& validationStats,
+                           common::ValidationStatistics& enhancedStats) {
     std::string base64Value = entry.getFirstAttribute(attrName);
     if (base64Value.empty()) return false;
 
@@ -3375,6 +3207,13 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
     if (countryCode == "XX") {
         countryCode = extractCountryCode(issuerDn);
     }
+
+    // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+    // Note: This extraction is done early (before validation) so metadata is available
+    // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
+    CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+    spdlog::debug("Phase 4.4: Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                  certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
 
     // Determine certificate type and perform validation
     std::string certType;
@@ -3531,6 +3370,40 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                         dscValidation.errorMessage, countryCode);
         }
     }
+
+    // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
+    IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+    spdlog::debug("Phase 4.4: ICAO compliance for {} cert: isCompliant={}, level={}",
+                  certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
+
+    // Phase 4.4: Update enhanced statistics (ValidationStatistics)
+    enhancedStats.totalCertificates++;
+    enhancedStats.certificateTypes[certType]++;
+    enhancedStats.signatureAlgorithms[certMetadata.signatureAlgorithm]++;
+    enhancedStats.keySizes[certMetadata.keySize]++;
+
+    // Update ICAO compliance counts
+    if (icaoCompliance.isCompliant) {
+        enhancedStats.icaoCompliantCount++;
+    } else {
+        enhancedStats.icaoNonCompliantCount++;
+    }
+
+    // Update validation status counts (matches legacy validationStats)
+    if (validationStatus == "VALID") {
+        enhancedStats.validCount++;
+    } else if (validationStatus == "INVALID") {
+        enhancedStats.invalidCount++;
+    } else if (validationStatus == "PENDING") {
+        enhancedStats.pendingCount++;
+    }
+
+    spdlog::debug("Phase 4.4: Updated statistics - total={}, type={}, sigAlg={}, keySize={}, icaoCompliant={}",
+                  enhancedStats.totalCertificates, certType, certMetadata.signatureAlgorithm,
+                  certMetadata.keySize, icaoCompliance.isCompliant);
+    // Note: This requires passing ValidationStatistics as a parameter to this function
+    // For now, we log the metadata and compliance for verification
+    // Statistics will be updated once the parameter is added to function signature
 
     auto endTime = std::chrono::high_resolution_clock::now();
     valRecord.validationDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
@@ -3841,10 +3714,9 @@ void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
     PQclear(res);
 }
 
-namespace {  // Resume anonymous namespace
-
 /**
  * @brief Process LDIF file asynchronously with full parsing (DB + LDAP)
+ * @note Defined outside anonymous namespace for external linkage (Phase 4.4)
  */
 void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
     std::thread([uploadId, content]() {
@@ -4163,7 +4035,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
     }).detach();
 }
 
-}  // Close anonymous namespace to define external function
+namespace {  // Anonymous namespace for internal helper functions
 
 /**
  * @brief Core Master List processing logic (called by Strategy Pattern)
@@ -4288,6 +4160,13 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                     std::string ldapCertType = "CSCA";  // LDAP cert type (CSCA or LC)
                                     bool isLinkCert = false;
 
+                                    // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                                    // Note: This extraction is done early (before type determination) so metadata is available
+                                    // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
+                                    CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+                                    spdlog::debug("Phase 4.4 (Master List): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                                                  certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
+
                                     // Sprint 3 Task 3.3: Validate both self-signed CSCAs and link certificates
                                     std::string validationStatus = "VALID";
                                     if (isSelfSigned(cert)) {
@@ -4309,6 +4188,17 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                         validationStatus = "INVALID";
                                         spdlog::warn("Master List: Invalid certificate (not self-signed and not link cert): {}", subjectDn);
                                     }
+
+                                    // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
+                                    // Use ldapCertType as it correctly identifies MLSC vs CSCA
+                                    IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, ldapCertType);
+                                    spdlog::debug("Phase 4.4 (Master List): ICAO compliance for {} cert: isCompliant={}, level={}",
+                                                  ldapCertType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
+
+                                    // Phase 4.4 TODO: Update enhanced statistics (ValidationStatistics)
+                                    // Note: This requires passing ValidationStatistics as a parameter to this function
+                                    // For now, we log the metadata and compliance for verification
+                                    // Statistics will be updated once the parameter is added to function signature
 
                                     // Save to DB
                                     std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
@@ -4385,6 +4275,13 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
+                            // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                            // Note: This extraction is done early (before type determination) so metadata is available
+                            // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
+                            CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+                            spdlog::debug("Phase 4.4 (Master List PKCS7): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                                          certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
+
                             // Determine certificate type: Self-signed CSCA or Link Certificate
                             std::string certType = "CSCA";  // DB always stores as CSCA
                             std::string ldapCertType = "CSCA";  // LDAP cert type (CSCA or LC)
@@ -4407,6 +4304,17 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
                                 validationStatus = "INVALID";
                                 spdlog::warn("Master List (PKCS7): Invalid certificate (not self-signed and not link cert): {}", subjectDn);
                             }
+
+                            // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
+                            // Use ldapCertType as it correctly identifies MLSC vs CSCA
+                            IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, ldapCertType);
+                            spdlog::debug("Phase 4.4 (Master List PKCS7): ICAO compliance for {} cert: isCompliant={}, level={}",
+                                          ldapCertType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
+
+                            // Phase 4.4 TODO: Update enhanced statistics (ValidationStatistics)
+                            // Note: This requires passing ValidationStatistics as a parameter to this function
+                            // For now, we log the metadata and compliance for verification
+                            // Statistics will be updated once the parameter is added to function signature
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
@@ -4463,11 +4371,11 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
     }
 }
 
-namespace {  // Reopen anonymous namespace for internal functions
+}  // Close anonymous namespace before external function
 
 /**
  * @brief Parse Master List (CMS SignedData) and extract CSCA certificates (DB + LDAP)
- * Master List contains CSCA certificates in CMS SignedData format
+ * @note Defined outside anonymous namespace for external linkage (Phase 4.4)
  */
 void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
     std::thread([uploadId, content]() {
@@ -4607,9 +4515,19 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
+                            // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                            CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                                          certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
+
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
                             // Including both self-signed and cross-signed/link CSCAs
                             std::string certType = "CSCA";
+
+                            // Phase 4.4: Check ICAO 9303 compliance
+                            IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
+                                          certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
@@ -4719,6 +4637,11 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         std::string fingerprint = computeFileHash(derBytes);
                                         std::string countryCode = extractCountryCode(subjectDn);
 
+                                        // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                                        CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+                                        spdlog::debug("Phase 4.4 (Master List Async): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                                                      certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
+
                                         // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
                                         // Including both self-signed and cross-signed/link CSCAs
                                         std::string certType = "CSCA";
@@ -4747,6 +4670,12 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                             spdlog::debug("Cross-signed CSCA: subject={}, issuer={}",
                                                          subjectDn.substr(0, 50), issuerDn.substr(0, 50));
                                         }
+
+                                        // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
+                                        IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                                        spdlog::debug("Phase 4.4 (Master List Async): ICAO compliance for {} cert: isCompliant={}, level={}",
+                                                      certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
+
                                         totalCerts++;
 
                                         // Check for duplicate before saving
@@ -4831,9 +4760,19 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
+                            // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                            CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
+                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                                          certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
+
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
                             // Including both self-signed and cross-signed/link CSCAs
                             std::string certType = "CSCA";
+
+                            // Phase 4.4: Check ICAO 9303 compliance
+                            IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
+                                          certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
                             std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
                                                                  subjectDn, issuerDn, serialNumber, fingerprint,
@@ -4906,6 +4845,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
         PQfinish(conn);
     }).detach();
 }
+
+namespace {  // Reopen anonymous namespace for remaining internal functions
 
 /**
  * @brief Check LDAP connectivity
