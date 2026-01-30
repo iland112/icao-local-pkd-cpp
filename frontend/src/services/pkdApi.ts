@@ -220,13 +220,17 @@ export const uploadHistoryApi = {
    * @returns Top countries by certificate count
    */
   getCountryStatistics: (limit: number = 20) =>
-    pkdApi.get<Array<{
-      country: string;
-      csca: number;
-      dsc: number;
-      dscNc: number;
-      total: number;
-    }>>('/upload/countries', { params: { limit } }),
+    pkdApi.get<{
+      countries: Array<{
+        country: string;
+        csca: number;
+        mlsc: number;
+        dsc: number;
+        dscNc: number;
+        total: number;
+      }>;
+      totalCountries: number;
+    }>('/upload/countries', { params: { limit } }),
 
   /**
    * Get detailed country-level statistics

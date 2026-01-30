@@ -30,12 +30,13 @@ bool UploadRepository::insert(const Upload& upload)
     try {
         const char* query =
             "INSERT INTO uploaded_file "
-            "(id, file_name, file_format, file_size, status, uploaded_by, upload_timestamp) "
-            "VALUES ($1, $2, $3, $4, $5, $6, NOW())";
+            "(id, file_name, file_hash, file_format, file_size, status, uploaded_by, upload_timestamp) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())";
 
         std::vector<std::string> params = {
             upload.id,
             upload.fileName,
+            upload.fileHash,
             upload.fileFormat,
             std::to_string(upload.fileSize),
             upload.status,
@@ -60,7 +61,7 @@ std::optional<Upload> UploadRepository::findById(const std::string& uploadId)
 
     try {
         const char* query =
-            "SELECT id, file_name, file_format, file_size, status, uploaded_by, "
+            "SELECT id, file_name, file_hash, file_format, file_size, status, uploaded_by, "
             "error_message, processing_mode, total_entries, processed_entries, "
             "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
             "upload_timestamp, completed_timestamp, "
@@ -112,7 +113,7 @@ std::vector<Upload> UploadRepository::findAll(
         }
 
         std::ostringstream query;
-        query << "SELECT id, file_name, file_format, file_size, status, uploaded_by, "
+        query << "SELECT id, file_name, file_hash, file_format, file_size, status, uploaded_by, "
               << "error_message, processing_mode, total_entries, processed_entries, "
               << "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
               << "upload_timestamp, completed_timestamp, "
@@ -364,7 +365,7 @@ Json::Value UploadRepository::getStatisticsSummary()
     Json::Value response;
 
     try {
-        // Get total uploads
+        // Get total uploads and status breakdown
         const char* countQuery = "SELECT COUNT(*) FROM uploaded_file";
         PGresult* countRes = executeQuery(countQuery);
         int totalUploads = std::atoi(PQgetvalue(countRes, 0, 0));
@@ -390,36 +391,76 @@ Json::Value UploadRepository::getStatisticsSummary()
         int totalMl = std::atoi(PQgetvalue(certRes, 0, 5));
         PQclear(certRes);
 
-        // Get uploads by status
+        // Get uploads by status (for successfulUploads/failedUploads)
         const char* statusQuery =
             "SELECT status, COUNT(*) FROM uploaded_file GROUP BY status";
         PGresult* statusRes = executeQuery(statusQuery);
 
-        Json::Value uploadsByStatus;
+        int successfulUploads = 0;
+        int failedUploads = 0;
         int statusRows = PQntuples(statusRes);
         for (int i = 0; i < statusRows; i++) {
             std::string status = PQgetvalue(statusRes, i, 0);
             int count = std::atoi(PQgetvalue(statusRes, i, 1));
-            uploadsByStatus[status] = count;
+            if (status == "COMPLETED") {
+                successfulUploads += count;
+            } else if (status == "FAILED" || status == "ERROR") {
+                failedUploads += count;
+            }
         }
         PQclear(statusRes);
 
-        // Build response
+        // Get country count (distinct countries)
+        const char* countryQuery =
+            "SELECT COUNT(DISTINCT country_code) FROM certificate "
+            "WHERE country_code IS NOT NULL AND country_code != ''";
+        PGresult* countryRes = executeQuery(countryQuery);
+        int countriesCount = std::atoi(PQgetvalue(countryRes, 0, 0));
+        PQclear(countryRes);
+
+        // Get validation statistics
+        const char* validationQuery =
+            "SELECT "
+            "COALESCE(SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END), 0) as valid_count, "
+            "COALESCE(SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END), 0) as invalid_count, "
+            "COALESCE(SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending_count, "
+            "COALESCE(SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END), 0) as error_count, "
+            "COALESCE(SUM(CASE WHEN trust_chain_valid = true THEN 1 ELSE 0 END), 0) as trust_chain_valid_count, "
+            "COALESCE(SUM(CASE WHEN trust_chain_valid = false THEN 1 ELSE 0 END), 0) as trust_chain_invalid_count, "
+            "COALESCE(SUM(CASE WHEN csca_found = false THEN 1 ELSE 0 END), 0) as csca_not_found_count, "
+            "COALESCE(SUM(CASE WHEN is_expired = true THEN 1 ELSE 0 END), 0) as expired_count, "
+            "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
+            "FROM validation_result";
+
+        PGresult* validationRes = executeQuery(validationQuery);
+        Json::Value validation;
+        validation["validCount"] = std::atoi(PQgetvalue(validationRes, 0, 0));
+        validation["invalidCount"] = std::atoi(PQgetvalue(validationRes, 0, 1));
+        validation["pendingCount"] = std::atoi(PQgetvalue(validationRes, 0, 2));
+        validation["errorCount"] = std::atoi(PQgetvalue(validationRes, 0, 3));
+        validation["trustChainValidCount"] = std::atoi(PQgetvalue(validationRes, 0, 4));
+        validation["trustChainInvalidCount"] = std::atoi(PQgetvalue(validationRes, 0, 5));
+        validation["cscaNotFoundCount"] = std::atoi(PQgetvalue(validationRes, 0, 6));
+        validation["expiredCount"] = std::atoi(PQgetvalue(validationRes, 0, 7));
+        validation["revokedCount"] = std::atoi(PQgetvalue(validationRes, 0, 8));
+        PQclear(validationRes);
+
+        // Build response matching frontend UploadStatisticsOverview interface
         response["totalUploads"] = totalUploads;
+        response["successfulUploads"] = successfulUploads;
+        response["failedUploads"] = failedUploads;
         response["totalCertificates"] = totalCsca + totalDsc + totalDscNc + totalMlsc;
-        response["totalCrls"] = totalCrl;
-        response["totalMasterLists"] = totalMl;
+        response["cscaCount"] = totalCsca;
+        response["mlscCount"] = totalMlsc;
+        response["dscCount"] = totalDsc;
+        response["dscNcCount"] = totalDscNc;
+        response["crlCount"] = totalCrl;
+        response["mlCount"] = totalMl;
+        response["countriesCount"] = countriesCount;
+        response["validation"] = validation;
 
-        response["certificatesByType"]["CSCA"] = totalCsca;
-        response["certificatesByType"]["DSC"] = totalDsc;
-        response["certificatesByType"]["DSC_NC"] = totalDscNc;
-        response["certificatesByType"]["MLSC"] = totalMlsc;
-        response["certificatesByType"]["CRL"] = totalCrl;
-
-        response["uploadsByStatus"] = uploadsByStatus;
-
-        spdlog::debug("[UploadRepository] Statistics: {} uploads, {} certificates",
-            totalUploads, response["totalCertificates"].asInt());
+        spdlog::debug("[UploadRepository] Statistics: {} uploads ({} successful, {} failed), {} certificates, {} countries",
+            totalUploads, successfulUploads, failedUploads, response["totalCertificates"].asInt(), countriesCount);
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get statistics summary failed: {}", e.what());
@@ -436,14 +477,18 @@ Json::Value UploadRepository::getCountryStatistics()
     Json::Value response;
 
     try {
-        // Get certificate counts by country (top 20 countries)
+        // Get certificate counts by country and type (top 20 countries)
         const char* query =
             "SELECT "
-            "country_code, "
+            "c.country_code, "
+            "SUM(CASE WHEN c.certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
+            "SUM(CASE WHEN c.certificate_type = 'MLSC' THEN 1 ELSE 0 END) as mlsc_count, "
+            "SUM(CASE WHEN c.certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
+            "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
             "COUNT(*) as total_certificates "
-            "FROM certificate "
-            "WHERE country_code IS NOT NULL AND country_code != '' "
-            "GROUP BY country_code "
+            "FROM certificate c "
+            "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
+            "GROUP BY c.country_code "
             "ORDER BY total_certificates DESC "
             "LIMIT 20";
 
@@ -454,7 +499,11 @@ Json::Value UploadRepository::getCountryStatistics()
         for (int i = 0; i < rows; i++) {
             Json::Value countryData;
             countryData["country"] = PQgetvalue(res, i, 0);
-            countryData["totalCertificates"] = std::atoi(PQgetvalue(res, i, 1));
+            countryData["csca"] = std::atoi(PQgetvalue(res, i, 1));
+            countryData["mlsc"] = std::atoi(PQgetvalue(res, i, 2));
+            countryData["dsc"] = std::atoi(PQgetvalue(res, i, 3));
+            countryData["dscNc"] = std::atoi(PQgetvalue(res, i, 4));
+            countryData["total"] = std::atoi(PQgetvalue(res, i, 5));
             countries.append(countryData);
         }
 
@@ -532,6 +581,96 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
     return response;
 }
 
+Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& uploadId)
+{
+    spdlog::debug("[UploadRepository] Finding duplicates for upload: {}", uploadId);
+
+    Json::Value result;
+    result["success"] = false;
+    result["uploadId"] = uploadId;
+
+    try {
+        // Query duplicate certificates for this upload
+        // CRITICAL: Only return certificates that already existed before this upload
+        // (exclude first appearance, only show true duplicates by fingerprint)
+        std::string query =
+            "SELECT "
+            "  cd.id, "
+            "  cd.source_type, "
+            "  cd.source_country, "
+            "  cd.detected_at, "
+            "  c.certificate_type, "
+            "  c.country_code, "
+            "  c.subject_dn, "
+            "  c.fingerprint_sha256 "
+            "FROM certificate_duplicates cd "
+            "JOIN certificate c ON cd.certificate_id = c.id "
+            "WHERE cd.upload_id = $1 "
+            "  AND c.first_upload_id != $2 "
+            "ORDER BY cd.detected_at DESC";
+
+        std::vector<std::string> params = {uploadId, uploadId};
+        PGresult* res = executeParamQuery(query, params);
+
+        result["success"] = true;
+        Json::Value duplicates(Json::arrayValue);
+
+        // Count by type
+        std::map<std::string, int> byType;
+        byType["CSCA"] = 0;
+        byType["DSC"] = 0;
+        byType["DSC_NC"] = 0;
+        byType["MLSC"] = 0;
+        byType["CRL"] = 0;
+
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++) {
+            Json::Value dup;
+            dup["id"] = std::atoi(PQgetvalue(res, i, 0));
+            dup["sourceType"] = PQgetvalue(res, i, 1);
+            dup["sourceCountry"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
+            dup["detectedAt"] = PQgetvalue(res, i, 3);
+
+            std::string certType = PQgetvalue(res, i, 4);
+            dup["certificateType"] = certType;
+            dup["country"] = PQgetvalue(res, i, 5);
+            dup["subjectDn"] = PQgetvalue(res, i, 6);
+            dup["fingerprint"] = PQgetvalue(res, i, 7);
+
+            duplicates.append(dup);
+
+            // Count by type
+            if (byType.find(certType) != byType.end()) {
+                byType[certType]++;
+            }
+        }
+
+        result["duplicates"] = duplicates;
+        result["totalDuplicates"] = rows;
+
+        // Add type breakdown
+        Json::Value byTypeJson;
+        byTypeJson["CSCA"] = byType["CSCA"];
+        byTypeJson["DSC"] = byType["DSC"];
+        byTypeJson["DSC_NC"] = byType["DSC_NC"];
+        byTypeJson["MLSC"] = byType["MLSC"];
+        byTypeJson["CRL"] = byType["CRL"];
+        result["byType"] = byTypeJson;
+
+        PQclear(res);
+
+        spdlog::debug("[UploadRepository] Found {} duplicates for upload {}", rows, uploadId);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[UploadRepository] Find duplicates failed: {}", e.what());
+        result["error"] = e.what();
+        result["duplicates"] = Json::Value(Json::arrayValue);
+        result["totalDuplicates"] = 0;
+    }
+
+    return result;
+}
+
 // ============================================================================
 // Private Helper Methods
 // ============================================================================
@@ -595,6 +734,7 @@ Upload UploadRepository::resultToUpload(PGresult* res, int row)
 
     upload.id = PQgetvalue(res, row, PQfnumber(res, "id"));
     upload.fileName = PQgetvalue(res, row, PQfnumber(res, "file_name"));
+    upload.fileHash = PQgetvalue(res, row, PQfnumber(res, "file_hash"));
     upload.fileFormat = PQgetvalue(res, row, PQfnumber(res, "file_format"));
     upload.fileSize = std::atoi(PQgetvalue(res, row, PQfnumber(res, "file_size")));
     upload.status = PQgetvalue(res, row, PQfnumber(res, "status"));

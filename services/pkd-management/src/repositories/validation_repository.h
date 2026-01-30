@@ -62,6 +62,25 @@ public:
      */
     int countByStatus(const std::string& status);
 
+    /**
+     * @brief Get validation statistics for an upload
+     * @param uploadId Upload UUID
+     * @return JSON object with validation statistics
+     *
+     * Response format:
+     * {
+     *   "totalCount": 29838,
+     *   "validCount": 16788,
+     *   "invalidCount": 6696,
+     *   "pendingCount": 6354,
+     *   "errorCount": 0,
+     *   "trustChainValidCount": 16788,
+     *   "trustChainInvalidCount": 12050,
+     *   "trustChainSuccessRate": 56.2
+     * }
+     */
+    Json::Value getStatisticsByUploadId(const std::string& uploadId);
+
 private:
     PGconn* dbConn_;
 

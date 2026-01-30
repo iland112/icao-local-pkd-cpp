@@ -57,10 +57,12 @@ Json::Value AuditRepository::findAll(
     int limit,
     int offset,
     const std::string& operationType,
-    const std::string& username
+    const std::string& username,
+    const std::string& successFilter
 )
 {
-    spdlog::debug("[AuditRepository] Finding all (limit: {}, offset: {})", limit, offset);
+    spdlog::debug("[AuditRepository] Finding all (limit: {}, offset: {}, success: {})",
+        limit, offset, successFilter);
 
     try {
         // Build query with optional filters
@@ -83,6 +85,15 @@ Json::Value AuditRepository::findAll(
             params.push_back(username);
         }
 
+        // Add success filter to SQL WHERE clause
+        if (!successFilter.empty()) {
+            if (successFilter == "true" || successFilter == "1") {
+                query << " AND success = true";
+            } else if (successFilter == "false" || successFilter == "0") {
+                query << " AND success = false";
+            }
+        }
+
         query << " ORDER BY created_at DESC "
               << " LIMIT $" << paramCount++ << " OFFSET $" << paramCount++;
         params.push_back(std::to_string(limit));
@@ -97,6 +108,61 @@ Json::Value AuditRepository::findAll(
     } catch (const std::exception& e) {
         spdlog::error("[AuditRepository] Find all failed: {}", e.what());
         return Json::arrayValue;
+    }
+}
+
+int AuditRepository::countAll(
+    const std::string& operationType,
+    const std::string& username,
+    const std::string& successFilter
+)
+{
+    spdlog::debug("[AuditRepository] Counting all (operationType: {}, username: {}, success: {})",
+        operationType, username, successFilter);
+
+    try {
+        // Build query with optional filters
+        std::ostringstream query;
+        query << "SELECT COUNT(*) FROM operation_audit_log WHERE 1=1";
+
+        std::vector<std::string> params;
+        int paramCount = 1;
+
+        if (!operationType.empty()) {
+            query << " AND operation_type = $" << paramCount++;
+            params.push_back(operationType);
+        }
+
+        if (!username.empty()) {
+            query << " AND username = $" << paramCount++;
+            params.push_back(username);
+        }
+
+        // Add success filter to SQL WHERE clause
+        if (!successFilter.empty()) {
+            if (successFilter == "true" || successFilter == "1") {
+                query << " AND success = true";
+            } else if (successFilter == "false" || successFilter == "0") {
+                query << " AND success = false";
+            }
+        }
+
+        PGresult* res = params.empty() ?
+            executeQuery(query.str()) :
+            executeParamQuery(query.str(), params);
+
+        int count = 0;
+        if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+            count = std::atoi(PQgetvalue(res, 0, 0));
+        }
+        PQclear(res);
+
+        spdlog::debug("[AuditRepository] Count result: {}", count);
+        return count;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[AuditRepository] Count all failed: {}", e.what());
+        return 0;
     }
 }
 

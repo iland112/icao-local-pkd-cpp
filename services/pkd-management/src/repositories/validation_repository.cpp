@@ -316,6 +316,67 @@ int ValidationRepository::countByStatus(const std::string& status)
     }
 }
 
+Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& uploadId)
+{
+    spdlog::debug("[ValidationRepository] Getting statistics for upload ID: {}", uploadId);
+
+    Json::Value stats;
+
+    try {
+        // Single query to get all statistics
+        const char* query =
+            "SELECT "
+            "  COUNT(*) as total_count, "
+            "  SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END) as valid_count, "
+            "  SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END) as invalid_count, "
+            "  SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END) as pending_count, "
+            "  SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END) as error_count, "
+            "  SUM(CASE WHEN trust_chain_valid = TRUE THEN 1 ELSE 0 END) as trust_chain_valid_count, "
+            "  SUM(CASE WHEN trust_chain_valid = FALSE THEN 1 ELSE 0 END) as trust_chain_invalid_count "
+            "FROM validation_result "
+            "WHERE upload_id = $1";
+
+        std::vector<std::string> params = {uploadId};
+        PGresult* res = executeParamQuery(query, params);
+
+        if (PQntuples(res) > 0) {
+            int totalCount = std::atoi(PQgetvalue(res, 0, 0));
+            int validCount = std::atoi(PQgetvalue(res, 0, 1));
+            int invalidCount = std::atoi(PQgetvalue(res, 0, 2));
+            int pendingCount = std::atoi(PQgetvalue(res, 0, 3));
+            int errorCount = std::atoi(PQgetvalue(res, 0, 4));
+            int trustChainValidCount = std::atoi(PQgetvalue(res, 0, 5));
+            int trustChainInvalidCount = std::atoi(PQgetvalue(res, 0, 6));
+
+            // Calculate trust chain success rate
+            double trustChainSuccessRate = 0.0;
+            if (totalCount > 0) {
+                trustChainSuccessRate = (static_cast<double>(trustChainValidCount) / totalCount) * 100.0;
+            }
+
+            stats["totalCount"] = totalCount;
+            stats["validCount"] = validCount;
+            stats["invalidCount"] = invalidCount;
+            stats["pendingCount"] = pendingCount;
+            stats["errorCount"] = errorCount;
+            stats["trustChainValidCount"] = trustChainValidCount;
+            stats["trustChainInvalidCount"] = trustChainInvalidCount;
+            stats["trustChainSuccessRate"] = trustChainSuccessRate;
+
+            spdlog::debug("[ValidationRepository] Statistics: total={}, valid={}, invalid={}, pending={}, error={}",
+                totalCount, validCount, invalidCount, pendingCount, errorCount);
+        }
+
+        PQclear(res);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ValidationRepository] Get statistics failed: {}", e.what());
+        stats["error"] = e.what();
+    }
+
+    return stats;
+}
+
 PGresult* ValidationRepository::executeParamQuery(
     const std::string& query,
     const std::vector<std::string>& params

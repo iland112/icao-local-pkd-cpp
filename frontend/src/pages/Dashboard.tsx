@@ -86,8 +86,8 @@ export function Dashboard() {
     setCountryLoading(true);
     try {
       const response = await uploadApi.getCountryStatistics(18);
-      const countries = response.data;
-      if (countries.length > 0) {
+      const countries = response.data.countries;
+      if (countries && countries.length > 0) {
         const maxTotal = countries[0].total;
         setCountryData(countries.map((item: any) => ({
           ...item,

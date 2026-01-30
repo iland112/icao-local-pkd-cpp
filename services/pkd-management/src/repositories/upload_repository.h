@@ -28,6 +28,7 @@ namespace repositories {
 struct Upload {
     std::string id;                  // UUID
     std::string fileName;
+    std::string fileHash;            // SHA-256 hash for deduplication
     std::string fileFormat;          // "LDIF", "MASTER_LIST"
     int fileSize;
     std::string status;              // "PENDING", "PARSING", "PARSED", "VALIDATING", "COMPLETED", "FAILED"
@@ -240,6 +241,40 @@ public:
      * ]
      */
     Json::Value getDetailedCountryStatistics(int limit = 0);
+
+    /**
+     * @brief Get duplicate certificates for an upload
+     * @param uploadId Upload UUID
+     * @return JSON object with duplicate certificate information
+     *
+     * Response format:
+     * {
+     *   "success": true,
+     *   "uploadId": "...",
+     *   "totalDuplicates": 100,
+     *   "byType": {
+     *     "CSCA": 10,
+     *     "DSC": 80,
+     *     "DSC_NC": 5,
+     *     "MLSC": 3,
+     *     "CRL": 2
+     *   },
+     *   "duplicates": [
+     *     {
+     *       "id": 123,
+     *       "sourceType": "...",
+     *       "sourceCountry": "KR",
+     *       "detectedAt": "2026-01-30...",
+     *       "certificateType": "DSC",
+     *       "country": "KR",
+     *       "subjectDn": "...",
+     *       "fingerprint": "..."
+     *     },
+     *     ...
+     *   ]
+     * }
+     */
+    Json::Value findDuplicatesByUploadId(const std::string& uploadId);
 
 private:
     PGconn* dbConn_;

@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.5
+**Current Version**: v2.2.0 (planned)
 **Last Updated**: 2026-01-30
-**Status**: Production Ready - Repository Pattern 100% Complete (12/12 endpoints migrated, Phase 4.4 skipped)
+**Status**: In Development - Phase 4.4 Implementation + X.509 Enhancements
 
 ---
 
@@ -91,13 +91,28 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.4.3)
+### Planned Changes (v2.2.0 - In Development)
 
-- ✅ **Repository Pattern Phase 4.3: ValidationService Core Implementation** (v2.1.4.3)
-  - **CertificateRepository X509 Certificate Retrieval Methods**
-    - `X509* findCscaByIssuerDn(const std::string& issuerDn)` - Find CSCA by issuer DN with normalized comparison
-    - `std::vector<X509*> findAllCscasBySubjectDn(const std::string& subjectDn)` - Find all CSCAs for trust chain building
-    - DN normalization helpers: `normalizeDnForComparison()`, `extractDnAttribute()` for format-independent matching
+- 🔄 **Phase 4.4: Complete Async Processing Migration** (Estimated: 3 days)
+  - **Move all database operations from main.cpp to Service layer** (88 PostgreSQL API calls)
+  - **UploadService Enhancement**: processLdifAsync(), processMasterListAsync()
+  - **ValidationService Enhancement**: validateDscCertificate(), saveValidationResult()
+  - **Helper Functions Migration**: All database helpers to Repository layer
+  - **Target**: Zero SQL in main.cpp, 100% Repository Pattern
+
+- 🔄 **X.509 Metadata Enhancements** (Estimated: 1 day)
+  - **RSA-PSS Hash Algorithm Extraction**: Fix 3,016 "unknown" certificates (9.7%)
+  - **EKU Logging Optimization**: Enhanced diagnostics for Extended Key Usage
+  - **Expected**: 100% hash algorithm coverage, better debugging
+
+- 🔄 **Performance Optimization** (Estimated: 1 day)
+  - **Batch INSERT**: 30-50% reduction in database round-trips
+  - **Thread Pool**: Parallel metadata extraction (2x speedup)
+  - **Target**: < 3 minutes for 76MB LDIF (current: 6.5 minutes, 3x speedup)
+
+**Documentation**: [PKD_MANAGEMENT_REFACTORING_PHASE_4.4_PLAN.md](docs/PKD_MANAGEMENT_REFACTORING_PHASE_4.4_PLAN.md)
+
+### Recent Changes (v2.1.5)
     - Supports both OpenSSL slash format (`/C=X/O=Y/CN=Z`) and RFC2253 comma format (`CN=Z,O=Y,C=X`)
     - PostgreSQL bytea hex format parsing (`\x` prefix) with OpenSSL d2i_X509()
     - Component-based SQL with LIKE + C++ post-filter to eliminate false positives
@@ -671,6 +686,58 @@ GET /api/certificates/validation?fingerprint=ac461...
 - [PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md](docs/PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md) - Comprehensive completion report
 - [PHASE_2_MAIN_INTEGRATION_COMPLETION.md](docs/PHASE_2_MAIN_INTEGRATION_COMPLETION.md) - Service initialization in main.cpp
 - [PHASE_1.6_SERVICE_REPOSITORY_INJECTION.md](docs/PHASE_1.6_SERVICE_REPOSITORY_INJECTION.md) - Service DI implementation
+
+### v2.1.4 (2026-01-30) - X.509 Certificate Metadata Extraction
+
+#### X.509 Metadata Implementation
+
+- ✅ **15 X.509 Metadata Fields Added** - Complete certificate analysis capability
+  - **Algorithm info**: version, signature_algorithm, signature_hash_algorithm, public_key_algorithm, public_key_size, public_key_curve
+  - **Key usage**: key_usage, extended_key_usage
+  - **CA info**: is_ca, path_len_constraint
+  - **Identifiers**: subject_key_identifier, authority_key_identifier
+  - **Distribution**: crl_distribution_points, ocsp_responder_url
+  - **Validation**: is_self_signed
+
+- ✅ **Full System Data Upload Verification**
+  - **31,215 certificates** processed with metadata extraction
+  - **100% coverage** for core fields (version, algorithms, key size)
+  - **94.6% coverage** for Subject Key Identifier
+  - **98.3% coverage** for Authority Key Identifier
+  - **Trust Chain validation**: 71.1% success rate (21,192/29,804 DSC)
+
+- ✅ **OpenSSL-based Extraction Library**
+  - New files: [x509_metadata_extractor.{h,cpp}](services/pkd-management/src/common/x509_metadata_extractor.cpp)
+  - Integration: [certificate_utils.cpp](services/pkd-management/src/common/certificate_utils.cpp) modified
+  - Database: Single migration with 15 fields + 7 indexes + 3 constraints
+
+#### Algorithm Distribution (31,146 certificates)
+
+| Algorithm   | Count  | Percentage   |
+|-------------|--------|--------------|
+| **RSA**     | 27,712 | 89.0%        |
+| **ECDSA**   | 3,434  | 11.0%        |
+| **SHA-256** | 26,791 | 86.0% (hash) |
+| **SHA-1**   | 637    | 2.0% (hash)  |
+
+#### Implementation Files
+
+**Files Created**:
+
+- `services/pkd-management/src/common/x509_metadata_extractor.h` - Metadata extraction interface
+- `services/pkd-management/src/common/x509_metadata_extractor.cpp` - OpenSSL-based extraction implementation
+- `docker/db/migrations/add_x509_metadata_fields.sql` - Database schema migration
+- `docker/db/migrations/update_file_format_constraint.sql` - Extended file format support (PEM, CER, DER, BIN)
+- `docs/X509_METADATA_EXTRACTION_IMPLEMENTATION.md` - Complete implementation documentation (NEW)
+
+**Files Modified**:
+
+- `services/pkd-management/src/common/certificate_utils.cpp` - Integrated metadata extraction in saveCertificateWithDuplicateCheck()
+- `services/pkd-management/CMakeLists.txt` - Added x509_metadata_extractor.cpp to build
+
+**Reference Documentation**:
+
+- [X509_METADATA_EXTRACTION_IMPLEMENTATION.md](docs/X509_METADATA_EXTRACTION_IMPLEMENTATION.md) - Comprehensive implementation guide with test results
 
 ### v2.1.0 (2026-01-26) - Sprint 3 Complete
 

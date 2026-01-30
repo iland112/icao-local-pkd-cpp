@@ -35,12 +35,32 @@ public:
 
     /**
      * @brief Find audit logs with filter
+     * @param limit Maximum number of records
+     * @param offset Offset for pagination
+     * @param operationType Filter by operation type (empty = all)
+     * @param username Filter by username (empty = all)
+     * @param successFilter Filter by success status ("true", "false", or empty = all)
+     * @return JSON array of audit logs
      */
     Json::Value findAll(
         int limit,
         int offset,
         const std::string& operationType = "",
-        const std::string& username = ""
+        const std::string& username = "",
+        const std::string& successFilter = ""
+    );
+
+    /**
+     * @brief Count audit logs with filter
+     * @param operationType Filter by operation type (empty = all)
+     * @param username Filter by username (empty = all)
+     * @param successFilter Filter by success status ("true", "false", or empty = all)
+     * @return Total count of matching records
+     */
+    int countAll(
+        const std::string& operationType = "",
+        const std::string& username = "",
+        const std::string& successFilter = ""
     );
 
     /**

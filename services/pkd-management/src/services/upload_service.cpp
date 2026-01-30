@@ -72,6 +72,7 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         repositories::Upload upload;
         upload.id = result.uploadId;
         upload.fileName = fileName;
+        upload.fileHash = fileHash;
         upload.fileFormat = "LDIF";
         upload.fileSize = fileContent.size();
         upload.status = "PENDING";
@@ -79,11 +80,6 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
 
         if (!uploadRepo_->insert(upload)) {
             throw std::runtime_error("Failed to insert upload record");
-        }
-
-        // Step 5: Update file hash
-        if (!uploadRepo_->updateFileHash(result.uploadId, fileHash)) {
-            spdlog::warn("Failed to update file hash for upload {}", result.uploadId);
         }
 
         // Step 6: Save to temporary file
@@ -151,18 +147,14 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
         repositories::Upload upload;
         upload.id = result.uploadId;
         upload.fileName = fileName;
-        upload.fileFormat = "MASTER_LIST";
+        upload.fileHash = fileHash;
+        upload.fileFormat = "ML";
         upload.fileSize = fileContent.size();
         upload.status = "PENDING";
         upload.uploadedBy = uploadedBy;
 
         if (!uploadRepo_->insert(upload)) {
             throw std::runtime_error("Failed to insert upload record");
-        }
-
-        // Step 5: Update file hash
-        if (!uploadRepo_->updateFileHash(result.uploadId, fileHash)) {
-            spdlog::warn("Failed to update file hash for upload {}", result.uploadId);
         }
 
         // Step 6: Save to temporary file
@@ -357,11 +349,20 @@ Json::Value UploadService::getUploadValidations(
 
 Json::Value UploadService::getUploadIssues(const std::string& uploadId)
 {
-    spdlog::warn("UploadService::getUploadIssues - TODO: Implement");
-    Json::Value response;
-    response["success"] = false;
-    response["message"] = "Not yet implemented";
-    return response;
+    spdlog::info("UploadService::getUploadIssues - uploadId: {}", uploadId);
+
+    try {
+        // Delegate to repository
+        return uploadRepo_->findDuplicatesByUploadId(uploadId);
+    } catch (const std::exception& e) {
+        spdlog::error("UploadService::getUploadIssues failed: {}", e.what());
+        Json::Value response;
+        response["success"] = false;
+        response["error"] = e.what();
+        response["duplicates"] = Json::Value(Json::arrayValue);
+        response["totalDuplicates"] = 0;
+        return response;
+    }
 }
 
 bool UploadService::deleteUpload(const std::string& uploadId)

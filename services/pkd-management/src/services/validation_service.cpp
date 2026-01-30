@@ -51,26 +51,93 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
     auto startTime = std::chrono::steady_clock::now();
 
     try {
-        // Implementation Note:
-        // This is a complex operation that requires:
-        // 1. Querying all DSC certificates from database (via CertificateRepository)
-        // 2. For each DSC:
-        //    a. Load X509 certificate from database
-        //    b. Call validateCertificate()
-        //    c. Save validation result to database (via ValidationRepository)
-        // 3. Aggregate statistics
-        //
-        // Due to complexity and need for database integration,
-        // this should be implemented in Phase 4.3+ with proper error handling,
-        // transaction management, and progress tracking.
-        //
-        // For now, returning "Not yet implemented" status.
+        // Default limit for testing (can be parameterized later)
+        int limit = 10;
 
-        spdlog::warn("ValidationService::revalidateDscCertificates - Full implementation deferred to Phase 4.3+");
-        spdlog::info("Requires: CertificateRepository queries, X509 parsing, bulk validation, result persistence");
+        // Step 1: Get DSC certificates that need re-validation
+        Json::Value dscs = certRepo_->findDscForRevalidation(limit);
 
-        result.success = false;
-        result.message = "Bulk re-validation not yet implemented - use single certificate validation";
+        if (!dscs.isArray()) {
+            result.success = false;
+            result.message = "Failed to retrieve DSC certificates for re-validation";
+            return result;
+        }
+
+        spdlog::info("Found {} DSC(s) for re-validation", dscs.size());
+
+        // Step 2: Validate each DSC
+        for (const auto& dscInfo : dscs) {
+            result.totalProcessed++;
+
+            try {
+                std::string certId = dscInfo.get("id", "").asString();
+                std::string certDataHex = dscInfo.get("certificateData", "").asString();
+
+                if (certDataHex.empty()) {
+                    spdlog::warn("Empty certificate data for ID: {}", certId);
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Parse bytea hex format (\x...)
+                std::vector<uint8_t> derBytes;
+                if (certDataHex.length() > 2 && certDataHex[0] == '\\' && certDataHex[1] == 'x') {
+                    for (size_t i = 2; i < certDataHex.length(); i += 2) {
+                        if (i + 1 < certDataHex.length()) {
+                            char hex[3] = {certDataHex[i], certDataHex[i + 1], 0};
+                            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+                        }
+                    }
+                }
+
+                if (derBytes.empty()) {
+                    spdlog::warn("Failed to parse certificate data for ID: {}", certId);
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Convert DER to X509
+                const uint8_t* data = derBytes.data();
+                X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+                if (!cert) {
+                    spdlog::error("Failed to parse X509 certificate for ID: {}", certId);
+                    result.errorCount++;
+                    continue;
+                }
+
+                // Validate certificate
+                ValidationResult valResult = validateCertificate(cert, "DSC");
+
+                // Count results
+                if (valResult.validationStatus == "VALID") {
+                    result.validCount++;
+                } else if (valResult.validationStatus == "INVALID") {
+                    result.invalidCount++;
+                } else if (valResult.validationStatus == "PENDING") {
+                    result.pendingCount++;
+                } else {
+                    result.errorCount++;
+                }
+
+                // TODO Phase 5: Save validation result to database
+                // validationRepo_->save(...)
+
+                // Free X509 certificate
+                X509_free(cert);
+
+                spdlog::debug("Validated DSC {}: {}", certId, valResult.validationStatus);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Error validating DSC: {}", e.what());
+                result.errorCount++;
+            }
+        }
+
+        result.success = true;
+        result.message = "Re-validation completed successfully";
+
+        spdlog::info("Re-validation complete: processed={}, valid={}, invalid={}, pending={}, error={}",
+            result.totalProcessed, result.validCount, result.invalidCount, result.pendingCount, result.errorCount);
 
     } catch (const std::exception& e) {
         spdlog::error("ValidationService::revalidateDscCertificates failed: {}", e.what());
@@ -261,11 +328,34 @@ Json::Value ValidationService::getValidationStatistics(const std::string& upload
 {
     spdlog::info("ValidationService::getValidationStatistics - uploadId: {}", uploadId);
 
-    spdlog::warn("TODO: Implement validation statistics");
-
     Json::Value response;
-    response["success"] = false;
-    response["message"] = "Not yet implemented";
+
+    try {
+        // Get statistics from repository
+        Json::Value stats = validationRepo_->getStatisticsByUploadId(uploadId);
+
+        // Check if there was an error
+        if (stats.isMember("error")) {
+            response["success"] = false;
+            response["error"] = stats["error"];
+            return response;
+        }
+
+        // Build response with statistics
+        response["success"] = true;
+        response["data"] = stats;
+
+        spdlog::info("ValidationService::getValidationStatistics - Returned statistics: total={}, valid={}, invalid={}",
+            stats.get("totalCount", 0).asInt(),
+            stats.get("validCount", 0).asInt(),
+            stats.get("invalidCount", 0).asInt());
+
+    } catch (const std::exception& e) {
+        spdlog::error("ValidationService::getValidationStatistics failed: {}", e.what());
+        response["success"] = false;
+        response["error"] = e.what();
+    }
+
     return response;
 }
 

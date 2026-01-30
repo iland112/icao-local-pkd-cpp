@@ -1,6 +1,9 @@
 #include "certificate_utils.h"
+#include "x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
+#include <openssl/x509.h>
 #include <cstring>
+#include <sstream>
 
 namespace certificate_utils {
 
@@ -51,7 +54,71 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
 
     PQclear(checkRes);
 
-    // Step 2: Insert new certificate
+    // Step 2: Extract X.509 metadata from certificate
+    const unsigned char* certPtr = certData.data();
+    X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
+
+    x509::CertificateMetadata x509meta;
+    std::string versionStr, sigAlg, sigHashAlg, pubKeyAlg, pubKeySizeStr;
+    std::string pubKeyCurve, keyUsageStr, extKeyUsageStr, isCaStr;
+    std::string pathLenStr, ski, aki, crlDpStr, ocspUrl, isSelfSignedStr;
+
+    if (x509cert) {
+        x509meta = x509::extractMetadata(x509cert);
+        X509_free(x509cert);
+
+        // Convert metadata to SQL strings
+        versionStr = std::to_string(x509meta.version);
+        sigAlg = x509meta.signatureAlgorithm;
+        sigHashAlg = x509meta.signatureHashAlgorithm;
+        pubKeyAlg = x509meta.publicKeyAlgorithm;
+        pubKeySizeStr = std::to_string(x509meta.publicKeySize);
+        pubKeyCurve = x509meta.publicKeyCurve.value_or("");
+
+        // Convert arrays to PostgreSQL array format
+        std::ostringstream kuStream, ekuStream, crlStream;
+        kuStream << "{";
+        for (size_t i = 0; i < x509meta.keyUsage.size(); i++) {
+            kuStream << "\"" << x509meta.keyUsage[i] << "\"";
+            if (i < x509meta.keyUsage.size() - 1) kuStream << ",";
+        }
+        kuStream << "}";
+        keyUsageStr = kuStream.str();
+
+        ekuStream << "{";
+        for (size_t i = 0; i < x509meta.extendedKeyUsage.size(); i++) {
+            ekuStream << "\"" << x509meta.extendedKeyUsage[i] << "\"";
+            if (i < x509meta.extendedKeyUsage.size() - 1) ekuStream << ",";
+        }
+        ekuStream << "}";
+        extKeyUsageStr = ekuStream.str();
+
+        crlStream << "{";
+        for (size_t i = 0; i < x509meta.crlDistributionPoints.size(); i++) {
+            crlStream << "\"" << x509meta.crlDistributionPoints[i] << "\"";
+            if (i < x509meta.crlDistributionPoints.size() - 1) crlStream << ",";
+        }
+        crlStream << "}";
+        crlDpStr = crlStream.str();
+
+        isCaStr = x509meta.isCA ? "TRUE" : "FALSE";
+        pathLenStr = x509meta.pathLenConstraint.has_value() ?
+                     std::to_string(x509meta.pathLenConstraint.value()) : "";
+        ski = x509meta.subjectKeyIdentifier.value_or("");
+        aki = x509meta.authorityKeyIdentifier.value_or("");
+        ocspUrl = x509meta.ocspResponderUrl.value_or("");
+        isSelfSignedStr = x509meta.isSelfSigned ? "TRUE" : "FALSE";
+    } else {
+        spdlog::warn("[CertUtils] Failed to parse X509 certificate for metadata extraction");
+        versionStr = "2";  // Default to v3
+        isCaStr = "FALSE";
+        isSelfSignedStr = "FALSE";
+        keyUsageStr = "{}";
+        extKeyUsageStr = "{}";
+        crlDpStr = "{}";
+    }
+
+    // Step 3: Insert new certificate with X.509 metadata
     // Convert DER bytes to PostgreSQL bytea format
     size_t byteaLen;
     unsigned char* byteaEscaped = PQescapeByteaConn(conn,
@@ -72,27 +139,54 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
         "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
         "not_before, not_after, certificate_data, "
         "validation_status, validation_message, "
-        "duplicate_count, first_upload_id, created_at"
+        "duplicate_count, first_upload_id, created_at, "
+        "version, signature_algorithm, signature_hash_algorithm, "
+        "public_key_algorithm, public_key_size, public_key_curve, "
+        "key_usage, extended_key_usage, "
+        "is_ca, path_len_constraint, "
+        "subject_key_identifier, authority_key_identifier, "
+        "crl_distribution_points, ocsp_responder_url, is_self_signed"
         ") VALUES ("
-        "$1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1::uuid, NOW()"
+        "$1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1::uuid, NOW(), "
+        "$13, NULLIF($14, ''), NULLIF($15, ''), "
+        "NULLIF($16, ''), NULLIF($17, '0')::integer, NULLIF($18, ''), "
+        "NULLIF($19, '{}')::text[], NULLIF($20, '{}')::text[], "
+        "$21, NULLIF($22, '')::integer, "
+        "NULLIF($23, ''), NULLIF($24, ''), "
+        "NULLIF($25, '{}')::text[], NULLIF($26, ''), $27"
         ") RETURNING id";
 
-    const char* insertParams[12] = {
-        uploadId.c_str(),
-        certType.c_str(),
-        countryCode.c_str(),
-        subjectDn.c_str(),
-        issuerDn.c_str(),
-        serialNumber.c_str(),
-        fingerprint.c_str(),
-        notBefore.c_str(),
-        notAfter.c_str(),
-        byteaStr.c_str(),
-        validationStatus.c_str(),
-        validationMessage.c_str()
+    const char* insertParams[27] = {
+        uploadId.c_str(),                    // $1
+        certType.c_str(),                    // $2
+        countryCode.c_str(),                 // $3
+        subjectDn.c_str(),                   // $4
+        issuerDn.c_str(),                    // $5
+        serialNumber.c_str(),                // $6
+        fingerprint.c_str(),                 // $7
+        notBefore.c_str(),                   // $8
+        notAfter.c_str(),                    // $9
+        byteaStr.c_str(),                    // $10
+        validationStatus.c_str(),            // $11
+        validationMessage.c_str(),           // $12
+        versionStr.c_str(),                  // $13
+        sigAlg.c_str(),                      // $14
+        sigHashAlg.c_str(),                  // $15
+        pubKeyAlg.c_str(),                   // $16
+        pubKeySizeStr.c_str(),               // $17
+        pubKeyCurve.c_str(),                 // $18
+        keyUsageStr.c_str(),                 // $19
+        extKeyUsageStr.c_str(),              // $20
+        isCaStr.c_str(),                     // $21
+        pathLenStr.c_str(),                  // $22
+        ski.c_str(),                         // $23
+        aki.c_str(),                         // $24
+        crlDpStr.c_str(),                    // $25
+        ocspUrl.c_str(),                     // $26
+        isSelfSignedStr.c_str()              // $27
     };
 
-    PGresult* insertRes = PQexecParams(conn, insertQuery, 12, nullptr, insertParams,
+    PGresult* insertRes = PQexecParams(conn, insertQuery, 27, nullptr, insertParams,
                                        nullptr, nullptr, 0);
 
     if (PQresultStatus(insertRes) != PGRES_TUPLES_OK) {

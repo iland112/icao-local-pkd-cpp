@@ -147,6 +147,26 @@ public:
      */
     std::vector<X509*> findAllCscasBySubjectDn(const std::string& subjectDn);
 
+    /**
+     * @brief Find DSC certificates that need re-validation
+     * Retrieves DSC/DSC_NC certificates with CSCA_NOT_FOUND error for re-validation.
+     *
+     * @param limit Maximum number of certificates to retrieve
+     * @return JSON array with certificate info (id, issuer_dn, certificate_data, fingerprint_sha256)
+     *
+     * Response format:
+     * [
+     *   {
+     *     "id": "uuid",
+     *     "issuerDn": "...",
+     *     "certificateData": "\\x308...",  // PostgreSQL bytea hex format
+     *     "fingerprint": "abc123..."
+     *   },
+     *   ...
+     * ]
+     */
+    Json::Value findDscForRevalidation(int limit);
+
 private:
     PGconn* dbConn_;
 

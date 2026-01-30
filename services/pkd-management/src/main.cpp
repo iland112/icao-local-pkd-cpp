@@ -60,6 +60,7 @@
 #include "common/audit_log.h"
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
+#include "common/x509_metadata_extractor.h"
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
@@ -3133,7 +3134,7 @@ void updateMasterListLdapStatus(PGconn* conn, const std::string& mlId, const std
 // =============================================================================
 
 /**
- * @brief Save certificate to database
+ * @brief Save certificate to database with X.509 metadata
  * @return certificate ID or empty string on failure
  */
 std::string saveCertificate(PGconn* conn, const std::string& uploadId,
@@ -3147,25 +3148,92 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
     std::string certId = generateUuid();
     std::string byteaEscaped = escapeBytea(conn, certBinary);
 
-    std::string query = "INSERT INTO certificate (id, upload_id, certificate_type, country_code, "
-                       "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-                       "not_before, not_after, certificate_data, validation_status, validation_message, created_at) VALUES ("
-                       "'" + certId + "', "
-                       "'" + uploadId + "', "
-                       + escapeSqlString(conn, certType) + ", "
-                       + escapeSqlString(conn, countryCode) + ", "
-                       + escapeSqlString(conn, subjectDn) + ", "
-                       + escapeSqlString(conn, issuerDn) + ", "
-                       + escapeSqlString(conn, serialNumber) + ", "
-                       "'" + fingerprint + "', "
-                       "'" + notBefore + "', "
-                       "'" + notAfter + "', "
-                       "'" + byteaEscaped + "', "
-                       + escapeSqlString(conn, validationStatus) + ", "
-                       + escapeSqlString(conn, validationMessage) + ", NOW()) "
-                       "ON CONFLICT (certificate_type, fingerprint_sha256) "
-                       "DO UPDATE SET upload_id = EXCLUDED.upload_id "
-                       "RETURNING id";
+    // Extract X.509 metadata from certificate binary
+    x509::CertificateMetadata metadata;
+    X509* cert = nullptr;
+
+    // Parse DER-encoded certificate
+    const unsigned char* data = certBinary.data();
+    cert = d2i_X509(nullptr, &data, static_cast<long>(certBinary.size()));
+
+    if (cert) {
+        metadata = x509::extractMetadata(cert);
+        X509_free(cert);
+    } else {
+        spdlog::warn("Failed to parse X509 certificate for metadata extraction: {}", fingerprint);
+    }
+
+    // Helper lambda to convert vector<string> to PostgreSQL array literal
+    auto vecToArray = [](const std::vector<std::string>& vec) -> std::string {
+        if (vec.empty()) return "NULL";
+        std::string result = "ARRAY[";
+        for (size_t i = 0; i < vec.size(); i++) {
+            result += "'" + vec[i] + "'";
+            if (i < vec.size() - 1) result += ",";
+        }
+        result += "]";
+        return result;
+    };
+
+    // Helper lambda for optional string
+    auto optToSql = [&conn](const std::optional<std::string>& opt) -> std::string {
+        return opt.has_value() ? escapeSqlString(conn, opt.value()) : "NULL";
+    };
+
+    // Helper lambda for optional int
+    auto optIntToSql = [](const std::optional<int>& opt) -> std::string {
+        return opt.has_value() ? std::to_string(opt.value()) : "NULL";
+    };
+
+    // Build INSERT query with X.509 metadata fields
+    std::string query =
+        "INSERT INTO certificate ("
+        "id, upload_id, certificate_type, country_code, "
+        "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+        "not_before, not_after, certificate_data, validation_status, validation_message, "
+        // X.509 metadata fields (15 fields)
+        "version, signature_algorithm, signature_hash_algorithm, "
+        "public_key_algorithm, public_key_size, public_key_curve, "
+        "key_usage, extended_key_usage, "
+        "is_ca, path_len_constraint, "
+        "subject_key_identifier, authority_key_identifier, "
+        "crl_distribution_points, ocsp_responder_url, "
+        "is_self_signed, "
+        "created_at"
+        ") VALUES ("
+        "'" + certId + "', "
+        "'" + uploadId + "', "
+        + escapeSqlString(conn, certType) + ", "
+        + escapeSqlString(conn, countryCode) + ", "
+        + escapeSqlString(conn, subjectDn) + ", "
+        + escapeSqlString(conn, issuerDn) + ", "
+        + escapeSqlString(conn, serialNumber) + ", "
+        "'" + fingerprint + "', "
+        "'" + notBefore + "', "
+        "'" + notAfter + "', "
+        "'" + byteaEscaped + "', "
+        + escapeSqlString(conn, validationStatus) + ", "
+        + escapeSqlString(conn, validationMessage) + ", "
+        // X.509 metadata values
+        + std::to_string(metadata.version) + ", "
+        + escapeSqlString(conn, metadata.signatureAlgorithm) + ", "
+        + escapeSqlString(conn, metadata.signatureHashAlgorithm) + ", "
+        + escapeSqlString(conn, metadata.publicKeyAlgorithm) + ", "
+        + std::to_string(metadata.publicKeySize) + ", "
+        + optToSql(metadata.publicKeyCurve) + ", "
+        + vecToArray(metadata.keyUsage) + ", "
+        + vecToArray(metadata.extendedKeyUsage) + ", "
+        + (metadata.isCA ? "TRUE" : "FALSE") + ", "
+        + optIntToSql(metadata.pathLenConstraint) + ", "
+        + optToSql(metadata.subjectKeyIdentifier) + ", "
+        + optToSql(metadata.authorityKeyIdentifier) + ", "
+        + vecToArray(metadata.crlDistributionPoints) + ", "
+        + optToSql(metadata.ocspResponderUrl) + ", "
+        + (metadata.isSelfSigned ? "TRUE" : "FALSE") + ", "
+        "NOW()) "
+        "ON CONFLICT (certificate_type, fingerprint_sha256) "
+        "DO UPDATE SET upload_id = EXCLUDED.upload_id "
+        "RETURNING id";
 
     PGresult* res = PQexec(conn, query.c_str());
     ExecStatusType status = PQresultStatus(res);
@@ -5256,6 +5324,35 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // GET /api/upload/{uploadId}/validation-statistics - Get validation statistics for an upload
+    // Phase 4.6: Connected to ValidationService → ValidationRepository (Repository Pattern)
+    app.registerHandler(
+        "/api/upload/{uploadId}/validation-statistics",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            try {
+                spdlog::info("GET /api/upload/{}/validation-statistics", uploadId);
+
+                // Call ValidationService (Repository Pattern)
+                Json::Value response = validationService->getValidationStatistics(uploadId);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Validation statistics error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Cleanup failed upload endpoint
     // Phase 3.1: Connected to UploadService (Repository Pattern)
     // TODO Phase 4: Move cleanupFailedUpload() logic into UploadService
@@ -5377,6 +5474,7 @@ void registerRoutes() {
     // =========================================================================
 
     // GET /api/audit/operations - List audit log entries with filtering
+    // Phase 4.4: Connected to AuditService → AuditRepository (Repository Pattern)
     app.registerHandler(
         "/api/audit/operations",
         [](const drogon::HttpRequestPtr& req,
@@ -5384,176 +5482,28 @@ void registerRoutes() {
             spdlog::info("GET /api/audit/operations - List audit logs");
 
             try {
-                // Query parameters
-                int limit = req->getOptionalParameter<int>("limit").value_or(50);
-                int offset = req->getOptionalParameter<int>("offset").value_or(0);
-                std::string operationType = req->getOptionalParameter<std::string>("operationType").value_or("");
-                std::string username = req->getOptionalParameter<std::string>("username").value_or("");
-                std::string success = req->getOptionalParameter<std::string>("success").value_or("");
+                // Build filter from query parameters
+                services::AuditService::AuditLogFilter filter;
+                filter.limit = req->getOptionalParameter<int>("limit").value_or(50);
+                filter.offset = req->getOptionalParameter<int>("offset").value_or(0);
+                filter.operationType = req->getOptionalParameter<std::string>("operationType").value_or("");
+                filter.username = req->getOptionalParameter<std::string>("username").value_or("");
+                filter.success = req->getOptionalParameter<std::string>("success").value_or("");
 
-                // Validate limit
-                if (limit > 100) limit = 100;
-                if (limit < 1) limit = 50;
-
-                // Connect to database
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Database connection failed";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    PQfinish(conn);
-                    return;
-                }
-
-                // Build query with filters
-                std::string query = "SELECT id::text, user_id::text, username, operation_type, operation_subtype, "
-                                   "resource_id, resource_type, ip_address, user_agent, "
-                                   "request_method, request_path, success, status_code, "
-                                   "error_message, metadata::text, duration_ms, created_at::text "
-                                   "FROM operation_audit_log WHERE 1=1";
-
-                std::vector<std::string> paramValues;
-                int paramIndex = 1;
-
-                if (!operationType.empty()) {
-                    query += " AND operation_type = $" + std::to_string(paramIndex++);
-                    paramValues.push_back(operationType);
-                }
-
-                if (!username.empty()) {
-                    query += " AND username = $" + std::to_string(paramIndex++);
-                    paramValues.push_back(username);
-                }
-
-                if (!success.empty()) {
-                    if (success == "true" || success == "1") {
-                        query += " AND success = true";
-                    } else if (success == "false" || success == "0") {
-                        query += " AND success = false";
-                    }
-                }
-
-                query += " ORDER BY created_at DESC LIMIT $" + std::to_string(paramIndex++);
-                paramValues.push_back(std::to_string(limit));
-
-                query += " OFFSET $" + std::to_string(paramIndex);
-                paramValues.push_back(std::to_string(offset));
-
-                // Execute query
-                std::vector<const char*> params;
-                for (const auto& p : paramValues) {
-                    params.push_back(p.c_str());
-                }
-
-                PGresult* res = PQexecParams(conn, query.c_str(), params.size(), nullptr,
-                                            params.data(), nullptr, nullptr, 0);
-
-                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Query failed";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    PQclear(res);
-                    PQfinish(conn);
-                    return;
-                }
-
-                // Build result
-                Json::Value result;
-                result["success"] = true;
-                result["limit"] = limit;
-                result["offset"] = offset;
-                result["count"] = PQntuples(res);
-
-                Json::Value operations(Json::arrayValue);
-                for (int i = 0; i < PQntuples(res); i++) {
-                    Json::Value op;
-                    op["id"] = PQgetvalue(res, i, 0);
-                    if (!PQgetisnull(res, i, 1)) op["userId"] = PQgetvalue(res, i, 1);
-                    if (!PQgetisnull(res, i, 2)) op["username"] = PQgetvalue(res, i, 2);
-                    op["operationType"] = PQgetvalue(res, i, 3);
-                    if (!PQgetisnull(res, i, 4)) op["operationSubtype"] = PQgetvalue(res, i, 4);
-                    if (!PQgetisnull(res, i, 5)) op["resourceId"] = PQgetvalue(res, i, 5);
-                    if (!PQgetisnull(res, i, 6)) op["resourceType"] = PQgetvalue(res, i, 6);
-                    if (!PQgetisnull(res, i, 7)) op["ipAddress"] = PQgetvalue(res, i, 7);
-                    if (!PQgetisnull(res, i, 8)) op["userAgent"] = PQgetvalue(res, i, 8);
-                    if (!PQgetisnull(res, i, 9)) op["requestMethod"] = PQgetvalue(res, i, 9);
-                    if (!PQgetisnull(res, i, 10)) op["requestPath"] = PQgetvalue(res, i, 10);
-                    op["success"] = strcmp(PQgetvalue(res, i, 11), "t") == 0;
-                    if (!PQgetisnull(res, i, 12)) op["statusCode"] = std::stoi(PQgetvalue(res, i, 12));
-                    if (!PQgetisnull(res, i, 13)) op["errorMessage"] = PQgetvalue(res, i, 13);
-                    if (!PQgetisnull(res, i, 14)) {
-                        Json::CharReaderBuilder builder;
-                        Json::Value metadata;
-                        std::string metadataStr = PQgetvalue(res, i, 14);
-                        std::istringstream iss(metadataStr);
-                        std::string errors;
-                        if (Json::parseFromStream(builder, iss, &metadata, &errors)) {
-                            op["metadata"] = metadata;
-                        }
-                    }
-                    if (!PQgetisnull(res, i, 15)) op["durationMs"] = std::stoi(PQgetvalue(res, i, 15));
-                    op["createdAt"] = PQgetvalue(res, i, 16);
-
-                    operations.append(op);
-                }
-
-                result["data"] = operations;
-                PQclear(res);
-
-                // Get total count (without pagination)
-                std::string countQuery = "SELECT COUNT(*) FROM operation_audit_log WHERE 1=1";
-                std::vector<std::string> countParamValues;
-                int countParamIndex = 1;
-                if (!operationType.empty()) {
-                    countQuery += " AND operation_type = $" + std::to_string(countParamIndex++);
-                    countParamValues.push_back(operationType);
-                }
-                if (!username.empty()) {
-                    countQuery += " AND username = $" + std::to_string(countParamIndex++);
-                    countParamValues.push_back(username);
-                }
-                if (!success.empty()) {
-                    if (success == "true" || success == "1") {
-                        countQuery += " AND success = true";
-                    } else if (success == "false" || success == "0") {
-                        countQuery += " AND success = false";
-                    }
-                }
-                std::vector<const char*> countParams;
-                for (const auto& p : countParamValues) {
-                    countParams.push_back(p.c_str());
-                }
-                PGresult* countRes = PQexecParams(conn, countQuery.c_str(), countParams.size(),
-                                                  nullptr, countParams.data(), nullptr, nullptr, 0);
-                int total = 0;
-                if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-                    total = std::stoi(PQgetvalue(countRes, 0, 0));
-                }
-                PQclear(countRes);
-                result["total"] = total;
+                // Call AuditService (Repository Pattern)
+                Json::Value result = auditService->getOperationLogs(filter);
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                if (!result.get("success", false).asBool()) {
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                }
                 callback(resp);
 
-                PQfinish(conn);
-
             } catch (const std::exception& e) {
-                spdlog::error("Audit log query error: {}", e.what());
+                spdlog::error("GET /api/audit/operations error: {}", e.what());
                 Json::Value error;
                 error["success"] = false;
-                error["message"] = e.what();
+                error["error"] = e.what();
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
@@ -5563,6 +5513,7 @@ void registerRoutes() {
     );
 
     // GET /api/audit/operations/stats - Audit log statistics
+    // Phase 4.4: Connected to AuditService → AuditRepository (Repository Pattern)
     app.registerHandler(
         "/api/audit/operations/stats",
         [](const drogon::HttpRequestPtr& req,
@@ -5570,108 +5521,20 @@ void registerRoutes() {
             spdlog::info("GET /api/audit/operations/stats - Audit log statistics");
 
             try {
-                // Connect to database
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Database connection failed";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    PQfinish(conn);
-                    return;
-                }
-
-                Json::Value stats;
-
-                // Total operations
-                PGresult* res = PQexec(conn, "SELECT COUNT(*) FROM operation_audit_log");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    stats["totalOperations"] = std::stoi(PQgetvalue(res, 0, 0));
-                } else {
-                    stats["totalOperations"] = 0;
-                }
-                PQclear(res);
-
-                // Successful operations
-                res = PQexec(conn, "SELECT COUNT(*) FROM operation_audit_log WHERE success = true");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    stats["successfulOperations"] = std::stoi(PQgetvalue(res, 0, 0));
-                } else {
-                    stats["successfulOperations"] = 0;
-                }
-                PQclear(res);
-
-                // Failed operations
-                res = PQexec(conn, "SELECT COUNT(*) FROM operation_audit_log WHERE success = false");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    stats["failedOperations"] = std::stoi(PQgetvalue(res, 0, 0));
-                } else {
-                    stats["failedOperations"] = 0;
-                }
-                PQclear(res);
-
-                // Operations by type (as Record<string, number>)
-                res = PQexec(conn, "SELECT operation_type, COUNT(*) FROM operation_audit_log "
-                                   "GROUP BY operation_type ORDER BY COUNT(*) DESC");
-                Json::Value operationsByType;
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        std::string opType = PQgetvalue(res, i, 0);
-                        operationsByType[opType] = std::stoi(PQgetvalue(res, i, 1));
-                    }
-                }
-                stats["operationsByType"] = operationsByType;
-                PQclear(res);
-
-                // Top users
-                res = PQexec(conn, "SELECT username, COUNT(*) as op_count FROM operation_audit_log "
-                                   "WHERE username IS NOT NULL "
-                                   "GROUP BY username ORDER BY op_count DESC LIMIT 10");
-                Json::Value topUsers(Json::arrayValue);
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value user;
-                        user["username"] = PQgetvalue(res, i, 0);
-                        user["operationCount"] = std::stoi(PQgetvalue(res, i, 1));
-                        topUsers.append(user);
-                    }
-                }
-                stats["topUsers"] = topUsers;
-                PQclear(res);
-
-                // Average duration
-                res = PQexec(conn, "SELECT AVG(duration_ms) FROM operation_audit_log "
-                                   "WHERE duration_ms IS NOT NULL");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0 &&
-                    !PQgetisnull(res, 0, 0)) {
-                    stats["averageDurationMs"] = std::stoi(PQgetvalue(res, 0, 0));
-                } else {
-                    stats["averageDurationMs"] = 0;
-                }
-                PQclear(res);
-
-                Json::Value result;
-                result["success"] = true;
-                result["data"] = stats;
+                // Call AuditService (Repository Pattern)
+                Json::Value result = auditService->getOperationStatistics();
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                if (!result.get("success", false).asBool()) {
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                }
                 callback(resp);
 
-                PQfinish(conn);
-
             } catch (const std::exception& e) {
-                spdlog::error("Audit stats query error: {}", e.what());
+                spdlog::error("GET /api/audit/operations/stats error: {}", e.what());
                 Json::Value error;
                 error["success"] = false;
-                error["message"] = e.what();
+                error["error"] = e.what();
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
@@ -5730,142 +5593,40 @@ void registerRoutes() {
     );
 
     // Re-validate DSC certificates endpoint
+    // Phase 4.7: Connected to ValidationService → CertificateRepository (Repository Pattern)
     app.registerHandler(
         "/api/validation/revalidate",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/validation/revalidate - Re-validate DSC certificates");
+            try {
+                spdlog::info("POST /api/validation/revalidate - Re-validate DSC certificates");
 
-            // Connect to PostgreSQL
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
+                // Call ValidationService (Repository Pattern)
+                auto result = validationService->revalidateDscCertificates();
 
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
+                // Build response
+                Json::Value response;
+                response["success"] = result.success;
+                response["message"] = result.message;
+                response["totalProcessed"] = result.totalProcessed;
+                response["validCount"] = result.validCount;
+                response["invalidCount"] = result.invalidCount;
+                response["pendingCount"] = result.pendingCount;
+                response["errorCount"] = result.errorCount;
+                response["durationSeconds"] = result.durationSeconds;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Revalidation error: {}", e.what());
                 Json::Value error;
                 error["success"] = false;
-                error["message"] = "Database connection failed";
+                error["error"] = e.what();
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
-                return;
             }
-
-            // Get optional limit from query param (default: 10 for testing)
-            int limit = 10;
-            auto limitParam = req->getParameter("limit");
-            if (!limitParam.empty()) {
-                try {
-                    limit = std::stoi(limitParam);
-                } catch (...) {}
-            }
-
-            // Get DSC certificates that need re-validation (CSCA_NOT_FOUND)
-            std::string query = "SELECT c.id, c.issuer_dn, c.certificate_data "
-                               "FROM certificate c "
-                               "JOIN validation_result vr ON c.id = vr.certificate_id "
-                               "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
-                               "AND vr.error_code = 'CSCA_NOT_FOUND' "
-                               "LIMIT " + std::to_string(limit);
-
-            PGresult* res = PQexec(conn, query.c_str());
-            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Query failed: " + std::string(PQerrorMessage(conn));
-                PQclear(res);
-                PQfinish(conn);
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            int totalDscs = PQntuples(res);
-            int validatedCount = 0;
-            int cscaFoundCount = 0;
-            int signatureValidCount = 0;
-            Json::Value details(Json::arrayValue);
-
-            for (int i = 0; i < totalDscs; i++) {
-                std::string certId = PQgetvalue(res, i, 0);
-                std::string issuerDn = PQgetvalue(res, i, 1);
-
-                // Try to find CSCA
-                X509* csca = findCscaByIssuerDn(conn, issuerDn);
-
-                Json::Value detail;
-                detail["certId"] = certId;
-                detail["issuerDn"] = issuerDn.substr(0, 100);
-
-                if (csca) {
-                    cscaFoundCount++;
-                    detail["cscaFound"] = true;
-
-                    // Parse DSC certificate
-                    char* certData = PQgetvalue(res, i, 2);
-                    int certLen = PQgetlength(res, i, 2);
-
-                    std::vector<uint8_t> derBytes;
-                    if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
-                        for (int j = 2; j < certLen; j += 2) {
-                            char hex[3] = {certData[j], certData[j+1], 0};
-                            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
-                        }
-                    }
-
-                    if (!derBytes.empty()) {
-                        const uint8_t* data = derBytes.data();
-                        X509* dsc = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
-                        if (dsc) {
-                            EVP_PKEY* cscaPubKey = X509_get_pubkey(csca);
-                            if (cscaPubKey) {
-                                int verifyResult = X509_verify(dsc, cscaPubKey);
-                                detail["signatureValid"] = (verifyResult == 1);
-                                if (verifyResult == 1) {
-                                    signatureValidCount++;
-                                }
-                                EVP_PKEY_free(cscaPubKey);
-                            }
-                            X509_free(dsc);
-                        }
-                    }
-
-                    X509_free(csca);
-                } else {
-                    detail["cscaFound"] = false;
-                    detail["signatureValid"] = false;
-
-                    // Check if CSCA exists with simple query
-                    std::string checkQuery = "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA' AND LOWER(subject_dn) = LOWER($1)";
-                    const char* paramValues[1] = {issuerDn.c_str()};
-                    PGresult* checkRes = PQexecParams(conn, checkQuery.c_str(), 1, nullptr, paramValues, nullptr, nullptr, 0);
-                    if (PQresultStatus(checkRes) == PGRES_TUPLES_OK) {
-                        int count = std::stoi(PQgetvalue(checkRes, 0, 0));
-                        detail["cscaExistsInDb"] = count;
-                    }
-                    PQclear(checkRes);
-                }
-
-                validatedCount++;
-                details.append(detail);
-            }
-
-            PQclear(res);
-            PQfinish(conn);
-
-            Json::Value result;
-            result["success"] = true;
-            result["totalProcessed"] = validatedCount;
-            result["cscaFoundCount"] = cscaFoundCount;
-            result["signatureValidCount"] = signatureValidCount;
-            result["details"] = details;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
         },
         {drogon::Post, drogon::Get}
     );
@@ -6677,96 +6438,19 @@ void registerRoutes() {
            const std::string& uploadId) {
             spdlog::info("GET /api/upload/{}/issues", uploadId);
 
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            Json::Value result;
-            result["success"] = false;
-
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Query ACTUAL duplicate certificates for this upload
-                // CRITICAL: Only return certificates that already existed before this upload
-                // (exclude first appearance, only show true duplicates by fingerprint)
-                std::string query =
-                    "SELECT "
-                    "  cd.id, "
-                    "  cd.source_type, "
-                    "  cd.source_country, "
-                    "  cd.detected_at, "
-                    "  c.certificate_type, "
-                    "  c.country_code, "
-                    "  c.subject_dn, "
-                    "  c.fingerprint_sha256 "
-                    "FROM certificate_duplicates cd "
-                    "JOIN certificate c ON cd.certificate_id = c.id "
-                    "WHERE cd.upload_id = '" + uploadId + "' "
-                    "  AND c.first_upload_id != '" + uploadId + "' "
-                    "ORDER BY cd.detected_at DESC";
-
-                PGresult* res = PQexec(conn, query.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    result["success"] = true;
-                    Json::Value duplicates(Json::arrayValue);
-
-                    // Count by type
-                    std::map<std::string, int> byType;
-                    byType["CSCA"] = 0;
-                    byType["DSC"] = 0;
-                    byType["DSC_NC"] = 0;
-                    byType["MLSC"] = 0;
-                    byType["CRL"] = 0;
-
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value dup;
-                        dup["id"] = std::stoi(PQgetvalue(res, i, 0));
-                        dup["sourceType"] = PQgetvalue(res, i, 1);
-                        dup["sourceCountry"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
-                        dup["detectedAt"] = PQgetvalue(res, i, 3);
-
-                        std::string certType = PQgetvalue(res, i, 4);
-                        dup["certificateType"] = certType;
-                        dup["country"] = PQgetvalue(res, i, 5);
-                        dup["subjectDn"] = PQgetvalue(res, i, 6);
-                        dup["fingerprint"] = PQgetvalue(res, i, 7);
-
-                        duplicates.append(dup);
-
-                        // Count by type
-                        if (byType.find(certType) != byType.end()) {
-                            byType[certType]++;
-                        }
-                    }
-
-                    result["duplicates"] = duplicates;
-                    result["totalDuplicates"] = PQntuples(res);
-
-                    // Add type breakdown
-                    Json::Value byTypeJson;
-                    byTypeJson["CSCA"] = byType["CSCA"];
-                    byTypeJson["DSC"] = byType["DSC"];
-                    byTypeJson["DSC_NC"] = byType["DSC_NC"];
-                    byTypeJson["MLSC"] = byType["MLSC"];
-                    byTypeJson["CRL"] = byType["CRL"];
-                    result["byType"] = byTypeJson;
-                } else {
-                    result["error"] = "Query failed";
-                    result["duplicates"] = Json::Value(Json::arrayValue);
-                    result["totalDuplicates"] = 0;
-                }
-                PQclear(res);
-            } else {
-                result["error"] = "Database connection failed";
-                result["duplicates"] = Json::Value(Json::arrayValue);
-                result["totalDuplicates"] = 0;
+            try {
+                Json::Value result = uploadService->getUploadIssues(uploadId);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/{}/issues error: {}", uploadId, e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
             }
-
-            PQfinish(conn);
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
         },
         {drogon::Get}
     );
@@ -6800,7 +6484,7 @@ void registerRoutes() {
             result["success"] = false;
 
             if (PQstatus(conn) == CONNECTION_OK) {
-                // Query to calculate changes between consecutive uploads of the same collection
+                // Query to calculate changes between consecutive uploads (chronological order)
                 std::string query =
                     "WITH ranked_uploads AS ( "
                     "  SELECT "
@@ -6812,35 +6496,36 @@ void registerRoutes() {
                     "    dsc_nc_count, "
                     "    crl_count, "
                     "    ml_count, "
-                    "    collection_number, "
+                    "    mlsc_count, "
+                    "    COALESCE(collection_number, '') as collection_number, "
                     "    ROW_NUMBER() OVER ( "
-                    "      PARTITION BY collection_number "
                     "      ORDER BY upload_timestamp DESC "
                     "    ) as rn "
                     "  FROM uploaded_file "
-                    "  WHERE status = 'COMPLETED' AND collection_number IS NOT NULL "
+                    "  WHERE status = 'COMPLETED' "
                     ") "
                     "SELECT "
                     "  curr.id, "
                     "  curr.original_file_name, "
-                    "  curr.collection_number, "
+                    "  CASE WHEN curr.collection_number = '' THEN 'N/A' ELSE curr.collection_number END as collection_number, "
                     "  to_char(curr.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as upload_time, "
                     "  curr.csca_count, "
                     "  curr.dsc_count, "
                     "  curr.dsc_nc_count, "
                     "  curr.crl_count, "
                     "  curr.ml_count, "
+                    "  curr.mlsc_count, "
                     "  curr.csca_count - COALESCE(prev.csca_count, 0) as csca_change, "
                     "  curr.dsc_count - COALESCE(prev.dsc_count, 0) as dsc_change, "
                     "  curr.dsc_nc_count - COALESCE(prev.dsc_nc_count, 0) as dsc_nc_change, "
                     "  curr.crl_count - COALESCE(prev.crl_count, 0) as crl_change, "
                     "  curr.ml_count - COALESCE(prev.ml_count, 0) as ml_change, "
+                    "  curr.mlsc_count - COALESCE(prev.mlsc_count, 0) as mlsc_change, "
                     "  prev.original_file_name as previous_file, "
                     "  to_char(prev.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as previous_upload_time "
                     "FROM ranked_uploads curr "
                     "LEFT JOIN ranked_uploads prev "
-                    "  ON curr.collection_number = prev.collection_number "
-                    "  AND prev.rn = curr.rn + 1 "
+                    "  ON prev.rn = curr.rn + 1 "
                     "WHERE curr.rn <= " + std::to_string(limit) + " "
                     "ORDER BY curr.upload_timestamp DESC";
 
@@ -6864,30 +6549,33 @@ void registerRoutes() {
                         counts["dscNc"] = std::stoi(PQgetvalue(res, i, 6));
                         counts["crl"] = std::stoi(PQgetvalue(res, i, 7));
                         counts["ml"] = std::stoi(PQgetvalue(res, i, 8));
+                        counts["mlsc"] = std::stoi(PQgetvalue(res, i, 9));
                         change["counts"] = counts;
 
                         // Changes (deltas)
                         Json::Value deltas;
-                        deltas["csca"] = std::stoi(PQgetvalue(res, i, 9));
-                        deltas["dsc"] = std::stoi(PQgetvalue(res, i, 10));
-                        deltas["dscNc"] = std::stoi(PQgetvalue(res, i, 11));
-                        deltas["crl"] = std::stoi(PQgetvalue(res, i, 12));
-                        deltas["ml"] = std::stoi(PQgetvalue(res, i, 13));
+                        deltas["csca"] = std::stoi(PQgetvalue(res, i, 10));
+                        deltas["dsc"] = std::stoi(PQgetvalue(res, i, 11));
+                        deltas["dscNc"] = std::stoi(PQgetvalue(res, i, 12));
+                        deltas["crl"] = std::stoi(PQgetvalue(res, i, 13));
+                        deltas["ml"] = std::stoi(PQgetvalue(res, i, 14));
+                        deltas["mlsc"] = std::stoi(PQgetvalue(res, i, 15));
                         change["changes"] = deltas;
 
                         // Calculate total change
-                        int totalChange = std::abs(std::stoi(PQgetvalue(res, i, 9))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 10))) +
+                        int totalChange = std::abs(std::stoi(PQgetvalue(res, i, 10))) +
                                         std::abs(std::stoi(PQgetvalue(res, i, 11))) +
                                         std::abs(std::stoi(PQgetvalue(res, i, 12))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 13)));
+                                        std::abs(std::stoi(PQgetvalue(res, i, 13))) +
+                                        std::abs(std::stoi(PQgetvalue(res, i, 14))) +
+                                        std::abs(std::stoi(PQgetvalue(res, i, 15)));
                         change["totalChange"] = totalChange;
 
                         // Previous upload info (if exists)
-                        if (!PQgetisnull(res, i, 14)) {
+                        if (!PQgetisnull(res, i, 16)) {
                             Json::Value previous;
-                            previous["fileName"] = PQgetvalue(res, i, 14);
-                            previous["uploadTime"] = PQgetvalue(res, i, 15);
+                            previous["fileName"] = PQgetvalue(res, i, 16);
+                            previous["uploadTime"] = PQgetvalue(res, i, 17);
                             change["previousUpload"] = previous;
                         } else {
                             change["previousUpload"] = Json::Value::null;

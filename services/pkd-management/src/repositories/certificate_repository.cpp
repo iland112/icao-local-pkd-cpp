@@ -339,6 +339,56 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
     }
 }
 
+Json::Value CertificateRepository::findDscForRevalidation(int limit)
+{
+    spdlog::debug("[CertificateRepository] Finding DSC certificates for re-validation (limit: {})", limit);
+
+    Json::Value result = Json::arrayValue;
+
+    try {
+        // Query DSC/DSC_NC certificates where CSCA was not found (failed validation)
+        const char* query =
+            "SELECT c.id, c.issuer_dn, c.certificate_data, c.fingerprint_sha256 "
+            "FROM certificate c "
+            "JOIN validation_result vr ON c.id = vr.certificate_id "
+            "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
+            "AND vr.csca_found = FALSE "
+            "AND vr.validation_status IN ('INVALID', 'PENDING') "
+            "LIMIT $1";
+
+        std::vector<std::string> params = {std::to_string(limit)};
+        PGresult* res = executeParamQuery(query, params);
+
+        int rows = PQntuples(res);
+        for (int i = 0; i < rows; i++) {
+            Json::Value cert;
+            cert["id"] = PQgetvalue(res, i, 0);
+            cert["issuerDn"] = PQgetvalue(res, i, 1);
+
+            // Certificate data (bytea hex format)
+            char* certData = PQgetvalue(res, i, 2);
+            int certLen = PQgetlength(res, i, 2);
+            if (certData && certLen > 0) {
+                cert["certificateData"] = std::string(certData, certLen);
+            } else {
+                cert["certificateData"] = "";
+            }
+
+            cert["fingerprint"] = PQgetvalue(res, i, 3);
+            result.append(cert);
+        }
+
+        PQclear(res);
+
+        spdlog::info("[CertificateRepository] Found {} DSC(s) for re-validation", rows);
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findDscForRevalidation failed: {}", e.what());
+        return Json::arrayValue;
+    }
+}
+
 // ========================================================================
 // Private Helper Methods
 // ========================================================================

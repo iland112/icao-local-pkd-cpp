@@ -60,6 +60,7 @@ add_executable(${PROJECT_NAME}
     # Common Utilities (NEW - v2.0.0)
     src/common/certificate_utils.cpp
     src/common/masterlist_processor.cpp
+    src/common/x509_metadata_extractor.cpp
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp
