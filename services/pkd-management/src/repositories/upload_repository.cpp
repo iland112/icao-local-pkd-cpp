@@ -364,10 +364,62 @@ Json::Value UploadRepository::getStatisticsSummary()
     Json::Value response;
 
     try {
-        // TODO: Implement statistics summary query
-        spdlog::warn("[UploadRepository] getStatisticsSummary - TODO: Implement");
-        response["success"] = false;
-        response["message"] = "Not yet implemented";
+        // Get total uploads
+        const char* countQuery = "SELECT COUNT(*) FROM uploaded_file";
+        PGresult* countRes = executeQuery(countQuery);
+        int totalUploads = std::atoi(PQgetvalue(countRes, 0, 0));
+        PQclear(countRes);
+
+        // Get certificate counts by type
+        const char* certQuery =
+            "SELECT "
+            "COALESCE(SUM(csca_count), 0) as total_csca, "
+            "COALESCE(SUM(dsc_count), 0) as total_dsc, "
+            "COALESCE(SUM(dsc_nc_count), 0) as total_dsc_nc, "
+            "COALESCE(SUM(mlsc_count), 0) as total_mlsc, "
+            "COALESCE(SUM(crl_count), 0) as total_crl, "
+            "COALESCE(SUM(ml_count), 0) as total_ml "
+            "FROM uploaded_file";
+
+        PGresult* certRes = executeQuery(certQuery);
+        int totalCsca = std::atoi(PQgetvalue(certRes, 0, 0));
+        int totalDsc = std::atoi(PQgetvalue(certRes, 0, 1));
+        int totalDscNc = std::atoi(PQgetvalue(certRes, 0, 2));
+        int totalMlsc = std::atoi(PQgetvalue(certRes, 0, 3));
+        int totalCrl = std::atoi(PQgetvalue(certRes, 0, 4));
+        int totalMl = std::atoi(PQgetvalue(certRes, 0, 5));
+        PQclear(certRes);
+
+        // Get uploads by status
+        const char* statusQuery =
+            "SELECT status, COUNT(*) FROM uploaded_file GROUP BY status";
+        PGresult* statusRes = executeQuery(statusQuery);
+
+        Json::Value uploadsByStatus;
+        int statusRows = PQntuples(statusRes);
+        for (int i = 0; i < statusRows; i++) {
+            std::string status = PQgetvalue(statusRes, i, 0);
+            int count = std::atoi(PQgetvalue(statusRes, i, 1));
+            uploadsByStatus[status] = count;
+        }
+        PQclear(statusRes);
+
+        // Build response
+        response["totalUploads"] = totalUploads;
+        response["totalCertificates"] = totalCsca + totalDsc + totalDscNc + totalMlsc;
+        response["totalCrls"] = totalCrl;
+        response["totalMasterLists"] = totalMl;
+
+        response["certificatesByType"]["CSCA"] = totalCsca;
+        response["certificatesByType"]["DSC"] = totalDsc;
+        response["certificatesByType"]["DSC_NC"] = totalDscNc;
+        response["certificatesByType"]["MLSC"] = totalMlsc;
+        response["certificatesByType"]["CRL"] = totalCrl;
+
+        response["uploadsByStatus"] = uploadsByStatus;
+
+        spdlog::debug("[UploadRepository] Statistics: {} uploads, {} certificates",
+            totalUploads, response["totalCertificates"].asInt());
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get statistics summary failed: {}", e.what());
@@ -384,10 +436,34 @@ Json::Value UploadRepository::getCountryStatistics()
     Json::Value response;
 
     try {
-        // TODO: Implement country statistics query
-        spdlog::warn("[UploadRepository] getCountryStatistics - TODO: Implement");
-        response["success"] = false;
-        response["message"] = "Not yet implemented";
+        // Get certificate counts by country (top 20 countries)
+        const char* query =
+            "SELECT "
+            "country_code, "
+            "COUNT(*) as total_certificates "
+            "FROM certificate "
+            "WHERE country_code IS NOT NULL AND country_code != '' "
+            "GROUP BY country_code "
+            "ORDER BY total_certificates DESC "
+            "LIMIT 20";
+
+        PGresult* res = executeQuery(query);
+        int rows = PQntuples(res);
+
+        Json::Value countries = Json::arrayValue;
+        for (int i = 0; i < rows; i++) {
+            Json::Value countryData;
+            countryData["country"] = PQgetvalue(res, i, 0);
+            countryData["totalCertificates"] = std::atoi(PQgetvalue(res, i, 1));
+            countries.append(countryData);
+        }
+
+        PQclear(res);
+
+        response["countries"] = countries;
+        response["totalCountries"] = rows;
+
+        spdlog::debug("[UploadRepository] Found {} countries with certificates", rows);
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get country statistics failed: {}", e.what());
@@ -404,10 +480,49 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
     Json::Value response;
 
     try {
-        // TODO: Implement detailed country statistics query
-        spdlog::warn("[UploadRepository] getDetailedCountryStatistics - TODO: Implement");
-        response["success"] = false;
-        response["message"] = "Not yet implemented";
+        // Get detailed certificate counts by country and type
+        std::ostringstream query;
+        query << "SELECT "
+              << "c.country_code, "
+              << "SUM(CASE WHEN c.certificate_type = 'MLSC' THEN 1 ELSE 0 END) as mlsc_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn = c.issuer_dn THEN 1 ELSE 0 END) as csca_self_signed_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn != c.issuer_dn THEN 1 ELSE 0 END) as csca_link_cert_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
+              << "COALESCE((SELECT COUNT(*) FROM crl WHERE country_code = c.country_code), 0) as crl_count, "
+              << "COUNT(*) as total_certificates "
+              << "FROM certificate c "
+              << "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
+              << "GROUP BY c.country_code "
+              << "ORDER BY total_certificates DESC ";
+
+        if (limit > 0) {
+            query << "LIMIT " << limit;
+        }
+
+        PGresult* res = executeQuery(query.str());
+        int rows = PQntuples(res);
+
+        Json::Value countries = Json::arrayValue;
+        for (int i = 0; i < rows; i++) {
+            Json::Value countryData;
+            countryData["country"] = PQgetvalue(res, i, 0);
+            countryData["mlscCount"] = std::atoi(PQgetvalue(res, i, 1));
+            countryData["cscaSelfSignedCount"] = std::atoi(PQgetvalue(res, i, 2));
+            countryData["cscaLinkCertCount"] = std::atoi(PQgetvalue(res, i, 3));
+            countryData["dscCount"] = std::atoi(PQgetvalue(res, i, 4));
+            countryData["dscNcCount"] = std::atoi(PQgetvalue(res, i, 5));
+            countryData["crlCount"] = std::atoi(PQgetvalue(res, i, 6));
+            countryData["totalCertificates"] = std::atoi(PQgetvalue(res, i, 7));
+            countries.append(countryData);
+        }
+
+        PQclear(res);
+
+        response["countries"] = countries;
+        response["totalCountries"] = rows;
+
+        spdlog::debug("[UploadRepository] Found detailed statistics for {} countries", rows);
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get detailed country statistics failed: {}", e.what());
