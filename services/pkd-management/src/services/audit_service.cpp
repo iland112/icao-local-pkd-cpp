@@ -147,24 +147,35 @@ Json::Value AuditService::getOperationLogs(const AuditLogFilter& filter)
         filter.limit, filter.offset);
 
     Json::Value response;
-    response["success"] = false;
-    response["data"] = Json::arrayValue;
-    response["total"] = 0;
-    response["count"] = 0;
-    response["limit"] = filter.limit;
-    response["offset"] = filter.offset;
 
     try {
-        // TODO: Use Repository findAll() with filter support
-        spdlog::warn("AuditService::getOperationLogs - TODO: Implement with Repository");
-        spdlog::warn("TODO: AuditRepository needs findAll() with filter support");
+        // Use Repository to get audit logs
+        Json::Value logs = auditRepo_->findAll(
+            filter.limit,
+            filter.offset,
+            filter.operationType,
+            filter.username
+        );
 
-        // For now, return empty result
+        // Build response
         response["success"] = true;
+        response["data"] = logs;
+        response["count"] = logs.size();
+        response["limit"] = filter.limit;
+        response["offset"] = filter.offset;
+
+        // Get total count (would need separate query in production)
+        response["total"] = logs.size(); // Simplified for now
 
     } catch (const std::exception& e) {
         spdlog::error("AuditService::getOperationLogs failed: {}", e.what());
+        response["success"] = false;
         response["error"] = e.what();
+        response["data"] = Json::arrayValue;
+        response["count"] = 0;
+        response["limit"] = filter.limit;
+        response["offset"] = filter.offset;
+        response["total"] = 0;
     }
 
     return response;
@@ -203,13 +214,24 @@ Json::Value AuditService::getOperationStatistics(
     spdlog::info("AuditService::getOperationStatistics - startDate: {}, endDate: {}",
         startDate, endDate);
 
-    spdlog::warn("TODO: Implement operation statistics");
-    spdlog::warn("TODO: Extract from main.cpp GET /api/audit/operations/stats endpoint");
+    try {
+        // Use Repository to get statistics
+        Json::Value stats = auditRepo_->getStatistics(startDate, endDate);
 
-    Json::Value response;
-    response["success"] = false;
-    response["message"] = "Not yet implemented";
-    return response;
+        // Wrap in data object for API response
+        Json::Value response;
+        response["success"] = true;
+        response["data"] = stats;
+
+        return response;
+
+    } catch (const std::exception& e) {
+        spdlog::error("AuditService::getOperationStatistics failed: {}", e.what());
+        Json::Value response;
+        response["success"] = false;
+        response["error"] = e.what();
+        return response;
+    }
 }
 
 Json::Value AuditService::getOperationStatisticsByType(
