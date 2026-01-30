@@ -228,6 +228,35 @@ Json::Value ValidationService::getValidationByFingerprint(const std::string& fin
     return response;
 }
 
+Json::Value ValidationService::getValidationsByUploadId(
+    const std::string& uploadId,
+    int limit,
+    int offset,
+    const std::string& statusFilter,
+    const std::string& certTypeFilter
+)
+{
+    spdlog::info("ValidationService::getValidationsByUploadId - uploadId: {}, limit: {}, offset: {}, status: {}, certType: {}",
+        uploadId, limit, offset, statusFilter, certTypeFilter);
+
+    Json::Value response;
+
+    try {
+        // Use Repository to get validation results
+        response = validationRepo_->findByUploadId(uploadId, limit, offset, statusFilter, certTypeFilter);
+
+    } catch (const std::exception& e) {
+        spdlog::error("ValidationService::getValidationsByUploadId failed: {}", e.what());
+        response["success"] = false;
+        response["error"] = e.what();
+        response["count"] = 0;
+        response["total"] = 0;
+        response["validations"] = Json::arrayValue;
+    }
+
+    return response;
+}
+
 Json::Value ValidationService::getValidationStatistics(const std::string& uploadId)
 {
     spdlog::info("ValidationService::getValidationStatistics - uploadId: {}", uploadId);

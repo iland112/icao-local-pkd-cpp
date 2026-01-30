@@ -171,6 +171,34 @@ public:
     Json::Value getValidationByFingerprint(const std::string& fingerprint);
 
     /**
+     * @brief Get validation results for an upload (paginated)
+     *
+     * @param uploadId Upload UUID
+     * @param limit Maximum results
+     * @param offset Pagination offset
+     * @param statusFilter Filter by validation_status (VALID/INVALID/PENDING)
+     * @param certTypeFilter Filter by certificate_type (DSC/DSC_NC)
+     * @return Json::Value Validation results with pagination metadata
+     *
+     * Response format:
+     * {
+     *   "success": true,
+     *   "count": 50,
+     *   "total": 29838,
+     *   "limit": 50,
+     *   "offset": 0,
+     *   "validations": [...]
+     * }
+     */
+    Json::Value getValidationsByUploadId(
+        const std::string& uploadId,
+        int limit,
+        int offset,
+        const std::string& statusFilter = "",
+        const std::string& certTypeFilter = ""
+    );
+
+    /**
      * @brief Get validation statistics for an upload
      *
      * @param uploadId Upload UUID

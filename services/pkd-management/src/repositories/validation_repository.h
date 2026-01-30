@@ -41,13 +41,20 @@ public:
     Json::Value findByFingerprint(const std::string& fingerprint);
 
     /**
-     * @brief Find validations by upload ID
+     * @brief Find validations by upload ID with pagination
+     * @param uploadId Upload UUID
+     * @param limit Maximum results
+     * @param offset Pagination offset
+     * @param statusFilter Filter by validation_status (VALID/INVALID/PENDING)
+     * @param certTypeFilter Filter by certificate_type (DSC/DSC_NC)
+     * @return JSON object with count, total, limit, offset, validations array
      */
     Json::Value findByUploadId(
         const std::string& uploadId,
         int limit,
         int offset,
-        const std::string& statusFilter = ""
+        const std::string& statusFilter = "",
+        const std::string& certTypeFilter = ""
     );
 
     /**
