@@ -29,8 +29,15 @@ echo ""
 # Step 1: Stop and remove all containers
 # =============================================================================
 echo -e "${YELLOW}[Step 1/6] Stopping and removing all containers...${NC}"
+
+# First, remove any manually created containers that might conflict
+echo "  Removing any existing icao-local-pkd-* containers..."
+docker ps -a --filter "name=icao-local-pkd-" --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
+
+# Then stop and remove compose-managed containers
 docker compose -f docker/docker-compose.yaml down 2>/dev/null || true
-echo -e "${GREEN}✓ Containers stopped and removed${NC}"
+
+echo -e "${GREEN}✓ All containers stopped and removed${NC}"
 echo ""
 
 # =============================================================================

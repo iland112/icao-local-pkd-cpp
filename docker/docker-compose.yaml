@@ -306,7 +306,7 @@ services:
     image: postgres:15
     container_name: icao-local-pkd-postgres
     ports:
-      - "5432:5432"
+      - "15432:5432"  # External: 15432, Internal: 5432 (WSL2 port forwarding workaround)
     environment:
       - POSTGRES_USER=pkd
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)
