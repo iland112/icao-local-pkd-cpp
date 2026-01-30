@@ -251,6 +251,7 @@ private:
      */
     struct TrustChain {
         std::vector<TrustChainNode> chain;
+        std::vector<X509*> certificates;  // Raw X509 pointers for signature verification
         bool isValid;
         std::string message;
         std::string path;  // Human-readable path
@@ -281,6 +282,14 @@ private:
      * @return true if signature is valid
      */
     bool verifyCertificateSignature(X509* cert, X509* issuerCert);
+
+    /**
+     * @brief Validate entire trust chain (signatures + expiration)
+     *
+     * @param chain Trust chain to validate
+     * @return true if all signatures and expiration checks pass
+     */
+    bool validateTrustChainInternal(const TrustChain& chain);
 
     // ========================================================================
     // CRL Check

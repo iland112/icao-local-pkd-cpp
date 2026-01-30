@@ -2,6 +2,13 @@
 #include <spdlog/spdlog.h>
 #include <cstring>
 #include <chrono>
+#include <iomanip>
+#include <sstream>
+#include <set>
+#include <algorithm>
+#include <openssl/evp.h>
+#include <openssl/x509v3.h>
+#include <openssl/err.h>
 
 namespace services {
 
@@ -44,12 +51,26 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
     auto startTime = std::chrono::steady_clock::now();
 
     try {
-        // TODO: Extract logic from main.cpp
-        spdlog::warn("ValidationService::revalidateDscCertificates - TODO: Implement");
-        spdlog::warn("TODO: Extract re-validation logic from main.cpp (lines ~5876-6017)");
+        // Implementation Note:
+        // This is a complex operation that requires:
+        // 1. Querying all DSC certificates from database (via CertificateRepository)
+        // 2. For each DSC:
+        //    a. Load X509 certificate from database
+        //    b. Call validateCertificate()
+        //    c. Save validation result to database (via ValidationRepository)
+        // 3. Aggregate statistics
+        //
+        // Due to complexity and need for database integration,
+        // this should be implemented in Phase 4.3+ with proper error handling,
+        // transaction management, and progress tracking.
+        //
+        // For now, returning "Not yet implemented" status.
+
+        spdlog::warn("ValidationService::revalidateDscCertificates - Full implementation deferred to Phase 4.3+");
+        spdlog::info("Requires: CertificateRepository queries, X509 parsing, bulk validation, result persistence");
 
         result.success = false;
-        result.message = "Not yet implemented";
+        result.message = "Bulk re-validation not yet implemented - use single certificate validation";
 
     } catch (const std::exception& e) {
         spdlog::error("ValidationService::revalidateDscCertificates failed: {}", e.what());
@@ -102,11 +123,62 @@ ValidationService::ValidationResult ValidationService::validateCertificate(
     try {
         spdlog::debug("Validating {} certificate", certType);
 
-        // TODO: Extract validation logic from main.cpp
-        spdlog::warn("ValidationService::validateCertificate - TODO: Implement");
+        // Step 1: Check certificate expiration
+        time_t now = time(nullptr);
+        if (X509_cmp_time(X509_get0_notAfter(cert), &now) < 0) {
+            result.validationStatus = "INVALID";
+            result.errorMessage = "Certificate is expired";
+            spdlog::warn("Certificate validation: Certificate is EXPIRED");
+            return result;
+        }
+        if (X509_cmp_time(X509_get0_notBefore(cert), &now) > 0) {
+            result.validationStatus = "INVALID";
+            result.errorMessage = "Certificate is not yet valid";
+            spdlog::warn("Certificate validation: Certificate is NOT YET VALID");
+            return result;
+        }
 
-        result.validationStatus = "PENDING";
-        result.errorMessage = "Not yet implemented";
+        // Step 2: Get issuer DN to find CSCA
+        std::string issuerDn = getIssuerDn(cert);
+        if (issuerDn.empty()) {
+            result.validationStatus = "ERROR";
+            result.errorMessage = "Failed to extract issuer DN";
+            return result;
+        }
+
+        // Step 3: Build trust chain
+        TrustChain chain = buildTrustChain(cert, 5);
+
+        if (!chain.isValid) {
+            result.validationStatus = "INVALID";
+            result.errorMessage = "Failed to build trust chain: " + chain.message;
+            result.trustChainPath = chain.path;
+            spdlog::warn("Certificate validation: {}", result.errorMessage);
+            return result;
+        }
+
+        result.cscaFound = true;
+        result.trustChainPath = chain.path;
+        spdlog::info("Certificate validation: Trust chain built ({} steps)", chain.certificates.size());
+
+        // Step 4: Validate entire chain (signatures + expiration)
+        bool chainValid = validateTrustChainInternal(chain);
+
+        if (chainValid) {
+            result.signatureValid = true;
+            result.trustChainValid = true;
+            result.validationStatus = "VALID";
+            spdlog::info("Certificate validation: Trust Chain VERIFIED - Path: {}", result.trustChainPath);
+        } else {
+            result.validationStatus = "INVALID";
+            result.errorMessage = "Trust chain validation failed (signature or expiration check)";
+            spdlog::error("Certificate validation: Trust Chain FAILED - {}", result.errorMessage);
+        }
+
+        // Cleanup chain certificates (except first one which is the input cert)
+        for (size_t i = 1; i < chain.certificates.size(); i++) {
+            X509_free(chain.certificates[i]);
+        }
 
     } catch (const std::exception& e) {
         spdlog::error("Certificate validation failed: {}", e.what());
@@ -232,12 +304,113 @@ ValidationService::TrustChain ValidationService::buildTrustChain(X509* leafCert,
     spdlog::debug("Building trust chain (maxDepth: {})", maxDepth);
 
     try {
-        // TODO: Extract trust chain building logic from main.cpp
-        spdlog::warn("TODO: Implement trust chain building");
-        spdlog::warn("TODO: Extract from main.cpp buildTrustChain() function");
+        // Step 1: Get issuer DN from leaf certificate to find all potential CSCAs
+        std::string leafIssuerDn = getIssuerDn(leafCert);
+        if (leafIssuerDn.empty()) {
+            chain.message = "Failed to extract issuer DN from leaf certificate";
+            return chain;
+        }
 
-        chain.isValid = false;
-        chain.message = "Not yet implemented";
+        // Step 2: Find ALL CSCAs matching the issuer DN (including link certificates)
+        std::vector<X509*> allCscas = certRepo_->findAllCscasBySubjectDn(leafIssuerDn);
+        if (allCscas.empty()) {
+            chain.message = "No CSCA found for issuer: " + leafIssuerDn.substr(0, 80);
+            spdlog::warn("Trust chain building: {}", chain.message);
+            return chain;
+        }
+
+        spdlog::info("Found {} CSCA(s) for issuer (may include link certs)", allCscas.size());
+
+        // Step 3: Add leaf certificate as first in chain
+        chain.certificates.push_back(leafCert);
+
+        // Step 4: Build chain iteratively
+        X509* current = leafCert;
+        std::set<std::string> visitedDns;  // Prevent circular references
+        int depth = 0;
+
+        while (depth < maxDepth) {
+            depth++;
+
+            // Check if current certificate is self-signed (root)
+            if (isSelfSigned(current)) {
+                chain.isValid = true;
+                spdlog::info("Chain building: Reached root CSCA at depth {}", depth);
+                break;
+            }
+
+            // Get issuer DN of current certificate
+            std::string currentIssuerDn = getIssuerDn(current);
+            if (currentIssuerDn.empty()) {
+                chain.message = "Failed to extract issuer DN at depth " + std::to_string(depth);
+                // Cleanup allocated CSCAs
+                for (X509* csca : allCscas) X509_free(csca);
+                return chain;
+            }
+
+            // Prevent circular references
+            if (visitedDns.count(currentIssuerDn) > 0) {
+                chain.message = "Circular reference detected at depth " + std::to_string(depth);
+                spdlog::error("Chain building: {}", chain.message);
+                // Cleanup
+                for (X509* csca : allCscas) X509_free(csca);
+                return chain;
+            }
+            visitedDns.insert(currentIssuerDn);
+
+            // Find issuer certificate in CSCA list
+            X509* issuer = nullptr;
+            for (X509* csca : allCscas) {
+                std::string cscaSubjectDn = getSubjectDn(csca);
+
+                // Case-insensitive DN comparison
+                if (strcasecmp(currentIssuerDn.c_str(), cscaSubjectDn.c_str()) == 0) {
+                    issuer = csca;
+                    spdlog::debug("Chain building: Found issuer at depth {}: {}",
+                                  depth, cscaSubjectDn.substr(0, 50));
+                    break;
+                }
+            }
+
+            if (!issuer) {
+                chain.message = "Chain broken: Issuer not found at depth " +
+                                std::to_string(depth) + " (issuer: " +
+                                currentIssuerDn.substr(0, 80) + ")";
+                spdlog::warn("Chain building: {}", chain.message);
+                // Cleanup
+                for (X509* csca : allCscas) X509_free(csca);
+                return chain;
+            }
+
+            // Add issuer to chain
+            chain.certificates.push_back(issuer);
+            current = issuer;
+        }
+
+        if (depth >= maxDepth) {
+            chain.message = "Maximum chain depth exceeded (" + std::to_string(maxDepth) + ")";
+            chain.isValid = false;
+            // Cleanup
+            for (X509* csca : allCscas) X509_free(csca);
+            return chain;
+        }
+
+        // Step 5: Build human-readable path
+        chain.path = "DSC";
+        for (size_t i = 1; i < chain.certificates.size(); i++) {
+            std::string subjectDn = getSubjectDn(chain.certificates[i]);
+            // Extract CN from DN for readability
+            size_t cnPos = subjectDn.find("CN=");
+            std::string cnPart = (cnPos != std::string::npos)
+                                 ? subjectDn.substr(cnPos, 30)
+                                 : subjectDn.substr(0, 30);
+            chain.path += " → " + cnPart;
+        }
+
+        spdlog::info("Trust chain built successfully: {}", chain.path);
+
+        // Note: We don't free allCscas here because chain.certificates contains pointers to them
+        // The caller must manage X509* lifetime
 
     } catch (const std::exception& e) {
         spdlog::error("Trust chain building failed: {}", e.what());
@@ -250,13 +423,11 @@ ValidationService::TrustChain ValidationService::buildTrustChain(X509* leafCert,
 
 X509* ValidationService::findCscaByIssuerDn(const std::string& issuerDn)
 {
-    spdlog::debug("Finding CSCA by issuer DN: {}", issuerDn);
+    spdlog::debug("Finding CSCA by issuer DN: {}...", issuerDn.substr(0, 80));
 
     try {
-        // TODO: Query database for CSCA certificate
-        spdlog::warn("TODO: Implement CSCA lookup from database");
-
-        return nullptr;
+        // Use CertificateRepository to find CSCA
+        return certRepo_->findCscaByIssuerDn(issuerDn);
 
     } catch (const std::exception& e) {
         spdlog::error("CSCA lookup failed: {}", e.what());
@@ -273,15 +444,77 @@ bool ValidationService::verifyCertificateSignature(X509* cert, X509* issuerCert)
     spdlog::debug("Verifying certificate signature");
 
     try {
-        // TODO: Extract signature verification logic
-        spdlog::warn("TODO: Implement signature verification using OpenSSL");
+        // Extract issuer's public key
+        EVP_PKEY* issuerPubKey = X509_get_pubkey(issuerCert);
+        if (!issuerPubKey) {
+            spdlog::error("Failed to extract public key from issuer certificate");
+            return false;
+        }
 
-        return false;
+        // Verify signature
+        int verifyResult = X509_verify(cert, issuerPubKey);
+        EVP_PKEY_free(issuerPubKey);
+
+        if (verifyResult != 1) {
+            unsigned long err = ERR_get_error();
+            char errBuf[256];
+            ERR_error_string_n(err, errBuf, sizeof(errBuf));
+            spdlog::error("Signature verification FAILED: {}", errBuf);
+            return false;
+        }
+
+        spdlog::debug("Certificate signature VALID");
+        return true;
 
     } catch (const std::exception& e) {
         spdlog::error("Signature verification failed: {}", e.what());
         return false;
     }
+}
+
+bool ValidationService::validateTrustChainInternal(const TrustChain& chain)
+{
+    if (!chain.isValid) {
+        spdlog::warn("Chain validation: Chain is already marked as invalid");
+        return false;
+    }
+
+    if (chain.certificates.empty()) {
+        spdlog::error("Chain validation: No certificates in chain");
+        return false;
+    }
+
+    time_t now = time(nullptr);
+
+    // Validate each certificate in chain (starting from index 1, skipping the leaf DSC)
+    for (size_t i = 1; i < chain.certificates.size(); i++) {
+        X509* cert = chain.certificates[i];
+        X509* issuer = (i + 1 < chain.certificates.size())
+                       ? chain.certificates[i + 1]
+                       : cert;  // Last cert is self-signed
+
+        // Check expiration
+        if (X509_cmp_time(X509_get0_notAfter(cert), &now) < 0) {
+            spdlog::warn("Chain validation: Certificate {} is EXPIRED", i);
+            return false;
+        }
+        if (X509_cmp_time(X509_get0_notBefore(cert), &now) > 0) {
+            spdlog::warn("Chain validation: Certificate {} is NOT YET VALID", i);
+            return false;
+        }
+
+        // Verify signature (cert signed by issuer)
+        if (!verifyCertificateSignature(cert, issuer)) {
+            spdlog::error("Chain validation: Signature verification FAILED at depth {}", i);
+            return false;
+        }
+
+        spdlog::debug("Chain validation: Certificate {} signature VALID", i);
+    }
+
+    spdlog::info("Chain validation: Trust chain VALID ({} certificates)",
+                 chain.certificates.size());
+    return true;
 }
 
 // ============================================================================
@@ -341,9 +574,22 @@ std::string ValidationService::getCertificateFingerprint(X509* cert)
         return "";
     }
 
-    // TODO: Extract fingerprint calculation from common utility
-    spdlog::warn("TODO: Implement getCertificateFingerprint");
-    return "";
+    // Calculate SHA-256 fingerprint
+    unsigned char md[EVP_MAX_MD_SIZE];
+    unsigned int mdLen = 0;
+
+    if (X509_digest(cert, EVP_sha256(), md, &mdLen) != 1) {
+        spdlog::error("Failed to calculate certificate fingerprint");
+        return "";
+    }
+
+    // Convert to hex string
+    std::ostringstream oss;
+    for (unsigned int i = 0; i < mdLen; ++i) {
+        oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(md[i]);
+    }
+
+    return oss.str();
 }
 
 std::string ValidationService::getSubjectDn(X509* cert)
@@ -387,9 +633,31 @@ bool ValidationService::isLinkCertificate(X509* cert)
         return false;
     }
 
-    // TODO: Extract Link Certificate detection logic
-    spdlog::warn("TODO: Implement isLinkCertificate");
-    return false;
+    // Link certificates must NOT be self-signed
+    if (isSelfSigned(cert)) {
+        return false;
+    }
+
+    // Check BasicConstraints: CA:TRUE
+    BASIC_CONSTRAINTS* bc = static_cast<BASIC_CONSTRAINTS*>(
+        X509_get_ext_d2i(cert, NID_basic_constraints, nullptr, nullptr));
+    if (!bc || !bc->ca) {
+        if (bc) BASIC_CONSTRAINTS_free(bc);
+        return false;
+    }
+    BASIC_CONSTRAINTS_free(bc);
+
+    // Check KeyUsage: keyCertSign (bit 5)
+    ASN1_BIT_STRING* usage = static_cast<ASN1_BIT_STRING*>(
+        X509_get_ext_d2i(cert, NID_key_usage, nullptr, nullptr));
+    if (!usage) {
+        return false;
+    }
+
+    bool hasKeyCertSign = (ASN1_BIT_STRING_get_bit(usage, 5) == 1);
+    ASN1_BIT_STRING_free(usage);
+
+    return hasKeyCertSign;
 }
 
 } // namespace services

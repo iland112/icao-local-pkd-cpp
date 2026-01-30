@@ -5,6 +5,7 @@
 #include <optional>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include <openssl/x509.h>
 
 /**
  * @file certificate_repository.h
@@ -120,12 +121,47 @@ public:
      */
     bool markStoredInLdap(const std::string& fingerprint);
 
+    // ========================================================================
+    // X509 Certificate Retrieval (for Validation)
+    // ========================================================================
+
+    /**
+     * @brief Find CSCA certificate by issuer DN
+     * Used for DSC trust chain validation.
+     * Uses normalized DN comparison to handle format variations.
+     *
+     * @param issuerDn Issuer DN from DSC certificate
+     * @return X509* certificate if found, nullptr otherwise
+     * @note Caller must free the returned X509* using X509_free()
+     */
+    X509* findCscaByIssuerDn(const std::string& issuerDn);
+
+    /**
+     * @brief Find ALL CSCA certificates matching subject DN
+     * Returns all CSCAs including link certificates for trust chain building.
+     * Uses normalized DN comparison to handle format variations.
+     *
+     * @param subjectDn Subject DN to match
+     * @return Vector of X509* certificates (may be empty)
+     * @note Caller must free all X509* in the vector using X509_free()
+     */
+    std::vector<X509*> findAllCscasBySubjectDn(const std::string& subjectDn);
+
 private:
     PGconn* dbConn_;
 
+    // Query execution helpers
     PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);
     PGresult* executeQuery(const std::string& query);
     Json::Value pgResultToJson(PGresult* res);
+
+    // DN normalization helpers (for CSCA lookup)
+    std::string extractDnAttribute(const std::string& dn, const std::string& attr);
+    std::string normalizeDnForComparison(const std::string& dn);
+    std::string escapeSingleQuotes(const std::string& str);
+
+    // X509 certificate parsing helper
+    X509* parseCertificateData(PGresult* res, int row, int col);
 };
 
 } // namespace repositories
