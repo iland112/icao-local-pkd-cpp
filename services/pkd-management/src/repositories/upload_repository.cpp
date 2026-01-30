@@ -30,8 +30,8 @@ bool UploadRepository::insert(const Upload& upload)
     try {
         const char* query =
             "INSERT INTO uploaded_file "
-            "(id, file_name, file_format, file_size, status, uploaded_by, created_at, updated_at) "
-            "VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())";
+            "(id, file_name, file_format, file_size, status, uploaded_by, upload_timestamp) "
+            "VALUES ($1, $2, $3, $4, $5, $6, NOW())";
 
         std::vector<std::string> params = {
             upload.id,
@@ -63,7 +63,7 @@ std::optional<Upload> UploadRepository::findById(const std::string& uploadId)
             "SELECT id, file_name, file_format, file_size, status, uploaded_by, "
             "error_message, processing_mode, total_entries, processed_entries, "
             "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
-            "created_at, updated_at, "
+            "upload_timestamp, completed_timestamp, "
             "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
             "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
             "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
@@ -103,17 +103,25 @@ std::vector<Upload> UploadRepository::findAll(
     std::vector<Upload> uploads;
 
     try {
+        // Map domain field names to database column names (support both camelCase and snake_case)
+        std::string dbSortBy = sortBy;
+        if (sortBy == "createdAt" || sortBy == "created_at") {
+            dbSortBy = "upload_timestamp";
+        } else if (sortBy == "updatedAt" || sortBy == "updated_at") {
+            dbSortBy = "completed_timestamp";
+        }
+
         std::ostringstream query;
         query << "SELECT id, file_name, file_format, file_size, status, uploaded_by, "
               << "error_message, processing_mode, total_entries, processed_entries, "
               << "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
-              << "created_at, updated_at, "
+              << "upload_timestamp, completed_timestamp, "
               << "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
               << "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
               << "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
               << "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
               << "FROM uploaded_file "
-              << "ORDER BY " << sortBy << " " << direction << " "
+              << "ORDER BY " << dbSortBy << " " << direction << " "
               << "LIMIT " << limit << " OFFSET " << offset;
 
         PGresult* res = executeQuery(query.str());
@@ -149,10 +157,14 @@ bool UploadRepository::updateStatus(
         std::vector<std::string> params;
 
         if (errorMessage.empty()) {
-            query = "UPDATE uploaded_file SET status = $1, updated_at = NOW() WHERE id = $2";
+            query = "UPDATE uploaded_file SET status = $1, "
+                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN NOW() ELSE completed_timestamp END "
+                   "WHERE id = $2";
             params = {status, uploadId};
         } else {
-            query = "UPDATE uploaded_file SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3";
+            query = "UPDATE uploaded_file SET status = $1, error_message = $2, "
+                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN NOW() ELSE completed_timestamp END "
+                   "WHERE id = $3";
             params = {status, errorMessage, uploadId};
         }
 
@@ -184,7 +196,7 @@ bool UploadRepository::updateStatistics(
         const char* query =
             "UPDATE uploaded_file SET "
             "csca_count = $1, dsc_count = $2, dsc_nc_count = $3, crl_count = $4, "
-            "mlsc_count = $5, ml_count = $6, updated_at = NOW() "
+            "mlsc_count = $5, ml_count = $6 "
             "WHERE id = $7";
 
         std::vector<std::string> params = {
@@ -262,7 +274,7 @@ std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHa
             "SELECT id, file_name, file_format, file_size, status, uploaded_by, "
             "error_message, processing_mode, total_entries, processed_entries, "
             "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
-            "created_at, updated_at, "
+            "upload_timestamp, completed_timestamp, "
             "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
             "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
             "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
@@ -486,19 +498,19 @@ Upload UploadRepository::resultToUpload(PGresult* res, int row)
     upload.mlscCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "mlsc_count")));
     upload.mlCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "ml_count")));
 
-    // Validation statistics (using column indices after the named fields)
-    upload.validationValidCount = std::atoi(PQgetvalue(res, row, 17));  // COALESCE(validation_valid_count, 0)
-    upload.validationInvalidCount = std::atoi(PQgetvalue(res, row, 18));  // COALESCE(validation_invalid_count, 0)
-    upload.validationPendingCount = std::atoi(PQgetvalue(res, row, 19));  // COALESCE(validation_pending_count, 0)
-    upload.validationErrorCount = std::atoi(PQgetvalue(res, row, 20));  // COALESCE(validation_error_count, 0)
-    upload.trustChainValidCount = std::atoi(PQgetvalue(res, row, 21));  // COALESCE(trust_chain_valid_count, 0)
-    upload.trustChainInvalidCount = std::atoi(PQgetvalue(res, row, 22));  // COALESCE(trust_chain_invalid_count, 0)
-    upload.cscaNotFoundCount = std::atoi(PQgetvalue(res, row, 23));  // COALESCE(csca_not_found_count, 0)
-    upload.expiredCount = std::atoi(PQgetvalue(res, row, 24));  // COALESCE(expired_count, 0)
-    upload.revokedCount = std::atoi(PQgetvalue(res, row, 25));  // COALESCE(revoked_count, 0)
+    // Validation statistics (using column indices after upload_timestamp and completed_timestamp)
+    upload.validationValidCount = std::atoi(PQgetvalue(res, row, 18));  // COALESCE(validation_valid_count, 0)
+    upload.validationInvalidCount = std::atoi(PQgetvalue(res, row, 19));  // COALESCE(validation_invalid_count, 0)
+    upload.validationPendingCount = std::atoi(PQgetvalue(res, row, 20));  // COALESCE(validation_pending_count, 0)
+    upload.validationErrorCount = std::atoi(PQgetvalue(res, row, 21));  // COALESCE(validation_error_count, 0)
+    upload.trustChainValidCount = std::atoi(PQgetvalue(res, row, 22));  // COALESCE(trust_chain_valid_count, 0)
+    upload.trustChainInvalidCount = std::atoi(PQgetvalue(res, row, 23));  // COALESCE(trust_chain_invalid_count, 0)
+    upload.cscaNotFoundCount = std::atoi(PQgetvalue(res, row, 24));  // COALESCE(csca_not_found_count, 0)
+    upload.expiredCount = std::atoi(PQgetvalue(res, row, 25));  // COALESCE(expired_count, 0)
+    upload.revokedCount = std::atoi(PQgetvalue(res, row, 26));  // COALESCE(revoked_count, 0)
 
-    upload.createdAt = PQgetvalue(res, row, 26);  // created_at
-    upload.updatedAt = PQgetvalue(res, row, 27);  // updated_at
+    upload.createdAt = PQgetvalue(res, row, 16);  // upload_timestamp
+    upload.updatedAt = PQgetvalue(res, row, 17);  // completed_timestamp (may be NULL)
 
     return upload;
 }

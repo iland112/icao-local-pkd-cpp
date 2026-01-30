@@ -8824,7 +8824,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v2.1.2.4 DSC-NC-DN-FIX (Build 20260128-104300) ======");
+    spdlog::info("====== ICAO Local PKD v2.1.3.1 Repository-Pattern-Phase3 (Build 20260130-005800) ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
