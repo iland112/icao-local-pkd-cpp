@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.1.4
+**Current Version**: v2.1.4.3
 **Last Updated**: 2026-01-30
-**Status**: Production Ready - Repository Pattern Phase 4 In Progress (12+ APIs functional)
+**Status**: Production Ready - Repository Pattern Phase 4.3 Complete (ValidationService Core + 12 APIs functional)
 
 ---
 
@@ -91,9 +91,34 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.1.4)
+### Recent Changes (v2.1.4.3)
 
-- ✅ **Repository Pattern Phase 4.2: AuditRepository & AuditService Implementation** (v2.1.4)
+- ✅ **Repository Pattern Phase 4.3: ValidationService Core Implementation** (v2.1.4.3)
+  - **CertificateRepository X509 Certificate Retrieval Methods**
+    - `X509* findCscaByIssuerDn(const std::string& issuerDn)` - Find CSCA by issuer DN with normalized comparison
+    - `std::vector<X509*> findAllCscasBySubjectDn(const std::string& subjectDn)` - Find all CSCAs for trust chain building
+    - DN normalization helpers: `normalizeDnForComparison()`, `extractDnAttribute()` for format-independent matching
+    - Supports both OpenSSL slash format (`/C=X/O=Y/CN=Z`) and RFC2253 comma format (`CN=Z,O=Y,C=X`)
+    - PostgreSQL bytea hex format parsing (`\x` prefix) with OpenSSL d2i_X509()
+    - Component-based SQL with LIKE + C++ post-filter to eliminate false positives
+  - **ValidationService Trust Chain Building**
+    - `buildTrustChain()` - Recursive chain construction with link certificate support
+    - Circular reference detection using `std::set<std::string>` for visited DNs
+    - Self-signed certificate detection with proper check ordering
+    - Link certificate identification via basicConstraints CA=TRUE + keyCertSign usage
+    - Trust chain depth limiting (maxDepth=5) to prevent infinite loops
+    - Chain path generation (e.g., "DSC → Link Cert → Root CSCA")
+  - **Certificate Validation with OpenSSL Integration**
+    - `validateCertificate()` - Complete validation workflow (expiration + trust chain + signature)
+    - `verifyCertificateSignature()` - RSA/ECDSA signature verification using X509_verify()
+    - `validateTrustChainInternal()` - Chain-wide signature validation
+    - Expiration check with X509_cmp_time() for notAfter field
+    - Proper memory management: X509_free() for all allocated certificates
+    - ValidationResult with status (VALID/INVALID/PENDING), trust chain path, detailed error messages
+  - **Code Statistics**: ~250 lines in CertificateRepository, ~200 lines in ValidationService
+  - **Commit**: 1d993c5 - Phase 4.3 ValidationService core implementation with OpenSSL integration
+
+- ✅ **Repository Pattern Phase 4.2: AuditRepository & AuditService Implementation** (v2.1.4.2)
   - **Complete Audit Log System**: Migrated from direct SQL to Repository Pattern
     - AuditRepository: findAll(), countByOperationType(), getStatistics()
     - AuditService: getOperationLogs(), getOperationStatistics()
