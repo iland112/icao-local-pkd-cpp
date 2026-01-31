@@ -100,18 +100,40 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Planned Changes (v2.3.0 - Frontend Enhancements)
+### Planned Changes (v2.2.2 - LDIF Structure Visualization) 📋
 
-- 📋 **Frontend Development** (Estimated: 2-3 days)
-  - **Real-time Statistics Dashboard**: Live upload progress with metadata
-  - **Certificate Metadata Card**: Detailed X.509 information display
-  - **ICAO Compliance Badge**: Visual compliance status indicators
-  - **Algorithm/Key Size Charts**: Distribution visualization
+**Status**: Planning Phase | **Next Session**: Implementation
 
-- 📋 **Testing & Validation** (Estimated: 1 day)
-  - **SSE Stream Verification**: Real-time progress updates
-  - **Large Upload Scenarios**: 29,838 DSC test validation
-  - **Statistics Accuracy**: End-to-end data verification
+- 📋 **LDIF Structure Visualization** (Estimated: 5-6 hours)
+  - **Backend**: LdifStructureParser class for parsing LDIF entries
+  - **API Endpoint**: `GET /api/upload/{uploadId}/ldif-structure`
+  - **Frontend**: LdifStructure component with tree view
+  - **Dynamic Tab Name**: "LDIF 구조" for LDIF files, "Master List 구조" for ML files
+  - **Binary Data Handling**: Detect and display binary attributes (collection-002 Master List CMS)
+  - **Entry Limit Selector**: 50/100/500/1000 entries configurable
+
+- 📋 **Testing & Validation** (Estimated: 1-2 hours)
+  - **Collection-001**: DSC certificates LDIF upload and structure display
+  - **Collection-002**: Master List with binary CMS data (26 ML entries)
+  - **Collection-003**: DSC_NC certificates LDIF upload
+  - **Performance**: Large LDIF files (5000+ entries)
+
+**Key Features**:
+
+- ✨ DN hierarchy display in tree format
+- ✨ All entry attributes with values
+- ✨ Binary data indicators with size (e.g., `[Binary CMS Data: 45678 bytes]`)
+- ✨ ObjectClass statistics (pkdCertificate, pkdMasterList, etc.)
+- ✨ Truncation warning for large files
+
+**Documentation**: [LDIF_STRUCTURE_VISUALIZATION_PLAN.md](docs/LDIF_STRUCTURE_VISUALIZATION_PLAN.md)
+
+### Deferred to v2.3.0 - Frontend Enhancements
+
+- 📋 **Real-time Statistics Dashboard**: Live upload progress with metadata
+- 📋 **Certificate Metadata Card**: Detailed X.509 information display
+- 📋 **ICAO Compliance Badge**: Visual compliance status indicators
+- 📋 **Algorithm/Key Size Charts**: Distribution visualization
 
 **Documentation**: [PHASE_4.4_TASK_3_COMPLETION.md](docs/PHASE_4.4_TASK_3_COMPLETION.md)
 
