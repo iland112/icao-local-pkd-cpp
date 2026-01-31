@@ -651,4 +651,75 @@ X509* CertificateRepository::parseCertificateData(PGresult* res, int row, int co
     return cert;
 }
 
+// ============================================================================
+// Duplicate Certificate Tracking (v2.2.1)
+// ============================================================================
+
+std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
+    const char* query =
+        "SELECT upload_id FROM certificate "
+        "WHERE fingerprint_sha256 = $1 "
+        "ORDER BY uploaded_at ASC LIMIT 1";
+
+    const char* paramValues[1] = {fingerprint.c_str()};
+
+    PGresult* res = PQexecParams(dbConn_, query, 1, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+
+    std::string uploadId;
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        uploadId = PQgetvalue(res, 0, 0);
+        spdlog::debug("[CertificateRepository] Found first upload_id={} for fingerprint={}",
+                     uploadId, fingerprint.substr(0, 16));
+    } else if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        spdlog::error("[CertificateRepository] Query failed: {}", PQerrorMessage(dbConn_));
+    }
+
+    PQclear(res);
+    return uploadId;
+}
+
+bool CertificateRepository::saveDuplicate(const std::string& uploadId,
+                                         const std::string& firstUploadId,
+                                         const std::string& fingerprint,
+                                         const std::string& certType,
+                                         const std::string& subjectDn,
+                                         const std::string& issuerDn,
+                                         const std::string& countryCode,
+                                         const std::string& serialNumber) {
+    const char* query =
+        "INSERT INTO duplicate_certificate "
+        "(upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
+        "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
+        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, CURRENT_TIMESTAMP) "
+        "ON CONFLICT (upload_id, fingerprint_sha256, certificate_type) "
+        "DO UPDATE SET duplicate_count = duplicate_certificate.duplicate_count + 1";
+
+    const char* paramValues[8] = {
+        uploadId.c_str(),
+        firstUploadId.c_str(),
+        fingerprint.c_str(),
+        certType.c_str(),
+        subjectDn.c_str(),
+        issuerDn.c_str(),
+        countryCode.empty() ? nullptr : countryCode.c_str(),
+        serialNumber.empty() ? nullptr : serialNumber.c_str()
+    };
+
+    PGresult* res = PQexecParams(dbConn_, query, 8, nullptr, paramValues,
+                                 nullptr, nullptr, 0);
+
+    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
+
+    if (!success) {
+        spdlog::error("[CertificateRepository] Failed to save duplicate: {}", PQerrorMessage(dbConn_));
+    } else {
+        spdlog::debug("[CertificateRepository] Saved duplicate: fingerprint={}, type={}, upload={}",
+                     fingerprint.substr(0, 16), certType, uploadId);
+    }
+
+    PQclear(res);
+    return success;
+}
+
 } // namespace repositories

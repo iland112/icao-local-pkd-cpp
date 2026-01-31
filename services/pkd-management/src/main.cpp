@@ -4695,6 +4695,14 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         if (certificateExistsByFingerprint(conn, fingerprint)) {
                                             skippedDuplicates++;
                                             spdlog::debug("Skipping duplicate certificate: fingerprint={}", fingerprint.substr(0, 16));
+
+                                            // Save duplicate record to duplicate_certificate table (v2.2.1)
+                                            std::string firstUploadId = certificateRepository->findFirstUploadIdByFingerprint(fingerprint);
+                                            if (!firstUploadId.empty()) {
+                                                certificateRepository->saveDuplicate(uploadId, firstUploadId, fingerprint,
+                                                                                    certType, subjectDn, issuerDn, countryCode, serialNumber);
+                                            }
+
                                             X509_free(cert);
                                             continue;
                                         }
@@ -6683,7 +6691,13 @@ void registerRoutes() {
             spdlog::info("GET /api/upload/countries");
 
             try {
-                Json::Value result = uploadService->getCountryStatistics();
+                // Get query parameter for limit (default 20)
+                int limit = 20;
+                if (auto l = req->getParameter("limit"); !l.empty()) {
+                    limit = std::stoi(l);
+                }
+
+                Json::Value result = uploadService->getCountryStatistics(limit);
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 callback(resp);
 

@@ -122,6 +122,38 @@ public:
     bool markStoredInLdap(const std::string& fingerprint);
 
     // ========================================================================
+    // Duplicate Certificate Tracking (v2.2.1)
+    // ========================================================================
+
+    /**
+     * @brief Find the upload_id of the first upload that introduced this certificate
+     * @param fingerprint SHA-256 fingerprint of the certificate
+     * @return Upload ID string if found, empty string otherwise
+     */
+    std::string findFirstUploadIdByFingerprint(const std::string& fingerprint);
+
+    /**
+     * @brief Save duplicate certificate record to duplicate_certificate table
+     * @param uploadId Current upload ID that detected this duplicate
+     * @param firstUploadId Upload ID that first introduced this certificate
+     * @param fingerprint SHA-256 fingerprint of the certificate
+     * @param certType Certificate type (CSCA, DSC, DSC_NC, MLSC, CRL)
+     * @param subjectDn Subject DN
+     * @param issuerDn Issuer DN
+     * @param countryCode Country code (optional)
+     * @param serialNumber Serial number (optional)
+     * @return true if saved successfully, false otherwise
+     */
+    bool saveDuplicate(const std::string& uploadId,
+                      const std::string& firstUploadId,
+                      const std::string& fingerprint,
+                      const std::string& certType,
+                      const std::string& subjectDn,
+                      const std::string& issuerDn,
+                      const std::string& countryCode = "",
+                      const std::string& serialNumber = "");
+
+    // ========================================================================
     // X509 Certificate Retrieval (for Validation)
     // ========================================================================
 

@@ -407,12 +407,12 @@ Json::Value UploadService::getUploadStatistics()
     }
 }
 
-Json::Value UploadService::getCountryStatistics()
+Json::Value UploadService::getCountryStatistics(int limit)
 {
-    spdlog::info("UploadService::getCountryStatistics");
+    spdlog::info("UploadService::getCountryStatistics - limit: {}", limit);
 
     try {
-        return uploadRepo_->getCountryStatistics();
+        return uploadRepo_->getCountryStatistics(limit);
     } catch (const std::exception& e) {
         spdlog::error("UploadService::getCountryStatistics failed: {}", e.what());
         Json::Value response;

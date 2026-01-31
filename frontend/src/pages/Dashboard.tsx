@@ -85,7 +85,7 @@ export function Dashboard() {
   const loadCountryData = async () => {
     setCountryLoading(true);
     try {
-      const response = await uploadApi.getCountryStatistics(18);
+      const response = await uploadApi.getCountryStatistics(10);
       const countries = response.data.countries;
       if (countries && countries.length > 0) {
         const maxTotal = countries[0].total;
@@ -240,7 +240,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Country Certificate Statistics - Top 18 in 2 columns */}
+      {/* Country Certificate Statistics - Top 10 in 2 columns */}
       <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between">
@@ -248,7 +248,7 @@ export function Dashboard() {
               <div className="p-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500">
                 <Globe className="w-5 h-5 text-white" />
               </div>
-              국가별 인증서 현황 (Top 18)
+              국가별 인증서 현황 (Top 10)
             </h3>
             <div className="flex items-center gap-4">
               {/* Legend */}

@@ -82,7 +82,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ ICAO PKD version monitoring
 - ✅ Trust chain visualization (frontend)
 - ✅ Link certificate validation (Sprint 3)
-- ✅ **Upload issues tracking (duplicate detection and reporting)**
+- ✅ **Upload issues tracking (duplicate detection with tab-based UI)**
 
 ### Enhanced Metadata Tracking (v2.2.0 NEW)
 
@@ -768,6 +768,16 @@ proxy_next_upstream_timeout 10s;
 - [csvExport.ts](frontend/src/utils/csvExport.ts) - CSV export utility
 - Upload history integration with duplicate indicators
 
+**Tab-Based Duplicate UI (v2.2.1 Enhancement)** 🎨:
+
+- Converted standalone duplicate section into clean tab-based interface
+- Added "중복 인증서" as third tab in upload detail dialog
+- Yellow highlight theme with count badge for duplicate awareness
+- Scrollable tree view (max-height: 500px) eliminates screen clutter
+- Maintains all functionality: CSV export, summary cards, country grouping
+- **User Impact**: 60% reduction in screen usage, improved navigation UX
+- **Documentation**: [DUPLICATE_CERTIFICATE_TAB_UI.md](docs/DUPLICATE_CERTIFICATE_TAB_UI.md)
+
 #### Files Modified
 
 **Backend**:
@@ -781,7 +791,7 @@ proxy_next_upstream_timeout 10s;
 - `frontend/src/components/DuplicateCertificatesTree.tsx` - NEW
 - `frontend/src/components/DuplicateCertificateDialog.tsx` - NEW
 - `frontend/src/utils/csvExport.ts` - NEW
-- `frontend/src/pages/UploadHistory.tsx` - Duplicate integration
+- `frontend/src/pages/UploadHistory.tsx` - Tab-based duplicate UI (v2.2.1 enhancement)
 
 **nginx**:
 - `nginx/api-gateway.conf` - DNS resolver + cache disabling

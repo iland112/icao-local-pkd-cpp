@@ -353,9 +353,10 @@ public:
     /**
      * @brief Get country statistics
      *
+     * @param limit Maximum number of countries (0 = all, default 20)
      * @return Json::Value Country statistics (country → certificate count)
      */
-    Json::Value getCountryStatistics();
+    Json::Value getCountryStatistics(int limit = 20);
 
     /**
      * @brief Get detailed country statistics

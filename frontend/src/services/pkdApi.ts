@@ -238,16 +238,19 @@ export const uploadHistoryApi = {
    * @returns Detailed certificate statistics by country
    */
   getDetailedCountryStatistics: (limit: number = 0) =>
-    pkdApi.get<Array<{
-      countryCode: string;
-      mlsc: number;
-      cscaSelfSigned: number;
-      cscaLinkCert: number;
-      dsc: number;
-      dscNc: number;
-      crl: number;
-      totalCerts: number;
-    }>>('/upload/countries/detailed', { params: { limit } }),
+    pkdApi.get<{
+      countries: Array<{
+        countryCode: string;
+        mlsc: number;
+        cscaSelfSigned: number;
+        cscaLinkCert: number;
+        dsc: number;
+        dscNc: number;
+        crl: number;
+        totalCerts: number;
+      }>;
+      totalCountries: number;
+    }>('/upload/countries/detailed', { params: { limit } }),
 
   /**
    * Get recent upload changes

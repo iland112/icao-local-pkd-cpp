@@ -510,29 +510,32 @@ Json::Value UploadRepository::getStatisticsSummary()
     return response;
 }
 
-Json::Value UploadRepository::getCountryStatistics()
+Json::Value UploadRepository::getCountryStatistics(int limit)
 {
-    spdlog::debug("[UploadRepository] Getting country statistics");
+    spdlog::debug("[UploadRepository] Getting country statistics (limit: {})", limit);
 
     Json::Value response;
 
     try {
-        // Get certificate counts by country and type (top 20 countries)
-        const char* query =
-            "SELECT "
-            "c.country_code, "
-            "SUM(CASE WHEN c.certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
-            "SUM(CASE WHEN c.certificate_type = 'MLSC' THEN 1 ELSE 0 END) as mlsc_count, "
-            "SUM(CASE WHEN c.certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
-            "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
-            "COUNT(*) as total_certificates "
-            "FROM certificate c "
-            "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
-            "GROUP BY c.country_code "
-            "ORDER BY total_certificates DESC "
-            "LIMIT 20";
+        // Get certificate counts by country and type
+        std::ostringstream query;
+        query << "SELECT "
+              << "c.country_code, "
+              << "SUM(CASE WHEN c.certificate_type = 'CSCA' THEN 1 ELSE 0 END) as csca_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'MLSC' THEN 1 ELSE 0 END) as mlsc_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
+              << "COUNT(*) as total_certificates "
+              << "FROM certificate c "
+              << "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
+              << "GROUP BY c.country_code "
+              << "ORDER BY total_certificates DESC ";
 
-        PGresult* res = executeQuery(query);
+        if (limit > 0) {
+            query << "LIMIT " << limit;
+        }
+
+        PGresult* res = executeQuery(query.str());
         int rows = PQntuples(res);
 
         Json::Value countries = Json::arrayValue;
@@ -595,14 +598,14 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
         Json::Value countries = Json::arrayValue;
         for (int i = 0; i < rows; i++) {
             Json::Value countryData;
-            countryData["country"] = PQgetvalue(res, i, 0);
-            countryData["mlscCount"] = std::atoi(PQgetvalue(res, i, 1));
-            countryData["cscaSelfSignedCount"] = std::atoi(PQgetvalue(res, i, 2));
-            countryData["cscaLinkCertCount"] = std::atoi(PQgetvalue(res, i, 3));
-            countryData["dscCount"] = std::atoi(PQgetvalue(res, i, 4));
-            countryData["dscNcCount"] = std::atoi(PQgetvalue(res, i, 5));
-            countryData["crlCount"] = std::atoi(PQgetvalue(res, i, 6));
-            countryData["totalCertificates"] = std::atoi(PQgetvalue(res, i, 7));
+            countryData["countryCode"] = PQgetvalue(res, i, 0);
+            countryData["mlsc"] = std::atoi(PQgetvalue(res, i, 1));
+            countryData["cscaSelfSigned"] = std::atoi(PQgetvalue(res, i, 2));
+            countryData["cscaLinkCert"] = std::atoi(PQgetvalue(res, i, 3));
+            countryData["dsc"] = std::atoi(PQgetvalue(res, i, 4));
+            countryData["dscNc"] = std::atoi(PQgetvalue(res, i, 5));
+            countryData["crl"] = std::atoi(PQgetvalue(res, i, 6));
+            countryData["totalCerts"] = std::atoi(PQgetvalue(res, i, 7));
             countries.append(countryData);
         }
 
@@ -631,8 +634,8 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
 
     try {
         // Query duplicate certificates for this upload
-        // CRITICAL: Only return certificates that already existed before this upload
-        // (exclude first appearance, only show true duplicates by fingerprint)
+        // Returns ALL duplicates detected during upload processing
+        // Includes both: duplicates within the same file and duplicates from previous uploads
         // Enhanced for tree view: includes first_upload info and all tracking details
         std::string query =
             "SELECT "
@@ -654,10 +657,9 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
             "JOIN certificate c ON cd.certificate_id = c.id "
             "LEFT JOIN uploaded_file uf ON c.first_upload_id = uf.id "
             "WHERE cd.upload_id = $1 "
-            "  AND c.first_upload_id != $2 "
             "ORDER BY c.fingerprint_sha256, cd.detected_at DESC";
 
-        std::vector<std::string> params = {uploadId, uploadId};
+        std::vector<std::string> params = {uploadId};
         PGresult* res = executeParamQuery(query, params);
 
         result["success"] = true;
