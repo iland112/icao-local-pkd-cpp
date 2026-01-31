@@ -87,7 +87,15 @@ export interface UploadDuplicate {
   fingerprint: string;
   sourceType: string;
   sourceCountry?: string;
+  sourceEntryDn?: string;
+  sourceFileName?: string;
   detectedAt: string;
+
+  // Certificate and first upload info for tree view
+  certificateId: string;
+  firstUploadId: string;
+  firstUploadFileName?: string;
+  firstUploadTimestamp?: string;
 }
 
 export interface UploadIssues {

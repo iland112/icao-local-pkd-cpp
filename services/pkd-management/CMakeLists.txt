@@ -62,6 +62,7 @@ add_executable(${PROJECT_NAME}
     src/common/masterlist_processor.cpp
     src/common/x509_metadata_extractor.cpp
     src/common/progress_manager.cpp  # Phase 4.4: Enhanced progress tracking
+    src/common/asn1_parser.cpp       # ASN.1/TLV parser for Master List structure
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp

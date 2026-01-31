@@ -65,10 +65,15 @@ std::optional<Upload> UploadRepository::findById(const std::string& uploadId)
             "error_message, processing_mode, total_entries, processed_entries, "
             "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
             "upload_timestamp, completed_timestamp, "
-            "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
-            "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
-            "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
-            "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
+            "COALESCE(validation_valid_count, 0) AS validation_valid_count, "
+            "COALESCE(validation_invalid_count, 0) AS validation_invalid_count, "
+            "COALESCE(validation_pending_count, 0) AS validation_pending_count, "
+            "COALESCE(validation_error_count, 0) AS validation_error_count, "
+            "COALESCE(trust_chain_valid_count, 0) AS trust_chain_valid_count, "
+            "COALESCE(trust_chain_invalid_count, 0) AS trust_chain_invalid_count, "
+            "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
+            "COALESCE(expired_count, 0) AS expired_count, "
+            "COALESCE(revoked_count, 0) AS revoked_count "
             "FROM uploaded_file WHERE id = $1";
 
         std::vector<std::string> params = {uploadId};
@@ -117,10 +122,15 @@ std::vector<Upload> UploadRepository::findAll(
               << "error_message, processing_mode, total_entries, processed_entries, "
               << "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
               << "upload_timestamp, completed_timestamp, "
-              << "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
-              << "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
-              << "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
-              << "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
+              << "COALESCE(validation_valid_count, 0) AS validation_valid_count, "
+              << "COALESCE(validation_invalid_count, 0) AS validation_invalid_count, "
+              << "COALESCE(validation_pending_count, 0) AS validation_pending_count, "
+              << "COALESCE(validation_error_count, 0) AS validation_error_count, "
+              << "COALESCE(trust_chain_valid_count, 0) AS trust_chain_valid_count, "
+              << "COALESCE(trust_chain_invalid_count, 0) AS trust_chain_invalid_count, "
+              << "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
+              << "COALESCE(expired_count, 0) AS expired_count, "
+              << "COALESCE(revoked_count, 0) AS revoked_count "
               << "FROM uploaded_file "
               << "ORDER BY " << dbSortBy << " " << direction << " "
               << "LIMIT " << limit << " OFFSET " << offset;
@@ -272,7 +282,7 @@ std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHa
 
     try {
         const char* query =
-            "SELECT id, file_name, file_format, file_size, status, uploaded_by, "
+            "SELECT id, file_name, file_hash, file_format, file_size, status, uploaded_by, "
             "error_message, processing_mode, total_entries, processed_entries, "
             "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
             "upload_timestamp, completed_timestamp, "
@@ -428,7 +438,7 @@ Json::Value UploadRepository::getStatisticsSummary()
             "COALESCE(SUM(CASE WHEN trust_chain_valid = true THEN 1 ELSE 0 END), 0) as trust_chain_valid_count, "
             "COALESCE(SUM(CASE WHEN trust_chain_valid = false THEN 1 ELSE 0 END), 0) as trust_chain_invalid_count, "
             "COALESCE(SUM(CASE WHEN csca_found = false THEN 1 ELSE 0 END), 0) as csca_not_found_count, "
-            "COALESCE(SUM(CASE WHEN is_expired = true THEN 1 ELSE 0 END), 0) as expired_count, "
+            "COALESCE(SUM(CASE WHEN validity_period_valid = false THEN 1 ELSE 0 END), 0) as expired_count, "
             "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
             "FROM validation_result";
 
@@ -445,6 +455,34 @@ Json::Value UploadRepository::getStatisticsSummary()
         validation["revokedCount"] = std::atoi(PQgetvalue(validationRes, 0, 8));
         PQclear(validationRes);
 
+        // Get CSCA breakdown (self-signed vs link certificates)
+        const char* cscaBreakdownQuery =
+            "SELECT "
+            "COALESCE(SUM(CASE WHEN is_self_signed = true THEN 1 ELSE 0 END), 0) as self_signed_count, "
+            "COALESCE(SUM(CASE WHEN is_self_signed = false THEN 1 ELSE 0 END), 0) as link_cert_count "
+            "FROM certificate WHERE certificate_type = 'CSCA'";
+
+        PGresult* cscaRes = executeQuery(cscaBreakdownQuery);
+        int selfSignedCount = std::atoi(PQgetvalue(cscaRes, 0, 0));
+        int linkCertCount = std::atoi(PQgetvalue(cscaRes, 0, 1));
+        PQclear(cscaRes);
+
+        // Build byType object with CSCA breakdown
+        Json::Value byType;
+        byType["csca"] = totalCsca;
+        byType["cscaSelfSigned"] = selfSignedCount;
+        byType["cscaLinkCert"] = linkCertCount;
+        byType["mlsc"] = totalMlsc;
+        byType["dsc"] = totalDsc;
+        byType["dscNc"] = totalDscNc;
+        byType["crl"] = totalCrl;
+
+        // Build cscaBreakdown object matching frontend UploadStatisticsOverview interface
+        Json::Value cscaBreakdown;
+        cscaBreakdown["total"] = totalCsca;
+        cscaBreakdown["selfSigned"] = selfSignedCount;
+        cscaBreakdown["linkCertificates"] = linkCertCount;
+
         // Build response matching frontend UploadStatisticsOverview interface
         response["totalUploads"] = totalUploads;
         response["successfulUploads"] = successfulUploads;
@@ -457,6 +495,8 @@ Json::Value UploadRepository::getStatisticsSummary()
         response["crlCount"] = totalCrl;
         response["mlCount"] = totalMl;
         response["countriesCount"] = countriesCount;
+        response["byType"] = byType;
+        response["cscaBreakdown"] = cscaBreakdown;
         response["validation"] = validation;
 
         spdlog::debug("[UploadRepository] Statistics: {} uploads ({} successful, {} failed), {} certificates, {} countries",
@@ -593,21 +633,29 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
         // Query duplicate certificates for this upload
         // CRITICAL: Only return certificates that already existed before this upload
         // (exclude first appearance, only show true duplicates by fingerprint)
+        // Enhanced for tree view: includes first_upload info and all tracking details
         std::string query =
             "SELECT "
             "  cd.id, "
             "  cd.source_type, "
             "  cd.source_country, "
+            "  cd.source_entry_dn, "
+            "  cd.source_file_name, "
             "  cd.detected_at, "
+            "  c.id as certificate_id, "
             "  c.certificate_type, "
             "  c.country_code, "
             "  c.subject_dn, "
-            "  c.fingerprint_sha256 "
+            "  c.fingerprint_sha256, "
+            "  c.first_upload_id, "
+            "  uf.file_name as first_upload_file_name, "
+            "  uf.upload_timestamp as first_upload_timestamp "
             "FROM certificate_duplicates cd "
             "JOIN certificate c ON cd.certificate_id = c.id "
+            "LEFT JOIN uploaded_file uf ON c.first_upload_id = uf.id "
             "WHERE cd.upload_id = $1 "
             "  AND c.first_upload_id != $2 "
-            "ORDER BY cd.detected_at DESC";
+            "ORDER BY c.fingerprint_sha256, cd.detected_at DESC";
 
         std::vector<std::string> params = {uploadId, uploadId};
         PGresult* res = executeParamQuery(query, params);
@@ -626,16 +674,26 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
         int rows = PQntuples(res);
         for (int i = 0; i < rows; i++) {
             Json::Value dup;
+            // Column indices updated for new query with 14 columns
             dup["id"] = std::atoi(PQgetvalue(res, i, 0));
             dup["sourceType"] = PQgetvalue(res, i, 1);
             dup["sourceCountry"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
-            dup["detectedAt"] = PQgetvalue(res, i, 3);
+            dup["sourceEntryDn"] = PQgetvalue(res, i, 3) ? PQgetvalue(res, i, 3) : "";
+            dup["sourceFileName"] = PQgetvalue(res, i, 4) ? PQgetvalue(res, i, 4) : "";
+            dup["detectedAt"] = PQgetvalue(res, i, 5);
 
-            std::string certType = PQgetvalue(res, i, 4);
+            // Certificate information
+            dup["certificateId"] = PQgetvalue(res, i, 6);
+            std::string certType = PQgetvalue(res, i, 7);
             dup["certificateType"] = certType;
-            dup["country"] = PQgetvalue(res, i, 5);
-            dup["subjectDn"] = PQgetvalue(res, i, 6);
-            dup["fingerprint"] = PQgetvalue(res, i, 7);
+            dup["country"] = PQgetvalue(res, i, 8);
+            dup["subjectDn"] = PQgetvalue(res, i, 9);
+            dup["fingerprint"] = PQgetvalue(res, i, 10);
+
+            // First upload information (for tree view root)
+            dup["firstUploadId"] = PQgetvalue(res, i, 11);
+            dup["firstUploadFileName"] = PQgetvalue(res, i, 12) ? PQgetvalue(res, i, 12) : "";
+            dup["firstUploadTimestamp"] = PQgetvalue(res, i, 13) ? PQgetvalue(res, i, 13) : "";
 
             duplicates.append(dup);
 
@@ -753,19 +811,20 @@ Upload UploadRepository::resultToUpload(PGresult* res, int row)
     upload.mlscCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "mlsc_count")));
     upload.mlCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "ml_count")));
 
-    // Validation statistics (using column indices after upload_timestamp and completed_timestamp)
-    upload.validationValidCount = std::atoi(PQgetvalue(res, row, 18));  // COALESCE(validation_valid_count, 0)
-    upload.validationInvalidCount = std::atoi(PQgetvalue(res, row, 19));  // COALESCE(validation_invalid_count, 0)
-    upload.validationPendingCount = std::atoi(PQgetvalue(res, row, 20));  // COALESCE(validation_pending_count, 0)
-    upload.validationErrorCount = std::atoi(PQgetvalue(res, row, 21));  // COALESCE(validation_error_count, 0)
-    upload.trustChainValidCount = std::atoi(PQgetvalue(res, row, 22));  // COALESCE(trust_chain_valid_count, 0)
-    upload.trustChainInvalidCount = std::atoi(PQgetvalue(res, row, 23));  // COALESCE(trust_chain_invalid_count, 0)
-    upload.cscaNotFoundCount = std::atoi(PQgetvalue(res, row, 24));  // COALESCE(csca_not_found_count, 0)
-    upload.expiredCount = std::atoi(PQgetvalue(res, row, 25));  // COALESCE(expired_count, 0)
-    upload.revokedCount = std::atoi(PQgetvalue(res, row, 26));  // COALESCE(revoked_count, 0)
+    // Timestamps
+    upload.createdAt = PQgetvalue(res, row, PQfnumber(res, "upload_timestamp"));
+    upload.updatedAt = PQgetvalue(res, row, PQfnumber(res, "completed_timestamp"));
 
-    upload.createdAt = PQgetvalue(res, row, 16);  // upload_timestamp
-    upload.updatedAt = PQgetvalue(res, row, 17);  // completed_timestamp (may be NULL)
+    // Validation statistics (now using PQfnumber with column aliases)
+    upload.validationValidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_valid_count")));
+    upload.validationInvalidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_invalid_count")));
+    upload.validationPendingCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_pending_count")));
+    upload.validationErrorCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_error_count")));
+    upload.trustChainValidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "trust_chain_valid_count")));
+    upload.trustChainInvalidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "trust_chain_invalid_count")));
+    upload.cscaNotFoundCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "csca_not_found_count")));
+    upload.expiredCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "expired_count")));
+    upload.revokedCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "revoked_count")));
 
     return upload;
 }

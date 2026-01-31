@@ -95,6 +95,8 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}        # Default: icao-pkd
       - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}  # Default: 3600 (1 hour)
       - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
+      # ASN.1 Parser Configuration
+      - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}     # Default: 100 (max lines for Master List structure parsing)
     depends_on:
       postgres:
         condition: service_healthy

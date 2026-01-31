@@ -41,6 +41,7 @@ const CertificateSearch: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [countries, setCountries] = useState<string[]>([]);
   const [countriesLoading, setCountriesLoading] = useState(false);
+  const [apiStats, setApiStats] = useState<{ total: number; valid: number; expired: number; notYetValid: number; unknown: number } | null>(null);
 
   // Search criteria
   const [criteria, setCriteria] = useState<SearchCriteria>({
@@ -103,6 +104,10 @@ const CertificateSearch: React.FC = () => {
       if (data.success) {
         setCertificates(data.certificates);
         setTotal(data.total);
+        // Store statistics from backend (if available)
+        if (data.stats) {
+          setApiStats(data.stats);
+        }
       } else {
         setError(data.error || 'Search failed');
       }
@@ -268,6 +273,20 @@ const CertificateSearch: React.FC = () => {
 
   // Calculate statistics
   const stats = useMemo(() => {
+    // Use backend statistics if available, otherwise fallback to client-side calculation
+    if (apiStats && apiStats.total > 0) {
+      return {
+        total: apiStats.total,
+        valid: apiStats.valid,
+        expired: apiStats.expired,
+        notYetValid: apiStats.notYetValid,
+        unknown: apiStats.unknown,
+        validPercent: apiStats.total > 0 ? Math.round((apiStats.valid / apiStats.total) * 100) : 0,
+        expiredPercent: apiStats.total > 0 ? Math.round((apiStats.expired / apiStats.total) * 100) : 0,
+      };
+    }
+
+    // Fallback: Calculate from current page certificates (legacy behavior)
     const valid = certificates.filter((c) => c.validity === 'VALID').length;
     const expired = certificates.filter((c) => c.validity === 'EXPIRED').length;
     const notYetValid = certificates.filter((c) => c.validity === 'NOT_YET_VALID').length;
@@ -282,7 +301,7 @@ const CertificateSearch: React.FC = () => {
       validPercent: total > 0 ? Math.round((valid / total) * 100) : 0,
       expiredPercent: total > 0 ? Math.round((expired / total) * 100) : 0,
     };
-  }, [certificates, total]);
+  }, [apiStats, certificates, total]);
 
   // Get certificate type badge
   const getCertTypeBadge = (certType: string) => {
@@ -389,63 +408,6 @@ const CertificateSearch: React.FC = () => {
           >
             <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
           </button>
-        </div>
-      </div>
-
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {/* Total */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-blue-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
-              <Shield className="w-5 h-5 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 인증서</p>
-              <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Valid */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-green-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/30">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">유효</p>
-              <p className="text-xl font-bold text-green-600 dark:text-green-400">{stats.valid}</p>
-              <p className="text-xs text-gray-400">{stats.validPercent}%</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Expired */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-red-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30">
-              <XCircle className="w-5 h-5 text-red-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">만료</p>
-              <p className="text-xl font-bold text-red-600 dark:text-red-400">{stats.expired}</p>
-              <p className="text-xs text-gray-400">{stats.expiredPercent}%</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Not Yet Valid */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-yellow-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/30">
-              <Clock className="w-5 h-5 text-yellow-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">유효 전</p>
-              <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stats.notYetValid}</p>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -603,6 +565,68 @@ const CertificateSearch: React.FC = () => {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Statistics Cards - Hierarchical Layout */}
+      <div className="mb-4">
+        {/* Main Total Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-5 border-l-4 border-blue-500">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+              <Shield className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                {criteria.country && getFlagSvgPath(criteria.country) && (
+                  <img
+                    src={getFlagSvgPath(criteria.country)}
+                    alt={criteria.country}
+                    className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                  {criteria.country ? `${criteria.country} 총 인증서` : '총 인증서'}
+                </p>
+              </div>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Breakdown Cards - Nested */}
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            {/* Valid */}
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">유효</p>
+              </div>
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">{stats.valid.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{stats.validPercent}%</p>
+            </div>
+
+            {/* Expired */}
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
+              <div className="flex items-center gap-2 mb-1">
+                <XCircle className="w-4 h-4 text-red-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">만료</p>
+              </div>
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">{stats.expired.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{stats.expiredPercent}%</p>
+            </div>
+
+            {/* Not Yet Valid */}
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
+              <div className="flex items-center gap-2 mb-1">
+                <Clock className="w-4 h-4 text-yellow-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">유효 전</p>
+              </div>
+              <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{stats.notYetValid.toLocaleString()}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Results Table */}

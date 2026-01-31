@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, FileText, ChevronDown, ChevronRight, Shield, Link2 } from 'lucide-react';
+import { Loader2, ChevronDown, ChevronRight, FileCode, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { cn } from '@/utils/cn';
 
@@ -7,35 +7,29 @@ interface MasterListStructureProps {
   uploadId: string;
 }
 
-interface SignerInfo {
-  subject: string;
-  issuer: string;
-  serialNumber: string;
-  isSelfSigned: boolean;
-}
-
-interface Certificate {
-  subject: string;
-  issuer: string;
-  serialNumber: string;
-  isSelfSigned: boolean;
-  type: string;
-}
-
-interface MasterListStructure {
-  signerInfoCount: number;
-  signerInfos: SignerInfo[];
-  pkiDataCertCount: number;
-  pkiDataSelfSignedCount: number;
-  pkiDataLinkCertCount: number;
-  pkiDataCertificates: Certificate[];
+interface Asn1Node {
+  offset: number;
+  depth: number;
+  headerLength: number;
+  length: number;
+  tag: string;
+  isConstructed: boolean;
+  value?: string;
+  children: Asn1Node[];
 }
 
 interface ApiResponse {
   success: boolean;
   fileName?: string;
   fileSize?: number;
-  structure?: MasterListStructure;
+  asn1Tree?: Asn1Node[];
+  statistics?: {
+    totalNodes: number;
+    constructedNodes: number;
+    primitiveNodes: number;
+  };
+  maxLines?: number;
+  truncated?: boolean;
   error?: string;
 }
 
@@ -43,14 +37,12 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
-  const [expandedSections, setExpandedSections] = useState({
-    signerInfo: true,
-    pkiData: false,
-  });
+  const [maxLines, setMaxLines] = useState(100);
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['0']));
 
   useEffect(() => {
     fetchStructure();
-  }, [uploadId]);
+  }, [uploadId, maxLines]);
 
   const fetchStructure = async () => {
     setLoading(true);
@@ -58,11 +50,13 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
 
     try {
       const response = await axios.get<ApiResponse>(
-        `/api/upload/${uploadId}/masterlist-structure`
+        `/api/upload/${uploadId}/masterlist-structure?maxLines=${maxLines}`
       );
 
       if (response.data.success) {
         setData(response.data);
+        // Auto-expand first level
+        setExpandedNodes(new Set(['0', '0-0', '0-1']));
       } else {
         setError(response.data.error || 'Failed to fetch Master List structure');
       }
@@ -74,19 +68,93 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
     }
   };
 
-  const toggleSection = (section: 'signerInfo' | 'pkiData') => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section],
-    }));
+  const toggleNode = (nodeId: string) => {
+    setExpandedNodes(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
   };
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['Bytes', 'KB', 'MB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const renderNode = (node: Asn1Node, path: string, depth: number): React.ReactElement => {
+    const nodeId = path;
+    const isExpanded = expandedNodes.has(nodeId);
+    const hasChildren = node.children && node.children.length > 0;
+
+    // TLV display
+    const tlvInfo = `T:${node.tag} L:${node.length}`;
+
+    return (
+      <div key={nodeId} className="select-text">
+        <div
+          className={cn(
+            'flex items-start gap-2 py-1 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer',
+            depth === 0 && 'bg-blue-50 dark:bg-blue-900/20'
+          )}
+          onClick={() => hasChildren && toggleNode(nodeId)}
+        >
+          {/* Indentation */}
+          <div style={{ width: `${depth * 20}px` }} className="flex-shrink-0" />
+
+          {/* Expand/Collapse Icon */}
+          <div className="flex-shrink-0 w-4">
+            {hasChildren && (
+              isExpanded ? (
+                <ChevronDown className="w-4 h-4 text-gray-500" />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-gray-500" />
+              )
+            )}
+          </div>
+
+          {/* Node Info */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+                {node.offset}:
+              </span>
+              <span className={cn(
+                'text-xs font-mono px-1.5 py-0.5 rounded',
+                node.isConstructed
+                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200'
+                  : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200'
+              )}>
+                {node.tag}
+              </span>
+              <span className="text-xs text-gray-600 dark:text-gray-400">
+                {tlvInfo}
+              </span>
+              {node.value && (
+                <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
+                  : {node.value}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Children */}
+        {hasChildren && isExpanded && (
+          <div>
+            {node.children.map((child, idx) =>
+              renderNode(child, `${path}-${idx}`, depth + 1)
+            )}
+          </div>
+        )}
+      </div>
+    );
   };
 
   if (loading) {
@@ -94,7 +162,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
       <div className="flex items-center justify-center py-12">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
         <span className="ml-3 text-gray-600 dark:text-gray-400">
-          Master List 구조 분석 중...
+          ASN.1 구조 분석 중...
         </span>
       </div>
     );
@@ -103,195 +171,118 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
   if (error) {
     return (
       <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-        <p className="text-red-600 dark:text-red-400">{error}</p>
+        <div className="flex items-start gap-2">
+          <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">파싱 실패</p>
+            <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
+          </div>
+        </div>
       </div>
     );
   }
 
-  if (!data || !data.structure) {
+  if (!data || !data.asn1Tree || data.asn1Tree.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-        Master List 구조 정보를 찾을 수 없습니다.
+        ASN.1 구조 정보를 찾을 수 없습니다.
       </div>
     );
   }
-
-  const { structure, fileName, fileSize } = data;
 
   return (
     <div className="space-y-4">
       {/* Header Info */}
       <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">
-          Master List CMS 구조
-        </h3>
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <FileCode className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              Master List ASN.1/DER 구조 (TLV)
+            </h3>
+          </div>
+          {data.truncated && (
+            <div className="flex items-center gap-2">
+              <select
+                value={maxLines}
+                onChange={(e) => setMaxLines(Number(e.target.value))}
+                className="text-xs border border-blue-300 dark:border-blue-700 rounded px-2 py-1 bg-white dark:bg-gray-800"
+              >
+                <option value={50}>50 라인</option>
+                <option value={100}>100 라인</option>
+                <option value={500}>500 라인</option>
+                <option value={1000}>1,000 라인</option>
+                <option value={5000}>5,000 라인</option>
+                <option value={0}>전체 (느림)</option>
+              </select>
+            </div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
           <div>
-            <span className="text-blue-700 dark:text-blue-300">파일명:</span>
-            <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">{fileName}</span>
+            <span className="text-blue-700 dark:text-blue-300">파일:</span>
+            <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
+              {data.fileName || 'Unknown'}
+            </span>
           </div>
           <div>
             <span className="text-blue-700 dark:text-blue-300">크기:</span>
             <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
-              {fileSize ? formatBytes(fileSize) : 'N/A'}
+              {data.fileSize ? formatBytes(data.fileSize) : 'N/A'}
             </span>
           </div>
-        </div>
-      </div>
-
-      {/* SignerInfo Section */}
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          onClick={() => toggleSection('signerInfo')}
-          className="w-full flex items-center justify-between px-4 py-3 bg-purple-50 dark:bg-purple-900/20 hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            {expandedSections.signerInfo ? (
-              <ChevronDown className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            ) : (
-              <ChevronRight className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            )}
-            <Shield className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-            <span className="font-semibold text-purple-900 dark:text-purple-100">
-              SignerInfo (MLSC)
-            </span>
-            <span className="ml-2 px-2 py-0.5 bg-purple-200 dark:bg-purple-800 text-purple-800 dark:text-purple-200 text-xs font-medium rounded">
-              {structure.signerInfoCount}개
-            </span>
-          </div>
-        </button>
-
-        {expandedSections.signerInfo && structure.signerInfos.length > 0 && (
-          <div className="p-4 space-y-3 bg-white dark:bg-gray-800">
-            {structure.signerInfos.map((signer, idx) => (
-              <div
-                key={idx}
-                className="p-3 bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-800 rounded-lg"
-              >
-                <div className="text-xs space-y-2">
-                  <div>
-                    <span className="font-medium text-purple-700 dark:text-purple-300">Subject:</span>
-                    <p className="mt-1 text-purple-900 dark:text-purple-100 font-mono text-[11px] break-all">
-                      {signer.subject}
-                    </p>
-                  </div>
-                  <div>
-                    <span className="font-medium text-purple-700 dark:text-purple-300">Issuer:</span>
-                    <p className="mt-1 text-purple-900 dark:text-purple-100 font-mono text-[11px] break-all">
-                      {signer.issuer}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <span className="font-medium text-purple-700 dark:text-purple-300">Serial:</span>
-                      <span className="ml-2 text-purple-900 dark:text-purple-100 font-mono text-[11px]">
-                        {signer.serialNumber}
-                      </span>
-                    </div>
-                    <span
-                      className={cn(
-                        'px-2 py-0.5 text-xs font-medium rounded',
-                        signer.isSelfSigned
-                          ? 'bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200'
-                          : 'bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200'
-                      )}
-                    >
-                      {signer.isSelfSigned ? 'Self-signed' : 'Cross-signed'}
-                    </span>
-                  </div>
-                </div>
+          {data.statistics && (
+            <>
+              <div>
+                <span className="text-blue-700 dark:text-blue-300">총 노드:</span>
+                <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
+                  {data.statistics.totalNodes}
+                </span>
               </div>
-            ))}
-          </div>
-        )}
+              <div>
+                <span className="text-blue-700 dark:text-blue-300">구조:</span>
+                <span className="ml-2 text-blue-900 dark:text-blue-100 font-medium">
+                  {data.statistics.constructedNodes}개 / Prim {data.statistics.primitiveNodes}개
+                </span>
+              </div>
+            </>
+          )}
+        </div>
 
-        {expandedSections.signerInfo && structure.signerInfos.length === 0 && (
-          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            SignerInfo가 없습니다.
+        {data.truncated && (
+          <div className="mt-3 flex items-center gap-2 text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-900/30 px-3 py-2 rounded">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>
+              출력이 {data.maxLines}개 라인으로 제한되었습니다. 전체 구조를 보려면 위에서 "전체"를 선택하세요.
+            </span>
           </div>
         )}
       </div>
 
-      {/* pkiData Section */}
+      {/* ASN.1 Tree */}
       <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <button
-          onClick={() => toggleSection('pkiData')}
-          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            {expandedSections.pkiData ? (
-              <ChevronDown className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            ) : (
-              <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            )}
-            <FileText className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <span className="font-semibold text-gray-900 dark:text-white">
-              pkiData (CSCA & Link Certificates)
+        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+              TLV (Tag-Length-Value) Tree
             </span>
-            <div className="flex items-center gap-2 ml-2">
-              <span className="px-2 py-0.5 bg-green-200 dark:bg-green-800 text-green-800 dark:text-green-200 text-xs font-medium rounded">
-                CSCA: {structure.pkiDataSelfSignedCount}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 rounded">
+                Constructed
               </span>
-              <span className="px-2 py-0.5 bg-cyan-200 dark:bg-cyan-800 text-cyan-800 dark:text-cyan-200 text-xs font-medium rounded">
-                LC: {structure.pkiDataLinkCertCount}
+              <span className="px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200 rounded">
+                Primitive
               </span>
             </div>
           </div>
-        </button>
+        </div>
 
-        {expandedSections.pkiData && structure.pkiDataCertificates.length > 0 && (
-          <div className="p-4 max-h-96 overflow-y-auto space-y-2 bg-white dark:bg-gray-800">
-            {structure.pkiDataCertificates.map((cert, idx) => (
-              <div
-                key={idx}
-                className={cn(
-                  'p-2 border rounded text-xs',
-                  cert.isSelfSigned
-                    ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
-                    : 'bg-cyan-50 dark:bg-cyan-900/10 border-cyan-200 dark:border-cyan-800'
-                )}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {cert.isSelfSigned ? (
-                      <Shield className="w-4 h-4 text-green-600 dark:text-green-400" />
-                    ) : (
-                      <Link2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
-                    )}
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      #{idx + 1} - {cert.type}
-                    </span>
-                  </div>
-                  <span className="text-[10px] font-mono text-gray-500 dark:text-gray-400">
-                    {cert.serialNumber.substring(0, 16)}...
-                  </span>
-                </div>
-                <div className="space-y-1">
-                  <div>
-                    <span className="text-gray-600 dark:text-gray-400">Subject:</span>
-                    <p className="mt-0.5 text-gray-900 dark:text-white font-mono text-[10px] break-all">
-                      {cert.subject}
-                    </p>
-                  </div>
-                  {!cert.isSelfSigned && (
-                    <div>
-                      <span className="text-gray-600 dark:text-gray-400">Issuer:</span>
-                      <p className="mt-0.5 text-gray-900 dark:text-white font-mono text-[10px] break-all">
-                        {cert.issuer}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {expandedSections.pkiData && structure.pkiDataCertificates.length === 0 && (
-          <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-            pkiData 인증서가 없습니다.
-          </div>
-        )}
+        <div className="bg-white dark:bg-gray-900 p-3 max-h-96 overflow-y-auto font-mono text-xs">
+          {data.asn1Tree.map((node, idx) =>
+            renderNode(node, `${idx}`, 0)
+          )}
+        </div>
       </div>
     </div>
   );

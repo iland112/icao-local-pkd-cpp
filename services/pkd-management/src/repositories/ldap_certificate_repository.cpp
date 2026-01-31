@@ -193,6 +193,13 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
     searchResult.limit = criteria.limit;
     searchResult.offset = criteria.offset;
 
+    // Initialize statistics
+    searchResult.stats.total = 0;
+    searchResult.stats.valid = 0;
+    searchResult.stats.expired = 0;
+    searchResult.stats.notYetValid = 0;
+    searchResult.stats.unknown = 0;
+
     // Post-filtering: When certType is specified without country, we search from dataTree
     // and need to filter by DN to match the requested type
     bool needsTypeFiltering = criteria.certType.has_value() &&
@@ -230,6 +237,27 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
         try {
             // Parse entry into Certificate entity
             domain::models::Certificate cert = parseEntry(entry, dn);
+
+            // Update statistics (before validity filtering)
+            // Note: Statistics represent all matching certificates (ignoring validity filter)
+            if (!needsValidityFiltering) {
+                searchResult.stats.total++;
+                auto validityStatus = cert.getValidityStatus();
+                switch (validityStatus) {
+                    case domain::models::ValidityStatus::VALID:
+                        searchResult.stats.valid++;
+                        break;
+                    case domain::models::ValidityStatus::EXPIRED:
+                        searchResult.stats.expired++;
+                        break;
+                    case domain::models::ValidityStatus::NOT_YET_VALID:
+                        searchResult.stats.notYetValid++;
+                        break;
+                    default:
+                        searchResult.stats.unknown++;
+                        break;
+                }
+            }
 
             // Apply validity filtering if needed
             if (needsValidityFiltering) {
@@ -484,6 +512,9 @@ std::string LdapCertificateRepository::getSearchBaseDn(
         switch (*certType) {
             case domain::models::CertificateType::CSCA:
                 orgComponent = "o=csca,";
+                break;
+            case domain::models::CertificateType::MLSC:
+                orgComponent = "o=mlsc,";
                 break;
             case domain::models::CertificateType::DSC:
                 orgComponent = "o=dsc,";

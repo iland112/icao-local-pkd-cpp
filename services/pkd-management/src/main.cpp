@@ -62,6 +62,7 @@
 #include "common/masterlist_processor.h"
 #include "common/x509_metadata_extractor.h"
 #include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
+#include "common/asn1_parser.h"       // ASN.1/TLV parser for Master List structure
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
@@ -188,6 +189,9 @@ struct AppConfig {
     bool icaoAutoNotify = true;
     int icaoHttpTimeout = 10;  // seconds
 
+    // ASN.1 Parser Configuration
+    int asn1MaxLines = 100;  // Default max lines for Master List structure parsing
+
     int serverPort = 8081;
     int threadNum = 4;
 
@@ -246,6 +250,9 @@ struct AppConfig {
         if (auto val = std::getenv("ICAO_NOTIFICATION_EMAIL")) config.notificationEmail = val;
         if (auto val = std::getenv("ICAO_AUTO_NOTIFY")) config.icaoAutoNotify = (std::string(val) == "true");
         if (auto val = std::getenv("ICAO_HTTP_TIMEOUT")) config.icaoHttpTimeout = std::stoi(val);
+
+        // ASN.1 Parser Configuration
+        if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = std::stoi(val);
 
         return config;
     }
@@ -3030,6 +3037,7 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
         "subject_key_identifier, authority_key_identifier, "
         "crl_distribution_points, ocsp_responder_url, "
         "is_self_signed, "
+        "duplicate_count, first_upload_id, "
         "created_at"
         ") VALUES ("
         "'" + certId + "', "
@@ -3061,9 +3069,14 @@ std::string saveCertificate(PGconn* conn, const std::string& uploadId,
         + vecToArray(metadata.crlDistributionPoints) + ", "
         + optToSql(metadata.ocspResponderUrl) + ", "
         + (metadata.isSelfSigned ? "TRUE" : "FALSE") + ", "
+        "0, "  // duplicate_count = 0 (first registration)
+        "'" + uploadId + "', "  // first_upload_id = current uploadId
         "NOW()) "
         "ON CONFLICT (certificate_type, fingerprint_sha256) "
-        "DO UPDATE SET upload_id = EXCLUDED.upload_id "
+        "DO UPDATE SET "
+        "  duplicate_count = certificate.duplicate_count + 1, "
+        "  last_seen_upload_id = EXCLUDED.upload_id, "
+        "  last_seen_at = NOW() "
         "RETURNING id";
 
     PGresult* res = PQexec(conn, query.c_str());
@@ -6396,6 +6409,125 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // Master List ASN.1 structure endpoint - GET /api/upload/{uploadId}/masterlist-structure
+    // Returns ASN.1 tree structure with TLV information for Master List files
+    app.registerHandler(
+        "/api/upload/{uploadId}/masterlist-structure",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            spdlog::info("GET /api/upload/{}/masterlist-structure", uploadId);
+
+            Json::Value result;
+            result["success"] = false;
+
+            std::string conninfo = "host=" + appConfig.dbHost +
+                                  " port=" + std::to_string(appConfig.dbPort) +
+                                  " dbname=" + appConfig.dbName +
+                                  " user=" + appConfig.dbUser +
+                                  " password=" + appConfig.dbPassword;
+
+            PGconn* conn = PQconnectdb(conninfo.c_str());
+
+            try {
+                if (PQstatus(conn) != CONNECTION_OK) {
+                    throw std::runtime_error(std::string("Database connection failed: ") + PQerrorMessage(conn));
+                }
+
+                // Query upload file information
+                const char* query =
+                    "SELECT file_name, original_file_name, file_format, file_size, file_path "
+                    "FROM uploaded_file "
+                    "WHERE id = $1::uuid";
+
+                const char* paramValues[] = { uploadId.c_str() };
+                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues, nullptr, nullptr, 0);
+
+                if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+                    PQclear(res);
+                    PQfinish(conn);
+                    result["error"] = "Upload not found";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    return;
+                }
+
+                std::string fileName = PQgetvalue(res, 0, 0);
+                // Use fileName (stored name) if originalFileName is NULL
+                std::string displayName = (PQgetvalue(res, 0, 1) && strlen(PQgetvalue(res, 0, 1)) > 0)
+                    ? PQgetvalue(res, 0, 1)
+                    : fileName;
+                std::string fileFormat = PQgetvalue(res, 0, 2);
+                std::string fileSizeStr = PQgetvalue(res, 0, 3);
+                std::string filePath = PQgetvalue(res, 0, 4) ? PQgetvalue(res, 0, 4) : "";
+                PQclear(res);
+                PQfinish(conn);
+
+                // Check if this is a Master List file
+                if (fileFormat != "ML" && fileFormat != "MASTER_LIST") {
+                    result["error"] = "Not a Master List file (format: " + fileFormat + ")";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                // If file_path is empty, construct it from upload directory + uploadId
+                // Files are stored as {uploadId}.ml in /app/uploads/
+                if (filePath.empty()) {
+                    filePath = "/app/uploads/" + uploadId + ".ml";
+                    spdlog::debug("file_path is NULL, using constructed path: {}", filePath);
+                }
+
+                // Get maxLines parameter (default from config, 0 = unlimited)
+                int maxLines = appConfig.asn1MaxLines;
+                if (auto ml = req->getParameter("maxLines"); !ml.empty()) {
+                    try {
+                        maxLines = std::stoi(ml);
+                        if (maxLines < 0) maxLines = appConfig.asn1MaxLines;
+                    } catch (...) {
+                        maxLines = appConfig.asn1MaxLines;
+                    }
+                }
+
+                // Parse ASN.1 structure with line limit
+                Json::Value asn1Result = icao::asn1::parseAsn1Structure(filePath, maxLines);
+
+                if (!asn1Result["success"].asBool()) {
+                    result["error"] = asn1Result["error"].asString();
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Build response
+                result["success"] = true;
+                result["fileName"] = displayName;
+                result["fileSize"] = std::stoi(fileSizeStr);
+                result["asn1Tree"] = asn1Result["tree"];
+                result["statistics"] = asn1Result["statistics"];
+                result["maxLines"] = asn1Result["maxLines"];
+                result["truncated"] = asn1Result["truncated"];
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/{}/masterlist-structure error: {}", uploadId, e.what());
+                if (PQstatus(conn) == CONNECTION_OK) {
+                    PQfinish(conn);
+                }
+                result["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Upload changes endpoint - GET /api/upload/changes
     app.registerHandler(
         "/api/upload/changes",
@@ -7206,6 +7338,15 @@ paths:
                     certs.append(certJson);
                 }
                 response["certificates"] = certs;
+
+                // Add statistics
+                Json::Value stats;
+                stats["total"] = result.stats.total;
+                stats["valid"] = result.stats.valid;
+                stats["expired"] = result.stats.expired;
+                stats["notYetValid"] = result.stats.notYetValid;
+                stats["unknown"] = result.stats.unknown;
+                response["stats"] = stats;
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);

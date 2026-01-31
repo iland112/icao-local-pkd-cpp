@@ -166,13 +166,25 @@ struct CertificateSearchCriteria {
 };
 
 /**
- * @brief Search result with pagination info (Value Object)
+ * @brief Certificate statistics by validity status (Value Object)
+ */
+struct CertificateStatistics {
+    int total = 0;
+    int valid = 0;
+    int expired = 0;
+    int notYetValid = 0;
+    int unknown = 0;
+};
+
+/**
+ * @brief Search result with pagination info and statistics (Value Object)
  */
 struct CertificateSearchResult {
     std::vector<Certificate> certificates;
     int total;
     int limit;
     int offset;
+    CertificateStatistics stats;  // Aggregated statistics for all matching certificates
 };
 
 } // namespace models

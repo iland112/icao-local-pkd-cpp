@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.2.0 ✅
-**Last Updated**: 2026-01-30
-**Status**: Production Ready - Phase 4.4 Complete + Enhanced Metadata Tracking
+**Current Version**: v2.2.1 🔥
+**Last Updated**: 2026-01-31
+**Status**: Production Ready - Critical Hotfix Applied (Upload 502 Error Fixed)
 
 ---
 
@@ -115,7 +115,40 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 **Documentation**: [PHASE_4.4_TASK_3_COMPLETION.md](docs/PHASE_4.4_TASK_3_COMPLETION.md)
 
-### Recent Changes (v2.1.5)
+### Recent Changes (v2.2.1 - Critical Hotfix)
+
+- 🔥 **Master List Upload 502 Error Fix** (CRITICAL)
+  - **Root Cause**: `UploadRepository::findByFileHash()` missing `file_hash` column in SELECT query
+  - **Error**: PostgreSQL result parsing crash ("column number -1 is out of range 0..26")
+  - **Impact**: Complete Master List upload failure (502 Bad Gateway)
+  - **Fix**: Added `file_hash` to SELECT clause in [upload_repository.cpp:285](services/pkd-management/src/repositories/upload_repository.cpp#L285)
+  - **Deployment**: `--no-cache` rebuild required for proper code application
+  - **Documentation**: [UPLOAD_502_ERROR_TROUBLESHOOTING.md](docs/UPLOAD_502_ERROR_TROUBLESHOOTING.md)
+
+- ✅ **nginx Stability Improvements** (Production Readiness)
+  - **DNS Resolver**: `resolver 127.0.0.11 valid=10s` - Prevents IP caching on container restart
+  - **Cache Disabled**: `proxy_buffering off; proxy_cache off` - Development/staging environment
+  - **Increased Timeouts**: 600s read/send timeout for large file uploads (Master List: 810KB)
+  - **Enhanced Buffers**: 16x32KB buffers for large responses
+  - **Error Handling**: Automatic retry with `proxy_next_upstream` (max 2 tries)
+  - **Files**: [nginx/api-gateway.conf](nginx/api-gateway.conf), [nginx/proxy_params](nginx/proxy_params)
+
+- ✅ **ASN.1 Parser Implementation** (Master List Structure Visualization)
+  - **New Files**: [asn1_parser.h](services/pkd-management/src/common/asn1_parser.h), [asn1_parser.cpp](services/pkd-management/src/common/asn1_parser.cpp)
+  - **Features**: OpenSSL asn1parse integration, TLV tree generation, line limiting
+  - **Configuration**: Environment variable `ASN1_MAX_LINES` (default: 100)
+  - **Frontend**: Tab-based UI with interactive tree viewer, expand/collapse, configurable limits
+
+- ✅ **Duplicate Certificates Enhancement**
+  - **New Components**:
+    - [DuplicateCertificatesTree.tsx](frontend/src/components/DuplicateCertificatesTree.tsx) - Tree view with country grouping
+    - [DuplicateCertificateDialog.tsx](frontend/src/components/DuplicateCertificateDialog.tsx) - Full-screen detail dialog
+    - [csvExport.ts](frontend/src/utils/csvExport.ts) - CSV export utility
+  - **Features**: Upload history integration, duplicate indicators, CSV download
+
+### Previous Changes (v2.1.5 - v2.2.0)
+
+- ✅ **Repository Pattern Complete** (v2.1.5)
     - Supports both OpenSSL slash format (`/C=X/O=Y/CN=Z`) and RFC2253 comma format (`CN=Z,O=Y,C=X`)
     - PostgreSQL bytea hex format parsing (`\x` prefix) with OpenSSL d2i_X509()
     - Component-based SQL with LIKE + C++ post-filter to eliminate false positives
@@ -638,6 +671,155 @@ Phase 4.4 delivers comprehensive real-time certificate metadata tracking and ICA
 - SSE stream verification with real data
 - 29,838 DSC upload scenario validation
 - Statistics accuracy end-to-end testing
+
+---
+
+### v2.2.1 (2026-01-31) - Critical Hotfix: Upload 502 Error & nginx Stability
+
+#### Executive Summary
+
+Critical hotfix resolving Master List upload failures caused by PostgreSQL result parsing error in `UploadRepository::findByFileHash()`. Additionally includes nginx stability improvements for production readiness.
+
+#### Critical Bug Fix
+
+**Issue**: Master List 업로드 시 502 Bad Gateway 에러
+- Backend service crash로 인한 연결 조기 종료
+- 파일 중복 검사 단계에서 서비스 크래시 발생
+
+**Root Cause**: [upload_repository.cpp:285](services/pkd-management/src/repositories/upload_repository.cpp#L285)
+```cpp
+// ❌ BEFORE: file_hash column missing from SELECT
+const char* query =
+    "SELECT id, file_name, file_format, file_size, status, ..."
+    "FROM uploaded_file WHERE file_hash = $1";
+
+// ✅ AFTER: file_hash added to SELECT clause
+const char* query =
+    "SELECT id, file_name, file_hash, file_format, file_size, status, ..."
+    "FROM uploaded_file WHERE file_hash = $1";
+```
+
+**Error Flow**:
+1. `findByFileHash()` SQL 쿼리에서 `file_hash` 컬럼 누락
+2. `resultToUpload()` 함수에서 `PQfnumber(res, "file_hash")` 호출 → -1 반환
+3. `PQgetvalue(res, row, -1)` 호출 → "column number -1 is out of range" 에러
+4. C++ exception → 프로세스 크래시 → nginx 502 에러
+
+**Impact**: Master List 업로드 완전 불가 (LDIF 업로드는 정상)
+
+#### nginx Stability Improvements
+
+**File**: [nginx/api-gateway.conf](nginx/api-gateway.conf#L28-L40)
+
+**DNS Resolver** (Prevents IP caching on container restart):
+```nginx
+resolver 127.0.0.11 valid=10s ipv6=off;
+resolver_timeout 5s;
+```
+
+**Cache Disabled** (Development/staging environment):
+```nginx
+proxy_buffering off;
+proxy_cache off;
+proxy_no_cache 1;
+proxy_cache_bypass 1;
+```
+
+**File**: [nginx/proxy_params](nginx/proxy_params#L14-L35)
+
+**Increased Timeouts** (Large file uploads):
+```nginx
+proxy_connect_timeout 60s;
+proxy_send_timeout 600s;
+proxy_read_timeout 600s;
+```
+
+**Enhanced Buffers** (Large responses):
+```nginx
+proxy_buffer_size 8k;
+proxy_buffers 16 32k;
+proxy_busy_buffers_size 64k;
+```
+
+**Error Handling** (Automatic retry):
+```nginx
+proxy_next_upstream error timeout http_502 http_503 http_504;
+proxy_next_upstream_tries 2;
+proxy_next_upstream_timeout 10s;
+```
+
+#### Additional Features
+
+**ASN.1 Parser Implementation**:
+- New files: [asn1_parser.h/cpp](services/pkd-management/src/common/asn1_parser.h)
+- OpenSSL asn1parse integration with line limiting
+- TLV (Tag-Length-Value) tree structure generation
+- Environment-based configuration (`ASN1_MAX_LINES`)
+
+**Master List Structure UI**:
+- Tab-based interface (업로드 상태 + Master List 구조)
+- Interactive ASN.1 tree viewer with expand/collapse
+- Configurable line limits (50/100/500/1000/전체)
+- TLV information display with color-coded tags
+
+**Duplicate Certificates Enhancement**:
+- [DuplicateCertificatesTree.tsx](frontend/src/components/DuplicateCertificatesTree.tsx) - Tree view component
+- [DuplicateCertificateDialog.tsx](frontend/src/components/DuplicateCertificateDialog.tsx) - Detail dialog
+- [csvExport.ts](frontend/src/utils/csvExport.ts) - CSV export utility
+- Upload history integration with duplicate indicators
+
+#### Files Modified
+
+**Backend**:
+- `services/pkd-management/src/repositories/upload_repository.cpp` - Critical fix
+- `services/pkd-management/src/common/asn1_parser.{h,cpp}` - NEW
+- `services/pkd-management/src/main.cpp` - ASN.1 endpoint integration
+- `docker/docker-compose.yaml` - ASN1_MAX_LINES environment variable
+
+**Frontend**:
+- `frontend/src/components/MasterListStructure.tsx` - Tab UI refactoring
+- `frontend/src/components/DuplicateCertificatesTree.tsx` - NEW
+- `frontend/src/components/DuplicateCertificateDialog.tsx` - NEW
+- `frontend/src/utils/csvExport.ts` - NEW
+- `frontend/src/pages/UploadHistory.tsx` - Duplicate integration
+
+**nginx**:
+- `nginx/api-gateway.conf` - DNS resolver + cache disabling
+- `nginx/proxy_params` - Timeouts + buffers + error handling
+
+#### Deployment
+
+```bash
+# Rebuild with no-cache (critical for bug fixes)
+cd docker
+docker-compose build --no-cache pkd-management
+
+# Restart with force-recreate
+docker-compose up -d --force-recreate pkd-management
+
+# Restart nginx to apply config changes
+docker-compose restart api-gateway frontend
+```
+
+#### Verification Results
+
+- ✅ Master List upload: 537 certificates (1 MLSC + 536 CSCA/LC) - 5 seconds
+- ✅ File hash deduplication: Works correctly
+- ✅ nginx stability: No more 502 errors on container restart
+- ✅ ASN.1 parser: 100 lines default, configurable up to unlimited
+- ✅ Duplicate detection: Accurate counting with tree visualization
+
+#### Documentation
+
+- [UPLOAD_502_ERROR_TROUBLESHOOTING.md](docs/UPLOAD_502_ERROR_TROUBLESHOOTING.md) - Complete troubleshooting guide
+- [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) - nginx debugging section updated
+
+#### Lessons Learned
+
+1. **Column Mismatch Pattern**: SQL 쿼리와 parsing 코드 간 불일치 → Runtime 에러
+   - **Prevention**: Repository unit tests, SQL validation in CI/CD
+2. **Docker Build Cache**: 첫 번째 빌드에서 코드 미적용 → --no-cache 필수
+3. **PostgreSQL libpq**: `PQfnumber()` returns -1 on missing column → Validation 필요
 
 ---
 
