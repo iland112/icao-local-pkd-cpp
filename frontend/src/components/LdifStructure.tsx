@@ -1,32 +1,34 @@
 /**
  * @file LdifStructure.tsx
- * @brief LDIF File Structure Visualization Component (Tree View)
+ * @brief LDIF File Structure Visualization Component (TreeViewer)
  *
  * Displays LDIF file structure in a hierarchical tree view based on DN hierarchy.
  * Shows DN components, objectClass, attributes, and binary data indicators.
  *
- * @version v2.2.2
+ * @version v2.3.0 (Refactored with TreeViewer)
  * @date 2026-02-01
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChevronDown, ChevronRight, AlertCircle, Loader2, ChevronsDown, ChevronsUp } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { uploadHistoryApi } from '@/services/pkdApi';
 import type { LdifStructureData, LdifEntry } from '@/types';
+import { TreeViewer } from './TreeViewer';
+import type { TreeNode } from './TreeViewer';
 
 interface LdifStructureProps {
   uploadId: string;
 }
 
 /**
- * Tree Node Structure
+ * Tree Node Structure (from original buildDnTree)
  */
-interface TreeNode {
-  rdn: string;  // Relative Distinguished Name (e.g., "dc=int")
-  fullDn: string;  // Complete DN path
-  children: Map<string, TreeNode>;
-  entries: LdifEntry[];  // Actual LDIF entries at this DN
-  level: number;  // Tree depth level
+interface DnTreeNode {
+  rdn: string;
+  fullDn: string;
+  children: Map<string, DnTreeNode>;
+  entries: LdifEntry[];
+  level: number;
 }
 
 /**
@@ -83,10 +85,8 @@ const splitDn = (dn: string): string[] => {
  * Remove common base DN suffix from components
  */
 const removeBaseDn = (components: string[]): string[] => {
-  // Common base DN (in reverse order): dc=int, dc=icao, dc=pkd, dc=download
   const baseDnSuffix = ['dc=int', 'dc=icao', 'dc=pkd', 'dc=download'];
 
-  // Check if components end with base DN
   let hasBaseDn = true;
   for (let i = 0; i < baseDnSuffix.length; i++) {
     if (components[i] !== baseDnSuffix[i]) {
@@ -95,7 +95,6 @@ const removeBaseDn = (components: string[]): string[] => {
     }
   }
 
-  // Remove base DN suffix if present
   if (hasBaseDn && components.length > baseDnSuffix.length) {
     return components.slice(baseDnSuffix.length);
   }
@@ -106,8 +105,8 @@ const removeBaseDn = (components: string[]): string[] => {
 /**
  * Build hierarchical tree from LDIF entries
  */
-const buildDnTree = (entries: LdifEntry[]): TreeNode => {
-  const root: TreeNode = {
+const buildDnTree = (entries: LdifEntry[]): DnTreeNode => {
+  const root: DnTreeNode = {
     rdn: 'ROOT',
     fullDn: '',
     children: new Map(),
@@ -116,14 +115,9 @@ const buildDnTree = (entries: LdifEntry[]): TreeNode => {
   };
 
   entries.forEach(entry => {
-    // Parse DN: "serialNumber=009667006,ou=people,dc=pkd,dc=icao,dc=int"
-    // Split by unescaped commas and reverse to get top-down hierarchy
     let components = splitDn(entry.dn).reverse();
-
-    // Remove common base DN to reduce tree depth
     components = removeBaseDn(components);
 
-    // If no components left after removing base DN, skip entry
     if (components.length === 0) {
       root.entries.push(entry);
       return;
@@ -147,7 +141,6 @@ const buildDnTree = (entries: LdifEntry[]): TreeNode => {
       currentNode = currentNode.children.get(rdn)!;
     });
 
-    // Add entry to leaf node
     currentNode.entries.push(entry);
   });
 
@@ -155,130 +148,45 @@ const buildDnTree = (entries: LdifEntry[]): TreeNode => {
 };
 
 /**
- * Tree Node Component
+ * Convert DN tree to TreeNode format (recursive)
  */
-const TreeNodeComponent: React.FC<{
-  node: TreeNode;
-  expandedNodes: Set<string>;
-  expandedEntries: Set<number>;
-  onToggleNode: (dn: string) => void;
-  onToggleEntry: (index: number) => void;
-}> = ({ node, expandedNodes, expandedEntries, onToggleNode, onToggleEntry }) => {
-  const isExpanded = expandedNodes.has(node.fullDn);
-  const hasChildren = node.children.size > 0;
-  const hasEntries = node.entries.length > 0;
+function convertDnTreeToTreeNode(dnNode: DnTreeNode, nodeId: string): TreeNode {
+  const children: TreeNode[] = [];
 
-  // Indent based on level
-  const indent = node.level * 16;
+  // Add child DN nodes
+  dnNode.children.forEach((childDnNode, rdn) => {
+    children.push(convertDnTreeToTreeNode(childDnNode, `${nodeId}-dn-${rdn}`));
+  });
 
-  const displayRdn = node.rdn === 'ROOT' ? 'dc=download,dc=pkd,dc=icao,dc=int' : node.rdn;
-  const isRoot = node.rdn === 'ROOT';
+  // Add entries at this DN level
+  dnNode.entries.forEach((entry, entryIdx) => {
+    const attributeNodes: TreeNode[] = entry.attributes.map((attr, attrIdx) => ({
+      id: `${nodeId}-entry-${entryIdx}-attr-${attrIdx}`,
+      name: attr.name,
+      value: attr.isBinary ? `[Binary: ${attr.value}]` : attr.value,
+      icon: attr.isBinary ? 'file-text' : 'hash',
+    }));
 
-  return (
-    <div style={{ marginLeft: `${isRoot ? 0 : indent}px` }}>
-      {/* DN Component Node */}
-      <div
-        className="flex items-center gap-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer group"
-        onClick={() => onToggleNode(node.fullDn)}
-      >
-        {(hasChildren || hasEntries) ? (
-          isExpanded ? (
-            <ChevronDown className="w-4 h-4 text-gray-500" />
-          ) : (
-            <ChevronRight className="w-4 h-4 text-gray-500" />
-          )
-        ) : (
-          <span className="w-4" />
-        )}
-        <span className={`font-mono text-sm font-semibold ${isRoot ? 'text-purple-600 dark:text-purple-400' : 'text-blue-600 dark:text-blue-400'}`} title={isRoot ? displayRdn : unescapeRdn(node.rdn)}>
-          {isRoot ? displayRdn : truncateRdn(node.rdn)}
-        </span>
-        {hasEntries && (
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            ({node.entries.length}개 엔트리)
-          </span>
-        )}
-      </div>
+    children.push({
+      id: `${nodeId}-entry-${entryIdx}`,
+      name: `${entry.objectClass} (Line ${entry.lineNumber})`,
+      value: truncateRdn(entry.dn, 80),
+      icon: 'file-text',
+      children: attributeNodes,
+    });
+  });
 
-      {/* Expanded content */}
-      {(node.rdn === 'ROOT' || isExpanded) && (
-        <>
-          {/* Child DN nodes */}
-          {Array.from(node.children.values()).map(childNode => (
-            <TreeNodeComponent
-              key={childNode.fullDn}
-              node={childNode}
-              expandedNodes={expandedNodes}
-              expandedEntries={expandedEntries}
-              onToggleNode={onToggleNode}
-              onToggleEntry={onToggleEntry}
-            />
-          ))}
+  const isRoot = dnNode.rdn === 'ROOT';
+  const displayRdn = isRoot ? 'dc=download,dc=pkd,dc=icao,dc=int' : truncateRdn(dnNode.rdn);
 
-          {/* Entries at this DN level */}
-          {node.entries.map((entry) => {
-            const globalIndex = entry.lineNumber;  // Use lineNumber as unique ID
-            const entryExpanded = expandedEntries.has(globalIndex);
-
-            return (
-              <div
-                key={globalIndex}
-                className="ml-4 border-l-2 border-gray-300 dark:border-gray-600 pl-3 my-1"
-              >
-                {/* Entry header */}
-                <div
-                  className="flex items-start gap-2 py-1 px-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded cursor-pointer"
-                  onClick={() => onToggleEntry(globalIndex)}
-                >
-                  {entryExpanded ? (
-                    <ChevronDown className="w-3 h-3 text-gray-500 mt-0.5" />
-                  ) : (
-                    <ChevronRight className="w-3 h-3 text-gray-500 mt-0.5" />
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs px-2 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-full font-mono">
-                        {entry.objectClass}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        Line {entry.lineNumber}
-                      </span>
-                      <span className="text-xs text-gray-400 dark:text-gray-500 font-mono truncate">
-                        {entry.dn}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Entry attributes */}
-                {entryExpanded && (
-                  <div className="ml-5 mt-1 space-y-0.5 bg-gray-50 dark:bg-gray-900 rounded p-2">
-                    {entry.attributes.map((attr, attrIdx) => (
-                      <div key={attrIdx} className="flex gap-2 text-xs font-mono">
-                        <span className="text-green-600 dark:text-green-400 font-semibold min-w-[180px]">
-                          {attr.name}:
-                        </span>
-                        {attr.isBinary ? (
-                          <span className="text-orange-600 dark:text-orange-400 font-semibold">
-                            {attr.value}
-                          </span>
-                        ) : (
-                          <span className="text-gray-700 dark:text-gray-300 break-all">
-                            {attr.value}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </>
-      )}
-    </div>
-  );
-};
+  return {
+    id: nodeId,
+    name: displayRdn,
+    value: dnNode.entries.length > 0 ? `${dnNode.entries.length}개 엔트리` : undefined,
+    icon: isRoot ? 'shield' : 'key',
+    children: children.length > 0 ? children : undefined,
+  };
+}
 
 /**
  * LDIF Structure Main Component
@@ -287,14 +195,13 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
   const [data, setData] = useState<LdifStructureData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
-  const [expandedEntries, setExpandedEntries] = useState<Set<number>>(new Set());
   const [maxEntries, setMaxEntries] = useState(100);
 
-  // Build tree structure
-  const tree = useMemo(() => {
-    if (!data) return null;
-    return buildDnTree(data.entries);
+  // Build DN tree and convert to TreeNode
+  const treeData = useMemo((): TreeNode[] => {
+    if (!data) return [];
+    const dnTree = buildDnTree(data.entries);
+    return [convertDnTreeToTreeNode(dnTree, 'root')];
   }, [data]);
 
   // Fetch LDIF structure
@@ -321,62 +228,6 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
 
     fetchStructure();
   }, [uploadId, maxEntries]);
-
-  // Toggle DN node
-  const toggleNode = (dn: string) => {
-    setExpandedNodes((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(dn)) {
-        newSet.delete(dn);
-      } else {
-        newSet.add(dn);
-      }
-      return newSet;
-    });
-  };
-
-  // Toggle entry expansion
-  const toggleEntry = (index: number) => {
-    setExpandedEntries((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(index)) {
-        newSet.delete(index);
-      } else {
-        newSet.add(index);
-      }
-      return newSet;
-    });
-  };
-
-  // Expand all nodes
-  const expandAll = () => {
-    if (!tree) return;
-
-    const allNodes = new Set<string>();
-    const allEntries = new Set<number>();
-
-    const traverse = (node: TreeNode) => {
-      if (node.fullDn) {
-        allNodes.add(node.fullDn);
-      }
-      node.entries.forEach(e => allEntries.add(e.lineNumber));
-      node.children.forEach(child => traverse(child));
-    };
-
-    traverse(tree);
-    setExpandedNodes(allNodes);
-    setExpandedEntries(allEntries);
-  };
-
-  // Collapse all nodes
-  const collapseAll = () => {
-    setExpandedNodes(new Set());
-    setExpandedEntries(new Set());
-  };
-
-  const isAllExpanded = tree &&
-    expandedNodes.size > 0 &&
-    expandedEntries.size === data?.entries.length;
 
   // Loading state
   if (loading) {
@@ -406,7 +257,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
   }
 
   // No data
-  if (!data || !tree) {
+  if (!data) {
     return (
       <div className="text-center py-12 text-gray-500 dark:text-gray-400">
         LDIF 구조 데이터가 없습니다.
@@ -469,25 +320,6 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
             <option value="10000">전체</option>
           </select>
         </div>
-
-        <div className="flex gap-2">
-          <button
-            onClick={isAllExpanded ? collapseAll : expandAll}
-            className="px-3 py-1.5 text-sm bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded-md hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors flex items-center gap-1.5"
-          >
-            {isAllExpanded ? (
-              <>
-                <ChevronsUp className="w-4 h-4" />
-                모두 접기
-              </>
-            ) : (
-              <>
-                <ChevronsDown className="w-4 h-4" />
-                모두 펼치기
-              </>
-            )}
-          </button>
-        </div>
       </div>
 
       {/* Truncation Warning */}
@@ -503,15 +335,10 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
       )}
 
       {/* DN Hierarchy Tree */}
-      <div className="border border-gray-300 dark:border-gray-600 rounded-lg p-4 bg-white dark:bg-gray-900 max-h-[600px] overflow-y-auto">
-        <TreeNodeComponent
-          node={tree}
-          expandedNodes={expandedNodes}
-          expandedEntries={expandedEntries}
-          onToggleNode={toggleNode}
-          onToggleEntry={toggleEntry}
-        />
-      </div>
+      <TreeViewer
+        data={treeData}
+        height="600px"
+      />
 
       {/* Entry Count Footer */}
       <div className="text-center text-sm text-gray-500 dark:text-gray-400">

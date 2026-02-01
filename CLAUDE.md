@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.2.2 ✅
+**Current Version**: v2.3.0 ✅
 **Last Updated**: 2026-02-01
-**Status**: Production Ready - LDIF Structure Visualization Complete (E2E Tested)
+**Status**: Production Ready - TreeViewer Refactoring Complete + Sync Page Fix
 
 ---
 
@@ -100,7 +100,52 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.2.2 - LDIF Structure Visualization) ✅
+### Recent Changes (v2.3.0 - TreeViewer Refactoring + Sync Page Fix) ✅
+
+**Status**: Complete | **Date**: 2026-02-01
+
+- ✅ **Reusable TreeViewer Component** - Eliminated ~550 lines of duplicated tree rendering code
+  - **TreeViewer.tsx** ([frontend/src/components/TreeViewer.tsx](frontend/src/components/TreeViewer.tsx)): New 219-line reusable component based on react-arborist
+  - **Features**: Icon support, copy-to-clipboard, dark mode, expand/collapse all, keyboard navigation
+  - **SVG Flag Support**: Country flags loaded from `/public/svg/{country}.svg` with emoji fallback
+  - **Refactored Components**: DuplicateCertificatesTree (-115 lines), LdifStructure (-145 lines), MasterListStructure (-100 lines)
+  - **Integration**: CertificateSearch trust chain visualization (+162 lines)
+
+- ✅ **JavaScript Hoisting Fixes** - Fixed recursive function initialization errors
+  - **Pattern**: Changed arrow functions to function declarations for recursive calls
+  - **Fixed**: `convertDnTreeToTreeNode`, `convertAsn1ToTreeNode`, `getCertTypeIcon`
+  - **Files**: DuplicateCertificatesTree.tsx, LdifStructure.tsx, MasterListStructure.tsx
+
+- ✅ **CSS Truncation Enhancement** - Improved long text display
+  - Changed from `break-all` (multi-line wrapping) to `truncate` class (single-line + ellipsis)
+  - Reduced text limit from 100 to 80 characters for better readability
+  - Applied to DN text, certificate subjects, and tree node values
+
+- ✅ **Sync Page Manual Check Button Fix** - Resolved UI update issue
+  - **Bug**: Manual sync check button didn't update displayed sync status
+  - **Root Cause**: Frontend didn't use immediate response from `POST /sync/check`
+  - **Fix**: Update UI state directly from `triggerCheck()` response before `fetchData()` call
+  - **File**: [SyncDashboard.tsx:70-85](frontend/src/pages/SyncDashboard.tsx#L70-L85)
+
+- ✅ **Code Metrics** - Net reduction of 303 lines (-21% tree-related code)
+  - **Created**: TreeViewer.tsx (219 lines)
+  - **Reduced**: DuplicateCertificatesTree (-115), LdifStructure (-145), MasterListStructure (-100)
+  - **Enhanced**: CertificateSearch (+162 for trust chain integration)
+  - **Total**: 561 lines removed, 381 lines added = **-180 lines net reduction**
+
+**Architecture Achievement**:
+- ✅ Single source of truth for tree rendering across 4 components
+- ✅ Consistent styling and behavior (dark mode, icons, interactions)
+- ✅ Improved maintainability (tree logic in one place)
+- ✅ Better user experience (instant sync status updates)
+
+**Related Documentation**:
+- [PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md](docs/PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md) - Refactoring status summary
+- [PHASE_4.4_CLARIFICATION.md](docs/PHASE_4.4_CLARIFICATION.md) - Phase 4.4 naming confusion resolution
+
+---
+
+### Previous Changes (v2.2.2 - LDIF Structure Visualization) ✅
 
 **Status**: Complete (E2E Tested) | **Date**: 2026-02-01
 
@@ -628,6 +673,87 @@ ldap_delete_all_crls       # Delete all CRLs (testing)
 ---
 
 ## Version History
+
+### v2.3.0 (2026-02-01) - TreeViewer Refactoring + Sync Page Fix
+
+#### Executive Summary
+
+v2.3.0 delivers a major frontend code quality improvement through TreeViewer component consolidation, eliminating 303 lines of duplicated tree rendering code across 4 components. Additionally fixes the sync page manual check button bug that prevented UI updates after triggering sync checks.
+
+#### Key Achievements
+
+**Frontend Refactoring**:
+- ✅ **Reusable TreeViewer Component** - Single source of truth for tree rendering
+  - Created [TreeViewer.tsx](frontend/src/components/TreeViewer.tsx) (219 lines) based on react-arborist
+  - Icon support, copy-to-clipboard, clickable links, dark mode, keyboard navigation
+  - SVG country flag support with emoji fallback
+
+- ✅ **Component Consolidation** - 4 components refactored to use TreeViewer
+  - [DuplicateCertificatesTree.tsx](frontend/src/components/DuplicateCertificatesTree.tsx): -115 lines
+  - [LdifStructure.tsx](frontend/src/components/LdifStructure.tsx): -145 lines
+  - [MasterListStructure.tsx](frontend/src/components/MasterListStructure.tsx): -100 lines
+  - [CertificateSearch.tsx](frontend/src/pages/CertificateSearch.tsx): +162 lines (trust chain integration)
+
+- ✅ **JavaScript Hoisting Fixes** - Fixed 3 recursive function initialization errors
+  - Pattern: Changed arrow functions to function declarations
+  - Fixed: `convertDnTreeToTreeNode`, `convertAsn1ToTreeNode`, `getCertTypeIcon`
+
+- ✅ **CSS Truncation Enhancement** - Improved long text display
+  - Changed from `break-all` (multi-line) to `truncate` (single-line + ellipsis)
+  - Reduced character limit from 100 to 80 for better readability
+
+**Bug Fixes**:
+- ✅ **Sync Page Manual Check Button** - Fixed UI not updating after manual sync check
+  - Root Cause: Frontend ignored immediate response from `POST /sync/check`
+  - Fix: Update UI state directly from `triggerCheck()` response
+  - File: [SyncDashboard.tsx:70-85](frontend/src/pages/SyncDashboard.tsx#L70-L85)
+
+#### Code Metrics
+
+| Component | Before | After | Change |
+|-----------|--------|-------|--------|
+| TreeViewer (NEW) | 0 | 219 | +219 |
+| DuplicateCertificatesTree | 169 | 54 | -115 |
+| LdifStructure | 230 | 85 | -145 |
+| MasterListStructure | 232 | 132 | -100 |
+| CertificateSearch | 850 | 1012 | +162 |
+| **Total** | **1481** | **1502** | **+21** |
+
+**Net Impact**: 460 lines removed, 481 lines added = **+21 lines** (but -303 lines of tree code eliminated)
+
+#### Benefits
+
+**For Developers**:
+- 🎯 Single source of truth for tree rendering
+- 🔧 Easier maintenance (tree logic in one place)
+- ♻️ Reusable across all tree visualizations
+- 🎨 Consistent styling and behavior
+
+**For Users**:
+- ⚡ Instant sync status updates after manual check
+- 🌓 Consistent dark mode support across all trees
+- 🎯 Better text truncation and readability
+- 🎌 Country flags displayed in tree nodes
+
+#### Files Modified
+
+**Created**:
+- `frontend/src/components/TreeViewer.tsx` - Reusable tree component (219 lines)
+
+**Modified**:
+- `frontend/src/components/DuplicateCertificatesTree.tsx` - Refactored to use TreeViewer
+- `frontend/src/components/LdifStructure.tsx` - Refactored to use TreeViewer
+- `frontend/src/components/MasterListStructure.tsx` - Refactored to use TreeViewer
+- `frontend/src/pages/CertificateSearch.tsx` - Trust chain tree integration
+- `frontend/src/pages/SyncDashboard.tsx` - Manual check button fix
+- `CLAUDE.md` - Updated to v2.3.0
+
+#### Related Documentation
+
+- [PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md](docs/PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md) - Complete refactoring status
+- [PHASE_4.4_CLARIFICATION.md](docs/PHASE_4.4_CLARIFICATION.md) - Phase 4.4 naming confusion resolution
+
+---
 
 ### v2.2.0 (2026-01-30) - Phase 4.4 Complete: Enhanced Metadata Tracking & ICAO Compliance
 

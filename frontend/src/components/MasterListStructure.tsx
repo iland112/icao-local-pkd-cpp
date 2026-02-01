@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
-import { Loader2, ChevronDown, ChevronRight, FileCode, AlertCircle } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Loader2, FileCode, AlertCircle } from 'lucide-react';
 import axios from 'axios';
-import { cn } from '@/utils/cn';
+import { TreeViewer } from './TreeViewer';
+import type { TreeNode } from './TreeViewer';
 
 interface MasterListStructureProps {
   uploadId: string;
@@ -38,7 +39,6 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
   const [maxLines, setMaxLines] = useState(100);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set(['0']));
 
   useEffect(() => {
     fetchStructure();
@@ -55,8 +55,6 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
 
       if (response.data.success) {
         setData(response.data);
-        // Auto-expand first level
-        setExpandedNodes(new Set(['0', '0-0', '0-1']));
       } else {
         setError(response.data.error || 'Failed to fetch Master List structure');
       }
@@ -68,18 +66,6 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
     }
   };
 
-  const toggleNode = (nodeId: string) => {
-    setExpandedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(nodeId)) {
-        next.delete(nodeId);
-      } else {
-        next.add(nodeId);
-      }
-      return next;
-    });
-  };
-
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -88,74 +74,29 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const renderNode = (node: Asn1Node, path: string, depth: number): React.ReactElement => {
-    const nodeId = path;
-    const isExpanded = expandedNodes.has(nodeId);
-    const hasChildren = node.children && node.children.length > 0;
-
-    // TLV display
+  // Convert ASN.1 nodes to TreeNode format (recursive)
+  function convertAsn1ToTreeNode(node: Asn1Node, path: string): TreeNode {
     const tlvInfo = `T:${node.tag} L:${node.length}`;
+    const nodeValue = node.value ? `${tlvInfo} : ${node.value}` : tlvInfo;
 
-    return (
-      <div key={nodeId} className="select-text">
-        <div
-          className={cn(
-            'flex items-start gap-2 py-1 px-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer',
-            depth === 0 && 'bg-blue-50 dark:bg-blue-900/20'
-          )}
-          onClick={() => hasChildren && toggleNode(nodeId)}
-        >
-          {/* Indentation */}
-          <div style={{ width: `${depth * 20}px` }} className="flex-shrink-0" />
+    return {
+      id: path,
+      name: `${node.offset}`,
+      value: nodeValue,
+      icon: node.isConstructed ? 'shield' : 'key',
+      children: node.children?.map((child, idx) =>
+        convertAsn1ToTreeNode(child, `${path}-${idx}`)
+      ),
+    };
+  }
 
-          {/* Expand/Collapse Icon */}
-          <div className="flex-shrink-0 w-4">
-            {hasChildren && (
-              isExpanded ? (
-                <ChevronDown className="w-4 h-4 text-gray-500" />
-              ) : (
-                <ChevronRight className="w-4 h-4 text-gray-500" />
-              )
-            )}
-          </div>
-
-          {/* Node Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
-                {node.offset}:
-              </span>
-              <span className={cn(
-                'text-xs font-mono px-1.5 py-0.5 rounded',
-                node.isConstructed
-                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200'
-                  : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200'
-              )}>
-                {node.tag}
-              </span>
-              <span className="text-xs text-gray-600 dark:text-gray-400">
-                {tlvInfo}
-              </span>
-              {node.value && (
-                <span className="text-xs text-gray-700 dark:text-gray-300 font-mono truncate">
-                  : {node.value}
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Children */}
-        {hasChildren && isExpanded && (
-          <div>
-            {node.children.map((child, idx) =>
-              renderNode(child, `${path}-${idx}`, depth + 1)
-            )}
-          </div>
-        )}
-      </div>
+  // Build tree data from ASN.1 structure
+  const treeData = useMemo((): TreeNode[] => {
+    if (!data?.asn1Tree) return [];
+    return data.asn1Tree.map((node, idx) =>
+      convertAsn1ToTreeNode(node, `${idx}`)
     );
-  };
+  }, [data]);
 
   if (loading) {
     return (
@@ -261,28 +202,29 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
       </div>
 
       {/* ASN.1 Tree */}
-      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+      <div>
+        <div className="bg-gray-50 dark:bg-gray-800 px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-t-lg">
           <div className="flex items-center justify-between">
             <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
               TLV (Tag-Length-Value) Tree
             </span>
             <div className="flex items-center gap-2 text-xs">
-              <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 rounded">
-                Constructed
-              </span>
-              <span className="px-2 py-1 bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-200 rounded">
-                Primitive
-              </span>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-blue-500"></div>
+                <span className="text-gray-600 dark:text-gray-400">Constructed</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-green-500"></div>
+                <span className="text-gray-600 dark:text-gray-400">Primitive</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 p-3 max-h-96 overflow-y-auto font-mono text-xs">
-          {data.asn1Tree.map((node, idx) =>
-            renderNode(node, `${idx}`, 0)
-          )}
-        </div>
+        <TreeViewer
+          data={treeData}
+          height="400px"
+        />
       </div>
     </div>
   );

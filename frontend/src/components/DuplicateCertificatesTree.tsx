@@ -1,7 +1,18 @@
+/**
+ * @file DuplicateCertificatesTree.tsx
+ * @brief Duplicate Certificates Tree Viewer
+ *
+ * Displays duplicate certificates grouped by country using TreeViewer component.
+ * Shows certificate details and duplicate occurrences in a hierarchical tree structure.
+ *
+ * @version v2.3.0 (Refactored with TreeViewer)
+ * @date 2026-02-01
+ */
+
 import React, { useMemo } from 'react';
-import { ChevronRight, ChevronDown, ChevronsDown, ChevronsUp } from 'lucide-react';
 import type { UploadDuplicate } from '../types';
-import { getFlagSvgPath } from '../utils/countryCode';
+import { TreeViewer } from './TreeViewer';
+import type { TreeNode } from './TreeViewer';
 
 interface DuplicateTreeNode {
   certificateId: string;
@@ -23,9 +34,31 @@ interface Props {
 }
 
 export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
-  const [expandedCountries, setExpandedCountries] = React.useState<Set<string>>(new Set());
-  const [expandedNodes, setExpandedNodes] = React.useState<Set<string>>(new Set());
+  // Format fingerprint: first 8 + ... + last 8
+  const formatFingerprint = (fp: string) => {
+    if (fp.length <= 16) return fp;
+    return `${fp.substring(0, 8)}...${fp.substring(fp.length - 8)}`;
+  };
 
+  // Truncate long text for better readability
+  const truncateText = (text: string, maxLength: number = 80): string => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + '...';
+  };
+
+  // Get certificate type icon (must be defined before useMemo)
+  function getCertTypeIcon(type: string): string {
+    switch (type) {
+      case 'CSCA': return 'shield';
+      case 'DSC': return 'key';
+      case 'DSC_NC': return 'alert-circle';
+      case 'MLSC': return 'file-text';
+      case 'CRL': return 'file-text';
+      default: return 'file-text';
+    }
+  }
+
+  // Group duplicates by country and certificate
   const countryGroups = useMemo((): CountryGroup[] => {
     const certMap = new Map<string, DuplicateTreeNode>();
 
@@ -62,61 +95,35 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
       .sort((a, b) => b.totalDuplicates - a.totalDuplicates);
   }, [duplicates]);
 
-  const toggleCountry = (countryCode: string) => {
-    setExpandedCountries(prev => {
-      const next = new Set(prev);
-      if (next.has(countryCode)) {
-        next.delete(countryCode);
-      } else {
-        next.add(countryCode);
-      }
-      return next;
+  // Convert country groups to TreeNode format
+  const treeData = useMemo((): TreeNode[] => {
+    return countryGroups.map(group => {
+      const certificateNodes: TreeNode[] = group.certificates.map(cert => {
+        const duplicateNodes: TreeNode[] = cert.duplicates.map((dup, dupIdx) => ({
+          id: `${group.countryCode}-${cert.certificateId}-dup-${dupIdx}`,
+          name: `Duplicate #${dupIdx + 1}`,
+          value: `${formatFingerprint(dup.fingerprint)} • ${dup.sourceType} • ${dup.sourceCountry}`,
+          icon: 'file-text',
+        }));
+
+        return {
+          id: `${group.countryCode}-${cert.certificateId}`,
+          name: `[${cert.certificateType}] ${formatFingerprint(cert.fingerprint)}`,
+          value: truncateText(cert.subjectDn, 80),
+          icon: getCertTypeIcon(cert.certificateType),
+          children: duplicateNodes,
+        };
+      });
+
+      return {
+        id: `country-${group.countryCode}`,
+        name: group.countryCode,
+        value: `${group.certificates.length}개 인증서, ${group.totalDuplicates}회 중복`,
+        icon: `flag-${group.countryCode.toLowerCase()}`,
+        children: certificateNodes,
+      };
     });
-  };
-
-  const toggleNode = (certificateId: string) => {
-    setExpandedNodes(prev => {
-      const next = new Set(prev);
-      if (next.has(certificateId)) {
-        next.delete(certificateId);
-      } else {
-        next.add(certificateId);
-      }
-      return next;
-    });
-  };
-
-  const expandAll = () => {
-    const allCountries = new Set(countryGroups.map(g => g.countryCode));
-    const allCerts = new Set(countryGroups.flatMap(g => g.certificates.map(c => c.certificateId)));
-    setExpandedCountries(allCountries);
-    setExpandedNodes(allCerts);
-  };
-
-  const collapseAll = () => {
-    setExpandedCountries(new Set());
-    setExpandedNodes(new Set());
-  };
-
-  const isAllExpanded = expandedCountries.size === countryGroups.length &&
-    expandedNodes.size === countryGroups.reduce((sum, g) => sum + g.certificates.length, 0);
-
-  // Format fingerprint: first 8 + ... + last 8
-  const formatFingerprint = (fp: string) => {
-    if (fp.length <= 16) return fp;
-    return `${fp.substring(0, 8)}...${fp.substring(fp.length - 8)}`;
-  };
-
-  const getCertTypeBadge = (type: string) => {
-    const colors: Record<string, string> = {
-      CSCA: 'text-blue-600 dark:text-blue-400',
-      DSC: 'text-green-600 dark:text-green-400',
-      DSC_NC: 'text-orange-600 dark:text-orange-400',
-      MLSC: 'text-purple-600 dark:text-purple-400',
-      CRL: 'text-red-600 dark:text-red-400'
-    };
-    return <span className={`font-mono text-xs ${colors[type] || 'text-gray-600'}`}>[{type}]</span>;
-  };
+  }, [countryGroups]);
 
   if (countryGroups.length === 0) {
     return (
@@ -128,143 +135,20 @@ export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
 
   return (
     <div className="h-full flex flex-col">
-      {/* Control buttons */}
-      <div className="flex justify-end gap-2 mb-3 px-2">
-        <button
-          onClick={isAllExpanded ? collapseAll : expandAll}
-          className="px-2 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors flex items-center gap-1.5"
-        >
-          {isAllExpanded ? (
-            <>
-              <ChevronsUp className="w-3 h-3" />
-              모두 접기
-            </>
-          ) : (
-            <>
-              <ChevronsDown className="w-3 h-3" />
-              모두 펼치기
-            </>
-          )}
-        </button>
+      {/* Summary */}
+      <div className="mb-3 px-2 py-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+        <div className="text-sm text-yellow-800 dark:text-yellow-300">
+          <strong>{countryGroups.length}개 국가</strong>에서{' '}
+          <strong>{countryGroups.reduce((sum, g) => sum + g.certificates.length, 0)}개 인증서</strong>가{' '}
+          <strong>{countryGroups.reduce((sum, g) => sum + g.totalDuplicates, 0)}회 중복</strong>됨
+        </div>
       </div>
 
-      {/* Tree view - scrollable */}
-      <div className="flex-1 overflow-y-auto px-2 font-mono text-sm">
-        {countryGroups.map((group) => {
-          const isCountryExpanded = expandedCountries.has(group.countryCode);
-
-          return (
-            <div key={group.countryCode} className="mb-2">
-              {/* Country node */}
-              <div
-                className="flex items-center gap-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer group"
-                onClick={() => toggleCountry(group.countryCode)}
-              >
-                <div className="flex items-center gap-1.5">
-                  {isCountryExpanded ? (
-                    <ChevronDown className="w-4 h-4 text-gray-500" />
-                  ) : (
-                    <ChevronRight className="w-4 h-4 text-gray-500" />
-                  )}
-                  {getFlagSvgPath(group.countryCode) && (
-                    <img
-                      src={getFlagSvgPath(group.countryCode)}
-                      alt={group.countryCode}
-                      className="w-5 h-4 rounded border border-gray-300 dark:border-gray-600"
-                    />
-                  )}
-                </div>
-                <span className="font-bold text-gray-900 dark:text-gray-100">{group.countryCode}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">
-                  ({group.certificates.length}개, {group.totalDuplicates}회 중복)
-                </span>
-              </div>
-
-              {/* Certificates */}
-              {isCountryExpanded && (
-                <div className="ml-4 border-l-2 border-gray-300 dark:border-gray-600 pl-2 mt-1">
-                  {group.certificates.map((cert, certIdx) => {
-                    const isExpanded = expandedNodes.has(cert.certificateId);
-                    const isLastCert = certIdx === group.certificates.length - 1;
-
-                    return (
-                      <div key={cert.certificateId} className={`relative ${!isLastCert ? 'mb-2' : ''}`}>
-                        {/* Certificate node */}
-                        <div
-                          className="flex items-start gap-2 py-1 px-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded cursor-pointer group"
-                          onClick={() => toggleNode(cert.certificateId)}
-                        >
-                          {/* Tree connector */}
-                          <div className="flex items-center">
-                            <span className="text-gray-400 dark:text-gray-600">
-                              {isLastCert ? '└─' : '├─'}
-                            </span>
-                            {isExpanded ? (
-                              <ChevronDown className="w-3 h-3 text-gray-500 ml-1" />
-                            ) : (
-                              <ChevronRight className="w-3 h-3 text-gray-500 ml-1" />
-                            )}
-                          </div>
-
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              {getCertTypeBadge(cert.certificateType)}
-                              <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                                {formatFingerprint(cert.fingerprint)}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-700 dark:text-gray-300 truncate mt-0.5">
-                              {cert.subjectDn}
-                            </div>
-                            <div className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
-                              중복 {cert.duplicates.length}회
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Duplicates */}
-                        {isExpanded && (
-                          <div className={`ml-6 ${isLastCert ? 'pl-2' : 'border-l-2 border-gray-300 dark:border-gray-600 pl-2'} mt-1`}>
-                            {cert.duplicates.map((dup, dupIdx) => {
-                              const isLastDup = dupIdx === cert.duplicates.length - 1;
-
-                              return (
-                                <div
-                                  key={dup.id}
-                                  className={`flex items-start gap-2 py-1 px-2 hover:bg-gray-50 dark:hover:bg-gray-900 rounded ${!isLastDup ? 'mb-1' : ''}`}
-                                >
-                                  {/* Tree connector */}
-                                  <span className="text-gray-400 dark:text-gray-600 text-xs">
-                                    {isLastDup ? '└─' : '├─'}
-                                  </span>
-
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                                        #{dupIdx + 1}
-                                      </span>
-                                      <span className="text-xs text-gray-600 dark:text-gray-400 font-mono">
-                                        {formatFingerprint(dup.fingerprint)}
-                                      </span>
-                                    </div>
-                                    <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                                      {dup.sourceType} • {dup.sourceCountry}
-                                    </div>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Tree view */}
+      <TreeViewer
+        data={treeData}
+        height="500px"
+      />
     </div>
   );
 };

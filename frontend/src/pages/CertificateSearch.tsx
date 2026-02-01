@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, Shield, ShieldCheck, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, HardDrive, AlertTriangle } from 'lucide-react';
+import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, HardDrive, AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { cn } from '@/utils/cn';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 import { validationApi } from '@/api/validationApi';
 import type { ValidationResult } from '@/types/validation';
+import { TreeViewer } from '@/components/TreeViewer';
+import type { TreeNode } from '@/components/TreeViewer';
 
 interface Certificate {
   dn: string;
@@ -23,6 +25,23 @@ interface Certificate {
   pkdConformanceCode?: string;
   pkdConformanceText?: string;
   pkdVersion?: string;
+
+  // X.509 Metadata (v2.3.0) - 15 fields
+  version?: number;                              // 0=v1, 1=v2, 2=v3
+  signatureAlgorithm?: string;                   // "sha256WithRSAEncryption"
+  signatureHashAlgorithm?: string;               // "SHA-256"
+  publicKeyAlgorithm?: string;                   // "RSA", "ECDSA"
+  publicKeySize?: number;                        // 2048, 4096 (bits)
+  publicKeyCurve?: string;                       // "prime256v1" (ECDSA)
+  keyUsage?: string[];                           // ["digitalSignature", "keyCertSign"]
+  extendedKeyUsage?: string[];                   // ["serverAuth", "clientAuth"]
+  isCA?: boolean;                                // TRUE if CA certificate
+  pathLenConstraint?: number;                    // Path length constraint
+  subjectKeyIdentifier?: string;                 // SKI (hex)
+  authorityKeyIdentifier?: string;               // AKI (hex)
+  crlDistributionPoints?: string[];              // CRL URLs
+  ocspResponderUrl?: string;                     // OCSP URL
+  isCertSelfSigned?: boolean;                    // Self-signed flag from X.509
 }
 
 interface SearchCriteria {
@@ -228,6 +247,204 @@ const CertificateSearch: React.FC = () => {
       month: '2-digit',
       day: '2-digit',
     });
+  };
+
+  // Format X.509 version
+  const formatVersion = (version: number | undefined): string => {
+    if (version === undefined) return 'Unknown';
+    const versionMap: { [key: number]: string } = { 0: 'v1', 1: 'v2', 2: 'v3' };
+    return versionMap[version] || `v${version + 1}`;
+  };
+
+  // Build certificate tree data for react-arborist
+  const buildCertificateTree = (cert: Certificate): TreeNode[] => {
+    const children: TreeNode[] = [];
+
+    // Version
+    children.push({
+      id: 'version',
+      name: 'Version',
+      value: formatVersion(cert.version),
+      icon: 'file-text',
+    });
+
+    // Serial Number
+    children.push({
+      id: 'serial',
+      name: 'Serial Number',
+      value: cert.sn,
+      icon: 'hash',
+    });
+
+    // Signature
+    if (cert.signatureAlgorithm || cert.signatureHashAlgorithm) {
+      const sigChildren: TreeNode[] = [];
+      if (cert.signatureAlgorithm) {
+        sigChildren.push({ id: 'sig-algo', name: 'Algorithm', value: cert.signatureAlgorithm });
+      }
+      if (cert.signatureHashAlgorithm) {
+        sigChildren.push({ id: 'hash-algo', name: 'Hash', value: cert.signatureHashAlgorithm });
+      }
+      children.push({
+        id: 'signature',
+        name: 'Signature',
+        children: sigChildren,
+        icon: 'shield',
+      });
+    }
+
+    // Issuer
+    children.push({
+      id: 'issuer',
+      name: 'Issuer',
+      value: cert.issuerDn,
+      icon: 'user',
+    });
+
+    // Validity
+    children.push({
+      id: 'validity',
+      name: 'Validity',
+      children: [
+        { id: 'valid-from', name: 'Not Before', value: formatDate(cert.validFrom) },
+        { id: 'valid-to', name: 'Not After', value: formatDate(cert.validTo) },
+      ],
+      icon: 'calendar',
+    });
+
+    // Subject
+    children.push({
+      id: 'subject',
+      name: 'Subject',
+      value: cert.subjectDn,
+      icon: 'user',
+    });
+
+    // Public Key
+    if (cert.publicKeyAlgorithm || cert.publicKeySize) {
+      const pkChildren: TreeNode[] = [];
+      if (cert.publicKeyAlgorithm) {
+        pkChildren.push({ id: 'pk-algo', name: 'Algorithm', value: cert.publicKeyAlgorithm });
+      }
+      if (cert.publicKeySize) {
+        pkChildren.push({ id: 'pk-size', name: 'Key Size', value: `${cert.publicKeySize} bits` });
+      }
+      if (cert.publicKeyCurve) {
+        pkChildren.push({ id: 'pk-curve', name: 'Curve', value: cert.publicKeyCurve });
+      }
+      children.push({
+        id: 'public-key',
+        name: 'Public Key',
+        children: pkChildren,
+        icon: 'key',
+      });
+    }
+
+    // Extensions
+    const extChildren: TreeNode[] = [];
+
+    // Key Usage
+    if (cert.keyUsage && cert.keyUsage.length > 0) {
+      extChildren.push({
+        id: 'key-usage',
+        name: 'Key Usage',
+        value: cert.keyUsage.join(', '),
+        icon: 'lock',
+      });
+    }
+
+    // Extended Key Usage
+    if (cert.extendedKeyUsage && cert.extendedKeyUsage.length > 0) {
+      extChildren.push({
+        id: 'ext-key-usage',
+        name: 'Extended Key Usage',
+        value: cert.extendedKeyUsage.join(', '),
+        icon: 'lock',
+      });
+    }
+
+    // Basic Constraints
+    if (cert.isCA !== undefined || cert.pathLenConstraint !== undefined) {
+      const bcChildren: TreeNode[] = [];
+      if (cert.isCA !== undefined) {
+        bcChildren.push({ id: 'is-ca', name: 'CA', value: cert.isCA ? 'TRUE' : 'FALSE' });
+      }
+      if (cert.pathLenConstraint !== undefined) {
+        bcChildren.push({ id: 'path-len', name: 'Path Length', value: String(cert.pathLenConstraint) });
+      }
+      extChildren.push({
+        id: 'basic-constraints',
+        name: 'Basic Constraints',
+        children: bcChildren,
+        icon: 'shield-check',
+      });
+    }
+
+    // Subject Key Identifier
+    if (cert.subjectKeyIdentifier) {
+      extChildren.push({
+        id: 'ski',
+        name: 'Subject Key Identifier',
+        value: cert.subjectKeyIdentifier,
+        copyable: true,
+        icon: 'hash',
+      });
+    }
+
+    // Authority Key Identifier
+    if (cert.authorityKeyIdentifier) {
+      extChildren.push({
+        id: 'aki',
+        name: 'Authority Key Identifier',
+        value: cert.authorityKeyIdentifier,
+        copyable: true,
+        icon: 'hash',
+      });
+    }
+
+    // CRL Distribution Points
+    if (cert.crlDistributionPoints && cert.crlDistributionPoints.length > 0) {
+      const crlChildren: TreeNode[] = cert.crlDistributionPoints.map((url, index) => ({
+        id: `crl-${index}`,
+        name: `URL ${index + 1}`,
+        value: url,
+        linkUrl: url,
+        icon: 'link-2',
+      }));
+      extChildren.push({
+        id: 'crl-dist',
+        name: 'CRL Distribution Points',
+        children: crlChildren,
+        icon: 'file-text',
+      });
+    }
+
+    // OCSP Responder
+    if (cert.ocspResponderUrl) {
+      extChildren.push({
+        id: 'ocsp',
+        name: 'OCSP Responder',
+        value: cert.ocspResponderUrl,
+        linkUrl: cert.ocspResponderUrl,
+        icon: 'link-2',
+      });
+    }
+
+    if (extChildren.length > 0) {
+      children.push({
+        id: 'extensions',
+        name: 'Extensions',
+        children: extChildren,
+        icon: 'settings',
+      });
+    }
+
+    return [{
+      id: 'certificate',
+      name: 'Certificate',
+      children,
+      icon: 'file-text',
+    }];
   };
 
   // Helper: Extract organization unit from DN (o=xxx)
@@ -1385,40 +1602,10 @@ const CertificateSearch: React.FC = () => {
                   {/* Certificate Fields Tree */}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Certificate Fields</h3>
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 max-h-96 overflow-y-auto">
-                      <div className="space-y-2 text-sm font-mono">
-                        <details open>
-                          <summary className="cursor-pointer font-semibold text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400">
-                            Certificate
-                          </summary>
-                          <div className="ml-4 mt-2 space-y-2">
-                            <details>
-                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Version</summary>
-                              <div className="ml-4 text-gray-600 dark:text-gray-400">V3</div>
-                            </details>
-                            <details>
-                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Serial Number</summary>
-                              <div className="ml-4 text-gray-600 dark:text-gray-400 break-all">{selectedCert.sn}</div>
-                            </details>
-                            <details>
-                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Issuer</summary>
-                              <div className="ml-4 text-gray-600 dark:text-gray-400 break-all">{selectedCert.issuerDn}</div>
-                            </details>
-                            <details open>
-                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Validity</summary>
-                              <div className="ml-4 space-y-1">
-                                <div className="text-gray-600 dark:text-gray-400">Not Before: {formatDate(selectedCert.validFrom)}</div>
-                                <div className="text-gray-600 dark:text-gray-400">Not After: {formatDate(selectedCert.validTo)}</div>
-                              </div>
-                            </details>
-                            <details>
-                              <summary className="cursor-pointer text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400">Subject</summary>
-                              <div className="ml-4 text-gray-600 dark:text-gray-400 break-all">{selectedCert.subjectDn}</div>
-                            </details>
-                          </div>
-                        </details>
-                      </div>
-                    </div>
+                    <TreeViewer
+                      data={buildCertificateTree(selectedCert)}
+                      height="400px"
+                    />
                   </div>
                 </div>
               )}

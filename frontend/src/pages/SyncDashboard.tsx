@@ -69,8 +69,17 @@ export function SyncDashboard() {
 
   const handleManualCheck = async () => {
     setChecking(true);
+    setError(null);
     try {
-      await syncServiceApi.triggerCheck();
+      // Trigger sync check and get immediate result
+      const checkResult = await syncServiceApi.triggerCheck();
+
+      // Update status immediately with check result
+      if (checkResult.data && checkResult.data.success) {
+        setStatus(checkResult.data);
+      }
+
+      // Fetch full data to update history and other states
       await fetchData();
     } catch (err) {
       console.error('Manual check failed:', err);
