@@ -70,9 +70,8 @@ services:
       # Mount source code for hot reload (optional - comment out for production-like build)
       # - ../services/pa-service/src:/app/src:ro
       - ../.docker-data/pa-dev-logs:/app/logs
-    depends_on:
-      - postgres
-      - openldap1
+    # Note: depends_on removed - using external production services
+    # Make sure production services (postgres, openldap1, openldap2) are running first
     networks:
       - pkd-network  # Use production network
     restart: unless-stopped

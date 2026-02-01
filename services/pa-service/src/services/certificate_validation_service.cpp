@@ -7,8 +7,38 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <openssl/err.h>
+#include <openssl/bn.h>
 
 namespace services {
+
+namespace {
+/**
+ * @brief Convert ASN1_INTEGER to hex string
+ * @param serial ASN1_INTEGER pointer
+ * @return Hex string representation (e.g., "01:23:45:67")
+ */
+std::string serialNumberToString(ASN1_INTEGER* serial) {
+    if (!serial) return "";
+
+    BIGNUM* bn = ASN1_INTEGER_to_BN(serial, nullptr);
+    if (!bn) return "";
+
+    char* hex = BN_bn2hex(bn);
+    std::string result;
+    if (hex) {
+        // Convert to uppercase and add colons between bytes
+        std::string hexStr(hex);
+        for (size_t i = 0; i < hexStr.length(); i += 2) {
+            if (i > 0) result += ":";
+            result += hexStr.substr(i, 2);
+        }
+        OPENSSL_free(hex);
+    }
+    BN_free(bn);
+
+    return result;
+}
+} // anonymous namespace
 
 CertificateValidationService::CertificateValidationService(
     repositories::LdapCertificateRepository* certRepo,
@@ -40,11 +70,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
 
         ASN1_INTEGER* serial = X509_get_serialNumber(dscCert);
         if (serial) {
-            char* serialStr = i2s_ASN1_INTEGER(nullptr, serial);
-            if (serialStr) {
-                result.dscSerialNumber = serialStr;
-                OPENSSL_free(serialStr);
-            }
+            result.dscSerialNumber = serialNumberToString(serial);
         }
 
         // Check DSC expiration
@@ -63,11 +89,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         result.cscaSubject = getSubjectDn(cscaCert);
         serial = X509_get_serialNumber(cscaCert);
         if (serial) {
-            char* serialStr = i2s_ASN1_INTEGER(nullptr, serial);
-            if (serialStr) {
-                result.cscaSerialNumber = serialStr;
-                OPENSSL_free(serialStr);
-            }
+            result.cscaSerialNumber = serialNumberToString(serial);
         }
 
         result.cscaExpired = isCertificateExpired(cscaCert);

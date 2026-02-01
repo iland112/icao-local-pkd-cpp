@@ -127,7 +127,8 @@ Json::Value PaVerificationRepository::findById(const std::string& id) {
 
     Json::Value result;
     if (PQntuples(res) > 0) {
-        result = pgResultToJson(res).get(0, Json::Value::null);
+        Json::Value jsonArray = pgResultToJson(res);
+        result = jsonArray[Json::ArrayIndex(0)];
     }
 
     PQclear(res);
@@ -180,7 +181,9 @@ Json::Value PaVerificationRepository::findAll(
 
     // Add LIMIT and OFFSET
     int paramCount = params.size() + 1;
-    dataQuery << " LIMIT $" << paramCount++ << " OFFSET $" << paramCount;
+    dataQuery << " LIMIT $" << paramCount;
+    paramCount++;
+    dataQuery << " OFFSET $" << paramCount;
     params.push_back(std::to_string(limit));
     params.push_back(std::to_string(offset));
 

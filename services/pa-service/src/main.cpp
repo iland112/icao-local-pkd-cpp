@@ -62,6 +62,15 @@
 // Audit logging (Phase 4.4)
 #include "common/audit_log.h"
 
+// Repository Pattern - Phase 3: Service and Repository includes
+#include "repositories/pa_verification_repository.h"
+#include "repositories/ldap_certificate_repository.h"
+#include "repositories/ldap_crl_repository.h"
+#include "services/sod_parser_service.h"
+#include "services/data_group_parser_service.h"
+#include "services/certificate_validation_service.h"
+#include "services/pa_verification_service.h"
+
 namespace {
 
 // =============================================================================
@@ -227,6 +236,21 @@ struct AppConfig {
 };
 
 AppConfig appConfig;
+
+// =============================================================================
+// Repository Pattern - Global Service and Repository Pointers
+// =============================================================================
+
+// Repositories
+repositories::PaVerificationRepository* paVerificationRepository = nullptr;
+repositories::LdapCertificateRepository* ldapCertificateRepository = nullptr;
+repositories::LdapCrlRepository* ldapCrlRepository = nullptr;
+
+// Services
+services::SodParserService* sodParserService = nullptr;
+services::DataGroupParserService* dataGroupParserService = nullptr;
+services::CertificateValidationService* certificateValidationService = nullptr;
+services::PaVerificationService* paVerificationService = nullptr;
 
 // =============================================================================
 // Utility Functions
@@ -1612,6 +1636,108 @@ Json::Value buildDataGroupValidationJson(const DataGroupValidationResult& result
     json["details"] = details;
 
     return json;
+}
+
+// =============================================================================
+// Repository Pattern - Service Initialization
+// =============================================================================
+
+/**
+ * @brief Initialize all services and repositories with dependency injection
+ *
+ * Initialization order:
+ * 1. Database connection (getDbConnection)
+ * 2. LDAP connection (getLdapConnection)
+ * 3. Repositories (with connection injection)
+ * 4. Services (with repository injection)
+ *
+ * This follows the same pattern as pkd-management service.
+ */
+void initializeServices() {
+    spdlog::info("Initializing Repository Pattern services...");
+
+    try {
+        // Step 1: Get database connection
+        PGconn* dbConn = getDbConnection();
+        if (!dbConn) {
+            throw std::runtime_error("Failed to get database connection");
+        }
+
+        // Step 2: Get LDAP connection
+        LDAP* ldapConn = getLdapConnection();
+        if (!ldapConn) {
+            throw std::runtime_error("Failed to get LDAP connection");
+        }
+
+        // Step 3: Initialize Repositories (constructor-based dependency injection)
+        spdlog::debug("Creating PaVerificationRepository...");
+        paVerificationRepository = new repositories::PaVerificationRepository(dbConn);
+
+        spdlog::debug("Creating LdapCertificateRepository...");
+        ldapCertificateRepository = new repositories::LdapCertificateRepository(
+            ldapConn,
+            appConfig.ldapBaseDn
+        );
+
+        spdlog::debug("Creating LdapCrlRepository...");
+        ldapCrlRepository = new repositories::LdapCrlRepository(
+            ldapConn,
+            appConfig.ldapBaseDn
+        );
+
+        // Step 4: Initialize Services (constructor-based dependency injection)
+        spdlog::debug("Creating SodParserService...");
+        sodParserService = new services::SodParserService();
+
+        spdlog::debug("Creating DataGroupParserService...");
+        dataGroupParserService = new services::DataGroupParserService();
+
+        spdlog::debug("Creating CertificateValidationService...");
+        certificateValidationService = new services::CertificateValidationService(
+            ldapCertificateRepository,
+            ldapCrlRepository
+        );
+
+        spdlog::debug("Creating PaVerificationService...");
+        paVerificationService = new services::PaVerificationService(
+            paVerificationRepository,
+            sodParserService,
+            certificateValidationService,
+            dataGroupParserService
+        );
+
+        spdlog::info("✅ All services initialized successfully");
+
+    } catch (const std::exception& e) {
+        spdlog::critical("Failed to initialize services: {}", e.what());
+        throw;
+    }
+}
+
+/**
+ * @brief Cleanup all services and repositories
+ */
+void cleanupServices() {
+    spdlog::info("Cleaning up services...");
+
+    // Delete in reverse order of initialization
+    delete paVerificationService;
+    delete certificateValidationService;
+    delete dataGroupParserService;
+    delete sodParserService;
+    delete ldapCrlRepository;
+    delete ldapCertificateRepository;
+    delete paVerificationRepository;
+
+    paVerificationService = nullptr;
+    certificateValidationService = nullptr;
+    dataGroupParserService = nullptr;
+    sodParserService = nullptr;
+    ldapCrlRepository = nullptr;
+    ldapCertificateRepository = nullptr;
+    paVerificationRepository = nullptr;
+
+    spdlog::info("✅ All services cleaned up");
 }
 
 // =============================================================================
@@ -3689,6 +3815,9 @@ int main(int /* argc */, char* /* argv */[]) {
             {drogon::Options}
         );
 
+        // Initialize services with dependency injection
+        initializeServices();
+
         registerRoutes();
 
         spdlog::info("Server starting on http://0.0.0.0:{}", appConfig.serverPort);
@@ -3696,8 +3825,12 @@ int main(int /* argc */, char* /* argv */[]) {
 
         app.run();
 
+        // Cleanup services on shutdown
+        cleanupServices();
+
     } catch (const std::exception& e) {
         spdlog::error("Application error: {}", e.what());
+        cleanupServices();  // Cleanup on error
         return 1;
     }
 
