@@ -1796,13 +1796,13 @@ void registerRoutes() {
         {drogon::Get}
     );
 
-    // PA verify endpoint - POST /api/pa/verify
+    // PA verify endpoint - POST /api/pa/verify (Repository Pattern)
     app.registerHandler(
         "/api/pa/verify",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
 
-            spdlog::info("POST /api/pa/verify - Passive Authentication verification");
+            spdlog::info("POST /api/pa/verify - Passive Authentication verification (Service Layer)");
 
             // Log request details for debugging
             auto contentType = req->getHeader("Content-Type");
