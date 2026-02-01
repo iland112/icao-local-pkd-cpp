@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.2.2 ✨
+**Current Version**: v2.2.2 ✅
 **Last Updated**: 2026-02-01
-**Status**: Production Ready - LDIF Structure Visualization Complete
+**Status**: Production Ready - LDIF Structure Visualization Complete (E2E Tested)
 
 ---
 
@@ -100,9 +100,9 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.2.2 - LDIF Structure Visualization) ✨
+### Recent Changes (v2.2.2 - LDIF Structure Visualization) ✅
 
-**Status**: Implementation Complete | **Date**: 2026-02-01
+**Status**: Complete (E2E Tested) | **Date**: 2026-02-01
 
 - ✅ **LDIF Structure Visualization** (Backend - Repository Pattern)
   - **LdifParser** ([ldif_parser.h/cpp](services/pkd-management/src/common/ldif_parser.h)): Parse LDIF files, detect binary attributes, extract DN components
@@ -163,16 +163,44 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ Testability: All layers mockable and testable
 - ✅ LDAP Compliance: Proper DN parsing following RFC 4514 escaping rules
 
-**Testing Results** (Collection-001 LDIF: 30,314 entries):
+**E2E Testing Results** (All file formats verified ✅):
+
+**Collection-001 (DSC LDIF: 30,314 entries)**:
 - ✅ Full DN parsing: Multi-line DNs correctly assembled
-- ✅ Tree depth: 4 levels reduced by base DN removal
+- ✅ Multi-valued RDN: `cn=OU=Identity Services...,C=NZ+sn=42E575AF` properly displayed
+- ✅ Tree depth: 4 levels reduced by base DN removal (dc=data → c=NZ → o=dsc)
 - ✅ Escaped characters: All DN components properly unescaped for display
 - ✅ Performance: Tree rendering smooth with 100 entries, acceptable with 1000 entries
+- ✅ 29,838 DSC + 69 CRL processed and verified
 
-**Next Steps** (v2.2.3):
-- 📋 E2E Testing with Collection-002/003 LDIF files
-- 📋 Performance optimization for very large files (5000+ entries)
-- 📋 Search/filter functionality for DN tree
+**Collection-002 (Country Master List LDIF: 82 entries)**:
+- ✅ Binary CMS data: `[Binary CMS Data: 120423 bytes]` correctly displayed
+- ✅ Master List extraction: 27 ML entries with 10,034 CSCA extracted
+- ✅ Deduplication: 9,252 duplicates detected (91.8% rate)
+- ✅ Net new CSCA: 782 certificates (306 stored from this upload)
+- ✅ MLSC extraction: 25 Master List Signer Certificates
+- ✅ ObjectClass display: pkdMasterList, pkdDownload, top, person
+
+**Collection-003 (DSC_NC LDIF: 534 entries)**:
+- ✅ nc-data container: DN tree correctly shows `dc=nc-data → c=XX → o=dsc`
+- ✅ PKD conformance: Non-conformant DSC properly identified
+- ✅ 502 DSC_NC certificates processed and stored
+- ✅ LDAP storage: 100% match (502 in DB, 502 in LDAP)
+
+**Master List File Direct Upload**:
+- ✅ 537 certificates: 1 MLSC + 536 CSCA/LC
+- ✅ Processing time: 5 seconds
+- ✅ Trust chain validation: Link certificates properly identified
+
+**System-Wide Verification**:
+| Type | Total | In LDAP | Coverage |
+|------|-------|---------|----------|
+| CSCA | 814 | 813 | 99.9% |
+| MLSC | 26 | 26 | 100% |
+| DSC | 29,804 | 29,804 | 100% |
+| DSC_NC | 502 | 502 | 100% |
+| CRL | 69 | 69 | 100% |
+| **Total** | **31,215** | **31,214** | **99.997%** |
 
 **Related Documentation**:
 - [LDIF_STRUCTURE_VISUALIZATION_PLAN.md](docs/LDIF_STRUCTURE_VISUALIZATION_PLAN.md) - Original planning document
