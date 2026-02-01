@@ -21,9 +21,8 @@ struct Config {
     std::string dbUser = "pkd";
     std::string dbPassword;  // Must be set via environment variable
 
-    // LDAP (read)
-    std::string ldapHost = "haproxy";
-    int ldapPort = 389;
+    // LDAP (read) - Software Load Balancing
+    std::string ldapReadHosts = "openldap1:389,openldap2:389";  // Comma-separated list
 
     // LDAP (write - for reconciliation)
     std::string ldapWriteHost = "openldap1";
@@ -53,8 +52,7 @@ struct Config {
         if (auto e = std::getenv("DB_NAME")) dbName = e;
         if (auto e = std::getenv("DB_USER")) dbUser = e;
         if (auto e = std::getenv("DB_PASSWORD")) dbPassword = e;
-        if (auto e = std::getenv("LDAP_HOST")) ldapHost = e;
-        if (auto e = std::getenv("LDAP_PORT")) ldapPort = std::stoi(e);
+        if (auto e = std::getenv("LDAP_READ_HOSTS")) ldapReadHosts = e;
         if (auto e = std::getenv("LDAP_WRITE_HOST")) ldapWriteHost = e;
         if (auto e = std::getenv("LDAP_WRITE_PORT")) ldapWritePort = std::stoi(e);
         if (auto e = std::getenv("LDAP_BIND_DN")) ldapBindDn = e;

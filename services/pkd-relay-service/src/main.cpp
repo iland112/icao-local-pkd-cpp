@@ -1,10 +1,12 @@
 // =============================================================================
 // ICAO Local PKD - PKD Relay Service
 // =============================================================================
-// Version: 2.0.0
+// Version: 2.1.0
 // Description: Data relay layer (ICAO portal monitoring, LDIF upload/parsing, DB-LDAP sync)
 // =============================================================================
 // Changelog:
+//   v2.1.0 (2026-01-26): MLSC (Master List Signer Certificate) sync support
+//   v2.0.5 (2026-01-25): CRL reconciliation support, reconciliation_log UUID fix
 //   v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
 //   v1.3.0 (2026-01-13): User-configurable settings UI, dynamic config reload
 //   v1.2.0 (2026-01-07): Remove interval sync, keep only daily scheduler
@@ -134,21 +136,36 @@ DbStats getDbStats() {
         return stats;
     }
 
-    // Get certificate counts by type
+    // Sprint 3: Get CSCA count (excluding MLSC)
+    PGresult* res = PQexec(conn.get(),
+        "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA' AND (ldap_dn_v2 NOT LIKE '%o=mlsc%' OR ldap_dn_v2 IS NULL)");
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        stats.cscaCount = std::stoi(PQgetvalue(res, 0, 0));
+    }
+    PQclear(res);
+
+    // Sprint 3: Get MLSC count (stored as CSCA but distinguished by ldap_dn_v2)
+    res = PQexec(conn.get(), "SELECT COUNT(*) FROM certificate WHERE ldap_dn_v2 LIKE '%o=mlsc%'");
+    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
+        stats.mlscCount = std::stoi(PQgetvalue(res, 0, 0));
+    }
+    PQclear(res);
+
+    // Get DSC and DSC_NC counts
     const char* certQuery = R"(
         SELECT certificate_type, COUNT(*) as cnt
         FROM certificate
+        WHERE certificate_type IN ('DSC', 'DSC_NC')
         GROUP BY certificate_type
     )";
 
-    PGresult* res = PQexec(conn.get(), certQuery);
+    res = PQexec(conn.get(), certQuery);
     if (PQresultStatus(res) == PGRES_TUPLES_OK) {
         int rows = PQntuples(res);
         for (int i = 0; i < rows; i++) {
             std::string type = PQgetvalue(res, i, 0);
             int count = std::stoi(PQgetvalue(res, i, 1));
-            if (type == "CSCA") stats.cscaCount = count;
-            else if (type == "DSC") stats.dscCount = count;
+            if (type == "DSC") stats.dscCount = count;
             else if (type == "DSC_NC") stats.dscNcCount = count;
         }
     }
@@ -225,40 +242,43 @@ int saveSyncStatus(const SyncResult& result) {
     std::string ldapCountryStr = Json::writeString(writer, ldapCountryJson);
 
     std::string query = "INSERT INTO sync_status ("
-        "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
-        "ldap_csca_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
-        "csca_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy, "
+        "db_csca_count, db_mlsc_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
+        "ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
+        "csca_discrepancy, mlsc_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy, "
         "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms"
-        ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20) RETURNING id";
+        ") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23) RETURNING id";
 
     std::string dbCsca = std::to_string(result.dbStats.cscaCount);
+    std::string dbMlsc = std::to_string(result.dbStats.mlscCount);
     std::string dbDsc = std::to_string(result.dbStats.dscCount);
     std::string dbDscNc = std::to_string(result.dbStats.dscNcCount);
     std::string dbCrl = std::to_string(result.dbStats.crlCount);
     std::string dbStoredInLdap = std::to_string(result.dbStats.storedInLdapCount);
     std::string ldapCsca = std::to_string(result.ldapStats.cscaCount);
+    std::string ldapMlsc = std::to_string(result.ldapStats.mlscCount);
     std::string ldapDsc = std::to_string(result.ldapStats.dscCount);
     std::string ldapDscNc = std::to_string(result.ldapStats.dscNcCount);
     std::string ldapCrl = std::to_string(result.ldapStats.crlCount);
     std::string ldapTotal = std::to_string(result.ldapStats.totalEntries);
     std::string cscaDisc = std::to_string(result.cscaDiscrepancy);
+    std::string mlscDisc = std::to_string(result.mlscDiscrepancy);
     std::string dscDisc = std::to_string(result.dscDiscrepancy);
     std::string dscNcDisc = std::to_string(result.dscNcDiscrepancy);
     std::string crlDisc = std::to_string(result.crlDiscrepancy);
     std::string totalDisc = std::to_string(result.totalDiscrepancy);
     std::string durationMs = std::to_string(result.checkDurationMs);
 
-    const char* paramValues[20] = {
-        dbCsca.c_str(), dbDsc.c_str(), dbDscNc.c_str(), dbCrl.c_str(), dbStoredInLdap.c_str(),
-        ldapCsca.c_str(), ldapDsc.c_str(), ldapDscNc.c_str(), ldapCrl.c_str(), ldapTotal.c_str(),
-        cscaDisc.c_str(), dscDisc.c_str(), dscNcDisc.c_str(), crlDisc.c_str(), totalDisc.c_str(),
+    const char* paramValues[23] = {
+        dbCsca.c_str(), dbMlsc.c_str(), dbDsc.c_str(), dbDscNc.c_str(), dbCrl.c_str(), dbStoredInLdap.c_str(),
+        ldapCsca.c_str(), ldapMlsc.c_str(), ldapDsc.c_str(), ldapDscNc.c_str(), ldapCrl.c_str(), ldapTotal.c_str(),
+        cscaDisc.c_str(), mlscDisc.c_str(), dscDisc.c_str(), dscNcDisc.c_str(), crlDisc.c_str(), totalDisc.c_str(),
         dbCountryStr.c_str(), ldapCountryStr.c_str(),
         result.status.c_str(),
         result.errorMessage.empty() ? nullptr : result.errorMessage.c_str(),
         durationMs.c_str()
     };
 
-    PGresult* res = PQexecParams(conn.get(), query.c_str(), 20, nullptr, paramValues, nullptr, nullptr, 0);
+    PGresult* res = PQexecParams(conn.get(), query.c_str(), 23, nullptr, paramValues, nullptr, nullptr, 0);
 
     int syncId = -1;
     if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
@@ -283,9 +303,9 @@ Json::Value getLatestSyncStatus() {
 
     const char* query = R"(
         SELECT id, checked_at,
-               db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count,
-               ldap_csca_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries,
-               csca_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy,
+               db_csca_count, db_mlsc_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count,
+               ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries,
+               csca_discrepancy, mlsc_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy,
                status, error_message, check_duration_ms
         FROM sync_status
         ORDER BY checked_at DESC
@@ -300,33 +320,36 @@ Json::Value getLatestSyncStatus() {
 
         Json::Value dbStats(Json::objectValue);
         dbStats["csca"] = std::stoi(PQgetvalue(res, 0, 2));
-        dbStats["dsc"] = std::stoi(PQgetvalue(res, 0, 3));
-        dbStats["dscNc"] = std::stoi(PQgetvalue(res, 0, 4));
-        dbStats["crl"] = std::stoi(PQgetvalue(res, 0, 5));
-        dbStats["storedInLdap"] = std::stoi(PQgetvalue(res, 0, 6));
+        dbStats["mlsc"] = std::stoi(PQgetvalue(res, 0, 3));
+        dbStats["dsc"] = std::stoi(PQgetvalue(res, 0, 4));
+        dbStats["dscNc"] = std::stoi(PQgetvalue(res, 0, 5));
+        dbStats["crl"] = std::stoi(PQgetvalue(res, 0, 6));
+        dbStats["storedInLdap"] = std::stoi(PQgetvalue(res, 0, 7));
         result["dbStats"] = dbStats;
 
         Json::Value ldapStats(Json::objectValue);
-        ldapStats["csca"] = std::stoi(PQgetvalue(res, 0, 7));
-        ldapStats["dsc"] = std::stoi(PQgetvalue(res, 0, 8));
-        ldapStats["dscNc"] = std::stoi(PQgetvalue(res, 0, 9));
-        ldapStats["crl"] = std::stoi(PQgetvalue(res, 0, 10));
-        ldapStats["total"] = std::stoi(PQgetvalue(res, 0, 11));
+        ldapStats["csca"] = std::stoi(PQgetvalue(res, 0, 8));
+        ldapStats["mlsc"] = std::stoi(PQgetvalue(res, 0, 9));
+        ldapStats["dsc"] = std::stoi(PQgetvalue(res, 0, 10));
+        ldapStats["dscNc"] = std::stoi(PQgetvalue(res, 0, 11));
+        ldapStats["crl"] = std::stoi(PQgetvalue(res, 0, 12));
+        ldapStats["total"] = std::stoi(PQgetvalue(res, 0, 13));
         result["ldapStats"] = ldapStats;
 
         Json::Value discrepancy(Json::objectValue);
-        discrepancy["csca"] = std::stoi(PQgetvalue(res, 0, 12));
-        discrepancy["dsc"] = std::stoi(PQgetvalue(res, 0, 13));
-        discrepancy["dscNc"] = std::stoi(PQgetvalue(res, 0, 14));
-        discrepancy["crl"] = std::stoi(PQgetvalue(res, 0, 15));
-        discrepancy["total"] = std::stoi(PQgetvalue(res, 0, 16));
+        discrepancy["csca"] = std::stoi(PQgetvalue(res, 0, 14));
+        discrepancy["mlsc"] = std::stoi(PQgetvalue(res, 0, 15));
+        discrepancy["dsc"] = std::stoi(PQgetvalue(res, 0, 16));
+        discrepancy["dscNc"] = std::stoi(PQgetvalue(res, 0, 17));
+        discrepancy["crl"] = std::stoi(PQgetvalue(res, 0, 18));
+        discrepancy["total"] = std::stoi(PQgetvalue(res, 0, 19));
         result["discrepancy"] = discrepancy;
 
-        result["status"] = PQgetvalue(res, 0, 17);
-        if (!PQgetisnull(res, 0, 18)) {
-            result["errorMessage"] = PQgetvalue(res, 0, 18);
+        result["status"] = PQgetvalue(res, 0, 20);
+        if (!PQgetisnull(res, 0, 21)) {
+            result["errorMessage"] = PQgetvalue(res, 0, 21);
         }
-        result["checkDurationMs"] = std::stoi(PQgetvalue(res, 0, 19));
+        result["checkDurationMs"] = std::stoi(PQgetvalue(res, 0, 22));
     } else {
         result["status"] = "NO_DATA";
         result["message"] = "No sync status found";
@@ -377,20 +400,52 @@ Json::Value getSyncHistory(int limit = 20) {
 LdapStats getLdapStats() {
     LdapStats stats;
 
-    std::string ldapUri = "ldap://" + g_config.ldapHost + ":" + std::to_string(g_config.ldapPort);
+    // Parse LDAP_READ_HOSTS (comma-separated list: "openldap1:389,openldap2:389")
+    std::vector<std::string> ldapHosts;
+    std::string hostsStr = g_config.ldapReadHosts;
+    std::istringstream ss(hostsStr);
+    std::string host;
+    while (std::getline(ss, host, ',')) {
+        // Trim whitespace
+        host.erase(0, host.find_first_not_of(" \t"));
+        host.erase(host.find_last_not_of(" \t") + 1);
+        if (!host.empty()) {
+            ldapHosts.push_back(host);
+        }
+    }
 
+    if (ldapHosts.empty()) {
+        spdlog::error("No LDAP hosts configured in LDAP_READ_HOSTS");
+        return stats;
+    }
+
+    // Try connecting to LDAP hosts in round-robin fashion
     LDAP* ld = nullptr;
-    int rc = ldap_initialize(&ld, ldapUri.c_str());
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP initialize failed: {}", ldap_err2string(rc));
+    int rc = LDAP_SERVER_DOWN;
+    std::string connectedHost;
+
+    for (const auto& hostPort : ldapHosts) {
+        std::string ldapUri = "ldap://" + hostPort;
+        rc = ldap_initialize(&ld, ldapUri.c_str());
+        if (rc == LDAP_SUCCESS) {
+            connectedHost = hostPort;
+            spdlog::debug("LDAP initialized successfully: {}", ldapUri);
+            break;
+        } else {
+            spdlog::warn("Failed to initialize LDAP {}: {}", ldapUri, ldap_err2string(rc));
+        }
+    }
+
+    if (rc != LDAP_SUCCESS || !ld) {
+        spdlog::error("Failed to connect to any LDAP host");
         return stats;
     }
 
     int version = LDAP_VERSION3;
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
-    // Enable referral chasing for HAProxy/MMR environments
-    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_ON);
+    // CRITICAL: Disable referrals to prevent MMR referral bypass (fixes LDAP count instability)
+    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
     // Authenticated bind for read access
     struct berval cred;
@@ -399,7 +454,7 @@ LdapStats getLdapStats() {
 
     rc = ldap_sasl_bind_s(ld, g_config.ldapBindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
     if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP bind failed: {}", ldap_err2string(rc));
+        spdlog::error("LDAP bind failed on {}: {}", connectedHost, ldap_err2string(rc));
         ldap_unbind_ext_s(ld, nullptr, nullptr);
         return stats;
     }
@@ -427,6 +482,12 @@ LdapStats getLdapStats() {
                 // Count by OU type in DN
                 if (dnStr.find("o=csca,") != std::string::npos) {
                     stats.cscaCount++;
+                } else if (dnStr.find("o=mlsc,") != std::string::npos) {
+                    // Sprint 3: Count Master List Signer Certificates
+                    stats.mlscCount++;
+                } else if (dnStr.find("o=lc,") != std::string::npos) {
+                    // Sprint 3: Count Link Certificates as CSCA
+                    stats.cscaCount++;
                 } else if (dnStr.find("o=dsc,") != std::string::npos) {
                     stats.dscCount++;
                 } else if (dnStr.find("o=crl,") != std::string::npos) {
@@ -441,6 +502,8 @@ LdapStats getLdapStats() {
                     if (!country.empty()) {
                         if (dnStr.find("o=csca,") != std::string::npos) {
                             stats.countryStats[country]["csca"]++;
+                        } else if (dnStr.find("o=mlsc,") != std::string::npos) {
+                            stats.countryStats[country]["mlsc"]++;
                         } else if (dnStr.find("o=dsc,") != std::string::npos) {
                             stats.countryStats[country]["dsc"]++;
                         }
@@ -472,7 +535,7 @@ LdapStats getLdapStats() {
     }
     if (result) ldap_msgfree(result);
 
-    stats.totalEntries = stats.cscaCount + stats.dscCount + stats.dscNcCount + stats.crlCount;
+    stats.totalEntries = stats.cscaCount + stats.mlscCount + stats.dscCount + stats.dscNcCount + stats.crlCount;
 
     ldap_unbind_ext_s(ld, nullptr, nullptr);
     return stats;
@@ -489,22 +552,24 @@ SyncResult performSyncCheck() {
 
     // Get DB stats
     result.dbStats = getDbStats();
-    spdlog::info("DB stats - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}",
-                 result.dbStats.cscaCount, result.dbStats.dscCount,
+    spdlog::info("DB stats - CSCA: {}, MLSC: {}, DSC: {}, DSC_NC: {}, CRL: {}",
+                 result.dbStats.cscaCount, result.dbStats.mlscCount, result.dbStats.dscCount,
                  result.dbStats.dscNcCount, result.dbStats.crlCount);
 
     // Get LDAP stats
     result.ldapStats = getLdapStats();
-    spdlog::info("LDAP stats - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}",
-                 result.ldapStats.cscaCount, result.ldapStats.dscCount,
+    spdlog::info("LDAP stats - CSCA: {}, MLSC: {}, DSC: {}, DSC_NC: {}, CRL: {}",
+                 result.ldapStats.cscaCount, result.ldapStats.mlscCount, result.ldapStats.dscCount,
                  result.ldapStats.dscNcCount, result.ldapStats.crlCount);
 
     // Calculate discrepancies
     result.cscaDiscrepancy = result.dbStats.cscaCount - result.ldapStats.cscaCount;
+    result.mlscDiscrepancy = result.dbStats.mlscCount - result.ldapStats.mlscCount;
     result.dscDiscrepancy = result.dbStats.dscCount - result.ldapStats.dscCount;
     result.dscNcDiscrepancy = result.dbStats.dscNcCount - result.ldapStats.dscNcCount;
     result.crlDiscrepancy = result.dbStats.crlCount - result.ldapStats.crlCount;
     result.totalDiscrepancy = std::abs(result.cscaDiscrepancy) +
+                               std::abs(result.mlscDiscrepancy) +
                                std::abs(result.dscDiscrepancy) +
                                std::abs(result.dscNcDiscrepancy) +
                                std::abs(result.crlDiscrepancy);
@@ -995,6 +1060,7 @@ void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpRespons
 
         Json::Value dbStats(Json::objectValue);
         dbStats["csca"] = result.dbStats.cscaCount;
+        dbStats["mlsc"] = result.dbStats.mlscCount;
         dbStats["dsc"] = result.dbStats.dscCount;
         dbStats["dscNc"] = result.dbStats.dscNcCount;
         dbStats["crl"] = result.dbStats.crlCount;
@@ -1002,6 +1068,7 @@ void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpRespons
 
         Json::Value ldapStats(Json::objectValue);
         ldapStats["csca"] = result.ldapStats.cscaCount;
+        ldapStats["mlsc"] = result.ldapStats.mlscCount;
         ldapStats["dsc"] = result.ldapStats.dscCount;
         ldapStats["dscNc"] = result.ldapStats.dscNcCount;
         ldapStats["crl"] = result.ldapStats.crlCount;
@@ -1009,6 +1076,7 @@ void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpRespons
 
         Json::Value discrepancy(Json::objectValue);
         discrepancy["csca"] = result.cscaDiscrepancy;
+        discrepancy["mlsc"] = result.mlscDiscrepancy;
         discrepancy["dsc"] = result.dscDiscrepancy;
         discrepancy["dscNc"] = result.dscNcDiscrepancy;
         discrepancy["crl"] = result.crlDiscrepancy;
@@ -1713,11 +1781,11 @@ int main() {
     }
 
     spdlog::info("=================================================");
-    spdlog::info("  ICAO Local PKD - PKD Relay Service v2.0.0");
+    spdlog::info("  ICAO Local PKD - PKD Relay Service v2.1.0");
     spdlog::info("=================================================");
     spdlog::info("Server port: {}", g_config.serverPort);
     spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
-    spdlog::info("LDAP (read): {}:{}", g_config.ldapHost, g_config.ldapPort);
+    spdlog::info("LDAP (read): {} (Software Load Balancing)", g_config.ldapReadHosts);
     spdlog::info("LDAP (write): {}:{}", g_config.ldapWriteHost, g_config.ldapWritePort);
 
     // Load user-configurable settings from database
@@ -1772,13 +1840,15 @@ info:
     Handles ICAO portal monitoring, LDIF upload/parsing, and DB-LDAP synchronization.
 
     ## Changelog
+    - v2.1.0 (2026-01-26): MLSC (Master List Signer Certificate) sync support
+    - v2.0.5 (2026-01-25): CRL reconciliation support
     - v2.0.0 (2026-01-20): Service reorganization - data relay layer separation
     - v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
     - v1.3.0 (2026-01-13): User-configurable settings UI
     - v1.2.0 (2026-01-07): Daily scheduler only
     - v1.1.0 (2026-01-06): Daily scheduler, certificate re-validation
     - v1.0.0 (2026-01-03): Initial release
-  version: 2.0.0
+  version: 2.1.0
 servers:
   - url: /
 tags:

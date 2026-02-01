@@ -22,11 +22,13 @@ import {
 } from 'lucide-react';
 import { healthApi, ldapApi, uploadApi } from '@/services/api';
 import { cn } from '@/utils/cn';
+import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
 
 // Country statistics type
 interface CountryStats {
   country: string;
   csca: number;
+  mlsc: number;
   dsc: number;
   dscNc: number;
   total: number;
@@ -54,6 +56,7 @@ export function Dashboard() {
   });
   const [countryData, setCountryData] = useState<CountryStats[]>([]);
   const [countryLoading, setCountryLoading] = useState(true);
+  const [showCountryDialog, setShowCountryDialog] = useState(false);
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -82,12 +85,13 @@ export function Dashboard() {
   const loadCountryData = async () => {
     setCountryLoading(true);
     try {
-      const response = await uploadApi.getCountryStatistics(18);
-      const countries = response.data;
-      if (countries.length > 0) {
+      const response = await uploadApi.getCountryStatistics(10);
+      const countries = response.data.countries;
+      if (countries && countries.length > 0) {
         const maxTotal = countries[0].total;
-        setCountryData(countries.map((item) => ({
+        setCountryData(countries.map((item: any) => ({
           ...item,
+          mlsc: item.mlsc || 0,
           percentage: Math.max(15, (item.total / maxTotal) * 100),
         })));
       }
@@ -236,7 +240,7 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Country Certificate Statistics - Top 18 in 2 columns */}
+      {/* Country Certificate Statistics - Top 10 in 2 columns */}
       <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between">
@@ -244,7 +248,7 @@ export function Dashboard() {
               <div className="p-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500">
                 <Globe className="w-5 h-5 text-white" />
               </div>
-              국가별 인증서 현황 (Top 18)
+              국가별 인증서 현황 (Top 10)
             </h3>
             <div className="flex items-center gap-4">
               {/* Legend */}
@@ -253,18 +257,22 @@ export function Dashboard() {
                   <Shield className="w-3.5 h-3.5 text-blue-500" />
                   <span className="font-medium">CSCA</span>
                 </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
+                  <FileText className="w-3.5 h-3.5 text-purple-500" />
+                  <span className="font-medium">MLSC</span>
+                </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                   <Key className="w-3.5 h-3.5 text-green-500" />
                   <span className="font-medium">DSC</span>
                 </div>
               </div>
-              <Link
-                to="/upload-dashboard"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              <button
+                onClick={() => setShowCountryDialog(true)}
+                className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
                 상세 통계
-              </Link>
+              </button>
             </div>
           </div>
         </div>
@@ -323,6 +331,12 @@ export function Dashboard() {
                       <Shield className="w-3 h-3 text-blue-500" />
                       {item.csca}
                     </span>
+                    {item.mlsc > 0 && (
+                      <span className="flex items-center gap-1">
+                        <FileText className="w-3 h-3 text-purple-500" />
+                        {item.mlsc}
+                      </span>
+                    )}
                     <span className="flex items-center gap-1">
                       <Key className="w-3 h-3 text-green-500" />
                       {item.dsc}
@@ -511,6 +525,12 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Country Statistics Dialog */}
+      <CountryStatisticsDialog
+        isOpen={showCountryDialog}
+        onClose={() => setShowCountryDialog(false)}
+      />
     </div>
   );
 }

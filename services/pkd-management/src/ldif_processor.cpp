@@ -1,5 +1,6 @@
 #include "ldif_processor.h"
 #include "common.h"
+#include "common/masterlist_processor.h"  // v2.0.7: For parseMasterListEntryV2
 #include <spdlog/spdlog.h>
 #include <libpq-fe.h>
 #include <ldap.h>
@@ -16,7 +17,8 @@ extern std::vector<LdifEntry> parseLdifContent(const std::string& content);
 extern bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                                   const LdifEntry& entry, const std::string& attrName,
                                   int& cscaCount, int& dscCount, int& dscNcCount,
-                                  int& ldapStoredCount, ValidationStats& validationStats);
+                                  int& ldapStoredCount, ValidationStats& validationStats,
+                                  common::ValidationStatistics& enhancedStats);
 extern bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                          const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount);
 extern bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
@@ -24,6 +26,18 @@ extern bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uplo
 
 // Forward declaration for sendDbSavingProgress helper function (from main.cpp)
 extern void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message);
+
+// Forward declaration for sendProgressWithMetadata helper function (from main.cpp) - Phase 4.4
+extern void sendProgressWithMetadata(
+    const std::string& uploadId,
+    common::ProcessingStage stage,
+    int processedCount,
+    int totalCount,
+    const std::string& message,
+    const std::optional<common::CertificateMetadata>& metadata,
+    const std::optional<common::IcaoComplianceStatus>& compliance,
+    const std::optional<common::ValidationStatistics>& stats
+);
 
 std::vector<LdifEntry> LdifProcessor::parseLdifContent(const std::string& content) {
     // Call the existing function from main.cpp
@@ -36,6 +50,7 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     PGconn* conn,
     LDAP* ld,
     ValidationStats& stats,
+    common::ValidationStatistics& enhancedStats,
     const TotalCounts* totalCounts
 ) {
     ProcessingCounts counts;
@@ -51,13 +66,13 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
             if (entry.hasAttribute("userCertificate;binary")) {
                 parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
-                                    counts.ldapCertStoredCount, stats);
+                                    counts.ldapCertStoredCount, stats, enhancedStats);
             }
             // Check for cACertificate;binary
             else if (entry.hasAttribute("cACertificate;binary")) {
                 parseCertificateEntry(conn, ld, uploadId, entry, "cACertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
-                                    counts.ldapCertStoredCount, stats);
+                                    counts.ldapCertStoredCount, stats, enhancedStats);
             }
 
             // Check for CRL
@@ -65,10 +80,19 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 parseCrlEntry(conn, ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount);
             }
 
-            // Check for Master List
+            // Check for Master List (v2.0.7: Use new CSCA extraction processor)
             if (entry.hasAttribute("pkdMasterListContent;binary") ||
                 entry.hasAttribute("pkdMasterListContent")) {
-                parseMasterListEntry(conn, ld, uploadId, entry, counts.mlCount, counts.ldapMlStoredCount);
+                MasterListStats mlStats;
+                parseMasterListEntryV2(conn, ld, uploadId, entry, mlStats);
+                // Track Master List file count (v2.1.1)
+                counts.mlCount++;
+                // Track MLSC count (v2.1.1)
+                counts.mlscCount += mlStats.mlscCount;
+                counts.ldapMlStoredCount += mlStats.ldapMlStoredCount;
+                // Add extracted CSCAs to counts
+                counts.cscaCount += mlStats.cscaNewCount;
+                counts.ldapCertStoredCount += mlStats.ldapCscaStoredCount;
             }
 
         } catch (const std::exception& e) {
@@ -134,8 +158,20 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 progressMsg += parts[i];
             }
 
-            // Send progress to frontend via SSE (call helper function from main.cpp)
-            sendDbSavingProgress(uploadId, processedEntries, totalEntries, progressMsg);
+            // Phase 4.4: Update processed count in statistics
+            enhancedStats.processedCount = counts.cscaCount + counts.dscCount + counts.dscNcCount;
+
+            // Phase 4.4: Send enhanced progress with validation statistics via SSE
+            sendProgressWithMetadata(
+                uploadId,
+                common::ProcessingStage::VALIDATION_IN_PROGRESS,
+                processedEntries,
+                totalEntries,
+                progressMsg,
+                std::nullopt,  // No current certificate metadata (batch update)
+                std::nullopt,  // No current compliance status (batch update)
+                enhancedStats  // Include accumulated validation statistics
+            );
 
             spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP), {} MLs ({} LDAP)",
                         processedEntries, totalEntries,
@@ -147,6 +183,19 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
     spdlog::info("LDIF processing completed: {} CSCA, {} DSC, {} DSC_NC, {} CRLs, {} MLs",
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount);
+
+    // Phase 4.4: Send final progress with complete validation statistics
+    enhancedStats.processedCount = counts.cscaCount + counts.dscCount + counts.dscNcCount;
+    sendProgressWithMetadata(
+        uploadId,
+        common::ProcessingStage::VALIDATION_COMPLETED,
+        totalEntries,
+        totalEntries,
+        "검증 완료: " + std::to_string(enhancedStats.processedCount) + "개 인증서 처리됨",
+        std::nullopt,  // No current certificate
+        std::nullopt,  // No current compliance
+        enhancedStats  // Final validation statistics
+    );
 
     return counts;
 }

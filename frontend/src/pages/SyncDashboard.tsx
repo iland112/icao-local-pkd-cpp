@@ -69,8 +69,17 @@ export function SyncDashboard() {
 
   const handleManualCheck = async () => {
     setChecking(true);
+    setError(null);
     try {
-      await syncServiceApi.triggerCheck();
+      // Trigger sync check and get immediate result
+      const checkResult = await syncServiceApi.triggerCheck();
+
+      // Update status immediately with check result
+      if (checkResult.data && checkResult.data.success) {
+        setStatus(checkResult.data);
+      }
+
+      // Fetch full data to update history and other states
       await fetchData();
     } catch (err) {
       console.error('Manual check failed:', err);
@@ -366,6 +375,17 @@ export function SyncDashboard() {
                       </span>
                     </div>
                   )}
+                  {status.discrepancy.mlsc !== 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500 dark:text-gray-400">MLSC:</span>
+                      <span className={cn(
+                        'font-semibold',
+                        status.discrepancy.mlsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                      )}>
+                        {status.discrepancy.mlsc > 0 ? '+' : ''}{status.discrepancy.mlsc}
+                      </span>
+                    </div>
+                  )}
                   {status.discrepancy.dsc !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">DSC:</span>
@@ -473,6 +493,27 @@ export function SyncDashboard() {
                     </td>
                   </tr>
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
+                    <td className="py-2 px-3 text-gray-700 dark:text-gray-300">MLSC</td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.dbStats.mlsc?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                      {status.ldapStats.mlsc?.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-3 text-right">
+                      {status.discrepancy && status.discrepancy.mlsc !== 0 ? (
+                        <span className={cn(
+                          'font-mono font-semibold',
+                          status.discrepancy.mlsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        )}>
+                          {status.discrepancy.mlsc > 0 ? '+' : ''}{status.discrepancy.mlsc}
+                        </span>
+                      ) : (
+                        <span className="text-green-600 dark:text-green-400">✓</span>
+                      )}
+                    </td>
+                  </tr>
+                  <tr className="border-b border-gray-100 dark:border-gray-700/50">
                     <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC</td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
                       {status.dbStats.dsc?.toLocaleString()}
@@ -559,7 +600,7 @@ export function SyncDashboard() {
               불일치 상세
             </h3>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                 {status.discrepancy.total}
@@ -571,6 +612,12 @@ export function SyncDashboard() {
                 {status.discrepancy.csca}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">CSCA</div>
+            </div>
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
+              <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
+                {status.discrepancy.mlsc}
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">MLSC</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">

@@ -47,6 +47,9 @@ FROM vcpkg-base AS vcpkg-deps
 WORKDIR /app
 COPY services/pa-service/vcpkg.json ./
 
+# Copy host vcpkg binary cache to avoid re-downloading/building
+COPY .vcpkg-cache/ /root/.cache/vcpkg/archives/
+
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
     vcpkg install --triplet $TRIPLET

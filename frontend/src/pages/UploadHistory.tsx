@@ -22,10 +22,16 @@ import {
   HardDrive,
   RefreshCw,
   Trash2,
+  Download,
 } from 'lucide-react';
-import { uploadApi } from '@/services/api';
-import type { PageResponse, UploadStatus, FileFormat } from '@/types';
+import { uploadApi, uploadHistoryApi } from '@/services/api';
+import type { PageResponse, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
 import { cn } from '@/utils/cn';
+import { MasterListStructure } from '@/components/MasterListStructure';
+import { LdifStructure } from '@/components/LdifStructure';
+import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTree';
+import { DuplicateCertificateDialog } from '@/components/DuplicateCertificateDialog';
+import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/csvExport';
 
 // Validation statistics interface
 interface ValidationStats {
@@ -53,24 +59,17 @@ interface UploadHistoryItem {
   certificateCount: number;  // Keep for backward compatibility
   crlCount: number;
   mlCount: number;  // Master List count
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
   errorMessage: string;
   createdAt: string;
   updatedAt: string;
   validation?: ValidationStats;  // Validation statistics
-  // Collection 002 CSCA extraction statistics (v2.0.0)
-  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
-  cscaDuplicates?: number;       // Duplicate CSCAs detected
+  // Collection 002 Master List extraction statistics (v2.1.1)
+  cscaExtractedFromMl?: number;  // Total certificates extracted from Master Lists (MLSC + CSCA + LC)
+  cscaDuplicates?: number;       // Duplicate certificates detected
   // LDAP storage status (v2.0.0 - Data Consistency)
   ldapUploadedCount?: number;    // Number of certificates stored in LDAP
 }
-
-// 4-step status definition (simplified for table view)
-const STATUS_STEPS_4: { key: string; label: string; shortLabel: string; icon: React.ReactNode; statuses: UploadStatus[] }[] = [
-  { key: 'UPLOAD', label: '업로드', shortLabel: '업로드', icon: <Upload className="w-3.5 h-3.5" />, statuses: ['PENDING', 'UPLOADING'] },
-  { key: 'PARSE', label: '파싱', shortLabel: '파싱', icon: <FileCheck className="w-3.5 h-3.5" />, statuses: ['PARSING'] },
-  { key: 'VALIDATE_DB', label: '검증/DB', shortLabel: '검증/DB', icon: <Database className="w-3.5 h-3.5" />, statuses: ['VALIDATING', 'SAVING_DB'] },
-  { key: 'LDAP', label: 'LDAP', shortLabel: 'LDAP', icon: <Server className="w-3.5 h-3.5" />, statuses: ['SAVING_LDAP', 'COMPLETED'] },
-];
 
 // Full status step definition (for dialog detail view)
 const STATUS_STEPS: { key: UploadStatus; label: string; icon: React.ReactNode }[] = [
@@ -100,17 +99,49 @@ export function UploadHistory() {
   // Detail dialog state
   const [selectedUpload, setSelectedUpload] = useState<UploadHistoryItem | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploadIssues, setUploadIssues] = useState<UploadIssues | null>(null);
+  const [loadingIssues, setLoadingIssues] = useState(false);
+
+  // Duplicate certificate detail dialog state
+  const [selectedDuplicate, setSelectedDuplicate] = useState<UploadDuplicate | null>(null);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
 
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [uploadToDelete, setUploadToDelete] = useState<UploadHistoryItem | null>(null);
   const [deleting, setDeleting] = useState(false);
 
+  // Tab state for detail dialog
+  const [activeTab, setActiveTab] = useState<'details' | 'structure' | 'duplicates'>('details');
+
   const pageSize = 10;
 
   useEffect(() => {
     fetchUploads();
   }, [page]);
+
+  // Fetch upload issues when detail dialog is opened (v2.1.2.2)
+  useEffect(() => {
+    const fetchUploadIssues = async () => {
+      if (!selectedUpload || !dialogOpen) {
+        setUploadIssues(null);
+        return;
+      }
+
+      setLoadingIssues(true);
+      try {
+        const response = await uploadHistoryApi.getIssues(selectedUpload.id);
+        setUploadIssues(response.data);
+      } catch (error) {
+        console.error('Failed to fetch upload issues:', error);
+        setUploadIssues(null);
+      } finally {
+        setLoadingIssues(false);
+      }
+    };
+
+    fetchUploadIssues();
+  }, [selectedUpload, dialogOpen]);
 
   const fetchUploads = async () => {
     setLoading(true);
@@ -180,81 +211,39 @@ export function UploadHistory() {
     }
   };
 
-  // Get current step index for status progress
+  // Get current step index for status progress (used in detail dialog)
   const getStatusStepIndex = (status: UploadStatus): number => {
     if (status === 'FAILED') return -1;
     return STATUS_STEPS.findIndex(step => step.key === status);
   };
 
-  // Get 4-step index from status
-  const get4StepIndex = (status: UploadStatus): number => {
-    if (status === 'FAILED') return -1;
-    for (let i = 0; i < STATUS_STEPS_4.length; i++) {
-      if (STATUS_STEPS_4[i].statuses.includes(status)) {
-        return i;
-      }
-    }
-    return -1;
-  };
-
-  // Check if step is completed
-  const isStepCompleted = (stepIndex: number, status: UploadStatus): boolean => {
-    if (status === 'COMPLETED') return true;
-    const currentIdx = get4StepIndex(status);
-    return stepIndex < currentIdx;
-  };
-
-  // Render 4-step status progress bar with labels
+  // Render simple status badge (진행 중 / 완료 / 실패)
   const renderStatusProgress = (status: UploadStatus) => {
+    // 실패
     if (status === 'FAILED') {
       return (
-        <div className="flex items-center gap-2">
-          <XCircle className="w-5 h-5 text-red-500" />
-          <span className="text-sm font-medium text-red-600 dark:text-red-400">실패</span>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+          <XCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">실패</span>
         </div>
       );
     }
 
-    const currentStepIdx = get4StepIndex(status);
-    const isAllCompleted = status === 'COMPLETED';
+    // 완료
+    if (status === 'COMPLETED') {
+      return (
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+          <CheckCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">완료</span>
+        </div>
+      );
+    }
 
+    // 진행 중 (PENDING, UPLOADING, PARSING, VALIDATING, SAVING_DB, SAVING_LDAP)
     return (
-      <div className="flex items-center gap-0.5">
-        {STATUS_STEPS_4.map((step, index) => {
-          const isPassed = isStepCompleted(index, status);
-          const isCurrent = index === currentStepIdx && !isAllCompleted;
-
-          return (
-            <div key={step.key} className="flex items-center">
-              <div
-                className={cn(
-                  'flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium transition-all',
-                  isPassed && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
-                  isCurrent && 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400',
-                  !isPassed && !isCurrent && 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500'
-                )}
-                title={step.label}
-              >
-                {isPassed ? (
-                  <CheckCircle className="w-3 h-3" />
-                ) : isCurrent ? (
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                ) : (
-                  step.icon
-                )}
-                <span className="hidden sm:inline">{step.shortLabel}</span>
-              </div>
-              {index < STATUS_STEPS_4.length - 1 && (
-                <div
-                  className={cn(
-                    'w-2 h-0.5',
-                    isPassed ? 'bg-green-400 dark:bg-green-600' : 'bg-gray-200 dark:bg-gray-600'
-                  )}
-                />
-              )}
-            </div>
-          );
-        })}
+      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm font-medium">진행 중</span>
       </div>
     );
   };
@@ -283,9 +272,21 @@ export function UploadHistory() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const handleViewDetail = (upload: UploadHistoryItem) => {
-    setSelectedUpload(upload);
-    setDialogOpen(true);
+  const handleViewDetail = async (upload: UploadHistoryItem) => {
+    try {
+      // Fetch full upload details including ldapUploadedCount
+      const response = await uploadHistoryApi.getDetail(upload.id);
+      const fullUploadData = response.data.data; // ApiResponse<UploadedFile> structure
+      setSelectedUpload(fullUploadData as UploadHistoryItem);
+      setActiveTab('details'); // Reset to details tab
+      setDialogOpen(true);
+    } catch (error) {
+      console.error('Failed to fetch upload details:', error);
+      // Fallback to basic upload data from history list
+      setSelectedUpload(upload);
+      setActiveTab('details'); // Reset to details tab
+      setDialogOpen(true);
+    }
   };
 
   const closeDialog = () => {
@@ -385,64 +386,6 @@ export function UploadHistory() {
         </div>
       </div>
 
-      {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-        {/* Total */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-blue-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
-              <FileText className="w-5 h-5 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 업로드</p>
-              <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Completed */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-green-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-green-50 dark:bg-green-900/30">
-              <CheckCircle className="w-5 h-5 text-green-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">완료</p>
-              <p className="text-xl font-bold text-green-600 dark:text-green-400">{stats.completed}</p>
-              <p className="text-xs text-gray-400">{stats.completedPercent}%</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Failed */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-red-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-red-50 dark:bg-red-900/30">
-              <XCircle className="w-5 h-5 text-red-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">실패</p>
-              <p className="text-xl font-bold text-red-600 dark:text-red-400">{stats.failed}</p>
-              <p className="text-xs text-gray-400">{stats.failedPercent}%</p>
-            </div>
-          </div>
-        </div>
-
-        {/* In Progress */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-yellow-500">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-yellow-50 dark:bg-yellow-900/30">
-              <Loader2 className="w-5 h-5 text-yellow-500" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">진행 중</p>
-              <p className="text-xl font-bold text-yellow-600 dark:text-yellow-400">{stats.inProgress}</p>
-              <p className="text-xs text-gray-400">{stats.inProgressPercent}%</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Filters Card */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
         <div className="flex items-center gap-2 mb-3">
@@ -463,7 +406,7 @@ export function UploadHistory() {
             >
               <option value="">전체</option>
               <option value="LDIF">LDIF</option>
-              <option value="MASTER_LIST">Master List</option>
+              <option value="ML">Master List</option>
             </select>
           </div>
 
@@ -539,6 +482,55 @@ export function UploadHistory() {
                   초기화
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Statistics Cards - Hierarchical Layout */}
+      <div className="mb-4">
+        {/* Main Total Card */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-5 border-l-4 border-blue-500">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
+              <FileText className="w-6 h-6 text-blue-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 업로드</p>
+              <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
+            </div>
+          </div>
+
+          {/* Breakdown Cards - Nested */}
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            {/* Completed */}
+            <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
+              <div className="flex items-center gap-2 mb-1">
+                <CheckCircle className="w-4 h-4 text-green-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">완료</p>
+              </div>
+              <p className="text-lg font-bold text-green-600 dark:text-green-400">{stats.completed.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{stats.completedPercent}%</p>
+            </div>
+
+            {/* Failed */}
+            <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
+              <div className="flex items-center gap-2 mb-1">
+                <XCircle className="w-4 h-4 text-red-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">실패</p>
+              </div>
+              <p className="text-lg font-bold text-red-600 dark:text-red-400">{stats.failed.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{stats.failedPercent}%</p>
+            </div>
+
+            {/* In Progress */}
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
+              <div className="flex items-center gap-2 mb-1">
+                <Loader2 className="w-4 h-4 text-yellow-500" />
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">진행 중</p>
+              </div>
+              <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{stats.inProgress.toLocaleString()}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">{stats.inProgressPercent}%</p>
             </div>
           </div>
         </div>
@@ -627,6 +619,12 @@ export function UploadHistory() {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
                               <ShieldCheck className="w-3 h-3" />
                               CSCA {upload.cscaCount || upload.certificateCount}
+                            </span>
+                          )}
+                          {upload.mlscCount && upload.mlscCount > 0 && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                              <FileText className="w-3 h-3" />
+                              MLSC {upload.mlscCount}
                             </span>
                           )}
                           {upload.dscCount > 0 && (
@@ -729,30 +727,82 @@ export function UploadHistory() {
           {/* Dialog Content - Wide layout without vertical scroll */}
           <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl mx-4">
             {/* Header */}
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
-                  <FileText className="w-5 h-5 text-white" />
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                    <FileText className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      업로드 상세 정보
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {selectedUpload.fileName}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    업로드 상세 정보
-                  </h2>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {selectedUpload.fileName}
-                  </p>
-                </div>
+                <button
+                  onClick={closeDialog}
+                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
               </div>
-              <button
-                onClick={closeDialog}
-                className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+
+              {/* Tabs - Show if Master List/LDIF file or has duplicates */}
+              {((selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST' || selectedUpload.fileFormat === 'LDIF') || (uploadIssues && uploadIssues.totalDuplicates > 0)) && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('details')}
+                    className={cn(
+                      'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                      activeTab === 'details'
+                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    )}
+                  >
+                    상세 정보
+                  </button>
+                  {(selectedUpload.fileFormat === 'ML' ||
+                    selectedUpload.fileFormat === 'MASTER_LIST' ||
+                    selectedUpload.fileFormat === 'LDIF') && (
+                    <button
+                      onClick={() => setActiveTab('structure')}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium rounded-lg transition-colors',
+                        activeTab === 'structure'
+                          ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      )}
+                    >
+                      {selectedUpload.fileFormat === 'LDIF' ? 'LDIF 구조' : 'Master List 구조'}
+                    </button>
+                  )}
+                  {uploadIssues && uploadIssues.totalDuplicates > 0 && (
+                    <button
+                      onClick={() => setActiveTab('duplicates')}
+                      className={cn(
+                        'px-4 py-2 text-sm font-medium rounded-lg transition-colors flex items-center gap-2',
+                        activeTab === 'duplicates'
+                          ? 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      )}
+                    >
+                      중복 인증서
+                      <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-200 dark:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200">
+                        {uploadIssues.totalDuplicates}
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Body - Horizontal two-column layout */}
             <div className="p-5">
+              {/* Details Tab */}
+              {activeTab === 'details' && (
               <div className="flex gap-5">
                 {/* Left Column - Status Progress & Certificate Counts */}
                 <div className="flex-1 space-y-4">
@@ -850,12 +900,18 @@ export function UploadHistory() {
                   </div>
 
                   {/* Certificate Type Breakdown */}
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
                     <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
                         {selectedUpload.cscaCount}
                       </p>
                       <span className="text-xs text-purple-700 dark:text-purple-300">CSCA</span>
+                    </div>
+                    <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-2 text-center">
+                      <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                        {selectedUpload.mlscCount || 0}
+                      </p>
+                      <span className="text-xs text-indigo-700 dark:text-indigo-300">MLSC</span>
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 text-center">
                       <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
@@ -883,14 +939,14 @@ export function UploadHistory() {
                     </div>
                   </div>
 
-                  {/* Collection 002 CSCA Extraction Statistics (v2.0.0) */}
+                  {/* Master List Extraction Statistics (v2.1.1) */}
                   {(selectedUpload.cscaExtractedFromMl || selectedUpload.cscaDuplicates) && (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Collection 002 CSCA 추출</span>
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Master List 인증서 추출 (MLSC + CSCA + LC)</span>
                         <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
-                          v2.0.0
+                          v2.1.1
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-2">
@@ -898,7 +954,7 @@ export function UploadHistory() {
                           <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                             {selectedUpload.cscaExtractedFromMl || 0}
                           </p>
-                          <span className="text-xs text-indigo-700 dark:text-indigo-300">추출됨</span>
+                          <span className="text-xs text-indigo-700 dark:text-indigo-300">총 추출</span>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
                           <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
@@ -917,6 +973,7 @@ export function UploadHistory() {
                       </div>
                     </div>
                   )}
+
 
                   {/* LDAP Storage Warning - Data Consistency Check (v2.0.0) */}
                   {selectedUpload.status === 'COMPLETED' &&
@@ -958,8 +1015,8 @@ export function UploadHistory() {
                   </div>
                 </div>
 
-                {/* Right Column - Validation Statistics */}
-                {selectedUpload.validation && (
+                {/* Right Column - Validation Statistics (Only for DSC/DSC_NC uploads) */}
+                {selectedUpload.validation && (selectedUpload.dscCount > 0 || selectedUpload.dscNcCount > 0) && (
                   <div className="w-64 flex-shrink-0">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trust Chain 검증</h3>
                     <div className="space-y-2">
@@ -1016,6 +1073,121 @@ export function UploadHistory() {
                   </div>
                 )}
               </div>
+              )}
+
+              {/* Structure Tab - LDIF/Master List Structure */}
+              {activeTab === 'structure' && (
+                <div className="max-h-[600px] overflow-y-auto">
+                  {selectedUpload.fileFormat === 'LDIF' ? (
+                    <LdifStructure uploadId={selectedUpload.id} />
+                  ) : (
+                    <MasterListStructure uploadId={selectedUpload.id} />
+                  )}
+                </div>
+              )}
+
+              {/* Duplicates Tab - Duplicate Certificates Tree */}
+              {activeTab === 'duplicates' && uploadIssues && (
+                <div className="space-y-4">
+                  {/* Header with export buttons */}
+                  <div className="flex items-center justify-between pb-3 border-b border-gray-200 dark:border-gray-700">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                        중복 인증서 목록
+                      </h3>
+                      <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
+                        총 {uploadIssues.totalDuplicates}건
+                      </span>
+                    </div>
+
+                    {/* CSV Export Buttons */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => exportDuplicateStatisticsToCsv(
+                          uploadIssues.byType,
+                          uploadIssues.totalDuplicates,
+                          `duplicate-stats-${selectedUpload.id}.csv`
+                        )}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors"
+                        title="통계 내보내기"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        통계
+                      </button>
+                      <button
+                        onClick={() => exportDuplicatesToCsv(
+                          uploadIssues.duplicates,
+                          `duplicates-${selectedUpload.id}.csv`
+                        )}
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors"
+                        title="전체 내보내기"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        전체
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Summary by type */}
+                  <div className="grid grid-cols-5 gap-2">
+                    {uploadIssues.byType.CSCA > 0 && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {uploadIssues.byType.CSCA}
+                        </p>
+                        <span className="text-xs text-blue-700 dark:text-blue-300">CSCA</span>
+                      </div>
+                    )}
+                    {uploadIssues.byType.MLSC > 0 && (
+                      <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                          {uploadIssues.byType.MLSC}
+                        </p>
+                        <span className="text-xs text-purple-700 dark:text-purple-300">MLSC</span>
+                      </div>
+                    )}
+                    {uploadIssues.byType.DSC > 0 && (
+                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                          {uploadIssues.byType.DSC}
+                        </p>
+                        <span className="text-xs text-green-700 dark:text-green-300">DSC</span>
+                      </div>
+                    )}
+                    {uploadIssues.byType.DSC_NC > 0 && (
+                      <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                          {uploadIssues.byType.DSC_NC}
+                        </p>
+                        <span className="text-xs text-orange-700 dark:text-orange-300">DSC_NC</span>
+                      </div>
+                    )}
+                    {uploadIssues.byType.CRL > 0 && (
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-center">
+                        <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                          {uploadIssues.byType.CRL}
+                        </p>
+                        <span className="text-xs text-amber-700 dark:text-amber-300">CRL</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tree View - Scrollable */}
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 max-h-[500px] overflow-y-auto">
+                    <DuplicateCertificatesTree duplicates={uploadIssues.duplicates} />
+                  </div>
+
+                  {loadingIssues && (
+                    <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center gap-2 justify-center">
+                        <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                        <span className="text-sm text-gray-500 dark:text-gray-400">업로드 이슈 조회 중...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
@@ -1134,6 +1306,16 @@ export function UploadHistory() {
           </div>
         </div>
       )}
+
+      {/* Duplicate Certificate Detail Dialog */}
+      <DuplicateCertificateDialog
+        duplicate={selectedDuplicate}
+        isOpen={duplicateDialogOpen}
+        onClose={() => {
+          setDuplicateDialogOpen(false);
+          setSelectedDuplicate(null);
+        }}
+      />
     </div>
   );
 }

@@ -89,27 +89,28 @@ inline bool logOperation(PGconn* conn, const AuditLogEntry& entry) {
     }
 
     // Build metadata JSON string
-    std::string metadataJson = "NULL";
+    // Build metadata JSON string for parameterized query
+    std::string metadataStr;
     if (entry.metadata.has_value()) {
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
-        metadataJson = "'" + Json::writeString(builder, entry.metadata.value()) + "'::jsonb";
+        metadataStr = Json::writeString(builder, entry.metadata.value());
     }
 
-    // Build parameterized query
-    const char* query =
+    // Build fully parameterized query (no string interpolation)
+    std::string query =
         "INSERT INTO operation_audit_log ("
         "user_id, username, "
         "operation_type, operation_subtype, resource_id, resource_type, "
         "ip_address, user_agent, request_method, request_path, "
         "success, status_code, error_message, metadata, duration_ms"
         ") VALUES ("
-        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, " + metadataJson + ", $14"
+        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15"
         ")";
 
     // Prepare parameter values
     std::string userIdStr = entry.userId.value_or("");
-    std::string usernameStr = entry.username.value_or("");
+    std::string usernameStr = entry.username.value_or("anonymous");
     std::string operationTypeStr = operationTypeToString(entry.operationType);
     std::string operationSubtypeStr = entry.operationSubtype.value_or("");
     std::string resourceIdStr = entry.resourceId.value_or("");
@@ -123,9 +124,9 @@ inline bool logOperation(PGconn* conn, const AuditLogEntry& entry) {
     std::string errorMessageStr = entry.errorMessage.value_or("");
     std::string durationMsStr = entry.durationMs.has_value() ? std::to_string(entry.durationMs.value()) : "";
 
-    const char* paramValues[14];
+    const char* paramValues[15];
     paramValues[0] = userIdStr.empty() ? nullptr : userIdStr.c_str();
-    paramValues[1] = usernameStr.empty() ? nullptr : usernameStr.c_str();
+    paramValues[1] = usernameStr.c_str();  // Never null: defaults to "anonymous"
     paramValues[2] = operationTypeStr.c_str();
     paramValues[3] = operationSubtypeStr.empty() ? nullptr : operationSubtypeStr.c_str();
     paramValues[4] = resourceIdStr.empty() ? nullptr : resourceIdStr.c_str();
@@ -137,10 +138,11 @@ inline bool logOperation(PGconn* conn, const AuditLogEntry& entry) {
     paramValues[10] = successStr.c_str();
     paramValues[11] = statusCodeStr.empty() ? nullptr : statusCodeStr.c_str();
     paramValues[12] = errorMessageStr.empty() ? nullptr : errorMessageStr.c_str();
-    paramValues[13] = durationMsStr.empty() ? nullptr : durationMsStr.c_str();
+    paramValues[13] = metadataStr.empty() ? nullptr : metadataStr.c_str();
+    paramValues[14] = durationMsStr.empty() ? nullptr : durationMsStr.c_str();
 
     // Execute query
-    PGresult* res = PQexecParams(conn, query, 14, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn, query.c_str(), 15, nullptr, paramValues,
                                  nullptr, nullptr, 0);
 
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -172,14 +174,16 @@ getUserInfoFromSession(const drogon::SessionPtr& session) {
     std::optional<std::string> username;
 
     if (session) {
-        auto userIdAttr = session->find("user_id");
-        if (userIdAttr != session->end()) {
-            userId = userIdAttr->second.asString();
+        try {
+            userId = session->get<std::string>("user_id");
+        } catch (...) {
+            // user_id not found in session
         }
 
-        auto usernameAttr = session->find("username");
-        if (usernameAttr != session->end()) {
-            username = usernameAttr->second.asString();
+        try {
+            username = session->get<std::string>("username");
+        } catch (...) {
+            // username not found in session
         }
     }
 

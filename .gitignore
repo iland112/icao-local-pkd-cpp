@@ -1,5 +1,6 @@
 # Build directories
-build/
+/build/
+!/scripts/build/
 cmake-build-*/
 out/
 
@@ -12,6 +13,7 @@ out/
 
 # vcpkg
 vcpkg_installed/
+.vcpkg-cache/
 
 # Compiled files
 *.o

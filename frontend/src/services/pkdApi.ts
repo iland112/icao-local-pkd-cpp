@@ -19,8 +19,10 @@ import type {
   UploadedFile,
   UploadStatisticsOverview,
   UploadChangesResponse,
+  UploadIssues,
   PageRequest,
   PageResponse,
+  LdifStructureData,
 } from '@/types';
 
 // =============================================================================
@@ -200,6 +202,14 @@ export const uploadHistoryApi = {
     pkdApi.get<ApiResponse<UploadedFile>>(`/upload/detail/${uploadId}`),
 
   /**
+   * Get upload issues (duplicates) by upload ID (v2.1.2.2)
+   * @param uploadId - Upload record UUID
+   * @returns List of duplicate certificates detected during upload
+   */
+  getIssues: (uploadId: string) =>
+    pkdApi.get<UploadIssues>(`/upload/${uploadId}/issues`),
+
+  /**
    * Get upload statistics overview
    * @returns Overall upload statistics (total files, certificates, etc.)
    */
@@ -211,13 +221,37 @@ export const uploadHistoryApi = {
    * @returns Top countries by certificate count
    */
   getCountryStatistics: (limit: number = 20) =>
-    pkdApi.get<Array<{
-      country: string;
-      csca: number;
-      dsc: number;
-      dscNc: number;
-      total: number;
-    }>>('/upload/countries', { params: { limit } }),
+    pkdApi.get<{
+      countries: Array<{
+        country: string;
+        csca: number;
+        mlsc: number;
+        dsc: number;
+        dscNc: number;
+        total: number;
+      }>;
+      totalCountries: number;
+    }>('/upload/countries', { params: { limit } }),
+
+  /**
+   * Get detailed country-level statistics
+   * @param limit - Number of countries to return (0 = all countries)
+   * @returns Detailed certificate statistics by country
+   */
+  getDetailedCountryStatistics: (limit: number = 0) =>
+    pkdApi.get<{
+      countries: Array<{
+        countryCode: string;
+        mlsc: number;
+        cscaSelfSigned: number;
+        cscaLinkCert: number;
+        dsc: number;
+        dscNc: number;
+        crl: number;
+        totalCerts: number;
+      }>;
+      totalCountries: number;
+    }>('/upload/countries/detailed', { params: { limit } }),
 
   /**
    * Get recent upload changes
@@ -226,6 +260,18 @@ export const uploadHistoryApi = {
    */
   getChanges: (limit: number = 10) =>
     pkdApi.get<UploadChangesResponse>('/upload/changes', { params: { limit } }),
+
+  /**
+   * Get LDIF file structure for visualization (v2.2.2)
+   * @param uploadId - Upload record UUID
+   * @param maxEntries - Maximum number of entries to return (1-10000, default: 100)
+   * @returns LDIF structure with entries and statistics
+   */
+  getLdifStructure: (uploadId: string, maxEntries: number = 100) =>
+    pkdApi.get<ApiResponse<LdifStructureData>>(
+      `/upload/${uploadId}/ldif-structure`,
+      { params: { maxEntries } }
+    ),
 };
 
 // =============================================================================

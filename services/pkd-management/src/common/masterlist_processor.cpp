@@ -125,165 +125,341 @@ bool parseMasterListEntryV2(
     // Calculate fingerprint of entire Master List
     std::string mlFingerprint = computeFileHash(mlBytes);
 
-    // Step 2: Parse CMS structure to extract individual CSCAs
+    // Step 2: Parse CMS SignedData structure
     BIO* bio = BIO_new_mem_buf(mlBytes.data(), static_cast<int>(mlBytes.size()));
     if (!bio) {
-        spdlog::error("[ML] Failed to create BIO for Master List");
+        spdlog::error("[ML-LDIF] Failed to create BIO for Master List: {}", entry.dn);
         return false;
     }
 
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
-    STACK_OF(X509)* certs = nullptr;
-    std::string signerDn;
-
-    if (cms) {
-        // CMS format
-        certs = CMS_get1_certs(cms);
-        if (certs && sk_X509_num(certs) > 0) {
-            X509* firstCert = sk_X509_value(certs, 0);
-            if (firstCert) {
-                char subjectBuf[512];
-                X509_NAME_oneline(X509_get_subject_name(firstCert), subjectBuf, sizeof(subjectBuf));
-                signerDn = subjectBuf;
-            }
-        }
-    } else {
-        // Fallback: Try PKCS#7
-        BIO_reset(bio);
-        PKCS7* p7 = d2i_PKCS7_bio(bio, nullptr);
-        if (p7) {
-            if (PKCS7_type_is_signed(p7)) {
-                certs = p7->d.sign->cert;
-                if (certs && sk_X509_num(certs) > 0) {
-                    X509* firstCert = sk_X509_value(certs, 0);
-                    if (firstCert) {
-                        char subjectBuf[512];
-                        X509_NAME_oneline(X509_get_subject_name(firstCert), subjectBuf, sizeof(subjectBuf));
-                        signerDn = subjectBuf;
-                    }
-                }
-            }
-            // Note: Don't free certs for PKCS7, they're managed by p7
-            PKCS7_free(p7);
-            certs = nullptr;  // Prevent double-free
-        }
-    }
-
     BIO_free(bio);
 
-    if (!certs || sk_X509_num(certs) == 0) {
-        spdlog::warn("[ML] No certificates found in Master List: {}", entry.dn);
-        if (cms) {
-            if (certs) sk_X509_pop_free(certs, X509_free);
-            CMS_ContentInfo_free(cms);
-        }
+    if (!cms) {
+        spdlog::error("[ML-LDIF] Failed to parse Master List as CMS SignedData: {}", entry.dn);
         return false;
     }
 
-    int totalCscas = sk_X509_num(certs);
-    spdlog::info("[ML] Master List contains {} CSCAs: country={}, fingerprint={}",
-                totalCscas, countryCode, mlFingerprint.substr(0, 16) + "...");
+    spdlog::info("[ML-LDIF] CMS SignedData parsed successfully: dn={}, size={} bytes", entry.dn, mlBytes.size());
 
-    // Use cn from entry as fallback signer DN
-    if (signerDn.empty()) {
-        signerDn = entry.getFirstAttribute("cn");
-        if (signerDn.empty()) {
-            signerDn = "Unknown";
-        }
-    }
-
-    // Step 3: Extract and save each CSCA
+    int totalCerts = 0;
     int newCount = 0;
     int dupCount = 0;
+    std::string signerDn = "Unknown";
 
-    for (int i = 0; i < totalCscas; i++) {
-        X509* cert = sk_X509_value(certs, i);
-        if (!cert) continue;
+    try {
+        // ====================================================================
+        // Step 2a: Extract MLSC certificates from CMS SignedData
+        // ====================================================================
+        // First, get all certificates from the CMS SignedData.certificates field
+        STACK_OF(X509)* certs = CMS_get1_certs(cms);
+        int numCerts = certs ? sk_X509_num(certs) : 0;
+        spdlog::info("[ML-LDIF] CMS SignedData contains {} certificate(s)", numCerts);
 
-        // Extract certificate metadata
-        CertificateMetadata meta = extractCertificateMetadata(cert);
+        // Get SignerInfo entries to match certificates
+        STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+        if (signerInfos && sk_CMS_SignerInfo_num(signerInfos) > 0) {
+            int numSigners = sk_CMS_SignerInfo_num(signerInfos);
+            spdlog::info("[ML-LDIF] Found {} SignerInfo entry(ies)", numSigners);
 
-        if (meta.derData.empty() || meta.fingerprint.empty()) {
-            spdlog::warn("[ML] CSCA {}/{} - Failed to extract metadata", i + 1, totalCscas);
-            continue;
-        }
+            for (int i = 0; i < numSigners; i++) {
+                CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, i);
+                if (!si) continue;
 
-        // Save with duplicate check
-        auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
-            conn, uploadId, "CSCA", countryCode,
-            meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
-            meta.notBefore, meta.notAfter, meta.derData,
-            "UNKNOWN", ""
-        );
+                // Try to find matching certificate from CMS certificates
+                X509* signerCert = nullptr;
 
-        if (certId < 0) {
-            spdlog::error("[ML] CSCA {}/{} - Failed to save to DB", i + 1, totalCscas);
-            continue;
-        }
+                if (certs && numCerts > 0) {
+                    // Match certificate with SignerInfo using issuer and serial
+                    for (int j = 0; j < numCerts; j++) {
+                        X509* cert = sk_X509_value(certs, j);
+                        if (CMS_SignerInfo_cert_cmp(si, cert) == 0) {
+                            signerCert = cert;
+                            spdlog::info("[ML-LDIF] MLSC {}/{} - Matched certificate from CMS certificates field (index {})",
+                                        i + 1, numSigners, j);
+                            break;
+                        }
+                    }
+                }
 
-        // Track source in certificate_duplicates table
-        std::string sourceFileName = "";  // Could extract from uploaded_file if needed
-        certificate_utils::trackCertificateDuplicate(
-            conn, certId, uploadId, "LDIF_002",
-            countryCode, entry.dn, sourceFileName
-        );
+                if (!signerCert) {
+                    // Get issuer and serial from SignerInfo for logging
+                    X509_NAME* issuer = nullptr;
+                    ASN1_INTEGER* serial = nullptr;
+                    CMS_SignerInfo_get0_signer_id(si, nullptr, &issuer, &serial);
 
-        if (isDuplicate) {
-            // Duplicate detected
-            dupCount++;
-            certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+                    char issuerBuf[512] = {0};
+                    if (issuer) {
+                        X509_NAME_oneline(issuer, issuerBuf, sizeof(issuerBuf));
+                    }
 
-            spdlog::info("[ML] CSCA {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, subject: {}",
-                        i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
-                        certId, meta.subjectDn);
-        } else {
-            // New certificate
-            newCount++;
+                    spdlog::warn("[ML-LDIF] MLSC {}/{} - No embedded certificate found (Issuer: {}). "
+                                "Master List only references MLSC, not embedding it.",
+                                i + 1, numSigners, issuerBuf);
+                    continue;
+                }
 
-            spdlog::info("[ML] CSCA {}/{} - NEW - fingerprint: {}, cert_id: {}, subject: {}",
-                        i + 1, totalCscas, meta.fingerprint.substr(0, 16) + "...",
-                        certId, meta.subjectDn);
+                // Extract signer DN
+                char subjectBuf[512];
+                X509_NAME_oneline(X509_get_subject_name(signerCert), subjectBuf, sizeof(subjectBuf));
+                signerDn = subjectBuf;
 
-            // Save to LDAP o=csca (only new certificates)
-            if (ld) {
-                std::string ldapDn = saveCertificateToLdap(
-                    ld, "CSCA", countryCode,
-                    meta.subjectDn, meta.issuerDn, meta.serialNumber,
-                    meta.fingerprint,  // Add fingerprint parameter
-                    meta.derData       // certBinary
+                // Extract MLSC metadata
+                CertificateMetadata meta = extractCertificateMetadata(signerCert);
+                if (meta.derData.empty() || meta.fingerprint.empty()) {
+                    spdlog::warn("[ML-LDIF] MLSC {}/{} - Failed to extract metadata", i + 1, numSigners);
+                    continue;
+                }
+
+                // Extract country code (usually UN for MLSC)
+                std::string certCountryCode = extractCountryCode(meta.subjectDn);
+                if (certCountryCode == "XX") {
+                    certCountryCode = countryCode;  // Fallback to LDAP entry country
+                }
+
+                spdlog::info("[ML-LDIF] MLSC {}/{} - Signer DN: {}, Country: {}",
+                            i + 1, numSigners, signerDn, certCountryCode);
+
+                // Save MLSC with duplicate check
+                auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
+                    conn, uploadId, "MLSC", certCountryCode,
+                    meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
+                    meta.notBefore, meta.notAfter, meta.derData,
+                    "UNKNOWN", ""
                 );
 
-                if (!ldapDn.empty()) {
-                    stats.ldapCscaStoredCount++;
-                    spdlog::debug("[ML] CSCA {}/{} - Saved to LDAP: {}", i + 1, totalCscas, ldapDn);
+                if (certId.empty()) {
+                    spdlog::error("[ML-LDIF] MLSC {}/{} - Failed to save to DB, reason: Database operation failed",
+                                 i + 1, numSigners);
+                    continue;
+                }
+
+                // Track source
+                certificate_utils::trackCertificateDuplicate(
+                    conn, certId, uploadId, "LDIF_002",
+                    certCountryCode, entry.dn, ""
+                );
+
+                if (isDuplicate) {
+                    certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+                    spdlog::info("[ML-LDIF] MLSC {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, reason: Already exists in DB",
+                                i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
                 } else {
-                    spdlog::warn("[ML] CSCA {}/{} - Failed to save to LDAP", i + 1, totalCscas);
+                    stats.mlscCount++;  // Track MLSC count (v2.1.1)
+                    spdlog::info("[ML-LDIF] MLSC {}/{} - NEW - fingerprint: {}, cert_id: {}",
+                                i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
+
+                    // Save MLSC to LDAP (o=mlsc)
+                    if (ld) {
+                        std::string ldapDn = saveCertificateToLdap(
+                            ld, "MLSC", certCountryCode,
+                            meta.subjectDn, meta.issuerDn, meta.serialNumber,
+                            meta.fingerprint, meta.derData,
+                            "", "", "",
+                            false  // useLegacyDn=false
+                        );
+
+                        if (!ldapDn.empty()) {
+                            certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                            spdlog::info("[ML-LDIF] MLSC {}/{} - Saved to LDAP: {}", i + 1, numSigners, ldapDn);
+                        } else {
+                            spdlog::warn("[ML-LDIF] MLSC {}/{} - Failed to save to LDAP, reason: LDAP operation failed",
+                                        i + 1, numSigners);
+                        }
+                    }
                 }
             }
         }
-    }
 
-    // Cleanup CMS structures
-    if (cms) {
-        sk_X509_pop_free(certs, X509_free);
+        // Free certificates stack
+        if (certs) {
+            sk_X509_pop_free(certs, X509_free);
+        }
+
+        // ====================================================================
+        // Step 2b: Extract CSCA/LC certificates from pkiData
+        // ====================================================================
+        ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+        if (!contentPtr || !*contentPtr) {
+            spdlog::warn("[ML-LDIF] No encapsulated content (pkiData) found: {}", entry.dn);
+            CMS_ContentInfo_free(cms);
+            return true;  // MLSC extraction succeeded, no pkiData is acceptable
+        }
+
+        const unsigned char* contentData = ASN1_STRING_get0_data(*contentPtr);
+        int contentLen = ASN1_STRING_length(*contentPtr);
+
+        spdlog::info("[ML-LDIF] Encapsulated content length: {} bytes", contentLen);
+
+        // Parse MasterList ASN.1 structure: MasterList ::= SEQUENCE { version INTEGER OPTIONAL, certList SET OF Certificate }
+        const unsigned char* p = contentData;
+        long remaining = contentLen;
+
+        // Parse outer SEQUENCE
+        int tag, xclass;
+        long seqLen;
+        int ret = ASN1_get_object(&p, &seqLen, &tag, &xclass, remaining);
+
+        if (ret == 0x80 || tag != V_ASN1_SEQUENCE) {
+            spdlog::error("[ML-LDIF] Invalid Master List structure: expected SEQUENCE, dn={}", entry.dn);
+            CMS_ContentInfo_free(cms);
+            return false;
+        }
+
+        const unsigned char* seqEnd = p + seqLen;
+
+        // Check first element: could be version (INTEGER) or certList (SET)
+        const unsigned char* elemStart = p;
+        long elemLen;
+        ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+
+        const unsigned char* certSetStart = nullptr;
+        long certSetLen = 0;
+
+        if (tag == V_ASN1_INTEGER) {
+            // Has version, skip it and read next element (certList)
+            p += elemLen;
+            if (p < seqEnd) {
+                ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+                if (tag == V_ASN1_SET) {
+                    certSetStart = p;
+                    certSetLen = elemLen;
+                }
+            }
+        } else if (tag == V_ASN1_SET) {
+            // No version, this is the certList
+            certSetStart = p;
+            certSetLen = elemLen;
+        }
+
+        if (!certSetStart || certSetLen == 0) {
+            spdlog::warn("[ML-LDIF] No certList SET found in Master List structure: {}", entry.dn);
+            CMS_ContentInfo_free(cms);
+            return true;  // MLSC extraction succeeded, empty certList is acceptable
+        }
+
+        spdlog::info("[ML-LDIF] Found certList SET: {} bytes", certSetLen);
+
+        // Parse certificates from SET
+        const unsigned char* certPtr = certSetStart;
+        const unsigned char* certSetEnd = certSetStart + certSetLen;
+
+        while (certPtr < certSetEnd) {
+            // Parse each certificate
+            const unsigned char* certStart = certPtr;
+            X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
+
+            if (!cert) {
+                spdlog::warn("[ML-LDIF] Failed to parse certificate in certList SET");
+                break;
+            }
+
+            totalCerts++;
+
+            // Extract certificate metadata
+            CertificateMetadata meta = extractCertificateMetadata(cert);
+            if (meta.derData.empty() || meta.fingerprint.empty()) {
+                spdlog::warn("[ML-LDIF] Certificate {} - Failed to extract metadata, reason: Metadata extraction failed", totalCerts);
+                X509_free(cert);
+                continue;
+            }
+
+            // Extract country code from Subject DN
+            std::string certCountryCode = extractCountryCode(meta.subjectDn);
+            if (certCountryCode == "XX") {
+                // Try Issuer DN as fallback (for link certificates)
+                certCountryCode = extractCountryCode(meta.issuerDn);
+                if (certCountryCode == "XX") {
+                    spdlog::warn("[ML-LDIF] Certificate {} - Could not extract country from Subject or Issuer DN, fingerprint: {}",
+                                totalCerts, meta.fingerprint.substr(0, 16) + "...");
+                    certCountryCode = countryCode;  // Use LDAP entry country as last resort
+                }
+            }
+
+            // Determine if link certificate
+            bool isLinkCertificate = (meta.subjectDn != meta.issuerDn);
+            std::string certType = "CSCA";
+            std::string ldapCertType = isLinkCertificate ? "LC" : "CSCA";
+
+            // Save with duplicate check
+            auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
+                conn, uploadId, certType, certCountryCode,
+                meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
+                meta.notBefore, meta.notAfter, meta.derData,
+                "UNKNOWN", ""
+            );
+
+            if (certId.empty()) {
+                std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+                spdlog::error("[ML-LDIF] {} {} - Failed to save to DB, reason: Database operation failed, fingerprint: {}",
+                             certTypeLabel, totalCerts, meta.fingerprint.substr(0, 16) + "...");
+                X509_free(cert);
+                continue;
+            }
+
+            certificate_utils::trackCertificateDuplicate(
+                conn, certId, uploadId, "LDIF_002",
+                certCountryCode, entry.dn, ""
+            );
+
+            if (isDuplicate) {
+                dupCount++;
+                certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+                std::string certTypeLabel = isLinkCertificate ? "LC" : "CSCA";
+                spdlog::debug("[ML-LDIF] {} {} - DUPLICATE - fingerprint: {}, cert_id: {}, reason: Already exists in DB",
+                            certTypeLabel, totalCerts, meta.fingerprint.substr(0, 16) + "...", certId);
+            } else {
+                newCount++;
+                std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+                spdlog::info("[ML-LDIF] {} {} - NEW - Country: {}, fingerprint: {}, cert_id: {}",
+                            certTypeLabel, totalCerts, certCountryCode, meta.fingerprint.substr(0, 16) + "...", certId);
+
+                // Save to LDAP
+                if (ld) {
+                    std::string ldapDn = saveCertificateToLdap(
+                        ld, ldapCertType, certCountryCode,
+                        meta.subjectDn, meta.issuerDn, meta.serialNumber,
+                        meta.fingerprint, meta.derData,
+                        "", "", "",
+                        false  // useLegacyDn=false
+                    );
+
+                    if (!ldapDn.empty()) {
+                        certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                        stats.ldapCscaStoredCount++;
+                        spdlog::debug("[ML-LDIF] {} {} - Saved to LDAP: {}", certTypeLabel, totalCerts, ldapDn);
+                    } else {
+                        spdlog::warn("[ML-LDIF] {} {} - Failed to save to LDAP, reason: LDAP operation failed",
+                                    certTypeLabel, totalCerts);
+                    }
+                }
+            }
+
+            X509_free(cert);
+        }
+
+        spdlog::info("[ML-LDIF] Extracted {} CSCA/LC certificates: {} new, {} duplicates",
+                    totalCerts, newCount, dupCount);
+
+        // Update statistics
+        stats.cscaExtractedCount += totalCerts;
+        stats.cscaNewCount += newCount;
+        stats.cscaDuplicateCount += dupCount;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ML-LDIF] Exception during Master List processing: {}, dn={}", e.what(), entry.dn);
         CMS_ContentInfo_free(cms);
+        return false;
     }
 
-    // Update statistics
-    stats.cscaExtractedCount += totalCscas;
-    stats.cscaNewCount += newCount;
-    stats.cscaDuplicateCount += dupCount;
-
-    spdlog::info("[ML] Extracted {} CSCAs: {} new, {} duplicates",
-                totalCscas, newCount, dupCount);
+    CMS_ContentInfo_free(cms);
 
     // Step 4: Save original Master List CMS to o=ml (backup)
     std::string mlId = saveMasterList(conn, uploadId, countryCode, signerDn,
-                                     mlFingerprint, totalCscas, mlBytes);
+                                     mlFingerprint, totalCerts, mlBytes);
 
     if (!mlId.empty()) {
-        stats.mlCount++;
-        spdlog::info("[ML] Saved Master List to DB: id={}, country={}", mlId, countryCode);
+        spdlog::info("[ML-LDIF] Saved Master List to DB: id={}, country={}", mlId, countryCode);
 
         // Save to LDAP o=ml (backup)
         if (ld) {
@@ -292,16 +468,369 @@ bool parseMasterListEntryV2(
             if (!ldapDn.empty()) {
                 updateMasterListLdapStatus(conn, mlId, ldapDn);
                 stats.ldapMlStoredCount++;
-                spdlog::info("[ML] Saved Master List to LDAP o=ml: {}", ldapDn);
+                spdlog::info("[ML-LDIF] Saved Master List to LDAP o=ml: {}", ldapDn);
+            } else {
+                spdlog::warn("[ML-LDIF] Failed to save Master List to LDAP o=ml, reason: LDAP operation failed");
             }
         }
     } else {
-        spdlog::error("[ML] Failed to save Master List to DB");
+        spdlog::error("[ML-LDIF] Failed to save Master List to DB, reason: Database operation failed");
         return false;
     }
 
     // Step 5: Update upload file statistics
-    certificate_utils::updateCscaExtractionStats(conn, uploadId, totalCscas, dupCount);
+    certificate_utils::updateCscaExtractionStats(conn, uploadId, totalCerts, dupCount);
 
     return true;
+}
+// New function for direct Master List file processing
+// Uses the same proven logic as parseMasterListEntryV2
+// Fixed processMasterListFile() - Extract pkiData (536 certificates)
+// Based on main.cpp 4270-4600 logic
+
+bool processMasterListFile(
+    PGconn* conn,
+    LDAP* ld,
+    const std::string& uploadId,
+    const std::vector<uint8_t>& content,
+    MasterListStats& stats
+) {
+    spdlog::info("[ML-FILE] Processing Master List file: {} bytes", content.size());
+
+    // Reset stats
+    stats = MasterListStats();
+
+    // Validate CMS format: first byte must be 0x30 (SEQUENCE tag)
+    if (content.empty() || content[0] != 0x30) {
+        spdlog::error("[ML-FILE] Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
+        return false;
+    }
+
+    // Parse as CMS SignedData
+    BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
+    if (!bio) {
+        spdlog::error("[ML-FILE] Failed to create BIO");
+        return false;
+    }
+
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+    BIO_free(bio);
+
+    if (!cms) {
+        spdlog::error("[ML-FILE] Failed to parse Master List as CMS SignedData");
+        return false;
+    }
+
+    spdlog::info("[ML-FILE] CMS SignedData parsed successfully");
+
+    int totalCerts = 0;
+    int newCount = 0;
+    int dupCount = 0;
+    std::string mlFingerprint = computeFileHash(content);
+    std::string signerDn = "Unknown";
+    std::string countryCode = "UN";  // Default to UN (ICAO)
+
+    try {
+        // ====================================================================
+        // Step 1: Extract MLSC certificates from SignerInfo
+        // ====================================================================
+        // Note: CMS_get1_certs() returns SignedData.certificates field, which is empty in ICAO Master Lists
+        // We need to extract certificates from SignerInfo instead
+        STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+        if (signerInfos && sk_CMS_SignerInfo_num(signerInfos) > 0) {
+            int numSigners = sk_CMS_SignerInfo_num(signerInfos);
+            spdlog::info("[ML-FILE] Found {} SignerInfo entries", numSigners);
+
+            // Extract signing certificates from each SignerInfo
+            for (int i = 0; i < numSigners; i++) {
+                CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, i);
+                if (!si) continue;
+
+                // Get the signing certificate from this SignerInfo
+                X509* signerCert = nullptr;
+
+                // Try to get certificate from SignerInfo's certificate chain
+                STACK_OF(X509)* certs = CMS_get1_certs(cms);
+                int numCerts = certs ? sk_X509_num(certs) : 0;
+
+                if (certs && numCerts > 0) {
+                    spdlog::info("[ML-FILE] CMS SignedData contains {} certificate(s)", numCerts);
+
+                    // Match certificate with SignerInfo using issuer and serial
+                    for (int j = 0; j < numCerts; j++) {
+                        X509* cert = sk_X509_value(certs, j);
+                        if (CMS_SignerInfo_cert_cmp(si, cert) == 0) {
+                            signerCert = cert;
+                            X509_up_ref(signerCert);  // Increment reference count
+                            spdlog::info("[ML-FILE] MLSC {}/{} - Matched certificate from CMS certificates field (index {})",
+                                        i + 1, numSigners, j);
+                            break;
+                        }
+                    }
+                    sk_X509_pop_free(certs, X509_free);
+                }
+
+                if (!signerCert) {
+                    // Get issuer and serial from SignerInfo for logging
+                    X509_NAME* issuer = nullptr;
+                    ASN1_INTEGER* serial = nullptr;
+                    CMS_SignerInfo_get0_signer_id(si, nullptr, &issuer, &serial);
+
+                    char issuerBuf[512] = {0};
+                    if (issuer) {
+                        X509_NAME_oneline(issuer, issuerBuf, sizeof(issuerBuf));
+                    }
+
+                    spdlog::warn("[ML-FILE] MLSC {}/{} - No embedded certificate found (Issuer: {}). "
+                                "Master List only references MLSC, not embedding it.",
+                                i + 1, numSigners, issuerBuf);
+                    continue;
+                }
+
+                // Extract metadata and save MLSC
+                CertificateMetadata meta = extractCertificateMetadata(signerCert);
+                if (meta.derData.empty() || meta.fingerprint.empty()) {
+                    spdlog::warn("[ML-FILE] MLSC {}/{} - Failed to extract metadata", i + 1, numSigners);
+                    X509_free(signerCert);
+                    continue;
+                }
+
+                // Extract country from signer DN (usually UN for ICAO)
+                char subjectBuf[512];
+                X509_NAME_oneline(X509_get_subject_name(signerCert), subjectBuf, sizeof(subjectBuf));
+                signerDn = subjectBuf;
+                countryCode = extractCountryCode(signerDn);
+                if (countryCode == "XX") {
+                    countryCode = "UN";  // Default to UN for ICAO Master List
+                }
+
+                spdlog::info("[ML-FILE] MLSC {}/{} - Signer DN: {}, Country: {}",
+                            i + 1, numSigners, signerDn, countryCode);
+
+                // Save MLSC with duplicate check
+                auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
+                    conn, uploadId, "MLSC", countryCode,
+                    meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
+                    meta.notBefore, meta.notAfter, meta.derData,
+                    "UNKNOWN", ""
+                );
+
+                if (!certId.empty()) {
+                    certificate_utils::trackCertificateDuplicate(
+                        conn, certId, uploadId, "ML_FILE",
+                        countryCode, "Master List Signer", ""
+                    );
+
+                    if (!isDuplicate) {
+                        stats.mlCount++;
+                        spdlog::info("[ML-FILE] MLSC {}/{} - NEW - fingerprint: {}, cert_id: {}",
+                                    i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
+
+                        // Save MLSC to LDAP (o=mlsc,c=UN)
+                        if (ld) {
+                            std::string ldapDn = saveCertificateToLdap(
+                                ld, "MLSC", countryCode,
+                                meta.subjectDn, meta.issuerDn, meta.serialNumber,
+                                meta.fingerprint, meta.derData,
+                                "", "", "",
+                                false  // useLegacyDn=false
+                            );
+
+                            if (!ldapDn.empty()) {
+                                certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                                spdlog::info("[ML-FILE] MLSC {}/{} - Saved to LDAP: {}", i + 1, numSigners, ldapDn);
+                            }
+                        }
+                    } else {
+                        spdlog::info("[ML-FILE] MLSC {}/{} - DUPLICATE - fingerprint: {}",
+                                    i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...");
+                    }
+                }
+
+                X509_free(signerCert);
+            }
+        } else {
+            spdlog::warn("[ML-FILE] No SignerInfo found in CMS SignedData");
+        }
+
+        // ====================================================================
+        // Step 2: Extract CSCA/LC certificates from pkiData
+        // ====================================================================
+        ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
+        if (!contentPtr || !*contentPtr) {
+            spdlog::error("[ML-FILE] Failed to extract encapsulated content (pkiData)");
+            CMS_ContentInfo_free(cms);
+            return false;
+        }
+
+        const unsigned char* contentData = ASN1_STRING_get0_data(*contentPtr);
+        int contentLen = ASN1_STRING_length(*contentPtr);
+
+        spdlog::info("[ML-FILE] Encapsulated content length: {} bytes", contentLen);
+
+        // Parse the Master List ASN.1 structure
+        // MasterList ::= SEQUENCE { version INTEGER OPTIONAL, certList SET OF Certificate }
+        const unsigned char* p = contentData;
+        long remaining = contentLen;
+
+        // Parse outer SEQUENCE
+        int tag, xclass;
+        long seqLen;
+        int ret = ASN1_get_object(&p, &seqLen, &tag, &xclass, remaining);
+
+        if (ret == 0x80 || tag != V_ASN1_SEQUENCE) {
+            spdlog::error("[ML-FILE] Invalid Master List structure: expected SEQUENCE");
+            CMS_ContentInfo_free(cms);
+            return false;
+        }
+
+        const unsigned char* seqEnd = p + seqLen;
+
+        // Check first element: could be version (INTEGER) or certList (SET)
+        const unsigned char* elemStart = p;
+        long elemLen;
+        ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+
+        const unsigned char* certSetStart = nullptr;
+        long certSetLen = 0;
+
+        if (tag == V_ASN1_INTEGER) {
+            // Has version, skip it and read next element (certList)
+            p += elemLen;
+            if (p < seqEnd) {
+                ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
+                if (tag == V_ASN1_SET) {
+                    certSetStart = p;
+                    certSetLen = elemLen;
+                }
+            }
+        } else if (tag == V_ASN1_SET) {
+            // No version, this is the certList
+            certSetStart = p;
+            certSetLen = elemLen;
+        }
+
+        if (!certSetStart || certSetLen == 0) {
+            spdlog::error("[ML-FILE] Failed to find certList SET in Master List structure");
+            CMS_ContentInfo_free(cms);
+            return false;
+        }
+
+        spdlog::info("[ML-FILE] Found certList SET: {} bytes", certSetLen);
+
+        // Parse certificates from SET
+        const unsigned char* certPtr = certSetStart;
+        const unsigned char* certSetEnd = certSetStart + certSetLen;
+
+        while (certPtr < certSetEnd) {
+            // Parse each certificate
+            const unsigned char* certStart = certPtr;
+            X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certStart);
+
+            if (!cert) {
+                spdlog::warn("[ML-FILE] Failed to parse certificate in certList SET");
+                break;
+            }
+
+            totalCerts++;
+
+            // Extract certificate metadata
+            CertificateMetadata meta = extractCertificateMetadata(cert);
+            if (meta.derData.empty() || meta.fingerprint.empty()) {
+                spdlog::warn("[ML-FILE] Certificate {}/{} - Failed to extract metadata", totalCerts, "?");
+                X509_free(cert);
+                continue;
+            }
+
+            // Extract country code from certificate (NOT from Master List signer)
+            std::string certCountryCode = extractCountryCode(meta.subjectDn);
+            if (certCountryCode == "XX") {
+                // Try issuer DN as fallback (for link certificates)
+                certCountryCode = extractCountryCode(meta.issuerDn);
+                if (certCountryCode == "XX") {
+                    spdlog::warn("[ML-FILE] Certificate {} - Could not extract country from Subject or Issuer DN: {}",
+                                totalCerts, meta.subjectDn);
+                    // Keep as "XX" - do NOT use UN as fallback
+                }
+            }
+
+            // Determine if link certificate
+            bool isLinkCertificate = (meta.subjectDn != meta.issuerDn);
+            std::string certType = "CSCA";
+            std::string ldapCertType = isLinkCertificate ? "LC" : "CSCA";
+
+            // Save with duplicate check
+            auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
+                conn, uploadId, certType, certCountryCode,
+                meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
+                meta.notBefore, meta.notAfter, meta.derData,
+                "UNKNOWN", ""
+            );
+
+            if (certId.empty()) {
+                spdlog::error("[ML-FILE] Certificate {} - Failed to save", totalCerts);
+                X509_free(cert);
+                continue;
+            }
+
+            certificate_utils::trackCertificateDuplicate(
+                conn, certId, uploadId, "ML_FILE",
+                certCountryCode, "Master List", ""
+            );
+
+            if (isDuplicate) {
+                dupCount++;
+                certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+            } else {
+                newCount++;
+                std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
+                spdlog::info("[ML-FILE] {} {} - NEW - Country: {}, fingerprint: {}, cert_id: {}",
+                            certTypeLabel, totalCerts, certCountryCode, meta.fingerprint.substr(0, 16) + "...", certId);
+
+                // Save to LDAP
+                if (ld) {
+                    std::string ldapDn = saveCertificateToLdap(
+                        ld, ldapCertType, certCountryCode,
+                        meta.subjectDn, meta.issuerDn, meta.serialNumber,
+                        meta.fingerprint, meta.derData,
+                        "", "", "",
+                        false  // useLegacyDn=false
+                    );
+
+                    if (!ldapDn.empty()) {
+                        certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                        stats.ldapCscaStoredCount++;
+                    }
+                }
+            }
+
+            X509_free(cert);
+        }
+
+        spdlog::info("[ML-FILE] Extracted {} CSCA/LC certificates: {} new, {} duplicates",
+                    totalCerts, newCount, dupCount);
+
+        // Update statistics
+        stats.cscaExtractedCount = totalCerts;
+        stats.cscaNewCount = newCount;
+        stats.cscaDuplicateCount = dupCount;
+
+        // Save Master List to DB
+        std::string mlId = saveMasterList(conn, uploadId, countryCode, signerDn,
+                                         mlFingerprint, totalCerts, content);
+
+        if (!mlId.empty()) {
+            spdlog::info("[ML-FILE] Saved Master List to DB: id={}", mlId);
+        }
+
+        certificate_utils::updateCscaExtractionStats(conn, uploadId, totalCerts, dupCount);
+
+        CMS_ContentInfo_free(cms);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ML-FILE] Exception during Master List processing: {}", e.what());
+        CMS_ContentInfo_free(cms);
+        return false;
+    }
 }

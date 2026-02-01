@@ -197,7 +197,23 @@ private:
         std::string& sn,
         std::string& fingerprint,
         std::chrono::system_clock::time_point& validFrom,
-        std::chrono::system_clock::time_point& validTo
+        std::chrono::system_clock::time_point& validTo,
+        // X.509 Metadata (v2.3.0)
+        int& version,
+        std::optional<std::string>& signatureAlgorithm,
+        std::optional<std::string>& signatureHashAlgorithm,
+        std::optional<std::string>& publicKeyAlgorithm,
+        std::optional<int>& publicKeySize,
+        std::optional<std::string>& publicKeyCurve,
+        std::vector<std::string>& keyUsage,
+        std::vector<std::string>& extendedKeyUsage,
+        std::optional<bool>& isCA,
+        std::optional<int>& pathLenConstraint,
+        std::optional<std::string>& subjectKeyIdentifier,
+        std::optional<std::string>& authorityKeyIdentifier,
+        std::vector<std::string>& crlDistributionPoints,
+        std::optional<std::string>& ocspResponderUrl,
+        std::optional<bool>& isCertSelfSigned
     );
 
     /**

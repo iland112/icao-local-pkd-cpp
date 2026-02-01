@@ -8,6 +8,7 @@
 
 #include "ldap_certificate_repository.h"
 #include "../common/ldap_utils.h"
+#include "../common/x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/sha.h>
@@ -151,10 +152,11 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
 
     spdlog::debug("[LdapCertificateRepository] Search - BaseDN: {}, Filter: {}", baseDn, filter);
 
-    // Attributes to retrieve
+    // Attributes to retrieve (including DSC_NC specific attributes)
     const char* attrs[] = {
         "cn", "serialNumber", "c", "o", "userCertificate;binary",
-        "cACertificate;binary", "certificateRevocationList;binary", nullptr
+        "cACertificate;binary", "certificateRevocationList;binary",
+        "pkdConformanceCode", "pkdConformanceText", "pkdVersion", nullptr
     };
 
     // Execute LDAP search
@@ -192,6 +194,13 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
     searchResult.limit = criteria.limit;
     searchResult.offset = criteria.offset;
 
+    // Initialize statistics
+    searchResult.stats.total = 0;
+    searchResult.stats.valid = 0;
+    searchResult.stats.expired = 0;
+    searchResult.stats.notYetValid = 0;
+    searchResult.stats.unknown = 0;
+
     // Post-filtering: When certType is specified without country, we search from dataTree
     // and need to filter by DN to match the requested type
     bool needsTypeFiltering = criteria.certType.has_value() &&
@@ -203,8 +212,9 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
     int collected = 0;
     int matchedCount = 0; // Count of entries matching all criteria (including filters)
 
+    // Note: When filtering is needed, we must iterate through ALL entries to get accurate total count
     for (LDAPMessage* entry = ldap_first_entry(ldap_, result);
-         entry != nullptr && collected < criteria.limit;
+         entry != nullptr;
          entry = ldap_next_entry(ldap_, entry))
     {
         // Get DN
@@ -229,6 +239,27 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
             // Parse entry into Certificate entity
             domain::models::Certificate cert = parseEntry(entry, dn);
 
+            // Update statistics (before validity filtering)
+            // Note: Statistics represent all matching certificates (ignoring validity filter)
+            if (!needsValidityFiltering) {
+                searchResult.stats.total++;
+                auto validityStatus = cert.getValidityStatus();
+                switch (validityStatus) {
+                    case domain::models::ValidityStatus::VALID:
+                        searchResult.stats.valid++;
+                        break;
+                    case domain::models::ValidityStatus::EXPIRED:
+                        searchResult.stats.expired++;
+                        break;
+                    case domain::models::ValidityStatus::NOT_YET_VALID:
+                        searchResult.stats.notYetValid++;
+                        break;
+                    default:
+                        searchResult.stats.unknown++;
+                        break;
+                }
+            }
+
             // Apply validity filtering if needed
             if (needsValidityFiltering) {
                 if (cert.getValidityStatus() != *criteria.validity) {
@@ -241,6 +272,11 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
 
             // Skip entries before offset
             if (matchedCount <= criteria.offset) {
+                continue;
+            }
+
+            // Check if we've collected enough (but keep counting for total)
+            if (collected >= criteria.limit) {
                 continue;
             }
 
@@ -271,10 +307,11 @@ domain::models::Certificate LdapCertificateRepository::getByDn(const std::string
 
     spdlog::debug("[LdapCertificateRepository] Fetching certificate by DN: {}", dn);
 
-    // Attributes to retrieve
+    // Attributes to retrieve (including DSC_NC specific attributes)
     const char* attrs[] = {
         "cn", "serialNumber", "c", "o", "userCertificate;binary",
-        "cACertificate;binary", "certificateRevocationList;binary", nullptr
+        "cACertificate;binary", "certificateRevocationList;binary",
+        "pkdConformanceCode", "pkdConformanceText", "pkdVersion", nullptr
     };
 
     // Search for specific DN (base search)
@@ -477,6 +514,9 @@ std::string LdapCertificateRepository::getSearchBaseDn(
             case domain::models::CertificateType::CSCA:
                 orgComponent = "o=csca,";
                 break;
+            case domain::models::CertificateType::MLSC:
+                orgComponent = "o=mlsc,";
+                break;
             case domain::models::CertificateType::DSC:
                 orgComponent = "o=dsc,";
                 break;
@@ -556,9 +596,26 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         throw std::runtime_error("No certificate binary data found in entry: " + dn);
     }
 
-    // Parse X.509 certificate
+    // Parse X.509 certificate (including metadata - v2.3.0)
     std::string subjectDn, issuerDn, fingerprint;
     std::chrono::system_clock::time_point validFrom, validTo;
+
+    // X.509 Metadata variables
+    int version = 2;
+    std::optional<std::string> signatureAlgorithm;
+    std::optional<std::string> signatureHashAlgorithm;
+    std::optional<std::string> publicKeyAlgorithm;
+    std::optional<int> publicKeySize;
+    std::optional<std::string> publicKeyCurve;
+    std::vector<std::string> keyUsage;
+    std::vector<std::string> extendedKeyUsage;
+    std::optional<bool> isCA;
+    std::optional<int> pathLenConstraint;
+    std::optional<std::string> subjectKeyIdentifier;
+    std::optional<std::string> authorityKeyIdentifier;
+    std::vector<std::string> crlDistributionPoints;
+    std::optional<std::string> ocspResponderUrl;
+    std::optional<bool> isCertSelfSigned;
 
     parseX509Certificate(
         certBinary,
@@ -568,10 +625,56 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         sn, // May be updated from certificate
         fingerprint,
         validFrom,
-        validTo
+        validTo,
+        // X.509 Metadata
+        version,
+        signatureAlgorithm,
+        signatureHashAlgorithm,
+        publicKeyAlgorithm,
+        publicKeySize,
+        publicKeyCurve,
+        keyUsage,
+        extendedKeyUsage,
+        isCA,
+        pathLenConstraint,
+        subjectKeyIdentifier,
+        authorityKeyIdentifier,
+        crlDistributionPoints,
+        ocspResponderUrl,
+        isCertSelfSigned
     );
 
-    // Create Certificate entity
+    // Read DSC_NC specific attributes (optional)
+    std::optional<std::string> pkdConformanceCode;
+    std::optional<std::string> pkdConformanceText;
+    std::optional<std::string> pkdVersion;
+
+    if (certType == domain::models::CertificateType::DSC_NC) {
+        std::string conformanceCode = getAttributeValue(entry, "pkdConformanceCode");
+        if (!conformanceCode.empty()) {
+            pkdConformanceCode = conformanceCode;
+            spdlog::debug("[LdapCertificateRepository] DSC_NC pkdConformanceCode: {}", conformanceCode);
+        }
+
+        std::string conformanceText = getAttributeValue(entry, "pkdConformanceText");
+        if (!conformanceText.empty()) {
+            pkdConformanceText = conformanceText;
+            spdlog::debug("[LdapCertificateRepository] DSC_NC pkdConformanceText: {}", conformanceText.substr(0, 50));
+        }
+
+        std::string version = getAttributeValue(entry, "pkdVersion");
+        if (!version.empty()) {
+            pkdVersion = version;
+            spdlog::debug("[LdapCertificateRepository] DSC_NC pkdVersion: {}", version);
+        }
+
+        spdlog::info("[LdapCertificateRepository] DSC_NC attributes read - Code:{}, Text:{}, Version:{}",
+            pkdConformanceCode.has_value() ? "YES" : "NO",
+            pkdConformanceText.has_value() ? "YES" : "NO",
+            pkdVersion.has_value() ? "YES" : "NO");
+    }
+
+    // Create Certificate entity (with X.509 metadata - v2.3.0)
     return domain::models::Certificate(
         dn,
         cn,
@@ -582,7 +685,26 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         issuerDn,
         fingerprint,
         validFrom,
-        validTo
+        validTo,
+        pkdConformanceCode,
+        pkdConformanceText,
+        pkdVersion,
+        // X.509 Metadata
+        version,
+        signatureAlgorithm,
+        signatureHashAlgorithm,
+        publicKeyAlgorithm,
+        publicKeySize,
+        publicKeyCurve,
+        keyUsage,
+        extendedKeyUsage,
+        isCA,
+        pathLenConstraint,
+        subjectKeyIdentifier,
+        authorityKeyIdentifier,
+        crlDistributionPoints,
+        ocspResponderUrl,
+        isCertSelfSigned
     );
 }
 
@@ -591,9 +713,14 @@ domain::models::CertificateType LdapCertificateRepository::extractCertTypeFromDn
     std::string dnLower = dn;
     std::transform(dnLower.begin(), dnLower.end(), dnLower.begin(), ::tolower);
 
-    // Check for certificate type in DN (o=csca, o=dsc, o=crl, o=ml)
+    // Check for certificate type in DN (o=csca, o=lc, o=mlsc, o=dsc, o=crl, o=ml)
     if (dnLower.find("o=csca") != std::string::npos) {
         return domain::models::CertificateType::CSCA;
+    } else if (dnLower.find("o=lc") != std::string::npos) {
+        // Link Certificates are stored as CSCA type in database
+        return domain::models::CertificateType::CSCA;
+    } else if (dnLower.find("o=mlsc") != std::string::npos) {
+        return domain::models::CertificateType::MLSC;
     } else if (dnLower.find("o=dsc") != std::string::npos) {
         // Check if it's under nc-data (non-conformant)
         if (dnLower.find("dc=nc-data") != std::string::npos) {
@@ -644,7 +771,23 @@ void LdapCertificateRepository::parseX509Certificate(
     std::string& sn,
     std::string& fingerprint,
     std::chrono::system_clock::time_point& validFrom,
-    std::chrono::system_clock::time_point& validTo
+    std::chrono::system_clock::time_point& validTo,
+    // X.509 Metadata (v2.3.0)
+    int& version,
+    std::optional<std::string>& signatureAlgorithm,
+    std::optional<std::string>& signatureHashAlgorithm,
+    std::optional<std::string>& publicKeyAlgorithm,
+    std::optional<int>& publicKeySize,
+    std::optional<std::string>& publicKeyCurve,
+    std::vector<std::string>& keyUsage,
+    std::vector<std::string>& extendedKeyUsage,
+    std::optional<bool>& isCA,
+    std::optional<int>& pathLenConstraint,
+    std::optional<std::string>& subjectKeyIdentifier,
+    std::optional<std::string>& authorityKeyIdentifier,
+    std::vector<std::string>& crlDistributionPoints,
+    std::optional<std::string>& ocspResponderUrl,
+    std::optional<bool>& isCertSelfSigned
 ) {
     // Parse DER-encoded certificate using OpenSSL
     const unsigned char* data = derData.data();
@@ -725,6 +868,38 @@ void LdapCertificateRepository::parseX509Certificate(
         ASN1_TIME_to_tm(notAfter, &tm);
         time_t t = mktime(&tm);
         validTo = std::chrono::system_clock::from_time_t(t);
+    }
+
+    // Extract X.509 metadata (v2.3.0)
+    try {
+        auto metadata = x509::extractMetadata(cert);
+
+        version = metadata.version;
+        signatureAlgorithm = metadata.signatureAlgorithm;
+        signatureHashAlgorithm = metadata.signatureHashAlgorithm;
+        publicKeyAlgorithm = metadata.publicKeyAlgorithm;
+        publicKeySize = metadata.publicKeySize;
+        publicKeyCurve = metadata.publicKeyCurve;
+        keyUsage = metadata.keyUsage;
+        extendedKeyUsage = metadata.extendedKeyUsage;
+        isCA = metadata.isCA;
+        pathLenConstraint = metadata.pathLenConstraint;
+        subjectKeyIdentifier = metadata.subjectKeyIdentifier;
+        authorityKeyIdentifier = metadata.authorityKeyIdentifier;
+        crlDistributionPoints = metadata.crlDistributionPoints;
+        ocspResponderUrl = metadata.ocspResponderUrl;
+        isCertSelfSigned = metadata.isSelfSigned;
+
+        spdlog::debug("[LdapCertificateRepository] Extracted X.509 metadata - "
+                     "Version: {}, SigAlg: {}, PubKeyAlg: {}, KeySize: {}, isCA: {}",
+                     metadata.version,
+                     metadata.signatureAlgorithm,
+                     metadata.publicKeyAlgorithm,
+                     metadata.publicKeySize,
+                     metadata.isCA ? "TRUE" : "FALSE");
+    } catch (const std::exception& e) {
+        spdlog::warn("[LdapCertificateRepository] Failed to extract X.509 metadata: {}", e.what());
+        // Continue without metadata - fields will remain as default/nullopt
     }
 
     X509_free(cert);

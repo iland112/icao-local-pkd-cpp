@@ -20,7 +20,7 @@ export interface HealthStatus {
 }
 
 // Upload types
-export type FileFormat = 'LDIF' | 'MASTER_LIST';
+export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST';  // Backend uses 'ML', some places use 'MASTER_LIST'
 export type UploadStatus = 'PENDING' | 'UPLOADING' | 'PARSING' | 'VALIDATING' | 'SAVING_DB' | 'SAVING_LDAP' | 'COMPLETED' | 'FAILED';
 export type ProcessingMode = 'AUTO' | 'MANUAL';
 
@@ -44,6 +44,7 @@ export interface UploadedFile {
   dscNcCount?: number;
   crlCount?: number;
   mlCount?: number;
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
   certificateCount?: number;
   totalEntries?: number;
   processedEntries?: number;
@@ -77,6 +78,128 @@ export interface UploadStatistics {
   skippedCount: number;
 }
 
+// Upload Issues (v2.1.2.2) - Duplicates detected during upload
+export interface UploadDuplicate {
+  id: number;
+  certificateType: CertificateType;
+  country: string;
+  subjectDn: string;
+  fingerprint: string;
+  sourceType: string;
+  sourceCountry?: string;
+  sourceEntryDn?: string;
+  sourceFileName?: string;
+  detectedAt: string;
+
+  // Certificate and first upload info for tree view
+  certificateId: string;
+  firstUploadId: string;
+  firstUploadFileName?: string;
+  firstUploadTimestamp?: string;
+}
+
+export interface UploadIssues {
+  success: boolean;
+  totalDuplicates: number;
+  duplicates: UploadDuplicate[];
+  byType: {
+    CSCA: number;
+    DSC: number;
+    DSC_NC: number;
+    MLSC: number;
+    CRL: number;
+  };
+  error?: string;
+}
+
+// Phase 4.4: X.509 Certificate Metadata (from backend)
+export interface CertificateMetadata {
+  // Identity
+  subjectDn: string;
+  issuerDn: string;
+  serialNumber: string;
+  countryCode: string;
+
+  // Certificate type
+  certificateType: string;  // CSCA, DSC, DSC_NC, MLSC
+  isSelfSigned: boolean;
+  isLinkCertificate: boolean;
+
+  // Cryptographic details
+  signatureAlgorithm: string;     // e.g., "SHA256withRSA"
+  publicKeyAlgorithm: string;     // e.g., "RSA", "ECDSA"
+  keySize: number;                // e.g., 2048, 4096
+
+  // X.509 Extensions
+  isCa: boolean;
+  pathLengthConstraint?: number;
+  keyUsage: string[];             // e.g., ["digitalSignature", "keyCertSign"]
+  extendedKeyUsage: string[];     // e.g., ["1.3.6.1.5.5.7.3.2"]
+
+  // Validity period
+  notBefore: string;
+  notAfter: string;
+  isExpired: boolean;
+
+  // Fingerprints
+  fingerprintSha256: string;
+  fingerprintSha1: string;
+}
+
+// Phase 4.4: ICAO 9303 Compliance Status
+export interface IcaoComplianceStatus {
+  isCompliant: boolean;
+  complianceLevel: string;         // CONFORMANT, NON_CONFORMANT, WARNING
+  violations: string[];
+  pkdConformanceCode?: string;     // e.g., "ERR:CSCA.CDP.14"
+  pkdConformanceText?: string;
+  pkdVersion?: string;
+
+  // Specific compliance checks
+  keyUsageCompliant: boolean;
+  algorithmCompliant: boolean;
+  keySizeCompliant: boolean;
+  validityPeriodCompliant: boolean;
+  dnFormatCompliant: boolean;
+  extensionsCompliant: boolean;
+}
+
+// Phase 4.4: Real-time Validation Statistics
+export interface ValidationStatistics {
+  // Overall counts
+  totalCertificates: number;
+  processedCount: number;
+  validCount: number;
+  invalidCount: number;
+  pendingCount: number;
+
+  // Trust chain results
+  trustChainValidCount: number;
+  trustChainInvalidCount: number;
+  cscaNotFoundCount: number;
+
+  // Expiration status
+  expiredCount: number;
+  notYetValidCount: number;
+  validPeriodCount: number;
+
+  // CRL status
+  revokedCount: number;
+  notRevokedCount: number;
+  crlNotCheckedCount: number;
+
+  // ICAO compliance (Phase 4.4)
+  icaoCompliantCount: number;
+  icaoNonCompliantCount: number;
+  icaoWarningCount: number;
+  complianceViolations: Record<string, number>;  // violation type -> count
+
+  // Distribution maps
+  signatureAlgorithms: Record<string, number>;  // "SHA256withRSA" -> count
+  keySizes: Record<string, number>;             // "2048" -> count
+  certificateTypes: Record<string, number>;     // "DSC" -> count, "CSCA" -> count
+}
+
 export interface UploadProgress {
   uploadId: string;
   stage: string;
@@ -90,10 +213,15 @@ export interface UploadProgress {
   updatedAt?: string;
   // For backward compatibility with frontend stage handling
   status?: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
+
+  // Phase 4.4: Enhanced metadata
+  currentCertificate?: CertificateMetadata;    // Currently processing certificate
+  currentCompliance?: IcaoComplianceStatus;    // Current cert compliance status
+  statistics?: ValidationStatistics;           // Aggregated statistics
 }
 
 // Certificate types
-export type CertificateType = 'CSCA' | 'DSC' | 'DSC_NC' | 'DS' | 'ML_SIGNER';
+export type CertificateType = 'CSCA' | 'DSC' | 'DSC_NC' | 'DS' | 'ML_SIGNER' | 'MLSC';  // MLSC added in v2.1.1
 export type CertificateStatus = 'PENDING' | 'VALID' | 'INVALID' | 'EXPIRED' | 'REVOKED';
 
 export interface Certificate {
@@ -306,14 +434,21 @@ export interface UploadStatisticsOverview {
   failedUploads: number;
   totalCertificates: number;
   cscaCount: number;
+  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
   dscCount: number;
   dscNcCount: number;
   crlCount: number;
   mlCount: number;  // Master List count
   countriesCount: number;
-  // Collection 002 CSCA extraction statistics (v2.0.0)
-  cscaExtractedFromMl?: number;  // Total CSCAs extracted from Master Lists
-  cscaDuplicates?: number;       // Duplicate CSCAs detected
+  // Master List extraction statistics (v2.1.1)
+  cscaExtractedFromMl?: number;  // Total certificates extracted from Master Lists (MLSC + CSCA + LC)
+  cscaDuplicates?: number;       // Duplicate certificates detected
+  // CSCA breakdown (v2.0.9)
+  cscaBreakdown?: {
+    total: number;
+    selfSigned: number;
+    linkCertificates: number;
+  };
   validation: ValidationStats;
 }
 
@@ -325,6 +460,7 @@ export interface UploadChange {
   uploadTime: string;
   counts: {
     csca: number;
+    mlsc?: number;
     dsc: number;
     dscNc: number;
     crl: number;
@@ -364,6 +500,7 @@ export type SyncStatusType = 'SYNCED' | 'DISCREPANCY' | 'ERROR' | 'PENDING' | 'N
 
 export interface SyncStats {
   csca: number;
+  mlsc: number;  // Master List Signer Certificates (Sprint 3)
   dsc: number;
   dscNc: number;
   crl: number;
@@ -373,6 +510,7 @@ export interface SyncStats {
 
 export interface SyncDiscrepancy {
   csca: number;
+  mlsc: number;  // Master List Signer Certificates (Sprint 3)
   dsc: number;
   dscNc: number;
   crl: number;
@@ -421,4 +559,40 @@ export interface SyncCheckResponse {
   ldapStats: SyncStats;
   discrepancy: SyncDiscrepancy;
   checkDurationMs: number;
+}
+
+// =============================================================================
+// LDIF Structure Visualization Types (v2.2.2)
+// =============================================================================
+
+/**
+ * LDIF Attribute with binary detection
+ */
+export interface LdifAttribute {
+  name: string;           // Attribute name (e.g., "cn", "userCertificate;binary")
+  value: string;          // Attribute value (or "[Binary Data: XXX bytes]" for binary)
+  isBinary: boolean;      // True if this is a binary attribute
+  binarySize?: number;    // Size in bytes (for binary attributes)
+}
+
+/**
+ * LDIF Entry structure for visualization
+ */
+export interface LdifEntry {
+  dn: string;                      // Distinguished Name
+  objectClass: string;             // Primary objectClass (e.g., "pkdCertificate")
+  attributes: LdifAttribute[];     // All attributes with values
+  lineNumber: number;              // Line number in LDIF file
+}
+
+/**
+ * Complete LDIF structure with statistics
+ */
+export interface LdifStructureData {
+  entries: LdifEntry[];                         // Parsed entries (limited by maxEntries)
+  totalEntries: number;                         // Total entries in file
+  displayedEntries: number;                     // Number of entries displayed
+  totalAttributes: number;                      // Total attributes across all entries
+  objectClassCounts: Record<string, number>;    // Count of entries by objectClass
+  truncated: boolean;                           // True if totalEntries > displayedEntries
 }

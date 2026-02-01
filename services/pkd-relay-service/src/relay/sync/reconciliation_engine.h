@@ -32,8 +32,16 @@ private:
         const std::string& certType,
         int limit) const;
 
+    // v2.0.5: Find CRLs in DB that are missing in LDAP
+    std::vector<CrlInfo> findMissingCrlsInLdap(
+        PGconn* pgConn,
+        int limit) const;
+
     // Mark certificate as stored in LDAP
     void markAsStoredInLdap(PGconn* pgConn, const std::string& certId) const;
+
+    // v2.0.5: Mark CRL as stored in LDAP
+    void markCrlAsStoredInLdap(PGconn* pgConn, const std::string& crlId) const;
 
     // Connect to LDAP write host
     LDAP* connectToLdapWrite(std::string& errorMsg) const;
@@ -43,6 +51,14 @@ private:
         PGconn* pgConn,
         LDAP* ld,
         const std::string& certType,
+        bool dryRun,
+        ReconciliationResult& result,
+        int reconciliationId) const;
+
+    // v2.0.5: Process CRLs
+    void processCrls(
+        PGconn* pgConn,
+        LDAP* ld,
         bool dryRun,
         ReconciliationResult& result,
         int reconciliationId) const;

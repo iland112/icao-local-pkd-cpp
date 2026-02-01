@@ -87,17 +87,23 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_DATA_CONTAINER=dc=data          # Container for normal certificates
+      - LDAP_NC_DATA_CONTAINER=dc=nc-data    # Container for non-conformant certificates
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
       # JWT Authentication (Phase 3)
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}          # From .env file (REQUIRED)
       - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}        # Default: icao-pkd
       - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}  # Default: 3600 (1 hour)
       - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
+      # ASN.1 Parser Configuration
+      - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}     # Default: 100 (max lines for Master List structure parsing)
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/pkd-logs:/app/logs
       - ../.docker-data/pkd-uploads:/app/uploads
@@ -131,6 +137,8 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
+      - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
+      - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
@@ -138,8 +146,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/pa-logs:/app/logs
     networks:
@@ -159,6 +169,7 @@ services:
   # - DB-LDAP Sync Monitoring
   # ---------------------------------------------------------------------------
   pkd-relay:
+    image: icao-pkd-relay:v2.0.5
     build:
       context: ..
       dockerfile: services/pkd-relay-service/Dockerfile
@@ -189,8 +200,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/sync-logs:/app/logs
     networks:
@@ -274,8 +287,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      haproxy:
-        condition: service_started
+      openldap1:
+        condition: service_healthy
+      openldap2:
+        condition: service_healthy
     volumes:
       - ../.docker-data/app-logs:/app/logs
       - ../.docker-data/app-uploads:/app/uploads
@@ -293,7 +308,7 @@ services:
     image: postgres:15
     container_name: icao-local-pkd-postgres
     ports:
-      - "5432:5432"
+      - "15432:5432"  # External: 15432, Internal: 5432 (WSL2 port forwarding workaround)
     environment:
       - POSTGRES_USER=pkd
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)
@@ -338,28 +353,6 @@ services:
     networks:
       - pkd-network
     restart: "no"
-
-  # ---------------------------------------------------------------------------
-  # HAProxy (LDAP Load Balancer - Shared)
-  # ---------------------------------------------------------------------------
-  haproxy:
-    image: haproxy:2.8
-    container_name: icao-local-pkd-haproxy
-    ports:
-      - "389:389"
-      # - "8404:8404"  # Stats page - temporarily disabled due to WSL2 port forwarding issue
-    volumes:
-      - ../haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
-    depends_on:
-      openldap1:
-        condition: service_healthy
-      openldap2:
-        condition: service_healthy
-      ldap-init:
-        condition: service_completed_successfully
-    networks:
-      - pkd-network
-    restart: unless-stopped
 
   # ---------------------------------------------------------------------------
   # OpenLDAP Node 1 (MMR Master - Shared)

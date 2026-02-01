@@ -12,6 +12,7 @@ namespace relay {
 // =============================================================================
 struct DbStats {
     int cscaCount = 0;
+    int mlscCount = 0;  // Master List Signer Certificates (Sprint 3)
     int dscCount = 0;
     int dscNcCount = 0;
     int crlCount = 0;
@@ -24,6 +25,7 @@ struct DbStats {
 // =============================================================================
 struct LdapStats {
     int cscaCount = 0;
+    int mlscCount = 0;  // Master List Signer Certificates (Sprint 3)
     int dscCount = 0;
     int dscNcCount = 0;
     int crlCount = 0;
@@ -39,6 +41,7 @@ struct SyncResult {
     DbStats dbStats;
     LdapStats ldapStats;
     int cscaDiscrepancy = 0;
+    int mlscDiscrepancy = 0;  // Master List Signer Certificates (Sprint 3)
     int dscDiscrepancy = 0;
     int dscNcDiscrepancy = 0;
     int crlDiscrepancy = 0;
@@ -57,7 +60,20 @@ struct CertificateInfo {
     std::string countryCode;
     std::string subject;
     std::string issuer;
+    std::string fingerprint;    // SHA-256 fingerprint (hex) for DN
     std::vector<unsigned char> certData;
+    std::string ldapDn;         // LDAP Distinguished Name
+};
+
+// =============================================================================
+// CRL Information (v2.0.5)
+// =============================================================================
+struct CrlInfo {
+    std::string id;             // UUID
+    std::string countryCode;
+    std::string issuerDn;
+    std::string fingerprint;    // SHA-256 fingerprint (hex) for DN
+    std::vector<unsigned char> crlData;
     std::string ldapDn;         // LDAP Distinguished Name
 };
 

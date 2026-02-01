@@ -5,8 +5,11 @@
 #
 # This configuration is for ARM64 deployment with:
 # - Native OpenLDAP (systemd service on host)
-# - Native HAProxy (systemd service on host)
 # - Docker containers: PostgreSQL + App Services
+#
+# LDAP Strategy (v2.0.1+):
+#   - Applications use direct connections to OpenLDAP servers
+#   - Application-level load balancing (no HAProxy)
 #
 # Usage:
 #   docker compose -f docker-compose.arm64.yaml up -d

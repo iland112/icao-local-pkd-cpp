@@ -60,6 +60,10 @@ add_executable(${PROJECT_NAME}
     # Common Utilities (NEW - v2.0.0)
     src/common/certificate_utils.cpp
     src/common/masterlist_processor.cpp
+    src/common/x509_metadata_extractor.cpp
+    src/common/progress_manager.cpp  # Phase 4.4: Enhanced progress tracking
+    src/common/asn1_parser.cpp       # ASN.1/TLV parser for Master List structure
+    src/common/ldif_parser.cpp       # v2.2.2: LDIF structure parser for visualization
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp
@@ -68,6 +72,21 @@ add_executable(${PROJECT_NAME}
     # Clean Architecture Layers (Existing)
     src/repositories/ldap_certificate_repository.cpp
     src/services/certificate_service.cpp
+
+    # Repository Layer - main.cpp refactoring (v2.1.3 Phase 1.5)
+    src/repositories/upload_repository.cpp
+    src/repositories/certificate_repository.cpp
+    src/repositories/validation_repository.cpp
+    src/repositories/audit_repository.cpp
+    src/repositories/statistics_repository.cpp
+    src/repositories/ldif_structure_repository.cpp  # v2.2.2: LDIF structure visualization
+
+    # Service Layer - main.cpp refactoring (v2.1.3)
+    src/services/upload_service.cpp
+    src/services/validation_service.cpp
+    src/services/audit_service.cpp
+    src/services/statistics_service.cpp
+    src/services/ldif_structure_service.cpp  # v2.2.2: LDIF structure visualization
 
     # ICAO Auto Sync Module (NEW - v1.7.0)
     src/infrastructure/http/http_client.cpp

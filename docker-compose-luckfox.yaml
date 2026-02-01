@@ -2,8 +2,12 @@
 # ICAO Local PKD C++ - Luckfox ARM64 Deployment
 # =============================================================================
 # Network Architecture:
-#   192.168.100.10: HAProxy (:10389) + OpenLDAP1 (:389) - Master Node
+#   192.168.100.10: OpenLDAP1 (:389) - Master Node
 #   192.168.100.11: OpenLDAP2 (:389) + Docker Apps - This Node
+#
+# LDAP Strategy (v2.0.1+):
+#   - Applications use direct connections to both LDAP servers
+#   - Application-level load balancing (no HAProxy)
 #
 # Network Isolation (Phase 4.3):
 #   - frontend network: External access (API Gateway, Frontend)
@@ -75,10 +79,8 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      # LDAP Read via HAProxy on Master Node (port 10389)
-      - LDAP_HOST=192.168.100.10
-      - LDAP_PORT=10389
-      # LDAP Write direct to Master Node OpenLDAP1 (port 389)
+      # LDAP - Direct connections to both servers (v2.0.1+)
+      - LDAP_READ_HOSTS=192.168.100.10:389,192.168.100.11:389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
@@ -116,9 +118,8 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      # LDAP Read via HAProxy on Master Node (port 10389)
-      - LDAP_HOST=192.168.100.10
-      - LDAP_PORT=10389
+      # LDAP - Direct connections to both servers (v2.0.1+)
+      - LDAP_READ_HOSTS=192.168.100.10:389,192.168.100.11:389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
@@ -146,10 +147,8 @@ services:
       - DB_NAME=localpkd
       - DB_USER=pkd
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      # LDAP Read via HAProxy on Master Node (port 10389)
-      - LDAP_HOST=192.168.100.10
-      - LDAP_PORT=10389
-      # LDAP Write direct to Master Node (port 389)
+      # LDAP - Direct connections to both servers (v2.0.1+)
+      - LDAP_READ_HOSTS=192.168.100.10:389,192.168.100.11:389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
