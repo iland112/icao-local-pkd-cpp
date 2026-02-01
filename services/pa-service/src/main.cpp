@@ -1804,6 +1804,7 @@ void registerRoutes() {
 
             spdlog::info("POST /api/pa/verify - Passive Authentication verification (Service Layer)");
 
+
             // Log request details for debugging
             auto contentType = req->getHeader("Content-Type");
             auto contentLength = req->getHeader("Content-Length");
@@ -1813,418 +1814,137 @@ void registerRoutes() {
                         contentLength.empty() ? "(empty)" : contentLength,
                         bodyLength);
 
-            // Log first 200 chars of body for debugging
-            if (bodyLength > 0) {
-                std::string bodyPreview = std::string(req->body().substr(0, 200));
-                spdlog::debug("Body preview: {}", bodyPreview);
-            } else {
-                spdlog::warn("Request body is empty!");
-            }
-
             try {
-                auto startTime = std::chrono::steady_clock::now();
-                std::string verificationId = generateUuid();
-                std::vector<PassiveAuthenticationError> errors;
-
                 // Parse request body
                 auto jsonBody = req->getJsonObject();
                 if (!jsonBody) {
-                    spdlog::error("Failed to parse JSON body. Body length: {}", bodyLength);
+                    spdlog::error("Failed to parse JSON body");
                     Json::Value error;
-                    error["status"] = "ERROR";
-                    error["verificationId"] = verificationId;
-                    error["errors"][0]["code"] = "INVALID_REQUEST";
-                    error["errors"][0]["message"] = "Invalid JSON body";
-                    error["errors"][0]["severity"] = "CRITICAL";
+                    error["success"] = false;
+                    error["error"] = "Invalid JSON body";
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                     resp->setStatusCode(drogon::k400BadRequest);
                     callback(resp);
                     return;
                 }
 
-            // Get SOD data (Base64 encoded)
-            std::string sodBase64 = (*jsonBody)["sod"].asString();
-            if (sodBase64.empty()) {
-                Json::Value error;
-                error["status"] = "ERROR";
-                error["verificationId"] = verificationId;
-                error["errors"][0]["code"] = "MISSING_SOD";
-                error["errors"][0]["message"] = "SOD data is required";
-                error["errors"][0]["severity"] = "CRITICAL";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
+                // Get SOD data (Base64 encoded)
+                std::string sodBase64 = (*jsonBody)["sod"].asString();
+                if (sodBase64.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "SOD data is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                // Decode SOD
+                std::vector<uint8_t> sodBytes = base64Decode(sodBase64);
+                if (sodBytes.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Failed to decode SOD (invalid Base64)";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                // Parse Data Groups (convert to map with string keys)
+                std::map<std::string, std::vector<uint8_t>> dataGroups;
+                if (jsonBody->isMember("dataGroups")) {
+                    if ((*jsonBody)["dataGroups"].isArray()) {
+                        // Array format: [{number: "DG1", data: "base64..."}, ...]
+                        for (const auto& dg : (*jsonBody)["dataGroups"]) {
+                            std::string dgNumStr = dg["number"].asString();
+                            std::string dgData = dg["data"].asString();
+                            // Extract number from "DG1" -> "1"
+                            std::string dgKey = dgNumStr.length() > 2 ? dgNumStr.substr(2) : dgNumStr;
+                            dataGroups[dgKey] = base64Decode(dgData);
+                        }
+                    } else if ((*jsonBody)["dataGroups"].isObject()) {
+                        // Object format: {"DG1": "base64...", "DG2": "base64..."} OR {"1": "base64...", "2": "base64..."}
+                        for (const auto& key : (*jsonBody)["dataGroups"].getMemberNames()) {
+                            std::string dgKey;
+                            // Support both "DG1" format and "1" format
+                            if (key.length() > 2 && (key.substr(0, 2) == "DG" || key.substr(0, 2) == "dg")) {
+                                dgKey = key.substr(2);  // "DG1" -> "1"
+                            } else {
+                                dgKey = key;  // "1" -> "1"
+                            }
+                            std::string dgData = (*jsonBody)["dataGroups"][key].asString();
+                            dataGroups[dgKey] = base64Decode(dgData);
+                        }
+                    }
+                }
+
+                // Get optional fields
+                std::string countryCode = (*jsonBody).get("issuingCountry", "").asString();
+                std::string documentNumber = (*jsonBody).get("documentNumber", "").asString();
+
+                // Extract documentNumber from DG1 if not provided
+                if (documentNumber.empty() && dataGroups.count("1") > 0) {
+                    const auto& dg1Data = dataGroups["1"];
+                    // Simple extraction: find MRZ in DG1 and extract document number
+                    // This is a simplified version - full parsing is in DataGroupParserService
+                    size_t pos = 0;
+                    while (pos + 3 < dg1Data.size()) {
+                        if (dg1Data[pos] == 0x5F && dg1Data[pos + 1] == 0x1F) {
+                            // Found MRZ tag 5F1F
+                            pos += 2;
+                            size_t mrzLen = dg1Data[pos++];
+                            if (mrzLen > 127) {
+                                size_t numBytes = mrzLen & 0x7F;
+                                mrzLen = 0;
+                                for (size_t i = 0; i < numBytes && pos < dg1Data.size(); i++) {
+                                    mrzLen = (mrzLen << 8) | dg1Data[pos++];
+                                }
+                            }
+                            if (pos + mrzLen <= dg1Data.size() && mrzLen >= 88) {
+                                std::string mrzData(dg1Data.begin() + pos, dg1Data.begin() + pos + mrzLen);
+                                // TD3 format: document number is at line2[0:9]
+                                if (mrzData.length() >= 88) {
+                                    std::string docNum = mrzData.substr(44, 9);  // Line 2, position 0-8
+                                    // Remove < characters
+                                    docNum.erase(std::remove(docNum.begin(), docNum.end(), '<'), docNum.end());
+                                    documentNumber = docNum;
+                                    spdlog::debug("Extracted document number from DG1: {}", documentNumber);
+                                }
+                            }
+                            break;
+                        }
+                        pos++;
+                    }
+                }
+
+                spdlog::info("PA verification request: country={}, documentNumber={}, dataGroups={}",
+                            countryCode.empty() ? "(unknown)" : countryCode,
+                            documentNumber.empty() ? "(unknown)" : documentNumber,
+                            dataGroups.size());
+
+                // Call service layer - this replaces ~400 lines of complex logic
+                Json::Value result = paVerificationService->verifyPassiveAuthentication(
+                    sodBytes,
+                    dataGroups,
+                    documentNumber,
+                    countryCode
+                );
+
+                // Return response
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                if (!result["success"].asBool()) {
+                    resp->setStatusCode(drogon::k400BadRequest);
+                }
                 callback(resp);
-                return;
-            }
-
-            // Decode SOD
-            std::vector<uint8_t> sodBytes = base64Decode(sodBase64);
-            if (sodBytes.empty()) {
-                Json::Value error;
-                error["status"] = "ERROR";
-                error["verificationId"] = verificationId;
-                error["errors"][0]["code"] = "INVALID_SOD";
-                error["errors"][0]["message"] = "Failed to decode SOD (invalid Base64)";
-                error["errors"][0]["severity"] = "CRITICAL";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
-            }
-
-            // Parse Data Groups
-            std::map<int, std::vector<uint8_t>> dataGroups;
-            if (jsonBody->isMember("dataGroups")) {
-                if ((*jsonBody)["dataGroups"].isArray()) {
-                    // Array format: [{number: "DG1", data: "base64..."}, ...]
-                    for (const auto& dg : (*jsonBody)["dataGroups"]) {
-                        std::string dgNumStr = dg["number"].asString();
-                        std::string dgData = dg["data"].asString();
-                        int dgNum = std::stoi(dgNumStr.substr(2));  // Extract number from "DG1"
-                        dataGroups[dgNum] = base64Decode(dgData);
-                    }
-                } else if ((*jsonBody)["dataGroups"].isObject()) {
-                    // Object format: {"DG1": "base64...", "DG2": "base64..."} OR {"1": "base64...", "2": "base64..."}
-                    for (const auto& key : (*jsonBody)["dataGroups"].getMemberNames()) {
-                        int dgNum;
-                        // Support both "DG1" format and "1" format
-                        if (key.length() > 2 && (key.substr(0, 2) == "DG" || key.substr(0, 2) == "dg")) {
-                            dgNum = std::stoi(key.substr(2));
-                        } else {
-                            // Direct number format: "1", "2", "14"
-                            dgNum = std::stoi(key);
-                        }
-                        std::string dgData = (*jsonBody)["dataGroups"][key].asString();
-                        dataGroups[dgNum] = base64Decode(dgData);
-                    }
-                }
-            }
-
-            // Get optional fields
-            std::string issuingCountry = (*jsonBody).get("issuingCountry", "").asString();
-            std::string documentNumber = (*jsonBody).get("documentNumber", "").asString();
-
-            // Extract documentNumber from DG1 if not provided in request
-            if (documentNumber.empty() && dataGroups.count(1) > 0) {
-                const auto& dg1Data = dataGroups[1];
-                // Local helper to clean MRZ field (remove trailing '<' chars)
-                auto cleanDocNum = [](const std::string& field) -> std::string {
-                    std::string result;
-                    for (char c : field) {
-                        if (c != '<') result += c;
-                    }
-                    // Trim trailing spaces
-                    size_t end = result.find_last_not_of(' ');
-                    if (end != std::string::npos) {
-                        result = result.substr(0, end + 1);
-                    }
-                    return result;
-                };
-                // Extract MRZ from DG1 (skip TLV header - find 0x5F1F tag)
-                size_t pos = 0;
-                while (pos + 3 < dg1Data.size()) {
-                    if (dg1Data[pos] == 0x5F && dg1Data[pos + 1] == 0x1F) {
-                        // Found MRZ tag 5F1F
-                        pos += 2;
-                        size_t mrzLen = dg1Data[pos++];
-                        if (mrzLen > 127) {
-                            // Long form length
-                            size_t numBytes = mrzLen & 0x7F;
-                            mrzLen = 0;
-                            for (size_t i = 0; i < numBytes && pos < dg1Data.size(); i++) {
-                                mrzLen = (mrzLen << 8) | dg1Data[pos++];
-                            }
-                        }
-                        if (pos + mrzLen <= dg1Data.size()) {
-                            std::string mrzData(dg1Data.begin() + pos, dg1Data.begin() + pos + mrzLen);
-                            // Parse MRZ to extract document number
-                            if (mrzData.length() == 88) {
-                                // TD3 format (passport): line2 starts at 44, docNum at 0-9
-                                std::string line2 = mrzData.substr(44, 44);
-                                documentNumber = cleanDocNum(line2.substr(0, 9));
-                            } else if (mrzData.length() == 72) {
-                                // TD2 format: line2 starts at 36, docNum at 0-9
-                                std::string line2 = mrzData.substr(36, 36);
-                                documentNumber = cleanDocNum(line2.substr(0, 9));
-                            } else if (mrzData.length() == 90) {
-                                // TD1 format: docNum at 5-14
-                                documentNumber = cleanDocNum(mrzData.substr(5, 9));
-                            }
-                            if (!documentNumber.empty()) {
-                                spdlog::info("Extracted documentNumber from DG1: {}", documentNumber);
-                            }
-                        }
-                        break;
-                    }
-                    pos++;
-                }
-            }
-
-            // Start verification process
-            std::string status = "VALID";
-            CertificateChainValidationResult chainResult;
-            SodSignatureValidationResult sodResult;
-            DataGroupValidationResult dgResult;
-
-            try {
-                // Step 1: Extract DSC from SOD
-                X509* dscCert = extractDscFromSod(sodBytes);
-                if (!dscCert) {
-                    throw std::runtime_error("Failed to extract DSC from SOD");
-                }
-
-                // Extract country from DSC if not provided
-                if (issuingCountry.empty()) {
-                    issuingCountry = extractCountryFromDn(getX509SubjectDn(dscCert));
-                }
-
-                // Step 2: Get LDAP connection and lookup CSCA
-                LDAP* ld = getLdapConnection();
-                X509* cscaCert = nullptr;
-                if (ld) {
-                    std::string issuerDn = getX509IssuerDn(dscCert);
-                    cscaCert = retrieveCscaFromLdap(ld, issuerDn);
-                }
-
-                // Step 3: Validate certificate chain
-                chainResult = validateCertificateChain(dscCert, cscaCert, issuingCountry, ld);
-
-                // Step 4: Validate SOD signature
-                sodResult = validateSodSignature(sodBytes, dscCert);
-
-                // Step 5: Parse and validate Data Group hashes
-                std::map<int, std::vector<uint8_t>> expectedHashes = parseDataGroupHashes(sodBytes);
-                std::string hashAlgorithm = extractHashAlgorithm(sodBytes);
-                dgResult = validateDataGroupHashes(dataGroups, expectedHashes, hashAlgorithm);
-
-                // Determine overall status
-                if (!chainResult.valid || chainResult.revoked) {
-                    status = "INVALID";
-                    PassiveAuthenticationError err;
-                    err.code = chainResult.revoked ? "CERTIFICATE_REVOKED" : "CHAIN_VALIDATION_FAILED";
-                    err.message = chainResult.validationErrors.empty() ?
-                        "Certificate chain validation failed" : chainResult.validationErrors;
-                    err.severity = "CRITICAL";
-                    err.timestamp = getCurrentTimestamp();
-                    errors.push_back(err);
-                }
-
-                if (!sodResult.valid) {
-                    status = "INVALID";
-                    PassiveAuthenticationError err;
-                    err.code = "SOD_SIGNATURE_INVALID";
-                    err.message = "SOD signature verification failed";
-                    err.severity = "CRITICAL";
-                    err.timestamp = getCurrentTimestamp();
-                    errors.push_back(err);
-                }
-
-                if (dgResult.invalidGroups > 0) {
-                    status = "INVALID";
-                    PassiveAuthenticationError err;
-                    err.code = "DG_HASH_MISMATCH";
-                    err.message = "Data Group hash validation failed";
-                    err.severity = "CRITICAL";
-                    err.timestamp = getCurrentTimestamp();
-                    errors.push_back(err);
-                }
-
-                // Clean up
-                X509_free(dscCert);
-                if (cscaCert) X509_free(cscaCert);
-                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-
-                // Save to database
-                PGconn* conn = getDbConnection();
-                if (conn) {
-                    auto endTime = std::chrono::steady_clock::now();
-                    int processingTimeMs = static_cast<int>(
-                        std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
-
-                    savePaVerification(conn, verificationId, status, issuingCountry, documentNumber,
-                        sodBytes, chainResult, sodResult, dgResult, processingTimeMs);
-                    savePaDataGroups(conn, verificationId, dgResult, hashAlgorithm, dataGroups);
-                    PQfinish(conn);
-                }
 
             } catch (const std::exception& e) {
-                spdlog::error("PA verification failed: {}", e.what());
-                status = "ERROR";
-                PassiveAuthenticationError err;
-                err.code = "PA_EXECUTION_ERROR";
-                err.message = std::string("Passive Authentication execution failed: ") + e.what();
-                err.severity = "CRITICAL";
-                err.timestamp = getCurrentTimestamp();
-                errors.push_back(err);
-            }
-
-            // Calculate processing time
-            auto endTime = std::chrono::steady_clock::now();
-            int processingTimeMs = static_cast<int>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
-
-            // Build response (matching Java PassiveAuthenticationResponse)
-            Json::Value response;
-            response["status"] = status;
-            response["verificationId"] = verificationId;
-            response["verificationTimestamp"] = getCurrentTimestamp();
-            response["issuingCountry"] = issuingCountry;
-            response["documentNumber"] = documentNumber;
-            response["certificateChainValidation"] = buildCertificateChainValidationJson(chainResult);
-            response["sodSignatureValidation"] = buildSodSignatureValidationJson(sodResult);
-            response["dataGroupValidation"] = buildDataGroupValidationJson(dgResult);
-            response["processingDurationMs"] = processingTimeMs;
-
-            Json::Value errorsJson(Json::arrayValue);
-            for (const auto& err : errors) {
-                Json::Value errJson;
-                errJson["code"] = err.code;
-                errJson["message"] = err.message;
-                errJson["severity"] = err.severity;
-                errJson["timestamp"] = err.timestamp;
-                errorsJson.append(errJson);
-            }
-            response["errors"] = errorsJson;
-
-            spdlog::info("PA verification completed - Status: {}, ID: {}, Duration: {}ms",
-                status, verificationId, processingTimeMs);
-
-            // Phase 4.4: Audit logging - PA_VERIFY
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-            PGconn* auditConn = PQconnectdb(conninfo.c_str());
-            if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                common::AuditLogEntry auditEntry;
-
-                // Extract user info from session (if authenticated)
-                auto session = req->getSession();
-                if (session) {
-                    auto [userId, username] = common::getUserInfoFromSession(session);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
-                }
-
-                auditEntry.operationType = common::OperationType::PA_VERIFY;
-                auditEntry.resourceId = verificationId;
-                auditEntry.resourceType = "PA_VERIFICATION";
-                auditEntry.ipAddress = common::getClientIpAddress(req);
-                auditEntry.userAgent = req->getHeader("User-Agent");
-                auditEntry.requestMethod = "POST";
-                auditEntry.requestPath = "/api/pa/verify";
-                auditEntry.success = (status != "ERROR");
-                auditEntry.statusCode = (status == "ERROR") ? 500 : 200;
-                if (status == "ERROR" && !errors.empty()) {
-                    auditEntry.errorMessage = errors[0].message;
-                }
-                auditEntry.durationMs = processingTimeMs;
-
-                // Metadata
-                Json::Value metadata;
-                metadata["issuingCountry"] = issuingCountry;
-                metadata["documentNumber"] = documentNumber;
-                metadata["verificationStatus"] = status;
-                metadata["chainValid"] = chainResult.valid;
-                metadata["sodSignatureValid"] = sodResult.valid;
-                metadata["dataGroupsValid"] = dgResult.validGroups;
-                metadata["dataGroupsInvalid"] = dgResult.invalidGroups;
-                auditEntry.metadata = metadata;
-
-                common::logOperation(auditConn, auditEntry);
-                PQfinish(auditConn);
-            }
-
-            // Wrap response in {success: true/false, data: {...}} format for frontend compatibility
-            Json::Value wrappedResponse;
-            wrappedResponse["success"] = (status == "VALID" || status == "INVALID");
-            wrappedResponse["data"] = response;
-            if (status == "ERROR") {
-                wrappedResponse["success"] = false;
-                wrappedResponse["error"] = errors.empty() ? "Unknown error" : errors[0].message;
-            }
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(wrappedResponse);
-            callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Exception in PA verify handler: {}", e.what());
-
-                // Phase 4.4: Audit logging - PA_VERIFY failure (exception)
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
-                    auditEntry.operationType = common::OperationType::PA_VERIFY;
-                    auditEntry.resourceType = "PA_VERIFICATION";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/pa/verify";
-                    auditEntry.success = false;
-                    auditEntry.statusCode = 500;
-                    auditEntry.errorMessage = e.what();
-
-                    common::logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
-                }
-
+                spdlog::error("Error in POST /api/pa/verify: {}", e.what());
                 Json::Value error;
                 error["success"] = false;
                 error["error"] = "Internal Server Error";
                 error["message"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            } catch (...) {
-                spdlog::error("Unknown exception in PA verify handler");
-
-                // Phase 4.4: Audit logging - PA_VERIFY failure (unknown exception)
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
-                    auditEntry.operationType = common::OperationType::PA_VERIFY;
-                    auditEntry.resourceType = "PA_VERIFICATION";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/pa/verify";
-                    auditEntry.success = false;
-                    auditEntry.statusCode = 500;
-                    auditEntry.errorMessage = "Unknown error occurred";
-
-                    common::logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
-                }
-
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Internal Server Error";
-                error["message"] = "Unknown error occurred";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
