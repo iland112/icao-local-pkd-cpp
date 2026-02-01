@@ -8,6 +8,7 @@
 
 #include "ldap_certificate_repository.h"
 #include "../common/ldap_utils.h"
+#include "../common/x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/sha.h>
@@ -595,9 +596,26 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         throw std::runtime_error("No certificate binary data found in entry: " + dn);
     }
 
-    // Parse X.509 certificate
+    // Parse X.509 certificate (including metadata - v2.3.0)
     std::string subjectDn, issuerDn, fingerprint;
     std::chrono::system_clock::time_point validFrom, validTo;
+
+    // X.509 Metadata variables
+    int version = 2;
+    std::optional<std::string> signatureAlgorithm;
+    std::optional<std::string> signatureHashAlgorithm;
+    std::optional<std::string> publicKeyAlgorithm;
+    std::optional<int> publicKeySize;
+    std::optional<std::string> publicKeyCurve;
+    std::vector<std::string> keyUsage;
+    std::vector<std::string> extendedKeyUsage;
+    std::optional<bool> isCA;
+    std::optional<int> pathLenConstraint;
+    std::optional<std::string> subjectKeyIdentifier;
+    std::optional<std::string> authorityKeyIdentifier;
+    std::vector<std::string> crlDistributionPoints;
+    std::optional<std::string> ocspResponderUrl;
+    std::optional<bool> isCertSelfSigned;
 
     parseX509Certificate(
         certBinary,
@@ -607,7 +625,23 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         sn, // May be updated from certificate
         fingerprint,
         validFrom,
-        validTo
+        validTo,
+        // X.509 Metadata
+        version,
+        signatureAlgorithm,
+        signatureHashAlgorithm,
+        publicKeyAlgorithm,
+        publicKeySize,
+        publicKeyCurve,
+        keyUsage,
+        extendedKeyUsage,
+        isCA,
+        pathLenConstraint,
+        subjectKeyIdentifier,
+        authorityKeyIdentifier,
+        crlDistributionPoints,
+        ocspResponderUrl,
+        isCertSelfSigned
     );
 
     // Read DSC_NC specific attributes (optional)
@@ -640,7 +674,7 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
             pkdVersion.has_value() ? "YES" : "NO");
     }
 
-    // Create Certificate entity
+    // Create Certificate entity (with X.509 metadata - v2.3.0)
     return domain::models::Certificate(
         dn,
         cn,
@@ -654,7 +688,23 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         validTo,
         pkdConformanceCode,
         pkdConformanceText,
-        pkdVersion
+        pkdVersion,
+        // X.509 Metadata
+        version,
+        signatureAlgorithm,
+        signatureHashAlgorithm,
+        publicKeyAlgorithm,
+        publicKeySize,
+        publicKeyCurve,
+        keyUsage,
+        extendedKeyUsage,
+        isCA,
+        pathLenConstraint,
+        subjectKeyIdentifier,
+        authorityKeyIdentifier,
+        crlDistributionPoints,
+        ocspResponderUrl,
+        isCertSelfSigned
     );
 }
 
@@ -721,7 +771,23 @@ void LdapCertificateRepository::parseX509Certificate(
     std::string& sn,
     std::string& fingerprint,
     std::chrono::system_clock::time_point& validFrom,
-    std::chrono::system_clock::time_point& validTo
+    std::chrono::system_clock::time_point& validTo,
+    // X.509 Metadata (v2.3.0)
+    int& version,
+    std::optional<std::string>& signatureAlgorithm,
+    std::optional<std::string>& signatureHashAlgorithm,
+    std::optional<std::string>& publicKeyAlgorithm,
+    std::optional<int>& publicKeySize,
+    std::optional<std::string>& publicKeyCurve,
+    std::vector<std::string>& keyUsage,
+    std::vector<std::string>& extendedKeyUsage,
+    std::optional<bool>& isCA,
+    std::optional<int>& pathLenConstraint,
+    std::optional<std::string>& subjectKeyIdentifier,
+    std::optional<std::string>& authorityKeyIdentifier,
+    std::vector<std::string>& crlDistributionPoints,
+    std::optional<std::string>& ocspResponderUrl,
+    std::optional<bool>& isCertSelfSigned
 ) {
     // Parse DER-encoded certificate using OpenSSL
     const unsigned char* data = derData.data();
@@ -802,6 +868,38 @@ void LdapCertificateRepository::parseX509Certificate(
         ASN1_TIME_to_tm(notAfter, &tm);
         time_t t = mktime(&tm);
         validTo = std::chrono::system_clock::from_time_t(t);
+    }
+
+    // Extract X.509 metadata (v2.3.0)
+    try {
+        auto metadata = x509::extractMetadata(cert);
+
+        version = metadata.version;
+        signatureAlgorithm = metadata.signatureAlgorithm;
+        signatureHashAlgorithm = metadata.signatureHashAlgorithm;
+        publicKeyAlgorithm = metadata.publicKeyAlgorithm;
+        publicKeySize = metadata.publicKeySize;
+        publicKeyCurve = metadata.publicKeyCurve;
+        keyUsage = metadata.keyUsage;
+        extendedKeyUsage = metadata.extendedKeyUsage;
+        isCA = metadata.isCA;
+        pathLenConstraint = metadata.pathLenConstraint;
+        subjectKeyIdentifier = metadata.subjectKeyIdentifier;
+        authorityKeyIdentifier = metadata.authorityKeyIdentifier;
+        crlDistributionPoints = metadata.crlDistributionPoints;
+        ocspResponderUrl = metadata.ocspResponderUrl;
+        isCertSelfSigned = metadata.isSelfSigned;
+
+        spdlog::debug("[LdapCertificateRepository] Extracted X.509 metadata - "
+                     "Version: {}, SigAlg: {}, PubKeyAlg: {}, KeySize: {}, isCA: {}",
+                     metadata.version,
+                     metadata.signatureAlgorithm,
+                     metadata.publicKeyAlgorithm,
+                     metadata.publicKeySize,
+                     metadata.isCA ? "TRUE" : "FALSE");
+    } catch (const std::exception& e) {
+        spdlog::warn("[LdapCertificateRepository] Failed to extract X.509 metadata: {}", e.what());
+        // Continue without metadata - fields will remain as default/nullopt
     }
 
     X509_free(cert);
