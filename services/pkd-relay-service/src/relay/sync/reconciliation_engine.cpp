@@ -51,11 +51,13 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
 
     // v2.0.3: Use fingerprint-based DN (compatible with PKD Management)
     // Query includes fingerprint_sha256 for proper DN construction
+    // v2.2.2 FIX: Filter by stored_in_ldap = FALSE to only retrieve certs that need adding
+    // This ensures we get the actual missing certificates regardless of ID order
     const char* query = R"(
         SELECT id, certificate_type, country_code, subject_dn, issuer_dn,
                fingerprint_sha256, certificate_data
         FROM certificate
-        WHERE certificate_type = $1
+        WHERE certificate_type = $1 AND stored_in_ldap = FALSE
         ORDER BY id
         LIMIT $2
     )";
@@ -107,7 +109,15 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
             cert.issuer = PQgetvalue(res, i, 4);
             cert.fingerprint = PQgetvalue(res, i, 5);  // v2.0.3: Get fingerprint
 
+            // v2.2.2 FIX: Detect link certificates (subject != issuer)
+            // Link certs have certificate_type='CSCA' in DB but should be stored as o=lc in LDAP
+            if (cert.certType == "CSCA" && cert.subject != cert.issuer) {
+                cert.certType = "LC";  // Update certType to Link Certificate
+                spdlog::debug("Detected link certificate: {} (subject != issuer)", cert.id);
+            }
+
             // v2.0.3: Build DN with fingerprint (compatible with PKD Management)
+            // v2.2.2: cert.certType is now "LC" for link certificates
             cert.ldapDn = ldapOps_->buildDn(cert.certType, cert.countryCode, cert.fingerprint);
 
             // Check if entry exists in LDAP

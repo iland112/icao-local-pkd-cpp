@@ -16,11 +16,17 @@ std::string LdapOperations::buildDn(const std::string& certType,
                                      const std::string& fingerprint) const {
     // v2.0.3: Use fingerprint-based DN (compatible with PKD Management buildCertificateDnV2)
     // This matches the DN format used by PKD Management for certificate uploads
+    // v2.2.2 FIX: Added Link Certificate (LC) support
     std::string ou;
     std::string dataContainer;
 
     if (certType == "CSCA") {
         ou = "csca";
+        dataContainer = config_.ldapDataContainer;
+    } else if (certType == "LC") {
+        // v2.2.2 FIX: Link Certificate support (Sprint 3)
+        // Link certificates are CSCA-type certs where subject_dn != issuer_dn
+        ou = "lc";
         dataContainer = config_.ldapDataContainer;
     } else if (certType == "DSC") {
         ou = "dsc";
@@ -262,10 +268,13 @@ bool LdapOperations::ensureParentDnExists(
         return false;
     }
 
-    // 2. Ensure organization container: o={csca|dsc|crl},c={COUNTRY},...
+    // 2. Ensure organization container: o={csca|lc|dsc|crl},c={COUNTRY},...
     std::string ou;
     if (certType == "CSCA") {
         ou = "csca";
+    } else if (certType == "LC") {
+        // v2.2.2 FIX: Link Certificate support (Sprint 3)
+        ou = "lc";
     } else if (certType == "DSC" || certType == "DSC_NC") {
         ou = "dsc";
     } else if (certType == "CRL") {
