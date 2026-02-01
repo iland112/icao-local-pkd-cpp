@@ -145,6 +145,9 @@ CREATE TABLE IF NOT EXISTS crl (
     CONSTRAINT chk_crl_validation CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED'))
 );
 
+-- v2.2.2 FIX: Add UNIQUE constraint to prevent CRL duplicates
+ALTER TABLE crl ADD CONSTRAINT crl_fingerprint_unique UNIQUE (fingerprint_sha256);
+
 CREATE INDEX idx_crl_upload_id ON crl(upload_id);
 CREATE INDEX idx_crl_country ON crl(country_code);
 CREATE INDEX idx_crl_issuer ON crl(issuer_dn);

@@ -3340,9 +3340,65 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                         dscValidation.errorMessage, countryCode);
         }
     } else {
-        certType = "DSC";
-        dscCount++;
-        valRecord.certificateType = "DSC";
+        // v2.2.2 FIX: Detect Link Certificates (subject != issuer, CA capability)
+        // Check if this is a Link Certificate by validating CA status
+        auto cscaValidation = validateCscaCertificate(cert);
+        bool isLinkCertificate = (cscaValidation.isCa && cscaValidation.hasKeyCertSign);
+
+        if (isLinkCertificate) {
+            // Link Certificate - Cross-signed CSCA (subject != issuer)
+            certType = "CSCA";  // Store as CSCA in DB for querying
+            cscaCount++;
+            valRecord.certificateType = "CSCA";
+            valRecord.isSelfSigned = false;  // Link cert is not self-signed
+            valRecord.isCa = cscaValidation.isCa;
+            valRecord.signatureVerified = false;  // Cannot self-verify
+            valRecord.validityCheckPassed = cscaValidation.isValid;
+            valRecord.keyUsageValid = cscaValidation.hasKeyCertSign;
+
+            // Link certificates need parent CSCA validation (same as DSC)
+            auto lcValidation = validateDscCertificate(conn, cert, issuerDn);
+            valRecord.cscaFound = lcValidation.cscaFound;
+            valRecord.cscaSubjectDn = lcValidation.cscaSubjectDn;
+            valRecord.trustChainPath = lcValidation.trustChainPath;
+
+            if (lcValidation.isValid) {
+                validationStatus = "VALID";
+                valRecord.validationStatus = "VALID";
+                valRecord.trustChainValid = true;
+                valRecord.trustChainMessage = "Trust chain verified: Link Certificate signed by CSCA";
+                validationStats.validCount++;
+                validationStats.trustChainValidCount++;
+                spdlog::info("LC validation: Trust Chain VERIFIED for {} (issuer: {})",
+                            countryCode, issuerDn.substr(0, 50));
+            } else if (lcValidation.cscaFound) {
+                validationStatus = "INVALID";
+                validationMessage = lcValidation.errorMessage;
+                valRecord.validationStatus = "INVALID";
+                valRecord.trustChainValid = false;
+                valRecord.trustChainMessage = lcValidation.errorMessage;
+                valRecord.errorMessage = lcValidation.errorMessage;
+                validationStats.invalidCount++;
+                validationStats.trustChainInvalidCount++;
+                spdlog::error("LC validation: Trust Chain FAILED - {} for {}",
+                             lcValidation.errorMessage, countryCode);
+            } else {
+                validationStatus = "PENDING";
+                validationMessage = lcValidation.errorMessage;
+                valRecord.validationStatus = "PENDING";
+                valRecord.trustChainMessage = "CSCA not found in database";
+                valRecord.errorCode = "CSCA_NOT_FOUND";
+                valRecord.errorMessage = lcValidation.errorMessage;
+                validationStats.pendingCount++;
+                validationStats.cscaNotFoundCount++;
+                spdlog::warn("LC validation: CSCA not found - {} for {}",
+                            lcValidation.errorMessage, countryCode);
+            }
+        } else {
+            // Regular DSC
+            certType = "DSC";
+            dscCount++;
+            valRecord.certificateType = "DSC";
 
         // DSC - perform trust chain validation
         auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
@@ -3386,6 +3442,7 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
             spdlog::warn("DSC validation: CSCA not found - {} for {}",
                         dscValidation.errorMessage, countryCode);
         }
+        }  // End of else block for regular DSC
     }
 
     // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
@@ -3448,7 +3505,15 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
             std::string pkdConformanceText = entry.getFirstAttribute("pkdConformanceText");
             std::string pkdVersion = entry.getFirstAttribute("pkdVersion");
 
-            std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+            // v2.2.2 FIX: Use "LC" for LDAP storage of Link Certificates
+            // DB stores as "CSCA" for querying, but LDAP uses "LC" for proper organizational unit
+            std::string ldapCertType = certType;
+            if (certType == "CSCA" && !valRecord.isSelfSigned) {
+                ldapCertType = "LC";  // Link Certificate (subject != issuer)
+                spdlog::debug("Using LDAP cert type 'LC' for link certificate: {}", fingerprint.substr(0, 16));
+            }
+
+            std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
                                                         subjectDn, issuerDn, serialNumber,
                                                         fingerprint, derBytes,
                                                         pkdConformanceCode, pkdConformanceText, pkdVersion);
@@ -7391,6 +7456,63 @@ paths:
                     }
                     if (cert.getPkdVersion().has_value()) {
                         certJson["pkdVersion"] = *cert.getPkdVersion();
+                    }
+
+                    // X.509 Metadata (v2.3.0) - 15 fields
+                    certJson["version"] = cert.getVersion();
+                    if (cert.getSignatureAlgorithm().has_value()) {
+                        certJson["signatureAlgorithm"] = *cert.getSignatureAlgorithm();
+                    }
+                    if (cert.getSignatureHashAlgorithm().has_value()) {
+                        certJson["signatureHashAlgorithm"] = *cert.getSignatureHashAlgorithm();
+                    }
+                    if (cert.getPublicKeyAlgorithm().has_value()) {
+                        certJson["publicKeyAlgorithm"] = *cert.getPublicKeyAlgorithm();
+                    }
+                    if (cert.getPublicKeySize().has_value()) {
+                        certJson["publicKeySize"] = *cert.getPublicKeySize();
+                    }
+                    if (cert.getPublicKeyCurve().has_value()) {
+                        certJson["publicKeyCurve"] = *cert.getPublicKeyCurve();
+                    }
+                    if (!cert.getKeyUsage().empty()) {
+                        Json::Value keyUsageArray(Json::arrayValue);
+                        for (const auto& usage : cert.getKeyUsage()) {
+                            keyUsageArray.append(usage);
+                        }
+                        certJson["keyUsage"] = keyUsageArray;
+                    }
+                    if (!cert.getExtendedKeyUsage().empty()) {
+                        Json::Value extKeyUsageArray(Json::arrayValue);
+                        for (const auto& usage : cert.getExtendedKeyUsage()) {
+                            extKeyUsageArray.append(usage);
+                        }
+                        certJson["extendedKeyUsage"] = extKeyUsageArray;
+                    }
+                    if (cert.getIsCA().has_value()) {
+                        certJson["isCA"] = *cert.getIsCA();
+                    }
+                    if (cert.getPathLenConstraint().has_value()) {
+                        certJson["pathLenConstraint"] = *cert.getPathLenConstraint();
+                    }
+                    if (cert.getSubjectKeyIdentifier().has_value()) {
+                        certJson["subjectKeyIdentifier"] = *cert.getSubjectKeyIdentifier();
+                    }
+                    if (cert.getAuthorityKeyIdentifier().has_value()) {
+                        certJson["authorityKeyIdentifier"] = *cert.getAuthorityKeyIdentifier();
+                    }
+                    if (!cert.getCrlDistributionPoints().empty()) {
+                        Json::Value crlDpArray(Json::arrayValue);
+                        for (const auto& url : cert.getCrlDistributionPoints()) {
+                            crlDpArray.append(url);
+                        }
+                        certJson["crlDistributionPoints"] = crlDpArray;
+                    }
+                    if (cert.getOcspResponderUrl().has_value()) {
+                        certJson["ocspResponderUrl"] = *cert.getOcspResponderUrl();
+                    }
+                    if (cert.getIsCertSelfSigned().has_value()) {
+                        certJson["isCertSelfSigned"] = *cert.getIsCertSelfSigned();
                     }
 
                     certs.append(certJson);

@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Successfully resolved DB-LDAP synchronization discrepancies for Link Certificates by fixing 4 critical bugs in PKD Relay Service. All 814 CSCA certificates (714 self-signed + 100 link) are now correctly synchronized with 100% accuracy.
+Successfully resolved DB-LDAP synchronization discrepancies for Link Certificates by fixing **6 critical bugs** (4 in PKD Relay Service, 1 in PKD Management Service, 1 in database schema). All 814 CSCA certificates (714 self-signed + 100 link) are now correctly synchronized with 100% accuracy.
 
 ### Final Sync Status
 
@@ -25,6 +25,8 @@ Successfully resolved DB-LDAP synchronization discrepancies for Link Certificate
 ---
 
 ## Critical Bugs Fixed
+
+### PKD Relay Service (4 bugs)
 
 ### Bug #1: Missing Link Certificate Support in buildDn()
 **File**: services/pkd-relay-service/src/relay/sync/ldap_operations.cpp:13-41
@@ -56,7 +58,62 @@ Successfully resolved DB-LDAP synchronization discrepancies for Link Certificate
 
 ---
 
+### PKD Management Service (1 bug)
+
+### Bug #5: Missing Link Certificate Detection in parseCertificateEntry()
+
+**File**: services/pkd-management/src/main.cpp:3342-3520
+
+**Impact**: LDIF processing stored link certificates incorrectly
+
+**Root Cause**:
+- parseCertificateEntry() only detected self-signed CSCAs (subject == issuer)
+- Link certificates (subject != issuer, CA capability) were misclassified as regular DSCs
+- Stored in database with certificate_type='DSC' instead of 'CSCA'
+- Saved to LDAP with certType='DSC' instead of 'LC'
+- Trust chain validation logic was not applied to link certificates
+
+**Fix**: Added Link Certificate detection logic:
+1. For non-self-signed certificates, validate CA capability using validateCscaCertificate()
+2. If certificate has basicConstraints CA=TRUE and keyUsageKeyCertSign, classify as Link Certificate
+3. Store in DB as certificate_type='CSCA' (for query compatibility)
+4. Apply trust chain validation (same as DSC - needs parent CSCA validation)
+5. Convert to ldapCertType='LC' for LDAP storage (correct organizational unit)
+
+---
+
+### Database Schema (1 bug)
+
+### Bug #6: CRL Duplicate Prevention Missing (Historical Issue)
+
+**File**: docker/init-scripts/01-core-schema.sql:148-151
+
+**Impact**: CRL table allowed duplicate entries based on fingerprint_sha256 before fix
+
+**Root Cause**:
+- CRL table schema had INDEX on fingerprint_sha256 but no UNIQUE constraint
+- saveCrl() function uses "ON CONFLICT DO NOTHING" (main.cpp:3129)
+- Without unique constraint, ON CONFLICT clause had no effect
+- Same CRL could be inserted multiple times into database
+- LDAP naturally prevented duplicates (DN uniqueness)
+- Result: DB had 2x more CRLs than LDAP before synchronization
+
+**Fix**: Added UNIQUE constraint to CRL table schema
+
+```sql
+-- v2.2.2 FIX: Add UNIQUE constraint to prevent CRL duplicates
+ALTER TABLE crl ADD CONSTRAINT crl_fingerprint_unique UNIQUE (fingerprint_sha256);
+```
+
+**Note**: Running database already had this constraint (manually added during troubleshooting), but it was missing from git-tracked schema files. This fix ensures fresh installations won't have the duplicate CRL issue.
+
+---
+
 ## Code Changes
+
+### PKD Relay Service
+
+
 
 ### 1. ldap_operations.cpp - buildDn() Enhancement
 
@@ -90,6 +147,84 @@ if (cert.certType == "CSCA" && cert.subject != cert.issuer) {
 ```sql
 -- Added filter to only retrieve certificates needing reconciliation
 WHERE certificate_type = $1 AND stored_in_ldap = FALSE
+```
+
+---
+
+### PKD Management Service
+
+### 5. main.cpp - parseCertificateEntry() Link Certificate Detection
+
+**Lines 3342-3445**: Added Link Certificate detection logic
+
+```cpp
+} else {
+    // v2.2.2 FIX: Detect Link Certificates (subject != issuer, CA capability)
+    auto cscaValidation = validateCscaCertificate(cert);
+    bool isLinkCertificate = (cscaValidation.isCa && cscaValidation.hasKeyCertSign);
+
+    if (isLinkCertificate) {
+        // Link Certificate - Cross-signed CSCA (subject != issuer)
+        certType = "CSCA";  // Store as CSCA in DB for querying
+        cscaCount++;
+        valRecord.certificateType = "CSCA";
+        valRecord.isSelfSigned = false;  // Link cert is not self-signed
+        valRecord.isCa = cscaValidation.isCa;
+        valRecord.keyUsageValid = cscaValidation.hasKeyCertSign;
+
+        // Link certificates need parent CSCA validation (same as DSC)
+        auto lcValidation = validateDscCertificate(conn, cert, issuerDn);
+        valRecord.cscaFound = lcValidation.cscaFound;
+        valRecord.trustChainPath = lcValidation.trustChainPath;
+
+        // Set validation status based on CSCA lookup
+        if (!valRecord.cscaFound) {
+            valRecord.validationStatus = "INVALID";
+            valRecord.errorMessage = "Issuer CSCA not found";
+        } else if (valRecord.isExpired) {
+            valRecord.validationStatus = "PENDING";
+            valRecord.errorMessage = "Certificate expired";
+        } else {
+            valRecord.validationStatus = "VALID";
+        }
+    } else {
+        // Regular DSC
+        certType = "DSC";
+        dscCount++;
+        valRecord.certificateType = "DSC";
+        // ... existing DSC validation logic ...
+    }
+}
+// End of else block for regular DSC
+```
+
+**Lines 3501-3520**: Convert to LC for LDAP storage
+
+```cpp
+// v2.2.2 FIX: Use "LC" for LDAP storage of Link Certificates
+std::string ldapCertType = certType;
+if (certType == "CSCA" && !valRecord.isSelfSigned) {
+    ldapCertType = "LC";  // Link Certificate (subject != issuer)
+    spdlog::debug("Using LDAP cert type 'LC' for link certificate: {}",
+                 fingerprint.substr(0, 16));
+}
+
+std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
+                                           subjectDn, issuerDn, serialNumber,
+                                           fingerprint, derBytes,
+                                           pkdConformanceCode, pkdConformanceText,
+                                           pkdVersion);
+```
+
+---
+
+### Database Schema
+
+### 6. 01-core-schema.sql - Add CRL UNIQUE Constraint
+
+```sql
+-- v2.2.2 FIX: Add UNIQUE constraint to prevent CRL duplicates
+ALTER TABLE crl ADD CONSTRAINT crl_fingerprint_unique UNIQUE (fingerprint_sha256);
 ```
 
 ---
@@ -136,6 +271,31 @@ WHERE certificate_type = $1 AND stored_in_ldap = FALSE
 - **Data Integrity**: 100% correct classification
 - **ICAO Compliance**: Full adherence to link certificate standards
 - **Total Certificates**: 31,215 synchronized across all types
+
+---
+
+## Bug #6: CRL Duplicate Prevention Missing
+
+**File**: docker/init-scripts/01-core-schema.sql:148-151
+
+**Impact**: CRL table allowed duplicate entries based on fingerprint_sha256
+
+**Root Cause**:
+- CRL table schema had INDEX on fingerprint_sha256 but no UNIQUE constraint
+- saveCrl() function uses "ON CONFLICT DO NOTHING" (line 3129 in main.cpp)
+- Without unique constraint, ON CONFLICT clause has no effect
+- Same CRL could be inserted multiple times into database
+- LDAP naturally prevented duplicates (DN uniqueness)
+- Result: DB had 2x more CRLs than LDAP before synchronization
+
+**Fix**: Added UNIQUE constraint to CRL table schema
+
+```sql
+-- v2.2.2 FIX: Add UNIQUE constraint to prevent CRL duplicates
+ALTER TABLE crl ADD CONSTRAINT crl_fingerprint_unique UNIQUE (fingerprint_sha256);
+```
+
+**Note**: Running database already has this constraint (manually added), but it was missing from git-tracked schema files.
 
 ---
 
