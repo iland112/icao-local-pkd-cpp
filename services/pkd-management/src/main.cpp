@@ -84,12 +84,14 @@
 #include "repositories/validation_repository.h"
 #include "repositories/audit_repository.h"
 #include "repositories/statistics_repository.h"
+#include "repositories/ldif_structure_repository.h"  // v2.2.2: LDIF structure visualization
 
 // Phase 1.5/1.6: Repository Pattern - Services
 #include "services/upload_service.h"
 #include "services/validation_service.h"
 #include "services/audit_service.h"
 #include "services/statistics_service.h"
+#include "services/ldif_structure_service.h"  // v2.2.2: LDIF structure visualization
 
 // Authentication Module (Phase 3)
 #include "middleware/auth_middleware.h"
@@ -117,10 +119,12 @@ std::shared_ptr<repositories::CertificateRepository> certificateRepository;
 std::shared_ptr<repositories::ValidationRepository> validationRepository;
 std::shared_ptr<repositories::AuditRepository> auditRepository;
 std::shared_ptr<repositories::StatisticsRepository> statisticsRepository;
+std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;  // v2.2.2
 std::shared_ptr<services::UploadService> uploadService;
 std::shared_ptr<services::ValidationService> validationService;
 std::shared_ptr<services::AuditService> auditService;
 std::shared_ptr<services::StatisticsService> statisticsService;
+std::shared_ptr<services::LdifStructureService> ldifStructureService;  // v2.2.2
 
 // Global cache for available countries (populated on startup)
 std::set<std::string> cachedCountries;
@@ -5315,6 +5319,46 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // GET /api/upload/{uploadId}/ldif-structure - Get LDIF file structure
+    // v2.2.2: LDIF Structure Visualization (Repository Pattern)
+    app.registerHandler(
+        "/api/upload/{uploadId}/ldif-structure",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+           const std::string& uploadId) {
+            try {
+                spdlog::info("GET /api/upload/{}/ldif-structure", uploadId);
+
+                // Get maxEntries from query parameter (default: 100)
+                int maxEntries = 100;
+                if (req->getParameter("maxEntries") != "") {
+                    try {
+                        maxEntries = std::stoi(req->getParameter("maxEntries"));
+                    } catch (...) {
+                        // Invalid maxEntries, use default
+                        maxEntries = 100;
+                    }
+                }
+
+                // Call LdifStructureService (Repository Pattern)
+                Json::Value response = ldifStructureService->getLdifStructure(uploadId, maxEntries);
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("LDIF structure error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Cleanup failed upload endpoint
     // Phase 3.1: Connected to UploadService (Repository Pattern)
     // TODO Phase 4: Move cleanupFailedUpload() logic into UploadService
@@ -8565,7 +8609,8 @@ int main(int argc, char* argv[]) {
         validationRepository = std::make_shared<repositories::ValidationRepository>(globalDbConn);
         auditRepository = std::make_shared<repositories::AuditRepository>(globalDbConn);
         statisticsRepository = std::make_shared<repositories::StatisticsRepository>(globalDbConn);
-        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics)");
+        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, LdifStructure)");
+        ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
         // Initialize Services with Repository dependencies
         uploadService = std::make_shared<services::UploadService>(
@@ -8588,7 +8633,11 @@ int main(int argc, char* argv[]) {
             uploadRepository.get()
         );
 
-        spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, Statistics)");
+        ldifStructureService = std::make_shared<services::LdifStructureService>(
+            ldifStructureRepository.get()
+        );
+
+        spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, Statistics, LdifStructure)");
         spdlog::info("Repository Pattern initialization complete - Ready for Oracle migration");
 
         auto& app = drogon::app();

@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.2.1 🔥
-**Last Updated**: 2026-01-31
-**Status**: Production Ready - Critical Hotfix Applied (Upload 502 Error Fixed)
+**Current Version**: v2.2.2 ✨
+**Last Updated**: 2026-02-01
+**Status**: Production Ready - LDIF Structure Visualization Complete
 
 ---
 
@@ -100,33 +100,83 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Planned Changes (v2.2.2 - LDIF Structure Visualization) 📋
+### Recent Changes (v2.2.2 - LDIF Structure Visualization) ✨
 
-**Status**: Planning Phase | **Next Session**: Implementation
+**Status**: Implementation Complete | **Date**: 2026-02-01
 
-- 📋 **LDIF Structure Visualization** (Estimated: 5-6 hours)
-  - **Backend**: LdifStructureParser class for parsing LDIF entries
-  - **API Endpoint**: `GET /api/upload/{uploadId}/ldif-structure`
-  - **Frontend**: LdifStructure component with tree view
+- ✅ **LDIF Structure Visualization** (Backend - Repository Pattern)
+  - **LdifParser** ([ldif_parser.h/cpp](services/pkd-management/src/common/ldif_parser.h)): Parse LDIF files, detect binary attributes, extract DN components
+  - **DN Continuation Line Fix**: Added `isDnContinuation` flag to properly handle multi-line DNs in LDIF format
+  - **Full DN Parsing**: Correctly parses DNs with escaped characters and continuation lines (e.g., `cn=OU\=Identity Services...`)
+  - **LdifStructureRepository** ([ldif_structure_repository.h/cpp](services/pkd-management/src/repositories/ldif_structure_repository.h)): File access and LDIF parsing
+  - **LdifStructureService** ([ldif_structure_service.h/cpp](services/pkd-management/src/services/ldif_structure_service.h)): Business logic and validation
+  - **API Endpoint**: `GET /api/upload/{uploadId}/ldif-structure?maxEntries=100`
+  - **Architecture**: Full Repository Pattern compliance (Controller → Service → Repository → Parser)
+  - **Zero SQL in Controller**: All database access through Repository layer
+
+- ✅ **Frontend LDIF Structure Viewer - DN Tree Hierarchy**
+  - **LdifStructure Component** ([LdifStructure.tsx](frontend/src/components/LdifStructure.tsx)): Complete rewrite with DN hierarchy tree
+  - **DN Tree Structure**: Hierarchical tree view with proper LDAP DN parsing (handles escaped commas and equals)
+  - **Base DN Optimization**: Removes common base DN (`dc=download,dc=pkd,dc=icao,dc=int`) to reduce tree depth
+  - **ROOT Display**: Shows full base DN as purple root node for context
+  - **LDAP Escaping**: Proper handling of escaped characters (`\=`, `\,`) in DN components
+  - **Multi-valued RDN**: Supports multi-valued RDN with `+` separator (e.g., `cn=...+sn=...`)
   - **Dynamic Tab Name**: "LDIF 구조" for LDIF files, "Master List 구조" for ML files
-  - **Binary Data Handling**: Detect and display binary attributes (collection-002 Master List CMS)
-  - **Entry Limit Selector**: 50/100/500/1000 entries configurable
-
-- 📋 **Testing & Validation** (Estimated: 1-2 hours)
-  - **Collection-001**: DSC certificates LDIF upload and structure display
-  - **Collection-002**: Master List with binary CMS data (26 ML entries)
-  - **Collection-003**: DSC_NC certificates LDIF upload
-  - **Performance**: Large LDIF files (5000+ entries)
+  - **Binary Data Handling**: Displays size for binary attributes (e.g., `[Binary Certificate: 1234 bytes]`)
+  - **Entry Limit Selector**: 50/100/500/1000/10000 entries configurable
+  - **Interactive UI**: Expand/collapse nodes and entries, dark mode support, loading states
+  - **UploadHistory Integration**: Conditional rendering based on file format (LDIF/ML/MASTER_LIST)
 
 **Key Features**:
-
-- ✨ DN hierarchy display in tree format
-- ✨ All entry attributes with values
-- ✨ Binary data indicators with size (e.g., `[Binary CMS Data: 45678 bytes]`)
-- ✨ ObjectClass statistics (pkdCertificate, pkdMasterList, etc.)
+- ✨ DN hierarchy tree with proper LDAP component parsing
+- ✨ Base DN removal for cleaner visualization (4 levels saved)
+- ✨ LDAP escape character handling (`\,`, `\=`, etc.)
+- ✨ All entry attributes with values (color-coded)
+- ✨ Binary data indicators with size (Certificate, CRL, CMS)
+- ✨ ObjectClass statistics (pkdCertificate, pkdMasterList, inetOrgPerson, etc.)
 - ✨ Truncation warning for large files
+- ✨ Real-time entry count updates
+- ✨ Recursive tree component rendering with indentation
 
-**Documentation**: [LDIF_STRUCTURE_VISUALIZATION_PLAN.md](docs/LDIF_STRUCTURE_VISUALIZATION_PLAN.md)
+**Technical Highlights**:
+- **splitDn()**: Character-by-character DN parser with escape state tracking
+- **unescapeRdn()**: LDAP special character unescaping for display
+- **removeBaseDn()**: Common suffix removal algorithm
+- **buildDnTree()**: Hierarchical tree construction from flat DN list
+- **TreeNodeComponent**: Recursive React component for tree rendering
+
+**Files Created** (Backend: 6, Frontend: 1):
+- Backend: ldif_parser.h/cpp, ldif_structure_repository.h/cpp, ldif_structure_service.h/cpp
+- Frontend: LdifStructure.tsx (complete rewrite)
+- Modified: CMakeLists.txt, main.cpp, types/index.ts, pkdApi.ts, UploadHistory.tsx
+
+**Bug Fixes**:
+- 🐛 **Backend**: Fixed DN continuation line parsing in [ldif_parser.cpp:274-332](services/pkd-management/src/common/ldif_parser.cpp#L274-L332)
+  - Added `isDnContinuation` flag to track multi-line DN parsing
+  - Prevents DN truncation for long subject DNs with escaped characters
+  - Correctly handles LDIF continuation lines (lines starting with space)
+
+**Architecture Achievement**:
+- ✅ Repository Pattern: Complete separation of concerns
+- ✅ Clean Architecture: Controller → Service → Repository → Parser
+- ✅ Database Independence: Only Repository accesses file system
+- ✅ Testability: All layers mockable and testable
+- ✅ LDAP Compliance: Proper DN parsing following RFC 4514 escaping rules
+
+**Testing Results** (Collection-001 LDIF: 30,314 entries):
+- ✅ Full DN parsing: Multi-line DNs correctly assembled
+- ✅ Tree depth: 4 levels reduced by base DN removal
+- ✅ Escaped characters: All DN components properly unescaped for display
+- ✅ Performance: Tree rendering smooth with 100 entries, acceptable with 1000 entries
+
+**Next Steps** (v2.2.3):
+- 📋 E2E Testing with Collection-002/003 LDIF files
+- 📋 Performance optimization for very large files (5000+ entries)
+- 📋 Search/filter functionality for DN tree
+
+**Related Documentation**:
+- [LDIF_STRUCTURE_VISUALIZATION_PLAN.md](docs/LDIF_STRUCTURE_VISUALIZATION_PLAN.md) - Original planning document
+- [LDIF_STRUCTURE_VISUALIZATION_IMPLEMENTATION.md](docs/LDIF_STRUCTURE_VISUALIZATION_IMPLEMENTATION.md) - Implementation completion report
 
 ### Deferred to v2.3.0 - Frontend Enhancements
 
@@ -137,7 +187,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 **Documentation**: [PHASE_4.4_TASK_3_COMPLETION.md](docs/PHASE_4.4_TASK_3_COMPLETION.md)
 
-### Recent Changes (v2.2.1 - Critical Hotfix)
+### Previous Changes (v2.2.1 - Critical Hotfix)
 
 - 🔥 **Master List Upload 502 Error Fix** (CRITICAL)
   - **Root Cause**: `UploadRepository::findByFileHash()` missing `file_hash` column in SELECT query

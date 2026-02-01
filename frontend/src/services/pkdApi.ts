@@ -22,6 +22,7 @@ import type {
   UploadIssues,
   PageRequest,
   PageResponse,
+  LdifStructureData,
 } from '@/types';
 
 // =============================================================================
@@ -259,6 +260,18 @@ export const uploadHistoryApi = {
    */
   getChanges: (limit: number = 10) =>
     pkdApi.get<UploadChangesResponse>('/upload/changes', { params: { limit } }),
+
+  /**
+   * Get LDIF file structure for visualization (v2.2.2)
+   * @param uploadId - Upload record UUID
+   * @param maxEntries - Maximum number of entries to return (1-10000, default: 100)
+   * @returns LDIF structure with entries and statistics
+   */
+  getLdifStructure: (uploadId: string, maxEntries: number = 100) =>
+    pkdApi.get<ApiResponse<LdifStructureData>>(
+      `/upload/${uploadId}/ldif-structure`,
+      { params: { maxEntries } }
+    ),
 };
 
 // =============================================================================

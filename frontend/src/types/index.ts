@@ -560,3 +560,39 @@ export interface SyncCheckResponse {
   discrepancy: SyncDiscrepancy;
   checkDurationMs: number;
 }
+
+// =============================================================================
+// LDIF Structure Visualization Types (v2.2.2)
+// =============================================================================
+
+/**
+ * LDIF Attribute with binary detection
+ */
+export interface LdifAttribute {
+  name: string;           // Attribute name (e.g., "cn", "userCertificate;binary")
+  value: string;          // Attribute value (or "[Binary Data: XXX bytes]" for binary)
+  isBinary: boolean;      // True if this is a binary attribute
+  binarySize?: number;    // Size in bytes (for binary attributes)
+}
+
+/**
+ * LDIF Entry structure for visualization
+ */
+export interface LdifEntry {
+  dn: string;                      // Distinguished Name
+  objectClass: string;             // Primary objectClass (e.g., "pkdCertificate")
+  attributes: LdifAttribute[];     // All attributes with values
+  lineNumber: number;              // Line number in LDIF file
+}
+
+/**
+ * Complete LDIF structure with statistics
+ */
+export interface LdifStructureData {
+  entries: LdifEntry[];                         // Parsed entries (limited by maxEntries)
+  totalEntries: number;                         // Total entries in file
+  displayedEntries: number;                     // Number of entries displayed
+  totalAttributes: number;                      // Total attributes across all entries
+  objectClassCounts: Record<string, number>;    // Count of entries by objectClass
+  truncated: boolean;                           // True if totalEntries > displayedEntries
+}

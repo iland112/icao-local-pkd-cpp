@@ -28,6 +28,7 @@ import { uploadApi, uploadHistoryApi } from '@/services/api';
 import type { PageResponse, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
 import { cn } from '@/utils/cn';
 import { MasterListStructure } from '@/components/MasterListStructure';
+import { LdifStructure } from '@/components/LdifStructure';
 import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTree';
 import { DuplicateCertificateDialog } from '@/components/DuplicateCertificateDialog';
 import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/csvExport';
@@ -749,8 +750,8 @@ export function UploadHistory() {
                 </button>
               </div>
 
-              {/* Tabs - Show if Master List file or has duplicates */}
-              {((selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST') || (uploadIssues && uploadIssues.totalDuplicates > 0)) && (
+              {/* Tabs - Show if Master List/LDIF file or has duplicates */}
+              {((selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST' || selectedUpload.fileFormat === 'LDIF') || (uploadIssues && uploadIssues.totalDuplicates > 0)) && (
                 <div className="flex gap-2">
                   <button
                     onClick={() => setActiveTab('details')}
@@ -763,7 +764,9 @@ export function UploadHistory() {
                   >
                     상세 정보
                   </button>
-                  {(selectedUpload.fileFormat === 'ML' || selectedUpload.fileFormat === 'MASTER_LIST') && (
+                  {(selectedUpload.fileFormat === 'ML' ||
+                    selectedUpload.fileFormat === 'MASTER_LIST' ||
+                    selectedUpload.fileFormat === 'LDIF') && (
                     <button
                       onClick={() => setActiveTab('structure')}
                       className={cn(
@@ -773,7 +776,7 @@ export function UploadHistory() {
                           : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       )}
                     >
-                      Master List 구조
+                      {selectedUpload.fileFormat === 'LDIF' ? 'LDIF 구조' : 'Master List 구조'}
                     </button>
                   )}
                   {uploadIssues && uploadIssues.totalDuplicates > 0 && (
@@ -1072,10 +1075,14 @@ export function UploadHistory() {
               </div>
               )}
 
-              {/* Structure Tab - Master List ASN.1/TLV Tree */}
+              {/* Structure Tab - LDIF/Master List Structure */}
               {activeTab === 'structure' && (
                 <div className="max-h-[600px] overflow-y-auto">
-                  <MasterListStructure uploadId={selectedUpload.id} />
+                  {selectedUpload.fileFormat === 'LDIF' ? (
+                    <LdifStructure uploadId={selectedUpload.id} />
+                  ) : (
+                    <MasterListStructure uploadId={selectedUpload.id} />
+                  )}
                 </div>
               )}
 
