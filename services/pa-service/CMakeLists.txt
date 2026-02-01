@@ -47,10 +47,31 @@ find_library(LBER_LIBRARY lber REQUIRED)
 find_library(UUID_LIBRARY uuid REQUIRED)
 
 # =============================================================================
+# Source Files
+# =============================================================================
+
+# Domain Models
+set(DOMAIN_MODELS_SRC
+    src/domain/models/pa_verification.cpp
+    src/domain/models/sod_data.cpp
+    src/domain/models/data_group.cpp
+    src/domain/models/certificate_chain_validation.cpp
+)
+
+# Repositories
+set(REPOSITORIES_SRC
+    src/repositories/pa_verification_repository.cpp
+    src/repositories/ldap_certificate_repository.cpp
+    src/repositories/ldap_crl_repository.cpp
+)
+
+# =============================================================================
 # Main Application
 # =============================================================================
 add_executable(${PROJECT_NAME}
     src/main.cpp
+    ${DOMAIN_MODELS_SRC}
+    ${REPOSITORIES_SRC}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
