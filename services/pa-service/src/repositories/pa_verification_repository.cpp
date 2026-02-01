@@ -33,66 +33,59 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
 
     const char* query =
         "INSERT INTO pa_verification ("
-        "id, document_number, country_code, verification_status, sod_hash, "
-        "dsc_subject, dsc_serial_number, dsc_issuer, dsc_not_before, dsc_not_after, dsc_expired, "
-        "csca_subject, csca_serial_number, csca_not_before, csca_not_after, csca_expired, "
-        "certificate_chain_valid, sod_signature_valid, data_groups_valid, "
-        "crl_checked, revoked, crl_status, crl_message, "
-        "validation_errors, expiration_status, expiration_message, "
-        "metadata, created_at, ip_address, user_agent"
+        "issuing_country, document_number, verification_status, sod_hash, sod_binary, "
+        "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
+        "csca_subject_dn, csca_fingerprint, "
+        "trust_chain_valid, trust_chain_message, "
+        "sod_signature_valid, sod_signature_message, "
+        "dg_hashes_valid, dg_hashes_message, "
+        "crl_status, crl_message, "
+        "verification_message, "
+        "client_ip, user_agent"
         ") VALUES ("
         "$1, $2, $3, $4, $5, "
-        "$6, $7, $8, $9, $10, $11, "
-        "$12, $13, $14, $15, $16, "
-        "$17, $18, $19, "
-        "$20, $21, $22, $23, "
-        "$24, $25, $26, "
-        "$27, NOW(), $28, $29"
+        "$6, $7, $8, $9, "
+        "$10, $11, "
+        "$12, $13, "
+        "$14, $15, "
+        "$16, $17, "
+        "$18, $19, "
+        "$20, "
+        "$21, $22"
         ") RETURNING id";
 
     std::vector<std::string> params;
-    params.push_back(verification.id.empty() ? "gen_random_uuid()" : verification.id);
-    params.push_back(verification.documentNumber);
-    params.push_back(verification.countryCode);
-    params.push_back(verification.verificationStatus);
-    params.push_back(verification.sodHash);
+    // Match new INSERT query column order
+    params.push_back(verification.countryCode);           // $1: issuing_country
+    params.push_back(verification.documentNumber);        // $2: document_number
+    params.push_back(verification.verificationStatus);    // $3: verification_status
+    params.push_back(verification.sodHash);               // $4: sod_hash
+    params.push_back("");                                 // $5: sod_binary (TODO: add to domain model)
 
-    params.push_back(verification.dscSubject);
-    params.push_back(verification.dscSerialNumber);
-    params.push_back(verification.dscIssuer);
-    params.push_back(verification.dscNotBefore.value_or(""));
-    params.push_back(verification.dscNotAfter.value_or(""));
-    params.push_back(verification.dscExpired ? "true" : "false");
+    params.push_back(verification.dscSubject);            // $6: dsc_subject_dn
+    params.push_back(verification.dscSerialNumber);       // $7: dsc_serial_number
+    params.push_back(verification.dscIssuer);             // $8: dsc_issuer_dn
+    params.push_back("");                                 // $9: dsc_fingerprint (TODO: add to domain model)
 
-    params.push_back(verification.cscaSubject);
-    params.push_back(verification.cscaSerialNumber);
-    params.push_back(verification.cscaNotBefore.value_or(""));
-    params.push_back(verification.cscaNotAfter.value_or(""));
-    params.push_back(verification.cscaExpired ? "true" : "false");
+    params.push_back(verification.cscaSubject);           // $10: csca_subject_dn
+    params.push_back("");                                 // $11: csca_fingerprint (TODO: add to domain model)
 
-    params.push_back(verification.certificateChainValid ? "true" : "false");
-    params.push_back(verification.sodSignatureValid ? "true" : "false");
-    params.push_back(verification.dataGroupsValid ? "true" : "false");
+    params.push_back(verification.certificateChainValid ? "true" : "false");  // $12: trust_chain_valid
+    params.push_back("");                                 // $13: trust_chain_message (TODO: add to domain model)
 
-    params.push_back(verification.crlChecked ? "true" : "false");
-    params.push_back(verification.revoked ? "true" : "false");
-    params.push_back(verification.crlStatus);
-    params.push_back(verification.crlMessage.value_or(""));
+    params.push_back(verification.sodSignatureValid ? "true" : "false");      // $14: sod_signature_valid
+    params.push_back("");                                 // $15: sod_signature_message (TODO: add to domain model)
 
-    params.push_back(verification.validationErrors.value_or(""));
-    params.push_back(verification.expirationStatus);
-    params.push_back(verification.expirationMessage.value_or(""));
+    params.push_back(verification.dataGroupsValid ? "true" : "false");        // $16: dg_hashes_valid
+    params.push_back("");                                 // $17: dg_hashes_message (TODO: add to domain model)
 
-    // Metadata as JSON string
-    std::string metadataStr;
-    if (verification.metadata) {
-        Json::StreamWriterBuilder builder;
-        metadataStr = Json::writeString(builder, *verification.metadata);
-    }
-    params.push_back(metadataStr);
+    params.push_back(verification.crlStatus);             // $18: crl_status
+    params.push_back(verification.crlMessage.value_or(""));  // $19: crl_message
 
-    params.push_back(verification.ipAddress.value_or(""));
-    params.push_back(verification.userAgent.value_or(""));
+    params.push_back(verification.validationErrors.value_or(""));  // $20: verification_message
+
+    params.push_back(verification.ipAddress.value_or(""));    // $21: client_ip
+    params.push_back(verification.userAgent.value_or(""));    // $22: user_agent
 
     PGresult* res = executeParamQuery(query, params);
 
@@ -113,13 +106,15 @@ Json::Value PaVerificationRepository::findById(const std::string& id) {
     spdlog::debug("Finding PA verification by ID: {}", id);
 
     const char* query =
-        "SELECT id, document_number, country_code, verification_status, sod_hash, "
-        "dsc_subject, dsc_serial_number, dsc_issuer, dsc_not_before, dsc_not_after, dsc_expired, "
-        "csca_subject, csca_serial_number, csca_not_before, csca_not_after, csca_expired, "
-        "certificate_chain_valid, sod_signature_valid, data_groups_valid, "
-        "crl_checked, revoked, crl_status, crl_message, "
-        "validation_errors, expiration_status, expiration_message, "
-        "metadata, created_at, updated_at, ip_address, user_agent "
+        "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+        "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
+        "csca_subject_dn, csca_fingerprint, "
+        "trust_chain_valid, trust_chain_message, "
+        "sod_signature_valid, sod_signature_message, "
+        "dg_hashes_valid, dg_hashes_message, "
+        "crl_status, crl_message, "
+        "verification_message, "
+        "request_timestamp, completed_timestamp, client_ip, user_agent "
         "FROM pa_verification WHERE id = $1";
 
     std::vector<std::string> params = {id};
@@ -166,18 +161,19 @@ Json::Value PaVerificationRepository::findAll(
 
     // Data query
     std::ostringstream dataQuery;
-    dataQuery << "SELECT id, document_number, country_code, verification_status, sod_hash, "
-              << "dsc_subject, dsc_serial_number, csca_subject, csca_serial_number, "
-              << "certificate_chain_valid, sod_signature_valid, data_groups_valid, "
-              << "crl_checked, revoked, crl_status, "
-              << "expiration_status, created_at "
+    dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+              << "dsc_subject_dn, dsc_serial_number, dsc_fingerprint, "
+              << "csca_subject_dn, csca_fingerprint, "
+              << "trust_chain_valid, sod_signature_valid, dg_hashes_valid, "
+              << "crl_status, crl_message, "
+              << "verification_message, request_timestamp "
               << "FROM pa_verification";
 
     if (!whereClause.empty()) {
         dataQuery << " WHERE " << whereClause;
     }
 
-    dataQuery << " ORDER BY created_at DESC";
+    dataQuery << " ORDER BY request_timestamp DESC";
 
     // Add LIMIT and OFFSET
     int paramCount = params.size() + 1;
@@ -233,9 +229,9 @@ Json::Value PaVerificationRepository::getStatistics() {
 
     // By country
     const char* countryQuery =
-        "SELECT country_code, COUNT(*) "
+        "SELECT issuing_country, COUNT(*) "
         "FROM pa_verification "
-        "GROUP BY country_code "
+        "GROUP BY issuing_country "
         "ORDER BY COUNT(*) DESC "
         "LIMIT 10";
     PGresult* countryRes = executeQuery(countryQuery);
@@ -290,7 +286,7 @@ bool PaVerificationRepository::updateStatus(const std::string& id, const std::st
 
     const char* query =
         "UPDATE pa_verification "
-        "SET verification_status = $1, updated_at = NOW() "
+        "SET verification_status = $1, completed_timestamp = NOW() "
         "WHERE id = $2";
 
     std::vector<std::string> params = {status, id};
@@ -409,7 +405,7 @@ domain::models::PaVerification PaVerificationRepository::resultToVerification(PG
 
     pv.id = PQgetvalue(res, row, PQfnumber(res, "id"));
     pv.documentNumber = PQgetvalue(res, row, PQfnumber(res, "document_number"));
-    pv.countryCode = PQgetvalue(res, row, PQfnumber(res, "country_code"));
+    pv.countryCode = PQgetvalue(res, row, PQfnumber(res, "issuing_country"));
     pv.verificationStatus = PQgetvalue(res, row, PQfnumber(res, "verification_status"));
 
     // ... (additional field mapping as needed)
@@ -433,7 +429,7 @@ std::string PaVerificationRepository::buildWhereClause(
 
     if (!countryCode.empty()) {
         if (paramCount > 1) where << " AND ";
-        where << "country_code = $" << paramCount++;
+        where << "issuing_country = $" << paramCount++;
         params.push_back(countryCode);
     }
 

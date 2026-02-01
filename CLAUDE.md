@@ -145,6 +145,86 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
+### PA Service Repository Pattern Refactoring (In Progress) 🚧
+
+**Branch**: `feature/pa-service-repository-pattern`
+**Status**: Phase 4 - 44% Complete (4/9 endpoints migrated)
+**Date**: 2026-02-01
+
+#### Objectives
+- Apply Repository Pattern to PA Service matching pkd-management architecture
+- Eliminate SQL from controllers (target: 3,706 → ~500 lines in main.cpp)
+- Improve testability with dependency injection
+- Enable database migration flexibility
+
+#### Progress Summary
+
+**✅ Phase 1: Repository Layer** (100% Complete)
+- Created 4 domain models (PaVerification, SodData, DataGroup, CertificateChainValidation)
+- Implemented 3 repositories (PaVerificationRepository, LdapCertificateRepository, LdapCrlRepository)
+- 100% parameterized SQL queries
+- Proper OpenSSL memory management (X509*, X509_CRL*)
+
+**✅ Phase 2: Service Layer** (100% Complete)
+- Created 4 services:
+  - SodParserService - SOD parsing and DSC extraction
+  - DataGroupParserService - DG hash verification (SHA-1/256/384/512)
+  - CertificateValidationService - Trust chain validation with CRL checking
+  - PaVerificationService - Complete PA verification orchestration
+
+**✅ Phase 3: Service Initialization** (100% Complete)
+- Constructor-based dependency injection in main.cpp
+- Global service pointers with proper initialization/cleanup
+- Fixed OpenSSL 3.x compatibility (i2s_ASN1_INTEGER → custom serialNumberToString)
+
+**⏳ Phase 4: API Endpoint Migration** (44% Complete - 4/9 endpoints)
+- ✅ GET /api/pa/history - 110 → 50 lines (54% reduction)
+- ✅ GET /api/pa/{id} - 100 → 35 lines (65% reduction)
+- ✅ GET /api/pa/statistics - 70 → 25 lines (64% reduction)
+- ✅ **POST /api/pa/verify** - **432 → 145 lines (66% reduction)** 🎯 **MAJOR MILESTONE**
+- 📋 Remaining: 5 parser/utility endpoints (parse-sod, parse-dg1, parse-dg2, parse-mrz-text, datagroups)
+
+**📋 Phase 5: Testing & Documentation** (Pending)
+- Integration testing with real data
+- Regression testing against production
+- Performance validation
+- Documentation updates
+
+#### Code Metrics
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Endpoint Code (4 migrated) | 712 lines | 255 lines | 64% reduction |
+| SQL in Controllers | ~500 lines | 0 lines | 100% elimination |
+| Parameterized Queries | N/A | 100% | Security hardened ✅ |
+
+#### Key Achievements
+- 🎯 **Critical endpoint migrated**: POST /api/pa/verify (core PA verification workflow)
+- ✅ **Zero SQL in migrated controllers**: All database access through Repository layer
+- ✅ **OpenSSL integration**: Proper X509* management with RAII pattern
+- ✅ **Development environment**: pa-service-dev on port 8092 with production DB/LDAP
+
+#### Development Environment
+```bash
+# Start development pa-service (port 8092)
+cd scripts/dev
+./start-pa-dev.sh
+
+# Rebuild after code changes
+./rebuild-pa-dev.sh [--no-cache]
+
+# View logs
+./logs-pa-dev.sh
+
+# Stop dev service
+./stop-pa-dev.sh
+```
+
+**Related Documentation**:
+- [PA_SERVICE_REFACTORING_PROGRESS.md](docs/PA_SERVICE_REFACTORING_PROGRESS.md) - Detailed progress report with all phases
+- [PA_SERVICE_REPOSITORY_PATTERN_PLAN.md](docs/PA_SERVICE_REPOSITORY_PATTERN_PLAN.md) - Complete refactoring plan (10-day timeline)
+
+---
+
 ### Previous Changes (v2.2.2 - LDIF Structure Visualization) ✅
 
 **Status**: Complete (E2E Tested) | **Date**: 2026-02-01

@@ -86,6 +86,6 @@ services:
 networks:
   pkd-network:
     external: true
-    name: icao-local-pkd_pkd-network
+    name: docker_pkd-network
 
 # No volumes needed - using production postgres and openldap volumes
