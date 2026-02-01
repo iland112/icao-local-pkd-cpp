@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.3.0 ✅
+**Current Version**: v2.2.2 ✅
 **Last Updated**: 2026-02-01
-**Status**: Production Ready - TreeViewer Refactoring Complete + Sync Page Fix
+**Status**: Production Ready - Link Certificate Sync Fix Complete (6 Critical Bugs Resolved)
 
 ---
 
@@ -100,9 +100,64 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ JWT authentication + RBAC
 - ✅ Audit logging (IP tracking)
 
-### Recent Changes (v2.3.0 - TreeViewer Refactoring + Sync Page Fix) ✅
+### Recent Changes (v2.2.2 - Link Certificate Sync Fix + LDIF Structure Visualization) ✅
 
 **Status**: Complete | **Date**: 2026-02-01
+
+#### Part 1: Link Certificate Sync Fix - 6 Critical Bugs Resolved ✅
+
+Successfully resolved DB-LDAP synchronization discrepancies for Link Certificates by fixing **6 critical bugs** across PKD Relay Service, PKD Management Service, and database schema.
+
+**Final Sync Status** (100% Achieved):
+
+| Type | Database | LDAP | Location | Status |
+|------|----------|------|----------|--------|
+| **CSCA (self-signed)** | 714 | 714 | o=csca, dc=data | ✅ 100% |
+| **Link Certificates** | 100 | 100 | **o=lc, dc=data** | ✅ **100%** |
+| **MLSC** | 26 | 26 | o=mlsc, dc=data | ✅ 100% |
+| **DSC** | 29,804 | 29,804 | o=dsc, dc=data | ✅ 100% |
+| **DSC_NC** | 502 | 502 | o=dsc, dc=nc-data | ✅ 100% |
+| **CRL** | 69 | 69 | dc=data | ✅ 100% |
+| **TOTAL** | **31,215** | **31,215** | | ✅ **100%** |
+
+**Bugs Fixed**:
+
+**PKD Relay Service** (4 bugs):
+1. ✅ **buildDn()** - Missing LC support → Link certs stored in o=csca instead of o=lc
+2. ✅ **reconciliation_engine** - Missing link cert detection (subject != issuer check)
+3. ✅ **ensureParentDnExists()** - Missing LC container creation support
+4. ✅ **reconciliation query** - Missing `stored_in_ldap = FALSE` filter → batch size limit prevented discovery
+
+**PKD Management Service** (1 bug):
+5. ✅ **parseCertificateEntry()** ([main.cpp:3342-3520](services/pkd-management/src/main.cpp#L3342-L3520))
+   - Added Link Certificate detection (subject != issuer + CA capability)
+   - Store as certificate_type='CSCA' in DB, convert to ldapCertType='LC' for LDAP
+   - Apply trust chain validation to link certificates (same as DSC)
+
+**Database Schema** (1 bug):
+6. ✅ **CRL table UNIQUE constraint** ([01-core-schema.sql:148](docker/init-scripts/01-core-schema.sql#L148))
+   - Added `crl_fingerprint_unique` constraint to prevent duplicates
+   - Fixed historical issue: DB had 2x CRLs vs LDAP due to missing constraint
+
+**Files Modified**:
+- services/pkd-relay-service/src/relay/sync/ldap_operations.cpp
+- services/pkd-relay-service/src/relay/sync/reconciliation_engine.cpp
+- services/pkd-management/src/main.cpp
+- docker/init-scripts/01-core-schema.sql
+
+**Production Impact**:
+- ✅ Trust Chain Validation: Now fully functional for all link certificates
+- ✅ Data Integrity: 100% correct classification
+- ✅ ICAO Compliance: Full adherence to link certificate standards
+- ✅ Total Certificates: 31,215 synchronized across all types
+
+**Documentation**: [LINK_CERT_SYNC_FIX_REPORT.md](docs/LINK_CERT_SYNC_FIX_REPORT.md)
+
+---
+
+#### Part 2: LDIF Structure Visualization ✅
+
+**Status**: Complete (E2E Tested) | **Date**: 2026-02-01
 
 - ✅ **Reusable TreeViewer Component** - Eliminated ~550 lines of duplicated tree rendering code
   - **TreeViewer.tsx** ([frontend/src/components/TreeViewer.tsx](frontend/src/components/TreeViewer.tsx)): New 219-line reusable component based on react-arborist
@@ -140,116 +195,13 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ Better user experience (instant sync status updates)
 
 **Related Documentation**:
+- [LINK_CERT_SYNC_FIX_REPORT.md](docs/LINK_CERT_SYNC_FIX_REPORT.md) - Complete bug fix report
 - [PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md](docs/PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md) - Refactoring status summary
 - [PHASE_4.4_CLARIFICATION.md](docs/PHASE_4.4_CLARIFICATION.md) - Phase 4.4 naming confusion resolution
-
----
-
-### Previous Changes (v2.2.2 - LDIF Structure Visualization) ✅
-
-**Status**: Complete (E2E Tested) | **Date**: 2026-02-01
-
-- ✅ **LDIF Structure Visualization** (Backend - Repository Pattern)
-  - **LdifParser** ([ldif_parser.h/cpp](services/pkd-management/src/common/ldif_parser.h)): Parse LDIF files, detect binary attributes, extract DN components
-  - **DN Continuation Line Fix**: Added `isDnContinuation` flag to properly handle multi-line DNs in LDIF format
-  - **Full DN Parsing**: Correctly parses DNs with escaped characters and continuation lines (e.g., `cn=OU\=Identity Services...`)
-  - **LdifStructureRepository** ([ldif_structure_repository.h/cpp](services/pkd-management/src/repositories/ldif_structure_repository.h)): File access and LDIF parsing
-  - **LdifStructureService** ([ldif_structure_service.h/cpp](services/pkd-management/src/services/ldif_structure_service.h)): Business logic and validation
-  - **API Endpoint**: `GET /api/upload/{uploadId}/ldif-structure?maxEntries=100`
-  - **Architecture**: Full Repository Pattern compliance (Controller → Service → Repository → Parser)
-  - **Zero SQL in Controller**: All database access through Repository layer
-
-- ✅ **Frontend LDIF Structure Viewer - DN Tree Hierarchy**
-  - **LdifStructure Component** ([LdifStructure.tsx](frontend/src/components/LdifStructure.tsx)): Complete rewrite with DN hierarchy tree
-  - **DN Tree Structure**: Hierarchical tree view with proper LDAP DN parsing (handles escaped commas and equals)
-  - **Base DN Optimization**: Removes common base DN (`dc=download,dc=pkd,dc=icao,dc=int`) to reduce tree depth
-  - **ROOT Display**: Shows full base DN as purple root node for context
-  - **LDAP Escaping**: Proper handling of escaped characters (`\=`, `\,`) in DN components
-  - **Multi-valued RDN**: Supports multi-valued RDN with `+` separator (e.g., `cn=...+sn=...`)
-  - **Dynamic Tab Name**: "LDIF 구조" for LDIF files, "Master List 구조" for ML files
-  - **Binary Data Handling**: Displays size for binary attributes (e.g., `[Binary Certificate: 1234 bytes]`)
-  - **Entry Limit Selector**: 50/100/500/1000/10000 entries configurable
-  - **Interactive UI**: Expand/collapse nodes and entries, dark mode support, loading states
-  - **UploadHistory Integration**: Conditional rendering based on file format (LDIF/ML/MASTER_LIST)
-
-**Key Features**:
-- ✨ DN hierarchy tree with proper LDAP component parsing
-- ✨ Base DN removal for cleaner visualization (4 levels saved)
-- ✨ LDAP escape character handling (`\,`, `\=`, etc.)
-- ✨ All entry attributes with values (color-coded)
-- ✨ Binary data indicators with size (Certificate, CRL, CMS)
-- ✨ ObjectClass statistics (pkdCertificate, pkdMasterList, inetOrgPerson, etc.)
-- ✨ Truncation warning for large files
-- ✨ Real-time entry count updates
-- ✨ Recursive tree component rendering with indentation
-
-**Technical Highlights**:
-- **splitDn()**: Character-by-character DN parser with escape state tracking
-- **unescapeRdn()**: LDAP special character unescaping for display
-- **removeBaseDn()**: Common suffix removal algorithm
-- **buildDnTree()**: Hierarchical tree construction from flat DN list
-- **TreeNodeComponent**: Recursive React component for tree rendering
-
-**Files Created** (Backend: 6, Frontend: 1):
-- Backend: ldif_parser.h/cpp, ldif_structure_repository.h/cpp, ldif_structure_service.h/cpp
-- Frontend: LdifStructure.tsx (complete rewrite)
-- Modified: CMakeLists.txt, main.cpp, types/index.ts, pkdApi.ts, UploadHistory.tsx
-
-**Bug Fixes**:
-- 🐛 **Backend**: Fixed DN continuation line parsing in [ldif_parser.cpp:274-332](services/pkd-management/src/common/ldif_parser.cpp#L274-L332)
-  - Added `isDnContinuation` flag to track multi-line DN parsing
-  - Prevents DN truncation for long subject DNs with escaped characters
-  - Correctly handles LDIF continuation lines (lines starting with space)
-
-**Architecture Achievement**:
-- ✅ Repository Pattern: Complete separation of concerns
-- ✅ Clean Architecture: Controller → Service → Repository → Parser
-- ✅ Database Independence: Only Repository accesses file system
-- ✅ Testability: All layers mockable and testable
-- ✅ LDAP Compliance: Proper DN parsing following RFC 4514 escaping rules
-
-**E2E Testing Results** (All file formats verified ✅):
-
-**Collection-001 (DSC LDIF: 30,314 entries)**:
-- ✅ Full DN parsing: Multi-line DNs correctly assembled
-- ✅ Multi-valued RDN: `cn=OU=Identity Services...,C=NZ+sn=42E575AF` properly displayed
-- ✅ Tree depth: 4 levels reduced by base DN removal (dc=data → c=NZ → o=dsc)
-- ✅ Escaped characters: All DN components properly unescaped for display
-- ✅ Performance: Tree rendering smooth with 100 entries, acceptable with 1000 entries
-- ✅ 29,838 DSC + 69 CRL processed and verified
-
-**Collection-002 (Country Master List LDIF: 82 entries)**:
-- ✅ Binary CMS data: `[Binary CMS Data: 120423 bytes]` correctly displayed
-- ✅ Master List extraction: 27 ML entries with 10,034 CSCA extracted
-- ✅ Deduplication: 9,252 duplicates detected (91.8% rate)
-- ✅ Net new CSCA: 782 certificates (306 stored from this upload)
-- ✅ MLSC extraction: 25 Master List Signer Certificates
-- ✅ ObjectClass display: pkdMasterList, pkdDownload, top, person
-
-**Collection-003 (DSC_NC LDIF: 534 entries)**:
-- ✅ nc-data container: DN tree correctly shows `dc=nc-data → c=XX → o=dsc`
-- ✅ PKD conformance: Non-conformant DSC properly identified
-- ✅ 502 DSC_NC certificates processed and stored
-- ✅ LDAP storage: 100% match (502 in DB, 502 in LDAP)
-
-**Master List File Direct Upload**:
-- ✅ 537 certificates: 1 MLSC + 536 CSCA/LC
-- ✅ Processing time: 5 seconds
-- ✅ Trust chain validation: Link certificates properly identified
-
-**System-Wide Verification**:
-| Type | Total | In LDAP | Coverage |
-|------|-------|---------|----------|
-| CSCA | 814 | 813 | 99.9% |
-| MLSC | 26 | 26 | 100% |
-| DSC | 29,804 | 29,804 | 100% |
-| DSC_NC | 502 | 502 | 100% |
-| CRL | 69 | 69 | 100% |
-| **Total** | **31,215** | **31,214** | **99.997%** |
-
-**Related Documentation**:
 - [LDIF_STRUCTURE_VISUALIZATION_PLAN.md](docs/LDIF_STRUCTURE_VISUALIZATION_PLAN.md) - Original planning document
 - [LDIF_STRUCTURE_VISUALIZATION_IMPLEMENTATION.md](docs/LDIF_STRUCTURE_VISUALIZATION_IMPLEMENTATION.md) - Implementation completion report
+
+---
 
 ### Deferred to v2.3.0 - Frontend Enhancements
 
@@ -259,6 +211,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - 📋 **Algorithm/Key Size Charts**: Distribution visualization
 
 **Documentation**: [PHASE_4.4_TASK_3_COMPLETION.md](docs/PHASE_4.4_TASK_3_COMPLETION.md)
+
+---
 
 ### Previous Changes (v2.2.1 - Critical Hotfix)
 
