@@ -2234,118 +2234,63 @@ void registerRoutes() {
     );
 
     // PA history endpoint
+    // GET /api/pa/history - PA verification history (Repository Pattern)
     app.registerHandler(
         "/api/pa/history",
         [](const drogon::HttpRequestPtr& req,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             spdlog::info("GET /api/pa/history");
 
-            int page = 0;
-            int size = 20;
-            std::string statusFilter;
-            std::string countryFilter;
+            try {
+                // Parse query parameters
+                int page = 0;
+                int size = 20;
+                std::string statusFilter;
+                std::string countryFilter;
 
-            if (auto p = req->getParameter("page"); !p.empty()) {
-                page = std::stoi(p);
-            }
-            if (auto s = req->getParameter("size"); !s.empty()) {
-                size = std::stoi(s);
-            }
-            if (auto st = req->getParameter("status"); !st.empty()) {
-                statusFilter = st;
-            }
-            if (auto c = req->getParameter("issuingCountry"); !c.empty()) {
-                countryFilter = c;
-            }
-
-            PGconn* conn = getDbConnection();
-            Json::Value result;
-            result["content"] = Json::Value(Json::arrayValue);
-            result["page"] = page;
-            result["size"] = size;
-
-            if (conn) {
-                // Build query
-                std::string countSql = "SELECT COUNT(*) FROM pa_verification";
-                std::string sql = "SELECT id, issuing_country, document_number, verification_status, "
-                    "request_timestamp, processing_time_ms, "
-                    "trust_chain_valid, sod_signature_valid, dg_hashes_valid, crl_status "
-                    "FROM pa_verification";
-
-                std::string whereClause;
-                if (!statusFilter.empty()) {
-                    whereClause = " WHERE verification_status = '" + statusFilter + "'";
+                if (auto p = req->getParameter("page"); !p.empty()) {
+                    page = std::stoi(p);
                 }
-                if (!countryFilter.empty()) {
-                    if (whereClause.empty()) {
-                        whereClause = " WHERE issuing_country = '" + countryFilter + "'";
-                    } else {
-                        whereClause += " AND issuing_country = '" + countryFilter + "'";
-                    }
+                if (auto s = req->getParameter("size"); !s.empty()) {
+                    size = std::stoi(s);
+                }
+                if (auto st = req->getParameter("status"); !st.empty()) {
+                    statusFilter = st;
+                }
+                if (auto c = req->getParameter("issuingCountry"); !c.empty()) {
+                    countryFilter = c;
                 }
 
-                countSql += whereClause;
-                sql += whereClause + " ORDER BY request_timestamp DESC LIMIT " +
-                    std::to_string(size) + " OFFSET " + std::to_string(page * size);
+                // Calculate limit and offset
+                int limit = size;
+                int offset = page * size;
 
-                // Get total count
-                PGresult* countRes = PQexec(conn, countSql.c_str());
-                int totalElements = 0;
-                if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-                    totalElements = std::stoi(PQgetvalue(countRes, 0, 0));
-                }
-                PQclear(countRes);
+                // Call service layer (100% parameterized SQL, secure)
+                Json::Value result = paVerificationService->getVerificationHistory(
+                    limit,
+                    offset,
+                    statusFilter,
+                    countryFilter
+                );
 
-                result["totalElements"] = totalElements;
-                result["totalPages"] = (totalElements + size - 1) / size;
-                result["first"] = (page == 0);
-                result["last"] = (page >= (totalElements / size));
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
 
-                // Get records
-                PGresult* res = PQexec(conn, sql.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    int nRows = PQntuples(res);
-                    for (int i = 0; i < nRows; i++) {
-                        Json::Value item;
-                        item["verificationId"] = PQgetvalue(res, i, 0);
-                        item["issuingCountry"] = PQgetvalue(res, i, 1);
-                        item["documentNumber"] = PQgetvalue(res, i, 2);
-                        item["status"] = PQgetvalue(res, i, 3);
-                        item["verificationTimestamp"] = PQgetvalue(res, i, 4);
-                        item["processingDurationMs"] = std::stoi(PQgetvalue(res, i, 5));
-
-                        // Build validation summaries
-                        Json::Value chainValidation;
-                        chainValidation["valid"] = (std::string(PQgetvalue(res, i, 6)) == "t");
-                        item["certificateChainValidation"] = chainValidation;
-
-                        Json::Value sodValidation;
-                        sodValidation["valid"] = (std::string(PQgetvalue(res, i, 7)) == "t");
-                        item["sodSignatureValidation"] = sodValidation;
-
-                        Json::Value dgValidation;
-                        dgValidation["valid"] = (std::string(PQgetvalue(res, i, 8)) == "t");
-                        item["dataGroupValidation"] = dgValidation;
-
-                        result["content"].append(item);
-                    }
-                }
-                PQclear(res);
-                PQfinish(conn);
-            } else {
-                result["totalElements"] = 0;
-                result["totalPages"] = 0;
-                result["first"] = true;
-                result["last"] = true;
+            } catch (const std::exception& e) {
+                spdlog::error("Error in GET /api/pa/history: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
             }
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
         },
         {drogon::Get}
     );
 
     // PA detail by ID
+    // GET /api/pa/{id} - Get PA verification by ID (Repository Pattern)
     app.registerHandler(
         "/api/pa/{id}",
         [](const drogon::HttpRequestPtr& /* req */,
@@ -2353,169 +2298,61 @@ void registerRoutes() {
            const std::string& id) {
             spdlog::info("GET /api/pa/{}", id);
 
-            PGconn* conn = getDbConnection();
-            Json::Value result;
+            try {
+                // Call service layer
+                Json::Value result = paVerificationService->getVerificationById(id);
 
-            if (conn) {
-                std::string sql = "SELECT id, issuing_country, document_number, verification_status, "
-                    "request_timestamp, completed_timestamp, processing_time_ms, "
-                    "dsc_subject_dn, dsc_serial_number, csca_subject_dn, csca_fingerprint, "
-                    "trust_chain_valid, trust_chain_message, "
-                    "sod_signature_valid, sod_signature_message, "
-                    "dg_hashes_valid, dg_hashes_message, "
-                    "crl_status, crl_message "
-                    "FROM pa_verification WHERE id = $1";
-
-                const char* paramValues[1] = {id.c_str()};
-                PGresult* res = PQexecParams(conn, sql.c_str(), 1, nullptr, paramValues, nullptr, nullptr, 0);
-
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["verificationId"] = PQgetvalue(res, 0, 0);
-                    result["issuingCountry"] = PQgetvalue(res, 0, 1);
-                    result["documentNumber"] = PQgetvalue(res, 0, 2);
-                    result["status"] = PQgetvalue(res, 0, 3);
-                    result["verificationTimestamp"] = PQgetvalue(res, 0, 4);
-                    result["processingDurationMs"] = std::stoi(PQgetvalue(res, 0, 6));
-
-                    // Certificate chain validation
-                    Json::Value chainValidation;
-                    chainValidation["valid"] = (std::string(PQgetvalue(res, 0, 11)) == "t");
-                    chainValidation["dscSubject"] = PQgetvalue(res, 0, 7);
-                    chainValidation["dscSerialNumber"] = PQgetvalue(res, 0, 8);
-                    chainValidation["cscaSubject"] = PQgetvalue(res, 0, 9);
-                    chainValidation["crlStatus"] = PQgetvalue(res, 0, 17);
-                    chainValidation["crlMessage"] = PQgetvalue(res, 0, 18);
-                    result["certificateChainValidation"] = chainValidation;
-
-                    // SOD signature validation
-                    Json::Value sodValidation;
-                    sodValidation["valid"] = (std::string(PQgetvalue(res, 0, 13)) == "t");
-                    result["sodSignatureValidation"] = sodValidation;
-
-                    // Data group validation
-                    Json::Value dgValidation;
-                    dgValidation["valid"] = (std::string(PQgetvalue(res, 0, 15)) == "t");
-
-                    // Fetch DG details
-                    std::string dgSql = "SELECT dg_number, expected_hash, actual_hash, hash_valid "
-                        "FROM pa_data_group WHERE verification_id = $1 ORDER BY dg_number";
-                    PGresult* dgRes = PQexecParams(conn, dgSql.c_str(), 1, nullptr, paramValues, nullptr, nullptr, 0);
-
-                    if (PQresultStatus(dgRes) == PGRES_TUPLES_OK) {
-                        int nDgs = PQntuples(dgRes);
-                        dgValidation["totalGroups"] = nDgs;
-                        int validCount = 0;
-                        Json::Value details;
-
-                        for (int i = 0; i < nDgs; i++) {
-                            std::string dgKey = "DG" + std::string(PQgetvalue(dgRes, i, 0));
-                            Json::Value dgDetail;
-                            dgDetail["valid"] = (std::string(PQgetvalue(dgRes, i, 3)) == "t");
-                            dgDetail["expectedHash"] = PQgetvalue(dgRes, i, 1);
-                            dgDetail["actualHash"] = PQgetvalue(dgRes, i, 2);
-                            details[dgKey] = dgDetail;
-
-                            if (dgDetail["valid"].asBool()) validCount++;
-                        }
-
-                        dgValidation["validGroups"] = validCount;
-                        dgValidation["invalidGroups"] = nDgs - validCount;
-                        dgValidation["details"] = details;
-                    }
-                    PQclear(dgRes);
-
-                    result["dataGroupValidation"] = dgValidation;
-                    result["errors"] = Json::Value(Json::arrayValue);
-
-                    PQclear(res);
-                    PQfinish(conn);
-
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                if (result.isNull() || result.empty()) {
+                    // Not found
+                    Json::Value notFound;
+                    notFound["status"] = "NOT_FOUND";
+                    notFound["message"] = "PA verification record not found";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(notFound);
+                    resp->setStatusCode(drogon::k404NotFound);
                     callback(resp);
                     return;
                 }
 
-                PQclear(res);
-                PQfinish(conn);
-            }
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
 
-            // Not found
-            result["status"] = "NOT_FOUND";
-            result["message"] = "PA verification record not found";
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            resp->setStatusCode(drogon::k404NotFound);
-            callback(resp);
+            } catch (const std::exception& e) {
+                spdlog::error("Error in GET /api/pa/{}: {}", id, e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
         },
         {drogon::Get}
     );
 
     // PA statistics endpoint
+    // GET /api/pa/statistics - PA verification statistics (Repository Pattern)
     app.registerHandler(
         "/api/pa/statistics",
         [](const drogon::HttpRequestPtr& /* req */,
            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             spdlog::info("GET /api/pa/statistics");
 
-            PGconn* conn = getDbConnection();
-            Json::Value result;
-            result["totalVerifications"] = 0;
-            result["validCount"] = 0;
-            result["invalidCount"] = 0;
-            result["errorCount"] = 0;
-            result["averageProcessingTimeMs"] = 0;
-            result["countriesVerified"] = 0;
+            try {
+                // Call service layer
+                Json::Value result = paVerificationService->getStatistics();
 
-            if (conn) {
-                // Total count
-                PGresult* res = PQexec(conn, "SELECT COUNT(*) FROM pa_verification");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["totalVerifications"] = std::stoi(PQgetvalue(res, 0, 0));
-                }
-                PQclear(res);
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
 
-                // Valid count
-                res = PQexec(conn, "SELECT COUNT(*) FROM pa_verification WHERE verification_status = 'VALID'");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["validCount"] = std::stoi(PQgetvalue(res, 0, 0));
-                }
-                PQclear(res);
-
-                // Invalid count
-                res = PQexec(conn, "SELECT COUNT(*) FROM pa_verification WHERE verification_status = 'INVALID'");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["invalidCount"] = std::stoi(PQgetvalue(res, 0, 0));
-                }
-                PQclear(res);
-
-                // Error count
-                res = PQexec(conn, "SELECT COUNT(*) FROM pa_verification WHERE verification_status = 'ERROR'");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["errorCount"] = std::stoi(PQgetvalue(res, 0, 0));
-                }
-                PQclear(res);
-
-                // Average processing time
-                res = PQexec(conn, "SELECT AVG(processing_time_ms) FROM pa_verification");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    const char* val = PQgetvalue(res, 0, 0);
-                    if (val && strlen(val) > 0) {
-                        result["averageProcessingTimeMs"] = static_cast<int>(std::stod(val));
-                    }
-                }
-                PQclear(res);
-
-                // Countries count
-                res = PQexec(conn, "SELECT COUNT(DISTINCT issuing_country) FROM pa_verification");
-                if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-                    result["countriesVerified"] = std::stoi(PQgetvalue(res, 0, 0));
-                }
-                PQclear(res);
-
-                PQfinish(conn);
+            } catch (const std::exception& e) {
+                spdlog::error("Error in GET /api/pa/statistics: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
             }
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
         },
         {drogon::Get}
     );
