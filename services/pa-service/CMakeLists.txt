@@ -65,6 +65,14 @@ set(REPOSITORIES_SRC
     src/repositories/ldap_crl_repository.cpp
 )
 
+# Services
+set(SERVICES_SRC
+    src/services/sod_parser_service.cpp
+    src/services/data_group_parser_service.cpp
+    src/services/certificate_validation_service.cpp
+    src/services/pa_verification_service.cpp
+)
+
 # =============================================================================
 # Main Application
 # =============================================================================
@@ -72,6 +80,7 @@ add_executable(${PROJECT_NAME}
     src/main.cpp
     ${DOMAIN_MODELS_SRC}
     ${REPOSITORIES_SRC}
+    ${SERVICES_SRC}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
