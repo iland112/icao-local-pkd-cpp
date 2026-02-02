@@ -1,0 +1,32 @@
+# Build directory
+build/
+cmake-build-*/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Compiled files
+*.o
+*.so
+*.so.*
+*.a
+*.dylib
+*.dll
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+!Config.cmake.in
+
+# Test outputs
+Testing/
+tests/icao_common_tests
+CTestTestfile.cmake
