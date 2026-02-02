@@ -35,7 +35,9 @@ export function PADashboard() {
         paApi.getStatistics(),
         paApi.getHistory({ page: 0, size: 100 }),
       ]);
-      setStats(statsResponse.data);
+      if (statsResponse.data.data) {
+        setStats(statsResponse.data.data);
+      }
       setRecentVerifications(historyResponse.data.content || []);
     } catch (error) {
       console.error('Failed to fetch PA dashboard data:', error);
@@ -391,7 +393,7 @@ export function PADashboard() {
                       총 검증 건수
                     </h3>
                     <div className="text-3xl font-bold text-teal-500">
-                      {stats?.totalVerifications.toLocaleString() || 0}
+                      {(stats?.totalVerifications ?? 0).toLocaleString()}
                     </div>
                     <p className="text-xs mt-1 text-gray-400">전체 검증 수행 건수</p>
                   </div>

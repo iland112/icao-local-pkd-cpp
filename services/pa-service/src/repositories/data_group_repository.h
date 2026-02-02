@@ -16,6 +16,7 @@
 #include <json/json.h>
 #include <libpq-fe.h>
 #include "../domain/models/data_group.h"
+#include "../common/db_connection_pool.h"
 
 namespace repositories {
 
@@ -27,17 +28,18 @@ namespace repositories {
  * - Retrieve data groups by verification ID
  * - 100% parameterized queries
  * - Exception-based error handling
+ * - Thread-safe database access via connection pool
  */
 class DataGroupRepository {
 private:
-    PGconn* dbConn_;  // Database connection (non-owning)
+    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
 
 public:
     /**
      * @brief Constructor
-     * @param conn PostgreSQL connection (must be open and valid)
+     * @param pool Database connection pool (must be valid)
      */
-    explicit DataGroupRepository(PGconn* conn);
+    explicit DataGroupRepository(common::DbConnectionPool* pool);
 
     /**
      * @brief Destructor

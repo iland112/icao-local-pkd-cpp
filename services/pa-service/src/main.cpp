@@ -61,6 +61,7 @@
 
 // Audit logging (Phase 4.4)
 #include "common/audit_log.h"
+#include "common/db_connection_pool.h"
 
 // Repository Pattern - Phase 3: Service and Repository includes
 #include "repositories/pa_verification_repository.h"
@@ -241,6 +242,11 @@ struct AppConfig {
 };
 
 AppConfig appConfig;
+
+// =============================================================================
+// Database Connection Pool
+// =============================================================================
+common::DbConnectionPool* dbPool = nullptr;
 
 // =============================================================================
 // Repository Pattern - Global Service and Repository Pointers
@@ -1641,11 +1647,25 @@ void initializeServices() {
     spdlog::info("Initializing Repository Pattern services...");
 
     try {
-        // Step 1: Get database connection
-        PGconn* dbConn = getDbConnection();
-        if (!dbConn) {
-            throw std::runtime_error("Failed to get database connection");
+        // Step 1: Initialize database connection pool
+        std::string connString = "host=" + appConfig.dbHost +
+                               " port=" + std::to_string(appConfig.dbPort) +
+                               " dbname=" + appConfig.dbName +
+                               " user=" + appConfig.dbUser +
+                               " password=" + appConfig.dbPassword;
+
+        spdlog::debug("Creating database connection pool...");
+        dbPool = new common::DbConnectionPool(
+            connString,
+            2,   // minSize: minimum 2 connections
+            10,  // maxSize: maximum 10 connections
+            5    // acquireTimeoutSec: 5 seconds timeout
+        );
+
+        if (!dbPool->initialize()) {
+            throw std::runtime_error("Failed to initialize database connection pool");
         }
+        spdlog::info("✅ Database connection pool initialized (min: 2, max: 10)");
 
         // Step 2: Get LDAP connection
         LDAP* ldapConn = getLdapConnection();
@@ -1655,10 +1675,10 @@ void initializeServices() {
 
         // Step 3: Initialize Repositories (constructor-based dependency injection)
         spdlog::debug("Creating PaVerificationRepository...");
-        paVerificationRepository = new repositories::PaVerificationRepository(dbConn);
+        paVerificationRepository = new repositories::PaVerificationRepository(dbPool);
 
         spdlog::debug("Creating DataGroupRepository...");
-        dataGroupRepository = new repositories::DataGroupRepository(dbConn);
+        dataGroupRepository = new repositories::DataGroupRepository(dbPool);
 
         spdlog::debug("Creating LdapCertificateRepository...");
         ldapCertificateRepository = new repositories::LdapCertificateRepository(
@@ -1725,6 +1745,15 @@ void cleanupServices() {
     ldapCertificateRepository = nullptr;
     dataGroupRepository = nullptr;
     paVerificationRepository = nullptr;
+
+    // Shutdown and delete connection pool
+    if (dbPool) {
+        spdlog::debug("Shutting down database connection pool...");
+        dbPool->shutdown();
+        delete dbPool;
+        dbPool = nullptr;
+        spdlog::info("✅ Database connection pool shut down");
+    }
 
     spdlog::info("✅ All services cleaned up");
 }

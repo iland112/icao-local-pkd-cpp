@@ -17,6 +17,7 @@
 #include <json/json.h>
 #include <libpq-fe.h>
 #include "../domain/models/pa_verification.h"
+#include "../common/db_connection_pool.h"
 
 namespace repositories {
 
@@ -27,18 +28,19 @@ namespace repositories {
  * - CRUD operations on pa_verification table
  * - Parameterized SQL queries (100% SQL injection protection)
  * - JSON response formatting for API
+ * - Thread-safe database access via connection pool
  */
 class PaVerificationRepository {
 private:
-    PGconn* dbConn_;  // Not owned - do not free
+    common::DbConnectionPool* dbPool_;  // Not owned - do not free
 
 public:
     /**
-     * @brief Constructor with database connection injection
-     * @param conn PostgreSQL connection (must remain valid during repository lifetime)
-     * @throws std::invalid_argument if conn is nullptr
+     * @brief Constructor with database connection pool injection
+     * @param pool Database connection pool (must remain valid during repository lifetime)
+     * @throws std::invalid_argument if pool is nullptr
      */
-    explicit PaVerificationRepository(PGconn* conn);
+    explicit PaVerificationRepository(common::DbConnectionPool* pool);
 
     /**
      * @brief Destructor

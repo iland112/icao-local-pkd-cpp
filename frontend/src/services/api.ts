@@ -159,7 +159,7 @@ export const paApi = {
     api.get<PAVerificationResponse>(`/pa/${id}`),
 
   getStatistics: () =>
-    api.get<PAStatisticsOverview>('/pa/statistics'),
+    api.get<ApiResponse<PAStatisticsOverview>>('/pa/statistics'),
 
   parseDG1: (data: string) =>
     api.post('/pa/parse-dg1', { data }),

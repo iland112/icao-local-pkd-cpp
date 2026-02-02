@@ -11,13 +11,13 @@
 
 namespace repositories {
 
-DataGroupRepository::DataGroupRepository(PGconn* conn)
-    : dbConn_(conn)
+DataGroupRepository::DataGroupRepository(common::DbConnectionPool* pool)
+    : dbPool_(pool)
 {
-    if (!dbConn_) {
-        throw std::invalid_argument("Database connection cannot be null");
+    if (!dbPool_) {
+        throw std::invalid_argument("Database connection pool cannot be null");
     }
-    spdlog::debug("DataGroupRepository initialized");
+    spdlog::debug("DataGroupRepository initialized with connection pool");
 }
 
 // ==========================================================================
@@ -125,6 +125,12 @@ std::string DataGroupRepository::insert(
     }
     params.push_back(binaryData);
 
+    // Acquire connection from pool
+    auto conn = dbPool_->acquire();
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     // Execute query with parameters
     const char* paramValues[7];
     for (size_t i = 0; i < params.size(); i++) {
@@ -132,7 +138,7 @@ std::string DataGroupRepository::insert(
     }
 
     PGresult* res = PQexecParams(
-        dbConn_,
+        conn.get(),
         query,
         7,  // number of parameters
         nullptr,
@@ -143,7 +149,7 @@ std::string DataGroupRepository::insert(
     );
 
     if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(dbConn_);
+        std::string error = PQerrorMessage(conn.get());
         PQclear(res);
         throw std::runtime_error("Failed to insert data group: " + error);
     }
@@ -183,13 +189,19 @@ PGresult* DataGroupRepository::executeParamQuery(
     const std::string& query,
     const std::vector<std::string>& params)
 {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
         paramValues.push_back(param.c_str());
     }
 
     PGresult* res = PQexecParams(
-        dbConn_,
+        conn.get(),
         query.c_str(),
         params.size(),
         nullptr,
@@ -201,7 +213,7 @@ PGresult* DataGroupRepository::executeParamQuery(
 
     ExecStatusType status = PQresultStatus(res);
     if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK) {
-        std::string error = PQerrorMessage(dbConn_);
+        std::string error = PQerrorMessage(conn.get());
         PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }
