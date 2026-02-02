@@ -47,10 +47,48 @@ find_library(LBER_LIBRARY lber REQUIRED)
 find_library(UUID_LIBRARY uuid REQUIRED)
 
 # =============================================================================
+# Source Files
+# =============================================================================
+
+# Domain Models
+set(DOMAIN_MODELS_SRC
+    src/domain/models/pa_verification.cpp
+    src/domain/models/sod_data.cpp
+    src/domain/models/data_group.cpp
+    src/domain/models/certificate_chain_validation.cpp
+)
+
+# Repositories
+set(REPOSITORIES_SRC
+    src/repositories/pa_verification_repository.cpp
+    src/repositories/ldap_certificate_repository.cpp
+    src/repositories/ldap_crl_repository.cpp
+    src/repositories/data_group_repository.cpp
+)
+
+# Services
+set(SERVICES_SRC
+    src/services/sod_parser_service.cpp
+    src/services/data_group_parser_service.cpp
+    src/services/certificate_validation_service.cpp
+    src/services/pa_verification_service.cpp
+)
+
+# Common Utilities
+set(COMMON_SRC
+    src/common/db_connection_pool.cpp
+    src/common/ldap_connection_pool.cpp
+)
+
+# =============================================================================
 # Main Application
 # =============================================================================
 add_executable(${PROJECT_NAME}
     src/main.cpp
+    ${DOMAIN_MODELS_SRC}
+    ${REPOSITORIES_SRC}
+    ${SERVICES_SRC}
+    ${COMMON_SRC}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -73,6 +111,59 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 # =============================================================================
+# Testing (Optional)
+# =============================================================================
+option(BUILD_TESTS "Build unit tests" OFF)
+
+if(BUILD_TESTS)
+    enable_testing()
+    find_package(GTest REQUIRED)
+
+    # Test sources
+    set(TEST_SRC
+        tests/repositories/pa_verification_repository_test.cpp
+        tests/repositories/data_group_repository_test.cpp
+        tests/repositories/ldap_helpers_test.cpp
+    )
+
+    # Create test executable
+    add_executable(pa-service-tests
+        ${TEST_SRC}
+        ${DOMAIN_MODELS_SRC}
+        ${REPOSITORIES_SRC}
+        ${SERVICES_SRC}
+        ${COMMON_SRC}
+    )
+
+    target_include_directories(pa-service-tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+        ${PostgreSQL_INCLUDE_DIRS}
+    )
+
+    target_link_libraries(pa-service-tests PRIVATE
+        GTest::GTest
+        GTest::Main
+        Drogon::Drogon
+        OpenSSL::SSL
+        OpenSSL::Crypto
+        PostgreSQL::PostgreSQL
+        nlohmann_json::nlohmann_json
+        spdlog::spdlog
+        ${LDAP_LIBRARY}
+        ${LBER_LIBRARY}
+        ${UUID_LIBRARY}
+    )
+
+    # Add tests to CTest
+    include(GoogleTest)
+    gtest_discover_tests(pa-service-tests)
+
+    message(STATUS "Unit tests enabled")
+endif()
+
+# =============================================================================
 # Build Info
 # =============================================================================
 message(STATUS "")
@@ -82,5 +173,6 @@ message(STATUS "C++ compiler:       ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILE
 message(STATUS "C++ standard:       ${CMAKE_CXX_STANDARD}")
 message(STATUS "Build type:         ${CMAKE_BUILD_TYPE}")
 message(STATUS "Install prefix:     ${CMAKE_INSTALL_PREFIX}")
+message(STATUS "Build tests:        ${BUILD_TESTS}")
 message(STATUS "==========================================")
 message(STATUS "")
