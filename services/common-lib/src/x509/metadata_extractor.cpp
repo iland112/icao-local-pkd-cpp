@@ -8,6 +8,7 @@
 
 #include "icao/x509/metadata_extractor.h"
 #include "icao/x509/dn_parser.h"
+#include "icao/utils/time_utils.h"
 #include <openssl/bn.h>
 #include <openssl/evp.h>
 #include <openssl/ec.h>
@@ -22,38 +23,6 @@ namespace icao {
 namespace x509 {
 
 namespace {
-    /**
-     * @brief Convert ASN1_INTEGER to hex string
-     */
-    std::string asn1IntegerToHex(const ASN1_INTEGER* asn1_int) {
-        if (!asn1_int) {
-            return "";
-        }
-
-        BIGNUM* bn = ASN1_INTEGER_to_BN(asn1_int, nullptr);
-        if (!bn) {
-            return "";
-        }
-
-        char* hex_str = BN_bn2hex(bn);
-        if (!hex_str) {
-            BN_free(bn);
-            return "";
-        }
-
-        std::string result(hex_str);
-
-        // Convert to lowercase
-        for (char& c : result) {
-            c = std::tolower(c);
-        }
-
-        OPENSSL_free(hex_str);
-        BN_free(bn);
-
-        return result;
-    }
-
     /**
      * @brief Convert ASN1_OCTET_STRING to hex string
      */
@@ -71,43 +40,6 @@ namespace {
 
         return oss.str();
     }
-
-    /**
-     * @brief Convert ASN1_TIME to time_point
-     */
-    std::chrono::system_clock::time_point asn1TimeToTimePoint(const ASN1_TIME* asn1_time) {
-        if (!asn1_time) {
-            return std::chrono::system_clock::time_point{};
-        }
-
-        struct tm tm_time;
-        std::memset(&tm_time, 0, sizeof(tm_time));
-
-        // Parse ASN1_TIME
-        const char* str = reinterpret_cast<const char*>(asn1_time->data);
-
-        if (asn1_time->type == V_ASN1_UTCTIME) {
-            // YYMMDDhhmmssZ
-            sscanf(str, "%2d%2d%2d%2d%2d%2d",
-                   &tm_time.tm_year, &tm_time.tm_mon, &tm_time.tm_mday,
-                   &tm_time.tm_hour, &tm_time.tm_min, &tm_time.tm_sec);
-
-            tm_time.tm_year += (tm_time.tm_year < 50) ? 100 : 0; // Y2K adjustment
-        } else if (asn1_time->type == V_ASN1_GENERALIZEDTIME) {
-            // YYYYMMDDhhmmssZ
-            sscanf(str, "%4d%2d%2d%2d%2d%2d",
-                   &tm_time.tm_year, &tm_time.tm_mon, &tm_time.tm_mday,
-                   &tm_time.tm_hour, &tm_time.tm_min, &tm_time.tm_sec);
-
-            tm_time.tm_year -= 1900;
-        }
-
-        tm_time.tm_mon -= 1; // Month is 0-11
-        tm_time.tm_isdst = 0; // UTC
-
-        std::time_t time = timegm(&tm_time);
-        return std::chrono::system_clock::from_time_t(time);
-    }
 }
 
 int getVersion(X509* cert) {
@@ -124,7 +56,7 @@ std::string getSerialNumber(X509* cert) {
     }
 
     const ASN1_INTEGER* serial = X509_get0_serialNumber(cert);
-    return asn1IntegerToHex(serial);
+    return utils::asn1IntegerToHex(serial);
 }
 
 std::optional<std::string> getSignatureAlgorithm(X509* cert) {
@@ -519,8 +451,8 @@ getValidityPeriod(X509* cert) {
     }
 
     return {
-        asn1TimeToTimePoint(not_before),
-        asn1TimeToTimePoint(not_after)
+        utils::asn1TimeToTimePoint(not_before),
+        utils::asn1TimeToTimePoint(not_after)
     };
 }
 

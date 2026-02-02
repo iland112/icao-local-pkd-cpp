@@ -29,8 +29,8 @@ set(TEST_SOURCES
     test_dn_components.cpp
     test_certificate_parser.cpp
     test_metadata_extractor.cpp
-    test_string_utils.cpp
-    test_time_utils.cpp
+    utils/test_string_utils.cpp
+    utils/test_time_utils.cpp
 )
 
 # Create test executable

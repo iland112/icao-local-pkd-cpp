@@ -1,8 +1,8 @@
 /**
  * @file string_utils.h
- * @brief String manipulation utilities
+ * @brief Common string utility functions
  *
- * Common string operations used across ICAO PKD services.
+ * Provides essential string manipulation functions used across services.
  *
  * @version 1.0.0
  * @date 2026-02-02
@@ -12,7 +12,6 @@
 
 #include <string>
 #include <vector>
-#include <optional>
 #include <cstdint>
 
 namespace icao {
@@ -22,162 +21,81 @@ namespace utils {
  * @brief Convert string to lowercase
  *
  * @param str Input string
- * @return Lowercase string
+ * @return Lowercase version of the string
+ *
+ * @example
+ * std::string upper = "HELLO";
+ * std::string lower = toLower(upper);  // "hello"
  */
-std::string toLowerCase(const std::string& str);
+std::string toLower(const std::string& str);
 
 /**
  * @brief Convert string to uppercase
  *
  * @param str Input string
- * @return Uppercase string
+ * @return Uppercase version of the string
+ *
+ * @example
+ * std::string lower = "hello";
+ * std::string upper = toUpper(lower);  // "HELLO"
  */
-std::string toUpperCase(const std::string& str);
+std::string toUpper(const std::string& str);
 
 /**
- * @brief Trim whitespace from both ends
+ * @brief Trim whitespace from both ends of string
+ *
+ * Removes leading and trailing whitespace characters (space, tab, newline, etc.).
  *
  * @param str Input string
  * @return Trimmed string
+ *
+ * @example
+ * std::string padded = "  hello  ";
+ * std::string trimmed = trim(padded);  // "hello"
  */
 std::string trim(const std::string& str);
-
-/**
- * @brief Trim whitespace from left end
- *
- * @param str Input string
- * @return Left-trimmed string
- */
-std::string trimLeft(const std::string& str);
-
-/**
- * @brief Trim whitespace from right end
- *
- * @param str Input string
- * @return Right-trimmed string
- */
-std::string trimRight(const std::string& str);
 
 /**
  * @brief Split string by delimiter
  *
  * @param str Input string
- * @param delimiter Delimiter character
- * @return Vector of string parts
+ * @param delimiter Character to split on
+ * @return Vector of substrings
+ *
+ * @example
+ * std::string csv = "a,b,c";
+ * auto parts = split(csv, ',');  // ["a", "b", "c"]
  */
 std::vector<std::string> split(const std::string& str, char delimiter);
 
 /**
- * @brief Join strings with delimiter
+ * @brief Convert bytes to hexadecimal string (lowercase)
  *
- * @param parts Vector of strings
- * @param delimiter Delimiter string
- * @return Joined string
+ * @param data Pointer to byte array
+ * @param len Length of byte array
+ * @return Hex-encoded string (lowercase, no separators)
+ *
+ * @example
+ * uint8_t bytes[] = {0xDE, 0xAD, 0xBE, 0xEF};
+ * std::string hex = bytesToHex(bytes, 4);  // "deadbeef"
  */
-std::string join(const std::vector<std::string>& parts, const std::string& delimiter);
+std::string bytesToHex(const uint8_t* data, size_t len);
 
 /**
- * @brief Check if string starts with prefix
+ * @brief Convert hexadecimal string to bytes
  *
- * @param str Input string
- * @param prefix Prefix to check
- * @return true if str starts with prefix
- */
-bool startsWith(const std::string& str, const std::string& prefix);
-
-/**
- * @brief Check if string ends with suffix
+ * Accepts both uppercase and lowercase hex characters.
+ * Input string must have even length.
  *
- * @param str Input string
- * @param suffix Suffix to check
- * @return true if str ends with suffix
- */
-bool endsWith(const std::string& str, const std::string& suffix);
-
-/**
- * @brief Replace all occurrences of substring
+ * @param hex Hex-encoded string (even length)
+ * @return Vector of bytes
+ * @throws std::invalid_argument if hex string is invalid
  *
- * @param str Input string
- * @param from Substring to replace
- * @param to Replacement string
- * @return String with replacements
+ * @example
+ * std::string hex = "deadbeef";
+ * auto bytes = hexToBytes(hex);  // {0xDE, 0xAD, 0xBE, 0xEF}
  */
-std::string replaceAll(const std::string& str, const std::string& from, const std::string& to);
-
-/**
- * @brief Convert binary data to hex string
- *
- * @param data Binary data
- * @param lowercase true for lowercase hex, false for uppercase
- * @return Hex string (2 chars per byte)
- */
-std::string toHex(const std::vector<uint8_t>& data, bool lowercase = true);
-
-/**
- * @brief Convert hex string to binary data
- *
- * @param hex Hex string (must be even length)
- * @return Binary data, or std::nullopt on error
- */
-std::optional<std::vector<uint8_t>> fromHex(const std::string& hex);
-
-/**
- * @brief Encode string to Base64
- *
- * @param data Binary data
- * @return Base64-encoded string
- */
-std::string toBase64(const std::vector<uint8_t>& data);
-
-/**
- * @brief Decode Base64 string
- *
- * @param base64 Base64-encoded string
- * @return Binary data, or std::nullopt on error
- */
-std::optional<std::vector<uint8_t>> fromBase64(const std::string& base64);
-
-/**
- * @brief Check if string contains only ASCII characters
- *
- * @param str Input string
- * @return true if all characters are ASCII (0-127)
- */
-bool isAscii(const std::string& str);
-
-/**
- * @brief Check if string is valid UTF-8
- *
- * @param str Input string
- * @return true if valid UTF-8 encoding
- */
-bool isValidUtf8(const std::string& str);
-
-/**
- * @brief Escape special characters for JSON
- *
- * @param str Input string
- * @return JSON-escaped string
- */
-std::string escapeJson(const std::string& str);
-
-/**
- * @brief Format string with printf-style arguments
- *
- * @param format Format string
- * @param args Variadic arguments
- * @return Formatted string
- */
-template<typename... Args>
-std::string format(const std::string& format, Args... args) {
-    int size = std::snprintf(nullptr, 0, format.c_str(), args...) + 1;
-    if (size <= 0) {
-        return "";
-    }
-    std::vector<char> buffer(size);
-    std::snprintf(buffer.data(), size, format.c_str(), args...);
-    return std::string(buffer.data(), buffer.data() + size - 1);
-}
+std::vector<uint8_t> hexToBytes(const std::string& hex);
 
 } // namespace utils
 } // namespace icao
