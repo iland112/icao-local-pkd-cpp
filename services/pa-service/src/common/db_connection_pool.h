@@ -101,7 +101,7 @@ private:
 
     std::queue<PGconn*> availableConnections_;
     std::atomic<size_t> totalConnections_;
-    std::mutex mutex_;
+    mutable std::mutex mutex_;  // mutable to allow locking in const methods
     std::condition_variable cv_;
 
     bool shutdown_;
