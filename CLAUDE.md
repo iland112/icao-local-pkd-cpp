@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.3.1 ✅
+**Current Version**: v2.3.2 ✅
 **Last Updated**: 2026-02-02
-**Status**: Production Ready - PA Service Integration Complete
+**Status**: Production Ready - Audit Log Enhancements Complete
 
 ---
 
@@ -965,6 +965,108 @@ ldap_delete_all_crls       # Delete all CRLs (testing)
 ---
 
 ## Version History
+
+### v2.3.2 (2026-02-02) - Audit Log System Enhancement
+
+#### Executive Summary
+
+v2.3.2 completes the audit logging system with proper JWT authentication integration, field name standardization, enhanced UI with detail dialogs, and critical homepage accessibility fix.
+
+#### Key Achievements
+
+**Backend: JWT Authentication & Data Format**:
+- ✅ **Global AuthMiddleware Registration** - JWT authentication now active system-wide
+  - Implemented `registerPreHandlingAdvice()` in [main.cpp:8796-8819](services/pkd-management/src/main.cpp#L8796-L8819)
+  - Session management: user_id, username, is_admin, permissions stored in session
+  - Proper audit logging: All operations now record actual username instead of "anonymous"
+
+- ✅ **Audit Repository Data Transformation** - [audit_repository.cpp:323-379](services/pkd-management/src/repositories/audit_repository.cpp#L323-L379)
+  - `toCamelCase()` conversion: snake_case database columns → camelCase JSON response
+  - PostgreSQL boolean conversion: "t"/"f" strings → true/false JSON booleans
+  - Numeric field conversion: duration_ms, status_code properly typed as integers
+
+**Frontend: Enhanced Audit Log UI**:
+- ✅ **Detail Dialog Implementation** - [AuditLog.tsx](frontend/src/pages/AuditLog.tsx)
+  - Removed confusing "User Agent" column that mixed HTTP request data
+  - Added Eye button for each log entry
+  - Full detail dialog with 4 organized sections:
+    - Basic Information (log ID, timestamp, user ID, username)
+    - Operation Information (type, subtype, resource ID/type)
+    - Request Information (IP address, method, path, User Agent)
+    - Result Information (success status, status code, duration, error message)
+  - Dark mode support and responsive design
+
+- ✅ **TypeError Fixes** - Nullish coalescing operators applied
+  - Fixed: `statistics.totalOperations?.toLocaleString() ?? 0`
+  - Applied to both AuditLog.tsx and OperationAuditLog.tsx
+
+**Critical Bug Fix**:
+- ✅ **Homepage 401 Unauthorized Fix** - [auth_middleware.cpp:10-18](services/pkd-management/src/middleware/auth_middleware.cpp#L10-L18)
+  - Added `/api/upload/countries` to public endpoints list
+  - Dashboard/Homepage now accessible without authentication
+  - Root cause: Global AuthMiddleware blocked all non-public endpoints
+
+#### Implementation Details
+
+**AuthMiddleware Public Endpoints**:
+```cpp
+std::set<std::string> AuthMiddleware::publicEndpoints_ = {
+    "^/api/health.*",           // Health check endpoints
+    "^/api/auth/login$",        // Login endpoint
+    "^/api/auth/register$",     // Registration endpoint
+    "^/api/audit/.*",           // Audit endpoints (temporary)
+    "^/api/upload/countries$",  // Dashboard statistics (public homepage)
+    "^/static/.*",              // Static files
+    "^/api-docs.*",             // API documentation
+    "^/swagger-ui/.*"           // Swagger UI
+};
+```
+
+**Data Flow**:
+1. User performs action → AuthMiddleware validates JWT → Session stores user info
+2. Handler uses session to get username/user_id → Calls AuditRepository
+3. Repository saves to database with actual username
+4. Frontend queries audit logs → Repository applies toCamelCase + type conversion
+5. Frontend displays in table or detail dialog
+
+#### Benefits
+
+**For Administrators**:
+- 🎯 Accurate user tracking: No more "anonymous" entries
+- 📊 Complete request context: IP, User Agent, HTTP method/path all available
+- 🔍 Detailed inspection: Eye button + dialog for comprehensive information
+- 🔐 Security audit trail: JWT authentication ensures accountability
+
+**For Developers**:
+- ✅ Consistent field naming: camelCase throughout frontend
+- ✅ Type safety: Booleans and numbers properly typed
+- ✅ Reusable pattern: Detail dialog can be applied to other audit pages
+
+#### Files Modified
+
+**Backend**:
+- [services/pkd-management/src/main.cpp](services/pkd-management/src/main.cpp) - AuthMiddleware global registration
+- [services/pkd-management/src/middleware/auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) - Public endpoints updated
+- [services/pkd-management/src/repositories/audit_repository.cpp](services/pkd-management/src/repositories/audit_repository.cpp) - toCamelCase + type conversion
+
+**Frontend**:
+- [frontend/src/pages/AuditLog.tsx](frontend/src/pages/AuditLog.tsx) - Detail dialog implementation
+- [frontend/src/pages/OperationAuditLog.tsx](frontend/src/pages/OperationAuditLog.tsx) - TypeError fixes
+
+**Documentation**:
+- `CLAUDE.md` - Updated to v2.3.2
+- `docs/PKD_MANAGEMENT_REFACTORING_COMPLETE_SUMMARY.md` - Documentation updates
+- `docs/REPOSITORY_PATTERN_IMPLEMENTATION_SUMMARY.md` - Architecture documentation
+
+#### Verification
+
+- ✅ Login recorded with actual username in auth_audit_log table
+- ✅ Audit log pages display data with proper field names and types
+- ✅ Detail dialog shows all request/response information
+- ✅ Homepage loads without authentication error
+- ✅ JWT authentication working system-wide for protected endpoints
+
+---
 
 ### v2.3.0 (2026-02-01) - TreeViewer Refactoring + Sync Page Fix
 

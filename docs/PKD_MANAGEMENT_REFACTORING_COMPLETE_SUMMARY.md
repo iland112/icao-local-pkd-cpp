@@ -1,9 +1,9 @@
 # PKD Management 서비스 Refactoring - 전체 완료 보고서
 
 **프로젝트**: ICAO Local PKD - PKD Management Service
-**최종 버전**: v2.3.0 (진행 중)
-**작성일**: 2026-02-01
-**상태**: ✅ 주요 Refactoring 완료, v2.3.0 커밋 대기 중
+**최종 버전**: v2.3.1 (완료)
+**작성일**: 2026-02-02 (업데이트)
+**상태**: ✅ Database Connection Pool 구현 완료
 
 ---
 
@@ -15,6 +15,7 @@ PKD Management 서비스의 대규모 리팩토링이 완료되었습니다. Rep
 
 #### 백엔드 (Backend)
 - ✅ **Repository Pattern 100% 완료** - Phase 1-3, Phase 4.1-4.3 (Phase 4.4 의도적 스킵)
+- ✅ **Database Connection Pool 구현** - Thread-safe 데이터베이스 액세스 (v2.3.1)
 - ✅ **12개 API 엔드포인트 마이그레이션** - Controller에서 SQL 완전 제거
 - ✅ **LDIF 구조 파서 구현** - Repository Pattern 준수
 - ✅ **X.509 메타데이터 추출 강화** - 15개 필드 확장
@@ -24,6 +25,7 @@ PKD Management 서비스의 대규모 리팩토링이 완료되었습니다. Rep
 - ✅ **코드 중복 제거** - ~550 라인 제거
 - ✅ **LDIF 구조 시각화** - DN 계층 구조 트리 뷰
 - ✅ **디자인 일관성** - 모든 트리 컴포넌트 통일
+- ✅ **Null Safety 개선** - Audit log 페이지 TypeError 해결
 
 ---
 
@@ -329,7 +331,203 @@ services/pkd-management/src/
 
 ---
 
-## 5. Git 상태 및 커밋 계획
+## 5. Database Connection Pool 구현 (v2.3.1)
+
+### 5.1 구현 개요
+
+**구현 일자**: 2026-02-02
+**상태**: ✅ 완료 및 커밋 (0c6ba86)
+
+**문제 상황**:
+- 데이터베이스 연결 불안정으로 인한 간헐적 실패
+- "Query failed: null result" 에러 발생
+- Admin audit log 페이지 미작동
+- 단일 `PGconn*` 객체를 여러 스레드에서 공유 (PostgreSQL libpq는 thread-safe하지 않음)
+
+**해결책**:
+- Thread-safe Database Connection Pool (RAII 패턴)
+- 최소 5개, 최대 20개 연결 유지
+- 각 쿼리가 독립적인 연결 사용 후 자동 반환
+
+### 5.2 기술 구현
+
+**새로운 파일** (2개):
+```
+services/pkd-management/src/common/
+├── db_connection_pool.h                    # Connection Pool 헤더
+└── db_connection_pool.cpp                  # Connection Pool 구현 (pa-service에서 복사)
+```
+
+**수정된 Repository 클래스** (5개 x 2 = 10 파일):
+1. **AuditRepository**
+   - Constructor: `PGconn* dbConn` → `common::DbConnectionPool* dbPool`
+   - executeQuery(), executeParamQuery() 메서드에 연결 획득 코드 추가
+
+2. **UploadRepository**
+   - Constructor 수정
+   - executeQuery() 메서드에 연결 획득 코드 추가
+
+3. **CertificateRepository**
+   - Constructor 수정
+   - executeQuery(), findFirstUploadIdByFingerprint(), saveDuplicate() 메서드 수정
+
+4. **ValidationRepository**
+   - Constructor 수정
+   - save(), updateStatistics(), executeQuery() 메서드 수정
+
+5. **StatisticsRepository**
+   - Constructor 수정
+   - executeQuery() 메서드 수정
+
+**연결 획득 패턴** (모든 쿼리 메서드에 적용):
+```cpp
+PGresult* Repository::executeQuery(const std::string& query) {
+    // RAII 패턴: scope 종료 시 자동 연결 반환
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
+    // ... 에러 처리
+
+    return res;
+    // conn이 자동으로 pool에 반환됨
+}
+```
+
+**main.cpp 초기화**:
+```cpp
+// Line 8693-8714
+try {
+    dbPool = std::make_shared<common::DbConnectionPool>(
+        dbConnInfo,  // PostgreSQL connection string
+        5,   // minConnections
+        20,  // maxConnections
+        5    // acquireTimeoutSec
+    );
+    spdlog::info("Database connection pool initialized (min=5, max=20)");
+} catch (const std::exception& e) {
+    spdlog::critical("Failed to initialize database connection pool: {}", e.what());
+    return 1;
+}
+
+// Repository 초기화 시 Connection Pool 전달
+uploadRepository = std::make_shared<repositories::UploadRepository>(dbPool.get());
+certificateRepository = std::make_shared<repositories::CertificateRepository>(dbPool.get());
+validationRepository = std::make_shared<repositories::ValidationRepository>(dbPool.get());
+auditRepository = std::make_shared<repositories::AuditRepository>(dbPool.get());
+statisticsRepository = std::make_shared<repositories::StatisticsRepository>(dbPool.get());
+```
+
+### 5.3 Frontend 버그 수정
+
+**파일** (2개):
+- `frontend/src/pages/AuditLog.tsx`
+- `frontend/src/pages/OperationAuditLog.tsx`
+
+**문제**: Frontend TypeError - "Cannot read properties of undefined (reading 'toLocaleString')"
+
+**수정**:
+```typescript
+// ❌ 이전
+{stats.totalOperations.toLocaleString()}
+
+// ✅ 이후 (Nullish coalescing)
+{(stats.totalOperations ?? 0).toLocaleString()}
+```
+
+**적용 위치**:
+- AuditLog.tsx: 4군데 (lines 158, 172, 186, 200)
+- OperationAuditLog.tsx: 4군데 (lines 184, 197, 210, 434)
+
+### 5.4 빌드 및 배포
+
+**변경 파일 요약**:
+- Backend: 17 파일 (+709 라인, -97 라인)
+- Frontend: 2 파일
+
+**빌드 결과**:
+```bash
+# pkd-management 재빌드 성공
+docker-compose build pkd-management
+docker-compose up -d --force-recreate pkd-management
+
+# 서비스 상태
+✅ pkd-management: healthy (Connection Pool initialized)
+```
+
+**초기화 로그**:
+```
+[info] DbConnectionPool created: minSize=5, maxSize=20, timeout=5s
+[info] Database connection pool initialized (min=5, max=20)
+[debug] [AuditRepository] Initialized with Connection Pool
+[debug] [UploadRepository] Initialized
+[debug] [CertificateRepository] Initialized
+[debug] [ValidationRepository] Initialized
+[debug] [StatisticsRepository] Initialized
+[info] Repositories initialized with Connection Pool
+```
+
+### 5.5 검증 결과
+
+**API 테스트**:
+```bash
+# Audit Operations API
+curl http://localhost:8080/api/audit/operations?limit=5
+✅ Response: 5 records, all 17 columns present
+✅ Operations: FILE_UPLOAD (4), PA_VERIFY (1)
+
+# Audit Statistics API
+curl http://localhost:8080/api/audit/operations/stats
+✅ totalOperations: 5
+✅ successfulOperations: 5
+✅ failedOperations: 0
+✅ averageDurationMs: 99ms
+✅ operationsByType: {"FILE_UPLOAD": 4, "PA_VERIFY": 1}
+```
+
+**Frontend 검증**:
+- ✅ http://localhost:3000/admin/audit-log - 정상 작동
+- ✅ http://localhost:3000/admin/operation-audit - 정상 작동
+- ✅ 통계 카드 정상 표시 (총 작업, 성공, 실패, 평균 시간)
+
+### 5.6 기술적 이점
+
+**1. Thread Safety** 🔒
+- 각 요청이 독립적인 데이터베이스 연결 사용
+- Mutex로 보호된 Connection Pool
+- 동시 접속 시 연결 충돌 완전 제거
+
+**2. Performance** ⚡
+- 연결 재사용으로 오버헤드 감소
+- 최소 5개 연결 항상 대기 (응답 시간 개선)
+- 최대 20개 연결로 리소스 제한
+
+**3. Resource Management** 🎯
+- RAII 패턴으로 자동 연결 반환 (메모리 누수 방지)
+- 5초 acquire timeout으로 데드락 방지
+- Pool size 제어로 데이터베이스 부하 제한
+
+**4. Stability** 💪
+- "Query failed: null result" 에러 완전 해결
+- 간헐적 연결 실패 문제 제거
+- 프로덕션 안정성 확보
+
+### 5.7 코드 메트릭
+
+| 항목 | 값 |
+|------|-----|
+| 변경된 Repository | 5개 클래스 (10 파일) |
+| 추가된 메서드 | ~15개 (각 Repository의 executeQuery 계열) |
+| 총 변경 라인 | +709, -97 |
+| 빌드 시간 | ~2분 (Docker no-cache) |
+| 배포 시간 | ~30초 (service restart) |
+
+---
+
+## 6. Git 상태 및 커밋 계획
 
 ### 5.1 현재 Git 상태
 
@@ -467,17 +665,19 @@ git commit -m "feat: Enhance X.509 metadata extraction (15 fields)"
 | v2.2.0 | 2026-01-30 | Phase 4.4 완료, 메타데이터 추적 | ✅ 커밋됨 |
 | v2.2.1 | 2026-01-31 | 502 에러 핫픽스, nginx 안정성 | ✅ 커밋됨 |
 | v2.2.2 | 2026-02-01 | LDIF 구조 시각화 | ✅ 커밋됨 |
-| **v2.3.0** | **2026-02-01** | **TreeViewer 리팩토링** | ⚠️ **커밋 대기** |
+| v2.3.0 | 2026-02-01 | TreeViewer 리팩토링 | ✅ 커밋됨 |
+| **v2.3.1** | **2026-02-02** | **Database Connection Pool** | ✅ **커밋됨** |
 
 ### 7.2 코드 품질 종합 메트릭
 
 **백엔드**:
-- Repository Classes: 5개
+- Repository Classes: 5개 (모두 Connection Pool 사용)
 - Service Classes: 4개
 - Domain Models: 3개
 - API Endpoints (Migrated): 12개
 - SQL in Controller: 0 라인 (100% 제거)
 - Database Calls: 88개 → Repository로 캡슐화
+- Thread Safety: ✅ Connection Pool (min=5, max=20)
 - Oracle Migration Ready: ✅ (67% 노력 감소)
 
 **프론트엔드**:
@@ -486,9 +686,10 @@ git commit -m "feat: Enhance X.509 metadata extraction (15 fields)"
 - Code Reduction: -303 라인 (-21%)
 - Duplicate Code Eliminated: ~550 라인
 - Design Consistency: ✅ 모든 트리 컴포넌트
+- Null Safety: ✅ Audit log pages (TypeError 해결)
 
 **전체**:
-- Files Created: 28개 (Backend: 18, Frontend: 10)
+- Files Created: 30개 (Backend: 20, Frontend: 10)
 - Files Modified: 45개
 - Documentation: 12개
 - Test Coverage: E2E 테스트 완료 (Collection-001, 002, 003)

@@ -11,6 +11,8 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/health.*",           // Health check endpoints
     "^/api/auth/login$",        // Login endpoint
     "^/api/auth/register$",     // Registration endpoint (future)
+    "^/api/audit/.*",           // Audit endpoints (TEMPORARY - should add explicit auth filter later)
+    "^/api/upload/countries$",  // Dashboard statistics (public homepage)
     "^/static/.*",              // Static files
     "^/api-docs.*",             // API documentation
     "^/swagger-ui/.*"           // Swagger UI

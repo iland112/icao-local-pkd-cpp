@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Shield, Filter, User, Activity, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Shield, Filter, User, Activity, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 
 interface AuditLogEntry {
   id: string;
@@ -41,6 +41,10 @@ export function AuditLog() {
   // Pagination
   const [page, setPage] = useState(1);
   const [limit] = useState(20);
+
+  // Detail Dialog
+  const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   useEffect(() => {
     fetchAuditLogs();
@@ -293,8 +297,8 @@ export function AuditLog() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   상태
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  User Agent
+                <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  상세
                 </th>
               </tr>
             </thead>
@@ -346,8 +350,16 @@ export function AuditLog() {
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-400 max-w-xs truncate">
-                      {log.requestMethod} {log.requestPath || log.userAgent}
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => {
+                          setSelectedLog(log);
+                          setDialogOpen(true);
+                        }}
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))
@@ -384,6 +396,143 @@ export function AuditLog() {
           </div>
         )}
       </div>
+
+      {/* Detail Dialog */}
+      {dialogOpen && selectedLog && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            {/* Dialog Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4 rounded-t-xl">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-bold text-white">감사 로그 상세 정보</h3>
+                <button
+                  onClick={() => setDialogOpen(false)}
+                  className="text-white/80 hover:text-white transition-colors"
+                >
+                  <XCircle className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            {/* Dialog Content */}
+            <div className="p-6 space-y-6">
+              {/* Basic Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">기본 정보</h4>
+                <dl className="grid grid-cols-2 gap-4">
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">로그 ID</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.id}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">생성 시간</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{formatDate(selectedLog.createdAt)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">사용자 ID</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.userId || '-'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">사용자 이름</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{selectedLog.username || '시스템'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* Operation Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">작업 정보</h4>
+                <dl className="grid grid-cols-2 gap-4">
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">작업 유형</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(selectedLog.operationType)}`}>
+                        {selectedLog.operationType}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">하위 유형</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{selectedLog.operationSubtype || '-'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* Request Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">요청 정보</h4>
+                <dl className="grid grid-cols-2 gap-4">
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">IP 주소</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.ipAddress}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">요청 방식</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.requestMethod || '-'}</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">요청 경로</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1 break-all">{selectedLog.requestPath || '-'}</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">User Agent</dt>
+                    <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-1 break-all">{selectedLog.userAgent || '-'}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* Result Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">결과 정보</h4>
+                <dl className="grid grid-cols-2 gap-4">
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">성공 여부</dt>
+                    <dd className="text-sm mt-1">
+                      {selectedLog.success ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          성공
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          실패
+                        </span>
+                      )}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">상태 코드</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.statusCode || '-'}</dd>
+                  </div>
+                  {selectedLog.durationMs !== undefined && (
+                    <div>
+                      <dt className="text-xs text-gray-500 dark:text-gray-400">소요 시간</dt>
+                      <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.durationMs}ms</dd>
+                    </div>
+                  )}
+                  {selectedLog.errorMessage && (
+                    <div className="col-span-2">
+                      <dt className="text-xs text-gray-500 dark:text-gray-400">오류 메시지</dt>
+                      <dd className="text-sm text-red-600 dark:text-red-400 mt-1 break-all">{selectedLog.errorMessage}</dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            </div>
+
+            {/* Dialog Footer */}
+            <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 rounded-b-xl">
+              <button
+                onClick={() => setDialogOpen(false)}
+                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

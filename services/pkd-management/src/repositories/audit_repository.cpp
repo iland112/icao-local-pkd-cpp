@@ -323,6 +323,23 @@ PGresult* AuditRepository::executeQuery(const std::string& query)
 
 Json::Value AuditRepository::pgResultToJson(PGresult* res)
 {
+    // Helper function to convert snake_case to camelCase
+    auto toCamelCase = [](const std::string& snake_case) -> std::string {
+        std::string camelCase;
+        bool capitalizeNext = false;
+        for (char c : snake_case) {
+            if (c == '_') {
+                capitalizeNext = true;
+            } else if (capitalizeNext) {
+                camelCase += std::toupper(c);
+                capitalizeNext = false;
+            } else {
+                camelCase += c;
+            }
+        }
+        return camelCase;
+    };
+
     Json::Value array = Json::arrayValue;
     int rows = PQntuples(res);
     int cols = PQnfields(res);
@@ -331,10 +348,29 @@ Json::Value AuditRepository::pgResultToJson(PGresult* res)
         Json::Value row;
         for (int j = 0; j < cols; ++j) {
             const char* fieldName = PQfname(res, j);
+            std::string camelFieldName = toCamelCase(fieldName);
+
             if (PQgetisnull(res, i, j)) {
-                row[fieldName] = Json::nullValue;
+                row[camelFieldName] = Json::nullValue;
             } else {
-                row[fieldName] = PQgetvalue(res, i, j);
+                std::string value = PQgetvalue(res, i, j);
+
+                // Convert PostgreSQL boolean "t"/"f" to JSON boolean
+                if (std::string(fieldName) == "success") {
+                    row[camelFieldName] = (value == "t");
+                }
+                // Convert numeric fields
+                else if (std::string(fieldName) == "duration_ms" ||
+                         std::string(fieldName) == "status_code") {
+                    try {
+                        row[camelFieldName] = std::stoi(value);
+                    } catch (...) {
+                        row[camelFieldName] = value;
+                    }
+                }
+                else {
+                    row[camelFieldName] = value;
+                }
             }
         }
         array.append(row);

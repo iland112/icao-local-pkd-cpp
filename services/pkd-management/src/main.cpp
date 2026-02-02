@@ -8798,6 +8798,34 @@ int main(int argc, char* argv[]) {
             resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id");
         });
 
+        // Register AuthMiddleware globally for JWT authentication (v2.3.1)
+        spdlog::info("Registering AuthMiddleware globally...");
+        try {
+            auto authMiddleware = std::make_shared<middleware::AuthMiddleware>();
+
+            app.registerPreHandlingAdvice([authMiddleware](const drogon::HttpRequestPtr& req,
+                                                           drogon::AdviceCallback&& callback,
+                                                           drogon::AdviceChainCallback&& chainCallback) {
+                // AuthMiddleware will validate JWT and set session for non-public endpoints
+                authMiddleware->doFilter(
+                    req,
+                    [callback = std::move(callback)](const drogon::HttpResponsePtr& resp) mutable {
+                        // Authentication failed - return error response
+                        callback(resp);
+                    },
+                    [chainCallback = std::move(chainCallback)]() mutable {
+                        // Authentication succeeded or public endpoint - continue to handler
+                        chainCallback();
+                    }
+                );
+            });
+
+            spdlog::info("✅ AuthMiddleware registered globally - JWT authentication enabled");
+        } catch (const std::exception& e) {
+            spdlog::error("❌ Failed to register AuthMiddleware: {}", e.what());
+            spdlog::warn("⚠️  Server will start WITHOUT authentication!");
+        }
+
         // Handle OPTIONS requests for CORS preflight
         app.registerHandler(
             "/{path}",
