@@ -16,6 +16,8 @@
 #include <optional>
 #include <ldap.h>
 #include <openssl/x509.h>
+#include "icao/x509/dn_parser.h"      // Shared DN Parser
+#include "icao/x509/dn_components.h"  // Shared DN Components
 
 namespace repositories {
 

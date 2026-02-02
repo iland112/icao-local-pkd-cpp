@@ -351,29 +351,78 @@ std::string LdapCertificateRepository::extractDnAttribute(
     const std::string& dn,
     const std::string& attr)
 {
-    // Simple extraction: find "attr=" and get value until next comma or end
-    std::string searchStr = attr + "=";
-    size_t pos = dn.find(searchStr);
+    // Use shared library for robust DN parsing
+    try {
+        X509_NAME* x509Name = icao::x509::parseDnString(dn);
+        if (!x509Name) {
+            return "";
+        }
 
-    if (pos == std::string::npos) {
+        auto components = icao::x509::extractDnComponents(x509Name);
+        X509_NAME_free(x509Name);
+
+        // Map attribute name to DnComponents field
+        if (attr == "CN" && components.commonName.has_value()) {
+            return *components.commonName;
+        } else if (attr == "C" && components.country.has_value()) {
+            return *components.country;
+        } else if (attr == "O" && components.organization.has_value()) {
+            return *components.organization;
+        } else if (attr == "OU" && components.organizationalUnit.has_value()) {
+            return *components.organizationalUnit;
+        } else if (attr == "serialNumber" && components.serialNumber.has_value()) {
+            return *components.serialNumber;
+        }
+
+        return "";
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to extract DN attribute '{}' from '{}': {}", attr, dn, e.what());
         return "";
     }
-
-    size_t start = pos + searchStr.length();
-    size_t end = dn.find(',', start);
-
-    if (end == std::string::npos) {
-        return dn.substr(start);
-    }
-
-    return dn.substr(start, end - start);
 }
 
 std::string LdapCertificateRepository::normalizeDn(const std::string& dn) {
-    // Simple normalization: lowercase
-    std::string normalized = dn;
-    std::transform(normalized.begin(), normalized.end(), normalized.begin(), ::tolower);
-    return normalized;
+    // Use shared library for format-independent normalization
+    try {
+        X509_NAME* x509Name = icao::x509::parseDnString(dn);
+        if (!x509Name) {
+            // Fallback to simple lowercase
+            std::string normalized = dn;
+            std::transform(normalized.begin(), normalized.end(), normalized.begin(), ::tolower);
+            return normalized;
+        }
+
+        auto components = icao::x509::extractDnComponents(x509Name);
+        X509_NAME_free(x509Name);
+
+        // Build normalized DN from components (sorted, lowercase)
+        std::string normalized;
+        if (components.country.has_value()) {
+            normalized += "c=" + *components.country + "|";
+        }
+        if (components.organization.has_value()) {
+            normalized += "o=" + *components.organization + "|";
+        }
+        if (components.organizationalUnit.has_value()) {
+            normalized += "ou=" + *components.organizationalUnit + "|";
+        }
+        if (components.commonName.has_value()) {
+            normalized += "cn=" + *components.commonName + "|";
+        }
+        if (components.serialNumber.has_value()) {
+            normalized += "sn=" + *components.serialNumber + "|";
+        }
+
+        // Lowercase the entire normalized DN
+        std::transform(normalized.begin(), normalized.end(), normalized.begin(), ::tolower);
+        return normalized;
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to normalize DN '{}': {}", dn, e.what());
+        // Fallback to simple lowercase
+        std::string normalized = dn;
+        std::transform(normalized.begin(), normalized.end(), normalized.begin(), ::tolower);
+        return normalized;
+    }
 }
 
 // ==========================================================================

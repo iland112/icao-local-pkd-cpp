@@ -58,6 +58,10 @@ RUN ARCH=$(uname -m) && \
 FROM vcpkg-deps AS builder
 
 COPY services/pa-service/CMakeLists.txt ./
+
+# Copy shared library (Phase 5: common-lib)
+COPY services/common-lib/ ../common-lib/
+
 COPY shared/ ./shared/
 COPY services/pa-service/src/ ./src/
 COPY services/pa-service/tests/ ./tests/
@@ -66,6 +70,7 @@ COPY services/pa-service/tests/ ./tests/
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_TESTS=OFF \
     && cmake --build build -j$(nproc)
 
 # Build and run tests (optional, controlled by build arg)
@@ -112,6 +117,11 @@ RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
 COPY --from=builder /app/build/bin/pa-service /app/
+
+# Phase 5: Copy shared library (common-lib)
+COPY --from=builder /app/build/lib/libicao-common.so* /usr/local/lib/
+RUN ldconfig
+
 COPY shared/static/swagger-ui/ /app/static/swagger-ui/
 
 WORKDIR /app
