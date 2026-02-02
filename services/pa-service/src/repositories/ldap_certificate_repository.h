@@ -116,6 +116,13 @@ public:
     std::string buildSearchBaseDn(const std::string& type, const std::string& countryCode);
 
     /**
+     * @brief Escape LDAP filter value to prevent injection (RFC 4515)
+     * @param value Raw value to escape
+     * @return Escaped value safe for LDAP filter
+     */
+    std::string escapeLdapFilterValue(const std::string& value);
+
+    /**
      * @brief Parse X509 certificate from LDAP berval
      * @param certData LDAP berval containing certificate data
      * @return X509* certificate or nullptr on error (caller must X509_free)

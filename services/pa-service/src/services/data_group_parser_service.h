@@ -41,6 +41,18 @@ public:
         const std::vector<uint8_t>& data,
         const std::string& algorithm
     );
+
+private:
+    // Helper functions for MRZ parsing
+    std::string trim(const std::string& str);
+    std::string convertMrzDate(const std::string& yymmdd);
+    std::string convertMrzExpiryDate(const std::string& yymmdd);
+    std::string cleanMrzField(const std::string& field);
+
+    // MRZ parsing by format
+    Json::Value parseMrzTd3(const std::string& mrzData);  // 2 lines x 44 chars (passport)
+    Json::Value parseMrzTd2(const std::string& mrzData);  // 2 lines x 36 chars
+    Json::Value parseMrzTd1(const std::string& mrzData);  // 3 lines x 30 chars (ID card)
 };
 
 } // namespace services

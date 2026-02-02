@@ -258,8 +258,69 @@ std::string LdapCertificateRepository::buildLdapFilter(
     const std::string& countryCode,
     const std::string& subjectDn)
 {
-    // Simple filter for all certificates of given type
-    return "(objectClass=pkdDownload)";
+    // Note: type and countryCode are handled via base DN in buildSearchBaseDn()
+    (void)type;
+    (void)countryCode;
+
+    // Build compound LDAP filter
+    std::vector<std::string> conditions;
+
+    // Always include objectClass
+    conditions.push_back("(objectClass=pkdDownload)");
+
+    // Add subjectDn filter if provided (searches in cn attribute)
+    if (!subjectDn.empty()) {
+        // Extract CN from subject DN for filtering
+        std::string cn = extractDnAttribute(subjectDn, "CN");
+        if (!cn.empty()) {
+            // Use wildcard search for partial matching
+            conditions.push_back("(cn=*" + escapeLdapFilterValue(cn) + "*)");
+        }
+    }
+
+    // If multiple conditions, use AND operator
+    if (conditions.size() == 1) {
+        return conditions[0];
+    } else {
+        std::ostringstream oss;
+        oss << "(&";
+        for (const auto& cond : conditions) {
+            oss << cond;
+        }
+        oss << ")";
+        return oss.str();
+    }
+}
+
+std::string LdapCertificateRepository::escapeLdapFilterValue(const std::string& value) {
+    // Escape special LDAP filter characters according to RFC 4515
+    // Special chars: * ( ) \ NUL
+    std::string result;
+    result.reserve(value.length() * 2);  // Reserve space for potential escaping
+
+    for (char c : value) {
+        switch (c) {
+            case '*':
+                result += "\\2a";
+                break;
+            case '(':
+                result += "\\28";
+                break;
+            case ')':
+                result += "\\29";
+                break;
+            case '\\':
+                result += "\\5c";
+                break;
+            case '\0':
+                result += "\\00";
+                break;
+            default:
+                result += c;
+        }
+    }
+
+    return result;
 }
 
 std::string LdapCertificateRepository::buildSearchBaseDn(

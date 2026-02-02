@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <iomanip>
+#include <json/json.h>
 #include <openssl/err.h>
 #include <openssl/bio.h>
 #include <openssl/objects.h>
@@ -294,9 +295,6 @@ std::map<int, std::vector<uint8_t>> SodParserService::parseDataGroupHashesRaw(
     }
 
     // Parse LDSSecurityObject (simplified parsing)
-    const unsigned char* p = (*contentPtr)->data;
-    long len = (*contentPtr)->length;
-
     // This is a simplified parser - full implementation would use ASN.1 parser
     // For now, return empty map (can be enhanced later)
 
@@ -334,6 +332,148 @@ const std::map<std::string, std::string>& SodParserService::getHashAlgorithmName
 
 const std::map<std::string, std::string>& SodParserService::getSignatureAlgorithmNames() {
     return SIGNATURE_ALGORITHM_NAMES;
+}
+
+// ==========================================================================
+// API-Specific Methods
+// ==========================================================================
+
+Json::Value SodParserService::parseSodForApi(const std::vector<uint8_t>& sodBytes) {
+    spdlog::debug("Parsing SOD for API response ({} bytes)", sodBytes.size());
+
+    Json::Value result;
+    result["success"] = true;
+    result["sodSize"] = static_cast<int>(sodBytes.size());
+
+    try {
+        // Extract hash algorithm
+        std::string hashAlgorithm = extractHashAlgorithm(sodBytes);
+        std::string hashAlgorithmOid = extractHashAlgorithmOid(sodBytes);
+        result["hashAlgorithm"] = hashAlgorithm;
+        result["hashAlgorithmOid"] = hashAlgorithmOid;
+
+        // Extract signature algorithm
+        std::string signatureAlgorithm = extractSignatureAlgorithm(sodBytes);
+        result["signatureAlgorithm"] = signatureAlgorithm;
+
+        // Extract DSC certificate info
+        X509* dscCert = extractDscCertificate(sodBytes);
+        if (dscCert) {
+            Json::Value dscInfo;
+
+            // Subject DN
+            char* subjectDn = X509_NAME_oneline(X509_get_subject_name(dscCert), nullptr, 0);
+            if (subjectDn) {
+                dscInfo["subjectDn"] = subjectDn;
+                OPENSSL_free(subjectDn);
+            }
+
+            // Issuer DN
+            char* issuerDn = X509_NAME_oneline(X509_get_issuer_name(dscCert), nullptr, 0);
+            if (issuerDn) {
+                dscInfo["issuerDn"] = issuerDn;
+                OPENSSL_free(issuerDn);
+            }
+
+            // Serial number
+            ASN1_INTEGER* serialAsn1 = X509_get_serialNumber(dscCert);
+            if (serialAsn1) {
+                BIGNUM* bn = ASN1_INTEGER_to_BN(serialAsn1, nullptr);
+                if (bn) {
+                    char* serialHex = BN_bn2hex(bn);
+                    if (serialHex) {
+                        dscInfo["serialNumber"] = serialHex;
+                        OPENSSL_free(serialHex);
+                    }
+                    BN_free(bn);
+                }
+            }
+
+            // Validity period
+            const ASN1_TIME* notBefore = X509_get0_notBefore(dscCert);
+            const ASN1_TIME* notAfter = X509_get0_notAfter(dscCert);
+
+            if (notBefore) {
+                BIO* bio = BIO_new(BIO_s_mem());
+                ASN1_TIME_print(bio, notBefore);
+                char buf[256];
+                int len = BIO_read(bio, buf, sizeof(buf) - 1);
+                if (len > 0) {
+                    buf[len] = '\0';
+                    dscInfo["notBefore"] = buf;
+                }
+                BIO_free(bio);
+            }
+
+            if (notAfter) {
+                BIO* bio = BIO_new(BIO_s_mem());
+                ASN1_TIME_print(bio, notAfter);
+                char buf[256];
+                int len = BIO_read(bio, buf, sizeof(buf) - 1);
+                if (len > 0) {
+                    buf[len] = '\0';
+                    dscInfo["notAfter"] = buf;
+                }
+                BIO_free(bio);
+            }
+
+            // Country code from issuer
+            X509_NAME* issuerName = X509_get_issuer_name(dscCert);
+            int countryIdx = X509_NAME_get_index_by_NID(issuerName, NID_countryName, -1);
+            if (countryIdx >= 0) {
+                X509_NAME_ENTRY* entry = X509_NAME_get_entry(issuerName, countryIdx);
+                if (entry) {
+                    ASN1_STRING* data = X509_NAME_ENTRY_get_data(entry);
+                    if (data) {
+                        unsigned char* utf8 = nullptr;
+                        int utf8len = ASN1_STRING_to_UTF8(&utf8, data);
+                        if (utf8len > 0) {
+                            dscInfo["countryCode"] = std::string(reinterpret_cast<char*>(utf8), utf8len);
+                            OPENSSL_free(utf8);
+                        }
+                    }
+                }
+            }
+
+            result["dscCertificate"] = dscInfo;
+            X509_free(dscCert);
+        } else {
+            result["dscCertificate"] = Json::nullValue;
+            result["warning"] = "Failed to extract DSC certificate from SOD";
+        }
+
+        // Extract contained data groups
+        std::map<int, std::vector<uint8_t>> dgHashes = parseDataGroupHashesRaw(sodBytes);
+        Json::Value containedDgs(Json::arrayValue);
+        for (const auto& [dgNum, hash] : dgHashes) {
+            Json::Value dgInfo;
+            dgInfo["dgNumber"] = dgNum;
+            dgInfo["dgName"] = "DG" + std::to_string(dgNum);
+            dgInfo["hashValue"] = hashToHexString(hash);
+            dgInfo["hashLength"] = static_cast<int>(hash.size());
+            containedDgs.append(dgInfo);
+        }
+        result["containedDataGroups"] = containedDgs;
+        result["dataGroupCount"] = static_cast<int>(dgHashes.size());
+
+        // Check if ICAO wrapper (Tag 0x77) was present
+        bool hasIcaoWrapper = (sodBytes.size() > 0 && sodBytes[0] == 0x77);
+        result["hasIcaoWrapper"] = hasIcaoWrapper;
+
+        // LDS version (if available from DG hashes)
+        if (!dgHashes.empty()) {
+            // Check for DG14 (Active Authentication) and DG15 (Extended Access Control)
+            result["hasDg14"] = (dgHashes.find(14) != dgHashes.end());
+            result["hasDg15"] = (dgHashes.find(15) != dgHashes.end());
+        }
+
+    } catch (const std::exception& e) {
+        spdlog::error("Error parsing SOD for API: {}", e.what());
+        result["success"] = false;
+        result["error"] = std::string("Failed to parse SOD: ") + e.what();
+    }
+
+    return result;
 }
 
 } // namespace services

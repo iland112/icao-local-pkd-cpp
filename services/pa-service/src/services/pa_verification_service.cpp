@@ -143,12 +143,4 @@ Json::Value PaVerificationService::getStatistics() {
     return paRepo_->getStatistics();
 }
 
-Json::Value PaVerificationService::getDataGroupsByVerificationId(const std::string& id) {
-    // Placeholder - would need to store DG results separately
-    Json::Value response;
-    response["success"] = false;
-    response["message"] = "Data groups retrieval not yet implemented";
-    return response;
-}
-
 } // namespace services

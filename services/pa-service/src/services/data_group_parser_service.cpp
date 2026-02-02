@@ -8,6 +8,7 @@
 #include <openssl/evp.h>
 #include <sstream>
 #include <iomanip>
+#include <algorithm>
 
 namespace services {
 
@@ -15,27 +16,111 @@ DataGroupParserService::DataGroupParserService() {
     spdlog::debug("DataGroupParserService initialized");
 }
 
+// ==========================================================================
+// Public API Methods
+// ==========================================================================
+
 Json::Value DataGroupParserService::parseDg1(const std::vector<uint8_t>& dg1Data) {
-    // Placeholder - extract MRZ from DG1 ASN.1 structure
+    spdlog::debug("Parsing DG1 ({} bytes)", dg1Data.size());
+
     Json::Value result;
-    result["success"] = false;
-    result["message"] = "DG1 parsing not yet implemented";
-    return result;
+
+    // Try to find MRZ data in DG1 (ICAO 9303 ASN.1 structure)
+    // DG1 structure: Tag 0x61, Length, Tag 0x5F1F, Length, MRZ data
+    std::string mrzData;
+    for (size_t i = 0; i < dg1Data.size() - 2; i++) {
+        if (dg1Data[i] == 0x5F && dg1Data[i+1] == 0x1F) {
+            // Found MRZ tag
+            i += 2;
+            size_t mrzLen = dg1Data[i++];
+            if (mrzLen > 0x80) {
+                int numBytes = mrzLen & 0x7F;
+                mrzLen = 0;
+                for (int j = 0; j < numBytes && i < dg1Data.size(); j++) {
+                    mrzLen = (mrzLen << 8) | dg1Data[i++];
+                }
+            }
+            if (i + mrzLen <= dg1Data.size()) {
+                mrzData = std::string(reinterpret_cast<const char*>(&dg1Data[i]), mrzLen);
+            }
+            break;
+        }
+    }
+
+    if (mrzData.empty()) {
+        result["success"] = false;
+        result["error"] = "Failed to extract MRZ from DG1";
+        return result;
+    }
+
+    // Parse MRZ based on length
+    if (mrzData.length() >= 88) {
+        return parseMrzTd3(mrzData);
+    } else if (mrzData.length() >= 72) {
+        return parseMrzTd2(mrzData);
+    } else if (mrzData.length() >= 30) {
+        return parseMrzTd1(mrzData);
+    } else {
+        result["success"] = false;
+        result["error"] = "MRZ data too short or invalid format (length: " +
+            std::to_string(mrzData.length()) + ")";
+        return result;
+    }
 }
 
 Json::Value DataGroupParserService::parseMrzText(const std::string& mrzText) {
-    // Placeholder - parse MRZ text lines
+    spdlog::debug("Parsing MRZ text");
+
+    // Remove newlines and spaces
+    std::string cleanedMrz = mrzText;
+    cleanedMrz.erase(std::remove(cleanedMrz.begin(), cleanedMrz.end(), '\n'), cleanedMrz.end());
+    cleanedMrz.erase(std::remove(cleanedMrz.begin(), cleanedMrz.end(), '\r'), cleanedMrz.end());
+
     Json::Value result;
-    result["success"] = false;
-    result["message"] = "MRZ text parsing not yet implemented";
-    return result;
+
+    // Parse based on length
+    if (cleanedMrz.length() >= 88) {
+        return parseMrzTd3(cleanedMrz);
+    } else if (cleanedMrz.length() >= 72) {
+        return parseMrzTd2(cleanedMrz);
+    } else if (cleanedMrz.length() >= 30) {
+        return parseMrzTd1(cleanedMrz);
+    } else {
+        result["success"] = false;
+        result["error"] = "MRZ text too short or invalid format (length: " +
+            std::to_string(cleanedMrz.length()) + ")";
+        return result;
+    }
 }
 
 Json::Value DataGroupParserService::parseDg2(const std::vector<uint8_t>& dg2Data) {
-    // Placeholder - extract face image from DG2
+    spdlog::debug("Parsing DG2 ({} bytes)", dg2Data.size());
+
     Json::Value result;
-    result["success"] = false;
-    result["message"] = "DG2 parsing not yet implemented";
+    result["success"] = true;
+    result["dg2Size"] = static_cast<int>(dg2Data.size());
+
+    // DG2 contains facial images in JPEG2000 or JPEG format
+    // Basic structure detection
+    if (dg2Data.size() >= 4) {
+        // Check for JPEG2000 signature (0x0000000C 0x6A502020)
+        if (dg2Data[0] == 0x00 && dg2Data[1] == 0x00 && dg2Data[2] == 0x00 && dg2Data[3] == 0x0C) {
+            result["imageFormat"] = "JPEG2000";
+        }
+        // Check for JPEG signature (0xFFD8FF)
+        else if (dg2Data[0] == 0xFF && dg2Data[1] == 0xD8 && dg2Data[2] == 0xFF) {
+            result["imageFormat"] = "JPEG";
+        }
+        else {
+            result["imageFormat"] = "UNKNOWN";
+        }
+
+        result["message"] = "Face image data detected (full parsing not implemented)";
+    } else {
+        result["success"] = false;
+        result["error"] = "DG2 data too short";
+    }
+
     return result;
 }
 
@@ -85,6 +170,205 @@ std::string DataGroupParserService::computeHash(
     }
 
     return oss.str();
+}
+
+// ==========================================================================
+// Private Helper Methods
+// ==========================================================================
+
+std::string DataGroupParserService::trim(const std::string& str) {
+    size_t start = str.find_first_not_of(" \t\n\r");
+    size_t end = str.find_last_not_of(" \t\n\r");
+    if (start == std::string::npos) return "";
+    return str.substr(start, end - start + 1);
+}
+
+std::string DataGroupParserService::convertMrzDate(const std::string& yymmdd) {
+    if (yymmdd.length() != 6) return yymmdd;
+
+    int year = std::stoi(yymmdd.substr(0, 2));
+    std::string month = yymmdd.substr(2, 2);
+    std::string day = yymmdd.substr(4, 2);
+
+    // ICAO 9303 rule: years 00-99 map to 1900-2099
+    // For birth dates: assume 00-23 = 2000-2023, 24-99 = 1924-1999
+    int fullYear = (year <= 23) ? 2000 + year : 1900 + year;
+
+    return std::to_string(fullYear) + "-" + month + "-" + day;
+}
+
+std::string DataGroupParserService::convertMrzExpiryDate(const std::string& yymmdd) {
+    if (yymmdd.length() != 6) return yymmdd;
+
+    int year = std::stoi(yymmdd.substr(0, 2));
+    std::string month = yymmdd.substr(2, 2);
+    std::string day = yymmdd.substr(4, 2);
+
+    // For expiry dates: assume 00-49 = 2000-2049, 50-99 = 1950-1999
+    int fullYear = (year <= 49) ? 2000 + year : 1900 + year;
+
+    return std::to_string(fullYear) + "-" + month + "-" + day;
+}
+
+std::string DataGroupParserService::cleanMrzField(const std::string& field) {
+    std::string result = field;
+    // Remove trailing < characters
+    while (!result.empty() && result.back() == '<') {
+        result.pop_back();
+    }
+    return result;
+}
+
+// ==========================================================================
+// MRZ Format Parsing Methods
+// ==========================================================================
+
+Json::Value DataGroupParserService::parseMrzTd3(const std::string& mrzData) {
+    // TD3 format (passport): 2 lines x 44 characters
+    Json::Value result;
+
+    std::string line1 = mrzData.substr(0, 44);
+    std::string line2 = mrzData.substr(44, 44);
+
+    // Java compatible: mrzLine1, mrzLine2, mrzFull
+    result["mrzLine1"] = line1;
+    result["mrzLine2"] = line2;
+    result["mrzFull"] = mrzData;
+
+    // Document type (first 2 characters)
+    result["documentType"] = cleanMrzField(line1.substr(0, 2));
+    result["issuingCountry"] = line1.substr(2, 3);
+
+    // Parse name (surname<<givennames)
+    size_t nameStart = 5;
+    size_t nameEnd = line1.find("<<", nameStart);
+    std::string surname, givenNames;
+
+    if (nameEnd != std::string::npos) {
+        surname = line1.substr(nameStart, nameEnd - nameStart);
+        std::replace(surname.begin(), surname.end(), '<', ' ');
+        surname = trim(surname);
+
+        std::string givenPart = line1.substr(nameEnd + 2);
+        std::replace(givenPart.begin(), givenPart.end(), '<', ' ');
+        givenNames = trim(givenPart);
+    } else {
+        // No << separator found, try single < as separator
+        nameEnd = line1.find('<', nameStart);
+        if (nameEnd != std::string::npos) {
+            surname = line1.substr(nameStart, nameEnd - nameStart);
+            surname = trim(surname);
+        }
+    }
+
+    result["surname"] = surname;
+    result["givenNames"] = givenNames;
+
+    // Java compatible: fullName field
+    if (!surname.empty() && !givenNames.empty()) {
+        result["fullName"] = surname + " " + givenNames;
+    } else if (!surname.empty()) {
+        result["fullName"] = surname;
+    } else {
+        result["fullName"] = givenNames;
+    }
+
+    // Line 2 parsing
+    std::string docNum = cleanMrzField(line2.substr(0, 9));
+    result["documentNumber"] = docNum;
+    result["documentNumberCheckDigit"] = line2.substr(9, 1);
+
+    result["nationality"] = line2.substr(10, 3);
+
+    // Date of birth with YYYY-MM-DD format (Java compatible)
+    std::string dobRaw = line2.substr(13, 6);
+    result["dateOfBirth"] = convertMrzDate(dobRaw);
+    result["dateOfBirthRaw"] = dobRaw;
+    result["dateOfBirthCheckDigit"] = line2.substr(19, 1);
+
+    // Sex
+    result["sex"] = line2.substr(20, 1);
+
+    // Date of expiry with YYYY-MM-DD format (Java compatible)
+    std::string expiryRaw = line2.substr(21, 6);
+    result["dateOfExpiry"] = convertMrzExpiryDate(expiryRaw);
+    result["dateOfExpiryRaw"] = expiryRaw;
+    result["dateOfExpiryCheckDigit"] = line2.substr(27, 1);
+
+    // Optional data and composite check digit
+    result["optionalData1"] = cleanMrzField(line2.substr(28, 14));
+    result["compositeCheckDigit"] = line2.substr(43, 1);
+
+    result["success"] = true;
+    return result;
+}
+
+Json::Value DataGroupParserService::parseMrzTd2(const std::string& mrzData) {
+    // TD2 format: 2 lines x 36 characters
+    Json::Value result;
+
+    std::string line1 = mrzData.substr(0, 36);
+    std::string line2 = mrzData.substr(36, 36);
+
+    result["mrzLine1"] = line1;
+    result["mrzLine2"] = line2;
+    result["mrzFull"] = mrzData;
+    result["documentType"] = cleanMrzField(line1.substr(0, 2));
+    result["issuingCountry"] = line1.substr(2, 3);
+
+    // Name parsing
+    size_t nameStart = 5;
+    size_t nameEnd = line1.find("<<", nameStart);
+    std::string surname, givenNames;
+
+    if (nameEnd != std::string::npos) {
+        surname = line1.substr(nameStart, nameEnd - nameStart);
+        std::replace(surname.begin(), surname.end(), '<', ' ');
+        surname = trim(surname);
+
+        std::string givenPart = line1.substr(nameEnd + 2);
+        std::replace(givenPart.begin(), givenPart.end(), '<', ' ');
+        givenNames = trim(givenPart);
+    }
+
+    result["surname"] = surname;
+    result["givenNames"] = givenNames;
+    result["fullName"] = !surname.empty() ? (surname + " " + givenNames) : givenNames;
+
+    // Line 2
+    result["documentNumber"] = cleanMrzField(line2.substr(0, 9));
+    result["nationality"] = line2.substr(10, 3);
+    result["dateOfBirth"] = convertMrzDate(line2.substr(13, 6));
+    result["dateOfBirthRaw"] = line2.substr(13, 6);
+    result["sex"] = line2.substr(20, 1);
+    result["dateOfExpiry"] = convertMrzExpiryDate(line2.substr(21, 6));
+    result["dateOfExpiryRaw"] = line2.substr(21, 6);
+
+    result["success"] = true;
+    return result;
+}
+
+Json::Value DataGroupParserService::parseMrzTd1(const std::string& mrzData) {
+    // TD1 format: 3 lines x 30 characters (ID cards)
+    Json::Value result;
+
+    result["mrzFull"] = mrzData;
+    result["documentType"] = cleanMrzField(mrzData.substr(0, 2));
+    result["issuingCountry"] = mrzData.substr(2, 3);
+    result["documentNumber"] = cleanMrzField(mrzData.substr(5, 9));
+
+    // For TD1, birth date is at different position
+    if (mrzData.length() >= 60) {
+        result["dateOfBirth"] = convertMrzDate(mrzData.substr(30, 6));
+        result["dateOfBirthRaw"] = mrzData.substr(30, 6);
+        result["sex"] = mrzData.substr(37, 1);
+        result["dateOfExpiry"] = convertMrzExpiryDate(mrzData.substr(38, 6));
+        result["dateOfExpiryRaw"] = mrzData.substr(38, 6);
+        result["nationality"] = mrzData.substr(45, 3);
+    }
+
+    result["success"] = true;
+    return result;
 }
 
 } // namespace services

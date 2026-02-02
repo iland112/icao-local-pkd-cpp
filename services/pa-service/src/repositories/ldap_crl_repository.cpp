@@ -54,9 +54,57 @@ X509_CRL* LdapCrlRepository::findCrlByIssuer(
     const std::string& issuerDn,
     const std::string& countryCode)
 {
-    // For now, just use country-based CRL search
-    // Future enhancement: filter by issuer DN if multiple CRLs exist
-    return findCrlByCountry(countryCode);
+    spdlog::debug("Finding CRL by issuer: {}, country: {}", issuerDn, countryCode);
+
+    // Search for CRLs in the country
+    std::string baseDn = buildCrlSearchBaseDn(countryCode);
+    std::string filter = buildCrlFilter(countryCode);
+
+    std::vector<std::string> attrs = {"certificateRevocationList;binary"};
+    LDAPMessage* res = executeCrlSearch(baseDn, filter);
+
+    if (!res) {
+        spdlog::warn("No CRLs found for country: {}", countryCode);
+        return nullptr;
+    }
+
+    // Extract all CRLs and find matching issuer
+    X509_CRL* bestMatch = nullptr;
+    LDAPMessage* entry = ldap_first_entry(ldapConn_, res);
+
+    while (entry) {
+        struct berval** crlData = ldap_get_values_len(ldapConn_, entry, "certificateRevocationList;binary");
+        if (crlData) {
+            X509_CRL* crl = parseCrlFromLdap(crlData);
+            if (crl) {
+                // Check if issuer matches
+                char* crlIssuerDn = X509_NAME_oneline(X509_CRL_get_issuer(crl), nullptr, 0);
+                if (crlIssuerDn) {
+                    std::string crlIssuer(crlIssuerDn);
+                    OPENSSL_free(crlIssuerDn);
+
+                    // Normalize and compare DNs
+                    if (normalizeDn(crlIssuer) == normalizeDn(issuerDn)) {
+                        spdlog::debug("Found matching CRL for issuer: {}", issuerDn);
+                        bestMatch = crl;
+                        ldap_value_free_len(crlData);
+                        break;
+                    }
+                }
+                X509_CRL_free(crl);
+            }
+            ldap_value_free_len(crlData);
+        }
+        entry = ldap_next_entry(ldapConn_, entry);
+    }
+
+    ldap_msgfree(res);
+
+    if (!bestMatch) {
+        spdlog::warn("No CRL found matching issuer: {}", issuerDn);
+    }
+
+    return bestMatch;
 }
 
 bool LdapCrlRepository::isCertificateRevoked(X509* cert, X509_CRL* crl) {
@@ -105,7 +153,6 @@ bool LdapCrlRepository::isCrlExpired(X509_CRL* crl) {
         return true;
     }
 
-    time_t now = time(nullptr);
     int days, seconds;
     ASN1_TIME_diff(&days, &seconds, nullptr, nextUpdate);
 
@@ -136,7 +183,9 @@ std::string LdapCrlRepository::getCrlExpirationStatus(X509_CRL* crl) {
 // ==========================================================================
 
 std::string LdapCrlRepository::buildCrlFilter(const std::string& countryCode) {
-    // Simple filter for CRL entries
+    // Build compound LDAP filter for CRL entries
+    // Note: countryCode is handled via base DN in buildCrlSearchBaseDn()
+    // This filter is primarily for object class selection
     return "(objectClass=pkdDownload)";
 }
 
@@ -159,6 +208,20 @@ X509_CRL* LdapCrlRepository::parseCrlFromLdap(struct berval** crlData) {
     }
 
     return crl;
+}
+
+std::string LdapCrlRepository::normalizeDn(const std::string& dn) {
+    // Normalize DN for comparison: lowercase and remove spaces
+    std::string normalized;
+    normalized.reserve(dn.length());
+
+    for (char c : dn) {
+        if (c != ' ' && c != '\t') {
+            normalized += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+        }
+    }
+
+    return normalized;
 }
 
 // ==========================================================================

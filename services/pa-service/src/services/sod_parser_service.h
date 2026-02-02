@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <json/json.h>
 #include <openssl/x509.h>
 #include <openssl/cms.h>
 #include "../domain/models/sod_data.h"
@@ -140,6 +141,17 @@ public:
      * @return Algorithm name or "UNKNOWN"
      */
     std::string getAlgorithmName(const std::string& oid, bool isHash);
+
+    // ==========================================================================
+    // API-Specific Methods
+    // ==========================================================================
+
+    /**
+     * @brief Parse SOD for API response (includes detailed metadata)
+     * @param sodBytes SOD data bytes
+     * @return JSON object with all SOD metadata for API response
+     */
+    Json::Value parseSodForApi(const std::vector<uint8_t>& sodBytes);
 
 private:
     /**

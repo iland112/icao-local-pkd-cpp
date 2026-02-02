@@ -60,11 +60,25 @@ FROM vcpkg-deps AS builder
 COPY services/pa-service/CMakeLists.txt ./
 COPY shared/ ./shared/
 COPY services/pa-service/src/ ./src/
+COPY services/pa-service/tests/ ./tests/
 
+# Build main application
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j$(nproc)
+
+# Build and run tests (optional, controlled by build arg)
+ARG RUN_TESTS=false
+RUN if [ "$RUN_TESTS" = "true" ]; then \
+        cmake -B build-test -S . \
+        -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+        -DCMAKE_BUILD_TYPE=Debug \
+        -DBUILD_TESTS=ON \
+        && cmake --build build-test -j$(nproc) \
+        && echo "=== Running Unit Tests ===" \
+        && cd build-test && ctest --output-on-failure; \
+    fi
 
 # Stage 4: Runtime
 FROM debian:bookworm-slim AS runtime

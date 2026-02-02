@@ -54,7 +54,6 @@ public:
 
     Json::Value getVerificationById(const std::string& id);
     Json::Value getStatistics();
-    Json::Value getDataGroupsByVerificationId(const std::string& id);
 };
 
 } // namespace services

@@ -110,7 +110,14 @@ public:
     std::string buildCrlSearchBaseDn(const std::string& countryCode);
 
     /**
-     * @brief Parse CRL from LDAP berval
+     * @brief Normalize DN for comparison (lowercase, remove spaces)
+     * @param dn Distinguished Name to normalize
+     * @return Normalized DN string
+     */
+    std::string normalizeDn(const std::string& dn);
+
+    /**
+     * @brief Parse X509_CRL from LDAP berval
      * @param crlData LDAP berval containing CRL data
      * @return X509_CRL* or nullptr on error (caller must X509_CRL_free)
      */
