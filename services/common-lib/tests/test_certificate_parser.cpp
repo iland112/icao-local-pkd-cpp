@@ -1,6 +1,4 @@
 #include <gtest/gtest.h>
 
-// Placeholder - tests will be implemented in later phases
-TEST(PlaceholderTest, Placeholder) {
-    EXPECT_TRUE(true);
-}
+// Tests will be implemented in Phase 3-4
+
