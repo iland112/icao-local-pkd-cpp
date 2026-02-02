@@ -4,11 +4,11 @@
 
 namespace repositories {
 
-ValidationRepository::ValidationRepository(PGconn* dbConn)
-    : dbConn_(dbConn)
+ValidationRepository::ValidationRepository(common::DbConnectionPool* dbPool)
+    : dbPool_(dbPool)
 {
-    if (!dbConn_) {
-        throw std::invalid_argument("ValidationRepository: dbConn cannot be nullptr");
+    if (!dbPool_) {
+        throw std::invalid_argument("ValidationRepository: dbPool cannot be nullptr");
     }
     spdlog::debug("[ValidationRepository] Initialized");
 }
@@ -19,6 +19,13 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                   result.certificateId.substr(0, 8));
 
     try {
+        // Acquire connection from pool (RAII - automatically released on scope exit)
+        auto conn = dbPool_->acquire();
+
+        if (!conn.isValid()) {
+            throw std::runtime_error("Failed to acquire database connection from pool");
+        }
+
         // Parameterized query matching actual validation_result table schema (22 columns)
         const char* query =
             "INSERT INTO validation_result ("
@@ -90,14 +97,15 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
         paramValues[21] = trustChainPathJson.c_str();
 
         // Execute parameterized query
-        PGresult* res = PQexecParams(dbConn_, query, 22, nullptr, paramValues,
+        PGresult* res = PQexecParams(
+        conn.get(), query, 22, nullptr, paramValues,
                                      nullptr, nullptr, 0);
 
         bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
 
         if (!success) {
             spdlog::error("[ValidationRepository] Failed to save validation result: {}",
-                         PQerrorMessage(dbConn_));
+                         PQerrorMessage(conn.get()));
         } else {
             spdlog::debug("[ValidationRepository] Validation result saved successfully");
         }
@@ -118,6 +126,13 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
                   uploadId.substr(0, 8));
 
     try {
+        // Acquire connection from pool (RAII - automatically released on scope exit)
+        auto conn = dbPool_->acquire();
+
+        if (!conn.isValid()) {
+            throw std::runtime_error("Failed to acquire database connection from pool");
+        }
+
         // Parameterized UPDATE query for uploaded_file table (10 parameters)
         const char* query =
             "UPDATE uploaded_file SET "
@@ -157,14 +172,15 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
         };
 
         // Execute parameterized query
-        PGresult* res = PQexecParams(dbConn_, query, 10, nullptr, paramValues,
+        PGresult* res = PQexecParams(
+        conn.get(), query, 10, nullptr, paramValues,
                                      nullptr, nullptr, 0);
 
         bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
 
         if (!success) {
             spdlog::error("[ValidationRepository] Failed to update statistics: {}",
-                         PQerrorMessage(dbConn_));
+                         PQerrorMessage(conn.get()));
         } else {
             spdlog::debug("[ValidationRepository] Statistics updated successfully "
                          "(valid={}, invalid={}, pending={}, error={})",
@@ -530,13 +546,20 @@ PGresult* ValidationRepository::executeParamQuery(
     const std::vector<std::string>& params
 )
 {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
         paramValues.push_back(param.c_str());
     }
 
     PGresult* res = PQexecParams(
-        dbConn_,
+        conn.get(),
         query.c_str(),
         params.size(),
         nullptr,
@@ -547,7 +570,7 @@ PGresult* ValidationRepository::executeParamQuery(
     );
 
     if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(dbConn_) : "null result";
+        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
         if (res) PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }
@@ -557,10 +580,17 @@ PGresult* ValidationRepository::executeParamQuery(
 
 PGresult* ValidationRepository::executeQuery(const std::string& query)
 {
-    PGresult* res = PQexec(dbConn_, query.c_str());
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
 
     if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(dbConn_) : "null result";
+        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
         if (res) PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }

@@ -4,6 +4,7 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include "../common/db_connection_pool.h"
 
 /**
  * @file statistics_repository.h
@@ -20,7 +21,7 @@ namespace repositories {
 
 class StatisticsRepository {
 public:
-    explicit StatisticsRepository(PGconn* dbConn);
+    explicit StatisticsRepository(common::DbConnectionPool* dbPool);
     ~StatisticsRepository() = default;
 
     /**
@@ -55,7 +56,7 @@ public:
     Json::Value getSystemStatistics();
 
 private:
-    PGconn* dbConn_;
+    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
 
     PGresult* executeQuery(const std::string& query);
     Json::Value pgResultToJson(PGresult* res);

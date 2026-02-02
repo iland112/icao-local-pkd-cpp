@@ -10,11 +10,11 @@ namespace repositories {
 // Constructor
 // ============================================================================
 
-UploadRepository::UploadRepository(PGconn* dbConn)
-    : dbConn_(dbConn)
+UploadRepository::UploadRepository(common::DbConnectionPool* dbPool)
+    : dbPool_(dbPool)
 {
-    if (!dbConn_) {
-        throw std::invalid_argument("UploadRepository: dbConn cannot be nullptr");
+    if (!dbPool_) {
+        throw std::invalid_argument("UploadRepository: dbPool cannot be nullptr");
     }
     spdlog::debug("[UploadRepository] Initialized");
 }
@@ -740,13 +740,20 @@ PGresult* UploadRepository::executeParamQuery(
     const std::vector<std::string>& params
 )
 {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
         paramValues.push_back(param.c_str());
     }
 
     PGresult* res = PQexecParams(
-        dbConn_,
+        conn.get(),
         query.c_str(),
         params.size(),
         nullptr,
@@ -762,7 +769,7 @@ PGresult* UploadRepository::executeParamQuery(
 
     ExecStatusType status = PQresultStatus(res);
     if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(dbConn_);
+        std::string error = PQerrorMessage(conn.get());
         PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }
@@ -772,7 +779,14 @@ PGresult* UploadRepository::executeParamQuery(
 
 PGresult* UploadRepository::executeQuery(const std::string& query)
 {
-    PGresult* res = PQexec(dbConn_, query.c_str());
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
 
     if (!res) {
         throw std::runtime_error("Query execution failed: null result");
@@ -780,7 +794,7 @@ PGresult* UploadRepository::executeQuery(const std::string& query)
 
     ExecStatusType status = PQresultStatus(res);
     if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(dbConn_);
+        std::string error = PQerrorMessage(conn.get());
         PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }

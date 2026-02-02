@@ -5,6 +5,7 @@
 #include <optional>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include "../common/db_connection_pool.h"
 
 /**
  * @file upload_repository.h
@@ -75,7 +76,7 @@ public:
      * @brief Constructor
      * @param dbConn PostgreSQL connection (non-owning pointer)
      */
-    explicit UploadRepository(PGconn* dbConn);
+    explicit UploadRepository(common::DbConnectionPool* dbPool);
 
     ~UploadRepository() = default;
 
@@ -278,7 +279,7 @@ public:
     Json::Value findDuplicatesByUploadId(const std::string& uploadId);
 
 private:
-    PGconn* dbConn_;
+    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
 
     /**
      * @brief Execute parameterized query

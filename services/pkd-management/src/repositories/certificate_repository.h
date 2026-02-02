@@ -5,6 +5,7 @@
 #include <optional>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include "../common/db_connection_pool.h"
 #include <openssl/x509.h>
 
 /**
@@ -41,7 +42,7 @@ struct CertificateSearchFilter {
  */
 class CertificateRepository {
 public:
-    explicit CertificateRepository(PGconn* dbConn);
+    explicit CertificateRepository(common::DbConnectionPool* dbPool);
     ~CertificateRepository() = default;
 
     // ========================================================================
@@ -200,7 +201,7 @@ public:
     Json::Value findDscForRevalidation(int limit);
 
 private:
-    PGconn* dbConn_;
+    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
 
     // Query execution helpers
     PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);

@@ -181,7 +181,7 @@ export function OperationAuditLog() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">총 작업</p>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
-                  {statistics.totalOperations.toLocaleString()}
+                  {(statistics.totalOperations ?? 0).toLocaleString()}
                 </p>
               </div>
               <Activity className="w-8 h-8 text-blue-500" />
@@ -194,7 +194,7 @@ export function OperationAuditLog() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">성공</p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
-                  {statistics.successfulOperations.toLocaleString()}
+                  {(statistics.successfulOperations ?? 0).toLocaleString()}
                 </p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-500" />
@@ -207,7 +207,7 @@ export function OperationAuditLog() {
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">실패</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
-                  {statistics.failedOperations.toLocaleString()}
+                  {(statistics.failedOperations ?? 0).toLocaleString()}
                 </p>
               </div>
               <XCircle className="w-8 h-8 text-red-500" />
@@ -431,7 +431,7 @@ export function OperationAuditLog() {
             <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 border-t border-gray-200 dark:border-gray-600">
               <div className="flex items-center justify-between">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  총 {total.toLocaleString()}개 중 {page * limit + 1}-{Math.min((page + 1) * limit, total)} 표시
+                  총 {(total ?? 0).toLocaleString()}개 중 {page * limit + 1}-{Math.min((page + 1) * limit, total ?? 0)} 표시
                 </div>
                 <div className="flex items-center space-x-2">
                   <button

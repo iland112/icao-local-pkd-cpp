@@ -4,6 +4,7 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include "../common/db_connection_pool.h"
 #include "../domain/models/validation_result.h"
 #include "../domain/models/validation_statistics.h"
 
@@ -19,7 +20,7 @@ namespace repositories {
 
 class ValidationRepository {
 public:
-    explicit ValidationRepository(PGconn* dbConn);
+    explicit ValidationRepository(common::DbConnectionPool* dbPool);
     ~ValidationRepository() = default;
 
     /**
@@ -91,7 +92,7 @@ public:
     Json::Value getStatisticsByUploadId(const std::string& uploadId);
 
 private:
-    PGconn* dbConn_;
+    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
 
     PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);
     PGresult* executeQuery(const std::string& query);

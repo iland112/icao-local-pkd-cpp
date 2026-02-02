@@ -64,6 +64,7 @@ add_executable(${PROJECT_NAME}
     src/common/progress_manager.cpp  # Phase 4.4: Enhanced progress tracking
     src/common/asn1_parser.cpp       # ASN.1/TLV parser for Master List structure
     src/common/ldif_parser.cpp       # v2.2.2: LDIF structure parser for visualization
+    src/common/db_connection_pool.cpp  # Database connection pool for thread-safe access
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp

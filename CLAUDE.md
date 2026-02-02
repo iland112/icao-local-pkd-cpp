@@ -261,6 +261,87 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ✅ Production-ready frontend UI with all 8 verification steps working
 - ✅ Dynamic service discovery (zero downtime on container restart)
 
+#### 4. PKD Management Connection Pool Implementation ✅
+
+**Problem**: Database connection instability causing intermittent failures
+- **Symptom**: "Query failed: null result" errors, audit log pages not displaying
+- **Root Cause**: Single `PGconn*` object shared across multiple threads (PostgreSQL libpq is not thread-safe)
+- **Impact**: Concurrent requests causing connection corruption and service instability
+
+**Solution**: Thread-safe Database Connection Pool (RAII pattern)
+- **Implementation**: Copied [db_connection_pool.{h,cpp}](services/pkd-management/src/common/db_connection_pool.h) from pa-service
+- **Configuration**: min=5, max=20 connections, 5s acquire timeout
+- **Pattern**: Each query acquires connection from pool, automatically releases on scope exit
+
+**Repository Layer Migration** (5 repositories updated):
+1. **AuditRepository** - [audit_repository.cpp:7-13,266-321](services/pkd-management/src/repositories/audit_repository.cpp#L7-L13)
+2. **UploadRepository** - Constructor + executeQuery() method
+3. **CertificateRepository** - Constructor + 3 query methods (executeQuery, findFirstUploadId, saveDuplicate)
+4. **ValidationRepository** - Constructor + 3 query methods (save, updateStatistics, executeQuery)
+5. **StatisticsRepository** - Constructor + executeQuery() method
+
+**Connection Acquisition Pattern** (applied to all query methods):
+```cpp
+// Each method acquires connection from pool (RAII)
+auto conn = dbPool_->acquire();
+if (!conn.isValid()) {
+    throw std::runtime_error("Failed to acquire connection");
+}
+PGresult* res = PQexec(conn.get(), query);
+// conn automatically released on scope exit
+```
+
+**Frontend Bug Fixes** (nullish coalescing for undefined statistics):
+- [AuditLog.tsx:158,172,186,200](frontend/src/pages/AuditLog.tsx#L158) - Added `?? 0` to prevent TypeError
+- [OperationAuditLog.tsx:184,197,210,434](frontend/src/pages/OperationAuditLog.tsx#L184) - Same pattern applied
+
+**Files Modified**:
+
+Backend (9 files):
+- `services/pkd-management/src/common/db_connection_pool.{h,cpp}` - NEW (copied from pa-service)
+- `services/pkd-management/src/repositories/audit_repository.{h,cpp}` - Connection Pool integration
+- `services/pkd-management/src/repositories/upload_repository.cpp` - Constructor + executeQuery
+- `services/pkd-management/src/repositories/certificate_repository.cpp` - Constructor + 3 methods
+- `services/pkd-management/src/repositories/validation_repository.cpp` - Constructor + 3 methods
+- `services/pkd-management/src/repositories/statistics_repository.cpp` - Constructor + executeQuery
+- `services/pkd-management/src/main.cpp` - Connection Pool initialization
+- `services/pkd-management/CMakeLists.txt` - Added db_connection_pool.cpp to build
+
+Frontend (2 files):
+- `frontend/src/pages/AuditLog.tsx` - Null safety fixes
+- `frontend/src/pages/OperationAuditLog.tsx` - Null safety fixes
+
+**Verification Results**:
+```bash
+# Service Status
+✅ pkd-management: healthy (Connection Pool initialized: min=5, max=20)
+
+# Connection Pool Logs
+[info] DbConnectionPool created: minSize=5, maxSize=20, timeout=5s
+[info] Database connection pool initialized (min=5, max=20)
+[info] Repositories initialized with Connection Pool
+
+# Audit Log API Tests
+✅ GET /api/audit/operations?limit=5
+   - Response: 5 records, all 17 columns present
+   - Operations: FILE_UPLOAD (4), PA_VERIFY (1)
+
+✅ GET /api/audit/operations/stats
+   - totalOperations: 5, successfulOperations: 5, failedOperations: 0
+   - averageDurationMs: 99ms
+   - operationsByType: {"FILE_UPLOAD": 4, "PA_VERIFY": 1}
+
+✅ Frontend Pages
+   - http://localhost:3000/admin/audit-log - Working correctly
+   - http://localhost:3000/admin/operation-audit - Working correctly
+```
+
+**Technical Benefits**:
+1. **Thread Safety** 🔒 - Each request uses independent database connection
+2. **Performance** ⚡ - Connection reuse reduces overhead, 5 connections always ready
+3. **Resource Management** 🎯 - RAII pattern ensures automatic connection release, max 20 connections prevent DB overload
+4. **Stability** 💪 - Eliminates "Query failed: null result" errors caused by concurrent access
+
 ---
 
 ### PA Service Repository Pattern Refactoring ✅ **COMPLETE**

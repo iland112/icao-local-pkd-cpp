@@ -9,11 +9,11 @@
 
 namespace repositories {
 
-CertificateRepository::CertificateRepository(PGconn* dbConn)
-    : dbConn_(dbConn)
+CertificateRepository::CertificateRepository(common::DbConnectionPool* dbPool)
+    : dbPool_(dbPool)
 {
-    if (!dbConn_) {
-        throw std::invalid_argument("CertificateRepository: dbConn cannot be nullptr");
+    if (!dbPool_) {
+        throw std::invalid_argument("CertificateRepository: dbPool cannot be nullptr");
     }
     spdlog::debug("[CertificateRepository] Initialized");
 }
@@ -398,13 +398,20 @@ PGresult* CertificateRepository::executeParamQuery(
     const std::vector<std::string>& params
 )
 {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
         paramValues.push_back(param.c_str());
     }
 
     PGresult* res = PQexecParams(
-        dbConn_,
+        conn.get(),
         query.c_str(),
         params.size(),
         nullptr,
@@ -420,7 +427,7 @@ PGresult* CertificateRepository::executeParamQuery(
 
     ExecStatusType status = PQresultStatus(res);
     if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(dbConn_);
+        std::string error = PQerrorMessage(conn.get());
         PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }
@@ -430,7 +437,14 @@ PGresult* CertificateRepository::executeParamQuery(
 
 PGresult* CertificateRepository::executeQuery(const std::string& query)
 {
-    PGresult* res = PQexec(dbConn_, query.c_str());
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
 
     if (!res) {
         throw std::runtime_error("Query execution failed: null result");
@@ -438,7 +452,7 @@ PGresult* CertificateRepository::executeQuery(const std::string& query)
 
     ExecStatusType status = PQresultStatus(res);
     if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(dbConn_);
+        std::string error = PQerrorMessage(conn.get());
         PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }
@@ -656,6 +670,13 @@ X509* CertificateRepository::parseCertificateData(PGresult* res, int row, int co
 // ============================================================================
 
 std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     const char* query =
         "SELECT upload_id FROM certificate "
         "WHERE fingerprint_sha256 = $1 "
@@ -663,7 +684,8 @@ std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::str
 
     const char* paramValues[1] = {fingerprint.c_str()};
 
-    PGresult* res = PQexecParams(dbConn_, query, 1, nullptr, paramValues,
+    PGresult* res = PQexecParams(
+        conn.get(), query, 1, nullptr, paramValues,
                                  nullptr, nullptr, 0);
 
     std::string uploadId;
@@ -672,7 +694,7 @@ std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::str
         spdlog::debug("[CertificateRepository] Found first upload_id={} for fingerprint={}",
                      uploadId, fingerprint.substr(0, 16));
     } else if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("[CertificateRepository] Query failed: {}", PQerrorMessage(dbConn_));
+        spdlog::error("[CertificateRepository] Query failed: {}", PQerrorMessage(conn.get()));
     }
 
     PQclear(res);
@@ -687,6 +709,13 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
                                          const std::string& issuerDn,
                                          const std::string& countryCode,
                                          const std::string& serialNumber) {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     const char* query =
         "INSERT INTO duplicate_certificate "
         "(upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
@@ -706,13 +735,14 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
         serialNumber.empty() ? nullptr : serialNumber.c_str()
     };
 
-    PGresult* res = PQexecParams(dbConn_, query, 8, nullptr, paramValues,
+    PGresult* res = PQexecParams(
+        conn.get(), query, 8, nullptr, paramValues,
                                  nullptr, nullptr, 0);
 
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
 
     if (!success) {
-        spdlog::error("[CertificateRepository] Failed to save duplicate: {}", PQerrorMessage(dbConn_));
+        spdlog::error("[CertificateRepository] Failed to save duplicate: {}", PQerrorMessage(conn.get()));
     } else {
         spdlog::debug("[CertificateRepository] Saved duplicate: fingerprint={}, type={}, upload={}",
                      fingerprint.substr(0, 16), certType, uploadId);

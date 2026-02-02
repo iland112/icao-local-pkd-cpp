@@ -155,7 +155,7 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.totalOperations.toLocaleString()}
+                  {(stats.totalOperations ?? 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">전체 이벤트</p>
               </div>
@@ -169,7 +169,7 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.successfulOperations.toLocaleString()}
+                  {(stats.successfulOperations ?? 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">성공한 작업</p>
               </div>
@@ -183,7 +183,7 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {stats.failedOperations.toLocaleString()}
+                  {(stats.failedOperations ?? 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">실패한 작업</p>
               </div>
@@ -197,7 +197,7 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {Math.round(stats.averageDurationMs).toLocaleString()}ms
+                  {Math.round(stats.averageDurationMs ?? 0).toLocaleString()}ms
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">평균 처리 시간</p>
               </div>

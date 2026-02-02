@@ -4,20 +4,21 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
+#include "../common/db_connection_pool.h"
 
 /**
  * @file audit_repository.h
  * @brief Audit Repository - Database Access Layer for operation_audit_log table
  *
- * @note Part of main.cpp refactoring Phase 1.5
- * @date 2026-01-29
+ * @note Part of main.cpp refactoring Phase 1.5 + Connection Pool (v2.3.1)
+ * @date 2026-01-29 (Updated: 2026-02-02)
  */
 
 namespace repositories {
 
 class AuditRepository {
 public:
-    explicit AuditRepository(PGconn* dbConn);
+    explicit AuditRepository(common::DbConnectionPool* dbPool);
     ~AuditRepository() = default;
 
     /**
@@ -74,7 +75,7 @@ public:
     Json::Value getStatistics(const std::string& startDate, const std::string& endDate);
 
 private:
-    PGconn* dbConn_;
+    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
 
     PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);
     PGresult* executeQuery(const std::string& query);

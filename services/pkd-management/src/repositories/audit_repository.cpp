@@ -4,13 +4,13 @@
 
 namespace repositories {
 
-AuditRepository::AuditRepository(PGconn* dbConn)
-    : dbConn_(dbConn)
+AuditRepository::AuditRepository(common::DbConnectionPool* dbPool)
+    : dbPool_(dbPool)
 {
-    if (!dbConn_) {
-        throw std::invalid_argument("AuditRepository: dbConn cannot be nullptr");
+    if (!dbPool_) {
+        throw std::invalid_argument("AuditRepository: dbPool cannot be nullptr");
     }
-    spdlog::debug("[AuditRepository] Initialized");
+    spdlog::debug("[AuditRepository] Initialized with Connection Pool");
 }
 
 bool AuditRepository::insert(
@@ -67,9 +67,10 @@ Json::Value AuditRepository::findAll(
     try {
         // Build query with optional filters
         std::ostringstream query;
-        query << "SELECT id, username, operation_type, operation_subtype, "
-              << "resource_id, resource_type, ip_address, "
-              << "success, error_message, metadata, duration_ms, created_at "
+        query << "SELECT id, user_id, username, operation_type, operation_subtype, "
+              << "resource_id, resource_type, ip_address, user_agent, "
+              << "request_method, request_path, "
+              << "success, status_code, error_message, metadata, duration_ms, created_at "
               << "FROM operation_audit_log WHERE 1=1";
 
         std::vector<std::string> params;
@@ -268,13 +269,20 @@ PGresult* AuditRepository::executeParamQuery(
     const std::vector<std::string>& params
 )
 {
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
         paramValues.push_back(param.c_str());
     }
 
     PGresult* res = PQexecParams(
-        dbConn_,
+        conn.get(),
         query.c_str(),
         params.size(),
         nullptr,
@@ -285,7 +293,7 @@ PGresult* AuditRepository::executeParamQuery(
     );
 
     if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(dbConn_) : "null result";
+        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
         if (res) PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }
@@ -295,10 +303,17 @@ PGresult* AuditRepository::executeParamQuery(
 
 PGresult* AuditRepository::executeQuery(const std::string& query)
 {
-    PGresult* res = PQexec(dbConn_, query.c_str());
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
 
     if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(dbConn_) : "null result";
+        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
         if (res) PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }

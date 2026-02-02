@@ -4,11 +4,11 @@
 
 namespace repositories {
 
-StatisticsRepository::StatisticsRepository(PGconn* dbConn)
-    : dbConn_(dbConn)
+StatisticsRepository::StatisticsRepository(common::DbConnectionPool* dbPool)
+    : dbPool_(dbPool)
 {
-    if (!dbConn_) {
-        throw std::invalid_argument("StatisticsRepository: dbConn cannot be nullptr");
+    if (!dbPool_) {
+        throw std::invalid_argument("StatisticsRepository: dbPool cannot be nullptr");
     }
     spdlog::debug("[StatisticsRepository] Initialized");
 }
@@ -94,10 +94,17 @@ Json::Value StatisticsRepository::getSystemStatistics()
 
 PGresult* StatisticsRepository::executeQuery(const std::string& query)
 {
-    PGresult* res = PQexec(dbConn_, query.c_str());
+    // Acquire connection from pool (RAII - automatically released on scope exit)
+    auto conn = dbPool_->acquire();
+
+    if (!conn.isValid()) {
+        throw std::runtime_error("Failed to acquire database connection from pool");
+    }
+
+    PGresult* res = PQexec(conn.get(), query.c_str());
 
     if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(dbConn_) : "null result";
+        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
         if (res) PQclear(res);
         throw std::runtime_error("Query failed: " + error);
     }

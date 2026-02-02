@@ -58,6 +58,7 @@
 #include "common.h"
 #include "common/ldap_utils.h"
 #include "common/audit_log.h"
+#include "common/db_connection_pool.h"  // v2.3.1: Database connection pool
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
 #include "common/x509_metadata_extractor.h"
@@ -113,7 +114,8 @@ std::shared_ptr<handlers::IcaoHandler> icaoHandler;
 std::shared_ptr<handlers::AuthHandler> authHandler;
 
 // Phase 1.6: Global Repositories and Services (Repository Pattern)
-PGconn* globalDbConn = nullptr;  // Persistent database connection
+// v2.3.1: Replaced single connection with Connection Pool for thread safety
+std::shared_ptr<common::DbConnectionPool> dbPool;  // Database connection pool
 std::shared_ptr<repositories::UploadRepository> uploadRepository;
 std::shared_ptr<repositories::CertificateRepository> certificateRepository;
 std::shared_ptr<repositories::ValidationRepository> validationRepository;
@@ -8688,14 +8690,28 @@ int main(int argc, char* argv[]) {
         // Phase 1.6: Initialize Repository Pattern - Repositories and Services
         spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
 
-        // Create persistent database connection for Repositories
-        globalDbConn = PQconnectdb(dbConnInfo.c_str());
-        if (PQstatus(globalDbConn) != CONNECTION_OK) {
-            spdlog::critical("Failed to connect to PostgreSQL: {}", PQerrorMessage(globalDbConn));
-            PQfinish(globalDbConn);
+        // Create database connection pool for Repositories (v2.3.1: Thread-safe connection management)
+        try {
+
+            dbPool = std::make_shared<common::DbConnectionPool>(
+                dbConnInfo,  // PostgreSQL connection string
+                5,   // minConnections
+                20,  // maxConnections
+                5    // acquireTimeoutSec
+            );
+
+
+
+
+
+
+
+
+            spdlog::info("Database connection pool initialized (min=5, max=20)");
+        } catch (const std::exception& e) {
+            spdlog::critical("Failed to initialize database connection pool: {}", e.what());
             return 1;
         }
-        spdlog::info("PostgreSQL connection established for Repository layer");
 
         // Create LDAP connection (for UploadService)
         // Note: Using write host for upload operations
@@ -8704,7 +8720,7 @@ int main(int argc, char* argv[]) {
         int ldapResult = ldap_initialize(&ldapWriteConn, ldapWriteUri.c_str());
         if (ldapResult != LDAP_SUCCESS) {
             spdlog::error("Failed to initialize LDAP connection: {}", ldap_err2string(ldapResult));
-            PQfinish(globalDbConn);
+            dbPool.reset();  // Release connection pool
             return 1;
         }
 
@@ -8720,18 +8736,18 @@ int main(int argc, char* argv[]) {
         if (ldapResult != LDAP_SUCCESS) {
             spdlog::error("LDAP bind failed: {}", ldap_err2string(ldapResult));
             ldap_unbind_ext_s(ldapWriteConn, nullptr, nullptr);
-            PQfinish(globalDbConn);
+            dbPool.reset();  // Release connection pool
             return 1;
         }
         spdlog::info("LDAP write connection established for UploadService");
 
-        // Initialize Repositories
-        uploadRepository = std::make_shared<repositories::UploadRepository>(globalDbConn);
-        certificateRepository = std::make_shared<repositories::CertificateRepository>(globalDbConn);
-        validationRepository = std::make_shared<repositories::ValidationRepository>(globalDbConn);
-        auditRepository = std::make_shared<repositories::AuditRepository>(globalDbConn);
-        statisticsRepository = std::make_shared<repositories::StatisticsRepository>(globalDbConn);
-        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, LdifStructure)");
+        // Initialize Repositories with Connection Pool (v2.3.1: Thread-safe database access)
+        uploadRepository = std::make_shared<repositories::UploadRepository>(dbPool.get());
+        certificateRepository = std::make_shared<repositories::CertificateRepository>(dbPool.get());
+        validationRepository = std::make_shared<repositories::ValidationRepository>(dbPool.get());
+        auditRepository = std::make_shared<repositories::AuditRepository>(dbPool.get());
+        statisticsRepository = std::make_shared<repositories::StatisticsRepository>(dbPool.get());
+        spdlog::info("Repositories initialized with Connection Pool (Upload, Certificate, Validation, Audit, Statistics)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
         // Initialize Services with Repository dependencies
@@ -8804,23 +8820,17 @@ int main(int argc, char* argv[]) {
         // Run the server
         app.run();
 
-        // Phase 1.6: Cleanup - Close database and LDAP connections
+        // Phase 1.6: Cleanup - Close LDAP connections (Database connection pool auto-cleanup via shared_ptr)
         spdlog::info("Shutting down Repository Pattern resources...");
-        if (globalDbConn) {
-            PQfinish(globalDbConn);
-            globalDbConn = nullptr;
-            spdlog::info("PostgreSQL connection closed");
-        }
+        dbPool.reset();  // Explicitly release connection pool
+        spdlog::info("Database connection pool closed");
         spdlog::info("Repository Pattern resources cleaned up");
 
     } catch (const std::exception& e) {
         spdlog::error("Application error: {}", e.what());
 
-        // Cleanup on error
-        if (globalDbConn) {
-            PQfinish(globalDbConn);
-            globalDbConn = nullptr;
-        }
+        // Cleanup on error (Connection pool auto-cleanup via shared_ptr)
+        dbPool.reset();
 
         return 1;
     }
