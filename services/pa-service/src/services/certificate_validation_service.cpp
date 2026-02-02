@@ -76,8 +76,25 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         // Check DSC expiration
         result.dscExpired = isCertificateExpired(dscCert);
 
+        // Extract country code from DSC issuer DN if not provided
+        std::string effectiveCountry = countryCode;
+        if (effectiveCountry.empty()) {
+            // Try to extract country from issuer DN (e.g., /C=KR/O=Gov/CN=CSCA)
+            size_t cPos = result.dscIssuer.find("/C=");
+            if (cPos != std::string::npos) {
+                cPos += 3; // Skip "/C="
+                size_t endPos = result.dscIssuer.find('/', cPos);
+                if (endPos != std::string::npos) {
+                    effectiveCountry = result.dscIssuer.substr(cPos, endPos - cPos);
+                } else {
+                    effectiveCountry = result.dscIssuer.substr(cPos);
+                }
+                spdlog::info("Extracted country code from DSC issuer: {}", effectiveCountry);
+            }
+        }
+
         // Find CSCA certificate
-        X509* cscaCert = certRepo_->findCscaByIssuerDn(result.dscIssuer, countryCode);
+        X509* cscaCert = certRepo_->findCscaByIssuerDn(result.dscIssuer, effectiveCountry);
         if (!cscaCert) {
             result.valid = false;
             result.validationErrors = "CSCA not found for issuer: " + result.dscIssuer;
@@ -97,10 +114,50 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         // Verify signature
         result.signatureVerified = verifyCertificateSignature(dscCert, cscaCert);
 
-        // Check CRL
-        result.crlStatus = checkCrlStatus(dscCert, countryCode);
+        // Check CRL (ICAO Doc 9303 Part 11 - Certificate Revocation)
+        result.crlStatus = checkCrlStatus(dscCert, effectiveCountry);
         result.crlChecked = (result.crlStatus != domain::models::CrlStatus::NOT_CHECKED);
         result.revoked = (result.crlStatus == domain::models::CrlStatus::REVOKED);
+
+        // Set CRL status messages (ICAO Doc 9303 compliant)
+        switch (result.crlStatus) {
+            case domain::models::CrlStatus::VALID:
+                result.crlStatusDescription = "Certificate Revocation List (CRL) check passed";
+                result.crlStatusDetailedDescription = "The Document Signer Certificate (DSC) was verified against the Certificate Revocation List (CRL) as specified in ICAO Doc 9303 Part 11. The certificate is not revoked and remains valid for Passive Authentication.";
+                result.crlStatusSeverity = "INFO";
+                result.crlMessage = "DSC verified - not revoked";
+                break;
+            case domain::models::CrlStatus::REVOKED:
+                result.crlStatusDescription = "Certificate has been revoked by issuing authority";
+                result.crlStatusDetailedDescription = "The Document Signer Certificate (DSC) appears on the Certificate Revocation List (CRL) published by the issuing Country Signing CA (CSCA). According to RFC 5280 and ICAO Doc 9303 Part 11, this certificate must not be used for Passive Authentication verification.";
+                result.crlStatusSeverity = "CRITICAL";
+                result.crlMessage = "DSC is revoked - PA verification FAILED";
+                break;
+            case domain::models::CrlStatus::CRL_UNAVAILABLE:
+                result.crlStatusDescription = "Certificate Revocation List (CRL) not available";
+                result.crlStatusDetailedDescription = "No CRL was found in the LDAP PKD for this issuing country. ICAO Doc 9303 Part 11 specifies CRL checking as RECOMMENDED but not mandatory. According to the principle of fail-open for unavailable infrastructure, this verification continues with a warning.";
+                result.crlStatusSeverity = "WARNING";
+                result.crlMessage = "CRL not found - proceeding with caution";
+                break;
+            case domain::models::CrlStatus::CRL_EXPIRED:
+                result.crlStatusDescription = "Certificate Revocation List (CRL) has expired";
+                result.crlStatusDetailedDescription = "The CRL retrieved from the PKD has passed its nextUpdate time as defined in RFC 5280. An expired CRL cannot be relied upon for revocation status. ICAO Doc 9303 Part 11 recommends treating expired CRLs with caution, as they may not reflect recent revocations.";
+                result.crlStatusSeverity = "WARNING";
+                result.crlMessage = "CRL expired - revocation status uncertain";
+                break;
+            case domain::models::CrlStatus::CRL_INVALID:
+                result.crlStatusDescription = "Certificate Revocation List (CRL) signature verification failed";
+                result.crlStatusDetailedDescription = "The digital signature on the CRL could not be verified against the issuing CSCA's public key. This indicates either CRL corruption or a security compromise. Per RFC 5280 Section 6.3, an invalid CRL must not be used for certificate validation.";
+                result.crlStatusSeverity = "CRITICAL";
+                result.crlMessage = "CRL signature invalid - cannot verify revocation";
+                break;
+            case domain::models::CrlStatus::NOT_CHECKED:
+                result.crlStatusDescription = "Certificate revocation check was not performed";
+                result.crlStatusDetailedDescription = "CRL checking was skipped or could not be completed. ICAO Doc 9303 Part 11 considers CRL verification as a SHOULD requirement rather than MUST. This is acceptable in environments where CRL infrastructure is not fully deployed.";
+                result.crlStatusSeverity = "INFO";
+                result.crlMessage = "CRL check skipped";
+                break;
+        }
 
         // Overall validation
         result.valid = result.signatureVerified && !result.revoked;

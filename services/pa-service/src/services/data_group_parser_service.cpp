@@ -6,11 +6,32 @@
 #include "data_group_parser_service.h"
 #include <spdlog/spdlog.h>
 #include <openssl/evp.h>
+#include <openssl/bio.h>
+#include <openssl/buffer.h>
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
 
 namespace services {
+
+// Helper function for Base64 encoding
+static std::string base64Encode(const std::vector<uint8_t>& data) {
+    BIO* bio = BIO_new(BIO_s_mem());
+    BIO* b64 = BIO_new(BIO_f_base64());
+    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);  // No newlines
+    bio = BIO_push(b64, bio);
+
+    BIO_write(bio, data.data(), static_cast<int>(data.size()));
+    BIO_flush(bio);
+
+    BUF_MEM* bufferPtr;
+    BIO_get_mem_ptr(bio, &bufferPtr);
+
+    std::string result(bufferPtr->data, bufferPtr->length);
+    BIO_free_all(bio);
+
+    return result;
+}
 
 DataGroupParserService::DataGroupParserService() {
     spdlog::debug("DataGroupParserService initialized");
@@ -100,26 +121,70 @@ Json::Value DataGroupParserService::parseDg2(const std::vector<uint8_t>& dg2Data
     result["success"] = true;
     result["dg2Size"] = static_cast<int>(dg2Data.size());
 
-    // DG2 contains facial images in JPEG2000 or JPEG format
-    // Basic structure detection
-    if (dg2Data.size() >= 4) {
-        // Check for JPEG2000 signature (0x0000000C 0x6A502020)
-        if (dg2Data[0] == 0x00 && dg2Data[1] == 0x00 && dg2Data[2] == 0x00 && dg2Data[3] == 0x0C) {
-            result["imageFormat"] = "JPEG2000";
-        }
-        // Check for JPEG signature (0xFFD8FF)
-        else if (dg2Data[0] == 0xFF && dg2Data[1] == 0xD8 && dg2Data[2] == 0xFF) {
-            result["imageFormat"] = "JPEG";
-        }
-        else {
-            result["imageFormat"] = "UNKNOWN";
-        }
+    // DG2 contains biometric template (facial images) per ICAO Doc 9303 Part 10
+    // Structure: Tag 0x7F60 (Biometric Information Template)
+    //            Tag 0x5F2E (Biometric Data Block - contains JPEG/JP2 image)
 
-        result["message"] = "Face image data detected (full parsing not implemented)";
-    } else {
-        result["success"] = false;
-        result["error"] = "DG2 data too short";
+    std::string imageFormat = "UNKNOWN";
+    std::vector<uint8_t> imageData;
+
+    // Search for JPEG or JPEG2000 signature within DG2
+    bool foundImage = false;
+    for (size_t i = 0; i < dg2Data.size() - 3; i++) {
+        // JPEG signature: 0xFFD8FF
+        if (dg2Data[i] == 0xFF && dg2Data[i+1] == 0xD8 && dg2Data[i+2] == 0xFF) {
+            imageFormat = "JPEG";
+            // Find JPEG end marker (0xFFD9)
+            for (size_t j = i + 3; j < dg2Data.size() - 1; j++) {
+                if (dg2Data[j] == 0xFF && dg2Data[j+1] == 0xD9) {
+                    // Extract JPEG data
+                    imageData.assign(dg2Data.begin() + i, dg2Data.begin() + j + 2);
+                    foundImage = true;
+                    break;
+                }
+            }
+            if (foundImage) break;
+        }
+        // JPEG2000 signature: 0x0000000C 0x6A502020
+        else if (i < dg2Data.size() - 8 &&
+                 dg2Data[i] == 0x00 && dg2Data[i+1] == 0x00 &&
+                 dg2Data[i+2] == 0x00 && dg2Data[i+3] == 0x0C) {
+            imageFormat = "JPEG2000";
+            // JPEG2000 doesn't have a simple end marker, use remaining data
+            imageData.assign(dg2Data.begin() + i, dg2Data.end());
+            foundImage = true;
+            break;
+        }
     }
+
+    if (!foundImage || imageData.empty()) {
+        result["success"] = false;
+        result["error"] = "No valid face image found in DG2 data";
+        result["message"] = "Could not extract JPEG/JPEG2000 image from biometric template";
+        return result;
+    }
+
+    // Convert image data to Base64 for data URL
+    std::string base64Image = base64Encode(imageData);
+    std::string mimeType = (imageFormat == "JPEG") ? "image/jpeg" : "image/jp2";
+    std::string imageDataUrl = "data:" + mimeType + ";base64," + base64Image;
+
+    // Build faceImages array (ICAO Doc 9303 allows multiple face images)
+    Json::Value faceImage;
+    faceImage["imageDataUrl"] = imageDataUrl;
+    faceImage["imageFormat"] = imageFormat;
+    faceImage["imageSize"] = static_cast<int>(imageData.size());
+    faceImage["imageType"] = "ICAO Face";  // As per CBEFF format
+
+    Json::Value faceImages = Json::arrayValue;
+    faceImages.append(faceImage);
+
+    result["faceImages"] = faceImages;
+    result["faceCount"] = 1;
+    result["message"] = "Face image extracted successfully from DG2";
+    result["imageFormat"] = imageFormat;  // Keep for backward compatibility
+
+    spdlog::info("DG2 parsed: {} image extracted ({} bytes)", imageFormat, imageData.size());
 
     return result;
 }

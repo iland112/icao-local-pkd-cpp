@@ -12,6 +12,8 @@
 #include <openssl/err.h>
 #include <openssl/bio.h>
 #include <openssl/objects.h>
+#include <openssl/asn1.h>
+#include <openssl/asn1t.h>
 
 namespace services {
 
@@ -115,7 +117,8 @@ std::map<std::string, std::string> SodParserService::extractDataGroupHashes(
     std::map<std::string, std::string> hexHashes;
 
     for (const auto& [dgNum, hashBytes] : rawHashes) {
-        std::string dgKey = "DG" + std::to_string(dgNum);
+        // Use number-only format to match frontend ("1", "2", "3" instead of "DG1", "DG2", "DG3")
+        std::string dgKey = std::to_string(dgNum);
         hexHashes[dgKey] = hashToHexString(hashBytes);
     }
 
@@ -294,11 +297,124 @@ std::map<int, std::vector<uint8_t>> SodParserService::parseDataGroupHashesRaw(
         return result;
     }
 
-    // Parse LDSSecurityObject (simplified parsing)
-    // This is a simplified parser - full implementation would use ASN.1 parser
-    // For now, return empty map (can be enhanced later)
+    // Parse LDSSecurityObject ASN.1 - Manual parsing (from v1.0)
+    const unsigned char* p = ASN1_STRING_get0_data(*contentPtr);
+    const unsigned char* contentData = p;
+
+    // Skip outer SEQUENCE tag and length
+    if (*contentData != 0x30) {
+        spdlog::error("Expected SEQUENCE tag for LDSSecurityObject");
+        CMS_ContentInfo_free(cms);
+        return result;
+    }
+    contentData++;
+
+    // Parse length
+    size_t contentLen = 0;
+    if (*contentData & 0x80) {
+        int numBytes = *contentData & 0x7F;
+        contentData++;
+        for (int i = 0; i < numBytes; i++) {
+            contentLen = (contentLen << 8) | *contentData++;
+        }
+    } else {
+        contentLen = *contentData++;
+    }
+
+    // Skip version (INTEGER)
+    if (*contentData == 0x02) {
+        contentData++;
+        size_t versionLen = *contentData++;
+        contentData += versionLen;
+    }
+
+    // Skip hashAlgorithm (SEQUENCE - AlgorithmIdentifier)
+    if (*contentData == 0x30) {
+        contentData++;
+        size_t algLen = 0;
+        if (*contentData & 0x80) {
+            int numBytes = *contentData & 0x7F;
+            contentData++;
+            for (int i = 0; i < numBytes; i++) {
+                algLen = (algLen << 8) | *contentData++;
+            }
+        } else {
+            algLen = *contentData++;
+        }
+        contentData += algLen;
+    }
+
+    // Parse dataGroupHashValues (SEQUENCE OF DataGroupHash)
+    if (*contentData == 0x30) {
+        contentData++;
+        size_t dgHashesLen = 0;
+        if (*contentData & 0x80) {
+            int numBytes = *contentData & 0x7F;
+            contentData++;
+            for (int i = 0; i < numBytes; i++) {
+                dgHashesLen = (dgHashesLen << 8) | *contentData++;
+            }
+        } else {
+            dgHashesLen = *contentData++;
+        }
+
+        const unsigned char* dgHashesEnd = contentData + dgHashesLen;
+
+        // Parse each DataGroupHash
+        while (contentData < dgHashesEnd) {
+            if (*contentData != 0x30) break;
+            contentData++;
+
+            size_t dgHashLen = 0;
+            if (*contentData & 0x80) {
+                int numBytes = *contentData & 0x7F;
+                contentData++;
+                for (int i = 0; i < numBytes; i++) {
+                    dgHashLen = (dgHashLen << 8) | *contentData++;
+                }
+            } else {
+                dgHashLen = *contentData++;
+            }
+
+            const unsigned char* dgHashEnd = contentData + dgHashLen;
+
+            // Parse dataGroupNumber (INTEGER)
+            int dgNumber = 0;
+            if (*contentData == 0x02) {
+                contentData++;
+                size_t intLen = *contentData++;
+                for (size_t i = 0; i < intLen; i++) {
+                    dgNumber = (dgNumber << 8) | *contentData++;
+                }
+            }
+
+            // Parse dataGroupHashValue (OCTET STRING)
+            if (*contentData == 0x04) {
+                contentData++;
+                size_t hashLen = 0;
+                if (*contentData & 0x80) {
+                    int numBytes = *contentData & 0x7F;
+                    contentData++;
+                    for (int i = 0; i < numBytes; i++) {
+                        hashLen = (hashLen << 8) | *contentData++;
+                    }
+                } else {
+                    hashLen = *contentData++;
+                }
+
+                std::vector<uint8_t> hashValue(contentData, contentData + hashLen);
+                result[dgNumber] = hashValue;
+                contentData += hashLen;
+
+                spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
+            }
+
+            contentData = dgHashEnd;
+        }
+    }
 
     CMS_ContentInfo_free(cms);
+    spdlog::info("Parsed {} Data Group hashes from SOD", result.size());
     return result;
 }
 

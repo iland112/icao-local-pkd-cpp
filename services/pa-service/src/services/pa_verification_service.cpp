@@ -56,19 +56,25 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         // Step 4: Verify data group hashes
         int totalDgs = dataGroups.size();
         int validDgs = 0;
-        Json::Value dgResults = Json::arrayValue;
+        Json::Value dgResults = Json::objectValue;  // Changed to object
 
         for (const auto& [dgNum, dgData] : dataGroups) {
             std::string expectedHash = sod.getDataGroupHash(dgNum);
             if (expectedHash.empty()) continue;
 
-            bool hashValid = dgParser_->verifyDataGroupHash(dgData, expectedHash, sod.hashAlgorithm);
+            // Compute actual hash
+            std::string computedHash = dgParser_->computeHash(dgData, sod.hashAlgorithm);
+            bool hashValid = (computedHash == expectedHash);
             if (hashValid) validDgs++;
 
+            // Create DG key in format "DG1", "DG2", etc.
+            std::string dgKey = "DG" + dgNum;
+
             Json::Value dgResult;
-            dgResult["dataGroup"] = dgNum;
             dgResult["valid"] = hashValid;
-            dgResults.append(dgResult);
+            dgResult["expectedHash"] = expectedHash;
+            dgResult["actualHash"] = computedHash;  // Frontend expects "actualHash"
+            dgResults[dgKey] = dgResult;  // Use key-based assignment
         }
 
         bool dataGroupsValid = (validDgs == totalDgs);
@@ -100,17 +106,26 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         // Save to database
         std::string verificationId = paRepo_->insert(verification);
 
-        // Build response
+        // Build response data
+        Json::Value data;
+        data["verificationId"] = verificationId;
+        data["status"] = verification.verificationStatus;
+        data["certificateChainValidation"] = certValidation.toJson();
+        data["sodSignatureValidation"] = Json::Value();
+        data["sodSignatureValidation"]["valid"] = sodSignatureValid;
+        data["sodSignatureValidation"]["algorithm"] = sod.signatureAlgorithm;
+        data["sodSignatureValidation"]["hashAlgorithm"] = sod.hashAlgorithm;
+        data["sodSignatureValidation"]["signatureAlgorithm"] = sod.signatureAlgorithm;
+        // Fix: dataGroups should be an object with results array and metadata
+        data["dataGroupValidation"] = Json::Value();
+        data["dataGroupValidation"]["details"] = dgResults;
+        data["dataGroupValidation"]["totalGroups"] = totalDgs;
+        data["dataGroupValidation"]["validGroups"] = validDgs;
+        data["dataGroupValidation"]["invalidGroups"] = totalDgs - validDgs;
+
+        // Wrap in ApiResponse format
         response["success"] = true;
-        response["verificationId"] = verificationId;
-        response["status"] = verification.verificationStatus;
-        response["certificateChain"] = certValidation.toJson();
-        response["sodSignature"] = Json::Value();
-        response["sodSignature"]["valid"] = sodSignatureValid;
-        response["sodSignature"]["algorithm"] = sod.signatureAlgorithm;
-        response["dataGroups"] = dgResults;
-        response["dataGroups"]["total"] = totalDgs;
-        response["dataGroups"]["valid"] = validDgs;
+        response["data"] = data;
 
         spdlog::info("PA verification completed: {}", verification.verificationStatus);
 
