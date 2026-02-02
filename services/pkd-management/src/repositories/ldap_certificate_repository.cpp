@@ -9,6 +9,8 @@
 #include "ldap_certificate_repository.h"
 #include "../common/ldap_utils.h"
 #include "../common/x509_metadata_extractor.h"
+#include "icao/x509/dn_parser.h"      // Shared DN Parser
+#include "icao/x509/dn_components.h"  // Shared DN Components
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/sha.h>
@@ -617,6 +619,10 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
     std::optional<std::string> ocspResponderUrl;
     std::optional<bool> isCertSelfSigned;
 
+    // DN Components (shared library)
+    std::optional<icao::x509::DnComponents> subjectDnComponents;
+    std::optional<icao::x509::DnComponents> issuerDnComponents;
+
     parseX509Certificate(
         certBinary,
         subjectDn,
@@ -641,7 +647,10 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         authorityKeyIdentifier,
         crlDistributionPoints,
         ocspResponderUrl,
-        isCertSelfSigned
+        isCertSelfSigned,
+        // DN Components
+        subjectDnComponents,
+        issuerDnComponents
     );
 
     // Read DSC_NC specific attributes (optional)
@@ -689,6 +698,9 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         pkdConformanceCode,
         pkdConformanceText,
         pkdVersion,
+        // DN Components (shared library)
+        subjectDnComponents,
+        issuerDnComponents,
         // X.509 Metadata
         version,
         signatureAlgorithm,
@@ -787,7 +799,10 @@ void LdapCertificateRepository::parseX509Certificate(
     std::optional<std::string>& authorityKeyIdentifier,
     std::vector<std::string>& crlDistributionPoints,
     std::optional<std::string>& ocspResponderUrl,
-    std::optional<bool>& isCertSelfSigned
+    std::optional<bool>& isCertSelfSigned,
+    // DN Components (shared library)
+    std::optional<icao::x509::DnComponents>& subjectDnComponents,
+    std::optional<icao::x509::DnComponents>& issuerDnComponents
 ) {
     // Parse DER-encoded certificate using OpenSSL
     const unsigned char* data = derData.data();
@@ -808,6 +823,35 @@ void LdapCertificateRepository::parseX509Certificate(
     if (issuerStr) {
         issuerDn = issuerStr;
         OPENSSL_free(issuerStr);
+    }
+
+    // Parse DNs into DnComponents using shared library
+    try {
+        // Extract DN components directly from X509 certificate
+        X509_NAME* subject = X509_get_subject_name(cert);
+        if (subject) {
+            subjectDnComponents = icao::x509::extractDnComponents(subject);
+            if (subjectDnComponents->country.has_value() || subjectDnComponents->organization.has_value()) {
+                spdlog::debug("[LdapCertificateRepository] Parsed Subject DN components: C={}, O={}, CN={}",
+                             subjectDnComponents->country.value_or(""),
+                             subjectDnComponents->organization.value_or(""),
+                             subjectDnComponents->commonName.value_or(""));
+            }
+        }
+
+        X509_NAME* issuer = X509_get_issuer_name(cert);
+        if (issuer) {
+            issuerDnComponents = icao::x509::extractDnComponents(issuer);
+            if (issuerDnComponents->country.has_value() || issuerDnComponents->organization.has_value()) {
+                spdlog::debug("[LdapCertificateRepository] Parsed Issuer DN components: C={}, O={}, CN={}",
+                             issuerDnComponents->country.value_or(""),
+                             issuerDnComponents->organization.value_or(""),
+                             issuerDnComponents->commonName.value_or(""));
+            }
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("[LdapCertificateRepository] Failed to parse DN components: {}", e.what());
+        // Continue without DN components - fields will remain as nullopt
     }
 
     // Extract CN from Subject (if not already set)

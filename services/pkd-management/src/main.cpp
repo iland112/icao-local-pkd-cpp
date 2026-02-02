@@ -67,6 +67,10 @@
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
+// Shared library (Phase 5)
+#include "icao/x509/dn_parser.h"      // Shared DN Parser
+#include "icao/x509/dn_components.h"  // Shared DN Components
+
 // Clean Architecture layers
 #include "domain/models/certificate.h"
 #include "repositories/ldap_certificate_repository.h"
@@ -2163,6 +2167,8 @@ std::string escapeLdapDnValue(const std::string& value) {
  * Standard LDAP DN attributes: CN, O, OU, C, L, ST, DC
  * Non-standard attributes: emailAddress, street, telephoneNumber, serialNumber, postalCode, etc.
  *
+ * Uses shared library DnParser for robust DN parsing.
+ *
  * @param subjectDn Full Subject DN (e.g., "CN=CSCA,O=Org,emailAddress=test@example.com")
  * @return Pair of (standardDn, nonStandardAttrs)
  */
@@ -2175,62 +2181,56 @@ std::pair<std::string, std::string> extractStandardAttributes(const std::string&
     std::string standardDn;
     std::string nonStandardAttrs;
 
-    // Parse DN by splitting on comma (handle escaped commas)
-    std::vector<std::string> rdns;
-    std::string current;
-    bool escaped = false;
+    try {
+        // Use shared library DN parsing for robust handling
+        X509_NAME* x509Name = icao::x509::parseDnString(subjectDn);
+        if (x509Name) {
+            auto components = icao::x509::extractDnComponents(x509Name);
+            X509_NAME_free(x509Name);  // Free X509_NAME
 
-    for (size_t i = 0; i < subjectDn.size(); ++i) {
-        char c = subjectDn[i];
+            // Build standardDn from known standard fields
+            std::vector<std::string> standardRdns;
 
-        if (escaped) {
-            current += c;
-            escaped = false;
-        } else if (c == '\\') {
-            current += c;
-            escaped = true;
-        } else if (c == ',') {
-            if (!current.empty()) {
-                rdns.push_back(current);
-                current.clear();
+            if (components.commonName.has_value() && !components.commonName->empty()) {
+                standardRdns.push_back("CN=" + *components.commonName);
             }
+            if (components.organization.has_value() && !components.organization->empty()) {
+                standardRdns.push_back("O=" + *components.organization);
+            }
+            if (components.organizationalUnit.has_value() && !components.organizationalUnit->empty()) {
+                standardRdns.push_back("OU=" + *components.organizationalUnit);
+            }
+            if (components.country.has_value() && !components.country->empty()) {
+                standardRdns.push_back("C=" + *components.country);
+            }
+            if (components.locality.has_value() && !components.locality->empty()) {
+                standardRdns.push_back("L=" + *components.locality);
+            }
+            if (components.stateOrProvince.has_value() && !components.stateOrProvince->empty()) {
+                standardRdns.push_back("ST=" + *components.stateOrProvince);
+            }
+
+            // Build standardDn string
+            for (size_t i = 0; i < standardRdns.size(); ++i) {
+                if (i > 0) standardDn += ",";
+                standardDn += standardRdns[i];
+            }
+
+            // If no standard attributes found, use original DN to avoid empty DN
+            if (standardDn.empty()) {
+                standardDn = subjectDn;
+            }
+
+            // Note: Non-standard attributes are not extracted in this version
+            // since DnComponents only provides standard fields
         } else {
-            current += c;
+            // Fallback if parsing fails
+            standardDn = subjectDn;
         }
-    }
-    if (!current.empty()) {
-        rdns.push_back(current);
-    }
 
-    // Classify each RDN as standard or non-standard
-    for (const auto& rdn : rdns) {
-        // Extract attribute type (before '=')
-        size_t eqPos = rdn.find('=');
-        if (eqPos == std::string::npos) continue;
-
-        std::string attrType = rdn.substr(0, eqPos);
-
-        // Trim whitespace
-        attrType.erase(0, attrType.find_first_not_of(" \t"));
-        attrType.erase(attrType.find_last_not_of(" \t") + 1);
-
-        // Convert to uppercase for comparison
-        std::string attrTypeUpper = attrType;
-        std::transform(attrTypeUpper.begin(), attrTypeUpper.end(), attrTypeUpper.begin(), ::toupper);
-
-        // Check if standard attribute
-        if (standardAttrs.find(attrTypeUpper) != standardAttrs.end()) {
-            if (!standardDn.empty()) standardDn += ",";
-            standardDn += rdn;
-        } else {
-            // Non-standard attribute
-            if (!nonStandardAttrs.empty()) nonStandardAttrs += ", ";
-            nonStandardAttrs += rdn;
-        }
-    }
-
-    // If no standard attributes found, use original DN to avoid empty DN
-    if (standardDn.empty()) {
+    } catch (const std::exception& e) {
+        // Fallback: if shared parser fails, use original DN
+        spdlog::warn("Failed to parse DN with shared library, using original: {}", e.what());
         standardDn = subjectDn;
     }
 

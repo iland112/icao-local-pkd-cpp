@@ -24,6 +24,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Dependencies
 # =============================================================================
 
+# ICAO Common Library (Shared DN parsing, X.509 utilities)
+set(ICAO_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common-lib)
+add_subdirectory(${ICAO_COMMON_DIR} ${CMAKE_BINARY_DIR}/common-lib)
+
 # Drogon Web Framework
 find_package(Drogon CONFIG REQUIRED)
 
@@ -108,10 +112,12 @@ add_executable(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
+    ${ICAO_COMMON_DIR}/include
     ${PostgreSQL_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    icao-common
     Drogon::Drogon
     OpenSSL::SSL
     OpenSSL::Crypto

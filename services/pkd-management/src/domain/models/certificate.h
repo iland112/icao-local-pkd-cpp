@@ -11,6 +11,7 @@
 #include <chrono>
 #include <optional>
 #include <vector>
+#include "icao/x509/dn_components.h"  // Shared DN Components
 
 namespace domain {
 namespace models {
@@ -62,6 +63,9 @@ public:
         std::optional<std::string> pkdConformanceCode = std::nullopt,
         std::optional<std::string> pkdConformanceText = std::nullopt,
         std::optional<std::string> pkdVersion = std::nullopt,
+        // DN Components (optional, for internal use)
+        std::optional<icao::x509::DnComponents> subjectDnComponents = std::nullopt,
+        std::optional<icao::x509::DnComponents> issuerDnComponents = std::nullopt,
         // X.509 Metadata Fields (v2.3.0)
         int version = 2,
         std::optional<std::string> signatureAlgorithm = std::nullopt,
@@ -85,6 +89,8 @@ public:
         certType_(certType),
         subjectDn_(std::move(subjectDn)),
         issuerDn_(std::move(issuerDn)),
+        subjectDnComponents_(std::move(subjectDnComponents)),
+        issuerDnComponents_(std::move(issuerDnComponents)),
         fingerprint_(std::move(fingerprint)),
         validFrom_(validFrom),
         validTo_(validTo),
@@ -116,6 +122,8 @@ public:
     CertificateType getCertType() const { return certType_; }
     const std::string& getSubjectDn() const { return subjectDn_; }
     const std::string& getIssuerDn() const { return issuerDn_; }
+    const std::optional<icao::x509::DnComponents>& getSubjectDnComponents() const { return subjectDnComponents_; }
+    const std::optional<icao::x509::DnComponents>& getIssuerDnComponents() const { return issuerDnComponents_; }
     const std::string& getFingerprint() const { return fingerprint_; }
     std::chrono::system_clock::time_point getValidFrom() const { return validFrom_; }
     std::chrono::system_clock::time_point getValidTo() const { return validTo_; }
@@ -184,8 +192,10 @@ private:
     std::string sn_;              // Serial Number
     std::string country_;         // ISO 3166-1 alpha-2 code
     CertificateType certType_;    // Certificate type
-    std::string subjectDn_;       // X.509 Subject DN
-    std::string issuerDn_;        // X.509 Issuer DN
+    std::string subjectDn_;       // X.509 Subject DN (original format for API)
+    std::string issuerDn_;        // X.509 Issuer DN (original format for API)
+    std::optional<icao::x509::DnComponents> subjectDnComponents_;  // Parsed DN (for internal use)
+    std::optional<icao::x509::DnComponents> issuerDnComponents_;   // Parsed DN (for internal use)
     std::string fingerprint_;     // SHA-256 fingerprint
     std::chrono::system_clock::time_point validFrom_;  // Not Before
     std::chrono::system_clock::time_point validTo_;    // Not After

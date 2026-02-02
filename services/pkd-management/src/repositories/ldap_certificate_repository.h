@@ -213,7 +213,10 @@ private:
         std::optional<std::string>& authorityKeyIdentifier,
         std::vector<std::string>& crlDistributionPoints,
         std::optional<std::string>& ocspResponderUrl,
-        std::optional<bool>& isCertSelfSigned
+        std::optional<bool>& isCertSelfSigned,
+        // DN Components (shared library)
+        std::optional<icao::x509::DnComponents>& subjectDnComponents,
+        std::optional<icao::x509::DnComponents>& issuerDnComponents
     );
 
     /**

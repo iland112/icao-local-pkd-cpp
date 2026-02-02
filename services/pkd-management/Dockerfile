@@ -80,6 +80,9 @@ RUN echo "=== CLEANING ALL POTENTIAL CACHED ARTIFACTS ===" && \
 # Copy build configuration (rarely changes)
 COPY services/pkd-management/CMakeLists.txt ./
 
+# Copy shared library (Phase 5: common-lib)
+COPY services/common-lib/ ../common-lib/
+
 # Copy shared code (changes occasionally)
 COPY shared/ ./shared/
 
@@ -163,6 +166,10 @@ COPY --from=builder /app/build_fresh/bin/pkd-management-${CACHE_BUST} /app/pkd-m
 
 # Copy test binary for Sprint 1 unit tests
 COPY --from=builder /app/build_fresh/bin/test_ldap_dn /app/test_ldap_dn
+
+# Phase 5: Copy shared library (common-lib)
+COPY --from=builder /app/build_fresh/lib/libicao-common.so* /usr/local/lib/
+RUN ldconfig
 
 # Verify binary version immediately after COPY
 RUN apt-get update && apt-get install -y binutils && \
