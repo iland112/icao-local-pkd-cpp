@@ -46,6 +46,14 @@
 #include "relay/sync/common/config.h"
 #include "relay/sync/reconciliation_engine.h"
 
+// Repository Pattern
+#include "repositories/sync_status_repository.h"
+#include "repositories/certificate_repository.h"
+#include "repositories/crl_repository.h"
+#include "repositories/reconciliation_repository.h"
+#include "services/sync_service.h"
+#include "services/reconciliation_service.h"
+
 using namespace drogon;
 using namespace icao::relay;
 
@@ -53,6 +61,17 @@ using namespace icao::relay;
 // Global Configuration Instance
 // =============================================================================
 Config g_config;
+
+// =============================================================================
+// Repository Pattern - Global Service Instances
+// =============================================================================
+std::shared_ptr<repositories::SyncStatusRepository> g_syncStatusRepo;
+std::shared_ptr<repositories::CertificateRepository> g_certificateRepo;
+std::shared_ptr<repositories::CrlRepository> g_crlRepo;
+std::shared_ptr<repositories::ReconciliationRepository> g_reconciliationRepo;
+
+std::shared_ptr<services::SyncService> g_syncService;
+std::shared_ptr<services::ReconciliationService> g_reconciliationService;
 
 // =============================================================================
 // PostgreSQL Connection
@@ -1763,6 +1782,65 @@ void setupLogging() {
 }
 
 // =============================================================================
+// Repository Pattern - Service Initialization
+// =============================================================================
+void initializeServices() {
+    spdlog::info("Initializing Repository Pattern services...");
+
+    try {
+        // Build database connection string
+        std::string conninfo = "host=" + g_config.dbHost +
+                              " port=" + std::to_string(g_config.dbPort) +
+                              " dbname=" + g_config.dbName +
+                              " user=" + g_config.dbUser +
+                              " password=" + g_config.dbPassword;
+
+        // Initialize Repositories
+        spdlog::info("Creating repository instances...");
+        g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(conninfo);
+        g_certificateRepo = std::make_shared<repositories::CertificateRepository>(conninfo);
+        g_crlRepo = std::make_shared<repositories::CrlRepository>(conninfo);
+        g_reconciliationRepo = std::make_shared<repositories::ReconciliationRepository>(conninfo);
+
+        // Initialize Services with dependency injection
+        spdlog::info("Creating service instances with repository dependencies...");
+        g_syncService = std::make_shared<services::SyncService>(
+            g_syncStatusRepo,
+            g_certificateRepo,
+            g_crlRepo
+        );
+
+        g_reconciliationService = std::make_shared<services::ReconciliationService>(
+            g_reconciliationRepo,
+            g_certificateRepo,
+            g_crlRepo
+        );
+
+        spdlog::info("✅ Repository Pattern services initialized successfully");
+
+    } catch (const std::exception& e) {
+        spdlog::critical("Failed to initialize services: {}", e.what());
+        throw;  // Re-throw to stop application startup
+    }
+}
+
+void shutdownServices() {
+    spdlog::info("Shutting down Repository Pattern services...");
+
+    // Services will be automatically cleaned up by shared_ptr destructors
+    g_reconciliationService.reset();
+    g_syncService.reset();
+
+    // Repositories will be automatically cleaned up by shared_ptr destructors
+    g_reconciliationRepo.reset();
+    g_crlRepo.reset();
+    g_certificateRepo.reset();
+    g_syncStatusRepo.reset();
+
+    spdlog::info("✅ Repository Pattern services shut down successfully");
+}
+
+// =============================================================================
 // Main
 // =============================================================================
 int main() {
@@ -1796,6 +1874,14 @@ int main() {
                  formatScheduledTime(g_config.dailySyncHour, g_config.dailySyncMinute));
     spdlog::info("Certificate re-validation on sync: {}", g_config.revalidateCertsOnSync ? "enabled" : "disabled");
     spdlog::info("Auto reconcile: {}", g_config.autoReconcile ? "enabled" : "disabled");
+
+    // Initialize Repository Pattern services
+    try {
+        initializeServices();
+    } catch (const std::exception& e) {
+        spdlog::critical("Service initialization failed: {}", e.what());
+        return 1;
+    }
 
     // Register HTTP handlers
     app().registerHandler("/api/sync/health",
@@ -1998,6 +2084,7 @@ paths:
 
     // Cleanup
     g_scheduler.stop();
+    shutdownServices();
 
     return 0;
 }
