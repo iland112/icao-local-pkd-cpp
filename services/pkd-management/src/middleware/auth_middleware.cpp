@@ -19,6 +19,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     // Dashboard & Statistics (Read-only public information)
     // ========================================================================
     "^/api/upload/countries$",     // Dashboard country statistics (homepage)
+    "^/api/upload/countries/detailed.*",  // Detailed country statistics (homepage, with query params)
     "^/api/upload/history.*",      // Upload history (development access)
     "^/api/upload/statistics$",    // Upload statistics
     "^/api/upload/changes.*",      // Recent upload changes
