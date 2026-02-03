@@ -3,6 +3,17 @@ name: Build ARM64 Docker Images
 
 on:
   workflow_dispatch:  # Manual trigger
+    inputs:
+      no_cache:
+        description: 'Force rebuild without cache'
+        required: false
+        type: boolean
+        default: false
+      force_build_all:
+        description: 'Force build all services (ignore change detection)'
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - main
@@ -58,7 +69,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-pkd-management:
     needs: detect-changes
-    if: needs.detect-changes.outputs.pkd-management == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.pkd-management == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -85,6 +96,7 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-management:arm64
           outputs: type=oci,dest=pkd-management-arm64.tar
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
             CACHE_BUST=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
@@ -112,7 +124,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-pa-service:
     needs: detect-changes
-    if: needs.detect-changes.outputs.pa-service == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.pa-service == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -136,6 +148,7 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-pa:arm64
           outputs: type=oci,dest=pkd-pa-arm64.tar
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
             CACHE_BUST=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
@@ -161,7 +174,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-pkd-relay:
     needs: detect-changes
-    if: needs.detect-changes.outputs.pkd-relay == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.pkd-relay == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -185,6 +198,7 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-relay:arm64
           outputs: type=oci,dest=pkd-relay-arm64.tar
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
             CACHE_BUST=${{ github.sha }}
             BUILDKIT_INLINE_CACHE=1
@@ -210,7 +224,7 @@ jobs:
   # ---------------------------------------------------------------------------
   build-frontend:
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true' || github.event_name == 'workflow_dispatch'
+    if: needs.detect-changes.outputs.frontend == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -234,6 +248,7 @@ jobs:
           platforms: linux/arm64
           tags: icao-local-pkd-frontend:arm64
           outputs: type=oci,dest=pkd-frontend-arm64.tar
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
