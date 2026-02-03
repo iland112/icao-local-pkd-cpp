@@ -1050,66 +1050,89 @@ void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePt
 
 // Get latest sync status
 void handleSyncStatus(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
-    Json::Value result = getLatestSyncStatus();
+    // Phase 4: Migrated to use SyncService
+    Json::Value result = g_syncService->getCurrentStatus();
     auto resp = HttpResponse::newHttpJsonResponse(result);
+
+    if (!result.get("success", true).asBool()) {
+        resp->setStatusCode(k500InternalServerError);
+    }
+
     callback(resp);
 }
 
 // Get sync history
 void handleSyncHistory(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    int limit = 20;
+    // Phase 4: Migrated to use SyncService
+    int limit = 50;  // Default from service
+    int offset = 0;
+
     if (auto l = req->getParameter("limit"); !l.empty()) {
         limit = std::stoi(l);
     }
+    if (auto o = req->getParameter("offset"); !o.empty()) {
+        offset = std::stoi(o);
+    }
 
-    Json::Value result = getSyncHistory(limit);
+    Json::Value result = g_syncService->getSyncHistory(limit, offset);
     auto resp = HttpResponse::newHttpJsonResponse(result);
+
+    if (!result.get("success", true).asBool()) {
+        resp->setStatusCode(k500InternalServerError);
+    }
+
     callback(resp);
 }
 
 // Trigger manual sync check
 void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
-        SyncResult result = performSyncCheck();
+        // Phase 4: Migrated to use SyncService
+        spdlog::info("Starting sync check...");
 
-        Json::Value response(Json::objectValue);
-        response["success"] = true;
-        response["syncStatusId"] = result.syncStatusId;
-        response["status"] = result.status;
+        // Get DB stats (still using existing function)
+        DbStats dbStats = getDbStats();
+        spdlog::info("DB stats - CSCA: {}, MLSC: {}, DSC: {}, DSC_NC: {}, CRL: {}",
+                     dbStats.cscaCount, dbStats.mlscCount, dbStats.dscCount,
+                     dbStats.dscNcCount, dbStats.crlCount);
 
-        Json::Value dbStats(Json::objectValue);
-        dbStats["csca"] = result.dbStats.cscaCount;
-        dbStats["mlsc"] = result.dbStats.mlscCount;
-        dbStats["dsc"] = result.dbStats.dscCount;
-        dbStats["dscNc"] = result.dbStats.dscNcCount;
-        dbStats["crl"] = result.dbStats.crlCount;
-        response["dbStats"] = dbStats;
+        // Get LDAP stats (still using existing function)
+        LdapStats ldapStats = getLdapStats();
+        spdlog::info("LDAP stats - CSCA: {}, MLSC: {}, DSC: {}, DSC_NC: {}, CRL: {}",
+                     ldapStats.cscaCount, ldapStats.mlscCount, ldapStats.dscCount,
+                     ldapStats.dscNcCount, ldapStats.crlCount);
 
-        Json::Value ldapStats(Json::objectValue);
-        ldapStats["csca"] = result.ldapStats.cscaCount;
-        ldapStats["mlsc"] = result.ldapStats.mlscCount;
-        ldapStats["dsc"] = result.ldapStats.dscCount;
-        ldapStats["dscNc"] = result.ldapStats.dscNcCount;
-        ldapStats["crl"] = result.ldapStats.crlCount;
-        response["ldapStats"] = ldapStats;
+        // Convert to JSON for service
+        Json::Value dbCounts;
+        dbCounts["csca"] = dbStats.cscaCount;
+        dbCounts["mlsc"] = dbStats.mlscCount;
+        dbCounts["dsc"] = dbStats.dscCount;
+        dbCounts["dsc_nc"] = dbStats.dscNcCount;
+        dbCounts["crl"] = dbStats.crlCount;
+        dbCounts["stored_in_ldap"] = dbStats.storedInLdapCount;
 
-        Json::Value discrepancy(Json::objectValue);
-        discrepancy["csca"] = result.cscaDiscrepancy;
-        discrepancy["mlsc"] = result.mlscDiscrepancy;
-        discrepancy["dsc"] = result.dscDiscrepancy;
-        discrepancy["dscNc"] = result.dscNcDiscrepancy;
-        discrepancy["crl"] = result.crlDiscrepancy;
-        discrepancy["total"] = result.totalDiscrepancy;
-        response["discrepancy"] = discrepancy;
+        Json::Value ldapCounts;
+        ldapCounts["csca"] = ldapStats.cscaCount;
+        ldapCounts["mlsc"] = ldapStats.mlscCount;
+        ldapCounts["dsc"] = ldapStats.dscCount;
+        ldapCounts["dsc_nc"] = ldapStats.dscNcCount;
+        ldapCounts["crl"] = ldapStats.crlCount;
 
-        response["checkDurationMs"] = result.checkDurationMs;
+        // Call service to perform check and save
+        Json::Value result = g_syncService->performSyncCheck(dbCounts, ldapCounts);
 
-        auto resp = HttpResponse::newHttpJsonResponse(response);
+        auto resp = HttpResponse::newHttpJsonResponse(result);
+        if (!result.get("success", true).asBool()) {
+            resp->setStatusCode(k500InternalServerError);
+        }
+
         callback(resp);
     } catch (const std::exception& e) {
-        Json::Value error(Json::objectValue);
+        Json::Value error;
         error["success"] = false;
+        error["message"] = "Sync check failed";
         error["error"] = e.what();
+
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
         callback(resp);
@@ -1250,22 +1273,10 @@ void handleReconcile(const HttpRequestPtr& req, std::function<void(const HttpRes
 // Get reconciliation history
 void handleReconciliationHistory(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
-        PgConnection pgConn;
-        if (!pgConn.connect()) {
-            Json::Value error(Json::objectValue);
-            error["success"] = false;
-            error["error"] = "Database connection failed";
-            auto resp = HttpResponse::newHttpJsonResponse(error);
-            resp->setStatusCode(k500InternalServerError);
-            callback(resp);
-            return;
-        }
-
+        // Phase 4: Migrated to use ReconciliationService
         // Parse query parameters
         int limit = 50;
         int offset = 0;
-        std::string status;
-        std::string triggeredBy;
 
         if (auto param = req->getParameter("limit"); !param.empty()) {
             limit = std::stoi(param);
@@ -1274,118 +1285,18 @@ void handleReconciliationHistory(const HttpRequestPtr& req, std::function<void(c
         if (auto param = req->getParameter("offset"); !param.empty()) {
             offset = std::stoi(param);
         }
-        if (auto param = req->getParameter("status"); !param.empty()) {
-            status = param;
-        }
-        if (auto param = req->getParameter("triggeredBy"); !param.empty()) {
-            triggeredBy = param;
-        }
 
-        // Build query with filters
-        std::string query =
-            "SELECT id, started_at, completed_at, triggered_by, dry_run, status, "
-            "total_processed, success_count, failed_count, "
-            "csca_added, csca_deleted, dsc_added, dsc_deleted, "
-            "dsc_nc_added, dsc_nc_deleted, crl_added, crl_deleted, "
-            "duration_ms, error_message, sync_status_id "
-            "FROM reconciliation_summary WHERE 1=1 ";
+        // Note: status and triggeredBy filters not yet implemented in Service
+        // TODO: Add filter support to ReconciliationService if needed
 
-        std::vector<std::string> conditions;
-        std::vector<const char*> paramValues;
-        int paramCount = 0;
+        // Call service to get reconciliation history
+        Json::Value result = g_reconciliationService->getReconciliationHistory(limit, offset);
 
-        if (!status.empty()) {
-            conditions.push_back("status = $" + std::to_string(++paramCount));
-            paramValues.push_back(status.c_str());
-        }
-        if (!triggeredBy.empty()) {
-            conditions.push_back("triggered_by = $" + std::to_string(++paramCount));
-            paramValues.push_back(triggeredBy.c_str());
-        }
-
-        for (const auto& cond : conditions) {
-            query += "AND " + cond + " ";
-        }
-
-        paramCount++;
-        query += "ORDER BY started_at DESC LIMIT $" + std::to_string(paramCount);
-        paramCount++;
-        query += " OFFSET $" + std::to_string(paramCount);
-
-        std::string limitStr = std::to_string(limit);
-        std::string offsetStr = std::to_string(offset);
-        paramValues.push_back(limitStr.c_str());
-        paramValues.push_back(offsetStr.c_str());
-
-        PGresult* res = PQexecParams(pgConn.get(), query.c_str(), paramCount,
-                                    nullptr, paramValues.data(), nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            spdlog::error("Query reconciliation_summary failed: {}", PQerrorMessage(pgConn.get()));
-            PQclear(res);
-            Json::Value error(Json::objectValue);
-            error["success"] = false;
-            error["error"] = "Query failed";
-            auto resp = HttpResponse::newHttpJsonResponse(error);
+        auto resp = HttpResponse::newHttpJsonResponse(result);
+        if (!result.get("success", true).asBool()) {
             resp->setStatusCode(k500InternalServerError);
-            callback(resp);
-            return;
         }
 
-        Json::Value response(Json::objectValue);
-        Json::Value history(Json::arrayValue);
-
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
-            Json::Value item(Json::objectValue);
-            item["id"] = std::atoi(PQgetvalue(res, i, 0));
-            item["startedAt"] = PQgetvalue(res, i, 1);
-            item["completedAt"] = PQgetisnull(res, i, 2) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 2));
-            item["triggeredBy"] = PQgetvalue(res, i, 3);
-            item["dryRun"] = (std::string(PQgetvalue(res, i, 4)) == "t");
-            item["status"] = PQgetvalue(res, i, 5);
-            item["totalProcessed"] = std::atoi(PQgetvalue(res, i, 6));
-            item["successCount"] = std::atoi(PQgetvalue(res, i, 7));
-            item["failedCount"] = std::atoi(PQgetvalue(res, i, 8));
-            item["cscaAdded"] = std::atoi(PQgetvalue(res, i, 9));
-            item["cscaDeleted"] = std::atoi(PQgetvalue(res, i, 10));
-            item["dscAdded"] = std::atoi(PQgetvalue(res, i, 11));
-            item["dscDeleted"] = std::atoi(PQgetvalue(res, i, 12));
-            item["dscNcAdded"] = std::atoi(PQgetvalue(res, i, 13));
-            item["dscNcDeleted"] = std::atoi(PQgetvalue(res, i, 14));
-            item["crlAdded"] = std::atoi(PQgetvalue(res, i, 15));
-            item["crlDeleted"] = std::atoi(PQgetvalue(res, i, 16));
-            item["durationMs"] = std::atoi(PQgetvalue(res, i, 17));
-            item["errorMessage"] = PQgetisnull(res, i, 18) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 18));
-            item["syncStatusId"] = PQgetisnull(res, i, 19) ? Json::Value::null : Json::Value(std::atoi(PQgetvalue(res, i, 19)));
-
-            history.append(item);
-        }
-
-        PQclear(res);
-
-        // Get total count for pagination
-        std::string countQuery = "SELECT COUNT(*) FROM reconciliation_summary WHERE 1=1 ";
-        for (const auto& cond : conditions) {
-            countQuery += "AND " + cond + " ";
-        }
-
-        res = PQexecParams(pgConn.get(), countQuery.c_str(), paramCount - 2,
-                          nullptr, paramValues.data(), nullptr, nullptr, 0);
-
-        int totalCount = 0;
-        if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-            totalCount = std::atoi(PQgetvalue(res, 0, 0));
-        }
-        PQclear(res);
-
-        response["success"] = true;
-        response["history"] = history;
-        response["total"] = totalCount;
-        response["limit"] = limit;
-        response["offset"] = offset;
-
-        auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);
 
     } catch (const std::exception& e) {
@@ -1401,121 +1312,37 @@ void handleReconciliationHistory(const HttpRequestPtr& req, std::function<void(c
 // Get reconciliation details by ID
 void handleReconciliationDetails(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
-        auto reconciliationId = req->getParameter("id");
-        if (reconciliationId.empty()) {
-            Json::Value error(Json::objectValue);
+        // Phase 4: Migrated to use ReconciliationService
+        auto reconciliationIdStr = req->getParameter("id");
+        if (reconciliationIdStr.empty()) {
+            Json::Value error;
             error["success"] = false;
-            error["error"] = "Missing reconciliation ID";
+            error["message"] = "Missing reconciliation ID";
+
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k400BadRequest);
             callback(resp);
             return;
         }
 
-        PgConnection pgConn;
-        if (!pgConn.connect()) {
-            Json::Value error(Json::objectValue);
-            error["success"] = false;
-            error["error"] = "Database connection failed";
-            auto resp = HttpResponse::newHttpJsonResponse(error);
+        int reconciliationId = std::stoi(reconciliationIdStr);
+
+        // Call service to get details
+        Json::Value result = g_reconciliationService->getReconciliationDetails(reconciliationId);
+
+        auto resp = HttpResponse::newHttpJsonResponse(result);
+        if (!result.get("success", true).asBool()) {
             resp->setStatusCode(k500InternalServerError);
-            callback(resp);
-            return;
         }
 
-        // Get summary
-        const char* summaryQuery =
-            "SELECT id, started_at, completed_at, triggered_by, dry_run, status, "
-            "total_processed, success_count, failed_count, "
-            "csca_added, csca_deleted, dsc_added, dsc_deleted, "
-            "dsc_nc_added, dsc_nc_deleted, crl_added, crl_deleted, "
-            "duration_ms, error_message, sync_status_id "
-            "FROM reconciliation_summary WHERE id = $1";
-
-        const char* paramValues[1] = { reconciliationId.c_str() };
-        PGresult* res = PQexecParams(pgConn.get(), summaryQuery, 1, nullptr,
-                                    paramValues, nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-            PQclear(res);
-            Json::Value error(Json::objectValue);
-            error["success"] = false;
-            error["error"] = "Reconciliation not found";
-            auto resp = HttpResponse::newHttpJsonResponse(error);
-            resp->setStatusCode(k404NotFound);
-            callback(resp);
-            return;
-        }
-
-        Json::Value summary(Json::objectValue);
-        summary["id"] = std::atoi(PQgetvalue(res, 0, 0));
-        summary["startedAt"] = PQgetvalue(res, 0, 1);
-        summary["completedAt"] = PQgetisnull(res, 0, 2) ? Json::Value::null : Json::Value(PQgetvalue(res, 0, 2));
-        summary["triggeredBy"] = PQgetvalue(res, 0, 3);
-        summary["dryRun"] = (std::string(PQgetvalue(res, 0, 4)) == "t");
-        summary["status"] = PQgetvalue(res, 0, 5);
-        summary["totalProcessed"] = std::atoi(PQgetvalue(res, 0, 6));
-        summary["successCount"] = std::atoi(PQgetvalue(res, 0, 7));
-        summary["failedCount"] = std::atoi(PQgetvalue(res, 0, 8));
-        summary["cscaAdded"] = std::atoi(PQgetvalue(res, 0, 9));
-        summary["cscaDeleted"] = std::atoi(PQgetvalue(res, 0, 10));
-        summary["dscAdded"] = std::atoi(PQgetvalue(res, 0, 11));
-        summary["dscDeleted"] = std::atoi(PQgetvalue(res, 0, 12));
-        summary["dscNcAdded"] = std::atoi(PQgetvalue(res, 0, 13));
-        summary["dscNcDeleted"] = std::atoi(PQgetvalue(res, 0, 14));
-        summary["crlAdded"] = std::atoi(PQgetvalue(res, 0, 15));
-        summary["crlDeleted"] = std::atoi(PQgetvalue(res, 0, 16));
-        summary["durationMs"] = std::atoi(PQgetvalue(res, 0, 17));
-        summary["errorMessage"] = PQgetisnull(res, 0, 18) ? Json::Value::null : Json::Value(PQgetvalue(res, 0, 18));
-        summary["syncStatusId"] = PQgetisnull(res, 0, 19) ? Json::Value::null : Json::Value(std::atoi(PQgetvalue(res, 0, 19)));
-
-        PQclear(res);
-
-        // Get detailed logs
-        const char* logsQuery =
-            "SELECT id, timestamp, operation, cert_type, cert_id, "
-            "country_code, subject, issuer, ldap_dn, status, error_message, duration_ms "
-            "FROM reconciliation_log WHERE reconciliation_id = $1 "
-            "ORDER BY timestamp";
-
-        res = PQexecParams(pgConn.get(), logsQuery, 1, nullptr,
-                          paramValues, nullptr, nullptr, 0);
-
-        Json::Value logs(Json::arrayValue);
-        if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-            int rows = PQntuples(res);
-            for (int i = 0; i < rows; i++) {
-                Json::Value log(Json::objectValue);
-                log["id"] = std::atoi(PQgetvalue(res, i, 0));
-                log["timestamp"] = PQgetvalue(res, i, 1);
-                log["operation"] = PQgetvalue(res, i, 2);
-                log["certType"] = PQgetvalue(res, i, 3);
-                log["certId"] = PQgetisnull(res, i, 4) ? Json::Value::null : Json::Value(std::atoi(PQgetvalue(res, i, 4)));
-                log["countryCode"] = PQgetisnull(res, i, 5) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 5));
-                log["subject"] = PQgetisnull(res, i, 6) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 6));
-                log["issuer"] = PQgetisnull(res, i, 7) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 7));
-                log["ldapDn"] = PQgetisnull(res, i, 8) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 8));
-                log["status"] = PQgetvalue(res, i, 9);
-                log["errorMessage"] = PQgetisnull(res, i, 10) ? Json::Value::null : Json::Value(PQgetvalue(res, i, 10));
-                log["durationMs"] = std::atoi(PQgetvalue(res, i, 11));
-
-                logs.append(log);
-            }
-        }
-        PQclear(res);
-
-        Json::Value response(Json::objectValue);
-        response["success"] = true;
-        response["summary"] = summary;
-        response["logs"] = logs;
-
-        auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error(Json::objectValue);
+        Json::Value error;
         error["success"] = false;
-        error["error"] = std::string("Failed to get reconciliation details: ") + e.what();
+        error["message"] = "Failed to get reconciliation details";
+        error["error"] = e.what();
+
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
         callback(resp);
