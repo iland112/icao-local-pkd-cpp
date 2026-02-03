@@ -56,6 +56,8 @@ FROM vcpkg-deps AS builder
 
 COPY services/pkd-relay-service/CMakeLists.txt ./
 COPY services/pkd-relay-service/src/ ./src/
+# Copy shared libraries (required by CMakeLists.txt line 35: add_subdirectory)
+COPY shared/ ./shared/
 
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
