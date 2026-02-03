@@ -47,8 +47,11 @@ FROM vcpkg-base AS vcpkg-deps
 WORKDIR /app
 COPY services/pa-service/vcpkg.json ./
 
-# Copy host vcpkg binary cache to avoid re-downloading/building
-COPY .vcpkg-cache/ /root/.cache/vcpkg/archives/
+# Copy host vcpkg binary cache to avoid re-downloading/building (optional - only exists in local builds)
+# Note: .vcpkg-cache is in .gitignore and won't be available in CI/CD builds
+# GitHub Actions uses GitHub cache instead (see build-arm64.yml cache-from/cache-to)
+# Uncomment for local builds if .vcpkg-cache exists:
+# COPY .vcpkg-cache/ /root/.cache/vcpkg/archives/
 
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
