@@ -25,11 +25,25 @@ Json::Value ReconciliationService::startReconciliation(
     Json::Value response;
 
     try {
-        // Create new reconciliation summary
-        domain::ReconciliationSummary summary;
-        summary.setTriggeredBy(triggeredBy);
-        summary.setStatus("IN_PROGRESS");
-        summary.setDryRun(dryRun);
+        // Create new reconciliation summary with required fields
+        auto now = std::chrono::system_clock::now();
+        domain::ReconciliationSummary summary(
+            0,                      // id (will be set by repository)
+            triggeredBy,            // triggered_by
+            now,                    // triggered_at
+            std::nullopt,           // completed_at (not completed yet)
+            "IN_PROGRESS",          // status
+            dryRun,                 // dry_run
+            0, 0,                   // success_count, failed_count
+            0, 0,                   // csca_added, csca_deleted
+            0, 0,                   // dsc_added, dsc_deleted
+            0, 0,                   // dsc_nc_added, dsc_nc_deleted
+            0, 0,                   // crl_added, crl_deleted
+            0,                      // total_added
+            0,                      // duration_ms
+            std::nullopt,           // error_message
+            std::nullopt            // sync_status_id
+        );
 
         bool created = reconciliationRepo_->createSummary(summary);
 

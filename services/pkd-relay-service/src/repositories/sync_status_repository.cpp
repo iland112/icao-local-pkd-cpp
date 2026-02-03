@@ -58,8 +58,8 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
             "$18, $19::jsonb"
             ") RETURNING id, checked_at";
 
-        // Convert boolean to string
-        const char* syncRequired = syncStatus.isSyncRequired() ? "true" : "false";
+        // Calculate sync_required based on total discrepancy
+        const char* syncRequired = (syncStatus.getTotalDiscrepancy() > 0) ? "true" : "false";
 
         // Convert integers to strings
         std::string dbCscaCount = std::to_string(syncStatus.getDbCscaCount());
@@ -85,7 +85,10 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
         // Serialize country_stats to JSON string
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
-        std::string countryStatsJson = Json::writeString(builder, syncStatus.getCountryStats());
+        auto dbCountryStats = syncStatus.getDbCountryStats();
+        std::string countryStatsJson = dbCountryStats.has_value()
+            ? Json::writeString(builder, dbCountryStats.value())
+            : "{}";
 
         const char* paramValues[19] = {
             dbCscaCount.c_str(), dbMlscCount.c_str(), dbDscCount.c_str(),
@@ -141,9 +144,9 @@ std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
         const char* query =
             "SELECT id, checked_at, "
             "db_csca_count, db_mlsc_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
-            "ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, "
+            "ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
             "csca_discrepancy, mlsc_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy, "
-            "sync_required, country_stats "
+            "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms "
             "FROM sync_status "
             "ORDER BY checked_at DESC "
             "LIMIT 1";
@@ -181,9 +184,9 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
         const char* query =
             "SELECT id, checked_at, "
             "db_csca_count, db_mlsc_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
-            "ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, "
+            "ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
             "csca_discrepancy, mlsc_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy, "
-            "sync_required, country_stats "
+            "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms "
             "FROM sync_status "
             "ORDER BY checked_at DESC "
             "LIMIT $1 OFFSET $2";
@@ -263,7 +266,7 @@ domain::SyncStatus SyncStatusRepository::resultToSyncStatus(PGresult* res, int r
         checkedAt = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
-    // Parse integer counts
+    // Parse integer counts (interleaved: db/ldap pairs)
     int dbCscaCount = std::atoi(PQgetvalue(res, row, 2));
     int dbMlscCount = std::atoi(PQgetvalue(res, row, 3));
     int dbDscCount = std::atoi(PQgetvalue(res, row, 4));
@@ -276,35 +279,81 @@ domain::SyncStatus SyncStatusRepository::resultToSyncStatus(PGresult* res, int r
     int ldapDscCount = std::atoi(PQgetvalue(res, row, 10));
     int ldapDscNcCount = std::atoi(PQgetvalue(res, row, 11));
     int ldapCrlCount = std::atoi(PQgetvalue(res, row, 12));
+    int ldapTotalEntries = std::atoi(PQgetvalue(res, row, 13));
 
-    int cscaDiscrepancy = std::atoi(PQgetvalue(res, row, 13));
-    int mlscDiscrepancy = std::atoi(PQgetvalue(res, row, 14));
-    int dscDiscrepancy = std::atoi(PQgetvalue(res, row, 15));
-    int dscNcDiscrepancy = std::atoi(PQgetvalue(res, row, 16));
-    int crlDiscrepancy = std::atoi(PQgetvalue(res, row, 17));
-    int totalDiscrepancy = std::atoi(PQgetvalue(res, row, 18));
+    // Parse discrepancies
+    int cscaDiscrepancy = std::atoi(PQgetvalue(res, row, 14));
+    int mlscDiscrepancy = std::atoi(PQgetvalue(res, row, 15));
+    int dscDiscrepancy = std::atoi(PQgetvalue(res, row, 16));
+    int dscNcDiscrepancy = std::atoi(PQgetvalue(res, row, 17));
+    int crlDiscrepancy = std::atoi(PQgetvalue(res, row, 18));
+    int totalDiscrepancy = std::atoi(PQgetvalue(res, row, 19));
 
-    // Parse boolean
-    bool syncRequired = (strcmp(PQgetvalue(res, row, 19), "t") == 0);
-
-    // Parse JSONB country_stats
-    Json::Value countryStats;
-    const char* countryStatsStr = PQgetvalue(res, row, 20);
-    Json::CharReaderBuilder builder;
-    std::string errors;
-    std::istringstream iss(countryStatsStr);
-    if (!Json::parseFromStream(builder, iss, &countryStats, &errors)) {
-        spdlog::warn("[SyncStatusRepository] Failed to parse country_stats JSON: {}", errors);
-        countryStats = Json::Value(Json::objectValue);
+    // Parse JSONB db_country_stats
+    std::optional<Json::Value> dbCountryStats;
+    const char* dbCountryStatsStr = PQgetvalue(res, row, 20);
+    if (dbCountryStatsStr && strlen(dbCountryStatsStr) > 0) {
+        Json::Value dbStats;
+        Json::CharReaderBuilder builder;
+        std::string errors;
+        std::istringstream iss(dbCountryStatsStr);
+        if (Json::parseFromStream(builder, iss, &dbStats, &errors)) {
+            dbCountryStats = dbStats;
+        } else {
+            spdlog::warn("[SyncStatusRepository] Failed to parse db_country_stats JSON: {}", errors);
+        }
     }
 
-    // Construct and return domain object
+    // Parse JSONB ldap_country_stats
+    std::optional<Json::Value> ldapCountryStats;
+    const char* ldapCountryStatsStr = PQgetvalue(res, row, 21);
+    if (ldapCountryStatsStr && strlen(ldapCountryStatsStr) > 0) {
+        Json::Value ldapStats;
+        Json::CharReaderBuilder builder;
+        std::string errors;
+        std::istringstream iss(ldapCountryStatsStr);
+        if (Json::parseFromStream(builder, iss, &ldapStats, &errors)) {
+            ldapCountryStats = ldapStats;
+        } else {
+            spdlog::warn("[SyncStatusRepository] Failed to parse ldap_country_stats JSON: {}", errors);
+        }
+    }
+
+    // Parse status string
+    std::string status = PQgetvalue(res, row, 22);
+
+    // Parse optional error_message
+    std::optional<std::string> errorMessage;
+    const char* errorMessageStr = PQgetvalue(res, row, 23);
+    if (errorMessageStr && strlen(errorMessageStr) > 0 && !PQgetisnull(res, row, 23)) {
+        errorMessage = std::string(errorMessageStr);
+    }
+
+    // Parse check_duration_ms
+    int checkDurationMs = std::atoi(PQgetvalue(res, row, 24));
+
+    // Construct and return domain object with correct parameter order:
+    // (id, checked_at,
+    //  db_csca_count, ldap_csca_count, csca_discrepancy,
+    //  db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy,
+    //  db_dsc_count, ldap_dsc_count, dsc_discrepancy,
+    //  db_dsc_nc_count, ldap_dsc_nc_count, dsc_nc_discrepancy,
+    //  db_crl_count, ldap_crl_count, crl_discrepancy,
+    //  total_discrepancy,
+    //  db_stored_in_ldap_count, ldap_total_entries,
+    //  db_country_stats, ldap_country_stats,
+    //  status, error_message, check_duration_ms)
     return domain::SyncStatus(
         id, checkedAt,
-        dbCscaCount, dbMlscCount, dbDscCount, dbDscNcCount, dbCrlCount, dbStoredInLdapCount,
-        ldapCscaCount, ldapMlscCount, ldapDscCount, ldapDscNcCount, ldapCrlCount,
-        cscaDiscrepancy, mlscDiscrepancy, dscDiscrepancy, dscNcDiscrepancy, crlDiscrepancy, totalDiscrepancy,
-        syncRequired, countryStats
+        dbCscaCount, ldapCscaCount, cscaDiscrepancy,
+        dbMlscCount, ldapMlscCount, mlscDiscrepancy,
+        dbDscCount, ldapDscCount, dscDiscrepancy,
+        dbDscNcCount, ldapDscNcCount, dscNcDiscrepancy,
+        dbCrlCount, ldapCrlCount, crlDiscrepancy,
+        totalDiscrepancy,
+        dbStoredInLdapCount, ldapTotalEntries,
+        dbCountryStats, ldapCountryStats,
+        status, errorMessage, checkDurationMs
     );
 }
 

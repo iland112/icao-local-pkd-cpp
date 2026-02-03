@@ -90,30 +90,55 @@ Json::Value SyncService::performSyncCheck(
             syncRequired = true;
         }
 
-        // Create SyncStatus domain object
-        domain::SyncStatus syncStatus;
-        syncStatus.setDbCscaCount(dbCounts.get("csca", 0).asInt());
-        syncStatus.setDbMlscCount(dbCounts.get("mlsc", 0).asInt());
-        syncStatus.setDbDscCount(dbCounts.get("dsc", 0).asInt());
-        syncStatus.setDbDscNcCount(dbCounts.get("dsc_nc", 0).asInt());
-        syncStatus.setDbCrlCount(dbCounts.get("crl", 0).asInt());
-        syncStatus.setDbStoredInLdapCount(dbCounts.get("stored_in_ldap", 0).asInt());
+        // Extract counts from JSON
+        int dbCscaCount = dbCounts.get("csca", 0).asInt();
+        int dbMlscCount = dbCounts.get("mlsc", 0).asInt();
+        int dbDscCount = dbCounts.get("dsc", 0).asInt();
+        int dbDscNcCount = dbCounts.get("dsc_nc", 0).asInt();
+        int dbCrlCount = dbCounts.get("crl", 0).asInt();
+        int dbStoredInLdapCount = dbCounts.get("stored_in_ldap", 0).asInt();
 
-        syncStatus.setLdapCscaCount(ldapCounts.get("csca", 0).asInt());
-        syncStatus.setLdapMlscCount(ldapCounts.get("mlsc", 0).asInt());
-        syncStatus.setLdapDscCount(ldapCounts.get("dsc", 0).asInt());
-        syncStatus.setLdapDscNcCount(ldapCounts.get("dsc_nc", 0).asInt());
-        syncStatus.setLdapCrlCount(ldapCounts.get("crl", 0).asInt());
+        int ldapCscaCount = ldapCounts.get("csca", 0).asInt();
+        int ldapMlscCount = ldapCounts.get("mlsc", 0).asInt();
+        int ldapDscCount = ldapCounts.get("dsc", 0).asInt();
+        int ldapDscNcCount = ldapCounts.get("dsc_nc", 0).asInt();
+        int ldapCrlCount = ldapCounts.get("crl", 0).asInt();
+        int ldapTotalEntries = ldapCscaCount + ldapMlscCount + ldapDscCount + ldapDscNcCount + ldapCrlCount;
 
-        syncStatus.setCscaDiscrepancy(discrepancies["csca"].asInt());
-        syncStatus.setMlscDiscrepancy(discrepancies["mlsc"].asInt());
-        syncStatus.setDscDiscrepancy(discrepancies["dsc"].asInt());
-        syncStatus.setDscNcDiscrepancy(discrepancies["dsc_nc"].asInt());
-        syncStatus.setCrlDiscrepancy(discrepancies["crl"].asInt());
-        syncStatus.setTotalDiscrepancy(discrepancies["total"].asInt());
+        int cscaDiscrepancy = discrepancies["csca"].asInt();
+        int mlscDiscrepancy = discrepancies["mlsc"].asInt();
+        int dscDiscrepancy = discrepancies["dsc"].asInt();
+        int dscNcDiscrepancy = discrepancies["dsc_nc"].asInt();
+        int crlDiscrepancy = discrepancies["crl"].asInt();
+        int totalDiscrepancy = discrepancies["total"].asInt();
 
-        syncStatus.setSyncRequired(syncRequired);
-        syncStatus.setCountryStats(countryStats);
+        // Wrap countryStats in optional if not empty
+        std::optional<Json::Value> dbCountryStats;
+        if (!countryStats.isNull() && !countryStats.empty()) {
+            dbCountryStats = countryStats;
+        }
+
+        // Status based on sync requirement
+        std::string status = syncRequired ? "SYNC_REQUIRED" : "OK";
+
+        // Create SyncStatus domain object with constructor
+        auto now = std::chrono::system_clock::now();
+        domain::SyncStatus syncStatus(
+            0,                      // id (will be set by repository)
+            now,                    // checked_at
+            dbCscaCount, ldapCscaCount, cscaDiscrepancy,
+            dbMlscCount, ldapMlscCount, mlscDiscrepancy,
+            dbDscCount, ldapDscCount, dscDiscrepancy,
+            dbDscNcCount, ldapDscNcCount, dscNcDiscrepancy,
+            dbCrlCount, ldapCrlCount, crlDiscrepancy,
+            totalDiscrepancy,
+            dbStoredInLdapCount, ldapTotalEntries,
+            dbCountryStats,         // db_country_stats
+            std::nullopt,           // ldap_country_stats (not available yet)
+            status,                 // status
+            std::nullopt,           // error_message
+            0                       // check_duration_ms (will be calculated)
+        );
 
         // Save to database
         bool saved = syncStatusRepo_->create(syncStatus);
@@ -159,7 +184,7 @@ Json::Value SyncService::getSyncStatistics() {
         Json::Value stats;
         stats["totalChecks"] = syncStatusRepo_->count();
         stats["lastCheckTime"] = syncStatusToJson(sync)["checkedAt"];
-        stats["syncRequired"] = sync.isSyncRequired();
+        stats["syncRequired"] = (sync.getTotalDiscrepancy() > 0);
         stats["totalDiscrepancy"] = sync.getTotalDiscrepancy();
 
         // Discrepancy breakdown
@@ -258,8 +283,15 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
     discrepancies["total"] = syncStatus.getTotalDiscrepancy();
     json["discrepancies"] = discrepancies;
 
-    json["syncRequired"] = syncStatus.isSyncRequired();
-    json["countryStats"] = syncStatus.getCountryStats();
+    json["syncRequired"] = (syncStatus.getTotalDiscrepancy() > 0);
+
+    // Include db_country_stats if available
+    auto dbCountryStats = syncStatus.getDbCountryStats();
+    if (dbCountryStats.has_value()) {
+        json["countryStats"] = dbCountryStats.value();
+    } else {
+        json["countryStats"] = Json::Value(Json::objectValue);
+    }
 
     return json;
 }

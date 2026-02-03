@@ -103,17 +103,11 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
             return false;
         }
 
-        // Update domain object with generated id and timestamp
+        // Update domain object with generated id
+        // Note: triggered_at is already set in the constructor and doesn't need updating
         if (PQntuples(res) > 0) {
             int id = std::atoi(PQgetvalue(res, 0, 0));
             summary.setId(id);
-
-            const char* triggeredAtStr = PQgetvalue(res, 0, 1);
-            std::tm tm = {};
-            if (strptime(triggeredAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
-                auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-                summary.setTriggeredAt(tp);
-            }
         }
 
         PQclear(res);
@@ -216,7 +210,8 @@ std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSumma
             "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
-            "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted "
+            "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted, "
+            "duration_ms, error_message, sync_status_id "
             "FROM reconciliation_summary "
             "WHERE id = $1";
 
@@ -263,7 +258,8 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
             "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
-            "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted "
+            "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted, "
+            "duration_ms, error_message, sync_status_id "
             "FROM reconciliation_summary "
             "ORDER BY triggered_at DESC "
             "LIMIT $1 OFFSET $2";
@@ -492,6 +488,7 @@ int ReconciliationRepository::countLogsByReconciliationId(int reconciliationId) 
 // ========================================================================
 
 domain::ReconciliationSummary ReconciliationRepository::resultToSummary(PGresult* res, int row) {
+    // Parse all fields from result set
     int id = std::atoi(PQgetvalue(res, row, 0));
     std::string triggeredBy = PQgetvalue(res, row, 1);
 
@@ -527,26 +524,35 @@ domain::ReconciliationSummary ReconciliationRepository::resultToSummary(PGresult
     int dscNcDeleted = std::atoi(PQgetvalue(res, row, 15));
     int crlDeleted = std::atoi(PQgetvalue(res, row, 16));
 
-    domain::ReconciliationSummary summary;
-    summary.setId(id);
-    summary.setTriggeredBy(triggeredBy);
-    summary.setTriggeredAt(triggeredAt);
-    summary.setCompletedAt(completedAt);
-    summary.setStatus(status);
-    summary.setDryRun(dryRun);
-    summary.setSuccessCount(successCount);
-    summary.setFailedCount(failedCount);
-    summary.setCscaAdded(cscaAdded);
-    summary.setDscAdded(dscAdded);
-    summary.setDscNcAdded(dscNcAdded);
-    summary.setCrlAdded(crlAdded);
-    summary.setTotalAdded(totalAdded);
-    summary.setCscaDeleted(cscaDeleted);
-    summary.setDscDeleted(dscDeleted);
-    summary.setDscNcDeleted(dscNcDeleted);
-    summary.setCrlDeleted(crlDeleted);
+    int durationMs = std::atoi(PQgetvalue(res, row, 17));
 
-    return summary;
+    // Parse optional error_message
+    std::optional<std::string> errorMessage;
+    if (!PQgetisnull(res, row, 18)) {
+        const char* errorMessageStr = PQgetvalue(res, row, 18);
+        if (errorMessageStr && strlen(errorMessageStr) > 0) {
+            errorMessage = std::string(errorMessageStr);
+        }
+    }
+
+    // Parse optional sync_status_id
+    std::optional<int> syncStatusId;
+    if (!PQgetisnull(res, row, 19)) {
+        syncStatusId = std::atoi(PQgetvalue(res, row, 19));
+    }
+
+    // Construct and return domain object using constructor
+    return domain::ReconciliationSummary(
+        id, triggeredBy, triggeredAt, completedAt,
+        status, dryRun,
+        successCount, failedCount,
+        cscaAdded, cscaDeleted,
+        dscAdded, dscDeleted,
+        dscNcAdded, dscNcDeleted,
+        crlAdded, crlDeleted,
+        totalAdded,
+        durationMs, errorMessage, syncStatusId
+    );
 }
 
 domain::ReconciliationLog ReconciliationRepository::resultToLog(PGresult* res, int row) {
