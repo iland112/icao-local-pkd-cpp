@@ -284,7 +284,15 @@ Json::Value ValidationService::getValidationByFingerprint(const std::string& fin
 
     try {
         // Use Repository to get validation result
-        response = validationRepo_->findByFingerprint(fingerprint);
+        Json::Value validation = validationRepo_->findByFingerprint(fingerprint);
+
+        // Wrap in proper response format
+        response["success"] = true;
+        if (validation.isNull()) {
+            response["validation"] = Json::nullValue;
+        } else {
+            response["validation"] = validation;
+        }
 
     } catch (const std::exception& e) {
         spdlog::error("ValidationService::getValidationByFingerprint failed: {}", e.what());

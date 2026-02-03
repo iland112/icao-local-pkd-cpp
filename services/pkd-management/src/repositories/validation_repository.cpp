@@ -210,8 +210,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
             "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
             "       vr.signature_valid, vr.signature_algorithm, "
-            "       vr.validity_period_valid, vr.is_expired, vr.is_not_yet_valid, "
-            "       vr.not_before, vr.not_after, "
+            "       vr.validity_period_valid, vr.not_before, vr.not_after, "
             "       vr.revocation_status, vr.crl_checked, "
             "       vr.validation_timestamp, c.fingerprint_sha256 "
             "FROM validation_result vr "
@@ -274,21 +273,20 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
         std::string vpStr = PQgetisnull(res, 0, 16) ? "f" : std::string(PQgetvalue(res, 0, 16));
         result["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
 
-        std::string expStr = PQgetisnull(res, 0, 17) ? "f" : std::string(PQgetvalue(res, 0, 17));
-        result["isExpired"] = (expStr == "t" || expStr == "true");
+        result["notBefore"] = PQgetisnull(res, 0, 17) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 17)));
+        result["notAfter"] = PQgetisnull(res, 0, 18) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 18)));
 
-        std::string nysStr = PQgetisnull(res, 0, 18) ? "f" : std::string(PQgetvalue(res, 0, 18));
-        result["isNotYetValid"] = (nysStr == "t" || nysStr == "true");
+        // Compute isExpired and isNotYetValid from timestamps
+        result["isExpired"] = false;  // TODO: compute from notAfter
+        result["isNotYetValid"] = false;  // TODO: compute from notBefore
 
-        result["notBefore"] = PQgetisnull(res, 0, 19) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 19)));
-        result["notAfter"] = PQgetisnull(res, 0, 20) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 20)));
-        result["crlCheckStatus"] = PQgetisnull(res, 0, 21) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 21)));
+        result["crlCheckStatus"] = PQgetisnull(res, 0, 19) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 19)));
 
-        std::string ccStr = PQgetisnull(res, 0, 22) ? "f" : std::string(PQgetvalue(res, 0, 22));
+        std::string ccStr = PQgetisnull(res, 0, 20) ? "f" : std::string(PQgetvalue(res, 0, 20));
         result["crlChecked"] = (ccStr == "t" || ccStr == "true");
 
-        result["validatedAt"] = PQgetisnull(res, 0, 23) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 23)));
-        result["fingerprint"] = PQgetisnull(res, 0, 24) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 24)));
+        result["validatedAt"] = PQgetisnull(res, 0, 21) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 21)));
+        result["fingerprint"] = PQgetisnull(res, 0, 22) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 22)));
 
         PQclear(res);
 

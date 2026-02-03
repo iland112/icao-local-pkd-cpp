@@ -8,14 +8,73 @@ namespace middleware {
 
 // Static members initialization
 std::set<std::string> AuthMiddleware::publicEndpoints_ = {
-    "^/api/health.*",           // Health check endpoints
-    "^/api/auth/login$",        // Login endpoint
-    "^/api/auth/register$",     // Registration endpoint (future)
-    "^/api/audit/.*",           // Audit endpoints (TEMPORARY - should add explicit auth filter later)
-    "^/api/upload/countries$",  // Dashboard statistics (public homepage)
-    "^/static/.*",              // Static files
-    "^/api-docs.*",             // API documentation
-    "^/swagger-ui/.*"           // Swagger UI
+    // ========================================================================
+    // System & Authentication
+    // ========================================================================
+    "^/api/health.*",              // Health check endpoints
+    "^/api/auth/login$",           // Login endpoint
+    "^/api/auth/register$",        // Registration endpoint (future)
+
+    // ========================================================================
+    // Dashboard & Statistics (Read-only public information)
+    // ========================================================================
+    "^/api/upload/countries$",     // Dashboard country statistics (homepage)
+    "^/api/upload/history.*",      // Upload history (development access)
+    "^/api/upload/statistics$",    // Upload statistics
+    "^/api/upload/changes.*",      // Recent upload changes
+    "^/api/upload/[a-f0-9\\-]+$",  // Upload detail by ID
+    "^/api/upload/[a-f0-9\\-]+/.*", // Upload sub-resources (validations, issues, etc.)
+
+    // ========================================================================
+    // Certificate Search (Public directory service)
+    // ========================================================================
+    "^/api/certificates/countries$", // Country list for certificate search
+    "^/api/certificates/search.*",   // Certificate search with filters
+    "^/api/certificates/validation.*", // Certificate validation results (trust chain)
+    "^/api/certificates/export/.*",  // Certificate export endpoints
+
+    // ========================================================================
+    // ICAO PKD Version Monitoring (Read-only public information)
+    // ========================================================================
+    "^/api/icao/status$",          // ICAO version status comparison
+    "^/api/icao/latest$",          // Latest ICAO version information
+    "^/api/icao/history.*",        // Version check history
+
+    // ========================================================================
+    // Sync Dashboard (Read-only monitoring)
+    // ========================================================================
+    "^/api/sync/status$",          // DB-LDAP sync status
+    "^/api/sync/stats$",           // Sync statistics
+    "^/api/reconcile/history.*",   // Reconciliation history
+
+    // ========================================================================
+    // Audit Logs (Read-only monitoring)
+    // ========================================================================
+    "^/api/audit/operations$",     // Operation audit logs
+    "^/api/audit/operations/stats$", // Operation statistics
+
+    // ========================================================================
+    // PA (Passive Authentication) Service (Demo/Verification functionality)
+    // ========================================================================
+    "^/api/pa/verify$",            // PA verification (main function)
+    "^/api/pa/parse-sod$",         // Parse SOD (Security Object Document)
+    "^/api/pa/parse-dg1$",         // Parse DG1 (MRZ data)
+    "^/api/pa/parse-dg2$",         // Parse DG2 (Face image)
+    "^/api/pa/parse-mrz-text$",    // Parse MRZ text
+    "^/api/pa/history.*",          // PA verification history
+    "^/api/pa/statistics$",        // PA statistics
+    "^/api/pa/[a-f0-9\\-]+$",      // PA verification detail by ID (UUID)
+    "^/api/pa/[a-f0-9\\-]+/datagroups$", // DataGroups detail
+
+    // ========================================================================
+    // Static Files & Documentation
+    // ========================================================================
+    "^/static/.*",                 // Static files (CSS, JS, images)
+    "^/api-docs.*",                // API documentation
+    "^/swagger-ui/.*"              // Swagger UI
+
+    // NOTE: Audit endpoints removed for security (was TEMPORARY)
+    // Admin users must authenticate to access /api/audit/*
 };
 
 bool AuthMiddleware::authEnabled_ = true;

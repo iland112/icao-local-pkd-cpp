@@ -7517,6 +7517,34 @@ paths:
                         certJson["isCertSelfSigned"] = *cert.getIsCertSelfSigned();
                     }
 
+                    // DN Components (shared library) - for clean UI display
+                    if (cert.getSubjectDnComponents().has_value()) {
+                        const auto& subjectDnComp = *cert.getSubjectDnComponents();
+                        Json::Value subjectDnJson;
+                        if (subjectDnComp.commonName.has_value()) subjectDnJson["commonName"] = *subjectDnComp.commonName;
+                        if (subjectDnComp.organization.has_value()) subjectDnJson["organization"] = *subjectDnComp.organization;
+                        if (subjectDnComp.organizationalUnit.has_value()) subjectDnJson["organizationalUnit"] = *subjectDnComp.organizationalUnit;
+                        if (subjectDnComp.locality.has_value()) subjectDnJson["locality"] = *subjectDnComp.locality;
+                        if (subjectDnComp.stateOrProvince.has_value()) subjectDnJson["stateOrProvince"] = *subjectDnComp.stateOrProvince;
+                        if (subjectDnComp.country.has_value()) subjectDnJson["country"] = *subjectDnComp.country;
+                        if (subjectDnComp.email.has_value()) subjectDnJson["email"] = *subjectDnComp.email;
+                        if (subjectDnComp.serialNumber.has_value()) subjectDnJson["serialNumber"] = *subjectDnComp.serialNumber;
+                        certJson["subjectDnComponents"] = subjectDnJson;
+                    }
+                    if (cert.getIssuerDnComponents().has_value()) {
+                        const auto& issuerDnComp = *cert.getIssuerDnComponents();
+                        Json::Value issuerDnJson;
+                        if (issuerDnComp.commonName.has_value()) issuerDnJson["commonName"] = *issuerDnComp.commonName;
+                        if (issuerDnComp.organization.has_value()) issuerDnJson["organization"] = *issuerDnComp.organization;
+                        if (issuerDnComp.organizationalUnit.has_value()) issuerDnJson["organizationalUnit"] = *issuerDnComp.organizationalUnit;
+                        if (issuerDnComp.locality.has_value()) issuerDnJson["locality"] = *issuerDnComp.locality;
+                        if (issuerDnComp.stateOrProvince.has_value()) issuerDnJson["stateOrProvince"] = *issuerDnComp.stateOrProvince;
+                        if (issuerDnComp.country.has_value()) issuerDnJson["country"] = *issuerDnComp.country;
+                        if (issuerDnComp.email.has_value()) issuerDnJson["email"] = *issuerDnComp.email;
+                        if (issuerDnComp.serialNumber.has_value()) issuerDnJson["serialNumber"] = *issuerDnComp.serialNumber;
+                        certJson["issuerDnComponents"] = issuerDnJson;
+                    }
+
                     certs.append(certJson);
                 }
                 response["certificates"] = certs;
