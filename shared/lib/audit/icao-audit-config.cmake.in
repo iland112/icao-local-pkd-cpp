@@ -1,0 +1,7 @@
+# ICAO Audit Library CMake Config
+
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/icao-audit-targets.cmake")
+
+check_required_components(icao-audit)
