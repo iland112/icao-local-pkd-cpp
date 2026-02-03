@@ -520,10 +520,12 @@ export interface SyncDiscrepancy {
 export interface SyncStatusResponse {
   id?: number;
   checkedAt?: string;
-  dbStats?: SyncStats;
-  ldapStats?: SyncStats;
-  discrepancy?: SyncDiscrepancy;
-  status: SyncStatusType;
+  dbCounts?: SyncStats;
+  ldapCounts?: SyncStats;
+  discrepancies?: SyncDiscrepancy;
+  syncRequired?: boolean;
+  countryStats?: Record<string, { csca?: number; mlsc?: number; dsc?: number; dsc_nc?: number; crl?: number }>;
+  status?: SyncStatusType;
   errorMessage?: string;
   checkDurationMs?: number;
   message?: string;
@@ -553,12 +555,8 @@ export interface SyncDiscrepancyItem {
 
 export interface SyncCheckResponse {
   success: boolean;
-  syncStatusId: number;
-  status: SyncStatusType;
-  dbStats: SyncStats;
-  ldapStats: SyncStats;
-  discrepancy: SyncDiscrepancy;
-  checkDurationMs: number;
+  message?: string;
+  data: SyncStatusResponse;
 }
 
 // =============================================================================

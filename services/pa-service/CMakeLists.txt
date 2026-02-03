@@ -28,6 +28,16 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(ICAO_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common-lib)
 add_subdirectory(${ICAO_COMMON_DIR} ${CMAKE_BINARY_DIR}/common-lib)
 
+# ICAO Shared Libraries (Audit Logging)
+# Note: In Docker, shared/ is copied to ./shared/ by Dockerfile line 87
+# For local builds, shared/ is at ../../shared
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shared")
+    set(ICAO_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)
+else()
+    set(ICAO_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../shared)
+endif()
+add_subdirectory(${ICAO_SHARED_DIR} ${CMAKE_BINARY_DIR}/shared-libs)
+
 # Drogon Web Framework
 find_package(Drogon CONFIG REQUIRED)
 
@@ -104,6 +114,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    icao::audit          # Shared audit logging library
     icao-common
     Drogon::Drogon
     OpenSSL::SSL

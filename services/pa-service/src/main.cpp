@@ -59,8 +59,8 @@
 #include <optional>
 #include <regex>
 
-// Audit logging (Phase 4.4)
-#include "common/audit_log.h"
+// Audit logging (Phase 4.4) - Shared library
+#include <icao/audit/audit_log.h>
 #include "common/db_connection_pool.h"
 
 // Repository Pattern - Phase 3: Service and Repository includes

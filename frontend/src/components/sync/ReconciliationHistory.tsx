@@ -24,9 +24,10 @@ export function ReconciliationHistory() {
   const fetchHistory = async () => {
     try {
       const response = await syncServiceApi.getReconciliationHistory({ limit: 20 });
-      setHistory(response.data.history);
+      setHistory(response.data?.history ?? []);
     } catch (err) {
       console.error('Failed to fetch reconciliation history:', err);
+      setHistory([]);  // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -41,9 +42,10 @@ export function ReconciliationHistory() {
     setLoadingDetails(true);
     try {
       const response = await syncServiceApi.getReconciliationDetails(item.id);
-      setLogs(response.data.logs);
+      setLogs(response.data?.logs ?? []);
     } catch (err) {
       console.error('Failed to fetch reconciliation details:', err);
+      setLogs([]);  // Set empty array on error
     } finally {
       setLoadingDetails(false);
     }

@@ -24,6 +24,16 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Dependencies
 # =============================================================================
 
+# ICAO Shared Libraries (Audit Logging)
+# Note: In Docker, shared/ is copied to ./shared/ by Dockerfile
+# For local builds, shared/ is at ../../shared
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shared")
+    set(ICAO_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shared)
+else()
+    set(ICAO_SHARED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../shared)
+endif()
+add_subdirectory(${ICAO_SHARED_DIR} ${CMAKE_BINARY_DIR}/shared-libs)
+
 # Drogon Web Framework
 find_package(Drogon CONFIG REQUIRED)
 
@@ -47,6 +57,14 @@ set(SOURCE_FILES
     src/main.cpp
     src/relay/sync/ldap_operations.cpp
     src/relay/sync/reconciliation_engine.cpp
+    # Repository Pattern - Repositories
+    src/repositories/sync_status_repository.cpp
+    src/repositories/certificate_repository.cpp
+    src/repositories/crl_repository.cpp
+    src/repositories/reconciliation_repository.cpp
+    # Repository Pattern - Services
+    src/services/sync_service.cpp
+    src/services/reconciliation_service.cpp
 )
 
 set(HEADER_FILES
@@ -54,6 +72,20 @@ set(HEADER_FILES
     src/relay/sync/common/config.h
     src/relay/sync/ldap_operations.h
     src/relay/sync/reconciliation_engine.h
+    # Repository Pattern - Domain Models
+    src/domain/models/sync_status.h
+    src/domain/models/reconciliation_summary.h
+    src/domain/models/reconciliation_log.h
+    src/domain/models/crl.h
+    src/domain/models/certificate.h
+    # Repository Pattern - Repositories
+    src/repositories/sync_status_repository.h
+    src/repositories/certificate_repository.h
+    src/repositories/crl_repository.h
+    src/repositories/reconciliation_repository.h
+    # Repository Pattern - Services
+    src/services/sync_service.h
+    src/services/reconciliation_service.h
 )
 
 # =============================================================================
@@ -67,10 +99,12 @@ add_executable(${PROJECT_NAME}
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
     ${PostgreSQL_INCLUDE_DIRS}
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    icao::audit          # Shared audit logging library
     Drogon::Drogon
     OpenSSL::SSL
     OpenSSL::Crypto
