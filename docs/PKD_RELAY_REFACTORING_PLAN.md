@@ -2,14 +2,16 @@
 
 **Branch**: `feature/pkd-relay-repository-pattern`
 **Target Version**: v2.4.0
-**Estimated Duration**: 7-10 days
-**Status**: Planning Phase
+**Estimated Duration**: 7-10 days (includes shared library integration)
+**Status**: Planning Phase - Updated with Shared Library Integration
 
 ---
 
 ## Executive Summary
 
 Apply Repository Pattern to PKD Relay Service following the same architecture used in pkd-management and pa-service. This refactoring will eliminate SQL from controllers, improve testability, and enable database migration flexibility.
+
+**🆕 NEW: Shared Library Integration** - This refactoring will be the first to use newly consolidated shared libraries (audit logging, connection pooling, etc.) as part of the broader v2.4.0 code consolidation initiative. See [SHARED_LIBRARY_INTEGRATION_ROADMAP.md](SHARED_LIBRARY_INTEGRATION_ROADMAP.md) for complete details.
 
 ### Current State Analysis
 
@@ -38,6 +40,57 @@ Total SQL queries:       ~37 direct queries
 
 ---
 
+## 🆕 Shared Library Integration Strategy
+
+As part of v2.4.0, this refactoring will be the **first service** to adopt consolidated shared libraries, eliminating duplicate code across pkd-management, pa-service, and pkd-relay.
+
+### Shared Libraries to Use
+
+#### 1. Audit Logging (`shared/lib/audit/`)
+**Replaces**: `src/relay/sync/common/audit_log.h` (212 lines)
+**Benefit**: Unified audit logging with all operation types
+**Integration Point**: Phase 2 (Service Layer)
+
+#### 2. Database Connection Pool (`shared/lib/database/`)
+**Replaces**: `src/main.cpp::PgConnection` (inline, ~50 lines)
+**Benefit**: Thread-safe pooling, automatic reconnection, health checks
+**Integration Point**: Phase 1 (Repository Layer)
+
+#### 3. LDAP Connection Pool (`shared/lib/ldap/`)
+**Replaces**: Direct libldap calls in reconciliation_engine
+**Benefit**: Connection pooling, automatic reconnection
+**Integration Point**: Phase 1 (Repository Layer)
+
+#### 4. Configuration Management (`shared/lib/config/`)
+**Replaces**: `src/relay/sync/common/config.h` (partial)
+**Benefit**: Unified config loading across all services
+**Integration Point**: Phase 1 (Infrastructure)
+
+#### 5. Common-lib X.509 Utils (`services/common-lib/`)
+**Uses**: DN normalization, certificate parsing, fingerprint calculation
+**Benefit**: Consistent certificate handling
+**Integration Point**: Phase 2 (Service Layer)
+
+### Integration Timeline
+
+| Phase | Shared Library | Action |
+|-------|----------------|--------|
+| **Phase 0** | All | Wait for shared lib Phase 1 completion (Week 1) |
+| **Phase 1** | DB Pool, LDAP Pool, Config | Use in Repository constructors |
+| **Phase 2** | Audit Log, Common-lib | Use in Service layer |
+| **Phase 3** | All | Controller integration |
+
+### Dependencies
+
+**Prerequisite**: Shared Library Integration Roadmap Phase 1 must complete first
+- ✅ Audit Log consolidated
+- ✅ DB Connection Pool created
+- ✅ LDAP Connection Pool created
+
+**Timeline Impact**: Adds 5 days to overall timeline (shared lib Phase 1 completion)
+
+---
+
 ## Goals
 
 ### Primary Goals
@@ -46,6 +99,7 @@ Total SQL queries:       ~37 direct queries
 3. **Improve Testability** - Enable unit testing with mock repositories
 4. **Oracle Migration Ready** - Database-agnostic architecture (67% effort reduction)
 5. **Maintain Existing Functionality** - Zero feature regression
+6. **🆕 Adopt Shared Libraries** - First service to use consolidated shared infrastructure
 
 ### Success Criteria
 - ✅ 0 SQL queries in main.cpp (currently ~30+)

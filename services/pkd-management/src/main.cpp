@@ -57,7 +57,7 @@
 // Project headers
 #include "common.h"
 #include "common/ldap_utils.h"
-#include "common/audit_log.h"
+#include <icao/audit/audit_log.h>
 #include "common/db_connection_pool.h"  // v2.3.1: Database connection pool
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
@@ -301,6 +301,14 @@ using common::ProgressManager;
 using common::CertificateMetadata;
 using common::IcaoComplianceStatus;
 using common::ValidationStatistics;
+
+// Audit logging (from shared library)
+using icao::audit::AuditLogEntry;
+using icao::audit::OperationType;
+using icao::audit::logOperation;
+using icao::audit::createAuditEntryFromRequest;
+using icao::audit::extractUserFromRequest;
+using icao::audit::extractIpAddress;
 
 // =============================================================================
 // Trust Anchor & CMS Signature Verification
@@ -5465,30 +5473,29 @@ void registerRoutes() {
                                       " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditLogEntry auditEntry;
+                    AuditLogEntry auditEntry;
                     auto session = req->getSession();
                     if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auto [userId, username] = extractUserFromRequest(req);
                         auditEntry.userId = userId;
                         auditEntry.username = username;
                     }
 
-                    auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
+                    auditEntry.operationType = OperationType::UPLOAD_DELETE;
                     auditEntry.operationSubtype = "UPLOAD";
                     auditEntry.resourceId = uploadId;
                     auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.ipAddress = extractIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
                     auditEntry.requestMethod = "DELETE";
                     auditEntry.requestPath = "/api/upload/" + uploadId;
                     auditEntry.success = true;
-                    auditEntry.statusCode = 200;
 
                     Json::Value metadata;
                     metadata["uploadId"] = uploadId;
                     auditEntry.metadata = metadata;
 
-                    common::logOperation(auditConn, auditEntry);
+                    logOperation(auditConn, auditEntry);
                     PQfinish(auditConn);
                 }
 
@@ -5503,31 +5510,30 @@ void registerRoutes() {
                                       " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditLogEntry auditEntry;
+                    AuditLogEntry auditEntry;
                     auto session = req->getSession();
                     if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auto [userId, username] = extractUserFromRequest(req);
                         auditEntry.userId = userId;
                         auditEntry.username = username;
                     }
 
-                    auditEntry.operationType = common::OperationType::UPLOAD_DELETE;
+                    auditEntry.operationType = OperationType::UPLOAD_DELETE;
                     auditEntry.operationSubtype = "UPLOAD";
                     auditEntry.resourceId = uploadId;
                     auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.ipAddress = extractIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
                     auditEntry.requestMethod = "DELETE";
                     auditEntry.requestPath = "/api/upload/" + uploadId;
                     auditEntry.success = false;
-                    auditEntry.statusCode = 500;
                     auditEntry.errorMessage = e.what();
 
                     Json::Value metadata;
                     metadata["uploadId"] = uploadId;
                     auditEntry.metadata = metadata;
 
-                    common::logOperation(auditConn, auditEntry);
+                    logOperation(auditConn, auditEntry);
                     PQfinish(auditConn);
                 }
 
@@ -5782,7 +5788,7 @@ void registerRoutes() {
                 std::string username = "anonymous";
                 auto session = req->getSession();
                 if (session) {
-                    auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                    auto [userId, sessionUsername] = extractUserFromRequest(req);
                     username = sessionUsername.value_or("anonymous");
                 }
 
@@ -5799,21 +5805,20 @@ void registerRoutes() {
                                           " password=" + appConfig.dbPassword;
                     PGconn* auditConn = PQconnectdb(conninfo.c_str());
                     if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                        common::AuditLogEntry auditEntry;
+                        AuditLogEntry auditEntry;
                         if (session) {
-                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auto [userId, sessionUsername] = extractUserFromRequest(req);
                             auditEntry.userId = userId;
                             auditEntry.username = sessionUsername;
                         }
-                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "LDIF";
                         auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.ipAddress = extractIpAddress(req);
                         auditEntry.userAgent = req->getHeader("User-Agent");
                         auditEntry.requestMethod = "POST";
                         auditEntry.requestPath = "/api/upload/ldif";
                         auditEntry.success = false;
-                        auditEntry.statusCode = 409;
                         auditEntry.errorMessage = "Duplicate file detected";
 
                         Json::Value metadata;
@@ -5822,7 +5827,7 @@ void registerRoutes() {
                         metadata["existingUploadId"] = result.uploadId;
                         auditEntry.metadata = metadata;
 
-                        common::logOperation(auditConn, auditEntry);
+                        logOperation(auditConn, auditEntry);
                         PQfinish(auditConn);
                     }
 
@@ -5857,21 +5862,20 @@ void registerRoutes() {
                                           " password=" + appConfig.dbPassword;
                     PGconn* auditConn = PQconnectdb(conninfo.c_str());
                     if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                        common::AuditLogEntry auditEntry;
+                        AuditLogEntry auditEntry;
                         if (session) {
-                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auto [userId, sessionUsername] = extractUserFromRequest(req);
                             auditEntry.userId = userId;
                             auditEntry.username = sessionUsername;
                         }
-                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "LDIF";
                         auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.ipAddress = extractIpAddress(req);
                         auditEntry.userAgent = req->getHeader("User-Agent");
                         auditEntry.requestMethod = "POST";
                         auditEntry.requestPath = "/api/upload/ldif";
                         auditEntry.success = false;
-                        auditEntry.statusCode = 500;
                         auditEntry.errorMessage = result.errorMessage;
 
                         Json::Value metadata;
@@ -5879,7 +5883,7 @@ void registerRoutes() {
                         metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                         auditEntry.metadata = metadata;
 
-                        common::logOperation(auditConn, auditEntry);
+                        logOperation(auditConn, auditEntry);
                         PQfinish(auditConn);
                     }
 
@@ -5927,23 +5931,22 @@ void registerRoutes() {
                                       " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditLogEntry auditEntry;
+                    AuditLogEntry auditEntry;
                     if (session) {
-                        auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                        auto [userId, sessionUsername] = extractUserFromRequest(req);
                         auditEntry.userId = userId;
                         auditEntry.username = sessionUsername;
                     }
 
-                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                    auditEntry.operationType = OperationType::FILE_UPLOAD;
                     auditEntry.operationSubtype = "LDIF";
                     auditEntry.resourceId = result.uploadId;
                     auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.ipAddress = extractIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
                     auditEntry.requestMethod = "POST";
                     auditEntry.requestPath = "/api/upload/ldif";
                     auditEntry.success = true;
-                    auditEntry.statusCode = 201;
 
                     // Metadata
                     Json::Value metadata;
@@ -5952,7 +5955,7 @@ void registerRoutes() {
                     metadata["processingMode"] = processingMode;
                     auditEntry.metadata = metadata;
 
-                    common::logOperation(auditConn, auditEntry);
+                    logOperation(auditConn, auditEntry);
                     PQfinish(auditConn);
                 }
 
@@ -6047,7 +6050,7 @@ void registerRoutes() {
                 std::string username = "anonymous";
                 auto session = req->getSession();
                 if (session) {
-                    auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                    auto [userId, sessionUsername] = extractUserFromRequest(req);
                     username = sessionUsername.value_or("anonymous");
                 }
 
@@ -6064,21 +6067,20 @@ void registerRoutes() {
                                           " password=" + appConfig.dbPassword;
                     PGconn* auditConn = PQconnectdb(conninfo.c_str());
                     if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                        common::AuditLogEntry auditEntry;
+                        AuditLogEntry auditEntry;
                         if (session) {
-                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auto [userId, sessionUsername] = extractUserFromRequest(req);
                             auditEntry.userId = userId;
                             auditEntry.username = sessionUsername;
                         }
-                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "MASTER_LIST";
                         auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.ipAddress = extractIpAddress(req);
                         auditEntry.userAgent = req->getHeader("User-Agent");
                         auditEntry.requestMethod = "POST";
                         auditEntry.requestPath = "/api/upload/masterlist";
                         auditEntry.success = false;
-                        auditEntry.statusCode = 409;
                         auditEntry.errorMessage = "Duplicate file detected";
 
                         Json::Value metadata;
@@ -6087,7 +6089,7 @@ void registerRoutes() {
                         metadata["existingUploadId"] = uploadResult.uploadId;
                         auditEntry.metadata = metadata;
 
-                        common::logOperation(auditConn, auditEntry);
+                        logOperation(auditConn, auditEntry);
                         PQfinish(auditConn);
                     }
 
@@ -6122,21 +6124,20 @@ void registerRoutes() {
                                           " password=" + appConfig.dbPassword;
                     PGconn* auditConn = PQconnectdb(conninfo.c_str());
                     if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                        common::AuditLogEntry auditEntry;
+                        AuditLogEntry auditEntry;
                         if (session) {
-                            auto [userId, sessionUsername] = common::getUserInfoFromSession(session);
+                            auto [userId, sessionUsername] = extractUserFromRequest(req);
                             auditEntry.userId = userId;
                             auditEntry.username = sessionUsername;
                         }
-                        auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                        auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "MASTER_LIST";
                         auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = common::getClientIpAddress(req);
+                        auditEntry.ipAddress = extractIpAddress(req);
                         auditEntry.userAgent = req->getHeader("User-Agent");
                         auditEntry.requestMethod = "POST";
                         auditEntry.requestPath = "/api/upload/masterlist";
                         auditEntry.success = false;
-                        auditEntry.statusCode = 500;
                         auditEntry.errorMessage = uploadResult.errorMessage;
 
                         Json::Value metadata;
@@ -6144,7 +6145,7 @@ void registerRoutes() {
                         metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                         auditEntry.metadata = metadata;
 
-                        common::logOperation(auditConn, auditEntry);
+                        logOperation(auditConn, auditEntry);
                         PQfinish(auditConn);
                     }
 
@@ -6305,24 +6306,23 @@ void registerRoutes() {
                                       " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditLogEntry auditEntry;
+                    AuditLogEntry auditEntry;
                     auto session = req->getSession();
                     if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auto [userId, username] = extractUserFromRequest(req);
                         auditEntry.userId = userId;
                         auditEntry.username = username;
                     }
 
-                    auditEntry.operationType = common::OperationType::FILE_UPLOAD;
+                    auditEntry.operationType = OperationType::FILE_UPLOAD;
                     auditEntry.operationSubtype = "MASTER_LIST";
                     auditEntry.resourceId = uploadId;
                     auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.ipAddress = extractIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
                     auditEntry.requestMethod = "POST";
                     auditEntry.requestPath = "/api/upload/masterlist";
                     auditEntry.success = true;
-                    auditEntry.statusCode = 201;
 
                     Json::Value metadata;
                     metadata["fileName"] = fileName;
@@ -6330,7 +6330,7 @@ void registerRoutes() {
                     metadata["processingMode"] = processingMode;
                     auditEntry.metadata = metadata;
 
-                    common::logOperation(auditConn, auditEntry);
+                    logOperation(auditConn, auditEntry);
                     PQfinish(auditConn);
                 }
 
@@ -7743,26 +7743,23 @@ paths:
                                       " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditTimer timer;
-                    common::AuditLogEntry auditEntry;
+                    AuditLogEntry auditEntry;
                     auto session = req->getSession();
                     if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auto [userId, username] = extractUserFromRequest(req);
                         auditEntry.userId = userId;
                         auditEntry.username = username;
                     }
 
-                    auditEntry.operationType = common::OperationType::CERT_EXPORT;
+                    auditEntry.operationType = OperationType::CERT_EXPORT;
                     auditEntry.operationSubtype = "SINGLE_CERT";
                     auditEntry.resourceId = dn;
                     auditEntry.resourceType = "CERTIFICATE";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.ipAddress = extractIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
                     auditEntry.requestMethod = "GET";
                     auditEntry.requestPath = "/api/certificates/export/file";
                     auditEntry.success = true;
-                    auditEntry.statusCode = 200;
-                    auditEntry.durationMs = timer.getDurationMs();
 
                     Json::Value metadata;
                     metadata["format"] = format;
@@ -7770,7 +7767,7 @@ paths:
                     metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
                     auditEntry.metadata = metadata;
 
-                    common::logOperation(auditConn, auditEntry);
+                    logOperation(auditConn, auditEntry);
                     PQfinish(auditConn);
                 }
 
@@ -7840,26 +7837,23 @@ paths:
                                       " password=" + appConfig.dbPassword;
                 PGconn* auditConn = PQconnectdb(conninfo.c_str());
                 if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
-                    common::AuditTimer timer;
-                    common::AuditLogEntry auditEntry;
+                    AuditLogEntry auditEntry;
                     auto session = req->getSession();
                     if (session) {
-                        auto [userId, username] = common::getUserInfoFromSession(session);
+                        auto [userId, username] = extractUserFromRequest(req);
                         auditEntry.userId = userId;
                         auditEntry.username = username;
                     }
 
-                    auditEntry.operationType = common::OperationType::CERT_EXPORT;
+                    auditEntry.operationType = OperationType::CERT_EXPORT;
                     auditEntry.operationSubtype = "COUNTRY_ZIP";
                     auditEntry.resourceId = country;
                     auditEntry.resourceType = "CERTIFICATE_COLLECTION";
-                    auditEntry.ipAddress = common::getClientIpAddress(req);
+                    auditEntry.ipAddress = extractIpAddress(req);
                     auditEntry.userAgent = req->getHeader("User-Agent");
                     auditEntry.requestMethod = "GET";
                     auditEntry.requestPath = "/api/certificates/export/country";
                     auditEntry.success = true;
-                    auditEntry.statusCode = 200;
-                    auditEntry.durationMs = timer.getDurationMs();
 
                     Json::Value metadata;
                     metadata["country"] = country;
@@ -7869,7 +7863,7 @@ paths:
                     // Parse certificate count from filename if available
                     auditEntry.metadata = metadata;
 
-                    common::logOperation(auditConn, auditEntry);
+                    logOperation(auditConn, auditEntry);
                     PQfinish(auditConn);
                 }
 
