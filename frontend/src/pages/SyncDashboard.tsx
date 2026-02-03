@@ -48,10 +48,19 @@ export function SyncDashboard() {
         syncServiceApi.getConfig(),
         syncServiceApi.getRevalidationHistory(5),
       ]);
-      setStatus(statusRes.data);
-      setHistory(historyRes.data);
-      setConfig(configRes.data);
-      setRevalidationHistory(revalHistoryRes.data);
+
+      // Debug logging
+      console.log('API Responses:', {
+        status: statusRes.data,
+        history: historyRes.data,
+        config: configRes.data,
+        revalidation: revalHistoryRes.data
+      });
+
+      setStatus(statusRes.data?.data ?? null);  // Extract nested data field
+      setHistory(historyRes.data?.data ?? []);  // Extract data array from paginated response
+      setConfig(configRes.data ?? null);
+      setRevalidationHistory(Array.isArray(revalHistoryRes.data) ? revalHistoryRes.data : []);
     } catch (err) {
       console.error('Failed to fetch sync data:', err);
       setError('동기화 서비스에 연결할 수 없습니다.');
@@ -76,7 +85,7 @@ export function SyncDashboard() {
 
       // Update status immediately with check result
       if (checkResult.data && checkResult.data.success) {
-        setStatus(checkResult.data);
+        setStatus(checkResult.data?.data ?? null);  // Extract nested data field
       }
 
       // Fetch full data to update history and other states
@@ -345,77 +354,77 @@ export function SyncDashboard() {
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               현재 상태
             </h3>
-            {status && getStatusIcon(status.status)}
+            {status && getStatusIcon(status.status || 'PENDING')}
           </div>
           <div className="space-y-3">
             <div
               className={cn(
                 'inline-flex items-center px-3 py-1 rounded-full text-sm font-medium',
-                status ? getStatusColor(status.status) : 'bg-gray-100 text-gray-600'
+                status ? getStatusColor(status.status || 'PENDING') : 'bg-gray-100 text-gray-600'
               )}
             >
-              {status ? getStatusLabel(status.status) : '알 수 없음'}
+              {status ? getStatusLabel(status.status || 'PENDING') : '알 수 없음'}
             </div>
 
             {/* Discrepancy Details in Current Status Card */}
-            {status?.status === 'DISCREPANCY' && status.discrepancy && status.discrepancy.total > 0 && (
+            {status?.status === 'DISCREPANCY' && status.discrepancies && status.discrepancies.total > 0 && (
               <div className="mt-3 pt-3 border-t border-yellow-200 dark:border-yellow-800/50">
                 <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-2">
                   불일치 상세:
                 </div>
                 <div className="grid grid-cols-2 gap-1.5 text-xs">
-                  {status.discrepancy.csca !== 0 && (
+                  {status.discrepancies.csca !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">CSCA:</span>
                       <span className={cn(
                         'font-semibold',
-                        status.discrepancy.csca > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        status.discrepancies.csca > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                       )}>
-                        {status.discrepancy.csca > 0 ? '+' : ''}{status.discrepancy.csca}
+                        {status.discrepancies.csca > 0 ? '+' : ''}{status.discrepancies.csca}
                       </span>
                     </div>
                   )}
-                  {status.discrepancy.mlsc !== 0 && (
+                  {status.discrepancies.mlsc !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">MLSC:</span>
                       <span className={cn(
                         'font-semibold',
-                        status.discrepancy.mlsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        status.discrepancies.mlsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                       )}>
-                        {status.discrepancy.mlsc > 0 ? '+' : ''}{status.discrepancy.mlsc}
+                        {status.discrepancies.mlsc > 0 ? '+' : ''}{status.discrepancies.mlsc}
                       </span>
                     </div>
                   )}
-                  {status.discrepancy.dsc !== 0 && (
+                  {status.discrepancies.dsc !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">DSC:</span>
                       <span className={cn(
                         'font-semibold',
-                        status.discrepancy.dsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        status.discrepancies.dsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                       )}>
-                        {status.discrepancy.dsc > 0 ? '+' : ''}{status.discrepancy.dsc}
+                        {status.discrepancies.dsc > 0 ? '+' : ''}{status.discrepancies.dsc}
                       </span>
                     </div>
                   )}
-                  {status.discrepancy.dscNc !== 0 && (
+                  {status.discrepancies.dscNc !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">DSC_NC:</span>
                       <span className={cn(
                         'font-semibold',
-                        status.discrepancy.dscNc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        status.discrepancies.dscNc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                       )}>
-                        {status.discrepancy.dscNc > 0 ? '+' : ''}{status.discrepancy.dscNc}
+                        {status.discrepancies.dscNc > 0 ? '+' : ''}{status.discrepancies.dscNc}
                       </span>
                     </div>
                   )}
-                  {status.discrepancy.crl !== 0 && (
+                  {status.discrepancies.crl !== 0 && (
                     <div className="flex justify-between">
                       <span className="text-gray-500 dark:text-gray-400">CRL:</span>
                       <span className={cn(
                         'font-semibold',
-                        status.discrepancy.crl > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                        status.discrepancies.crl > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                       )}>
-                        {status.discrepancy.crl > 0 ? '+' : ''}{status.discrepancy.crl}
+                        {status.discrepancies.crl > 0 ? '+' : ''}{status.discrepancies.crl}
                       </span>
                     </div>
                   )}
@@ -445,7 +454,7 @@ export function SyncDashboard() {
               DB ↔ LDAP 비교
             </h3>
           </div>
-          {status?.dbStats && status?.ldapStats ? (
+          {status?.dbCounts && status?.ldapCounts ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -474,18 +483,18 @@ export function SyncDashboard() {
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
                     <td className="py-2 px-3 text-gray-700 dark:text-gray-300">CSCA</td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.dbStats.csca?.toLocaleString()}
+                      {status.dbCounts.csca?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.ldapStats.csca?.toLocaleString()}
+                      {status.ldapCounts.csca?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {status.discrepancy && status.discrepancy.csca !== 0 ? (
+                      {status.discrepancies && status.discrepancies.csca !== 0 ? (
                         <span className={cn(
                           'font-mono font-semibold',
-                          status.discrepancy.csca > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                          status.discrepancies.csca > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                         )}>
-                          {status.discrepancy.csca > 0 ? '+' : ''}{status.discrepancy.csca}
+                          {status.discrepancies.csca > 0 ? '+' : ''}{status.discrepancies.csca}
                         </span>
                       ) : (
                         <span className="text-green-600 dark:text-green-400">✓</span>
@@ -495,18 +504,18 @@ export function SyncDashboard() {
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
                     <td className="py-2 px-3 text-gray-700 dark:text-gray-300">MLSC</td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.dbStats.mlsc?.toLocaleString()}
+                      {status.dbCounts.mlsc?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.ldapStats.mlsc?.toLocaleString()}
+                      {status.ldapCounts.mlsc?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {status.discrepancy && status.discrepancy.mlsc !== 0 ? (
+                      {status.discrepancies && status.discrepancies.mlsc !== 0 ? (
                         <span className={cn(
                           'font-mono font-semibold',
-                          status.discrepancy.mlsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                          status.discrepancies.mlsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                         )}>
-                          {status.discrepancy.mlsc > 0 ? '+' : ''}{status.discrepancy.mlsc}
+                          {status.discrepancies.mlsc > 0 ? '+' : ''}{status.discrepancies.mlsc}
                         </span>
                       ) : (
                         <span className="text-green-600 dark:text-green-400">✓</span>
@@ -516,18 +525,18 @@ export function SyncDashboard() {
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
                     <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC</td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.dbStats.dsc?.toLocaleString()}
+                      {status.dbCounts.dsc?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.ldapStats.dsc?.toLocaleString()}
+                      {status.ldapCounts.dsc?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {status.discrepancy && status.discrepancy.dsc !== 0 ? (
+                      {status.discrepancies && status.discrepancies.dsc !== 0 ? (
                         <span className={cn(
                           'font-mono font-semibold',
-                          status.discrepancy.dsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                          status.discrepancies.dsc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                         )}>
-                          {status.discrepancy.dsc > 0 ? '+' : ''}{status.discrepancy.dsc}
+                          {status.discrepancies.dsc > 0 ? '+' : ''}{status.discrepancies.dsc}
                         </span>
                       ) : (
                         <span className="text-green-600 dark:text-green-400">✓</span>
@@ -537,18 +546,18 @@ export function SyncDashboard() {
                   <tr className="border-b border-gray-100 dark:border-gray-700/50">
                     <td className="py-2 px-3 text-gray-700 dark:text-gray-300">DSC_NC</td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.dbStats.dscNc?.toLocaleString()}
+                      {status.dbCounts.dscNc?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.ldapStats.dscNc?.toLocaleString()}
+                      {status.ldapCounts.dscNc?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {status.discrepancy && status.discrepancy.dscNc !== 0 ? (
+                      {status.discrepancies && status.discrepancies.dscNc !== 0 ? (
                         <span className={cn(
                           'font-mono font-semibold',
-                          status.discrepancy.dscNc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                          status.discrepancies.dscNc > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                         )}>
-                          {status.discrepancy.dscNc > 0 ? '+' : ''}{status.discrepancy.dscNc}
+                          {status.discrepancies.dscNc > 0 ? '+' : ''}{status.discrepancies.dscNc}
                         </span>
                       ) : (
                         <span className="text-green-600 dark:text-green-400">✓</span>
@@ -558,18 +567,18 @@ export function SyncDashboard() {
                   <tr>
                     <td className="py-2 px-3 text-gray-700 dark:text-gray-300">CRL</td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.dbStats.crl?.toLocaleString()}
+                      {status.dbCounts.crl?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
-                      {status.ldapStats.crl?.toLocaleString()}
+                      {status.ldapCounts.crl?.toLocaleString()}
                     </td>
                     <td className="py-2 px-3 text-right">
-                      {status.discrepancy && status.discrepancy.crl !== 0 ? (
+                      {status.discrepancies && status.discrepancies.crl !== 0 ? (
                         <span className={cn(
                           'font-mono font-semibold',
-                          status.discrepancy.crl > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
+                          status.discrepancies.crl > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'
                         )}>
-                          {status.discrepancy.crl > 0 ? '+' : ''}{status.discrepancy.crl}
+                          {status.discrepancies.crl > 0 ? '+' : ''}{status.discrepancies.crl}
                         </span>
                       ) : (
                         <span className="text-green-600 dark:text-green-400">✓</span>
@@ -592,7 +601,7 @@ export function SyncDashboard() {
       </div>
 
       {/* Discrepancy Details */}
-      {status?.discrepancy && status.discrepancy.total > 0 && (
+      {status?.discrepancies && status.discrepancies.total > 0 && (
         <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-yellow-500" />
@@ -603,37 +612,37 @@ export function SyncDashboard() {
           <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                {status.discrepancy.total}
+                {status.discrepancies.total}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">총 불일치</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
-                {status.discrepancy.csca}
+                {status.discrepancies.csca}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">CSCA</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
-                {status.discrepancy.mlsc}
+                {status.discrepancies.mlsc}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">MLSC</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
-                {status.discrepancy.dsc}
+                {status.discrepancies.dsc}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">DSC</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
-                {status.discrepancy.dscNc}
+                {status.discrepancies.dscNc}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">DSC_NC</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
-                {status.discrepancy.crl}
+                {status.discrepancies.crl}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">CRL</div>
             </div>

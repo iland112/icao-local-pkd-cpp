@@ -285,6 +285,9 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
 
     json["syncRequired"] = (syncStatus.getTotalDiscrepancy() > 0);
 
+    // Add status field based on total discrepancy
+    json["status"] = (syncStatus.getTotalDiscrepancy() == 0) ? "SYNCED" : "DISCREPANCY";
+
     // Include db_country_stats if available
     auto dbCountryStats = syncStatus.getDbCountryStats();
     if (dbCountryStats.has_value()) {

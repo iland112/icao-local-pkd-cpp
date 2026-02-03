@@ -342,14 +342,14 @@ export const syncApi = {
    * Get current sync status
    * Shows DB vs LDAP certificate counts and discrepancies
    */
-  getStatus: () => relayApi.get<SyncStatusResponse>('/sync/status'),
+  getStatus: () => relayApi.get<{ success: boolean; data: SyncStatusResponse }>('/sync/status'),
 
   /**
    * Get sync check history
    * @param limit - Number of records to return
    */
   getHistory: (limit: number = 20) =>
-    relayApi.get<SyncHistoryItem[]>('/sync/history', { params: { limit } }),
+    relayApi.get<{ success: boolean; data: SyncHistoryItem[]; pagination: { total: number; limit: number; offset: number; count: number } }>('/sync/history', { params: { limit } }),
 
   /**
    * Trigger manual sync check
