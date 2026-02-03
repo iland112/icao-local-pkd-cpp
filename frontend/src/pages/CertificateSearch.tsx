@@ -1,12 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, HardDrive, AlertTriangle, Shield, ShieldCheck } from 'lucide-react';
+import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, Shield, HelpCircle } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { getCountryDisplayName } from '@/utils/countryNames';
 import { cn } from '@/utils/cn';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 import { validationApi } from '@/api/validationApi';
 import type { ValidationResult } from '@/types/validation';
 import { TreeViewer } from '@/components/TreeViewer';
 import type { TreeNode } from '@/components/TreeViewer';
+
+interface DnComponents {
+  commonName?: string;
+  organization?: string;
+  organizationalUnit?: string;
+  locality?: string;
+  stateOrProvince?: string;
+  country?: string;
+  email?: string;
+  serialNumber?: string;
+}
 
 interface Certificate {
   dn: string;
@@ -25,6 +37,10 @@ interface Certificate {
   pkdConformanceCode?: string;
   pkdConformanceText?: string;
   pkdVersion?: string;
+
+  // DN Components (parsed, clean format)
+  subjectDnComponents?: DnComponents;
+  issuerDnComponents?: DnComponents;
 
   // X.509 Metadata (v2.3.0) - 15 fields
   version?: number;                              // 0=v1, 1=v2, 2=v3
@@ -254,6 +270,67 @@ const CertificateSearch: React.FC = () => {
     if (version === undefined) return 'Unknown';
     const versionMap: { [key: number]: string } = { 0: 'v1', 1: 'v2', 2: 'v3' };
     return versionMap[version] || `v${version + 1}`;
+  };
+
+  // Format signature algorithm for display
+  const formatSignatureAlgorithm = (algorithm: string | undefined): string => {
+    if (!algorithm) return 'N/A';
+
+    // Simplify common algorithm names
+    const algorithmMap: { [key: string]: string } = {
+      'sha256WithRSAEncryption': 'RSA-SHA256',
+      'sha384WithRSAEncryption': 'RSA-SHA384',
+      'sha512WithRSAEncryption': 'RSA-SHA512',
+      'sha1WithRSAEncryption': 'RSA-SHA1',
+      'ecdsa-with-SHA256': 'ECDSA-SHA256',
+      'ecdsa-with-SHA384': 'ECDSA-SHA384',
+      'ecdsa-with-SHA512': 'ECDSA-SHA512',
+    };
+
+    return algorithmMap[algorithm] || algorithm;
+  };
+
+  // Build trust chain tree from validation result
+  const buildTrustChainTree = (trustChainPath: string): TreeNode[] => {
+    // Parse trust chain path: "DSC → CSCA Latvia → Root CSCA"
+    const parts = trustChainPath.split('→').map(s => s.trim());
+
+    if (parts.length === 0) return [];
+
+    // Build tree structure (reverse order - root at top)
+    const nodes: TreeNode[] = [];
+    const reversedParts = [...parts].reverse();
+
+    reversedParts.forEach((part, index) => {
+      const isRoot = index === 0;
+      const isLeaf = index === reversedParts.length - 1;
+
+      // Extract meaningful info from DN
+      let displayName = part;
+      let icon = 'shield-check';
+
+      // Detect certificate type
+      if (part.startsWith('DSC')) {
+        icon = 'hard-drive';
+        displayName = part.replace('DSC', 'Document Signer Certificate');
+      } else if (part.includes('CSCA') || part.includes('CN=')) {
+        icon = isRoot ? 'shield-check' : 'shield';
+        // Extract CN from DN if present
+        const cnMatch = part.match(/CN=([^,]+)/);
+        if (cnMatch) {
+          displayName = cnMatch[1];
+        }
+      }
+
+      nodes.push({
+        id: `chain-${index}`,
+        name: isRoot ? '🔒 Root CA' : isLeaf ? '📄 Certificate' : '🔗 Intermediate CA',
+        value: displayName,
+        icon: icon as any,
+      });
+    });
+
+    return nodes;
   };
 
   // Build certificate tree data for react-arborist
@@ -520,52 +597,94 @@ const CertificateSearch: React.FC = () => {
     };
   }, [apiStats, certificates, total]);
 
-  // Get certificate type badge
-  const getCertTypeBadge = (certType: string) => {
+  // Get certificate type description for tooltip
+  const getCertTypeDescription = (certType: string, cert: Certificate): string => {
+    if (isLinkCertificate(cert)) {
+      return 'ICAO Doc 9303 Part 12에 정의된 인증서로, 이전 CSCA와 새 CSCA 사이의 신뢰 체인을 연결합니다.\n\n사용 사례: CSCA 키 교체/갱신, 서명 알고리즘 마이그레이션 (RSA → ECDSA), 조직 정보 변경, CSCA 인프라 업그레이드';
+    }
+    if (isMasterListSignerCertificate(cert)) {
+      return 'ICAO PKD에서 Master List CMS 구조에 디지털 서명하는데 사용되는 Self-signed 인증서입니다.\n\n특징: Subject DN = Issuer DN, Master List CMS SignerInfo에 포함, digitalSignature key usage (0x80 bit)';
+    }
+
     switch (certType) {
       case 'CSCA':
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
-            CSCA
-          </span>
-        );
-      case 'MLSC':
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
-            MLSC
-          </span>
-        );
+        return 'ICAO Doc 9303 Part 12에 정의된 Self-signed 루트 인증서로, 여권 전자 칩에 서명하는 DSC를 발급하는 국가 최상위 인증기관입니다.\n\n역할: DSC 발급, 국가 PKI 신뢰 체인의 루트, 여권 검증 시 최상위 신뢰 앵커 (Trust Anchor)';
       case 'DSC':
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700">
-            DSC
-          </span>
-        );
+        return 'ICAO Doc 9303 Part 12에 정의된 인증서로, 여권 전자 칩(eMRTD)의 데이터 그룹(DG1-DG16)에 디지털 서명하는데 사용됩니다.\n\n역할: 여권 데이터 그룹(DG) 서명 (SOD 생성), CSCA에 의해 발급, Passive Authentication 검증 대상, 유효기간: 3개월 ~ 3년';
       case 'DSC_NC':
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-700">
-            DSC_NC
-          </span>
-        );
+        return 'ICAO 9303 기술 표준을 완전히 준수하지 않는 DSC입니다. ICAO PKD의 nc-data 컨테이너에 별도 저장됩니다.\n\n⚠️ 주의: 프로덕션 환경에서 사용 권장하지 않음, 일부 검증 시스템에서 거부될 수 있음, ICAO는 2021년부터 nc-data 폐기 권장';
+      case 'MLSC':
+        return 'ICAO PKD에서 Master List CMS 구조에 디지털 서명하는데 사용되는 Self-signed 인증서입니다.\n\n특징: Subject DN = Issuer DN, Master List CMS SignerInfo에 포함, digitalSignature key usage (0x80 bit)';
       case 'CRL':
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-700">
-            CRL
-          </span>
-        );
+        return '인증서 폐지 목록 (Certificate Revocation List) - 폐지된 인증서 목록을 담은 X.509 데이터 구조입니다.';
       case 'ML':
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
-            ML
-          </span>
-        );
+        return 'Master List - ICAO PKD에서 배포하는 국가별 CSCA 인증서 목록이 포함된 CMS SignedData 구조입니다.';
       default:
-        return (
-          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
-            {certType}
-          </span>
-        );
+        return certType;
     }
+  };
+
+  // Get certificate type badge with tooltip
+  const getCertTypeBadge = (certType: string, cert?: Certificate) => {
+    const badges: Record<string, React.ReactElement> = {
+      'CSCA': (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-700">
+          CSCA
+        </span>
+      ),
+      'MLSC': (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+          MLSC
+        </span>
+      ),
+      'DSC': (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700">
+          DSC
+        </span>
+      ),
+      'DSC_NC': (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-700">
+          DSC_NC
+        </span>
+      ),
+      'CRL': (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300 border border-red-200 dark:border-red-700">
+          CRL
+        </span>
+      ),
+      'ML': (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-indigo-100 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700">
+          ML
+        </span>
+      ),
+    };
+
+    const badge = badges[certType] || (
+      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-600">
+        {certType}
+      </span>
+    );
+
+    // Add tooltip icon if certificate object is provided
+    if (cert) {
+      const description = getCertTypeDescription(certType, cert);
+      return (
+        <div className="inline-flex items-center gap-1.5">
+          {badge}
+          <div className="relative group">
+            <HelpCircle className="w-4 h-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 cursor-help transition-colors" />
+            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 hidden group-hover:block z-50 w-80">
+              <div className="bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 text-xs rounded-lg p-3 shadow-lg">
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full w-0 h-0 border-l-4 border-r-4 border-b-4 border-transparent border-b-gray-900 dark:border-b-gray-100"></div>
+                <div className="whitespace-pre-line leading-relaxed">{description}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return badge;
   };
 
   // Get validity badge
@@ -643,11 +762,11 @@ const CertificateSearch: React.FC = () => {
 
         {showFilters && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {/* Country */}
-              <div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+              {/* Country - wider column */}
+              <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                  국가 코드
+                  국가
                 </label>
                 <div className="relative">
                   <select
@@ -662,7 +781,7 @@ const CertificateSearch: React.FC = () => {
                     </option>
                     {countries.map((country) => (
                       <option key={country} value={country}>
-                        {country}
+                        {getCountryDisplayName(country)}
                       </option>
                     ))}
                   </select>
@@ -906,10 +1025,13 @@ const CertificateSearch: React.FC = () => {
                     종류
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
-                    CN
+                    발급 기관
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
+                    버전
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
-                    Serial
+                    서명 알고리즘
                   </th>
                   <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider border-r border-gray-200 dark:border-gray-600">
                     유효기간
@@ -963,11 +1085,16 @@ const CertificateSearch: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate border-r border-gray-100 dark:border-gray-700" title={cert.cn}>
-                      {cert.cn}
+                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate border-r border-gray-100 dark:border-gray-700" title={cert.issuerDnComponents?.organization || cert.issuerDnComponents?.commonName || 'N/A'}>
+                      {cert.issuerDnComponents?.organization || cert.issuerDnComponents?.commonName || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 font-mono border-r border-gray-100 dark:border-gray-700">
-                      {cert.sn.substring(0, 12)}...
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600 dark:text-gray-300 border-r border-gray-100 dark:border-gray-700">
+                      {formatVersion(cert.version)}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-gray-300 border-r border-gray-100 dark:border-gray-700">
+                      <span className="truncate block max-w-[200px]" title={cert.signatureAlgorithm || 'N/A'}>
+                        {formatSignatureAlgorithm(cert.signatureAlgorithm)}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300 text-center border-r border-gray-100 dark:border-gray-700">
                       <div className="flex flex-col gap-0.5">
@@ -1038,8 +1165,28 @@ const CertificateSearch: React.FC = () => {
                     인증서 상세 정보
                   </h2>
                   <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md">
-                    {selectedCert.cn}
+                    {selectedCert.country} - {selectedCert.subjectDnComponents?.organization || selectedCert.cn}
                   </p>
+                  {/* Certificate Type Badges */}
+                  <div className="flex items-center gap-2 mt-2">
+                    {getCertTypeBadge(getActualCertType(selectedCert), selectedCert)}
+                    {isLinkCertificate(selectedCert) && (
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700">
+                        Link Certificate
+                      </span>
+                    )}
+                    {isMasterListSignerCertificate(selectedCert) && (
+                      <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
+                        Master List Signer
+                      </span>
+                    )}
+                    {selectedCert.isSelfSigned && (
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Self-signed
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
               <button
@@ -1082,246 +1229,99 @@ const CertificateSearch: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-6">
               {/* General Tab */}
               {detailTab === 'general' && (
-                <div className="space-y-6">
-                  {/* Certificate Type Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                      Certificate Type
-                    </h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Type:</span>
-                        <div className="flex items-center gap-2">
-                          {/* Use actual cert type from LDAP DN */}
-                          {getCertTypeBadge(getActualCertType(selectedCert))}
-                          {isLinkCertificate(selectedCert) && (
-                            <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-cyan-100 dark:bg-cyan-900/40 text-cyan-800 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700">
-                              Link Certificate
-                            </span>
-                          )}
-                          {isMasterListSignerCertificate(selectedCert) && (
-                            <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700">
-                              Master List Signer
-                            </span>
-                          )}
+                <div className="space-y-4">
+                  {/* Issued To/By in 2-column layout */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Issued To */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">Issued To</h3>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">CN:</span>
+                          <span className="text-xs text-gray-900 dark:text-white break-all">
+                            {selectedCert.subjectDnComponents?.commonName || selectedCert.cn}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Organization:</span>
+                          <span className="text-xs text-gray-900 dark:text-white">
+                            {selectedCert.subjectDnComponents?.organization || '-'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Org. Unit:</span>
+                          <span className="text-xs text-gray-900 dark:text-white">
+                            {selectedCert.subjectDnComponents?.organizationalUnit || '-'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Serial:</span>
+                          <span className="text-xs text-gray-900 dark:text-white font-mono break-all">
+                            {selectedCert.subjectDnComponents?.serialNumber || selectedCert.sn}
+                          </span>
                         </div>
                       </div>
-                      {isLinkCertificate(selectedCert) && (
-                        <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-lg p-3 space-y-2">
-                          <div className="flex items-start gap-2">
-                            <Shield className="w-4 h-4 text-cyan-600 dark:text-cyan-400 flex-shrink-0 mt-0.5" />
-                            <div className="text-xs text-cyan-800 dark:text-cyan-300">
-                              <p className="font-semibold mb-1">연결 인증서 (Link Certificate)</p>
-                              <p className="mb-2">
-                                ICAO Doc 9303 Part 12에 정의된 인증서로, 이전 CSCA와 새 CSCA 사이의 신뢰 체인을 연결합니다.
-                                Subject DN과 Issuer DN이 서로 다르며, 이전 CSCA의 개인키로 새 CSCA 공개키에 서명합니다.
-                              </p>
-                              <p className="font-semibold mb-1">사용 사례:</p>
-                              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                <li>CSCA 키 교체/갱신 (Key Rollover)</li>
-                                <li>서명 알고리즘 마이그레이션 (예: RSA → ECDSA)</li>
-                                <li>조직 정보 변경 (Organization DN change)</li>
-                                <li>CSCA 인프라 업그레이드</li>
-                              </ul>
-                            </div>
-                          </div>
+                    </div>
+
+                    {/* Issued By */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">Issued By</h3>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">CN:</span>
+                          <span className="text-xs text-gray-900 dark:text-white break-all">
+                            {selectedCert.issuerDnComponents?.commonName || '-'}
+                          </span>
                         </div>
-                      )}
-                      {isMasterListSignerCertificate(selectedCert) && (
-                        <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3 space-y-2">
-                          <div className="flex items-start gap-2">
-                            <FileText className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0 mt-0.5" />
-                            <div className="text-xs text-purple-800 dark:text-purple-300">
-                              <p className="font-semibold mb-1">마스터 리스트 서명 인증서 (MLSC)</p>
-                              <p className="mb-2">
-                                ICAO PKD에서 Master List CMS 구조에 디지털 서명하는데 사용되는 Self-signed 인증서입니다.
-                                국가 PKI 기관이 발급하며, digitalSignature key usage (0x80 bit)를 가집니다.
-                              </p>
-                              <p className="font-semibold mb-1">특징:</p>
-                              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                <li>Self-signed 인증서 (Subject DN = Issuer DN)</li>
-                                <li>Master List CMS SignerInfo에 포함</li>
-                                <li>LDAP: o=mlsc,c=UN 에 저장</li>
-                                <li>Database: certificate_type='MLSC', country_code='UN'</li>
-                              </ul>
-                            </div>
-                          </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Organization:</span>
+                          <span className="text-xs text-gray-900 dark:text-white">
+                            {selectedCert.issuerDnComponents?.organization || '-'}
+                          </span>
                         </div>
-                      )}
-                      {/* CSCA (Self-signed) description */}
-                      {getActualCertType(selectedCert) === 'CSCA' && !isLinkCertificate(selectedCert) && !isMasterListSignerCertificate(selectedCert) && (
-                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-3 space-y-2">
-                          <div className="flex items-start gap-2">
-                            <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-                            <div className="text-xs text-blue-800 dark:text-blue-300">
-                              <p className="font-semibold mb-1">국가 서명 인증기관 (CSCA - Country Signing CA)</p>
-                              <p className="mb-2">
-                                ICAO Doc 9303 Part 12에 정의된 Self-signed 루트 인증서로, 여권 전자 칩에 서명하는 DSC를 발급하는 국가 최상위 인증기관입니다.
-                                각 국가는 독자적인 CSCA를 운영하며, ICAO PKD를 통해 전 세계에 배포합니다.
-                              </p>
-                              <p className="font-semibold mb-1">역할:</p>
-                              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                <li>DSC (Document Signer Certificate) 발급</li>
-                                <li>국가 PKI 신뢰 체인의 루트</li>
-                                <li>여권 검증 시 최상위 신뢰 앵커 (Trust Anchor)</li>
-                                <li>Self-signed (Subject DN = Issuer DN)</li>
-                              </ul>
-                            </div>
-                          </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Org. Unit:</span>
+                          <span className="text-xs text-gray-900 dark:text-white">
+                            {selectedCert.issuerDnComponents?.organizationalUnit || '-'}
+                          </span>
                         </div>
-                      )}
-                      {/* DSC description */}
-                      {getActualCertType(selectedCert) === 'DSC' && (
-                        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-3 space-y-2">
-                          <div className="flex items-start gap-2">
-                            <HardDrive className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-                            <div className="text-xs text-green-800 dark:text-green-300">
-                              <p className="font-semibold mb-1">문서 서명 인증서 (DSC - Document Signer Certificate)</p>
-                              <p className="mb-2">
-                                ICAO Doc 9303 Part 12에 정의된 인증서로, 여권 전자 칩(eMRTD)의 데이터 그룹(DG1-DG16)에 디지털 서명하는데 사용됩니다.
-                                CSCA가 발급하며, Passive Authentication 검증 시 사용됩니다.
-                              </p>
-                              <p className="font-semibold mb-1">역할:</p>
-                              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                <li>여권 데이터 그룹(DG) 서명 (SOD 생성)</li>
-                                <li>CSCA에 의해 발급 (Issuer = CSCA)</li>
-                                <li>Passive Authentication 검증 대상</li>
-                                <li>유효기간: 일반적으로 3개월 ~ 3년</li>
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      {/* DSC_NC description */}
-                      {getActualCertType(selectedCert) === 'DSC_NC' && (
-                        <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-lg p-3 space-y-2">
-                          <div className="flex items-start gap-2">
-                            <AlertTriangle className="w-4 h-4 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
-                            <div className="text-xs text-orange-800 dark:text-orange-300">
-                              <p className="font-semibold mb-1">비준수 문서 서명 인증서 (DSC_NC - Non-Conformant DSC)</p>
-                              <p className="mb-2">
-                                ICAO 9303 기술 표준을 완전히 준수하지 않는 DSC입니다.
-                                ICAO PKD의 nc-data 컨테이너에 별도 저장되며, 일부 국가의 레거시 시스템 호환성을 위해 유지됩니다.
-                              </p>
-                              <p className="font-semibold mb-1">비준수 이유 (예시):</p>
-                              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                <li>필수 X.509 확장(Extension) 누락 또는 잘못된 설정</li>
-                                <li>Key Usage, Extended Key Usage 미준수</li>
-                                <li>Subject DN 또는 Issuer DN 형식 오류</li>
-                                <li>유효기간(Validity Period) 정책 위반</li>
-                                <li>서명 알고리즘 비권장 또는 보안 취약</li>
-                              </ul>
-                              <p className="font-semibold mb-1 mt-2">주의사항:</p>
-                              <ul className="list-disc list-inside space-y-0.5 ml-2">
-                                <li>⚠️ 프로덕션 환경에서 사용 권장하지 않음</li>
-                                <li>⚠️ 일부 검증 시스템에서 거부될 수 있음</li>
-                                <li>📌 LDAP 저장: dc=nc-data 컨테이너</li>
-                                <li>📌 ICAO는 2021년부터 nc-data 폐기 권장</li>
-                              </ul>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Self-signed:</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {selectedCert.isSelfSigned ? (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-                              <CheckCircle className="w-3 h-3 mr-1" />
-                              Yes
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400">
-                              No
-                            </span>
-                          )}
-                        </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Issued To Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Issued To</h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Common name (CN):</span>
-                        <span className="text-sm text-gray-900 dark:text-white break-all">{selectedCert.cn}</span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Organization (O):</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {selectedCert.subjectDn.match(/O=([^,]+)/)?.[1] || '-'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Organizational unit (OU):</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {selectedCert.subjectDn.match(/OU=([^,]+)/)?.[1] || '-'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Serial number:</span>
-                        <span className="text-sm text-gray-900 dark:text-white font-mono break-all">{selectedCert.sn}</span>
+                  {/* Validity and Fingerprints in 2-column layout */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* Validity */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">Validity</h3>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Issued on:</span>
+                          <span className="text-xs text-gray-900 dark:text-white">{formatDate(selectedCert.validFrom)}</span>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">Expires on:</span>
+                          <span className="text-xs text-gray-900 dark:text-white">{formatDate(selectedCert.validTo)}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Issued By Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Issued By</h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Common name (CN):</span>
-                        <span className="text-sm text-gray-900 dark:text-white break-all">
-                          {selectedCert.issuerDn.match(/CN=([^,]+)/)?.[1] || '-'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Organization (O):</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {selectedCert.issuerDn.match(/O=([^,]+)/)?.[1] || '-'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Organizational unit (OU):</span>
-                        <span className="text-sm text-gray-900 dark:text-white">
-                          {selectedCert.issuerDn.match(/OU=([^,]+)/)?.[1] || '-'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Validity Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Validity</h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Issued on:</span>
-                        <span className="text-sm text-gray-900 dark:text-white">{formatDate(selectedCert.validFrom)}</span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Expires on:</span>
-                        <span className="text-sm text-gray-900 dark:text-white">{formatDate(selectedCert.validTo)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Fingerprints Section */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Fingerprints</h3>
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">SHA1 fingerprint:</span>
-                        <span className="text-sm text-gray-900 dark:text-white font-mono break-all">
-                          {selectedCert.fingerprint.substring(0, 40) || 'N/A'}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-[140px_1fr] gap-2">
-                        <span className="text-sm text-gray-600 dark:text-gray-400">MD5 fingerprint:</span>
-                        <span className="text-sm text-gray-900 dark:text-white font-mono break-all">
-                          {selectedCert.fingerprint.substring(0, 32) || 'N/A'}
-                        </span>
+                    {/* Fingerprints */}
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">Fingerprints</h3>
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">SHA1:</span>
+                          <span className="text-xs text-gray-900 dark:text-white font-mono break-all">
+                            {selectedCert.fingerprint.substring(0, 40) || 'N/A'}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[80px_1fr] gap-2">
+                          <span className="text-xs text-gray-600 dark:text-gray-400">MD5:</span>
+                          <span className="text-xs text-gray-900 dark:text-white font-mono break-all">
+                            {selectedCert.fingerprint.substring(0, 32) || 'N/A'}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1329,31 +1329,31 @@ const CertificateSearch: React.FC = () => {
                   {/* PKD Conformance Section (DSC_NC only) */}
                   {getActualCertType(selectedCert) === 'DSC_NC' && (selectedCert.pkdConformanceCode || selectedCert.pkdConformanceText || selectedCert.pkdVersion) && (
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">
                         PKD Conformance Information
                       </h3>
-                      <div className="space-y-3">
+                      <div className="space-y-2">
                         {selectedCert.pkdConformanceCode && (
-                          <div className="grid grid-cols-[140px_1fr] gap-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Conformance Code:</span>
-                            <span className="text-sm text-gray-900 dark:text-white font-mono">
+                          <div className="grid grid-cols-[120px_1fr] gap-2">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Conformance Code:</span>
+                            <span className="text-xs text-gray-900 dark:text-white font-mono">
                               {selectedCert.pkdConformanceCode}
                             </span>
                           </div>
                         )}
                         {selectedCert.pkdVersion && (
-                          <div className="grid grid-cols-[140px_1fr] gap-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">PKD Version:</span>
-                            <span className="text-sm text-gray-900 dark:text-white">
+                          <div className="grid grid-cols-[120px_1fr] gap-2">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">PKD Version:</span>
+                            <span className="text-xs text-gray-900 dark:text-white">
                               {selectedCert.pkdVersion}
                             </span>
                           </div>
                         )}
                         {selectedCert.pkdConformanceText && (
-                          <div className="grid grid-cols-[140px_1fr] gap-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Conformance Text:</span>
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700 rounded p-3">
+                          <div className="grid grid-cols-[120px_1fr] gap-2">
+                            <span className="text-xs text-gray-600 dark:text-gray-400">Conformance Text:</span>
+                            <div className="text-xs text-gray-900 dark:text-white">
+                              <div className="bg-orange-50 dark:bg-orange-900/10 border border-orange-200 dark:border-orange-700 rounded p-2">
                                 <pre className="whitespace-pre-wrap break-words text-xs font-mono">
                                   {selectedCert.pkdConformanceText}
                                 </pre>
@@ -1368,16 +1368,16 @@ const CertificateSearch: React.FC = () => {
                   {/* Trust Chain Summary Card (DSC / DSC_NC only) */}
                   {(getActualCertType(selectedCert) === 'DSC' || getActualCertType(selectedCert) === 'DSC_NC') && (
                     <div>
-                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">
                         Trust Chain Validation
                       </h3>
                       {validationLoading ? (
-                        <div className="flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                           <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                          <span className="text-sm text-gray-500 dark:text-gray-400">검증 결과 로드 중...</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">검증 결과 로드 중...</span>
                         </div>
                       ) : validationResult ? (
-                        <div className={`rounded-lg border p-4 space-y-3 ${
+                        <div className={`rounded-lg border p-3 space-y-2 ${
                           validationResult.trustChainValid
                             ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
                             : validationResult.validationStatus === 'PENDING'
@@ -1388,18 +1388,18 @@ const CertificateSearch: React.FC = () => {
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                               {validationResult.trustChainValid ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
-                                  <CheckCircle className="w-3.5 h-3.5" />
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
+                                  <CheckCircle className="w-3 h-3" />
                                   신뢰 체인 유효
                                 </span>
                               ) : validationResult.validationStatus === 'PENDING' ? (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300">
-                                  <Clock className="w-3.5 h-3.5" />
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300">
+                                  <Clock className="w-3 h-3" />
                                   검증 대기 (만료됨)
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
-                                  <XCircle className="w-3.5 h-3.5" />
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
+                                  <XCircle className="w-3 h-3" />
                                   신뢰 체인 유효하지 않음
                                 </span>
                               )}
@@ -1415,7 +1415,7 @@ const CertificateSearch: React.FC = () => {
                           {/* Trust Chain Path (Compact) */}
                           {validationResult.trustChainPath && (
                             <div>
-                              <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1.5">신뢰 체인 경로:</span>
+                              <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">신뢰 체인 경로:</span>
                               <TrustChainVisualization
                                 trustChainPath={validationResult.trustChainPath}
                                 trustChainValid={validationResult.trustChainValid}
@@ -1438,7 +1438,7 @@ const CertificateSearch: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                           이 인증서에 대한 신뢰 체인 검증 결과가 없습니다.
                         </p>
                       )}
@@ -1453,27 +1453,27 @@ const CertificateSearch: React.FC = () => {
                   {/* Trust Chain Validation (Sprint 3 Task 3.6) */}
                   <div>
                     <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                      Trust Chain Validation
+                      신뢰 체인 검증
                     </h3>
                     {validationLoading ? (
                       <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center gap-2">
                         <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                        <span className="text-sm text-gray-600 dark:text-gray-400">Loading validation result...</span>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">검증 결과 로드 중...</span>
                       </div>
                     ) : validationResult ? (
                       <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
                         {/* Validation Status */}
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-gray-600 dark:text-gray-400">Status:</span>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">상태:</span>
                           {validationResult.trustChainValid ? (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                               <CheckCircle className="w-3 h-3 mr-1" />
-                              Valid
+                              유효
                             </span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
                               <XCircle className="w-3 h-3 mr-1" />
-                              Invalid
+                              유효하지 않음
                             </span>
                           )}
                         </div>
@@ -1481,7 +1481,7 @@ const CertificateSearch: React.FC = () => {
                         {/* Trust Chain Path Visualization */}
                         {validationResult.trustChainPath && (
                           <div>
-                            <span className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">Trust Chain Path:</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">신뢰 체인 경로:</span>
                             <TrustChainVisualization
                               trustChainPath={validationResult.trustChainPath}
                               trustChainValid={validationResult.trustChainValid}
@@ -1493,7 +1493,7 @@ const CertificateSearch: React.FC = () => {
                         {/* Message */}
                         {validationResult.trustChainMessage && (
                           <div>
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Message:</span>
+                            <span className="text-sm text-gray-600 dark:text-gray-400">메시지:</span>
                             <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{validationResult.trustChainMessage}</p>
                           </div>
                         )}
@@ -1501,7 +1501,7 @@ const CertificateSearch: React.FC = () => {
                     ) : (
                       <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
                         <p className="text-sm text-gray-600 dark:text-gray-400">
-                          No validation result available for this certificate.
+                          이 인증서에 대한 검증 결과가 없습니다.
                         </p>
                       </div>
                     )}
@@ -1511,23 +1511,23 @@ const CertificateSearch: React.FC = () => {
                   {isLinkCertificate(selectedCert) && (
                     <div>
                       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                        Link Certificate Information
+                        링크 인증서 정보
                       </h3>
                       <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-lg p-4 space-y-3">
                         <div className="flex items-start gap-2">
                           <Shield className="w-5 h-5 text-cyan-600 dark:text-cyan-400 mt-0.5" />
                           <div className="flex-1">
                             <h4 className="text-sm font-semibold text-cyan-800 dark:text-cyan-300 mb-2">
-                              Purpose
+                              목적
                             </h4>
                             <p className="text-xs text-cyan-700 dark:text-cyan-400 leading-relaxed">
-                              Link Certificates create a cryptographic trust chain between different CSCA certificates. They are typically used when:
+                              링크 인증서는 서로 다른 CSCA 인증서 간의 암호화 신뢰 체인을 생성합니다. 일반적으로 다음과 같은 경우에 사용됩니다:
                             </p>
                             <ul className="mt-2 ml-4 space-y-1 text-xs text-cyan-700 dark:text-cyan-400">
-                              <li className="list-disc">• A country updates their CSCA infrastructure</li>
-                              <li className="list-disc">• Organizational details change (e.g., organization name)</li>
-                              <li className="list-disc">• Certificate policies are updated</li>
-                              <li className="list-disc">• Migration to new cryptographic algorithms</li>
+                              <li className="list-disc">• 국가가 CSCA 인프라를 업데이트할 때</li>
+                              <li className="list-disc">• 조직 정보가 변경될 때 (예: 조직명 변경)</li>
+                              <li className="list-disc">• 인증서 정책이 업데이트될 때</li>
+                              <li className="list-disc">• 새로운 암호화 알고리즘으로 마이그레이션할 때</li>
                             </ul>
                           </div>
                         </div>
@@ -1545,23 +1545,23 @@ const CertificateSearch: React.FC = () => {
                   {isMasterListSignerCertificate(selectedCert) && (
                     <div>
                       <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                        Master List Signer Certificate Information
+                        Master List 서명 인증서 정보
                       </h3>
                       <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 space-y-3">
                         <div className="flex items-start gap-2">
                           <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5" />
                           <div className="flex-1">
                             <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2">
-                              Purpose
+                              목적
                             </h4>
                             <p className="text-xs text-purple-700 dark:text-purple-400 leading-relaxed">
-                              Master List Signer Certificates (MLSC) are used to digitally sign Master List CMS structures. These certificates:
+                              Master List 서명 인증서(MLSC)는 Master List CMS 구조에 디지털 서명하는 데 사용됩니다. 이러한 인증서의 특징:
                             </p>
                             <ul className="mt-2 ml-4 space-y-1 text-xs text-purple-700 dark:text-purple-400">
-                              <li className="list-disc">• Are self-signed certificates</li>
-                              <li className="list-disc">• Have digitalSignature key usage (0x80 bit)</li>
-                              <li className="list-disc">• Are embedded in Master List CMS as signer certificates</li>
-                              <li className="list-disc">• Are issued by national PKI authorities</li>
+                              <li className="list-disc">• 자체 서명 인증서</li>
+                              <li className="list-disc">• digitalSignature 키 사용 (0x80 비트)</li>
+                              <li className="list-disc">• Master List CMS에 서명 인증서로 포함됨</li>
+                              <li className="list-disc">• 국가 PKI 기관에서 발급</li>
                             </ul>
                           </div>
                         </div>
@@ -1572,15 +1572,15 @@ const CertificateSearch: React.FC = () => {
                               <span className="text-purple-800 dark:text-purple-300 font-mono break-all">{selectedCert.dn}</span>
                             </div>
                             <div className="grid grid-cols-[120px_1fr] gap-2">
-                              <span className="text-purple-600 dark:text-purple-400 font-medium">Storage:</span>
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">저장 위치:</span>
                               <span className="text-purple-800 dark:text-purple-300">
-                                Stored as CSCA type in database, but in <code className="bg-purple-100 dark:bg-purple-900/50 px-1 py-0.5 rounded">o=mlsc</code> organizational unit in LDAP
+                                데이터베이스에는 CSCA 타입으로 저장되지만, LDAP에서는 <code className="bg-purple-100 dark:bg-purple-900/50 px-1 py-0.5 rounded">o=mlsc</code> 조직 단위에 저장
                               </span>
                             </div>
                             <div className="grid grid-cols-[120px_1fr] gap-2">
-                              <span className="text-purple-600 dark:text-purple-400 font-medium">Self-signed:</span>
+                              <span className="text-purple-600 dark:text-purple-400 font-medium">자체 서명:</span>
                               <span className="text-purple-800 dark:text-purple-300">
-                                {selectedCert.isSelfSigned ? 'Yes (Subject DN = Issuer DN)' : 'No'}
+                                {selectedCert.isSelfSigned ? '예 (Subject DN = Issuer DN)' : '아니오'}
                               </span>
                             </div>
                           </div>
@@ -1589,19 +1589,35 @@ const CertificateSearch: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Certificate Hierarchy */}
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Certificate Hierarchy</h3>
-                    <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                      <div className="text-sm font-mono text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">
-                        {selectedCert.cn}
+                  {/* Trust Chain Hierarchy (only show for non-self-signed certificates with trust chain) */}
+                  {validationResult && validationResult.trustChainPath && validationResult.trustChainPath.trim() !== '' && !selectedCert.isSelfSigned && (
+                    <div>
+                      <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
+                        신뢰 체인 계층
+                      </h3>
+                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                        <TreeViewer
+                          data={buildTrustChainTree(validationResult.trustChainPath)}
+                          height="200px"
+                        />
                       </div>
+                      {validationResult.trustChainValid ? (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                          <CheckCircle className="w-4 h-4" />
+                          <span>신뢰 체인이 유효합니다</span>
+                        </div>
+                      ) : (
+                        <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+                          <XCircle className="w-4 h-4" />
+                          <span>신뢰 체인 검증 실패</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
+                  )}
 
                   {/* Certificate Fields Tree */}
                   <div>
-                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">Certificate Fields</h3>
+                    <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">인증서 필드</h3>
                     <TreeViewer
                       data={buildCertificateTree(selectedCert)}
                       height="400px"
@@ -1617,7 +1633,7 @@ const CertificateSearch: React.FC = () => {
                 onClick={() => exportCertificate(selectedCert.dn, 'pem')}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
               >
-                Save Certificate...
+                인증서 저장...
               </button>
               <button
                 onClick={() => setShowDetailDialog(false)}
