@@ -62,6 +62,9 @@ set(SOURCE_FILES
     src/repositories/certificate_repository.cpp
     src/repositories/crl_repository.cpp
     src/repositories/reconciliation_repository.cpp
+    # Repository Pattern - Services
+    src/services/sync_service.cpp
+    src/services/reconciliation_service.cpp
 )
 
 set(HEADER_FILES
@@ -80,6 +83,9 @@ set(HEADER_FILES
     src/repositories/certificate_repository.h
     src/repositories/crl_repository.h
     src/repositories/reconciliation_repository.h
+    # Repository Pattern - Services
+    src/services/sync_service.h
+    src/services/reconciliation_service.h
 )
 
 # =============================================================================
