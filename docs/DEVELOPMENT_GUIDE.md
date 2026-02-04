@@ -1,7 +1,7 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.0.5
-**Last Updated**: 2026-01-25
+**Version**: 2.4.3
+**Last Updated**: 2026-02-04
 
 ---
 
@@ -51,6 +51,75 @@ db_reset_crl_flags                          # Reset CRL stored_in_ldap flags
 db_reconciliation_summary 10                # Show last 10 reconciliations
 db_latest_reconciliation_logs               # Show latest reconciliation logs
 db_sync_status 10                           # Show sync status history
+```
+
+---
+
+## Architecture Overview
+
+### Connection Pool Architecture (v2.4.3)
+
+**All 3 backend services now use shared connection pools**:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              ICAO Local PKD - v2.4.3                        │
+│          Connection Pool Architecture                        │
+└─────────────────────────────────────────────────────────────┘
+
+┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+│ PA Service   │  │ PKD Mgmt     │  │ PKD Relay    │
+│ (8082)       │  │ (8081)       │  │ (8083)       │
+└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
+       │                 │                 │
+       └─────────────────┴─────────────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         │   Shared Libraries (v2.4.3)   │
+         ├───────────────────────────────┤
+         │  • icao::ldap  (LDAP Pool)    │
+         │  • icao::database (DB Pool)   │
+         │  • icao::config               │
+         │  • icao::exception            │
+         │  • icao::logging              │
+         │  • icao::icao9303             │
+         └───────────────┬───────────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         │                               │
+    ┌────▼─────┐                  ┌─────▼────┐
+    │ OpenLDAP │                  │ Postgres │
+    │ Cluster  │                  │ 15       │
+    │ (MMR)    │                  │          │
+    └──────────┘                  └──────────┘
+```
+
+**Benefits**:
+- ✅ **50x LDAP Performance**: Connection reuse vs. new connection per request
+- ✅ **Thread Safety**: Automatic connection management with RAII pattern
+- ✅ **Resource Efficiency**: Configurable min/max connections per service
+- ✅ **Automatic Retry**: Built-in connection validation and recovery
+- ✅ **Consistent API**: Same pattern across all services
+
+**Connection Pool Configuration**:
+
+| Service | LDAP Pool | DB Pool | Notes |
+|---------|-----------|---------|-------|
+| pa-service | 2-10 | 5-20 | Verification-heavy |
+| pkd-management | 3-15 | 5-20 | Upload/search operations |
+| pkd-relay | 2-10 | 5-20 | Sync/reconciliation |
+
+**RAII Pattern Example**:
+```cpp
+// Acquire connection from pool (auto-release on scope exit)
+auto conn = ldapPool_->acquire();
+if (!conn.isValid()) {
+    throw std::runtime_error("Failed to acquire LDAP connection");
+}
+
+LDAP* ld = conn.get();
+// Use connection...
+// Connection automatically released when 'conn' goes out of scope
 ```
 
 ---
