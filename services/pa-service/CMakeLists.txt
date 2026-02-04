@@ -67,8 +67,7 @@ find_library(UUID_LIBRARY uuid REQUIRED)
 # Domain Models
 set(DOMAIN_MODELS_SRC
     src/domain/models/pa_verification.cpp
-    src/domain/models/sod_data.cpp
-    src/domain/models/data_group.cpp
+    # sod_data.cpp and data_group.cpp now provided by icao::icao9303 library
     src/domain/models/certificate_chain_validation.cpp
 )
 
@@ -82,8 +81,7 @@ set(REPOSITORIES_SRC
 
 # Services
 set(SERVICES_SRC
-    src/services/sod_parser_service.cpp
-    src/services/data_group_parser_service.cpp
+    # sod_parser_service.cpp and data_group_parser_service.cpp now provided by icao::icao9303 library
     src/services/certificate_validation_service.cpp
     src/services/pa_verification_service.cpp
 )
@@ -116,6 +114,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     icao::database       # Shared database connection pool library
     icao::audit          # Shared audit logging library
+    icao::icao9303       # Shared ICAO 9303 parser library (SOD, DG, MRZ)
     icao-common
     Drogon::Drogon
     OpenSSL::SSL

@@ -68,8 +68,9 @@
 #include "repositories/data_group_repository.h"
 #include "repositories/ldap_certificate_repository.h"
 #include "repositories/ldap_crl_repository.h"
-#include "services/sod_parser_service.h"
-#include "services/data_group_parser_service.h"
+// ICAO 9303 Parser Library (Shared)
+#include <sod_parser.h>
+#include <dg_parser.h>
 #include "services/certificate_validation_service.h"
 #include "services/pa_verification_service.h"
 
@@ -259,8 +260,8 @@ repositories::LdapCertificateRepository* ldapCertificateRepository = nullptr;
 repositories::LdapCrlRepository* ldapCrlRepository = nullptr;
 
 // Services
-services::SodParserService* sodParserService = nullptr;
-services::DataGroupParserService* dataGroupParserService = nullptr;
+icao::SodParser* sodParserService = nullptr;
+icao::DgParser* dataGroupParserService = nullptr;
 services::CertificateValidationService* certificateValidationService = nullptr;
 services::PaVerificationService* paVerificationService = nullptr;
 
@@ -1693,11 +1694,11 @@ void initializeServices() {
         );
 
         // Step 4: Initialize Services (constructor-based dependency injection)
-        spdlog::debug("Creating SodParserService...");
-        sodParserService = new services::SodParserService();
+        spdlog::debug("Creating icao::SodParser...");
+        sodParserService = new icao::SodParser();
 
-        spdlog::debug("Creating DataGroupParserService...");
-        dataGroupParserService = new services::DataGroupParserService();
+        spdlog::debug("Creating icao::DgParser...");
+        dataGroupParserService = new icao::DgParser();
 
         spdlog::debug("Creating CertificateValidationService...");
         certificateValidationService = new services::CertificateValidationService(
@@ -1906,7 +1907,7 @@ void registerRoutes() {
                 if (documentNumber.empty() && dataGroups.count("1") > 0) {
                     const auto& dg1Data = dataGroups["1"];
                     // Simple extraction: find MRZ in DG1 and extract document number
-                    // This is a simplified version - full parsing is in DataGroupParserService
+                    // This is a simplified version - full parsing is in icao::DgParser
                     size_t pos = 0;
                     while (pos + 3 < dg1Data.size()) {
                         if (dg1Data[pos] == 0x5F && dg1Data[pos + 1] == 0x1F) {
@@ -2136,7 +2137,7 @@ void registerRoutes() {
                 return;
             }
 
-            // Use DataGroupParserService to parse DG1
+            // Use icao::DgParser to parse DG1
             Json::Value result = dataGroupParserService->parseDg1(dg1Bytes);
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -2165,7 +2166,7 @@ void registerRoutes() {
 
             std::string mrzText = (*jsonBody)["mrzText"].asString();
 
-            // Use DataGroupParserService to parse MRZ text
+            // Use icao::DgParser to parse MRZ text
             Json::Value result = dataGroupParserService->parseMrzText(mrzText);
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -2217,7 +2218,7 @@ void registerRoutes() {
                 return;
             }
 
-            // Use DataGroupParserService to parse DG2
+            // Use icao::DgParser to parse DG2
             Json::Value result = dataGroupParserService->parseDg2(dg2Bytes);
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -2269,7 +2270,7 @@ void registerRoutes() {
                 return;
             }
 
-            // Use SodParserService to parse SOD
+            // Use icao::SodParser to parse SOD
             Json::Value result = sodParserService->parseSodForApi(sodBytes);
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -2324,7 +2325,7 @@ void registerRoutes() {
                         result["hasDg1"] = true;
                         spdlog::debug("Parsing DG1 ({} bytes)", dgBytes.size());
 
-                        // Use DataGroupParserService to parse DG1
+                        // Use icao::DgParser to parse DG1
                         Json::Value dg1Result = dataGroupParserService->parseDg1(dgBytes);
                         if (dg1Result["success"].asBool()) {
                             result["dg1"] = dg1Result;
@@ -2336,7 +2337,7 @@ void registerRoutes() {
                         result["hasDg2"] = true;
                         spdlog::debug("Parsing DG2 ({} bytes)", dgBytes.size());
 
-                        // Use DataGroupParserService to parse DG2
+                        // Use icao::DgParser to parse DG2
                         Json::Value dg2Result = dataGroupParserService->parseDg2(dgBytes);
                         if (dg2Result["success"].asBool()) {
                             result["dg2"] = dg2Result;

@@ -82,7 +82,7 @@ Json::Value DataGroupRepository::findById(const std::string& id) {
 }
 
 std::string DataGroupRepository::insert(
-    const domain::models::DataGroup& dg,
+    const icao::models::DataGroup& dg,
     const std::string& verificationId)
 {
     spdlog::debug("Inserting data group {} for verification {}", dg.dgNumber, verificationId);

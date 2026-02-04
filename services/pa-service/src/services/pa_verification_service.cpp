@@ -11,9 +11,9 @@ namespace services {
 
 PaVerificationService::PaVerificationService(
     repositories::PaVerificationRepository* paRepo,
-    SodParserService* sodParser,
+    icao::SodParser* sodParser,
     CertificateValidationService* certValidator,
-    DataGroupParserService* dgParser)
+    icao::DgParser* dgParser)
     : paRepo_(paRepo),
       sodParser_(sodParser),
       certValidator_(certValidator),
@@ -37,7 +37,7 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
 
     try {
         // Step 1: Parse SOD
-        domain::models::SodData sod = sodParser_->parseSod(sodData);
+        icao::models::SodData sod = sodParser_->parseSod(sodData);
         if (!sod.parsingSuccess || !sod.dscCertificate) {
             response["success"] = false;
             response["error"] = "SOD parsing failed: " + sod.parsingErrors.value_or("Unknown error");

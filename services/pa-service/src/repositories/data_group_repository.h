@@ -15,7 +15,7 @@
 #include <vector>
 #include <json/json.h>
 #include <libpq-fe.h>
-#include "../domain/models/data_group.h"
+#include <models/data_group.h>
 #include "db_connection_pool.h"
 
 namespace repositories {
@@ -74,7 +74,7 @@ public:
      * @param verificationId PA verification UUID
      * @return Inserted data group ID (UUID)
      */
-    std::string insert(const domain::models::DataGroup& dg, const std::string& verificationId);
+    std::string insert(const icao::models::DataGroup& dg, const std::string& verificationId);
 
     /**
      * @brief Delete all data groups for a verification
