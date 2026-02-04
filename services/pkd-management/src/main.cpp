@@ -122,7 +122,9 @@ std::shared_ptr<handlers::AuthHandler> authHandler;
 // Phase 1.6: Global Repositories and Services (Repository Pattern)
 // v2.3.1: Replaced single connection with Connection Pool for thread safety
 // v2.5.0: Uses Factory Pattern for database type selection (Oracle migration Phase 2)
+// v2.5.0 Phase 3: Query Executor Pattern for database-agnostic queries
 std::shared_ptr<common::DbConnectionPool> dbPool;  // Database connection pool (currently PostgreSQL only)
+std::unique_ptr<common::IQueryExecutor> queryExecutor;  // Query executor (database-agnostic)
 std::shared_ptr<common::LdapConnectionPool> ldapPool;  // LDAP connection pool (NEW - v2.4.3)
 std::shared_ptr<repositories::UploadRepository> uploadRepository;
 std::shared_ptr<repositories::CertificateRepository> certificateRepository;
@@ -5297,10 +5299,7 @@ void registerRoutes() {
 
                     // MANUAL mode Stage 2: Validate and save to DB
                     auto strategy = ProcessingStrategyFactory::create("MANUAL");
-                    auto manualStrategy = dynamic_cast<ManualProcessingStrategy*>(strategy.get());
-                    if (manualStrategy) {
-                        manualStrategy->validateAndSaveToDb(uploadId, conn);
-                    }
+                    strategy->validateAndSaveToDb(uploadId, conn);
 
                     // Send DB save completed (Stage 2 완료)
                     ProgressManager::getInstance().sendProgress(
@@ -8777,13 +8776,17 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        // Initialize Repositories with Connection Pool (v2.3.1: Thread-safe database access)
-        uploadRepository = std::make_shared<repositories::UploadRepository>(dbPool.get());
-        certificateRepository = std::make_shared<repositories::CertificateRepository>(dbPool.get());
-        validationRepository = std::make_shared<repositories::ValidationRepository>(dbPool.get());
-        auditRepository = std::make_shared<repositories::AuditRepository>(dbPool.get());
-        statisticsRepository = std::make_shared<repositories::StatisticsRepository>(dbPool.get());
-        spdlog::info("Repositories initialized with Connection Pool (Upload, Certificate, Validation, Audit, Statistics)");
+        // Initialize Query Executor (v2.5.0 Phase 3: Database-agnostic query execution)
+        queryExecutor = common::createQueryExecutor(dbPool.get());
+        spdlog::info("Query Executor initialized (DB type: {})", queryExecutor->getDatabaseType());
+
+        // Initialize Repositories with Query Executor (v2.5.0 Phase 3: Database-agnostic)
+        uploadRepository = std::make_shared<repositories::UploadRepository>(queryExecutor.get());
+        certificateRepository = std::make_shared<repositories::CertificateRepository>(queryExecutor.get());
+        validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get());
+        auditRepository = std::make_shared<repositories::AuditRepository>(queryExecutor.get());
+        statisticsRepository = std::make_shared<repositories::StatisticsRepository>(queryExecutor.get());
+        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics: Query Executor)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
         // Initialize Services with Repository dependencies

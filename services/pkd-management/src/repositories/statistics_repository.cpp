@@ -4,13 +4,13 @@
 
 namespace repositories {
 
-StatisticsRepository::StatisticsRepository(common::DbConnectionPool* dbPool)
-    : dbPool_(dbPool)
+StatisticsRepository::StatisticsRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
 {
-    if (!dbPool_) {
-        throw std::invalid_argument("StatisticsRepository: dbPool cannot be nullptr");
+    if (!queryExecutor_) {
+        throw std::invalid_argument("StatisticsRepository: queryExecutor cannot be nullptr");
     }
-    spdlog::debug("[StatisticsRepository] Initialized");
+    spdlog::debug("[StatisticsRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
 }
 
 Json::Value StatisticsRepository::getUploadStatistics()
@@ -92,55 +92,5 @@ Json::Value StatisticsRepository::getSystemStatistics()
     return response;
 }
 
-PGresult* StatisticsRepository::executeQuery(const std::string& query)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
-        if (res) PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-Json::Value StatisticsRepository::pgResultToJson(PGresult* res)
-{
-    Json::Value array = Json::arrayValue;
-    int rows = PQntuples(res);
-    int cols = PQnfields(res);
-
-    for (int i = 0; i < rows; ++i) {
-        Json::Value row;
-        for (int j = 0; j < cols; ++j) {
-            const char* fieldName = PQfname(res, j);
-            if (PQgetisnull(res, i, j)) {
-                row[fieldName] = Json::nullValue;
-            } else {
-                Oid type = PQftype(res, j);
-                if (type == 23 || type == 20) {  // INT4 or INT8
-                    row[fieldName] = std::atoi(PQgetvalue(res, i, j));
-                } else if (type == 700 || type == 701) {  // FLOAT4 or FLOAT8
-                    row[fieldName] = std::atof(PQgetvalue(res, i, j));
-                } else if (type == 16) {  // BOOL
-                    row[fieldName] = (PQgetvalue(res, i, j)[0] == 't');
-                } else {
-                    row[fieldName] = PQgetvalue(res, i, j);
-                }
-            }
-        }
-        array.append(row);
-    }
-
-    return array;
-}
 
 } // namespace repositories

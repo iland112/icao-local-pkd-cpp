@@ -4,13 +4,13 @@
 
 namespace repositories {
 
-ValidationRepository::ValidationRepository(common::DbConnectionPool* dbPool)
-    : dbPool_(dbPool)
+ValidationRepository::ValidationRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
 {
-    if (!dbPool_) {
-        throw std::invalid_argument("ValidationRepository: dbPool cannot be nullptr");
+    if (!queryExecutor_) {
+        throw std::invalid_argument("ValidationRepository: queryExecutor cannot be nullptr");
     }
-    spdlog::debug("[ValidationRepository] Initialized");
+    spdlog::debug("[ValidationRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
 }
 
 bool ValidationRepository::save(const domain::models::ValidationResult& result)
@@ -19,13 +19,6 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                   result.certificateId.substr(0, 8));
 
     try {
-        // Acquire connection from pool (RAII - automatically released on scope exit)
-        auto conn = dbPool_->acquire();
-
-        if (!conn.isValid()) {
-            throw std::runtime_error("Failed to acquire database connection from pool");
-        }
-
         // Parameterized query matching actual validation_result table schema (22 columns)
         const char* query =
             "INSERT INTO validation_result ("
@@ -58,8 +51,6 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
         }
 
         // Prepare trust_chain_path as JSON array (schema expects jsonb)
-        // trustChainPath is human-readable like "DSC → CN=CSCA → CN=Link"
-        // Wrap as JSON array for JSONB column
         std::string trustChainPathJson;
         if (result.trustChainPath.empty()) {
             trustChainPathJson = "[]";
@@ -71,47 +62,35 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
             trustChainPathJson = Json::writeString(builder, pathArray);
         }
 
-        // Prepare parameter values
-        const char* paramValues[22];
-        paramValues[0] = result.certificateId.c_str();
-        paramValues[1] = result.uploadId.c_str();
-        paramValues[2] = result.certificateType.c_str();
-        paramValues[3] = result.countryCode.empty() ? nullptr : result.countryCode.c_str();
-        paramValues[4] = result.subjectDn.c_str();
-        paramValues[5] = result.issuerDn.c_str();
-        paramValues[6] = result.serialNumber.empty() ? nullptr : result.serialNumber.c_str();
-        paramValues[7] = result.validationStatus.c_str();
-        paramValues[8] = trustChainValidStr.c_str();
-        paramValues[9] = result.trustChainMessage.empty() ? nullptr : result.trustChainMessage.c_str();
-        paramValues[10] = cscaFoundStr.c_str();
-        paramValues[11] = result.cscaSubjectDn.empty() ? nullptr : result.cscaSubjectDn.c_str();
-        paramValues[12] = nullptr;  // csca_serial_number - not tracked in ValidationResult
-        paramValues[13] = nullptr;  // csca_country - not tracked in ValidationResult
-        paramValues[14] = signatureValidStr.c_str();
-        paramValues[15] = result.signatureAlgorithm.empty() ? nullptr : result.signatureAlgorithm.c_str();
-        paramValues[16] = validityPeriodValidStr.c_str();
-        paramValues[17] = result.notBefore.empty() ? nullptr : result.notBefore.c_str();
-        paramValues[18] = result.notAfter.empty() ? nullptr : result.notAfter.c_str();
-        paramValues[19] = revocationStatus.c_str();
-        paramValues[20] = crlCheckedStr.c_str();
-        paramValues[21] = trustChainPathJson.c_str();
+        // Prepare parameter values as vector
+        std::vector<std::string> params = {
+            result.certificateId,
+            result.uploadId,
+            result.certificateType,
+            result.countryCode.empty() ? "" : result.countryCode,
+            result.subjectDn,
+            result.issuerDn,
+            result.serialNumber.empty() ? "" : result.serialNumber,
+            result.validationStatus,
+            trustChainValidStr,
+            result.trustChainMessage.empty() ? "" : result.trustChainMessage,
+            cscaFoundStr,
+            result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn,
+            "",  // csca_serial_number - not tracked
+            "",  // csca_country - not tracked
+            signatureValidStr,
+            result.signatureAlgorithm.empty() ? "" : result.signatureAlgorithm,
+            validityPeriodValidStr,
+            result.notBefore.empty() ? "" : result.notBefore,
+            result.notAfter.empty() ? "" : result.notAfter,
+            revocationStatus,
+            crlCheckedStr,
+            trustChainPathJson
+        };
 
-        // Execute parameterized query
-        PGresult* res = PQexecParams(
-        conn.get(), query, 22, nullptr, paramValues,
-                                     nullptr, nullptr, 0);
-
-        bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-
-        if (!success) {
-            spdlog::error("[ValidationRepository] Failed to save validation result: {}",
-                         PQerrorMessage(conn.get()));
-        } else {
-            spdlog::debug("[ValidationRepository] Validation result saved successfully");
-        }
-
-        PQclear(res);
-        return success;
+        queryExecutor_->executeCommand(query, params);
+        spdlog::debug("[ValidationRepository] Validation result saved successfully");
+        return true;
 
     } catch (const std::exception& e) {
         spdlog::error("[ValidationRepository] Exception in save: {}", e.what());
@@ -126,13 +105,6 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
                   uploadId.substr(0, 8));
 
     try {
-        // Acquire connection from pool (RAII - automatically released on scope exit)
-        auto conn = dbPool_->acquire();
-
-        if (!conn.isValid()) {
-            throw std::runtime_error("Failed to acquire database connection from pool");
-        }
-
         // Parameterized UPDATE query for uploaded_file table (10 parameters)
         const char* query =
             "UPDATE uploaded_file SET "
@@ -147,49 +119,25 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
             "revoked_count = $9 "
             "WHERE id = $10";
 
-        // Prepare integer strings for parameterized query
-        std::string validCountStr = std::to_string(stats.validCount);
-        std::string invalidCountStr = std::to_string(stats.invalidCount);
-        std::string pendingCountStr = std::to_string(stats.pendingCount);
-        std::string errorCountStr = std::to_string(stats.errorCount);
-        std::string trustChainValidCountStr = std::to_string(stats.trustChainValidCount);
-        std::string trustChainInvalidCountStr = std::to_string(stats.trustChainInvalidCount);
-        std::string cscaNotFoundCountStr = std::to_string(stats.cscaNotFoundCount);
-        std::string expiredCountStr = std::to_string(stats.expiredCount);
-        std::string revokedCountStr = std::to_string(stats.revokedCount);
-
-        const char* paramValues[10] = {
-            validCountStr.c_str(),
-            invalidCountStr.c_str(),
-            pendingCountStr.c_str(),
-            errorCountStr.c_str(),
-            trustChainValidCountStr.c_str(),
-            trustChainInvalidCountStr.c_str(),
-            cscaNotFoundCountStr.c_str(),
-            expiredCountStr.c_str(),
-            revokedCountStr.c_str(),
-            uploadId.c_str()
+        std::vector<std::string> params = {
+            std::to_string(stats.validCount),
+            std::to_string(stats.invalidCount),
+            std::to_string(stats.pendingCount),
+            std::to_string(stats.errorCount),
+            std::to_string(stats.trustChainValidCount),
+            std::to_string(stats.trustChainInvalidCount),
+            std::to_string(stats.cscaNotFoundCount),
+            std::to_string(stats.expiredCount),
+            std::to_string(stats.revokedCount),
+            uploadId
         };
 
-        // Execute parameterized query
-        PGresult* res = PQexecParams(
-        conn.get(), query, 10, nullptr, paramValues,
-                                     nullptr, nullptr, 0);
-
-        bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-
-        if (!success) {
-            spdlog::error("[ValidationRepository] Failed to update statistics: {}",
-                         PQerrorMessage(conn.get()));
-        } else {
-            spdlog::debug("[ValidationRepository] Statistics updated successfully "
-                         "(valid={}, invalid={}, pending={}, error={})",
-                         stats.validCount, stats.invalidCount,
-                         stats.pendingCount, stats.errorCount);
-        }
-
-        PQclear(res);
-        return success;
+        queryExecutor_->executeCommand(query, params);
+        spdlog::debug("[ValidationRepository] Statistics updated successfully "
+                     "(valid={}, invalid={}, pending={}, error={})",
+                     stats.validCount, stats.invalidCount,
+                     stats.pendingCount, stats.errorCount);
+        return true;
 
     } catch (const std::exception& e) {
         spdlog::error("[ValidationRepository] Exception in updateStatistics: {}", e.what());
@@ -219,76 +167,124 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             "LIMIT 1";
 
         std::vector<std::string> params = {fingerprint};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value queryResult = queryExecutor_->executeQuery(query, params);
 
         // Check if result found
-        if (PQntuples(res) == 0) {
+        if (queryResult.empty()) {
             spdlog::debug("[ValidationRepository] No validation result found for fingerprint: {}...",
                 fingerprint.substr(0, 16));
-            PQclear(res);
             return Json::nullValue;
         }
 
-        // Build JSON response
+        // Extract first row
+        Json::Value row = queryResult[0];
+
+        // Build JSON response with field name mapping
         Json::Value result;
-        result["id"] = PQgetisnull(res, 0, 0) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 0)));
-        result["certificateId"] = PQgetisnull(res, 0, 1) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 1)));
-        result["uploadId"] = PQgetisnull(res, 0, 2) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 2)));
-        result["certificateType"] = PQgetisnull(res, 0, 3) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 3)));
-        result["countryCode"] = PQgetisnull(res, 0, 4) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 4)));
-        result["subjectDn"] = PQgetisnull(res, 0, 5) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 5)));
-        result["issuerDn"] = PQgetisnull(res, 0, 6) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 6)));
-        result["serialNumber"] = PQgetisnull(res, 0, 7) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 7)));
-        result["validationStatus"] = PQgetisnull(res, 0, 8) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 8)));
+        result["id"] = row.get("id", Json::nullValue);
+        result["certificateId"] = row.get("certificate_id", Json::nullValue);
+        result["uploadId"] = row.get("upload_id", Json::nullValue);
+        result["certificateType"] = row.get("certificate_type", Json::nullValue);
+        result["countryCode"] = row.get("country_code", Json::nullValue);
+        result["subjectDn"] = row.get("subject_dn", Json::nullValue);
+        result["issuerDn"] = row.get("issuer_dn", Json::nullValue);
+        result["serialNumber"] = row.get("serial_number", Json::nullValue);
+        result["validationStatus"] = row.get("validation_status", Json::nullValue);
 
-        // Boolean fields
-        std::string tcvStr = PQgetisnull(res, 0, 9) ? "f" : std::string(PQgetvalue(res, 0, 9));
-        result["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+        // Boolean fields - handle both boolean and string types from Query Executor
+        Json::Value tcvVal = row.get("trust_chain_valid", false);
+        if (tcvVal.isBool()) {
+            result["trustChainValid"] = tcvVal.asBool();
+        } else if (tcvVal.isString()) {
+            std::string tcvStr = tcvVal.asString();
+            result["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+        } else {
+            result["trustChainValid"] = false;
+        }
 
-        result["trustChainMessage"] = PQgetisnull(res, 0, 10) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 10)));
+        result["trustChainMessage"] = row.get("trust_chain_message", Json::nullValue);
 
         // Parse trust_chain_path JSONB (stored as array ["DSC → CSCA"])
-        std::string tcpRaw = PQgetisnull(res, 0, 11) ? "[]" : std::string(PQgetvalue(res, 0, 11));
-        try {
-            Json::Reader reader;
-            Json::Value pathArray;
-            if (reader.parse(tcpRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
-                result["trustChainPath"] = pathArray[0].asString();
-            } else {
+        Json::Value tcpVal = row.get("trust_chain_path", Json::nullValue);
+        if (tcpVal.isArray() && tcpVal.size() > 0) {
+            result["trustChainPath"] = tcpVal[0].asString();
+        } else if (tcpVal.isString()) {
+            // If returned as string, try parsing
+            std::string tcpRaw = tcpVal.asString();
+            try {
+                Json::Reader reader;
+                Json::Value pathArray;
+                if (reader.parse(tcpRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
+                    result["trustChainPath"] = pathArray[0].asString();
+                } else {
+                    result["trustChainPath"] = "";
+                }
+            } catch (...) {
                 result["trustChainPath"] = "";
             }
-        } catch (...) {
+        } else {
             result["trustChainPath"] = "";
         }
 
-        std::string cfStr = PQgetisnull(res, 0, 12) ? "f" : std::string(PQgetvalue(res, 0, 12));
-        result["cscaFound"] = (cfStr == "t" || cfStr == "true");
-        result["cscaSubjectDn"] = PQgetisnull(res, 0, 13) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 13)));
+        // Boolean field: csca_found
+        Json::Value cfVal = row.get("csca_found", false);
+        if (cfVal.isBool()) {
+            result["cscaFound"] = cfVal.asBool();
+        } else if (cfVal.isString()) {
+            std::string cfStr = cfVal.asString();
+            result["cscaFound"] = (cfStr == "t" || cfStr == "true");
+        } else {
+            result["cscaFound"] = false;
+        }
 
-        std::string svStr = PQgetisnull(res, 0, 14) ? "f" : std::string(PQgetvalue(res, 0, 14));
-        result["signatureVerified"] = (svStr == "t" || svStr == "true");
+        result["cscaSubjectDn"] = row.get("csca_subject_dn", Json::nullValue);
 
-        result["signatureAlgorithm"] = PQgetisnull(res, 0, 15) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 15)));
+        // Boolean field: signature_valid
+        Json::Value svVal = row.get("signature_valid", false);
+        if (svVal.isBool()) {
+            result["signatureVerified"] = svVal.asBool();
+        } else if (svVal.isString()) {
+            std::string svStr = svVal.asString();
+            result["signatureVerified"] = (svStr == "t" || svStr == "true");
+        } else {
+            result["signatureVerified"] = false;
+        }
 
-        std::string vpStr = PQgetisnull(res, 0, 16) ? "f" : std::string(PQgetvalue(res, 0, 16));
-        result["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+        result["signatureAlgorithm"] = row.get("signature_algorithm", Json::nullValue);
 
-        result["notBefore"] = PQgetisnull(res, 0, 17) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 17)));
-        result["notAfter"] = PQgetisnull(res, 0, 18) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 18)));
+        // Boolean field: validity_period_valid
+        Json::Value vpVal = row.get("validity_period_valid", false);
+        if (vpVal.isBool()) {
+            result["validityCheckPassed"] = vpVal.asBool();
+        } else if (vpVal.isString()) {
+            std::string vpStr = vpVal.asString();
+            result["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+        } else {
+            result["validityCheckPassed"] = false;
+        }
+
+        result["notBefore"] = row.get("not_before", Json::nullValue);
+        result["notAfter"] = row.get("not_after", Json::nullValue);
 
         // Compute isExpired and isNotYetValid from timestamps
         result["isExpired"] = false;  // TODO: compute from notAfter
         result["isNotYetValid"] = false;  // TODO: compute from notBefore
 
-        result["crlCheckStatus"] = PQgetisnull(res, 0, 19) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 19)));
+        result["crlCheckStatus"] = row.get("revocation_status", Json::nullValue);
 
-        std::string ccStr = PQgetisnull(res, 0, 20) ? "f" : std::string(PQgetvalue(res, 0, 20));
-        result["crlChecked"] = (ccStr == "t" || ccStr == "true");
+        // Boolean field: crl_checked
+        Json::Value ccVal = row.get("crl_checked", false);
+        if (ccVal.isBool()) {
+            result["crlChecked"] = ccVal.asBool();
+        } else if (ccVal.isString()) {
+            std::string ccStr = ccVal.asString();
+            result["crlChecked"] = (ccStr == "t" || ccStr == "true");
+        } else {
+            result["crlChecked"] = false;
+        }
 
-        result["validatedAt"] = PQgetisnull(res, 0, 21) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 21)));
-        result["fingerprint"] = PQgetisnull(res, 0, 22) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, 0, 22)));
-
-        PQclear(res);
+        result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
+        result["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
 
         spdlog::debug("[ValidationRepository] Found validation result for fingerprint: {}...",
             fingerprint.substr(0, 16));
@@ -334,13 +330,8 @@ Json::Value ValidationRepository::findByUploadId(
 
         // Get total count
         std::string countQuery = "SELECT COUNT(*) FROM validation_result vr " + whereClause;
-        PGresult* countRes = executeParamQuery(countQuery, paramValues);
-
-        int total = 0;
-        if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-            total = std::atoi(PQgetvalue(countRes, 0, 0));
-        }
-        PQclear(countRes);
+        Json::Value countResult = queryExecutor_->executeScalar(countQuery, paramValues);
+        int total = countResult.asInt();
 
         // Fetch validation results with JOIN to certificate for fingerprint
         std::string dataQuery =
@@ -365,85 +356,147 @@ Json::Value ValidationRepository::findByUploadId(
         dataParams.push_back(std::to_string(limit));
         dataParams.push_back(std::to_string(offset));
 
-        PGresult* res = executeParamQuery(dataQuery, dataParams);
+        Json::Value queryResult = queryExecutor_->executeQuery(dataQuery, dataParams);
 
         // Build validations array
         Json::Value validations = Json::arrayValue;
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
+        for (Json::ArrayIndex i = 0; i < queryResult.size(); i++) {
+            Json::Value row = queryResult[i];
             Json::Value v;
-            v["id"] = PQgetisnull(res, i, 0) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 0)));
-            v["certificateId"] = PQgetisnull(res, i, 1) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 1)));
-            v["uploadId"] = PQgetisnull(res, i, 2) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 2)));
-            v["certificateType"] = PQgetisnull(res, i, 3) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 3)));
-            v["countryCode"] = PQgetisnull(res, i, 4) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 4)));
-            v["subjectDn"] = PQgetisnull(res, i, 5) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 5)));
-            v["issuerDn"] = PQgetisnull(res, i, 6) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 6)));
-            v["serialNumber"] = PQgetisnull(res, i, 7) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 7)));
-            v["validationStatus"] = PQgetisnull(res, i, 8) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 8)));
 
-            // Boolean fields
-            std::string tcvStr = PQgetisnull(res, i, 9) ? "f" : std::string(PQgetvalue(res, i, 9));
-            v["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+            v["id"] = row.get("id", Json::nullValue);
+            v["certificateId"] = row.get("certificate_id", Json::nullValue);
+            v["uploadId"] = row.get("upload_id", Json::nullValue);
+            v["certificateType"] = row.get("certificate_type", Json::nullValue);
+            v["countryCode"] = row.get("country_code", Json::nullValue);
+            v["subjectDn"] = row.get("subject_dn", Json::nullValue);
+            v["issuerDn"] = row.get("issuer_dn", Json::nullValue);
+            v["serialNumber"] = row.get("serial_number", Json::nullValue);
+            v["validationStatus"] = row.get("validation_status", Json::nullValue);
 
-            v["trustChainMessage"] = PQgetisnull(res, i, 10) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 10)));
+            // Boolean field: trust_chain_valid
+            Json::Value tcvVal = row.get("trust_chain_valid", false);
+            if (tcvVal.isBool()) {
+                v["trustChainValid"] = tcvVal.asBool();
+            } else if (tcvVal.isString()) {
+                std::string tcvStr = tcvVal.asString();
+                v["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+            } else {
+                v["trustChainValid"] = false;
+            }
+
+            v["trustChainMessage"] = row.get("trust_chain_message", Json::nullValue);
 
             // Parse trust_chain_path JSONB
-            std::string tcpRaw = PQgetisnull(res, i, 11) ? "[]" : std::string(PQgetvalue(res, i, 11));
-            try {
-                Json::Reader reader;
-                Json::Value pathArray;
-                if (reader.parse(tcpRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
-                    v["trustChainPath"] = pathArray[0].asString();
-                } else {
+            Json::Value tcpVal = row.get("trust_chain_path", Json::nullValue);
+            if (tcpVal.isArray() && tcpVal.size() > 0) {
+                v["trustChainPath"] = tcpVal[0].asString();
+            } else if (tcpVal.isString()) {
+                std::string tcpRaw = tcpVal.asString();
+                try {
+                    Json::Reader reader;
+                    Json::Value pathArray;
+                    if (reader.parse(tcpRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0) {
+                        v["trustChainPath"] = pathArray[0].asString();
+                    } else {
+                        v["trustChainPath"] = "";
+                    }
+                } catch (...) {
                     v["trustChainPath"] = "";
                 }
-            } catch (...) {
+            } else {
                 v["trustChainPath"] = "";
             }
 
-            std::string cfStr = PQgetisnull(res, i, 12) ? "f" : std::string(PQgetvalue(res, i, 12));
-            v["cscaFound"] = (cfStr == "t" || cfStr == "true");
-            v["cscaSubjectDn"] = PQgetisnull(res, i, 13) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 13)));
+            // Boolean field: csca_found
+            Json::Value cfVal = row.get("csca_found", false);
+            if (cfVal.isBool()) {
+                v["cscaFound"] = cfVal.asBool();
+            } else if (cfVal.isString()) {
+                std::string cfStr = cfVal.asString();
+                v["cscaFound"] = (cfStr == "t" || cfStr == "true");
+            } else {
+                v["cscaFound"] = false;
+            }
 
-            std::string svStr = PQgetisnull(res, i, 14) ? "f" : std::string(PQgetvalue(res, i, 14));
-            v["signatureVerified"] = (svStr == "t" || svStr == "true");
+            v["cscaSubjectDn"] = row.get("csca_subject_dn", Json::nullValue);
 
-            v["signatureAlgorithm"] = PQgetisnull(res, i, 15) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 15)));
+            // Boolean field: signature_valid
+            Json::Value svVal = row.get("signature_valid", false);
+            if (svVal.isBool()) {
+                v["signatureVerified"] = svVal.asBool();
+            } else if (svVal.isString()) {
+                std::string svStr = svVal.asString();
+                v["signatureVerified"] = (svStr == "t" || svStr == "true");
+            } else {
+                v["signatureVerified"] = false;
+            }
 
-            std::string vpStr = PQgetisnull(res, i, 16) ? "f" : std::string(PQgetvalue(res, i, 16));
-            v["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+            v["signatureAlgorithm"] = row.get("signature_algorithm", Json::nullValue);
 
-            std::string expStr = PQgetisnull(res, i, 17) ? "f" : std::string(PQgetvalue(res, i, 17));
-            v["isExpired"] = (expStr == "t" || expStr == "true");
+            // Boolean field: validity_period_valid
+            Json::Value vpVal = row.get("validity_period_valid", false);
+            if (vpVal.isBool()) {
+                v["validityCheckPassed"] = vpVal.asBool();
+            } else if (vpVal.isString()) {
+                std::string vpStr = vpVal.asString();
+                v["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+            } else {
+                v["validityCheckPassed"] = false;
+            }
 
-            std::string nysStr = PQgetisnull(res, i, 18) ? "f" : std::string(PQgetvalue(res, i, 18));
-            v["isNotYetValid"] = (nysStr == "t" || nysStr == "true");
+            // Boolean field: is_expired
+            Json::Value expVal = row.get("is_expired", false);
+            if (expVal.isBool()) {
+                v["isExpired"] = expVal.asBool();
+            } else if (expVal.isString()) {
+                std::string expStr = expVal.asString();
+                v["isExpired"] = (expStr == "t" || expStr == "true");
+            } else {
+                v["isExpired"] = false;
+            }
 
-            v["notBefore"] = PQgetisnull(res, i, 19) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 19)));
-            v["notAfter"] = PQgetisnull(res, i, 20) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 20)));
-            v["crlCheckStatus"] = PQgetisnull(res, i, 21) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 21)));
+            // Boolean field: is_not_yet_valid
+            Json::Value nysVal = row.get("is_not_yet_valid", false);
+            if (nysVal.isBool()) {
+                v["isNotYetValid"] = nysVal.asBool();
+            } else if (nysVal.isString()) {
+                std::string nysStr = nysVal.asString();
+                v["isNotYetValid"] = (nysStr == "t" || nysStr == "true");
+            } else {
+                v["isNotYetValid"] = false;
+            }
 
-            std::string ccStr = PQgetisnull(res, i, 22) ? "f" : std::string(PQgetvalue(res, i, 22));
-            v["crlChecked"] = (ccStr == "t" || ccStr == "true");
+            v["notBefore"] = row.get("not_before", Json::nullValue);
+            v["notAfter"] = row.get("not_after", Json::nullValue);
+            v["crlCheckStatus"] = row.get("revocation_status", Json::nullValue);
 
-            v["validatedAt"] = PQgetisnull(res, i, 23) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 23)));
-            v["fingerprint"] = PQgetisnull(res, i, 24) ? Json::nullValue : Json::Value(std::string(PQgetvalue(res, i, 24)));
+            // Boolean field: crl_checked
+            Json::Value ccVal = row.get("crl_checked", false);
+            if (ccVal.isBool()) {
+                v["crlChecked"] = ccVal.asBool();
+            } else if (ccVal.isString()) {
+                std::string ccStr = ccVal.asString();
+                v["crlChecked"] = (ccStr == "t" || ccStr == "true");
+            } else {
+                v["crlChecked"] = false;
+            }
+
+            v["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
+            v["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
 
             validations.append(v);
         }
 
-        PQclear(res);
-
         // Build response with pagination metadata
         response["success"] = true;
-        response["count"] = rows;
+        response["count"] = static_cast<int>(queryResult.size());
         response["total"] = total;
         response["limit"] = limit;
         response["offset"] = offset;
         response["validations"] = validations;
 
-        spdlog::debug("[ValidationRepository] Found {} validations (total: {})", rows, total);
+        spdlog::debug("[ValidationRepository] Found {} validations (total: {})", queryResult.size(), total);
 
         return response;
 
@@ -466,11 +519,8 @@ int ValidationRepository::countByStatus(const std::string& status)
         const char* query = "SELECT COUNT(*) FROM validation_result WHERE validation_status = $1";
         std::vector<std::string> params = {status};
 
-        PGresult* res = executeParamQuery(query, params);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
-
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[ValidationRepository] Count by status failed: {}", e.what());
@@ -499,16 +549,16 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
             "WHERE upload_id = $1";
 
         std::vector<std::string> params = {uploadId};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQntuples(res) > 0) {
-            int totalCount = std::atoi(PQgetvalue(res, 0, 0));
-            int validCount = std::atoi(PQgetvalue(res, 0, 1));
-            int invalidCount = std::atoi(PQgetvalue(res, 0, 2));
-            int pendingCount = std::atoi(PQgetvalue(res, 0, 3));
-            int errorCount = std::atoi(PQgetvalue(res, 0, 4));
-            int trustChainValidCount = std::atoi(PQgetvalue(res, 0, 5));
-            int trustChainInvalidCount = std::atoi(PQgetvalue(res, 0, 6));
+        if (!result.empty()) {
+            int totalCount = result[0].get("total_count", 0).asInt();
+            int validCount = result[0].get("valid_count", 0).asInt();
+            int invalidCount = result[0].get("invalid_count", 0).asInt();
+            int pendingCount = result[0].get("pending_count", 0).asInt();
+            int errorCount = result[0].get("error_count", 0).asInt();
+            int trustChainValidCount = result[0].get("trust_chain_valid_count", 0).asInt();
+            int trustChainInvalidCount = result[0].get("trust_chain_invalid_count", 0).asInt();
 
             // Calculate trust chain success rate
             double trustChainSuccessRate = 0.0;
@@ -529,93 +579,12 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
                 totalCount, validCount, invalidCount, pendingCount, errorCount);
         }
 
-        PQclear(res);
-
     } catch (const std::exception& e) {
         spdlog::error("[ValidationRepository] Get statistics failed: {}", e.what());
         stats["error"] = e.what();
     }
 
     return stats;
-}
-
-PGresult* ValidationRepository::executeParamQuery(
-    const std::string& query,
-    const std::vector<std::string>& params
-)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    std::vector<const char*> paramValues;
-    for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
-    }
-
-    PGresult* res = PQexecParams(
-        conn.get(),
-        query.c_str(),
-        params.size(),
-        nullptr,
-        paramValues.data(),
-        nullptr,
-        nullptr,
-        0
-    );
-
-    if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
-        if (res) PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-PGresult* ValidationRepository::executeQuery(const std::string& query)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
-        if (res) PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-Json::Value ValidationRepository::pgResultToJson(PGresult* res)
-{
-    Json::Value array = Json::arrayValue;
-    int rows = PQntuples(res);
-    int cols = PQnfields(res);
-
-    for (int i = 0; i < rows; ++i) {
-        Json::Value row;
-        for (int j = 0; j < cols; ++j) {
-            const char* fieldName = PQfname(res, j);
-            if (PQgetisnull(res, i, j)) {
-                row[fieldName] = Json::nullValue;
-            } else {
-                row[fieldName] = PQgetvalue(res, i, j);
-            }
-        }
-        array.append(row);
-    }
-
-    return array;
 }
 
 } // namespace repositories

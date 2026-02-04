@@ -3,9 +3,8 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include <libpq-fe.h>
 #include <json/json.h>
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 
 /**
  * @file upload_repository.h
@@ -13,10 +12,10 @@
  *
  * Handles all database operations related to file uploads.
  * Provides CRUD operations and business-specific queries.
- * Database-agnostic interface (currently PostgreSQL, future: Oracle support).
+ * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of main.cpp refactoring Phase 1.5
- * @date 2026-01-29
+ * @note Part of Oracle migration Phase 3: Query Executor Pattern
+ * @date 2026-02-04
  */
 
 namespace repositories {
@@ -74,9 +73,10 @@ class UploadRepository {
 public:
     /**
      * @brief Constructor
-     * @param dbPool Database connection pool (non-owning pointer, supports PostgreSQL and Oracle)
+     * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @throws std::invalid_argument if queryExecutor is nullptr
      */
-    explicit UploadRepository(common::DbConnectionPool* dbPool);
+    explicit UploadRepository(common::IQueryExecutor* queryExecutor);
 
     ~UploadRepository() = default;
 
@@ -279,52 +279,24 @@ public:
     Json::Value findDuplicatesByUploadId(const std::string& uploadId);
 
 private:
-    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
+    common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 
     /**
-     * @brief Execute parameterized query
-     * @param query SQL query with $1, $2, ... placeholders
-     * @param params Query parameters
-     * @return PGresult* (caller must PQclear)
-     * @throws std::runtime_error on failure
-     */
-    PGresult* executeParamQuery(
-        const std::string& query,
-        const std::vector<std::string>& params
-    );
-
-    /**
-     * @brief Execute simple query (no parameters)
-     * @param query SQL query
-     * @return PGresult* (caller must PQclear)
-     * @throws std::runtime_error on failure
-     */
-    PGresult* executeQuery(const std::string& query);
-
-    /**
-     * @brief Convert PGresult row to Upload entity
-     * @param res PGresult
-     * @param row Row index
+     * @brief Convert JSON object to Upload entity
+     * @param json JSON object from query result
      * @return Upload entity
      */
-    Upload resultToUpload(PGresult* res, int row);
+    Upload jsonToUpload(const Json::Value& json);
 
     /**
-     * @brief Convert PGresult to JSON array
-     * @param res PGresult
-     * @return JSON array
+     * @brief Get optional string from JSON value
      */
-    Json::Value pgResultToJson(PGresult* res);
+    std::optional<std::string> getOptionalString(const Json::Value& json, const std::string& field);
 
     /**
-     * @brief Get optional string from PGresult
+     * @brief Get optional int from JSON value
      */
-    std::optional<std::string> getOptionalString(PGresult* res, int row, int col);
-
-    /**
-     * @brief Get optional int from PGresult
-     */
-    std::optional<int> getOptionalInt(PGresult* res, int row, int col);
+    std::optional<int> getOptionalInt(const Json::Value& json, const std::string& field);
 };
 
 } // namespace repositories

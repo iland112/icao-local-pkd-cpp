@@ -1,16 +1,17 @@
 #include "audit_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <sstream>
 
 namespace repositories {
 
-AuditRepository::AuditRepository(common::DbConnectionPool* dbPool)
-    : dbPool_(dbPool)
+AuditRepository::AuditRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
 {
-    if (!dbPool_) {
-        throw std::invalid_argument("AuditRepository: dbPool cannot be nullptr");
+    if (!queryExecutor_) {
+        throw std::invalid_argument("AuditRepository: queryExecutor cannot be nullptr");
     }
-    spdlog::debug("[AuditRepository] Initialized with Connection Pool");
+    spdlog::debug("[AuditRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
 }
 
 bool AuditRepository::insert(
@@ -42,9 +43,7 @@ bool AuditRepository::insert(
             std::to_string(durationMs)
         };
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
-
+        queryExecutor_->executeCommand(query, params);
         return true;
 
     } catch (const std::exception& e) {
@@ -100,9 +99,47 @@ Json::Value AuditRepository::findAll(
         params.push_back(std::to_string(limit));
         params.push_back(std::to_string(offset));
 
-        PGresult* res = executeParamQuery(query.str(), params);
-        Json::Value array = pgResultToJson(res);
-        PQclear(res);
+        Json::Value result = queryExecutor_->executeQuery(query.str(), params);
+
+        // Convert field names to camelCase and handle type conversions
+        Json::Value array = Json::arrayValue;
+        for (const auto& row : result) {
+            Json::Value convertedRow;
+            for (const auto& key : row.getMemberNames()) {
+                std::string camelKey = toCamelCase(key);
+
+                // Handle boolean field (success)
+                if (key == "success") {
+                    Json::Value val = row[key];
+                    if (val.isBool()) {
+                        convertedRow[camelKey] = val.asBool();
+                    } else if (val.isString()) {
+                        convertedRow[camelKey] = (val.asString() == "t" || val.asString() == "true");
+                    } else {
+                        convertedRow[camelKey] = val;
+                    }
+                }
+                // Handle numeric fields
+                else if (key == "duration_ms" || key == "status_code") {
+                    Json::Value val = row[key];
+                    if (val.isInt()) {
+                        convertedRow[camelKey] = val.asInt();
+                    } else if (val.isString()) {
+                        try {
+                            convertedRow[camelKey] = std::stoi(val.asString());
+                        } catch (...) {
+                            convertedRow[camelKey] = val;
+                        }
+                    } else {
+                        convertedRow[camelKey] = val;
+                    }
+                }
+                else {
+                    convertedRow[camelKey] = row[key];
+                }
+            }
+            array.append(convertedRow);
+        }
 
         return array;
 
@@ -110,6 +147,24 @@ Json::Value AuditRepository::findAll(
         spdlog::error("[AuditRepository] Find all failed: {}", e.what());
         return Json::arrayValue;
     }
+}
+
+// Helper function for camelCase conversion
+std::string AuditRepository::toCamelCase(const std::string& snake_case)
+{
+    std::string camelCase;
+    bool capitalizeNext = false;
+    for (char c : snake_case) {
+        if (c == '_') {
+            capitalizeNext = true;
+        } else if (capitalizeNext) {
+            camelCase += std::toupper(c);
+            capitalizeNext = false;
+        } else {
+            camelCase += c;
+        }
+    }
+    return camelCase;
 }
 
 int AuditRepository::countAll(
@@ -148,16 +203,11 @@ int AuditRepository::countAll(
             }
         }
 
-        PGresult* res = params.empty() ?
-            executeQuery(query.str()) :
-            executeParamQuery(query.str(), params);
+        Json::Value result = params.empty() ?
+            queryExecutor_->executeScalar(query.str()) :
+            queryExecutor_->executeScalar(query.str(), params);
 
-        int count = 0;
-        if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-            count = std::atoi(PQgetvalue(res, 0, 0));
-        }
-        PQclear(res);
-
+        int count = result.asInt();
         spdlog::debug("[AuditRepository] Count result: {}", count);
         return count;
 
@@ -175,11 +225,8 @@ int AuditRepository::countByOperationType(const std::string& operationType)
         const char* query = "SELECT COUNT(*) FROM operation_audit_log WHERE operation_type = $1";
         std::vector<std::string> params = {operationType};
 
-        PGresult* res = executeParamQuery(query, params);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
-
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[AuditRepository] Count failed: {}", e.what());
@@ -208,13 +255,17 @@ Json::Value AuditRepository::getStatistics(const std::string& startDate, const s
             params.push_back(endDate);
         }
 
-        PGresult* countRes = params.empty() ? executeQuery(countQuery) : executeParamQuery(countQuery, params);
+        Json::Value countResult = params.empty() ?
+            queryExecutor_->executeQuery(countQuery) :
+            queryExecutor_->executeQuery(countQuery, params);
 
-        response["totalOperations"] = std::atoi(PQgetvalue(countRes, 0, 0));
-        response["successfulOperations"] = std::atoi(PQgetvalue(countRes, 0, 1));
-        response["failedOperations"] = std::atoi(PQgetvalue(countRes, 0, 2));
-        response["averageDurationMs"] = PQgetisnull(countRes, 0, 3) ? 0 : std::atoi(PQgetvalue(countRes, 0, 3));
-        PQclear(countRes);
+        if (!countResult.empty()) {
+            response["totalOperations"] = countResult[0].get("total", 0).asInt();
+            response["successfulOperations"] = countResult[0].get("successful", 0).asInt();
+            response["failedOperations"] = countResult[0].get("failed", 0).asInt();
+            response["averageDurationMs"] = countResult[0].get("avg_duration", Json::nullValue).isNull() ?
+                0 : countResult[0].get("avg_duration", 0).asInt();
+        }
 
         // Operations by type
         std::string typeQuery = "SELECT operation_type, COUNT(*) as count "
@@ -224,16 +275,16 @@ Json::Value AuditRepository::getStatistics(const std::string& startDate, const s
         }
         typeQuery += " GROUP BY operation_type ORDER BY count DESC";
 
-        PGresult* typeRes = params.empty() ? executeQuery(typeQuery) : executeParamQuery(typeQuery, params);
+        Json::Value typeResult = params.empty() ?
+            queryExecutor_->executeQuery(typeQuery) :
+            queryExecutor_->executeQuery(typeQuery, params);
 
         Json::Value operationsByType;
-        int typeRows = PQntuples(typeRes);
-        for (int i = 0; i < typeRows; i++) {
-            std::string opType = PQgetvalue(typeRes, i, 0);
-            int count = std::atoi(PQgetvalue(typeRes, i, 1));
+        for (const auto& row : typeResult) {
+            std::string opType = row.get("operation_type", "").asString();
+            int count = row.get("count", 0).asInt();
             operationsByType[opType] = count;
         }
-        PQclear(typeRes);
         response["operationsByType"] = operationsByType;
 
         // Top users
@@ -244,16 +295,17 @@ Json::Value AuditRepository::getStatistics(const std::string& startDate, const s
         }
         userQuery += " GROUP BY username ORDER BY count DESC LIMIT 10";
 
-        PGresult* userRes = params.empty() ? executeQuery(userQuery) : executeParamQuery(userQuery, params);
+        Json::Value userResult = params.empty() ?
+            queryExecutor_->executeQuery(userQuery) :
+            queryExecutor_->executeQuery(userQuery, params);
+
         Json::Value topUsers = Json::arrayValue;
-        int userRows = PQntuples(userRes);
-        for (int i = 0; i < userRows; i++) {
+        for (const auto& row : userResult) {
             Json::Value user;
-            user["username"] = PQgetvalue(userRes, i, 0);
-            user["count"] = std::atoi(PQgetvalue(userRes, i, 1));
+            user["username"] = row.get("username", "").asString();
+            user["count"] = row.get("count", 0).asInt();
             topUsers.append(user);
         }
-        PQclear(userRes);
         response["topUsers"] = topUsers;
 
     } catch (const std::exception& e) {
@@ -262,121 +314,6 @@ Json::Value AuditRepository::getStatistics(const std::string& startDate, const s
     }
 
     return response;
-}
-
-PGresult* AuditRepository::executeParamQuery(
-    const std::string& query,
-    const std::vector<std::string>& params
-)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    std::vector<const char*> paramValues;
-    for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
-    }
-
-    PGresult* res = PQexecParams(
-        conn.get(),
-        query.c_str(),
-        params.size(),
-        nullptr,
-        paramValues.data(),
-        nullptr,
-        nullptr,
-        0
-    );
-
-    if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
-        if (res) PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-PGresult* AuditRepository::executeQuery(const std::string& query)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (!res || (PQresultStatus(res) != PGRES_COMMAND_OK && PQresultStatus(res) != PGRES_TUPLES_OK)) {
-        std::string error = res ? PQerrorMessage(conn.get()) : "null result";
-        if (res) PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-Json::Value AuditRepository::pgResultToJson(PGresult* res)
-{
-    // Helper function to convert snake_case to camelCase
-    auto toCamelCase = [](const std::string& snake_case) -> std::string {
-        std::string camelCase;
-        bool capitalizeNext = false;
-        for (char c : snake_case) {
-            if (c == '_') {
-                capitalizeNext = true;
-            } else if (capitalizeNext) {
-                camelCase += std::toupper(c);
-                capitalizeNext = false;
-            } else {
-                camelCase += c;
-            }
-        }
-        return camelCase;
-    };
-
-    Json::Value array = Json::arrayValue;
-    int rows = PQntuples(res);
-    int cols = PQnfields(res);
-
-    for (int i = 0; i < rows; ++i) {
-        Json::Value row;
-        for (int j = 0; j < cols; ++j) {
-            const char* fieldName = PQfname(res, j);
-            std::string camelFieldName = toCamelCase(fieldName);
-
-            if (PQgetisnull(res, i, j)) {
-                row[camelFieldName] = Json::nullValue;
-            } else {
-                std::string value = PQgetvalue(res, i, j);
-
-                // Convert PostgreSQL boolean "t"/"f" to JSON boolean
-                if (std::string(fieldName) == "success") {
-                    row[camelFieldName] = (value == "t");
-                }
-                // Convert numeric fields
-                else if (std::string(fieldName) == "duration_ms" ||
-                         std::string(fieldName) == "status_code") {
-                    try {
-                        row[camelFieldName] = std::stoi(value);
-                    } catch (...) {
-                        row[camelFieldName] = value;
-                    }
-                }
-                else {
-                    row[camelFieldName] = value;
-                }
-            }
-        }
-        array.append(row);
-    }
-
-    return array;
 }
 
 } // namespace repositories

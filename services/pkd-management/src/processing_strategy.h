@@ -44,6 +44,18 @@ public:
         PGconn* conn,
         LDAP* ld
     ) = 0;
+
+    /**
+     * @brief Validate and save to database (MANUAL mode Stage 2)
+     * @param uploadId Upload record UUID
+     * @param conn PostgreSQL connection
+     * @note Only implemented for ManualProcessingStrategy
+     * @throws std::runtime_error if called on AutoProcessingStrategy
+     */
+    virtual void validateAndSaveToDb(
+        const std::string& uploadId,
+        PGconn* conn
+    ) = 0;
 };
 
 /**
@@ -68,6 +80,11 @@ public:
         const std::vector<uint8_t>& content,
         PGconn* conn,
         LDAP* ld
+    ) override;
+
+    void validateAndSaveToDb(
+        const std::string& uploadId,
+        PGconn* conn
     ) override;
 };
 

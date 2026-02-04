@@ -2,9 +2,8 @@
 
 #include <string>
 #include <vector>
-#include <libpq-fe.h>
 #include <json/json.h>
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 #include "../domain/models/validation_result.h"
 #include "../domain/models/validation_statistics.h"
 
@@ -12,15 +11,22 @@
  * @file validation_repository.h
  * @brief Validation Repository - Database Access Layer for validation_result table
  *
- * @note Part of main.cpp refactoring Phase 1.5 - Phase 4.4
- * @date 2026-01-29 (Updated: 2026-01-30)
+ * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
+ *
+ * @note Part of Oracle migration Phase 3: Query Executor Pattern
+ * @date 2026-02-04
  */
 
 namespace repositories {
 
 class ValidationRepository {
 public:
-    explicit ValidationRepository(common::DbConnectionPool* dbPool);
+    /**
+     * @brief Constructor
+     * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @throws std::invalid_argument if queryExecutor is nullptr
+     */
+    explicit ValidationRepository(common::IQueryExecutor* queryExecutor);
     ~ValidationRepository() = default;
 
     /**
@@ -92,11 +98,7 @@ public:
     Json::Value getStatisticsByUploadId(const std::string& uploadId);
 
 private:
-    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
-
-    PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);
-    PGresult* executeQuery(const std::string& query);
-    Json::Value pgResultToJson(PGresult* res);
+    common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 };
 
 } // namespace repositories

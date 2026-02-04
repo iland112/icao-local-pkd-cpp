@@ -10,13 +10,13 @@ namespace repositories {
 // Constructor
 // ============================================================================
 
-UploadRepository::UploadRepository(common::DbConnectionPool* dbPool)
-    : dbPool_(dbPool)
+UploadRepository::UploadRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
 {
-    if (!dbPool_) {
-        throw std::invalid_argument("UploadRepository: dbPool cannot be nullptr");
+    if (!queryExecutor_) {
+        throw std::invalid_argument("UploadRepository: queryExecutor cannot be nullptr");
     }
-    spdlog::debug("[UploadRepository] Initialized (DB type: {})");
+    spdlog::debug("[UploadRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
 }
 
 // ============================================================================
@@ -43,8 +43,7 @@ bool UploadRepository::insert(const Upload& upload)
             upload.uploadedBy
         };
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
+        queryExecutor_->executeCommand(query, params);
 
         spdlog::info("[UploadRepository] Upload inserted: {} ({})", upload.fileName, upload.id);
         return true;
@@ -77,17 +76,14 @@ std::optional<Upload> UploadRepository::findById(const std::string& uploadId)
             "FROM uploaded_file WHERE id = $1";
 
         std::vector<std::string> params = {uploadId};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQntuples(res) == 0) {
-            PQclear(res);
+        if (result.empty()) {
             spdlog::debug("[UploadRepository] Upload not found: {}", uploadId);
             return std::nullopt;
         }
 
-        Upload upload = resultToUpload(res, 0);
-        PQclear(res);
-
+        Upload upload = jsonToUpload(result[0]);
         return upload;
 
     } catch (const std::exception& e) {
@@ -135,18 +131,14 @@ std::vector<Upload> UploadRepository::findAll(
               << "ORDER BY " << dbSortBy << " " << direction << " "
               << "LIMIT " << limit << " OFFSET " << offset;
 
-        PGresult* res = executeQuery(query.str());
+        Json::Value result = queryExecutor_->executeQuery(query.str());
 
-        int rows = PQntuples(res);
-        uploads.reserve(rows);
-
-        for (int i = 0; i < rows; ++i) {
-            uploads.push_back(resultToUpload(res, i));
+        uploads.reserve(result.size());
+        for (const auto& row : result) {
+            uploads.push_back(jsonToUpload(row));
         }
 
-        PQclear(res);
-
-        spdlog::debug("[UploadRepository] Found {} uploads", rows);
+        spdlog::debug("[UploadRepository] Found {} uploads", result.size());
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Find all failed: {}", e.what());
@@ -179,8 +171,7 @@ bool UploadRepository::updateStatus(
             params = {status, errorMessage, uploadId};
         }
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
+        queryExecutor_->executeCommand(query, params);
 
         spdlog::info("[UploadRepository] Status updated: {} -> {}", uploadId, status);
         return true;
@@ -220,8 +211,7 @@ bool UploadRepository::updateStatistics(
             uploadId
         };
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
+        queryExecutor_->executeCommand(query, params);
 
         spdlog::info("[UploadRepository] Statistics updated: {}", uploadId);
         return true;
@@ -240,8 +230,7 @@ bool UploadRepository::deleteById(const std::string& uploadId)
         const char* query = "DELETE FROM uploaded_file WHERE id = $1";
         std::vector<std::string> params = {uploadId};
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
+        queryExecutor_->executeCommand(query, params);
 
         spdlog::info("[UploadRepository] Upload deleted: {}", uploadId);
         return true;
@@ -260,8 +249,7 @@ bool UploadRepository::updateFileHash(const std::string& uploadId, const std::st
         const char* query = "UPDATE uploaded_file SET file_hash = $1 WHERE id = $2";
         std::vector<std::string> params = {fileHash, uploadId};
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
+        queryExecutor_->executeCommand(query, params);
 
         spdlog::debug("[UploadRepository] File hash updated: {}", uploadId);
         return true;
@@ -286,23 +274,26 @@ std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHa
             "error_message, processing_mode, total_entries, processed_entries, "
             "csca_count, dsc_count, dsc_nc_count, crl_count, mlsc_count, ml_count, "
             "upload_timestamp, completed_timestamp, "
-            "COALESCE(validation_valid_count, 0), COALESCE(validation_invalid_count, 0), "
-            "COALESCE(validation_pending_count, 0), COALESCE(validation_error_count, 0), "
-            "COALESCE(trust_chain_valid_count, 0), COALESCE(trust_chain_invalid_count, 0), "
-            "COALESCE(csca_not_found_count, 0), COALESCE(expired_count, 0), COALESCE(revoked_count, 0) "
+            "COALESCE(validation_valid_count, 0) AS validation_valid_count, "
+            "COALESCE(validation_invalid_count, 0) AS validation_invalid_count, "
+            "COALESCE(validation_pending_count, 0) AS validation_pending_count, "
+            "COALESCE(validation_error_count, 0) AS validation_error_count, "
+            "COALESCE(trust_chain_valid_count, 0) AS trust_chain_valid_count, "
+            "COALESCE(trust_chain_invalid_count, 0) AS trust_chain_invalid_count, "
+            "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
+            "COALESCE(expired_count, 0) AS expired_count, "
+            "COALESCE(revoked_count, 0) AS revoked_count "
             "FROM uploaded_file WHERE file_hash = $1 LIMIT 1";
 
         std::vector<std::string> params = {fileHash};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQntuples(res) == 0) {
-            PQclear(res);
+        if (result.empty()) {
             spdlog::debug("[UploadRepository] No duplicate found for hash: {}", fileHash.substr(0, 16) + "...");
             return std::nullopt;
         }
 
-        Upload upload = resultToUpload(res, 0);
-        PQclear(res);
+        Upload upload = jsonToUpload(result[0]);
 
         spdlog::info("[UploadRepository] Duplicate upload found: {}", upload.id);
         return upload;
@@ -321,11 +312,8 @@ int UploadRepository::countByStatus(const std::string& status)
         const char* query = "SELECT COUNT(*) FROM uploaded_file WHERE status = $1";
         std::vector<std::string> params = {status};
 
-        PGresult* res = executeParamQuery(query, params);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
-
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Count by status failed: {}", e.what());
@@ -339,11 +327,9 @@ int UploadRepository::countAll()
 
     try {
         const char* query = "SELECT COUNT(*) FROM uploaded_file";
-        PGresult* res = executeQuery(query);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
 
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Count all failed: {}", e.what());
@@ -375,11 +361,9 @@ Json::Value UploadRepository::getStatisticsSummary()
     Json::Value response;
 
     try {
-        // Get total uploads and status breakdown
-        const char* countQuery = "SELECT COUNT(*) FROM uploaded_file";
-        PGresult* countRes = executeQuery(countQuery);
-        int totalUploads = std::atoi(PQgetvalue(countRes, 0, 0));
-        PQclear(countRes);
+        // Get total uploads
+        Json::Value totalUploadsResult = queryExecutor_->executeScalar("SELECT COUNT(*) FROM uploaded_file");
+        int totalUploads = totalUploadsResult.asInt();
 
         // Get certificate counts by type
         const char* certQuery =
@@ -392,41 +376,37 @@ Json::Value UploadRepository::getStatisticsSummary()
             "COALESCE(SUM(ml_count), 0) as total_ml "
             "FROM uploaded_file";
 
-        PGresult* certRes = executeQuery(certQuery);
-        int totalCsca = std::atoi(PQgetvalue(certRes, 0, 0));
-        int totalDsc = std::atoi(PQgetvalue(certRes, 0, 1));
-        int totalDscNc = std::atoi(PQgetvalue(certRes, 0, 2));
-        int totalMlsc = std::atoi(PQgetvalue(certRes, 0, 3));
-        int totalCrl = std::atoi(PQgetvalue(certRes, 0, 4));
-        int totalMl = std::atoi(PQgetvalue(certRes, 0, 5));
-        PQclear(certRes);
+        Json::Value certResult = queryExecutor_->executeQuery(certQuery);
+        int totalCsca = certResult[0]["total_csca"].asInt();
+        int totalDsc = certResult[0]["total_dsc"].asInt();
+        int totalDscNc = certResult[0]["total_dsc_nc"].asInt();
+        int totalMlsc = certResult[0]["total_mlsc"].asInt();
+        int totalCrl = certResult[0]["total_crl"].asInt();
+        int totalMl = certResult[0]["total_ml"].asInt();
 
         // Get uploads by status (for successfulUploads/failedUploads)
         const char* statusQuery =
-            "SELECT status, COUNT(*) FROM uploaded_file GROUP BY status";
-        PGresult* statusRes = executeQuery(statusQuery);
+            "SELECT status, COUNT(*) as count FROM uploaded_file GROUP BY status";
+        Json::Value statusResult = queryExecutor_->executeQuery(statusQuery);
 
         int successfulUploads = 0;
         int failedUploads = 0;
-        int statusRows = PQntuples(statusRes);
-        for (int i = 0; i < statusRows; i++) {
-            std::string status = PQgetvalue(statusRes, i, 0);
-            int count = std::atoi(PQgetvalue(statusRes, i, 1));
+        for (const auto& row : statusResult) {
+            std::string status = row["status"].asString();
+            int count = row["count"].asInt();
             if (status == "COMPLETED") {
                 successfulUploads += count;
             } else if (status == "FAILED" || status == "ERROR") {
                 failedUploads += count;
             }
         }
-        PQclear(statusRes);
 
         // Get country count (distinct countries)
-        const char* countryQuery =
+        Json::Value countryResult = queryExecutor_->executeScalar(
             "SELECT COUNT(DISTINCT country_code) FROM certificate "
-            "WHERE country_code IS NOT NULL AND country_code != ''";
-        PGresult* countryRes = executeQuery(countryQuery);
-        int countriesCount = std::atoi(PQgetvalue(countryRes, 0, 0));
-        PQclear(countryRes);
+            "WHERE country_code IS NOT NULL AND country_code != ''"
+        );
+        int countriesCount = countryResult.asInt();
 
         // Get validation statistics
         const char* validationQuery =
@@ -442,18 +422,19 @@ Json::Value UploadRepository::getStatisticsSummary()
             "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
             "FROM validation_result";
 
-        PGresult* validationRes = executeQuery(validationQuery);
+        Json::Value validationResult = queryExecutor_->executeQuery(validationQuery);
         Json::Value validation;
-        validation["validCount"] = std::atoi(PQgetvalue(validationRes, 0, 0));
-        validation["invalidCount"] = std::atoi(PQgetvalue(validationRes, 0, 1));
-        validation["pendingCount"] = std::atoi(PQgetvalue(validationRes, 0, 2));
-        validation["errorCount"] = std::atoi(PQgetvalue(validationRes, 0, 3));
-        validation["trustChainValidCount"] = std::atoi(PQgetvalue(validationRes, 0, 4));
-        validation["trustChainInvalidCount"] = std::atoi(PQgetvalue(validationRes, 0, 5));
-        validation["cscaNotFoundCount"] = std::atoi(PQgetvalue(validationRes, 0, 6));
-        validation["expiredCount"] = std::atoi(PQgetvalue(validationRes, 0, 7));
-        validation["revokedCount"] = std::atoi(PQgetvalue(validationRes, 0, 8));
-        PQclear(validationRes);
+        if (!validationResult.empty()) {
+            validation["validCount"] = validationResult[0]["valid_count"].asInt();
+            validation["invalidCount"] = validationResult[0]["invalid_count"].asInt();
+            validation["pendingCount"] = validationResult[0]["pending_count"].asInt();
+            validation["errorCount"] = validationResult[0]["error_count"].asInt();
+            validation["trustChainValidCount"] = validationResult[0]["trust_chain_valid_count"].asInt();
+            validation["trustChainInvalidCount"] = validationResult[0]["trust_chain_invalid_count"].asInt();
+            validation["cscaNotFoundCount"] = validationResult[0]["csca_not_found_count"].asInt();
+            validation["expiredCount"] = validationResult[0]["expired_count"].asInt();
+            validation["revokedCount"] = validationResult[0]["revoked_count"].asInt();
+        }
 
         // Get CSCA breakdown (self-signed vs link certificates)
         const char* cscaBreakdownQuery =
@@ -462,10 +443,13 @@ Json::Value UploadRepository::getStatisticsSummary()
             "COALESCE(SUM(CASE WHEN is_self_signed = false THEN 1 ELSE 0 END), 0) as link_cert_count "
             "FROM certificate WHERE certificate_type = 'CSCA'";
 
-        PGresult* cscaRes = executeQuery(cscaBreakdownQuery);
-        int selfSignedCount = std::atoi(PQgetvalue(cscaRes, 0, 0));
-        int linkCertCount = std::atoi(PQgetvalue(cscaRes, 0, 1));
-        PQclear(cscaRes);
+        Json::Value cscaResult = queryExecutor_->executeQuery(cscaBreakdownQuery);
+        int selfSignedCount = 0;
+        int linkCertCount = 0;
+        if (!cscaResult.empty()) {
+            selfSignedCount = cscaResult[0]["self_signed_count"].asInt();
+            linkCertCount = cscaResult[0]["link_cert_count"].asInt();
+        }
 
         // Build byType object with CSCA breakdown
         Json::Value byType;
@@ -535,27 +519,24 @@ Json::Value UploadRepository::getCountryStatistics(int limit)
             query << "LIMIT " << limit;
         }
 
-        PGresult* res = executeQuery(query.str());
-        int rows = PQntuples(res);
+        Json::Value result = queryExecutor_->executeQuery(query.str());
 
         Json::Value countries = Json::arrayValue;
-        for (int i = 0; i < rows; i++) {
+        for (const auto& row : result) {
             Json::Value countryData;
-            countryData["country"] = PQgetvalue(res, i, 0);
-            countryData["csca"] = std::atoi(PQgetvalue(res, i, 1));
-            countryData["mlsc"] = std::atoi(PQgetvalue(res, i, 2));
-            countryData["dsc"] = std::atoi(PQgetvalue(res, i, 3));
-            countryData["dscNc"] = std::atoi(PQgetvalue(res, i, 4));
-            countryData["total"] = std::atoi(PQgetvalue(res, i, 5));
+            countryData["country"] = row["country_code"];
+            countryData["csca"] = row["csca_count"];
+            countryData["mlsc"] = row["mlsc_count"];
+            countryData["dsc"] = row["dsc_count"];
+            countryData["dscNc"] = row["dsc_nc_count"];
+            countryData["total"] = row["total_certificates"];
             countries.append(countryData);
         }
 
-        PQclear(res);
-
         response["countries"] = countries;
-        response["totalCountries"] = rows;
+        response["totalCountries"] = static_cast<int>(result.size());
 
-        spdlog::debug("[UploadRepository] Found {} countries with certificates", rows);
+        spdlog::debug("[UploadRepository] Found {} countries with certificates", result.size());
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get country statistics failed: {}", e.what());
@@ -592,29 +573,26 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
             query << "LIMIT " << limit;
         }
 
-        PGresult* res = executeQuery(query.str());
-        int rows = PQntuples(res);
+        Json::Value result = queryExecutor_->executeQuery(query.str());
 
         Json::Value countries = Json::arrayValue;
-        for (int i = 0; i < rows; i++) {
+        for (const auto& row : result) {
             Json::Value countryData;
-            countryData["countryCode"] = PQgetvalue(res, i, 0);
-            countryData["mlsc"] = std::atoi(PQgetvalue(res, i, 1));
-            countryData["cscaSelfSigned"] = std::atoi(PQgetvalue(res, i, 2));
-            countryData["cscaLinkCert"] = std::atoi(PQgetvalue(res, i, 3));
-            countryData["dsc"] = std::atoi(PQgetvalue(res, i, 4));
-            countryData["dscNc"] = std::atoi(PQgetvalue(res, i, 5));
-            countryData["crl"] = std::atoi(PQgetvalue(res, i, 6));
-            countryData["totalCerts"] = std::atoi(PQgetvalue(res, i, 7));
+            countryData["countryCode"] = row["country_code"];
+            countryData["mlsc"] = row["mlsc_count"];
+            countryData["cscaSelfSigned"] = row["csca_self_signed_count"];
+            countryData["cscaLinkCert"] = row["csca_link_cert_count"];
+            countryData["dsc"] = row["dsc_count"];
+            countryData["dscNc"] = row["dsc_nc_count"];
+            countryData["crl"] = row["crl_count"];
+            countryData["totalCerts"] = row["total_certificates"];
             countries.append(countryData);
         }
 
-        PQclear(res);
-
         response["countries"] = countries;
-        response["totalCountries"] = rows;
+        response["totalCountries"] = static_cast<int>(result.size());
 
-        spdlog::debug("[UploadRepository] Found detailed statistics for {} countries", rows);
+        spdlog::debug("[UploadRepository] Found detailed statistics for {} countries", result.size());
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get detailed country statistics failed: {}", e.what());
@@ -660,7 +638,7 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
             "ORDER BY c.fingerprint_sha256, cd.detected_at DESC";
 
         std::vector<std::string> params = {uploadId};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value queryResult = queryExecutor_->executeQuery(query, params);
 
         result["success"] = true;
         Json::Value duplicates(Json::arrayValue);
@@ -673,29 +651,27 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
         byType["MLSC"] = 0;
         byType["CRL"] = 0;
 
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
+        for (const auto& row : queryResult) {
             Json::Value dup;
-            // Column indices updated for new query with 14 columns
-            dup["id"] = std::atoi(PQgetvalue(res, i, 0));
-            dup["sourceType"] = PQgetvalue(res, i, 1);
-            dup["sourceCountry"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
-            dup["sourceEntryDn"] = PQgetvalue(res, i, 3) ? PQgetvalue(res, i, 3) : "";
-            dup["sourceFileName"] = PQgetvalue(res, i, 4) ? PQgetvalue(res, i, 4) : "";
-            dup["detectedAt"] = PQgetvalue(res, i, 5);
+            dup["id"] = row["id"];
+            dup["sourceType"] = row["source_type"];
+            dup["sourceCountry"] = row.get("source_country", "");
+            dup["sourceEntryDn"] = row.get("source_entry_dn", "");
+            dup["sourceFileName"] = row.get("source_file_name", "");
+            dup["detectedAt"] = row["detected_at"];
 
             // Certificate information
-            dup["certificateId"] = PQgetvalue(res, i, 6);
-            std::string certType = PQgetvalue(res, i, 7);
+            dup["certificateId"] = row["certificate_id"];
+            std::string certType = row["certificate_type"].asString();
             dup["certificateType"] = certType;
-            dup["country"] = PQgetvalue(res, i, 8);
-            dup["subjectDn"] = PQgetvalue(res, i, 9);
-            dup["fingerprint"] = PQgetvalue(res, i, 10);
+            dup["country"] = row["country_code"];
+            dup["subjectDn"] = row["subject_dn"];
+            dup["fingerprint"] = row["fingerprint_sha256"];
 
             // First upload information (for tree view root)
-            dup["firstUploadId"] = PQgetvalue(res, i, 11);
-            dup["firstUploadFileName"] = PQgetvalue(res, i, 12) ? PQgetvalue(res, i, 12) : "";
-            dup["firstUploadTimestamp"] = PQgetvalue(res, i, 13) ? PQgetvalue(res, i, 13) : "";
+            dup["firstUploadId"] = row["first_upload_id"];
+            dup["firstUploadFileName"] = row.get("first_upload_file_name", "");
+            dup["firstUploadTimestamp"] = row.get("first_upload_timestamp", "");
 
             duplicates.append(dup);
 
@@ -706,7 +682,7 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
         }
 
         result["duplicates"] = duplicates;
-        result["totalDuplicates"] = rows;
+        result["totalDuplicates"] = static_cast<int>(queryResult.size());
 
         // Add type breakdown
         Json::Value byTypeJson;
@@ -717,9 +693,7 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
         byTypeJson["CRL"] = byType["CRL"];
         result["byType"] = byTypeJson;
 
-        PQclear(res);
-
-        spdlog::debug("[UploadRepository] Found {} duplicates for upload {}", rows, uploadId);
+        spdlog::debug("[UploadRepository] Found {} duplicates for upload {}", queryResult.size(), uploadId);
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Find duplicates failed: {}", e.what());
@@ -735,164 +709,63 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
 // Private Helper Methods
 // ============================================================================
 
-PGresult* UploadRepository::executeParamQuery(
-    const std::string& query,
-    const std::vector<std::string>& params
-)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    std::vector<const char*> paramValues;
-    for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
-    }
-
-    PGresult* res = PQexecParams(
-        conn.get(),
-        query.c_str(),
-        params.size(),
-        nullptr,
-        paramValues.data(),
-        nullptr,
-        nullptr,
-        0
-    );
-
-    if (!res) {
-        throw std::runtime_error("Query execution failed: null result");
-    }
-
-    ExecStatusType status = PQresultStatus(res);
-    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(conn.get());
-        PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-PGresult* UploadRepository::executeQuery(const std::string& query)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (!res) {
-        throw std::runtime_error("Query execution failed: null result");
-    }
-
-    ExecStatusType status = PQresultStatus(res);
-    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(conn.get());
-        PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-Upload UploadRepository::resultToUpload(PGresult* res, int row)
+Upload UploadRepository::jsonToUpload(const Json::Value& json)
 {
     Upload upload;
 
-    upload.id = PQgetvalue(res, row, PQfnumber(res, "id"));
-    upload.fileName = PQgetvalue(res, row, PQfnumber(res, "file_name"));
-    upload.fileHash = PQgetvalue(res, row, PQfnumber(res, "file_hash"));
-    upload.fileFormat = PQgetvalue(res, row, PQfnumber(res, "file_format"));
-    upload.fileSize = std::atoi(PQgetvalue(res, row, PQfnumber(res, "file_size")));
-    upload.status = PQgetvalue(res, row, PQfnumber(res, "status"));
-    upload.uploadedBy = PQgetvalue(res, row, PQfnumber(res, "uploaded_by"));
+    upload.id = json.get("id", "").asString();
+    upload.fileName = json.get("file_name", "").asString();
+    upload.fileHash = json.get("file_hash", "").asString();
+    upload.fileFormat = json.get("file_format", "").asString();
+    upload.fileSize = json.get("file_size", 0).asInt();
+    upload.status = json.get("status", "").asString();
+    upload.uploadedBy = json.get("uploaded_by", "").asString();
 
-    upload.errorMessage = getOptionalString(res, row, PQfnumber(res, "error_message"));
-    upload.processingMode = getOptionalString(res, row, PQfnumber(res, "processing_mode"));
+    upload.errorMessage = getOptionalString(json, "error_message");
+    upload.processingMode = getOptionalString(json, "processing_mode");
 
-    upload.totalEntries = std::atoi(PQgetvalue(res, row, PQfnumber(res, "total_entries")));
-    upload.processedEntries = std::atoi(PQgetvalue(res, row, PQfnumber(res, "processed_entries")));
+    upload.totalEntries = json.get("total_entries", 0).asInt();
+    upload.processedEntries = json.get("processed_entries", 0).asInt();
 
-    upload.cscaCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "csca_count")));
-    upload.dscCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "dsc_count")));
-    upload.dscNcCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "dsc_nc_count")));
-    upload.crlCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "crl_count")));
-    upload.mlscCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "mlsc_count")));
-    upload.mlCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "ml_count")));
+    upload.cscaCount = json.get("csca_count", 0).asInt();
+    upload.dscCount = json.get("dsc_count", 0).asInt();
+    upload.dscNcCount = json.get("dsc_nc_count", 0).asInt();
+    upload.crlCount = json.get("crl_count", 0).asInt();
+    upload.mlscCount = json.get("mlsc_count", 0).asInt();
+    upload.mlCount = json.get("ml_count", 0).asInt();
 
     // Timestamps
-    upload.createdAt = PQgetvalue(res, row, PQfnumber(res, "upload_timestamp"));
-    upload.updatedAt = PQgetvalue(res, row, PQfnumber(res, "completed_timestamp"));
+    upload.createdAt = json.get("upload_timestamp", "").asString();
+    upload.updatedAt = json.get("completed_timestamp", "").asString();
 
-    // Validation statistics (now using PQfnumber with column aliases)
-    upload.validationValidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_valid_count")));
-    upload.validationInvalidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_invalid_count")));
-    upload.validationPendingCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_pending_count")));
-    upload.validationErrorCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "validation_error_count")));
-    upload.trustChainValidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "trust_chain_valid_count")));
-    upload.trustChainInvalidCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "trust_chain_invalid_count")));
-    upload.cscaNotFoundCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "csca_not_found_count")));
-    upload.expiredCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "expired_count")));
-    upload.revokedCount = std::atoi(PQgetvalue(res, row, PQfnumber(res, "revoked_count")));
+    // Validation statistics
+    upload.validationValidCount = json.get("validation_valid_count", 0).asInt();
+    upload.validationInvalidCount = json.get("validation_invalid_count", 0).asInt();
+    upload.validationPendingCount = json.get("validation_pending_count", 0).asInt();
+    upload.validationErrorCount = json.get("validation_error_count", 0).asInt();
+    upload.trustChainValidCount = json.get("trust_chain_valid_count", 0).asInt();
+    upload.trustChainInvalidCount = json.get("trust_chain_invalid_count", 0).asInt();
+    upload.cscaNotFoundCount = json.get("csca_not_found_count", 0).asInt();
+    upload.expiredCount = json.get("expired_count", 0).asInt();
+    upload.revokedCount = json.get("revoked_count", 0).asInt();
 
     return upload;
 }
 
-Json::Value UploadRepository::pgResultToJson(PGresult* res)
+std::optional<std::string> UploadRepository::getOptionalString(const Json::Value& json, const std::string& field)
 {
-    Json::Value array = Json::arrayValue;
-
-    int rows = PQntuples(res);
-    int cols = PQnfields(res);
-
-    for (int i = 0; i < rows; ++i) {
-        Json::Value row;
-        for (int j = 0; j < cols; ++j) {
-            const char* fieldName = PQfname(res, j);
-            const char* value = PQgetvalue(res, i, j);
-
-            if (PQgetisnull(res, i, j)) {
-                row[fieldName] = Json::nullValue;
-            } else {
-                Oid type = PQftype(res, j);
-                if (type == 23 || type == 20) {  // INT4 or INT8
-                    row[fieldName] = std::atoi(value);
-                } else if (type == 700 || type == 701) {  // FLOAT4 or FLOAT8
-                    row[fieldName] = std::atof(value);
-                } else if (type == 16) {  // BOOL
-                    row[fieldName] = (value[0] == 't');
-                } else {
-                    row[fieldName] = value;
-                }
-            }
-        }
-        array.append(row);
-    }
-
-    return array;
-}
-
-std::optional<std::string> UploadRepository::getOptionalString(PGresult* res, int row, int col)
-{
-    if (PQgetisnull(res, row, col)) {
+    if (!json.isMember(field) || json[field].isNull()) {
         return std::nullopt;
     }
-    return std::string(PQgetvalue(res, row, col));
+    return json[field].asString();
 }
 
-std::optional<int> UploadRepository::getOptionalInt(PGresult* res, int row, int col)
+std::optional<int> UploadRepository::getOptionalInt(const Json::Value& json, const std::string& field)
 {
-    if (PQgetisnull(res, row, col)) {
+    if (!json.isMember(field) || json[field].isNull()) {
         return std::nullopt;
     }
-    return std::atoi(PQgetvalue(res, row, col));
+    return json[field].asInt();
 }
 
 } // namespace repositories

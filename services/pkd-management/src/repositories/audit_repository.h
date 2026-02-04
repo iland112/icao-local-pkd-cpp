@@ -2,23 +2,29 @@
 
 #include <string>
 #include <vector>
-#include <libpq-fe.h>
 #include <json/json.h>
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 
 /**
  * @file audit_repository.h
  * @brief Audit Repository - Database Access Layer for operation_audit_log table
  *
- * @note Part of main.cpp refactoring Phase 1.5 + Connection Pool (v2.3.1)
- * @date 2026-01-29 (Updated: 2026-02-02)
+ * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
+ *
+ * @note Part of Oracle migration Phase 3: Query Executor Pattern
+ * @date 2026-02-04
  */
 
 namespace repositories {
 
 class AuditRepository {
 public:
-    explicit AuditRepository(common::DbConnectionPool* dbPool);
+    /**
+     * @brief Constructor
+     * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @throws std::invalid_argument if queryExecutor is nullptr
+     */
+    explicit AuditRepository(common::IQueryExecutor* queryExecutor);
     ~AuditRepository() = default;
 
     /**
@@ -75,11 +81,14 @@ public:
     Json::Value getStatistics(const std::string& startDate, const std::string& endDate);
 
 private:
-    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
+    common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 
-    PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);
-    PGresult* executeQuery(const std::string& query);
-    Json::Value pgResultToJson(PGresult* res);
+    /**
+     * @brief Helper function to convert snake_case to camelCase
+     * @param snake_case Input string in snake_case format
+     * @return String in camelCase format
+     */
+    std::string toCamelCase(const std::string& snake_case);
 };
 
 } // namespace repositories

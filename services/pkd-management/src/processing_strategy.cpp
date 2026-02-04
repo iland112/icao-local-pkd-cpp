@@ -195,6 +195,14 @@ void AutoProcessingStrategy::processMasterListContent(
                 stats.mlCount, stats.cscaExtractedCount);
 }
 
+void AutoProcessingStrategy::validateAndSaveToDb(
+    const std::string& uploadId,
+    PGconn* conn
+) {
+    // AUTO mode doesn't use Stage 2 validation - all processing happens in processLdifEntries/processMasterListContent
+    throw std::runtime_error("validateAndSaveToDb() is not supported in AUTO mode");
+}
+
 // ============================================================================
 // ManualProcessingStrategy - Stage 1: Parse and save to temp
 // ============================================================================

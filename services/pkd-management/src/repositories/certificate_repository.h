@@ -3,9 +3,8 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include <libpq-fe.h>
 #include <json/json.h>
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 #include <openssl/x509.h>
 
 /**
@@ -13,10 +12,10 @@
  * @brief Certificate Repository - Database Access Layer for certificate table
  *
  * Handles all database operations related to certificates (CSCA, DSC, DSC_NC, MLSC, Link Certs).
- * Database-agnostic interface (currently PostgreSQL, future: Oracle support).
+ * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of main.cpp refactoring Phase 1.5
- * @date 2026-01-29
+ * @note Part of Oracle migration Phase 3: Query Executor Pattern
+ * @date 2026-02-04
  */
 
 namespace repositories {
@@ -42,7 +41,12 @@ struct CertificateSearchFilter {
  */
 class CertificateRepository {
 public:
-    explicit CertificateRepository(common::DbConnectionPool* dbPool);
+    /**
+     * @brief Constructor
+     * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @throws std::invalid_argument if queryExecutor is nullptr
+     */
+    explicit CertificateRepository(common::IQueryExecutor* queryExecutor);
     ~CertificateRepository() = default;
 
     // ========================================================================
@@ -201,12 +205,7 @@ public:
     Json::Value findDscForRevalidation(int limit);
 
 private:
-    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
-
-    // Query execution helpers
-    PGresult* executeParamQuery(const std::string& query, const std::vector<std::string>& params);
-    PGresult* executeQuery(const std::string& query);
-    Json::Value pgResultToJson(PGresult* res);
+    common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 
     // DN normalization helpers (for CSCA lookup)
     std::string extractDnAttribute(const std::string& dn, const std::string& attr);
@@ -214,7 +213,13 @@ private:
     std::string escapeSingleQuotes(const std::string& str);
 
     // X509 certificate parsing helper
-    X509* parseCertificateData(PGresult* res, int row, int col);
+    /**
+     * @brief Parse certificate data from hex-encoded bytea format to X509*
+     * @param hexData Hex-encoded certificate data (e.g., "\\x3082...")
+     * @return X509* certificate, or nullptr on failure
+     * @note Caller must free the returned X509* using X509_free()
+     */
+    X509* parseCertificateDataFromHex(const std::string& hexData);
 };
 
 } // namespace repositories

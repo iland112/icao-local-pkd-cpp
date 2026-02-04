@@ -2,26 +2,30 @@
 
 #include <string>
 #include <vector>
-#include <libpq-fe.h>
 #include <json/json.h>
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 
 /**
  * @file statistics_repository.h
  * @brief Statistics Repository - Database Access Layer for statistical queries
  *
  * Handles complex aggregation queries for statistics and analytics.
- * Database-agnostic interface (currently PostgreSQL, future: Oracle support).
+ * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of main.cpp refactoring Phase 1.5
- * @date 2026-01-29
+ * @note Part of Oracle migration Phase 3: Query Executor Pattern
+ * @date 2026-02-04
  */
 
 namespace repositories {
 
 class StatisticsRepository {
 public:
-    explicit StatisticsRepository(common::DbConnectionPool* dbPool);
+    /**
+     * @brief Constructor
+     * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @throws std::invalid_argument if queryExecutor is nullptr
+     */
+    explicit StatisticsRepository(common::IQueryExecutor* queryExecutor);
     ~StatisticsRepository() = default;
 
     /**
@@ -56,10 +60,7 @@ public:
     Json::Value getSystemStatistics();
 
 private:
-    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
-
-    PGresult* executeQuery(const std::string& query);
-    Json::Value pgResultToJson(PGresult* res);
+    common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 };
 
 } // namespace repositories

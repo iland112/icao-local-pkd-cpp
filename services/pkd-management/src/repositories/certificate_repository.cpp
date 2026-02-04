@@ -9,13 +9,14 @@
 
 namespace repositories {
 
-CertificateRepository::CertificateRepository(common::DbConnectionPool* dbPool)
-    : dbPool_(dbPool)
+CertificateRepository::CertificateRepository(common::IQueryExecutor* queryExecutor)
+    : queryExecutor_(queryExecutor)
 {
-    if (!dbPool_) {
-        throw std::invalid_argument("CertificateRepository: dbPool cannot be nullptr");
+    if (!queryExecutor_) {
+        throw std::invalid_argument("CertificateRepository: queryExecutor cannot be nullptr");
     }
-    spdlog::debug("[CertificateRepository] Initialized");
+    spdlog::debug("[CertificateRepository] Initialized with database type: {}",
+        queryExecutor_->getDatabaseType());
 }
 
 // ========================================================================
@@ -46,17 +47,13 @@ Json::Value CertificateRepository::findByFingerprint(const std::string& fingerpr
             "FROM certificate WHERE fingerprint_sha256 = $1";
 
         std::vector<std::string> params = {fingerprint};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQntuples(res) == 0) {
-            PQclear(res);
+        if (result.empty()) {
             return Json::nullValue;
         }
 
-        Json::Value certs = pgResultToJson(res);
-        PQclear(res);
-
-        return certs[0];
+        return result[0];
 
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Find by fingerprint failed: {}", e.what());
@@ -106,11 +103,8 @@ int CertificateRepository::countByType(const std::string& certType)
         const char* query = "SELECT COUNT(*) FROM certificate WHERE certificate_type = $1";
         std::vector<std::string> params = {certType};
 
-        PGresult* res = executeParamQuery(query, params);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
-
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Count by type failed: {}", e.what());
@@ -124,11 +118,8 @@ int CertificateRepository::countAll()
 
     try {
         const char* query = "SELECT COUNT(*) FROM certificate";
-        PGresult* res = executeQuery(query);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
-
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Count all failed: {}", e.what());
@@ -144,11 +135,8 @@ int CertificateRepository::countByCountry(const std::string& countryCode)
         const char* query = "SELECT COUNT(*) FROM certificate WHERE country_code = $1";
         std::vector<std::string> params = {countryCode};
 
-        PGresult* res = executeParamQuery(query, params);
-        int count = std::atoi(PQgetvalue(res, 0, 0));
-        PQclear(res);
-
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Count by country failed: {}", e.what());
@@ -181,9 +169,7 @@ bool CertificateRepository::markStoredInLdap(const std::string& fingerprint)
             "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
         std::vector<std::string> params = {fingerprint};
 
-        PGresult* res = executeParamQuery(query, params);
-        PQclear(res);
-
+        queryExecutor_->executeCommand(query, params);
         return true;
 
     } catch (const std::exception& e) {
@@ -229,18 +215,18 @@ X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
         }
         query += " LIMIT 20";  // Fetch candidates for post-filtering
 
-        PGresult* res = executeQuery(query);
+        Json::Value result = queryExecutor_->executeQuery(query);
 
         // Post-filter: find exact DN match using normalized comparison
         std::string targetNormalized = normalizeDnForComparison(issuerDn);
         int matchedRow = -1;
 
-        for (int i = 0; i < PQntuples(res); i++) {
-            char* dbSubjectDn = PQgetvalue(res, i, 1);
-            if (dbSubjectDn) {
-                std::string dbNormalized = normalizeDnForComparison(std::string(dbSubjectDn));
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            std::string dbSubjectDn = result[i].get("subject_dn", "").asString();
+            if (!dbSubjectDn.empty()) {
+                std::string dbNormalized = normalizeDnForComparison(dbSubjectDn);
                 if (dbNormalized == targetNormalized) {
-                    matchedRow = i;
+                    matchedRow = static_cast<int>(i);
                     spdlog::debug("[CertificateRepository] Found matching CSCA at row {}", i);
                     break;
                 }
@@ -250,13 +236,12 @@ X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
         if (matchedRow < 0) {
             spdlog::warn("[CertificateRepository] CSCA not found for issuer DN: {}",
                 issuerDn.substr(0, 80));
-            PQclear(res);
             return nullptr;
         }
 
-        // Parse binary certificate data
-        X509* cert = parseCertificateData(res, matchedRow, 0);
-        PQclear(res);
+        // Parse binary certificate data from hex-encoded string
+        std::string certDataHex = result[matchedRow].get("certificate_data", "").asString();
+        X509* cert = parseCertificateDataFromHex(certDataHex);
 
         if (cert) {
             spdlog::debug("[CertificateRepository] Successfully parsed CSCA X509 certificate");
@@ -304,18 +289,18 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
             query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
         }
 
-        PGresult* res = executeQuery(query);
-        int rows = PQntuples(res);
+        Json::Value rows = queryExecutor_->executeQuery(query);
 
         // Post-filter: match using normalized DN comparison
         std::string targetNormalized = normalizeDnForComparison(subjectDn);
 
-        for (int i = 0; i < rows; i++) {
-            char* dbSubjectDn = PQgetvalue(res, i, 1);
-            if (dbSubjectDn) {
-                std::string dbNormalized = normalizeDnForComparison(std::string(dbSubjectDn));
+        for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+            std::string dbSubjectDn = rows[i].get("subject_dn", "").asString();
+            if (!dbSubjectDn.empty()) {
+                std::string dbNormalized = normalizeDnForComparison(dbSubjectDn);
                 if (dbNormalized == targetNormalized) {
-                    X509* cert = parseCertificateData(res, i, 0);
+                    std::string certDataHex = rows[i].get("certificate_data", "").asString();
+                    X509* cert = parseCertificateDataFromHex(certDataHex);
                     if (cert) {
                         result.push_back(cert);
                         spdlog::debug("[CertificateRepository] Added CSCA {} to result", i);
@@ -323,8 +308,6 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
                 }
             }
         }
-
-        PQclear(res);
 
         spdlog::info("[CertificateRepository] Found {} CSCA(s) matching subject DN", result.size());
         return result;
@@ -343,8 +326,6 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
 {
     spdlog::debug("[CertificateRepository] Finding DSC certificates for re-validation (limit: {})", limit);
 
-    Json::Value result = Json::arrayValue;
-
     try {
         // Query DSC/DSC_NC certificates where CSCA was not found (failed validation)
         const char* query =
@@ -357,30 +338,27 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
             "LIMIT $1";
 
         std::vector<std::string> params = {std::to_string(limit)};
-        PGresult* res = executeParamQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
-            Json::Value cert;
-            cert["id"] = PQgetvalue(res, i, 0);
-            cert["issuerDn"] = PQgetvalue(res, i, 1);
-
-            // Certificate data (bytea hex format)
-            char* certData = PQgetvalue(res, i, 2);
-            int certLen = PQgetlength(res, i, 2);
-            if (certData && certLen > 0) {
-                cert["certificateData"] = std::string(certData, certLen);
-            } else {
-                cert["certificateData"] = "";
+        // Transform field names to match expected format (camelCase)
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            // Field names are already in the correct format from query executor
+            // Just ensure certificateData field exists
+            if (!result[i].isMember("certificateData") && result[i].isMember("certificate_data")) {
+                result[i]["certificateData"] = result[i]["certificate_data"];
+                result[i].removeMember("certificate_data");
             }
-
-            cert["fingerprint"] = PQgetvalue(res, i, 3);
-            result.append(cert);
+            if (!result[i].isMember("issuerDn") && result[i].isMember("issuer_dn")) {
+                result[i]["issuerDn"] = result[i]["issuer_dn"];
+                result[i].removeMember("issuer_dn");
+            }
+            if (!result[i].isMember("fingerprint") && result[i].isMember("fingerprint_sha256")) {
+                result[i]["fingerprint"] = result[i]["fingerprint_sha256"];
+                result[i].removeMember("fingerprint_sha256");
+            }
         }
 
-        PQclear(res);
-
-        spdlog::info("[CertificateRepository] Found {} DSC(s) for re-validation", rows);
+        spdlog::info("[CertificateRepository] Found {} DSC(s) for re-validation", result.size());
         return result;
 
     } catch (const std::exception& e) {
@@ -392,107 +370,6 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
 // ========================================================================
 // Private Helper Methods
 // ========================================================================
-
-PGresult* CertificateRepository::executeParamQuery(
-    const std::string& query,
-    const std::vector<std::string>& params
-)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    std::vector<const char*> paramValues;
-    for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
-    }
-
-    PGresult* res = PQexecParams(
-        conn.get(),
-        query.c_str(),
-        params.size(),
-        nullptr,
-        paramValues.data(),
-        nullptr,
-        nullptr,
-        0
-    );
-
-    if (!res) {
-        throw std::runtime_error("Query execution failed: null result");
-    }
-
-    ExecStatusType status = PQresultStatus(res);
-    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(conn.get());
-        PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-PGresult* CertificateRepository::executeQuery(const std::string& query)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (!res) {
-        throw std::runtime_error("Query execution failed: null result");
-    }
-
-    ExecStatusType status = PQresultStatus(res);
-    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(conn.get());
-        PQclear(res);
-        throw std::runtime_error("Query failed: " + error);
-    }
-
-    return res;
-}
-
-Json::Value CertificateRepository::pgResultToJson(PGresult* res)
-{
-    Json::Value array = Json::arrayValue;
-
-    int rows = PQntuples(res);
-    int cols = PQnfields(res);
-
-    for (int i = 0; i < rows; ++i) {
-        Json::Value row;
-        for (int j = 0; j < cols; ++j) {
-            const char* fieldName = PQfname(res, j);
-            const char* value = PQgetvalue(res, i, j);
-
-            if (PQgetisnull(res, i, j)) {
-                row[fieldName] = Json::nullValue;
-            } else {
-                Oid type = PQftype(res, j);
-                if (type == 23 || type == 20) {  // INT4 or INT8
-                    row[fieldName] = std::atoi(value);
-                } else if (type == 700 || type == 701) {  // FLOAT4 or FLOAT8
-                    row[fieldName] = std::atof(value);
-                } else if (type == 16) {  // BOOL
-                    row[fieldName] = (value[0] == 't');
-                } else {
-                    row[fieldName] = value;
-                }
-            }
-        }
-        array.append(row);
-    }
-
-    return array;
-}
 
 // ========================================================================
 // DN Normalization Helpers
@@ -620,30 +497,25 @@ std::string CertificateRepository::escapeSingleQuotes(const std::string& str)
     return escaped;
 }
 
-X509* CertificateRepository::parseCertificateData(PGresult* res, int row, int col)
+X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexData)
 {
-    char* certData = PQgetvalue(res, row, col);
-    int certLen = PQgetlength(res, row, col);
-
-    if (!certData || certLen == 0) {
+    if (hexData.empty()) {
         spdlog::warn("[CertificateRepository] Empty certificate data");
         return nullptr;
     }
 
     // Parse bytea hex format (PostgreSQL escape format: \x...)
     std::vector<uint8_t> derBytes;
-    if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
+    if (hexData.size() > 2 && hexData[0] == '\\' && hexData[1] == 'x') {
         // Hex encoded
-        for (int i = 2; i < certLen; i += 2) {
-            if (i + 1 < certLen) {
-                char hex[3] = {certData[i], certData[i + 1], 0};
-                derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
-            }
+        for (size_t i = 2; i + 1 < hexData.size(); i += 2) {
+            char hex[3] = {hexData[i], hexData[i + 1], 0};
+            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
         }
     } else {
         // Might be raw binary (starts with 0x30 for DER SEQUENCE)
-        if (certLen > 0 && static_cast<unsigned char>(certData[0]) == 0x30) {
-            derBytes.assign(certData, certData + certLen);
+        if (!hexData.empty() && static_cast<unsigned char>(hexData[0]) == 0x30) {
+            derBytes.assign(hexData.begin(), hexData.end());
         }
     }
 
@@ -670,35 +542,28 @@ X509* CertificateRepository::parseCertificateData(PGresult* res, int row, int co
 // ============================================================================
 
 std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
+    try {
+        const char* query =
+            "SELECT upload_id FROM certificate "
+            "WHERE fingerprint_sha256 = $1 "
+            "ORDER BY uploaded_at ASC LIMIT 1";
 
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
+        std::vector<std::string> params = {fingerprint};
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        if (!result.empty()) {
+            std::string uploadId = result[0].get("upload_id", "").asString();
+            spdlog::debug("[CertificateRepository] Found first upload_id={} for fingerprint={}",
+                         uploadId, fingerprint.substr(0, 16));
+            return uploadId;
+        }
+
+        return "";
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findFirstUploadIdByFingerprint failed: {}", e.what());
+        return "";
     }
-
-    const char* query =
-        "SELECT upload_id FROM certificate "
-        "WHERE fingerprint_sha256 = $1 "
-        "ORDER BY uploaded_at ASC LIMIT 1";
-
-    const char* paramValues[1] = {fingerprint.c_str()};
-
-    PGresult* res = PQexecParams(
-        conn.get(), query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    std::string uploadId;
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        uploadId = PQgetvalue(res, 0, 0);
-        spdlog::debug("[CertificateRepository] Found first upload_id={} for fingerprint={}",
-                     uploadId, fingerprint.substr(0, 16));
-    } else if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("[CertificateRepository] Query failed: {}", PQerrorMessage(conn.get()));
-    }
-
-    PQclear(res);
-    return uploadId;
 }
 
 bool CertificateRepository::saveDuplicate(const std::string& uploadId,
@@ -709,47 +574,36 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
                                          const std::string& issuerDn,
                                          const std::string& countryCode,
                                          const std::string& serialNumber) {
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
+    try {
+        const char* query =
+            "INSERT INTO duplicate_certificate "
+            "(upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
+            "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, CURRENT_TIMESTAMP) "
+            "ON CONFLICT (upload_id, fingerprint_sha256, certificate_type) "
+            "DO UPDATE SET duplicate_count = duplicate_certificate.duplicate_count + 1";
 
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
+        std::vector<std::string> params = {
+            uploadId,
+            firstUploadId,
+            fingerprint,
+            certType,
+            subjectDn,
+            issuerDn,
+            countryCode.empty() ? "" : countryCode,
+            serialNumber.empty() ? "" : serialNumber
+        };
 
-    const char* query =
-        "INSERT INTO duplicate_certificate "
-        "(upload_id, first_upload_id, fingerprint_sha256, certificate_type, "
-        "subject_dn, issuer_dn, country_code, serial_number, duplicate_count, detection_timestamp) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 1, CURRENT_TIMESTAMP) "
-        "ON CONFLICT (upload_id, fingerprint_sha256, certificate_type) "
-        "DO UPDATE SET duplicate_count = duplicate_certificate.duplicate_count + 1";
+        queryExecutor_->executeCommand(query, params);
 
-    const char* paramValues[8] = {
-        uploadId.c_str(),
-        firstUploadId.c_str(),
-        fingerprint.c_str(),
-        certType.c_str(),
-        subjectDn.c_str(),
-        issuerDn.c_str(),
-        countryCode.empty() ? nullptr : countryCode.c_str(),
-        serialNumber.empty() ? nullptr : serialNumber.c_str()
-    };
-
-    PGresult* res = PQexecParams(
-        conn.get(), query, 8, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-
-    if (!success) {
-        spdlog::error("[CertificateRepository] Failed to save duplicate: {}", PQerrorMessage(conn.get()));
-    } else {
         spdlog::debug("[CertificateRepository] Saved duplicate: fingerprint={}, type={}, upload={}",
                      fingerprint.substr(0, 16), certType, uploadId);
-    }
+        return true;
 
-    PQclear(res);
-    return success;
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Failed to save duplicate: {}", e.what());
+        return false;
+    }
 }
 
 } // namespace repositories

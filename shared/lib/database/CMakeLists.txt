@@ -14,11 +14,17 @@ find_package(PostgreSQL REQUIRED)
 # Find spdlog
 find_package(spdlog CONFIG REQUIRED)
 
+# Find jsoncpp (for Query Executor)
+find_package(jsoncpp CONFIG REQUIRED)
+
 # Library target (compiled library, not header-only)
 add_library(icao-database STATIC
     db_connection_pool.cpp
     db_connection_pool_factory.cpp
     oracle_connection_pool.cpp
+    postgresql_query_executor.cpp
+    oracle_query_executor.cpp
+    query_executor_factory.cpp
 )
 
 # Include directories
@@ -46,6 +52,7 @@ endif()
 target_link_libraries(icao-database PUBLIC
     PostgreSQL::PostgreSQL
     spdlog::spdlog
+    JsonCpp::JsonCpp
 )
 
 # C++ standard
@@ -68,6 +75,9 @@ install(FILES
     db_connection_pool.h
     db_connection_pool_factory.h
     oracle_connection_pool.h
+    i_query_executor.h
+    postgresql_query_executor.h
+    oracle_query_executor.h
     DESTINATION include/icao/database
 )
 
