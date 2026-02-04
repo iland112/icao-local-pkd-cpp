@@ -1,0 +1,108 @@
+# ==============================================================================
+# ICAO Local PKD - Development Docker Compose
+# ==============================================================================
+# Purpose: Development environment for certificate file upload feature
+# Branch: feature/certificate-file-upload
+# Services: pkd-management-dev (port 8091), oracle-xe (port 1521)
+# Database: Oracle XE (development only)
+# LDAP: Uses production LDAP (shared)
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Oracle Database XE (Development Only)
+  # ---------------------------------------------------------------------------
+  oracle-xe-dev:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: icao-oracle-xe-dev
+    ports:
+      - "1521:1521"  # Oracle listener port
+      - "5500:5500"  # Oracle Enterprise Manager
+    environment:
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD:-OraclePwd123}
+      - ORACLE_DATABASE=LOCALPKD
+      - APP_USER=pkd
+      - APP_USER_PASSWORD=${ORACLE_APP_PASSWORD:-pkd123}
+    volumes:
+      - oracle-xe-dev-data:/opt/oracle/oradata
+      - ./db/oracle-init:/container-entrypoint-initdb.d
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    shm_size: 1gb
+  # ---------------------------------------------------------------------------
+  # PKD Management Service (Development Version)
+  # ---------------------------------------------------------------------------
+  pkd-management-dev:
+    build:
+      context: ..
+      dockerfile: services/pkd-management/Dockerfile
+      args:
+        - BUILD_TYPE=Debug
+    container_name: icao-pkd-management-dev
+    ports:
+      - "8091:8091"  # Development port (production: 8081)
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-management-dev
+      - SERVER_PORT=8091  # Development port
+      # Oracle Database Configuration
+      - DB_TYPE=oracle
+      - ORACLE_HOST=oracle-xe-dev
+      - ORACLE_PORT=1521
+      - ORACLE_SERVICE_NAME=LOCALPKD
+      - ORACLE_USER=pkd
+      - ORACLE_PASSWORD=${ORACLE_APP_PASSWORD:-pkd123}
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389
+      - LDAP_WRITE_HOST=openldap1
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_DATA_CONTAINER=dc=data
+      - LDAP_NC_DATA_CONTAINER=dc=nc-data
+      - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+      # JWT Authentication
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}
+      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      # ASN.1 Parser Configuration
+      - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}
+      # Internal Service Authentication (for PA auto-registration)
+      - INTERNAL_SERVICE_SECRET=${INTERNAL_SERVICE_SECRET:-dev-secret-change-in-production}
+    volumes:
+      - ../data:/app/data
+      - pkd-management-dev-logs:/var/log/pkd-management
+    depends_on:
+      oracle-xe-dev:
+        condition: service_healthy
+      openldap1:
+        condition: service_started
+      openldap2:
+        condition: service_started
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8091/api/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pkd-management-dev-logs:
+  oracle-xe-dev-data:
+
+networks:
+  pkd-network:
+    external: true

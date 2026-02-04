@@ -1,8 +1,10 @@
 # ICAO PKD - Shared Database Library
-# Version: 1.0.0
+# Version: 2.0.0
 # Created: 2026-02-04
+# Updated: 2026-02-04
 #
-# Provides thread-safe PostgreSQL connection pooling for all ICAO PKD services
+# Provides thread-safe database connection pooling for PostgreSQL and Oracle
+# Supports strategy pattern for database-agnostic connection management
 
 cmake_minimum_required(VERSION 3.15)
 
@@ -15,11 +17,14 @@ find_package(spdlog CONFIG REQUIRED)
 # Library target (compiled library, not header-only)
 add_library(icao-database STATIC
     db_connection_pool.cpp
+    db_connection_pool_factory.cpp
+    oracle_connection_pool.cpp
 )
 
 # Include directories
 target_include_directories(icao-database PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/external/otl>
     $<INSTALL_INTERFACE:include/icao/database>
 )
 
@@ -45,7 +50,10 @@ install(TARGETS icao-database
 )
 
 install(FILES
+    db_connection_interface.h
     db_connection_pool.h
+    db_connection_pool_factory.h
+    oracle_connection_pool.h
     DESTINATION include/icao/database
 )
 

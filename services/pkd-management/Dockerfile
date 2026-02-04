@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     git \
     curl \
+    wget \
     zip \
     unzip \
     tar \
@@ -33,7 +34,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     flex \
     autoconf \
     ca-certificates \
+    libaio1 \
     && rm -rf /var/lib/apt/lists/*
+
+# Install Oracle Instant Client (for Oracle database support)
+# Version: 21.13 (compatible with Oracle 11g, 12c, 18c, 19c, 21c)
+RUN mkdir -p /opt/oracle && cd /opt/oracle && \
+    # Download Oracle Instant Client Basic and SDK
+    wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
+    wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
+    # Extract files
+    unzip -q instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
+    unzip -q instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
+    # Cleanup zip files
+    rm -f *.zip && \
+    # Create symbolic links for compatibility
+    cd instantclient_21_13 && \
+    ln -sf libclntsh.so.21.1 libclntsh.so && \
+    ln -sf libocci.so.21.1 libocci.so && \
+    echo "Oracle Instant Client installed successfully"
+
+# Set Oracle environment variables
+ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
+ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
+ENV PATH=$ORACLE_HOME:$PATH
 
 # Install vcpkg
 WORKDIR /opt

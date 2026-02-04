@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "db_connection_interface.h"
 #include <libpq-fe.h>
 #include <string>
 #include <queue>
@@ -32,7 +33,7 @@ namespace common {
  *
  * Automatically returns connection to pool when destroyed
  */
-class DbConnection {
+class DbConnection : public IDbConnection {
 private:
     PGconn* conn_;
     class DbConnectionPool* pool_;  // Non-owning pointer to pool
@@ -75,16 +76,28 @@ public:
     PGconn* get() const { return conn_; }
 
     /**
-     * @brief Check if connection is valid
+     * @brief Check if connection is valid (IDbConnection interface)
      */
-    bool isValid() const {
+    bool isValid() const override {
         return conn_ != nullptr && !released_;
     }
 
     /**
-     * @brief Manually release connection back to pool
+     * @brief Get database type (IDbConnection interface)
      */
-    void release();
+    std::string getDatabaseType() const override {
+        return "postgres";
+    }
+
+    /**
+     * @brief Execute raw SQL query (IDbConnection interface)
+     */
+    bool execute(const std::string& sql) override;
+
+    /**
+     * @brief Manually release connection back to pool (IDbConnection interface)
+     */
+    void release() override;
 };
 
 /**
@@ -92,7 +105,7 @@ public:
  *
  * Thread-safe connection pool with configurable size and timeout
  */
-class DbConnectionPool {
+class DbConnectionPool : public IDbConnectionPool {
 private:
     std::string connString_;
     size_t minSize_;
@@ -133,33 +146,39 @@ public:
     DbConnectionPool& operator=(const DbConnectionPool&) = delete;
 
     /**
-     * @brief Initialize connection pool
+     * @brief Initialize connection pool (IDbConnectionPool interface)
      * @return true if successfully created minimum connections
      */
-    bool initialize();
+    bool initialize() override;
 
     /**
-     * @brief Acquire connection from pool
+     * @brief Acquire connection from pool (PostgreSQL specific)
      * @return DbConnection RAII wrapper (nullptr on timeout)
      * @throws std::runtime_error on pool shutdown or critical error
      */
     DbConnection acquire();
 
     /**
-     * @brief Get pool statistics
+     * @brief Acquire connection (IDbConnectionPool interface)
      */
-    struct Stats {
-        size_t availableConnections;
-        size_t totalConnections;
-        size_t maxConnections;
-    };
-
-    Stats getStats() const;
+    std::unique_ptr<IDbConnection> acquireGeneric() override;
 
     /**
-     * @brief Shutdown pool and close all connections
+     * @brief Get pool statistics (IDbConnectionPool interface)
      */
-    void shutdown();
+    Stats getStats() const override;
+
+    /**
+     * @brief Shutdown pool and close all connections (IDbConnectionPool interface)
+     */
+    void shutdown() override;
+
+    /**
+     * @brief Get database type (IDbConnectionPool interface)
+     */
+    std::string getDatabaseType() const override {
+        return "postgres";
+    }
 
 private:
     /**

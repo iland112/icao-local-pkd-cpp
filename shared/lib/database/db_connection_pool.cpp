@@ -19,6 +19,22 @@ DbConnection::~DbConnection() {
     }
 }
 
+bool DbConnection::execute(const std::string& sql) {
+    if (!isValid()) {
+        return false;
+    }
+
+    PGresult* res = PQexec(conn_, sql.c_str());
+    if (!res) {
+        return false;
+    }
+
+    ExecStatusType status = PQresultStatus(res);
+    PQclear(res);
+
+    return (status == PGRES_COMMAND_OK || status == PGRES_TUPLES_OK);
+}
+
 void DbConnection::release() {
     if (released_ || !conn_) {
         return;
@@ -131,6 +147,11 @@ DbConnection DbConnectionPool::acquire() {
             throw std::runtime_error("Timeout acquiring database connection");
         }
     }
+}
+
+std::unique_ptr<IDbConnection> DbConnectionPool::acquireGeneric() {
+    DbConnection conn = acquire();
+    return std::make_unique<DbConnection>(std::move(conn));
 }
 
 DbConnectionPool::Stats DbConnectionPool::getStats() const {
