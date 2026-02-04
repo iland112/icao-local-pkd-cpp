@@ -9,6 +9,7 @@
 # ==============================================================================
 
 version: '3.8'
+name: icao-dev
 
 services:
   # ---------------------------------------------------------------------------
@@ -18,8 +19,8 @@ services:
     image: gvenzl/oracle-xe:21-slim
     container_name: icao-oracle-xe-dev
     ports:
-      - "1521:1521"  # Oracle listener port
-      - "5500:5500"  # Oracle Enterprise Manager
+      - "11521:1521"  # Oracle listener port (dev: 11521)
+      - "15500:5500"  # Oracle Enterprise Manager (dev: 15500)
     environment:
       - ORACLE_PASSWORD=${ORACLE_PASSWORD:-OraclePwd123}
       - ORACLE_DATABASE=LOCALPKD
@@ -49,11 +50,11 @@ services:
         - BUILD_TYPE=Debug
     container_name: icao-pkd-management-dev
     ports:
-      - "8091:8091"  # Development port (production: 8081)
+      - "18091:18091"  # Development port (production: 8081)
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-management-dev
-      - SERVER_PORT=8091  # Development port
+      - SERVER_PORT=18091  # Development port
       # Oracle Database Configuration
       - DB_TYPE=oracle
       - ORACLE_HOST=oracle-xe-dev
@@ -85,15 +86,13 @@ services:
     depends_on:
       oracle-xe-dev:
         condition: service_healthy
-      openldap1:
-        condition: service_started
-      openldap2:
-        condition: service_started
+      # Note: LDAP services (openldap1, openldap2) are from production environment
+      # They must be running separately for pkd-management-dev to work
     networks:
       - pkd-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8091/api/health || exit 1"]
+      test: ["CMD-SHELL", "curl -f http://localhost:18091/api/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -105,4 +104,5 @@ volumes:
 
 networks:
   pkd-network:
-    external: true
+    name: pkd-dev-network
+    driver: bridge

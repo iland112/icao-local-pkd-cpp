@@ -14,6 +14,7 @@
 #include <string>
 #include <memory>
 #include <map>
+#include <vector>
 
 namespace common {
 

@@ -58,6 +58,8 @@ RUN mkdir -p /opt/oracle && cd /opt/oracle && \
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
 ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
 ENV PATH=$ORACLE_HOME:$PATH
+# Note: Oracle SDK include path NOT added to system paths to avoid conflicts with OpenLDAP headers
+# Oracle headers will be included only for oracle_connection_pool.cpp via CMake target_include_directories
 
 # Install vcpkg
 WORKDIR /opt

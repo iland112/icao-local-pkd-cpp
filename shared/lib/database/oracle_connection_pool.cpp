@@ -129,7 +129,7 @@ void OracleConnectionPool::initializeOTL() {
         std::cout << "[info] OTL initialized successfully" << std::endl;
     } catch (otl_exception& e) {
         std::cerr << "[error] OTL initialization failed: " << e.msg << std::endl;
-        throw std::runtime_error(std::string("OTL initialization failed: ") + e.msg);
+        throw std::runtime_error(std::string("OTL initialization failed: ") + reinterpret_cast<const char*>(e.msg));
     }
 }
 
@@ -180,7 +180,7 @@ void* OracleConnectionPool::createConnection() {
     } catch (otl_exception& e) {
         std::cerr << "[error] Failed to create Oracle connection: " << e.msg << std::endl;
         std::cerr << "[error] Connection string: " << connString_ << std::endl;
-        throw std::runtime_error(std::string("Oracle connection failed: ") + e.msg);
+        throw std::runtime_error(std::string("Oracle connection failed: ") + reinterpret_cast<const char*>(e.msg));
     }
 }
 

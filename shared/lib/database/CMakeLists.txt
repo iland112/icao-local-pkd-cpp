@@ -28,6 +28,14 @@ target_include_directories(icao-database PUBLIC
     $<INSTALL_INTERFACE:include/icao/database>
 )
 
+# Oracle SDK include path (PRIVATE to avoid conflicts with OpenLDAP)
+# Only oracle_connection_pool.cpp needs Oracle OCI headers
+if(DEFINED ENV{ORACLE_HOME})
+    target_include_directories(icao-database PRIVATE
+        $ENV{ORACLE_HOME}/sdk/include
+    )
+endif()
+
 # Link dependencies
 target_link_libraries(icao-database PUBLIC
     PostgreSQL::PostgreSQL
