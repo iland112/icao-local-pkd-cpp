@@ -1,10 +1,11 @@
 # ==============================================================================
 # ICAO Local PKD - Development Docker Compose
 # ==============================================================================
-# Purpose: Development environment for certificate file upload feature
+# Purpose: Development environment for Oracle migration Phase 2 testing
 # Branch: feature/certificate-file-upload
-# Services: pkd-management-dev (port 8091), oracle-xe (port 1521)
-# Database: Oracle XE (development only)
+# Services: pkd-management-dev (port 18091)
+# Databases: PostgreSQL (port 15433), Oracle XE (port 11521)
+# DB_TYPE: Configurable via environment variable (postgres or oracle)
 # LDAP: Uses production LDAP (shared)
 # ==============================================================================
 
@@ -39,6 +40,34 @@ services:
       retries: 5
       start_period: 120s
     shm_size: 1gb
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (Development Only)
+  # ---------------------------------------------------------------------------
+  postgres-dev:
+    image: postgres:15
+    container_name: icao-postgres-dev
+    ports:
+      - "15433:5432"  # PostgreSQL port (dev: 15433)
+    environment:
+      - POSTGRES_USER=pkd
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-pkd_dev_password}
+      - POSTGRES_DB=localpkd
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pkd -d localpkd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # ---------------------------------------------------------------------------
   # PKD Management Service (Development Version)
   # ---------------------------------------------------------------------------
@@ -55,8 +84,21 @@ services:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-management-dev
       - SERVER_PORT=18091  # Development port
-      # Oracle Database Configuration
-      - DB_TYPE=oracle
+      # Database Configuration (Factory Pattern: choose PostgreSQL or Oracle)
+      - DB_TYPE=postgres  # Options: postgres, oracle
+      # Generic Database Configuration (for AppConfig legacy support)
+      - DB_HOST=postgres-dev
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      # PostgreSQL Configuration (development database)
+      - PG_HOST=postgres-dev
+      - PG_PORT=5432
+      - PG_DATABASE=localpkd
+      - PG_USER=pkd
+      - PG_PASSWORD=${POSTGRES_PASSWORD}
+      # Oracle Database Configuration (development testing)
       - ORACLE_HOST=oracle-xe-dev
       - ORACLE_PORT=1521
       - ORACLE_SERVICE_NAME=LOCALPKD
@@ -84,6 +126,8 @@ services:
       - ../data:/app/data
       - pkd-management-dev-logs:/var/log/pkd-management
     depends_on:
+      postgres-dev:
+        condition: service_healthy
       oracle-xe-dev:
         condition: service_healthy
       # Note: LDAP services (openldap1, openldap2) are from production environment
@@ -101,6 +145,7 @@ services:
 volumes:
   pkd-management-dev-logs:
   oracle-xe-dev-data:
+  postgres-dev-data:
 
 networks:
   pkd-network:

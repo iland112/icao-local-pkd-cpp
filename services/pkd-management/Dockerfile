@@ -174,6 +174,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     curl \
     ldap-utils \
+    libaio1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set timezone
@@ -195,6 +196,13 @@ COPY --from=builder /app/build_fresh/bin/test_ldap_dn /app/test_ldap_dn
 
 # Phase 5: Copy shared library (common-lib)
 COPY --from=builder /app/build_fresh/lib/libicao-common.so* /usr/local/lib/
+
+# v2.5.0: Copy Oracle Instant Client libraries (runtime dependency)
+COPY --from=builder /opt/oracle/instantclient_21_13/ /opt/oracle/instantclient_21_13/
+ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
+ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
+ENV PATH=$ORACLE_HOME:$PATH
+
 RUN ldconfig
 
 # Verify binary version immediately after COPY

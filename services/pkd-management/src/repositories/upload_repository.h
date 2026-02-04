@@ -74,7 +74,7 @@ class UploadRepository {
 public:
     /**
      * @brief Constructor
-     * @param dbConn PostgreSQL connection (non-owning pointer)
+     * @param dbPool Database connection pool (non-owning pointer, supports PostgreSQL and Oracle)
      */
     explicit UploadRepository(common::DbConnectionPool* dbPool);
 

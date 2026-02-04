@@ -59,6 +59,7 @@
 #include "common/ldap_utils.h"
 #include <icao/audit/audit_log.h>
 #include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
+#include "db_connection_pool_factory.h"  // v2.5.0: Factory Pattern for DB abstraction
 #include <ldap_connection_pool.h>  // v2.4.3: Shared LDAP connection pool library (NEW)
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
@@ -120,7 +121,8 @@ std::shared_ptr<handlers::AuthHandler> authHandler;
 
 // Phase 1.6: Global Repositories and Services (Repository Pattern)
 // v2.3.1: Replaced single connection with Connection Pool for thread safety
-std::shared_ptr<common::DbConnectionPool> dbPool;  // Database connection pool
+// v2.5.0: Uses Factory Pattern for database type selection (Oracle migration Phase 2)
+std::shared_ptr<common::DbConnectionPool> dbPool;  // Database connection pool (currently PostgreSQL only)
 std::shared_ptr<common::LdapConnectionPool> ldapPool;  // LDAP connection pool (NEW - v2.4.3)
 std::shared_ptr<repositories::UploadRepository> uploadRepository;
 std::shared_ptr<repositories::CertificateRepository> certificateRepository;
@@ -8730,24 +8732,45 @@ int main(int argc, char* argv[]) {
         // Phase 1.6: Initialize Repository Pattern - Repositories and Services
         spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
 
-        // Create database connection pool for Repositories (v2.3.1: Thread-safe connection management)
+        // Create database connection pool for Repositories (v2.5.0: Factory Pattern with Oracle support)
         try {
+            // v2.5.0: Use Factory Pattern to create pool based on DB_TYPE environment variable
+            // Supports both PostgreSQL (production) and Oracle (development)
+            auto genericPool = common::DbConnectionPoolFactory::createFromEnv();
 
-            dbPool = std::make_shared<common::DbConnectionPool>(
-                dbConnInfo,  // PostgreSQL connection string
-                5,   // minConnections
-                20,  // maxConnections
-                5    // acquireTimeoutSec
-            );
+            if (!genericPool) {
+                spdlog::critical("Failed to create database connection pool from environment");
+                ldapPool.reset();  // Release LDAP pool
+                return 1;
+            }
 
+            // Initialize the connection pool
+            if (!genericPool->initialize()) {
+                spdlog::critical("Failed to initialize database connection pool");
+                ldapPool.reset();  // Release LDAP pool
+                return 1;
+            }
 
+            std::string dbType = genericPool->getDatabaseType();
+            spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
+            // Phase 2: Currently only PostgreSQL is supported by Repositories
+            // TODO Phase 3: Add Oracle Repository support or use database-agnostic SQL
+            if (dbType != "postgres") {
+                spdlog::critical("Repositories currently only support PostgreSQL (got: {})", dbType);
+                spdlog::critical("Oracle support requires Repository layer refactoring (Phase 3)");
+                ldapPool.reset();
+                return 1;
+            }
 
+            // Safe downcast for PostgreSQL pool (current phase limitation)
+            dbPool = std::dynamic_pointer_cast<common::DbConnectionPool>(genericPool);
+            if (!dbPool) {
+                spdlog::critical("Failed to cast database pool to PostgreSQL type");
+                ldapPool.reset();
+                return 1;
+            }
 
-
-
-
-            spdlog::info("Database connection pool initialized (min=5, max=20)");
         } catch (const std::exception& e) {
             spdlog::critical("Failed to initialize database connection pool: {}", e.what());
             ldapPool.reset();  // Release LDAP pool

@@ -16,7 +16,7 @@ UploadRepository::UploadRepository(common::DbConnectionPool* dbPool)
     if (!dbPool_) {
         throw std::invalid_argument("UploadRepository: dbPool cannot be nullptr");
     }
-    spdlog::debug("[UploadRepository] Initialized");
+    spdlog::debug("[UploadRepository] Initialized (DB type: {})");
 }
 
 // ============================================================================

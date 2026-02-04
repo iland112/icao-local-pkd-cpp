@@ -34,6 +34,12 @@ if(DEFINED ENV{ORACLE_HOME})
     target_include_directories(icao-database PRIVATE
         $ENV{ORACLE_HOME}/sdk/include
     )
+
+    # Oracle Instant Client library linking
+    target_link_directories(icao-database PUBLIC
+        $ENV{ORACLE_HOME}
+    )
+    target_link_libraries(icao-database PUBLIC clntsh)
 endif()
 
 # Link dependencies
