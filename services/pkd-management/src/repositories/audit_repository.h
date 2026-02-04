@@ -4,7 +4,7 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
-#include "../common/db_connection_pool.h"
+#include "db_connection_pool.h"
 
 /**
  * @file audit_repository.h

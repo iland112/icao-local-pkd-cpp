@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/models/certificate.h"
+#include "db_connection_pool.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -13,19 +14,21 @@ namespace icao::relay::repositories {
  *
  * Handles certificate-related database operations for DB-LDAP synchronization.
  * All queries use parameterized statements for SQL injection prevention.
+ *
+ * Thread-safe: Uses DbConnectionPool for concurrent request handling.
  */
 class CertificateRepository {
 public:
     /**
      * @brief Constructor
-     * @param conninfo PostgreSQL connection string
+     * @param dbPool Shared database connection pool
      */
-    explicit CertificateRepository(const std::string& conninfo);
+    explicit CertificateRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
 
     /**
-     * @brief Destructor - closes database connection
+     * @brief Destructor
      */
-    ~CertificateRepository();
+    ~CertificateRepository() = default;
 
     // Disable copy and move
     CertificateRepository(const CertificateRepository&) = delete;
@@ -74,14 +77,7 @@ private:
      */
     domain::Certificate resultToCertificate(PGresult* res, int row);
 
-    /**
-     * @brief Get database connection (reconnects if needed)
-     * @return PGconn pointer
-     */
-    PGconn* getConnection();
-
-    std::string conninfo_;
-    PGconn* conn_ = nullptr;
+    std::shared_ptr<common::DbConnectionPool> dbPool_;
 };
 
 } // namespace icao::relay::repositories

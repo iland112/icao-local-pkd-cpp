@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/models/crl.h"
+#include "db_connection_pool.h"
 #include <memory>
 #include <vector>
 #include <string>
@@ -13,19 +14,21 @@ namespace icao::relay::repositories {
  *
  * Handles CRL-related database operations for DB-LDAP synchronization.
  * All queries use parameterized statements for SQL injection prevention.
+ *
+ * Thread-safe: Uses DbConnectionPool for concurrent request handling.
  */
 class CrlRepository {
 public:
     /**
      * @brief Constructor
-     * @param conninfo PostgreSQL connection string
+     * @param dbPool Shared database connection pool
      */
-    explicit CrlRepository(const std::string& conninfo);
+    explicit CrlRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
 
     /**
-     * @brief Destructor - closes database connection
+     * @brief Destructor
      */
-    ~CrlRepository();
+    ~CrlRepository() = default;
 
     // Disable copy and move
     CrlRepository(const CrlRepository&) = delete;
@@ -69,14 +72,7 @@ private:
      */
     domain::Crl resultToCrl(PGresult* res, int row);
 
-    /**
-     * @brief Get database connection (reconnects if needed)
-     * @return PGconn pointer
-     */
-    PGconn* getConnection();
-
-    std::string conninfo_;
-    PGconn* conn_ = nullptr;
+    std::shared_ptr<common::DbConnectionPool> dbPool_;
 };
 
 } // namespace icao::relay::repositories

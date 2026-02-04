@@ -61,7 +61,7 @@
 
 // Audit logging (Phase 4.4) - Shared library
 #include <icao/audit/audit_log.h>
-#include "common/db_connection_pool.h"
+#include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
 
 // Repository Pattern - Phase 3: Service and Repository includes
 #include "repositories/pa_verification_repository.h"

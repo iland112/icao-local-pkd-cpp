@@ -16,7 +16,7 @@
 #include <json/json.h>
 #include <libpq-fe.h>
 #include "../domain/models/data_group.h"
-#include "../common/db_connection_pool.h"
+#include "db_connection_pool.h"
 
 namespace repositories {
 

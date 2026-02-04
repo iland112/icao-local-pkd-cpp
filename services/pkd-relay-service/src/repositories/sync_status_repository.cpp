@@ -5,43 +5,17 @@
 
 namespace icao::relay::repositories {
 
-SyncStatusRepository::SyncStatusRepository(const std::string& conninfo)
-    : conninfo_(conninfo) {
-    conn_ = PQconnectdb(conninfo_.c_str());
-    if (PQstatus(conn_) != CONNECTION_OK) {
-        std::string error = PQerrorMessage(conn_);
-        PQfinish(conn_);
-        conn_ = nullptr;
-        throw std::runtime_error("Database connection failed: " + error);
-    }
-}
-
-SyncStatusRepository::~SyncStatusRepository() {
-    if (conn_) {
-        PQfinish(conn_);
-        conn_ = nullptr;
-    }
-}
-
-PGconn* SyncStatusRepository::getConnection() {
-    if (!conn_ || PQstatus(conn_) != CONNECTION_OK) {
-        if (conn_) {
-            PQfinish(conn_);
-        }
-        conn_ = PQconnectdb(conninfo_.c_str());
-        if (PQstatus(conn_) != CONNECTION_OK) {
-            std::string error = PQerrorMessage(conn_);
-            PQfinish(conn_);
-            conn_ = nullptr;
-            throw std::runtime_error("Database reconnection failed: " + error);
-        }
-    }
-    return conn_;
+SyncStatusRepository::SyncStatusRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+    : dbPool_(dbPool) {
 }
 
 bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query =
             "INSERT INTO sync_status ("
@@ -117,12 +91,12 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 23, nullptr,
+            conn.get(), query, 23, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[SyncStatusRepository] Failed to create sync_status: {}", error);
             return false;
@@ -154,7 +128,11 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
 
 std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
+            return std::nullopt;
+        }
 
         const char* query =
             "SELECT id, checked_at, "
@@ -167,10 +145,10 @@ std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
             "ORDER BY checked_at DESC "
             "LIMIT 1";
 
-        PGresult* res = PQexec(conn, query);
+        PGresult* res = PQexec(conn.get(), query);
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[SyncStatusRepository] Failed to find latest sync_status: {}", error);
             return std::nullopt;
@@ -195,7 +173,11 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
     std::vector<domain::SyncStatus> results;
 
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
+            return results;
+        }
 
         const char* query =
             "SELECT id, checked_at, "
@@ -217,12 +199,12 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 2, nullptr,
+            conn.get(), query, 2, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[SyncStatusRepository] Failed to find all sync_status: {}", error);
             return results;
@@ -244,14 +226,18 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
 
 int SyncStatusRepository::count() {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
+            return 0;
+        }
 
         const char* query = "SELECT COUNT(*) FROM sync_status";
 
-        PGresult* res = PQexec(conn, query);
+        PGresult* res = PQexec(conn.get(), query);
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[SyncStatusRepository] Failed to count sync_status: {}", error);
             return 0;

@@ -11,14 +11,18 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Build options
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
 option(BUILD_AUDIT_LIB "Build audit logging library" ON)
+option(BUILD_DATABASE_LIB "Build database connection pool library" ON)
 
 # Add subdirectories
 if(BUILD_AUDIT_LIB)
     add_subdirectory(lib/audit)
 endif()
 
+if(BUILD_DATABASE_LIB)
+    add_subdirectory(lib/database)
+endif()
+
 # Future shared libraries:
-# add_subdirectory(lib/database)
 # add_subdirectory(lib/ldap)
 # add_subdirectory(lib/config)
 # add_subdirectory(lib/exception)

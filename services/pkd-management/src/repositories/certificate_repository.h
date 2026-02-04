@@ -5,7 +5,7 @@
 #include <optional>
 #include <libpq-fe.h>
 #include <json/json.h>
-#include "../common/db_connection_pool.h"
+#include "db_connection_pool.h"
 #include <openssl/x509.h>
 
 /**

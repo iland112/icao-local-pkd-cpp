@@ -58,7 +58,7 @@
 #include "common.h"
 #include "common/ldap_utils.h"
 #include <icao/audit/audit_log.h>
-#include "common/db_connection_pool.h"  // v2.3.1: Database connection pool
+#include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
 #include "common/x509_metadata_extractor.h"

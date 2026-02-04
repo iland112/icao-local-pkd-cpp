@@ -4,7 +4,7 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
-#include "../common/db_connection_pool.h"
+#include "db_connection_pool.h"
 #include "../domain/models/validation_result.h"
 #include "../domain/models/validation_statistics.h"
 

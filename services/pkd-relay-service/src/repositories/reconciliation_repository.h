@@ -2,6 +2,7 @@
 
 #include "../domain/models/reconciliation_summary.h"
 #include "../domain/models/reconciliation_log.h"
+#include "db_connection_pool.h"
 #include <memory>
 #include <vector>
 #include <optional>
@@ -14,19 +15,21 @@ namespace icao::relay::repositories {
  *
  * Handles all database operations for reconciliation tracking.
  * All queries use parameterized statements for SQL injection prevention.
+ *
+ * Thread-safe: Uses DbConnectionPool for concurrent request handling.
  */
 class ReconciliationRepository {
 public:
     /**
      * @brief Constructor
-     * @param conninfo PostgreSQL connection string
+     * @param dbPool Shared database connection pool
      */
-    explicit ReconciliationRepository(const std::string& conninfo);
+    explicit ReconciliationRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
 
     /**
-     * @brief Destructor - closes database connection
+     * @brief Destructor
      */
-    ~ReconciliationRepository();
+    ~ReconciliationRepository() = default;
 
     // Disable copy and move
     ReconciliationRepository(const ReconciliationRepository&) = delete;
@@ -121,14 +124,7 @@ private:
      */
     domain::ReconciliationLog resultToLog(PGresult* res, int row);
 
-    /**
-     * @brief Get database connection (reconnects if needed)
-     * @return PGconn pointer
-     */
-    PGconn* getConnection();
-
-    std::string conninfo_;
-    PGconn* conn_ = nullptr;
+    std::shared_ptr<common::DbConnectionPool> dbPool_;
 };
 
 } // namespace icao::relay::repositories

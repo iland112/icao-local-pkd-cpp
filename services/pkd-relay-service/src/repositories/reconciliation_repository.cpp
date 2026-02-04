@@ -5,38 +5,8 @@
 
 namespace icao::relay::repositories {
 
-ReconciliationRepository::ReconciliationRepository(const std::string& conninfo)
-    : conninfo_(conninfo) {
-    conn_ = PQconnectdb(conninfo_.c_str());
-    if (PQstatus(conn_) != CONNECTION_OK) {
-        std::string error = PQerrorMessage(conn_);
-        PQfinish(conn_);
-        conn_ = nullptr;
-        throw std::runtime_error("Database connection failed: " + error);
-    }
-}
-
-ReconciliationRepository::~ReconciliationRepository() {
-    if (conn_) {
-        PQfinish(conn_);
-        conn_ = nullptr;
-    }
-}
-
-PGconn* ReconciliationRepository::getConnection() {
-    if (!conn_ || PQstatus(conn_) != CONNECTION_OK) {
-        if (conn_) {
-            PQfinish(conn_);
-        }
-        conn_ = PQconnectdb(conninfo_.c_str());
-        if (PQstatus(conn_) != CONNECTION_OK) {
-            std::string error = PQerrorMessage(conn_);
-            PQfinish(conn_);
-            conn_ = nullptr;
-            throw std::runtime_error("Database reconnection failed: " + error);
-        }
-    }
-    return conn_;
+ReconciliationRepository::ReconciliationRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+    : dbPool_(dbPool) {
 }
 
 // ========================================================================
@@ -45,7 +15,11 @@ PGconn* ReconciliationRepository::getConnection() {
 
 bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summary) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query =
             "INSERT INTO reconciliation_summary ("
@@ -92,12 +66,12 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 14, nullptr,
+            conn.get(), query, 14, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to create summary: {}", error);
             return false;
@@ -121,7 +95,11 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
 
 bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary& summary) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query =
             "UPDATE reconciliation_summary SET "
@@ -182,12 +160,12 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 14, nullptr,
+            conn.get(), query, 14, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to update summary: {}", error);
             return false;
@@ -204,7 +182,11 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
 
 std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSummaryById(int id) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return std::nullopt;
+        }
 
         const char* query =
             "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
@@ -222,12 +204,12 @@ std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSumma
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 1, nullptr,
+            conn.get(), query, 1, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to find summary by id: {}", error);
             return std::nullopt;
@@ -252,7 +234,11 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
     std::vector<domain::ReconciliationSummary> results;
 
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return results;
+        }
 
         const char* query =
             "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
@@ -273,12 +259,12 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 2, nullptr,
+            conn.get(), query, 2, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to find all summaries: {}", error);
             return results;
@@ -300,14 +286,18 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
 
 int ReconciliationRepository::countSummaries() {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query = "SELECT COUNT(*) FROM reconciliation_summary";
 
-        PGresult* res = PQexec(conn, query);
+        PGresult* res = PQexec(conn.get(), query);
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to count summaries: {}", error);
             return 0;
@@ -333,7 +323,11 @@ int ReconciliationRepository::countSummaries() {
 
 bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query =
             "INSERT INTO reconciliation_log ("
@@ -357,12 +351,12 @@ bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 7, nullptr,
+            conn.get(), query, 7, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to create log: {}", error);
             return false;
@@ -399,7 +393,11 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
     std::vector<domain::ReconciliationLog> results;
 
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return results;
+        }
 
         const char* query =
             "SELECT id, reconciliation_id, created_at, cert_fingerprint, cert_type, "
@@ -420,12 +418,12 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 3, nullptr,
+            conn.get(), query, 3, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to find logs: {}", error);
             return results;
@@ -447,7 +445,11 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
 
 int ReconciliationRepository::countLogsByReconciliationId(int reconciliationId) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query = "SELECT COUNT(*) FROM reconciliation_log WHERE reconciliation_id = $1";
 
@@ -458,12 +460,12 @@ int ReconciliationRepository::countLogsByReconciliationId(int reconciliationId) 
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 1, nullptr,
+            conn.get(), query, 1, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[ReconciliationRepository] Failed to count logs: {}", error);
             return 0;

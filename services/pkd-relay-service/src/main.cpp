@@ -47,6 +47,7 @@
 #include "relay/sync/reconciliation_engine.h"
 
 // Repository Pattern
+#include "db_connection_pool.h"
 #include "repositories/sync_status_repository.h"
 #include "repositories/certificate_repository.h"
 #include "repositories/crl_repository.h"
@@ -65,6 +66,8 @@ Config g_config;
 // =============================================================================
 // Repository Pattern - Global Service Instances
 // =============================================================================
+std::shared_ptr<common::DbConnectionPool> g_dbPool;
+
 std::shared_ptr<repositories::SyncStatusRepository> g_syncStatusRepo;
 std::shared_ptr<repositories::CertificateRepository> g_certificateRepo;
 std::shared_ptr<repositories::CrlRepository> g_crlRepo;
@@ -1622,12 +1625,17 @@ void initializeServices() {
                               " user=" + g_config.dbUser +
                               " password=" + g_config.dbPassword;
 
-        // Initialize Repositories
-        spdlog::info("Creating repository instances...");
-        g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(conninfo);
-        g_certificateRepo = std::make_shared<repositories::CertificateRepository>(conninfo);
-        g_crlRepo = std::make_shared<repositories::CrlRepository>(conninfo);
-        g_reconciliationRepo = std::make_shared<repositories::ReconciliationRepository>(conninfo);
+        // Initialize Database Connection Pool
+        spdlog::info("Creating database connection pool (min=5, max=20)...");
+        g_dbPool = std::make_shared<common::DbConnectionPool>(conninfo, 5, 20);
+        spdlog::info("✅ Database connection pool initialized");
+
+        // Initialize Repositories with shared connection pool
+        spdlog::info("Creating repository instances with connection pool...");
+        g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(g_dbPool);
+        g_certificateRepo = std::make_shared<repositories::CertificateRepository>(g_dbPool);
+        g_crlRepo = std::make_shared<repositories::CrlRepository>(g_dbPool);
+        g_reconciliationRepo = std::make_shared<repositories::ReconciliationRepository>(g_dbPool);
 
         // Initialize Services with dependency injection
         spdlog::info("Creating service instances with repository dependencies...");
@@ -1663,6 +1671,9 @@ void shutdownServices() {
     g_crlRepo.reset();
     g_certificateRepo.reset();
     g_syncStatusRepo.reset();
+
+    // Database connection pool will be automatically cleaned up
+    g_dbPool.reset();
 
     spdlog::info("✅ Repository Pattern services shut down successfully");
 }

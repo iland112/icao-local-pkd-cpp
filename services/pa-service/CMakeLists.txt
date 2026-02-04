@@ -90,8 +90,8 @@ set(SERVICES_SRC
 
 # Common Utilities
 set(COMMON_SRC
-    src/common/db_connection_pool.cpp
     src/common/ldap_connection_pool.cpp
+    # Database connection pool now provided by shared icao::database library
 )
 
 # =============================================================================
@@ -114,6 +114,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
+    icao::database       # Shared database connection pool library
     icao::audit          # Shared audit logging library
     icao-common
     Drogon::Drogon

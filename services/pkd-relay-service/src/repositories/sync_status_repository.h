@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../domain/models/sync_status.h"
+#include "db_connection_pool.h"
 #include <memory>
 #include <vector>
 #include <optional>
@@ -13,19 +14,21 @@ namespace icao::relay::repositories {
  *
  * Handles all database operations for sync status tracking.
  * All queries use parameterized statements for SQL injection prevention.
+ *
+ * Thread-safe: Uses DbConnectionPool for concurrent request handling.
  */
 class SyncStatusRepository {
 public:
     /**
      * @brief Constructor
-     * @param conninfo PostgreSQL connection string
+     * @param dbPool Shared database connection pool
      */
-    explicit SyncStatusRepository(const std::string& conninfo);
+    explicit SyncStatusRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
 
     /**
-     * @brief Destructor - closes database connection
+     * @brief Destructor
      */
-    ~SyncStatusRepository();
+    ~SyncStatusRepository() = default;
 
     // Disable copy and move
     SyncStatusRepository(const SyncStatusRepository&) = delete;
@@ -69,14 +72,7 @@ private:
      */
     domain::SyncStatus resultToSyncStatus(PGresult* res, int row);
 
-    /**
-     * @brief Get database connection (reconnects if needed)
-     * @return PGconn pointer
-     */
-    PGconn* getConnection();
-
-    std::string conninfo_;
-    PGconn* conn_ = nullptr;
+    std::shared_ptr<common::DbConnectionPool> dbPool_;
 };
 
 } // namespace icao::relay::repositories

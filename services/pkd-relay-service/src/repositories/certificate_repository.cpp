@@ -5,43 +5,17 @@
 
 namespace icao::relay::repositories {
 
-CertificateRepository::CertificateRepository(const std::string& conninfo)
-    : conninfo_(conninfo) {
-    conn_ = PQconnectdb(conninfo_.c_str());
-    if (PQstatus(conn_) != CONNECTION_OK) {
-        std::string error = PQerrorMessage(conn_);
-        PQfinish(conn_);
-        conn_ = nullptr;
-        throw std::runtime_error("Database connection failed: " + error);
-    }
-}
-
-CertificateRepository::~CertificateRepository() {
-    if (conn_) {
-        PQfinish(conn_);
-        conn_ = nullptr;
-    }
-}
-
-PGconn* CertificateRepository::getConnection() {
-    if (!conn_ || PQstatus(conn_) != CONNECTION_OK) {
-        if (conn_) {
-            PQfinish(conn_);
-        }
-        conn_ = PQconnectdb(conninfo_.c_str());
-        if (PQstatus(conn_) != CONNECTION_OK) {
-            std::string error = PQerrorMessage(conn_);
-            PQfinish(conn_);
-            conn_ = nullptr;
-            throw std::runtime_error("Database reconnection failed: " + error);
-        }
-    }
-    return conn_;
+CertificateRepository::CertificateRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+    : dbPool_(dbPool) {
 }
 
 int CertificateRepository::countByType(const std::string& certificateType) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[CertificateRepository] Failed to acquire database connection");
+            return 0;
+        }
 
         const char* query = "SELECT COUNT(*) FROM certificate WHERE certificate_type = $1";
 
@@ -50,12 +24,12 @@ int CertificateRepository::countByType(const std::string& certificateType) {
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 1, nullptr,
+            conn.get(), query, 1, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[CertificateRepository] Failed to count by type '{}': {}",
                           certificateType, error);
@@ -83,7 +57,11 @@ std::vector<domain::Certificate> CertificateRepository::findNotInLdap(
     std::vector<domain::Certificate> results;
 
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[CertificateRepository] Failed to acquire database connection");
+            return results;
+        }
 
         std::string query =
             "SELECT id, fingerprint_sha256, certificate_type, country_code, "
@@ -107,14 +85,14 @@ std::vector<domain::Certificate> CertificateRepository::findNotInLdap(
         paramValues.push_back(limitStr.c_str());
 
         PGresult* res = PQexecParams(
-            conn, query.c_str(),
+            conn.get(), query.c_str(),
             paramValues.size(), nullptr,
             paramValues.data(),
             nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[CertificateRepository] Failed to find not in LDAP: {}", error);
             return results;
@@ -140,7 +118,11 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
     }
 
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[CertificateRepository] Failed to acquire database connection");
+            return 0;
+        }
 
         // Build parameterized query with IN clause
         // UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN ($1, $2, ...)
@@ -160,14 +142,14 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
         std::string query = queryBuilder.str();
 
         PGresult* res = PQexecParams(
-            conn, query.c_str(),
+            conn.get(), query.c_str(),
             paramValues.size(), nullptr,
             paramValues.data(),
             nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[CertificateRepository] Failed to mark stored in LDAP: {}", error);
             return 0;
@@ -187,7 +169,11 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
 
 bool CertificateRepository::markStoredInLdap(const std::string& fingerprint) {
     try {
-        PGconn* conn = getConnection();
+        auto conn = dbPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::error("[CertificateRepository] Failed to acquire database connection");
+            return false;
+        }
 
         const char* query =
             "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
@@ -197,12 +183,12 @@ bool CertificateRepository::markStoredInLdap(const std::string& fingerprint) {
         };
 
         PGresult* res = PQexecParams(
-            conn, query, 1, nullptr,
+            conn.get(), query, 1, nullptr,
             paramValues, nullptr, nullptr, 0
         );
 
         if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn);
+            std::string error = PQerrorMessage(conn.get());
             PQclear(res);
             spdlog::error("[CertificateRepository] Failed to mark stored in LDAP: {}", error);
             return false;
