@@ -33,11 +33,11 @@ namespace services {
 UploadService::UploadService(
     repositories::UploadRepository* uploadRepo,
     repositories::CertificateRepository* certRepo,
-    LDAP* ldapConn
+    common::LdapConnectionPool* ldapPool
 )
     : uploadRepo_(uploadRepo)
     , certRepo_(certRepo)
-    , ldapConn_(ldapConn)
+    , ldapPool_(ldapPool)
 {
     if (!uploadRepo_) {
         throw std::invalid_argument("UploadService: uploadRepo cannot be nullptr");

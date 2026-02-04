@@ -28,7 +28,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(ICAO_COMMON_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../common-lib)
 add_subdirectory(${ICAO_COMMON_DIR} ${CMAKE_BINARY_DIR}/common-lib)
 
-# ICAO Shared Libraries (Audit Logging)
+# ICAO Shared Libraries (Database, Audit, LDAP, Config, Exception, Logging)
 # Note: In Docker, shared/ is copied to ./shared/ by Dockerfile line 87
 # For local builds, shared/ is at ../../shared
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shared")
@@ -129,6 +129,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     icao::database       # Shared database connection pool library
     icao::audit          # Shared audit logging library
+    icao::ldap           # Shared LDAP connection pool library (NEW)
+    icao::config         # Shared configuration management library (NEW)
+    icao::exception      # Shared exception handling library (NEW)
+    icao::logging        # Shared structured logging library (NEW)
     icao-common
     Drogon::Drogon
     OpenSSL::SSL

@@ -9,6 +9,7 @@
 #include "../common.h"
 #include "../repositories/upload_repository.h"
 #include "../repositories/certificate_repository.h"
+#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool (NEW)
 
 /**
  * @file upload_service.h
@@ -47,12 +48,12 @@ public:
      * @brief Constructor with Dependency Injection
      * @param uploadRepo Upload repository (non-owning pointer)
      * @param certRepo Certificate repository (non-owning pointer)
-     * @param ldapConn LDAP connection (non-owning pointer, can be nullptr)
+     * @param ldapPool LDAP connection pool (non-owning pointer, can be nullptr)
      */
     UploadService(
         repositories::UploadRepository* uploadRepo,
         repositories::CertificateRepository* certRepo,
-        LDAP* ldapConn
+        common::LdapConnectionPool* ldapPool
     );
 
     /**
@@ -379,7 +380,7 @@ private:
     // Dependencies (non-owning pointers)
     repositories::UploadRepository* uploadRepo_;
     repositories::CertificateRepository* certRepo_;
-    LDAP* ldapConn_;
+    common::LdapConnectionPool* ldapPool_;  // v2.4.3: LDAP connection pool (changed from LDAP* ldapConn_)
 
     // ========================================================================
     // Helper Methods

@@ -59,6 +59,7 @@
 #include "common/ldap_utils.h"
 #include <icao/audit/audit_log.h>
 #include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
+#include <ldap_connection_pool.h>  // v2.4.3: Shared LDAP connection pool library (NEW)
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
 #include "common/x509_metadata_extractor.h"
@@ -120,6 +121,7 @@ std::shared_ptr<handlers::AuthHandler> authHandler;
 // Phase 1.6: Global Repositories and Services (Repository Pattern)
 // v2.3.1: Replaced single connection with Connection Pool for thread safety
 std::shared_ptr<common::DbConnectionPool> dbPool;  // Database connection pool
+std::shared_ptr<common::LdapConnectionPool> ldapPool;  // LDAP connection pool (NEW - v2.4.3)
 std::shared_ptr<repositories::UploadRepository> uploadRepository;
 std::shared_ptr<repositories::CertificateRepository> certificateRepository;
 std::shared_ptr<repositories::ValidationRepository> validationRepository;
@@ -8649,22 +8651,38 @@ int main(int argc, char* argv[]) {
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
+    // Create LDAP connection pool FIRST (v2.4.3: Thread-safe LDAP connection management)
+    // Note: Using write host for upload operations
     try {
-        // Initialize Certificate Service (Clean Architecture)
+        std::string ldapWriteUri = "ldap://" + appConfig.ldapWriteHost + ":" + std::to_string(appConfig.ldapWritePort);
+
+        ldapPool = std::make_shared<common::LdapConnectionPool>(
+            ldapWriteUri,                    // LDAP URI
+            appConfig.ldapBindDn,            // Bind DN
+            appConfig.ldapBindPassword,      // Bind Password
+            2,   // minConnections
+            10,  // maxConnections
+            5    // acquireTimeoutSec
+        );
+
+        spdlog::info("LDAP connection pool initialized (min=2, max=10, host={})", ldapWriteUri);
+    } catch (const std::exception& e) {
+        spdlog::critical("Failed to initialize LDAP connection pool: {}", e.what());
+        return 1;
+    }
+
+    try {
+        // Initialize Certificate Service (Clean Architecture) - v2.4.3: Using LDAP connection pool
         // Certificate search base DN: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
         // Note: Repository will prepend dc=data,dc=download based on search criteria
         std::string certSearchBaseDn = appConfig.ldapBaseDn;
 
-        repositories::LdapConfig ldapConfig(
-            "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort),
-            appConfig.ldapBindDn,
-            appConfig.ldapBindPassword,
-            certSearchBaseDn,
-            30
+        auto repository = std::make_shared<repositories::LdapCertificateRepository>(
+            ldapPool.get(),
+            certSearchBaseDn
         );
-        auto repository = std::make_shared<repositories::LdapCertificateRepository>(ldapConfig);
         certificateService = std::make_shared<services::CertificateService>(repository);
-        spdlog::info("Certificate service initialized with LDAP repository (baseDN: {})", certSearchBaseDn);
+        spdlog::info("Certificate service initialized with LDAP connection pool (baseDN: {})", certSearchBaseDn);
 
         // TODO: Replace with Redis-based caching for better performance and scalability
         // Countries API now uses PostgreSQL for instant response (~70ms)
@@ -8732,36 +8750,9 @@ int main(int argc, char* argv[]) {
             spdlog::info("Database connection pool initialized (min=5, max=20)");
         } catch (const std::exception& e) {
             spdlog::critical("Failed to initialize database connection pool: {}", e.what());
+            ldapPool.reset();  // Release LDAP pool
             return 1;
         }
-
-        // Create LDAP connection (for UploadService)
-        // Note: Using write host for upload operations
-        LDAP* ldapWriteConn = nullptr;
-        std::string ldapWriteUri = "ldap://" + appConfig.ldapWriteHost + ":" + std::to_string(appConfig.ldapWritePort);
-        int ldapResult = ldap_initialize(&ldapWriteConn, ldapWriteUri.c_str());
-        if (ldapResult != LDAP_SUCCESS) {
-            spdlog::error("Failed to initialize LDAP connection: {}", ldap_err2string(ldapResult));
-            dbPool.reset();  // Release connection pool
-            return 1;
-        }
-
-        int version = LDAP_VERSION3;
-        ldap_set_option(ldapWriteConn, LDAP_OPT_PROTOCOL_VERSION, &version);
-
-        struct berval cred;
-        cred.bv_val = const_cast<char*>(appConfig.ldapBindPassword.c_str());
-        cred.bv_len = appConfig.ldapBindPassword.length();
-
-        ldapResult = ldap_sasl_bind_s(ldapWriteConn, appConfig.ldapBindDn.c_str(),
-                                      LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
-        if (ldapResult != LDAP_SUCCESS) {
-            spdlog::error("LDAP bind failed: {}", ldap_err2string(ldapResult));
-            ldap_unbind_ext_s(ldapWriteConn, nullptr, nullptr);
-            dbPool.reset();  // Release connection pool
-            return 1;
-        }
-        spdlog::info("LDAP write connection established for UploadService");
 
         // Initialize Repositories with Connection Pool (v2.3.1: Thread-safe database access)
         uploadRepository = std::make_shared<repositories::UploadRepository>(dbPool.get());
@@ -8776,7 +8767,7 @@ int main(int argc, char* argv[]) {
         uploadService = std::make_shared<services::UploadService>(
             uploadRepository.get(),
             certificateRepository.get(),
-            ldapWriteConn
+            ldapPool.get()  // v2.4.3: Use LDAP connection pool instead of direct connection
         );
 
         validationService = std::make_shared<services::ValidationService>(

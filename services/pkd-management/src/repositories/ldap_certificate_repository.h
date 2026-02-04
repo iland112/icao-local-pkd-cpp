@@ -4,12 +4,15 @@
  *
  * Clean Architecture: Repository in Infrastructure Layer
  * Handles LDAP queries and transforms data into domain entities
+ *
+ * v2.4.3: Migrated to use LdapConnectionPool for thread-safe connection management
  */
 
 #pragma once
 
 #include "../domain/models/certificate.h"
 #include <ldap.h>
+#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
 #include <memory>
 #include <string>
 #include <vector>
@@ -93,19 +96,25 @@ public:
  *
  * Implements certificate data access using OpenLDAP C API.
  * Transforms LDAP entries into domain Certificate entities.
+ *
+ * v2.4.3: Uses LdapConnectionPool for thread-safe connection management
  */
 class LdapCertificateRepository : public ICertificateRepository {
 public:
     /**
-     * @brief Constructor with LDAP configuration
-     * @param config LDAP connection parameters
+     * @brief Constructor with LDAP connection pool
+     * @param ldapPool LDAP connection pool (non-owning pointer)
+     * @param baseDn Base DN for searches
      */
-    explicit LdapCertificateRepository(const LdapConfig& config);
+    explicit LdapCertificateRepository(
+        common::LdapConnectionPool* ldapPool,
+        const std::string& baseDn
+    );
 
     /**
-     * @brief Destructor - ensures LDAP connection cleanup
+     * @brief Destructor
      */
-    ~LdapCertificateRepository() override;
+    ~LdapCertificateRepository() override = default;
 
     // Implement interface methods
     domain::models::CertificateSearchResult search(
@@ -122,25 +131,9 @@ public:
     ) override;
 
 private:
-    LdapConfig config_;
-    LDAP* ldap_;
-
-    /**
-     * @brief Initialize and bind LDAP connection
-     * @throws std::runtime_error on connection or bind failure
-     */
-    void connect();
-
-    /**
-     * @brief Close LDAP connection
-     */
-    void disconnect();
-
-    /**
-     * @brief Ensure LDAP connection is active, reconnect if needed
-     * @throws std::runtime_error on reconnection failure
-     */
-    void ensureConnected();
+    // Dependencies (non-owning pointers)
+    common::LdapConnectionPool* ldapPool_;  // v2.4.3: Connection pool
+    std::string baseDn_;  // Base DN for searches
 
     /**
      * @brief Build LDAP search filter from criteria
@@ -162,12 +155,13 @@ private:
 
     /**
      * @brief Parse LDAP entry into Certificate domain entity
+     * @param ldap LDAP connection handle
      * @param entry LDAP entry from search result
      * @param dn Distinguished Name of the entry
      * @return Certificate entity
      * @throws std::runtime_error on parsing errors
      */
-    domain::models::Certificate parseEntry(LDAPMessage* entry, const std::string& dn);
+    domain::models::Certificate parseEntry(LDAP* ldap, LDAPMessage* entry, const std::string& dn);
 
     /**
      * @brief Extract certificate type from DN
@@ -221,19 +215,21 @@ private:
 
     /**
      * @brief Get LDAP attribute value as string
+     * @param ldap LDAP connection handle
      * @param entry LDAP entry
      * @param attrName Attribute name
      * @return Attribute value (empty string if not found)
      */
-    std::string getAttributeValue(LDAPMessage* entry, const char* attrName);
+    std::string getAttributeValue(LDAP* ldap, LDAPMessage* entry, const char* attrName);
 
     /**
      * @brief Get LDAP binary attribute value
+     * @param ldap LDAP connection handle
      * @param entry LDAP entry
      * @param attrName Attribute name (e.g., "userCertificate;binary")
      * @return Binary data vector (empty if not found)
      */
-    std::vector<uint8_t> getBinaryAttributeValue(LDAPMessage* entry, const char* attrName);
+    std::vector<uint8_t> getBinaryAttributeValue(LDAP* ldap, LDAPMessage* entry, const char* attrName);
 };
 
 } // namespace repositories
