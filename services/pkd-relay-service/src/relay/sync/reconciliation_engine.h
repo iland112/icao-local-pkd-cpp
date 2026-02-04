@@ -2,6 +2,7 @@
 
 #include <libpq-fe.h>
 #include <ldap.h>
+#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
 #include <memory>
 #include "relay/sync/common/types.h"
 #include "relay/sync/common/config.h"
@@ -15,7 +16,11 @@ namespace relay {
 // =============================================================================
 class ReconciliationEngine {
 public:
-    explicit ReconciliationEngine(const Config& config);
+    // v2.4.3: Constructor now accepts LDAP connection pool
+    explicit ReconciliationEngine(
+        const Config& config,
+        common::LdapConnectionPool* ldapPool
+    );
     ~ReconciliationEngine() = default;
 
     // Perform reconciliation between PostgreSQL and LDAP
@@ -42,9 +47,6 @@ private:
 
     // v2.0.5: Mark CRL as stored in LDAP
     void markCrlAsStoredInLdap(PGconn* pgConn, const std::string& crlId) const;
-
-    // Connect to LDAP write host
-    LDAP* connectToLdapWrite(std::string& errorMsg) const;
 
     // Process certificates for a specific type
     void processCertificateType(
@@ -86,6 +88,7 @@ private:
         int durationMs) const;
 
     const Config& config_;
+    common::LdapConnectionPool* ldapPool_;  // v2.4.3: LDAP connection pool
     std::unique_ptr<LdapOperations> ldapOps_;
 };
 

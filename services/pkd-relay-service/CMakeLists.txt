@@ -104,8 +104,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 )
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    icao::audit          # Shared audit logging library
     icao::database       # Shared database connection pool library
+    icao::audit          # Shared audit logging library
+    icao::ldap           # Shared LDAP connection pool library (NEW - v2.4.3)
+    icao::config         # Shared configuration management library (NEW - v2.4.3)
+    icao::exception      # Shared exception handling library (NEW - v2.4.3)
+    icao::logging        # Shared structured logging library (NEW - v2.4.3)
     Drogon::Drogon
     OpenSSL::SSL
     OpenSSL::Crypto

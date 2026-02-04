@@ -5,41 +5,17 @@
 namespace icao {
 namespace relay {
 
-ReconciliationEngine::ReconciliationEngine(const Config& config)
+// v2.4.3: Constructor now accepts LDAP connection pool
+ReconciliationEngine::ReconciliationEngine(
+    const Config& config,
+    common::LdapConnectionPool* ldapPool)
     : config_(config),
+      ldapPool_(ldapPool),
       ldapOps_(std::make_unique<LdapOperations>(config)) {
-}
 
-LDAP* ReconciliationEngine::connectToLdapWrite(std::string& errorMsg) const {
-    std::string ldapUri = "ldap://" + config_.ldapWriteHost + ":" +
-                         std::to_string(config_.ldapWritePort);
-
-    LDAP* ld = nullptr;
-    int rc = ldap_initialize(&ld, ldapUri.c_str());
-    if (rc != LDAP_SUCCESS) {
-        errorMsg = "LDAP connection failed: " + std::string(ldap_err2string(rc));
-        return nullptr;
+    if (!ldapPool_) {
+        throw std::runtime_error("ReconciliationEngine: ldapPool cannot be null");
     }
-
-    // Set LDAP version
-    int version = LDAP_VERSION3;
-    ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
-
-    // Bind to LDAP with admin credentials
-    berval cred;
-    cred.bv_val = const_cast<char*>(config_.ldapBindPassword.c_str());
-    cred.bv_len = config_.ldapBindPassword.length();
-
-    rc = ldap_sasl_bind_s(ld, config_.ldapBindDn.c_str(), LDAP_SASL_SIMPLE,
-                         &cred, nullptr, nullptr, nullptr);
-    if (rc != LDAP_SUCCESS) {
-        errorMsg = "LDAP bind failed: " + std::string(ldap_err2string(rc));
-        ldap_unbind_ext_s(ld, nullptr, nullptr);
-        return nullptr;
-    }
-
-    spdlog::info("Connected to LDAP write host: {}", ldapUri);
-    return ld;
 }
 
 std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
@@ -276,16 +252,18 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
         return result;
     }
 
-    // Connect to LDAP (write host)
-    std::string errorMsg;
-    LDAP* ld = connectToLdapWrite(errorMsg);
-    if (!ld) {
+    // v2.4.3: Acquire LDAP connection from pool (RAII - auto-release on scope exit)
+    auto conn = ldapPool_->acquire();
+    if (!conn.isValid()) {
         result.success = false;
         result.status = "FAILED";
-        result.errorMessage = errorMsg;
+        result.errorMessage = "Failed to acquire LDAP connection from pool";
         spdlog::error("Reconciliation failed: {}", result.errorMessage);
         return result;
     }
+
+    LDAP* ld = conn.get();
+    spdlog::info("Acquired LDAP connection from pool for reconciliation");
 
     // Process each certificate type in order: CSCA, DSC
     // Note: DSC_NC excluded - ICAO deprecated nc-data branch in 2021 (legacy data only)
@@ -299,8 +277,7 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
     // v2.0.5: Process CRLs
     processCrls(pgConn, ld, dryRun, result, reconciliationId);
 
-    // Cleanup LDAP connection
-    ldap_unbind_ext_s(ld, nullptr, nullptr);
+    // v2.4.3: Connection automatically released when 'conn' goes out of scope (RAII)
 
     // Calculate duration
     auto endTime = std::chrono::steady_clock::now();

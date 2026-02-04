@@ -48,6 +48,7 @@
 
 // Repository Pattern
 #include "db_connection_pool.h"
+#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
 #include "repositories/sync_status_repository.h"
 #include "repositories/certificate_repository.h"
 #include "repositories/crl_repository.h"
@@ -67,6 +68,7 @@ Config g_config;
 // Repository Pattern - Global Service Instances
 // =============================================================================
 std::shared_ptr<common::DbConnectionPool> g_dbPool;
+std::shared_ptr<common::LdapConnectionPool> g_ldapPool;  // v2.4.3: LDAP connection pool
 
 std::shared_ptr<repositories::SyncStatusRepository> g_syncStatusRepo;
 std::shared_ptr<repositories::CertificateRepository> g_certificateRepo;
@@ -955,7 +957,8 @@ public:
 
                                 PgConnection pgConn;
                                 if (pgConn.connect()) {
-                                    ReconciliationEngine engine(g_config);
+                                    // v2.4.3: Pass LDAP connection pool to ReconciliationEngine
+                                    ReconciliationEngine engine(g_config, g_ldapPool.get());
                                     ReconciliationResult reconResult = engine.performReconciliation(
                                         pgConn.get(), false, "DAILY_SYNC", syncStatusId);
 
@@ -1220,8 +1223,8 @@ void handleReconcile(const HttpRequestPtr& req, std::function<void(const HttpRes
             return;
         }
 
-        // Create reconciliation engine and perform reconciliation
-        ReconciliationEngine engine(g_config);
+        // v2.4.3: Create reconciliation engine with LDAP pool and perform reconciliation
+        ReconciliationEngine engine(g_config, g_ldapPool.get());
         ReconciliationResult result = engine.performReconciliation(pgConn.get(), dryRun);
 
         // Build JSON response
@@ -1630,6 +1633,20 @@ void initializeServices() {
         g_dbPool = std::make_shared<common::DbConnectionPool>(conninfo, 5, 20);
         spdlog::info("✅ Database connection pool initialized");
 
+        // v2.4.3: Initialize LDAP Connection Pool
+        spdlog::info("Creating LDAP connection pool (min=2, max=10)...");
+        std::string ldapUri = "ldap://" + g_config.ldapWriteHost + ":" +
+                             std::to_string(g_config.ldapWritePort);
+        g_ldapPool = std::make_shared<common::LdapConnectionPool>(
+            ldapUri,
+            g_config.ldapBindDn,
+            g_config.ldapBindPassword,
+            2,   // min connections
+            10,  // max connections
+            5    // timeout seconds
+        );
+        spdlog::info("✅ LDAP connection pool initialized ({})", ldapUri);
+
         // Initialize Repositories with shared connection pool
         spdlog::info("Creating repository instances with connection pool...");
         g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(g_dbPool);
@@ -1674,6 +1691,9 @@ void shutdownServices() {
 
     // Database connection pool will be automatically cleaned up
     g_dbPool.reset();
+
+    // v2.4.3: LDAP connection pool will be automatically cleaned up
+    g_ldapPool.reset();
 
     spdlog::info("✅ Repository Pattern services shut down successfully");
 }
