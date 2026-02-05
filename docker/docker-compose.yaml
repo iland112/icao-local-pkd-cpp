@@ -76,11 +76,20 @@ services:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-management
       - SERVER_PORT=8081
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=localpkd
-      - DB_USER=pkd
+      # Database Type Selection (Phase 4.4)
+      - DB_TYPE=${DB_TYPE}                      # postgres or oracle
+      # PostgreSQL Configuration
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
+      # Oracle Configuration (Phase 4.4)
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
       - LDAP_WRITE_PORT=389
@@ -132,11 +141,20 @@ services:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pa-service
       - SERVER_PORT=8082
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=localpkd
-      - DB_USER=pkd
+      # Database Type Selection (Phase 4.4)
+      - DB_TYPE=${DB_TYPE}                      # postgres or oracle
+      # PostgreSQL Configuration
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}              # From .env file
+      # Oracle Configuration (Phase 4.4)
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
       - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
@@ -326,6 +344,35 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Oracle Database XE 21c (Optional - for testing Oracle support)
+  # ---------------------------------------------------------------------------
+  oracle:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: icao-local-pkd-oracle
+    ports:
+      - "11521:1521"  # External: 11521, Internal: 1521
+      - "15500:5500"  # Oracle Enterprise Manager Express
+    environment:
+      - ORACLE_PWD=${ORACLE_PASSWORD}          # From .env file (SYS/SYSTEM password)
+      - ORACLE_CHARACTERSET=AL32UTF8           # UTF-8 encoding
+      - TZ=Asia/Seoul
+    volumes:
+      - oracle-data:/opt/oracle/oradata  # Named volume (auto-manages permissions)
+      - ./db-oracle/init:/opt/oracle/scripts/startup:ro  # Initialization scripts
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/${ORACLE_PASSWORD}@//localhost:1521/XE as sysdba | grep -q 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s  # Oracle takes 3-5 minutes to initialize first time
+    restart: unless-stopped
+    shm_size: 1g  # Shared memory for Oracle
+    profiles:
+      - oracle  # Only starts with: docker compose --profile oracle up
 
   # ---------------------------------------------------------------------------
   # LDAP PKD DIT Initializer (runs once after MMR setup)
@@ -583,3 +630,10 @@ services:
 networks:
   pkd-network:
     driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  oracle-data:
+    name: icao-local-pkd-oracle-data

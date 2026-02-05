@@ -2,6 +2,7 @@
 
 #include "../domain/models/crl.h"
 #include "db_connection_pool.h"
+#include "db_connection_interface.h"  // Phase 4.4: Interface for PostgreSQL/Oracle support
 #include <memory>
 #include <vector>
 #include <string>
@@ -20,10 +21,10 @@ namespace icao::relay::repositories {
 class CrlRepository {
 public:
     /**
-     * @brief Constructor
-     * @param dbPool Shared database connection pool
+     * @brief Constructor (Phase 4.4: Supports PostgreSQL and Oracle via interface)
+     * @param dbPool Shared database connection pool (IDbConnectionPool interface)
      */
-    explicit CrlRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
+    explicit CrlRepository(std::shared_ptr<common::IDbConnectionPool> dbPool);
 
     /**
      * @brief Destructor
@@ -72,7 +73,7 @@ private:
      */
     domain::Crl resultToCrl(PGresult* res, int row);
 
-    std::shared_ptr<common::DbConnectionPool> dbPool_;
+    std::shared_ptr<common::IDbConnectionPool> dbPool_;  // Phase 4.4: Interface for PostgreSQL/Oracle
 };
 
 } // namespace icao::relay::repositories

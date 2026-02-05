@@ -5,7 +5,7 @@
 
 namespace icao::relay::repositories {
 
-SyncStatusRepository::SyncStatusRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+SyncStatusRepository::SyncStatusRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
     : dbPool_(dbPool) {
 }
 

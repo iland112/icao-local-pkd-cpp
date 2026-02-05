@@ -2,6 +2,7 @@
 
 #include "../domain/models/certificate.h"
 #include "db_connection_pool.h"
+#include "db_connection_interface.h"  // Phase 4.4: Interface for PostgreSQL/Oracle support
 #include <memory>
 #include <vector>
 #include <string>
@@ -20,10 +21,10 @@ namespace icao::relay::repositories {
 class CertificateRepository {
 public:
     /**
-     * @brief Constructor
-     * @param dbPool Shared database connection pool
+     * @brief Constructor (Phase 4.4: Supports PostgreSQL and Oracle via interface)
+     * @param dbPool Shared database connection pool (IDbConnectionPool interface)
      */
-    explicit CertificateRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
+    explicit CertificateRepository(std::shared_ptr<common::IDbConnectionPool> dbPool);
 
     /**
      * @brief Destructor
@@ -77,7 +78,7 @@ private:
      */
     domain::Certificate resultToCertificate(PGresult* res, int row);
 
-    std::shared_ptr<common::DbConnectionPool> dbPool_;
+    std::shared_ptr<common::IDbConnectionPool> dbPool_;  // Phase 4.4: Interface for PostgreSQL/Oracle
 };
 
 } // namespace icao::relay::repositories

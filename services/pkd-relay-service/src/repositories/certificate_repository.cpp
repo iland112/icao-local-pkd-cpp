@@ -5,7 +5,7 @@
 
 namespace icao::relay::repositories {
 
-CertificateRepository::CertificateRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+CertificateRepository::CertificateRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
     : dbPool_(dbPool) {
 }
 

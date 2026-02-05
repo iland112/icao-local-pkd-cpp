@@ -46,8 +46,9 @@
 #include "relay/sync/common/config.h"
 #include "relay/sync/reconciliation_engine.h"
 
-// Repository Pattern
+// Repository Pattern (Phase 4.4: Factory Pattern with Oracle support)
 #include "db_connection_pool.h"
+#include "db_connection_pool_factory.h"  // Phase 4.4: Factory Pattern (includes interface)
 #include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
 #include "repositories/sync_status_repository.h"
 #include "repositories/certificate_repository.h"
@@ -65,9 +66,9 @@ using namespace icao::relay;
 Config g_config;
 
 // =============================================================================
-// Repository Pattern - Global Service Instances
+// Repository Pattern - Global Service Instances (Phase 4.4: Factory Pattern)
 // =============================================================================
-std::shared_ptr<common::DbConnectionPool> g_dbPool;
+std::shared_ptr<common::IDbConnectionPool> g_dbPool;
 std::shared_ptr<common::LdapConnectionPool> g_ldapPool;  // v2.4.3: LDAP connection pool
 
 std::shared_ptr<repositories::SyncStatusRepository> g_syncStatusRepo;
@@ -1621,17 +1622,22 @@ void initializeServices() {
     spdlog::info("Initializing Repository Pattern services...");
 
     try {
-        // Build database connection string
-        std::string conninfo = "host=" + g_config.dbHost +
-                              " port=" + std::to_string(g_config.dbPort) +
-                              " dbname=" + g_config.dbName +
-                              " user=" + g_config.dbUser +
-                              " password=" + g_config.dbPassword;
+        // Initialize Database Connection Pool (Phase 4.4: Factory Pattern)
+        // Use Factory Pattern to create pool based on DB_TYPE environment variable
+        // Supports both PostgreSQL (production) and Oracle (development)
+        spdlog::info("Creating database connection pool using Factory Pattern...");
+        g_dbPool = common::DbConnectionPoolFactory::createFromEnv();
 
-        // Initialize Database Connection Pool
-        spdlog::info("Creating database connection pool (min=5, max=20)...");
-        g_dbPool = std::make_shared<common::DbConnectionPool>(conninfo, 5, 20);
-        spdlog::info("✅ Database connection pool initialized");
+        if (!g_dbPool) {
+            throw std::runtime_error("Failed to create database connection pool from environment");
+        }
+
+        if (!g_dbPool->initialize()) {
+            throw std::runtime_error("Failed to initialize database connection pool");
+        }
+
+        std::string dbType = g_dbPool->getDatabaseType();
+        spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
         // v2.4.3: Initialize LDAP Connection Pool
         spdlog::info("Creating LDAP connection pool (min=2, max=10)...");

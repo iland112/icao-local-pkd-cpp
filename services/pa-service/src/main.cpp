@@ -62,6 +62,7 @@
 // Audit logging (Phase 4.4) - Shared library
 #include <icao/audit/audit_log.h>
 #include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
+#include "db_connection_pool_factory.h"  // Phase 4.4: Factory Pattern (includes interface)
 
 // Repository Pattern - Phase 3: Service and Repository includes
 #include "repositories/pa_verification_repository.h"
@@ -245,9 +246,9 @@ struct AppConfig {
 AppConfig appConfig;
 
 // =============================================================================
-// Database Connection Pool
+// Database Connection Pool (Phase 4.4: Factory Pattern with Oracle support)
 // =============================================================================
-common::DbConnectionPool* dbPool = nullptr;
+std::shared_ptr<common::IDbConnectionPool> dbPool;
 
 // =============================================================================
 // Repository Pattern - Global Service and Repository Pointers
@@ -1648,25 +1649,22 @@ void initializeServices() {
     spdlog::info("Initializing Repository Pattern services...");
 
     try {
-        // Step 1: Initialize database connection pool
-        std::string connString = "host=" + appConfig.dbHost +
-                               " port=" + std::to_string(appConfig.dbPort) +
-                               " dbname=" + appConfig.dbName +
-                               " user=" + appConfig.dbUser +
-                               " password=" + appConfig.dbPassword;
+        // Step 1: Initialize database connection pool (Phase 4.4: Factory Pattern)
+        // Use Factory Pattern to create pool based on DB_TYPE environment variable
+        // Supports both PostgreSQL (production) and Oracle (development)
+        spdlog::debug("Creating database connection pool using Factory Pattern...");
+        dbPool = common::DbConnectionPoolFactory::createFromEnv();
 
-        spdlog::debug("Creating database connection pool...");
-        dbPool = new common::DbConnectionPool(
-            connString,
-            2,   // minSize: minimum 2 connections
-            10,  // maxSize: maximum 10 connections
-            5    // acquireTimeoutSec: 5 seconds timeout
-        );
+        if (!dbPool) {
+            throw std::runtime_error("Failed to create database connection pool from environment");
+        }
 
         if (!dbPool->initialize()) {
             throw std::runtime_error("Failed to initialize database connection pool");
         }
-        spdlog::info("✅ Database connection pool initialized (min: 2, max: 10)");
+
+        std::string dbType = dbPool->getDatabaseType();
+        spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
         // Step 2: Get LDAP connection
         LDAP* ldapConn = getLdapConnection();
@@ -1675,11 +1673,18 @@ void initializeServices() {
         }
 
         // Step 3: Initialize Repositories (constructor-based dependency injection)
+        // Note: PA Service repositories currently only support PostgreSQL
+        // Phase 4.4: Add type checking for database compatibility
+        auto* pgPool = dynamic_cast<common::DbConnectionPool*>(dbPool.get());
+        if (!pgPool) {
+            throw std::runtime_error("PA Service repositories currently only support PostgreSQL");
+        }
+
         spdlog::debug("Creating PaVerificationRepository...");
-        paVerificationRepository = new repositories::PaVerificationRepository(dbPool);
+        paVerificationRepository = new repositories::PaVerificationRepository(pgPool);
 
         spdlog::debug("Creating DataGroupRepository...");
-        dataGroupRepository = new repositories::DataGroupRepository(dbPool);
+        dataGroupRepository = new repositories::DataGroupRepository(pgPool);
 
         spdlog::debug("Creating LdapCertificateRepository...");
         ldapCertificateRepository = new repositories::LdapCertificateRepository(
@@ -1747,12 +1752,11 @@ void cleanupServices() {
     dataGroupRepository = nullptr;
     paVerificationRepository = nullptr;
 
-    // Shutdown and delete connection pool
+    // Shutdown connection pool (shared_ptr manages memory automatically)
     if (dbPool) {
         spdlog::debug("Shutting down database connection pool...");
         dbPool->shutdown();
-        delete dbPool;
-        dbPool = nullptr;
+        dbPool.reset();  // Release shared_ptr (optional - will be released at scope exit)
         spdlog::info("✅ Database connection pool shut down");
     }
 

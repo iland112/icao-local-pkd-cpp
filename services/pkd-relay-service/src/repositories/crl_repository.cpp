@@ -6,7 +6,7 @@
 
 namespace icao::relay::repositories {
 
-CrlRepository::CrlRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+CrlRepository::CrlRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
     : dbPool_(dbPool) {
 }
 

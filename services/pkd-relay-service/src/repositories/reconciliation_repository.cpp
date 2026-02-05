@@ -5,7 +5,7 @@
 
 namespace icao::relay::repositories {
 
-ReconciliationRepository::ReconciliationRepository(std::shared_ptr<common::DbConnectionPool> dbPool)
+ReconciliationRepository::ReconciliationRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
     : dbPool_(dbPool) {
 }
 

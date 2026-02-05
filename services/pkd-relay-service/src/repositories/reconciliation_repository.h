@@ -3,6 +3,7 @@
 #include "../domain/models/reconciliation_summary.h"
 #include "../domain/models/reconciliation_log.h"
 #include "db_connection_pool.h"
+#include "db_connection_interface.h"  // Phase 4.4: Interface for PostgreSQL/Oracle support
 #include <memory>
 #include <vector>
 #include <optional>
@@ -21,10 +22,10 @@ namespace icao::relay::repositories {
 class ReconciliationRepository {
 public:
     /**
-     * @brief Constructor
-     * @param dbPool Shared database connection pool
+     * @brief Constructor (Phase 4.4: Supports PostgreSQL and Oracle via interface)
+     * @param dbPool Shared database connection pool (IDbConnectionPool interface)
      */
-    explicit ReconciliationRepository(std::shared_ptr<common::DbConnectionPool> dbPool);
+    explicit ReconciliationRepository(std::shared_ptr<common::IDbConnectionPool> dbPool);
 
     /**
      * @brief Destructor
@@ -124,7 +125,7 @@ private:
      */
     domain::ReconciliationLog resultToLog(PGresult* res, int row);
 
-    std::shared_ptr<common::DbConnectionPool> dbPool_;
+    std::shared_ptr<common::IDbConnectionPool> dbPool_;  // Phase 4.4: Interface for PostgreSQL/Oracle
 };
 
 } // namespace icao::relay::repositories
