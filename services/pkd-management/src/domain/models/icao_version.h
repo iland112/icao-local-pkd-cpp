@@ -14,7 +14,7 @@ namespace models {
  * Tracks lifecycle: DETECTED → NOTIFIED → DOWNLOADED → IMPORTED
  */
 struct IcaoVersion {
-    int id;
+    std::string id;               // UUID
     std::string collectionType;  // "DSC_CRL" or "MASTERLIST"
     std::string fileName;         // "icaopkd-001-dsccrl-005973.ldif"
     int fileVersion;              // 5973
@@ -43,7 +43,7 @@ struct IcaoVersion {
                                       const std::string& fileName,
                                       int fileVersion) {
         IcaoVersion version;
-        version.id = 0;  // Will be set by database
+        // version.id will be set by database (UUID)
         version.collectionType = collectionType;
         version.fileName = fileName;
         version.fileVersion = fileVersion;

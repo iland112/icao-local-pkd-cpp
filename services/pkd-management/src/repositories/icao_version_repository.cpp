@@ -339,7 +339,7 @@ std::vector<domain::models::IcaoVersion> IcaoVersionRepository::getAllVersions()
 domain::models::IcaoVersion IcaoVersionRepository::resultToVersion(PGresult* res, int row) {
     domain::models::IcaoVersion version;
 
-    version.id = std::stoi(PQgetvalue(res, row, 0));
+    version.id = PQgetvalue(res, row, 0);  // UUID as string
     version.collectionType = PQgetvalue(res, row, 1);
     version.fileName = PQgetvalue(res, row, 2);
     version.fileVersion = std::stoi(PQgetvalue(res, row, 3));
