@@ -35,7 +35,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libaio1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Oracle Instant Client (Phase 4.4: for Oracle database support)
+# Install Oracle Instant Client (Phase 5.2: for Oracle database support)
 # Version: 21.13 (compatible with Oracle 11g, 12c, 18c, 19c, 21c)
 RUN mkdir -p /opt/oracle && cd /opt/oracle && \
     # Download Oracle Instant Client Basic and SDK
@@ -52,7 +52,7 @@ RUN mkdir -p /opt/oracle && cd /opt/oracle && \
     ln -sf libocci.so.21.1 libocci.so && \
     echo "Oracle Instant Client installed successfully"
 
-# Set Oracle environment variables (Phase 4.4)
+# Set Oracle environment variables (Phase 5.2)
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
 ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
 ENV PATH=$ORACLE_HOME:$PATH
@@ -112,12 +112,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     curl \
     ldap-utils \
+    libaio1 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && echo ${TZ} > /etc/timezone
 RUN useradd -m -s /bin/bash app
 RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
+
+# Copy Oracle Instant Client from builder stage (Phase 5.2)
+COPY --from=builder /opt/oracle /opt/oracle
+
+# Set Oracle environment variables for runtime (Phase 5.2)
+ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
+ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
+ENV PATH=$ORACLE_HOME:$PATH
 
 COPY --from=builder /app/build/bin/pkd-relay-service /app/
 

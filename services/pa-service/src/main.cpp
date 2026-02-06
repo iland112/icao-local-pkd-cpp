@@ -251,6 +251,11 @@ AppConfig appConfig;
 std::shared_ptr<common::IDbConnectionPool> dbPool;
 
 // =============================================================================
+// Query Executor (Phase 5.1: Database-agnostic query execution)
+// =============================================================================
+std::unique_ptr<common::IQueryExecutor> queryExecutor;
+
+// =============================================================================
 // Repository Pattern - Global Service and Repository Pointers
 // =============================================================================
 
@@ -1638,12 +1643,13 @@ Json::Value buildDataGroupValidationJson(const DataGroupValidationResult& result
  * @brief Initialize all services and repositories with dependency injection
  *
  * Initialization order:
- * 1. Database connection (getDbConnection)
- * 2. LDAP connection (getLdapConnection)
- * 3. Repositories (with connection injection)
- * 4. Services (with repository injection)
+ * 1. Database connection pool (Factory Pattern)
+ * 2. Query Executor (database abstraction)
+ * 3. LDAP connection
+ * 4. Repositories (with Query Executor/LDAP injection)
+ * 5. Services (with repository injection)
  *
- * This follows the same pattern as pkd-management service.
+ * Phase 5.1: Query Executor Pattern for database independence (PostgreSQL/Oracle)
  */
 void initializeServices() {
     spdlog::info("Initializing Repository Pattern services...");
@@ -1666,25 +1672,27 @@ void initializeServices() {
         std::string dbType = dbPool->getDatabaseType();
         spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
-        // Step 2: Get LDAP connection
+        // Step 2: Create Query Executor (Phase 5.1: Database abstraction)
+        spdlog::debug("Creating Query Executor from connection pool...");
+        queryExecutor = common::createQueryExecutor(dbPool.get());
+        if (!queryExecutor) {
+            throw std::runtime_error("Failed to create Query Executor");
+        }
+        spdlog::info("✅ Query Executor initialized (DB type: {})", queryExecutor->getDatabaseType());
+
+        // Step 3: Get LDAP connection
         LDAP* ldapConn = getLdapConnection();
         if (!ldapConn) {
             throw std::runtime_error("Failed to get LDAP connection");
         }
 
-        // Step 3: Initialize Repositories (constructor-based dependency injection)
-        // Note: PA Service repositories currently only support PostgreSQL
-        // Phase 4.4: Add type checking for database compatibility
-        auto* pgPool = dynamic_cast<common::DbConnectionPool*>(dbPool.get());
-        if (!pgPool) {
-            throw std::runtime_error("PA Service repositories currently only support PostgreSQL");
-        }
-
+        // Step 4: Initialize Repositories (constructor-based dependency injection)
+        // Phase 5.1: Repositories now use Query Executor for database independence
         spdlog::debug("Creating PaVerificationRepository...");
-        paVerificationRepository = new repositories::PaVerificationRepository(pgPool);
+        paVerificationRepository = new repositories::PaVerificationRepository(queryExecutor.get());
 
         spdlog::debug("Creating DataGroupRepository...");
-        dataGroupRepository = new repositories::DataGroupRepository(pgPool);
+        dataGroupRepository = new repositories::DataGroupRepository(queryExecutor.get());
 
         spdlog::debug("Creating LdapCertificateRepository...");
         ldapCertificateRepository = new repositories::LdapCertificateRepository(
@@ -1698,7 +1706,7 @@ void initializeServices() {
             appConfig.ldapBaseDn
         );
 
-        // Step 4: Initialize Services (constructor-based dependency injection)
+        // Step 5: Initialize Services (constructor-based dependency injection)
         spdlog::debug("Creating icao::SodParser...");
         sodParserService = new icao::SodParser();
 

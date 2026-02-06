@@ -1,12 +1,14 @@
 /**
  * @file data_group_repository.h
- * @brief Repository for Data Group database operations
+ * @brief Repository for Data Group database operations (Database-agnostic)
  *
- * Handles CRUD operations for pa_data_group table in PostgreSQL.
+ * Handles CRUD operations for pa_data_group table.
+ * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
  * Uses 100% parameterized queries for security.
  *
  * @author SmartCore Inc.
  * @date 2026-02-02
+ * @updated 2026-02-05 (Phase 5.1.3: Query Executor Pattern)
  */
 
 #pragma once
@@ -14,32 +16,32 @@
 #include <string>
 #include <vector>
 #include <json/json.h>
-#include <libpq-fe.h>
 #include <models/data_group.h>
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 
 namespace repositories {
 
 /**
- * @brief Data Group Repository
+ * @brief Data Group Repository (Database-agnostic)
  *
  * Responsibilities:
  * - CRUD operations for pa_data_group table
  * - Retrieve data groups by verification ID
  * - 100% parameterized queries
  * - Exception-based error handling
- * - Thread-safe database access via connection pool
+ * - Database independence via Query Executor interface
  */
 class DataGroupRepository {
 private:
-    common::DbConnectionPool* dbPool_;  // Database connection pool (non-owning)
+    common::IQueryExecutor* queryExecutor_;  // Not owned - do not free
 
 public:
     /**
-     * @brief Constructor
-     * @param pool Database connection pool (must be valid)
+     * @brief Constructor with Query Executor injection
+     * @param executor Query Executor (PostgreSQL or Oracle, must remain valid during repository lifetime)
+     * @throws std::invalid_argument if executor is nullptr
      */
-    explicit DataGroupRepository(common::DbConnectionPool* pool);
+    explicit DataGroupRepository(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -83,29 +85,13 @@ public:
      */
     int deleteByVerificationId(const std::string& verificationId);
 
-    // ==========================================================================
-    // Helper Methods
-    // ==========================================================================
-
 private:
     /**
-     * @brief Execute parameterized query
-     * @param query SQL query with $1, $2, ... placeholders
-     * @param params Parameter values
-     * @return PGresult* (caller must PQclear)
+     * @brief Convert database row (snake_case) to camelCase JSON for frontend
+     * @param dbRow Database result row
+     * @return Camel case JSON object
      */
-    PGresult* executeParamQuery(
-        const std::string& query,
-        const std::vector<std::string>& params
-    );
-
-    /**
-     * @brief Convert PostgreSQL result row to DataGroup JSON
-     * @param res PostgreSQL result
-     * @param row Row index
-     * @return JSON object representing a data group
-     */
-    Json::Value resultToDataGroupJson(PGresult* res, int row);
+    Json::Value toCamelCase(const Json::Value& dbRow);
 };
 
 } // namespace repositories

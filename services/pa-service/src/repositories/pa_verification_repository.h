@@ -1,12 +1,14 @@
 /**
  * @file pa_verification_repository.h
- * @brief Repository for PA verification records in PostgreSQL
+ * @brief Repository for PA verification records (Database-agnostic)
  *
  * Handles all database access for pa_verification table.
- * Follows Repository Pattern with constructor-based dependency injection.
+ * Follows Repository Pattern with Query Executor abstraction.
+ * Supports both PostgreSQL and Oracle.
  *
  * @author SmartCore Inc.
  * @date 2026-02-01
+ * @updated 2026-02-05 (Phase 5.1: Query Executor Pattern)
  */
 
 #pragma once
@@ -15,9 +17,8 @@
 #include <vector>
 #include <optional>
 #include <json/json.h>
-#include <libpq-fe.h>
 #include "../domain/models/pa_verification.h"
-#include "db_connection_pool.h"
+#include "i_query_executor.h"
 
 namespace repositories {
 
@@ -28,19 +29,19 @@ namespace repositories {
  * - CRUD operations on pa_verification table
  * - Parameterized SQL queries (100% SQL injection protection)
  * - JSON response formatting for API
- * - Thread-safe database access via connection pool
+ * - Database-agnostic via Query Executor interface
  */
 class PaVerificationRepository {
 private:
-    common::DbConnectionPool* dbPool_;  // Not owned - do not free
+    common::IQueryExecutor* queryExecutor_;  // Not owned - do not free
 
 public:
     /**
-     * @brief Constructor with database connection pool injection
-     * @param pool Database connection pool (must remain valid during repository lifetime)
-     * @throws std::invalid_argument if pool is nullptr
+     * @brief Constructor with Query Executor injection
+     * @param executor Query Executor (PostgreSQL or Oracle, must remain valid during repository lifetime)
+     * @throws std::invalid_argument if executor is nullptr
      */
-    explicit PaVerificationRepository(common::DbConnectionPool* pool);
+    explicit PaVerificationRepository(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -106,45 +107,6 @@ public:
      */
     bool updateStatus(const std::string& id, const std::string& status);
 
-    // ==========================================================================
-    // Helper Methods
-    // ==========================================================================
-
-    /**
-     * @brief Execute parameterized query
-     * @param query SQL query with $1, $2, ... placeholders
-     * @param params Parameter values
-     * @return PGresult* (caller must PQclear)
-     * @throws std::runtime_error on query error
-     */
-    PGresult* executeParamQuery(
-        const std::string& query,
-        const std::vector<std::string>& params
-    );
-
-    /**
-     * @brief Execute simple query (no parameters)
-     * @param query SQL query
-     * @return PGresult* (caller must PQclear)
-     * @throws std::runtime_error on query error
-     */
-    PGresult* executeQuery(const std::string& query);
-
-    /**
-     * @brief Convert PostgreSQL result to JSON array
-     * @param res PGresult from query
-     * @return JSON array of objects
-     */
-    Json::Value pgResultToJson(PGresult* res);
-
-    /**
-     * @brief Convert single row to PaVerification domain model
-     * @param res PGresult
-     * @param row Row number
-     * @return PaVerification instance
-     */
-    domain::models::PaVerification resultToVerification(PGresult* res, int row);
-
 private:
     /**
      * @brief Build WHERE clause from filters
@@ -158,6 +120,13 @@ private:
         const std::string& countryCode,
         std::vector<std::string>& params
     );
+
+    /**
+     * @brief Convert database row (snake_case) to camelCase JSON for frontend
+     * @param dbRow Database result row
+     * @return Camel case JSON object
+     */
+    Json::Value toCamelCase(const Json::Value& dbRow);
 };
 
 } // namespace repositories

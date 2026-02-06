@@ -9,11 +9,6 @@
     "openssl",
     "libpq",
     "nlohmann-json",
-    {
-      "name": "spdlog",
-      "features": ["fmt"]
-    },
-    "catch2",
-    "gtest"
+    "spdlog"
   ]
 }

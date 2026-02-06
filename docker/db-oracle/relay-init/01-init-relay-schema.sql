@@ -1,0 +1,198 @@
+-- =============================================================================
+-- ICAO Local PKD - PKD Relay Service Oracle Database Schema
+-- =============================================================================
+-- Version: 2.5.0 (Phase 5.3 - Oracle Edition)
+-- Created: 2026-02-05
+-- Description: Oracle schema for PKD Relay Service (sync & reconciliation)
+-- User: pkd_relay (instead of pkd)
+-- =============================================================================
+
+-- Connect to pluggable database
+ALTER SESSION SET CONTAINER = XEPDB1;
+
+-- Grant privileges to PKD Relay user
+GRANT CREATE TABLE TO pkd_relay;
+GRANT CREATE VIEW TO pkd_relay;
+GRANT CREATE SEQUENCE TO pkd_relay;
+GRANT CREATE PROCEDURE TO pkd_relay;
+GRANT CREATE TRIGGER TO pkd_relay;
+GRANT UNLIMITED TABLESPACE TO pkd_relay;
+
+ALTER USER pkd_relay DEFAULT TABLESPACE USERS;
+ALTER USER pkd_relay TEMPORARY TABLESPACE TEMP;
+
+-- Connect as PKD_RELAY user for schema creation
+-- Note: This script should be run as PKD_RELAY user after initial setup
+
+-- =============================================================================
+-- Helper Function: UUID Generation (Oracle equivalent of uuid_generate_v4())
+-- =============================================================================
+CREATE OR REPLACE FUNCTION uuid_generate_v4 RETURN VARCHAR2 IS
+BEGIN
+    RETURN LOWER(REGEXP_REPLACE(
+        RAWTOHEX(SYS_GUID()),
+        '([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})',
+        '\1-\2-\3-\4-\5'
+    ));
+END;
+/
+
+-- =============================================================================
+-- Certificate Table (for PKD Relay sync operations)
+-- =============================================================================
+
+CREATE TABLE certificate (
+    id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
+    fingerprint_sha256 VARCHAR2(64) NOT NULL,
+    certificate_type VARCHAR2(20) NOT NULL,
+    country_code VARCHAR2(3) NOT NULL,
+    subject_dn CLOB NOT NULL,
+    issuer_dn CLOB NOT NULL,
+    serial_number VARCHAR2(100) NOT NULL,
+    not_before TIMESTAMP,
+    not_after TIMESTAMP,
+    certificate_data BLOB NOT NULL,
+
+    -- LDAP storage tracking
+    stored_in_ldap NUMBER(1) DEFAULT 0,
+    stored_at TIMESTAMP,
+
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+
+    CONSTRAINT chk_cert_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC', 'LINK_CERT'))
+);
+
+CREATE UNIQUE INDEX idx_cert_fingerprint ON certificate(fingerprint_sha256);
+CREATE INDEX idx_cert_type ON certificate(certificate_type);
+CREATE INDEX idx_cert_country ON certificate(country_code);
+CREATE INDEX idx_cert_stored_ldap ON certificate(stored_in_ldap);
+
+-- =============================================================================
+-- CRL Table (for PKD Relay sync operations)
+-- =============================================================================
+
+CREATE TABLE crl (
+    id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
+    fingerprint_sha256 VARCHAR2(64) NOT NULL,
+    country_code VARCHAR2(3) NOT NULL,
+    issuer_dn CLOB NOT NULL,
+    this_update TIMESTAMP NOT NULL,
+    next_update TIMESTAMP,
+    crl_data BLOB NOT NULL,
+
+    -- LDAP storage tracking
+    stored_in_ldap NUMBER(1) DEFAULT 0,
+    stored_at TIMESTAMP,
+
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
+);
+
+CREATE UNIQUE INDEX idx_crl_fingerprint ON crl(fingerprint_sha256);
+CREATE INDEX idx_crl_country ON crl(country_code);
+CREATE INDEX idx_crl_stored_ldap ON crl(stored_in_ldap);
+
+-- =============================================================================
+-- Sync Status Table
+-- =============================================================================
+
+CREATE TABLE sync_status (
+    id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
+    checked_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+
+    -- Database counts
+    db_csca_count NUMBER(10) DEFAULT 0,
+    db_mlsc_count NUMBER(10) DEFAULT 0,
+    db_dsc_count NUMBER(10) DEFAULT 0,
+    db_dsc_nc_count NUMBER(10) DEFAULT 0,
+    db_crl_count NUMBER(10) DEFAULT 0,
+
+    -- LDAP counts
+    ldap_csca_count NUMBER(10) DEFAULT 0,
+    ldap_mlsc_count NUMBER(10) DEFAULT 0,
+    ldap_dsc_count NUMBER(10) DEFAULT 0,
+    ldap_dsc_nc_count NUMBER(10) DEFAULT 0,
+    ldap_crl_count NUMBER(10) DEFAULT 0,
+
+    -- Discrepancies
+    csca_discrepancy NUMBER(10) DEFAULT 0,
+    mlsc_discrepancy NUMBER(10) DEFAULT 0,
+    dsc_discrepancy NUMBER(10) DEFAULT 0,
+    dsc_nc_discrepancy NUMBER(10) DEFAULT 0,
+    crl_discrepancy NUMBER(10) DEFAULT 0,
+    total_discrepancy NUMBER(10) DEFAULT 0,
+
+    -- Country-level statistics (JSON format)
+    country_stats CLOB
+);
+
+CREATE INDEX idx_sync_status_checked_at ON sync_status(checked_at DESC);
+
+-- =============================================================================
+-- Reconciliation Summary Table
+-- =============================================================================
+
+CREATE TABLE reconciliation_summary (
+    id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    triggered_by VARCHAR2(100) NOT NULL,
+    triggered_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    completed_at TIMESTAMP,
+    status VARCHAR2(20) NOT NULL,
+    dry_run NUMBER(1) DEFAULT 0 NOT NULL,
+
+    -- Processing counts
+    success_count NUMBER(10) DEFAULT 0,
+    failed_count NUMBER(10) DEFAULT 0,
+
+    -- Added counts
+    csca_added NUMBER(10) DEFAULT 0,
+    dsc_added NUMBER(10) DEFAULT 0,
+    dsc_nc_added NUMBER(10) DEFAULT 0,
+    crl_added NUMBER(10) DEFAULT 0,
+    total_added NUMBER(10) DEFAULT 0,
+
+    -- Deleted counts
+    csca_deleted NUMBER(10) DEFAULT 0,
+    dsc_deleted NUMBER(10) DEFAULT 0,
+    dsc_nc_deleted NUMBER(10) DEFAULT 0,
+    crl_deleted NUMBER(10) DEFAULT 0,
+
+    -- Performance
+    duration_ms NUMBER(19),
+    error_message CLOB,
+
+    -- Optional link to sync_status
+    sync_status_id VARCHAR2(36),
+
+    CONSTRAINT chk_recon_status CHECK (status IN ('PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED'))
+);
+
+CREATE INDEX idx_recon_summary_triggered ON reconciliation_summary(triggered_at DESC);
+
+-- =============================================================================
+-- Reconciliation Log Table (detailed per-certificate)
+-- =============================================================================
+
+CREATE TABLE reconciliation_log (
+    id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    reconciliation_id NUMBER NOT NULL,
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    cert_fingerprint VARCHAR2(64) NOT NULL,
+    cert_type VARCHAR2(20) NOT NULL,
+    country_code VARCHAR2(3) NOT NULL,
+    action VARCHAR2(20) NOT NULL,
+    result VARCHAR2(20) NOT NULL,
+    error_message CLOB,
+
+    CONSTRAINT fk_recon_log_summary FOREIGN KEY (reconciliation_id) REFERENCES reconciliation_summary(id) ON DELETE CASCADE,
+    CONSTRAINT chk_recon_action CHECK (action IN ('ADD_TO_LDAP', 'UPDATE_LDAP', 'DELETE_FROM_LDAP', 'VERIFY', 'SKIP')),
+    CONSTRAINT chk_recon_result CHECK (result IN ('SUCCESS', 'FAILED', 'SKIPPED'))
+);
+
+CREATE INDEX idx_recon_log_recon_id ON reconciliation_log(reconciliation_id);
+CREATE INDEX idx_recon_log_fingerprint ON reconciliation_log(cert_fingerprint);
+CREATE INDEX idx_recon_log_created ON reconciliation_log(created_at DESC);
+
+-- =============================================================================
+-- Success Message
+-- =============================================================================
+SELECT 'Oracle PKD Relay schema initialized successfully' AS status FROM dual;

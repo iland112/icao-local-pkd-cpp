@@ -357,7 +357,7 @@ inline AuditLogEntry createAuditEntryFromRequest(
     // Extract request context
     entry.ipAddress = extractIpAddress(req);
     entry.userAgent = std::string(req->getHeader("User-Agent"));
-    entry.requestMethod = std::string(drogon::to_string(req->getMethod()));
+    entry.requestMethod = std::string(req->getMethodString());
     entry.requestPath = std::string(req->getPath());
 
     return entry;

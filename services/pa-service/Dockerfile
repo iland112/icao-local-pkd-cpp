@@ -60,6 +60,7 @@ ENV PATH=$ORACLE_HOME:$PATH
 WORKDIR /opt
 RUN git clone https://github.com/microsoft/vcpkg.git \
     && cd vcpkg \
+    && git checkout 2023.12.12 \
     && ./bootstrap-vcpkg.sh
 
 ENV VCPKG_ROOT=/opt/vcpkg

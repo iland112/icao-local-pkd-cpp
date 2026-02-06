@@ -1,129 +1,135 @@
 /**
  * @file pa_verification_repository.cpp
- * @brief Implementation of PaVerificationRepository
+ * @brief Implementation of PaVerificationRepository (Query Executor Pattern)
+ * @updated 2026-02-05 (Phase 5.1: Database-agnostic implementation)
  */
 
 #include "pa_verification_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
+#include <map>
 
 namespace repositories {
 
-PaVerificationRepository::PaVerificationRepository(common::DbConnectionPool* pool)
-    : dbPool_(pool)
+// ============================================================================
+// Constructor
+// ============================================================================
+
+PaVerificationRepository::PaVerificationRepository(common::IQueryExecutor* executor)
+    : queryExecutor_(executor)
 {
-    if (!dbPool_) {
-        throw std::invalid_argument("Database connection pool cannot be null");
+    if (!queryExecutor_) {
+        throw std::invalid_argument("PaVerificationRepository: queryExecutor cannot be nullptr");
     }
 
-    spdlog::debug("PaVerificationRepository initialized with connection pool");
+    spdlog::debug("[PaVerificationRepository] Initialized (DB type: {})",
+        queryExecutor_->getDatabaseType());
 }
 
-// ==========================================================================
+// ============================================================================
 // CRUD Operations
-// ==========================================================================
+// ============================================================================
 
 std::string PaVerificationRepository::insert(const domain::models::PaVerification& verification) {
-    spdlog::debug("Inserting PA verification record");
+    spdlog::debug("[PaVerificationRepository] Inserting PA verification record");
 
-    const char* query =
-        "INSERT INTO pa_verification ("
-        "issuing_country, document_number, verification_status, sod_hash, sod_binary, "
-        "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
-        "csca_subject_dn, csca_fingerprint, "
-        "trust_chain_valid, trust_chain_message, "
-        "sod_signature_valid, sod_signature_message, "
-        "dg_hashes_valid, dg_hashes_message, "
-        "crl_status, crl_message, "
-        "verification_message, "
-        "client_ip, user_agent"
-        ") VALUES ("
-        "$1, $2, $3, $4, $5, "
-        "$6, $7, $8, $9, "
-        "$10, $11, "
-        "$12, $13, "
-        "$14, $15, "
-        "$16, $17, "
-        "$18, $19, "
-        "$20, "
-        "$21, $22"
-        ") RETURNING id";
+    try {
+        const char* query =
+            "INSERT INTO pa_verification ("
+            "issuing_country, document_number, verification_status, sod_hash, sod_binary, "
+            "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
+            "csca_subject_dn, csca_fingerprint, "
+            "trust_chain_valid, trust_chain_message, "
+            "sod_signature_valid, sod_signature_message, "
+            "dg_hashes_valid, dg_hashes_message, "
+            "crl_status, crl_message, "
+            "verification_message, "
+            "client_ip, user_agent"
+            ") VALUES ("
+            "$1, $2, $3, $4, $5, "
+            "$6, $7, $8, $9, "
+            "$10, $11, "
+            "$12, $13, "
+            "$14, $15, "
+            "$16, $17, "
+            "$18, $19, "
+            "$20, "
+            "$21, $22"
+            ") RETURNING id";
 
-    std::vector<std::string> params;
-    // Match new INSERT query column order
-    params.push_back(verification.countryCode);           // $1: issuing_country
-    params.push_back(verification.documentNumber);        // $2: document_number
-    params.push_back(verification.verificationStatus);    // $3: verification_status
-    params.push_back(verification.sodHash);               // $4: sod_hash
-    params.push_back("");                                 // $5: sod_binary (TODO: add to domain model)
+        std::vector<std::string> params = {
+            verification.countryCode,                                        // $1
+            verification.documentNumber,                                     // $2
+            verification.verificationStatus,                                 // $3
+            verification.sodHash,                                            // $4
+            "",                                                              // $5: sod_binary (TODO)
+            verification.dscSubject,                                         // $6
+            verification.dscSerialNumber,                                    // $7
+            verification.dscIssuer,                                          // $8
+            "",                                                              // $9: dsc_fingerprint (TODO)
+            verification.cscaSubject,                                        // $10
+            "",                                                              // $11: csca_fingerprint (TODO)
+            verification.certificateChainValid ? "true" : "false",           // $12
+            "",                                                              // $13: trust_chain_message (TODO)
+            verification.sodSignatureValid ? "true" : "false",               // $14
+            "",                                                              // $15: sod_signature_message (TODO)
+            verification.dataGroupsValid ? "true" : "false",                 // $16
+            "",                                                              // $17: dg_hashes_message (TODO)
+            verification.crlStatus,                                          // $18
+            verification.crlMessage.value_or(""),                            // $19
+            verification.validationErrors.value_or(""),                      // $20
+            verification.ipAddress.value_or(""),                             // $21
+            verification.userAgent.value_or("")                              // $22
+        };
 
-    params.push_back(verification.dscSubject);            // $6: dsc_subject_dn
-    params.push_back(verification.dscSerialNumber);       // $7: dsc_serial_number
-    params.push_back(verification.dscIssuer);             // $8: dsc_issuer_dn
-    params.push_back("");                                 // $9: dsc_fingerprint (TODO: add to domain model)
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-    params.push_back(verification.cscaSubject);           // $10: csca_subject_dn
-    params.push_back("");                                 // $11: csca_fingerprint (TODO: add to domain model)
+        if (result.empty()) {
+            throw std::runtime_error("Insert returned no ID");
+        }
 
-    params.push_back(verification.certificateChainValid ? "true" : "false");  // $12: trust_chain_valid
-    params.push_back("");                                 // $13: trust_chain_message (TODO: add to domain model)
+        std::string id = result[0]["id"].asString();
+        spdlog::info("[PaVerificationRepository] PA verification inserted with ID: {}", id);
+        return id;
 
-    params.push_back(verification.sodSignatureValid ? "true" : "false");      // $14: sod_signature_valid
-    params.push_back("");                                 // $15: sod_signature_message (TODO: add to domain model)
-
-    params.push_back(verification.dataGroupsValid ? "true" : "false");        // $16: dg_hashes_valid
-    params.push_back("");                                 // $17: dg_hashes_message (TODO: add to domain model)
-
-    params.push_back(verification.crlStatus);             // $18: crl_status
-    params.push_back(verification.crlMessage.value_or(""));  // $19: crl_message
-
-    params.push_back(verification.validationErrors.value_or(""));  // $20: verification_message
-
-    params.push_back(verification.ipAddress.value_or(""));    // $21: client_ip
-    params.push_back(verification.userAgent.value_or(""));    // $22: user_agent
-
-    PGresult* res = executeParamQuery(query, params);
-
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        std::string error = PQresultErrorMessage(res);
-        PQclear(res);
-        throw std::runtime_error("Failed to insert PA verification: " + error);
+    } catch (const std::exception& e) {
+        spdlog::error("[PaVerificationRepository] Insert failed: {}", e.what());
+        throw;
     }
-
-    std::string id = PQgetvalue(res, 0, 0);
-    PQclear(res);
-
-    spdlog::info("PA verification inserted with ID: {}", id);
-    return id;
 }
 
 Json::Value PaVerificationRepository::findById(const std::string& id) {
-    spdlog::debug("Finding PA verification by ID: {}", id);
+    spdlog::debug("[PaVerificationRepository] Finding PA verification by ID: {}", id);
 
-    const char* query =
-        "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
-        "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
-        "csca_subject_dn, csca_fingerprint, "
-        "trust_chain_valid, trust_chain_message, "
-        "sod_signature_valid, sod_signature_message, "
-        "dg_hashes_valid, dg_hashes_message, "
-        "crl_status, crl_message, "
-        "verification_message, "
-        "request_timestamp, completed_timestamp, client_ip, user_agent "
-        "FROM pa_verification WHERE id = $1";
+    try {
+        const char* query =
+            "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+            "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
+            "csca_subject_dn, csca_fingerprint, "
+            "trust_chain_valid, trust_chain_message, "
+            "sod_signature_valid, sod_signature_message, "
+            "dg_hashes_valid, dg_hashes_message, "
+            "crl_status, crl_message, "
+            "verification_message, "
+            "request_timestamp, completed_timestamp, client_ip, user_agent "
+            "FROM pa_verification WHERE id = $1";
 
-    std::vector<std::string> params = {id};
-    PGresult* res = executeParamQuery(query, params);
+        std::vector<std::string> params = {id};
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-    Json::Value result;
-    if (PQntuples(res) > 0) {
-        Json::Value jsonArray = pgResultToJson(res);
-        result = jsonArray[Json::ArrayIndex(0)];
+        if (result.empty()) {
+            spdlog::debug("[PaVerificationRepository] PA verification not found: {}", id);
+            return Json::Value::null;
+        }
+
+        // Apply field name mapping (snake_case -> camelCase)
+        return toCamelCase(result[0]);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[PaVerificationRepository] Find by ID failed: {}", e.what());
+        return Json::Value::null;
     }
-
-    PQclear(res);
-    return result;
 }
 
 Json::Value PaVerificationRepository::findAll(
@@ -132,354 +138,195 @@ Json::Value PaVerificationRepository::findAll(
     const std::string& status,
     const std::string& countryCode)
 {
-    spdlog::debug("Finding all PA verifications (limit: {}, offset: {}, status: {}, country: {})",
+    spdlog::debug("[PaVerificationRepository] Finding all PA verifications (limit: {}, offset: {}, status: {}, country: {})",
         limit, offset, status, countryCode);
 
-    std::vector<std::string> params;
-    std::string whereClause = buildWhereClause(status, countryCode, params);
+    try {
+        std::vector<std::string> params;
+        std::string whereClause = buildWhereClause(status, countryCode, params);
 
-    // Count query
-    std::ostringstream countQuery;
-    countQuery << "SELECT COUNT(*) FROM pa_verification";
-    if (!whereClause.empty()) {
-        countQuery << " WHERE " << whereClause;
+        // Count query
+        std::ostringstream countQuery;
+        countQuery << "SELECT COUNT(*) FROM pa_verification";
+        if (!whereClause.empty()) {
+            countQuery << " WHERE " << whereClause;
+        }
+
+        Json::Value countResult = queryExecutor_->executeScalar(countQuery.str(), params);
+        int total = countResult.asInt();
+
+        // Data query
+        std::ostringstream dataQuery;
+        dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+                  << "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
+                  << "csca_subject_dn, csca_fingerprint, "
+                  << "trust_chain_valid, trust_chain_message, "
+                  << "sod_signature_valid, sod_signature_message, "
+                  << "dg_hashes_valid, dg_hashes_message, "
+                  << "crl_status, crl_message, "
+                  << "verification_message, "
+                  << "request_timestamp, completed_timestamp, client_ip, user_agent "
+                  << "FROM pa_verification";
+
+        if (!whereClause.empty()) {
+            dataQuery << " WHERE " << whereClause;
+        }
+
+        dataQuery << " ORDER BY request_timestamp DESC"
+                  << " LIMIT " << limit << " OFFSET " << offset;
+
+        Json::Value dataResult = queryExecutor_->executeQuery(dataQuery.str(), params);
+
+        // Build response
+        Json::Value response;
+        response["success"] = true;
+        response["total"] = total;
+        response["page"] = (offset / limit) + 1;
+        response["size"] = limit;
+
+        Json::Value dataArray = Json::arrayValue;
+        for (const auto& row : dataResult) {
+            dataArray.append(toCamelCase(row));
+        }
+        response["data"] = dataArray;
+
+        spdlog::debug("[PaVerificationRepository] Found {} verifications (total: {})",
+            dataResult.size(), total);
+
+        return response;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[PaVerificationRepository] Find all failed: {}", e.what());
+
+        Json::Value errorResponse;
+        errorResponse["success"] = false;
+        errorResponse["error"] = e.what();
+        return errorResponse;
     }
-
-    PGresult* countRes = params.empty() ?
-        executeQuery(countQuery.str()) :
-        executeParamQuery(countQuery.str(), params);
-
-    int total = 0;
-    if (PQntuples(countRes) > 0) {
-        total = std::atoi(PQgetvalue(countRes, 0, 0));
-    }
-    PQclear(countRes);
-
-    // Data query
-    std::ostringstream dataQuery;
-    dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
-              << "dsc_subject_dn, dsc_serial_number, dsc_fingerprint, "
-              << "csca_subject_dn, csca_fingerprint, "
-              << "trust_chain_valid, sod_signature_valid, dg_hashes_valid, "
-              << "crl_status, crl_message, "
-              << "verification_message, request_timestamp "
-              << "FROM pa_verification";
-
-    if (!whereClause.empty()) {
-        dataQuery << " WHERE " << whereClause;
-    }
-
-    dataQuery << " ORDER BY request_timestamp DESC";
-
-    // Add LIMIT and OFFSET
-    int paramCount = params.size() + 1;
-    dataQuery << " LIMIT $" << paramCount;
-    paramCount++;
-    dataQuery << " OFFSET $" << paramCount;
-    params.push_back(std::to_string(limit));
-    params.push_back(std::to_string(offset));
-
-    PGresult* dataRes = executeParamQuery(dataQuery.str(), params);
-    Json::Value data = pgResultToJson(dataRes);
-    PQclear(dataRes);
-
-    // Build response (PageResponse format for frontend)
-    Json::Value response;
-    response["content"] = data;  // Frontend expects "content" not "data"
-    response["page"] = offset / limit;
-    response["size"] = data.size();
-    response["totalElements"] = total;  // Frontend expects "totalElements" not "total"
-    response["totalPages"] = (total + limit - 1) / limit;  // Calculate total pages
-    response["first"] = (offset == 0);
-    response["last"] = (offset + limit >= total);
-
-    return response;
 }
 
 Json::Value PaVerificationRepository::getStatistics() {
-    spdlog::debug("Getting PA verification statistics");
+    spdlog::debug("[PaVerificationRepository] Getting PA verification statistics");
 
-    Json::Value stats;
+    try {
+        Json::Value stats;
 
-    // Total verifications
-    const char* totalQuery = "SELECT COUNT(*) FROM pa_verification";
-    PGresult* totalRes = executeQuery(totalQuery);
-    stats["totalVerifications"] = std::atoi(PQgetvalue(totalRes, 0, 0));
-    PQclear(totalRes);
+        // Total count
+        const char* totalQuery = "SELECT COUNT(*) FROM pa_verification";
+        stats["totalVerifications"] = queryExecutor_->executeScalar(totalQuery).asInt();
 
-    // By status - Return individual counts as top-level fields for frontend
-    const char* statusQuery =
-        "SELECT verification_status, COUNT(*) "
-        "FROM pa_verification "
-        "GROUP BY verification_status";
-    PGresult* statusRes = executeQuery(statusQuery);
+        // Count by status
+        const char* statusQuery =
+            "SELECT verification_status, COUNT(*) as count "
+            "FROM pa_verification "
+            "GROUP BY verification_status";
+        Json::Value statusResult = queryExecutor_->executeQuery(statusQuery);
 
-    // Initialize counts
-    int validCount = 0;
-    int invalidCount = 0;
-    int errorCount = 0;
-
-    for (int i = 0; i < PQntuples(statusRes); i++) {
-        std::string status = PQgetvalue(statusRes, i, 0);
-        int count = std::atoi(PQgetvalue(statusRes, i, 1));
-
-        if (status == "VALID") {
-            validCount = count;
-        } else if (status == "INVALID") {
-            invalidCount = count;
-        } else if (status == "ERROR") {
-            errorCount = count;
+        Json::Value statusCounts;
+        for (const auto& row : statusResult) {
+            std::string status = row["verification_status"].asString();
+            int count = std::stoi(row["count"].asString());
+            statusCounts[status] = count;
         }
+        stats["byStatus"] = statusCounts;
+
+        // Count by country
+        const char* countryQuery =
+            "SELECT issuing_country, COUNT(*) as count "
+            "FROM pa_verification "
+            "GROUP BY issuing_country "
+            "ORDER BY count DESC "
+            "LIMIT 10";
+        Json::Value countryResult = queryExecutor_->executeQuery(countryQuery);
+
+        Json::Value countryCounts = Json::arrayValue;
+        for (const auto& row : countryResult) {
+            Json::Value country;
+            country["country"] = row["issuing_country"].asString();
+            country["count"] = std::stoi(row["count"].asString());
+            countryCounts.append(country);
+        }
+        stats["byCountry"] = countryCounts;
+
+        // Success rate
+        const char* successQuery =
+            "SELECT "
+            "COUNT(CASE WHEN verification_status = 'VALID' THEN 1 END) as valid_count, "
+            "COUNT(*) as total_count "
+            "FROM pa_verification";
+        Json::Value successResult = queryExecutor_->executeQuery(successQuery);
+
+        if (!successResult.empty()) {
+            int validCount = std::stoi(successResult[0]["valid_count"].asString());
+            int totalCount = std::stoi(successResult[0]["total_count"].asString());
+            double successRate = totalCount > 0 ? (validCount * 100.0 / totalCount) : 0.0;
+            stats["successRate"] = successRate;
+        }
+
+        spdlog::debug("[PaVerificationRepository] Statistics retrieved successfully");
+        return stats;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[PaVerificationRepository] Get statistics failed: {}", e.what());
+
+        Json::Value errorResponse;
+        errorResponse["error"] = e.what();
+        return errorResponse;
     }
-    PQclear(statusRes);
-
-    // Set top-level fields for frontend compatibility
-    stats["validCount"] = validCount;
-    stats["invalidCount"] = invalidCount;
-    stats["errorCount"] = errorCount;
-
-    // Countries verified (count distinct countries)
-    const char* countriesQuery =
-        "SELECT COUNT(DISTINCT issuing_country) "
-        "FROM pa_verification "
-        "WHERE issuing_country IS NOT NULL AND issuing_country != ''";
-    PGresult* countriesRes = executeQuery(countriesQuery);
-    stats["countriesVerified"] = std::atoi(PQgetvalue(countriesRes, 0, 0));
-    PQclear(countriesRes);
-
-    // Average processing time (placeholder - not tracked yet)
-    stats["averageProcessingTimeMs"] = 0;
-
-    // By country (top 10)
-    const char* countryQuery =
-        "SELECT issuing_country, COUNT(*) "
-        "FROM pa_verification "
-        "GROUP BY issuing_country "
-        "ORDER BY COUNT(*) DESC "
-        "LIMIT 10";
-    PGresult* countryRes = executeQuery(countryQuery);
-
-    Json::Value byCountry = Json::arrayValue;
-    for (int i = 0; i < PQntuples(countryRes); i++) {
-        Json::Value item;
-        item["country"] = PQgetvalue(countryRes, i, 0);
-        item["count"] = std::atoi(PQgetvalue(countryRes, i, 1));
-        byCountry.append(item);
-    }
-    PQclear(countryRes);
-    stats["topCountries"] = byCountry;
-
-    // Success rate
-    const char* successQuery =
-        "SELECT "
-        "CAST(SUM(CASE WHEN verification_status = 'VALID' THEN 1 ELSE 0 END) AS FLOAT) / "
-        "NULLIF(COUNT(*), 0) * 100 AS success_rate "
-        "FROM pa_verification";
-    PGresult* successRes = executeQuery(successQuery);
-    if (PQntuples(successRes) > 0 && !PQgetisnull(successRes, 0, 0)) {
-        stats["successRate"] = std::atof(PQgetvalue(successRes, 0, 0));
-    } else {
-        stats["successRate"] = 0.0;
-    }
-    PQclear(successRes);
-
-    Json::Value response;
-    response["success"] = true;
-    response["data"] = stats;
-
-    return response;
 }
 
 bool PaVerificationRepository::deleteById(const std::string& id) {
-    spdlog::debug("Deleting PA verification by ID: {}", id);
+    spdlog::debug("[PaVerificationRepository] Deleting PA verification: {}", id);
 
-    const char* query = "DELETE FROM pa_verification WHERE id = $1";
-    std::vector<std::string> params = {id};
+    try {
+        const char* query = "DELETE FROM pa_verification WHERE id = $1";
+        std::vector<std::string> params = {id};
 
-    PGresult* res = executeParamQuery(query, params);
-    int affectedRows = std::atoi(PQcmdTuples(res));
-    PQclear(res);
+        int affectedRows = queryExecutor_->executeCommand(query, params);
 
-    spdlog::info("Deleted {} PA verification record(s)", affectedRows);
-    return affectedRows > 0;
+        if (affectedRows > 0) {
+            spdlog::info("[PaVerificationRepository] Deleted PA verification: {}", id);
+            return true;
+        }
+
+        spdlog::warn("[PaVerificationRepository] PA verification not found for deletion: {}", id);
+        return false;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[PaVerificationRepository] Delete failed: {}", e.what());
+        return false;
+    }
 }
 
 bool PaVerificationRepository::updateStatus(const std::string& id, const std::string& status) {
-    spdlog::debug("Updating PA verification status: ID={}, status={}", id, status);
+    spdlog::debug("[PaVerificationRepository] Updating PA verification status: ID={}, status={}", id, status);
 
-    const char* query =
-        "UPDATE pa_verification "
-        "SET verification_status = $1, completed_timestamp = NOW() "
-        "WHERE id = $2";
+    try {
+        const char* query =
+            "UPDATE pa_verification "
+            "SET verification_status = $1, completed_timestamp = NOW() "
+            "WHERE id = $2";
 
-    std::vector<std::string> params = {status, id};
-    PGresult* res = executeParamQuery(query, params);
-    int affectedRows = std::atoi(PQcmdTuples(res));
-    PQclear(res);
+        std::vector<std::string> params = {status, id};
+        int affectedRows = queryExecutor_->executeCommand(query, params);
 
-    return affectedRows > 0;
-}
-
-// ==========================================================================
-// Helper Methods
-// ==========================================================================
-
-PGresult* PaVerificationRepository::executeParamQuery(
-    const std::string& query,
-    const std::vector<std::string>& params)
-{
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    std::vector<const char*> paramValues;
-    for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
-    }
-
-    PGresult* res = PQexecParams(
-        conn.get(),
-        query.c_str(),
-        paramValues.size(),
-        nullptr,
-        paramValues.data(),
-        nullptr,
-        nullptr,
-        0
-    );
-
-    if (!res) {
-        std::string error = PQerrorMessage(conn.get());
-        throw std::runtime_error("PQexecParams returned nullptr: " + error);
-    }
-
-    ExecStatusType status = PQresultStatus(res);
-    if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK) {
-        std::string error = PQresultErrorMessage(res);
-        PQclear(res);
-        throw std::runtime_error("Query execution failed: " + error);
-    }
-
-    return res;
-}
-
-PGresult* PaVerificationRepository::executeQuery(const std::string& query) {
-    // Acquire connection from pool (RAII - automatically released on scope exit)
-    auto conn = dbPool_->acquire();
-
-    if (!conn.isValid()) {
-        throw std::runtime_error("Failed to acquire database connection from pool");
-    }
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (!res) {
-        std::string error = PQerrorMessage(conn.get());
-        throw std::runtime_error("PQexec returned nullptr: " + error);
-    }
-
-    ExecStatusType status = PQresultStatus(res);
-    if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK) {
-        std::string error = PQresultErrorMessage(res);
-        PQclear(res);
-        throw std::runtime_error("Query execution failed: " + error);
-    }
-
-    return res;
-}
-
-Json::Value PaVerificationRepository::pgResultToJson(PGresult* res) {
-    Json::Value array = Json::arrayValue;
-
-    int rows = PQntuples(res);
-    int cols = PQnfields(res);
-
-    // Field name mapping: snake_case (DB) -> camelCase (Frontend)
-    static const std::map<std::string, std::string> fieldMapping = {
-        {"id", "verificationId"},
-        {"verification_status", "status"},
-        {"request_timestamp", "verificationTimestamp"},
-        {"issuing_country", "issuingCountry"},
-        {"document_number", "documentNumber"},
-        {"sod_hash", "sodHash"},
-        {"sod_signature_valid", "sodSignatureValid"},
-        {"trust_chain_valid", "trustChainValid"},
-        {"dg_hashes_valid", "dgHashesValid"},
-        {"crl_status", "crlStatus"},
-        {"crl_message", "crlMessage"},
-        {"dsc_subject_dn", "dscSubjectDn"},
-        {"dsc_serial_number", "dscSerialNumber"},
-        {"dsc_fingerprint", "dscFingerprint"},
-        {"csca_subject_dn", "cscaSubjectDn"},
-        {"csca_fingerprint", "cscaFingerprint"},
-        {"verification_message", "verificationMessage"},
-    };
-
-    for (int i = 0; i < rows; i++) {
-        Json::Value row;
-
-        for (int j = 0; j < cols; j++) {
-            const char* colName = PQfname(res, j);
-            std::string colNameStr(colName);
-
-            // Map field name to camelCase
-            std::string jsonFieldName = colNameStr;
-            auto it = fieldMapping.find(colNameStr);
-            if (it != fieldMapping.end()) {
-                jsonFieldName = it->second;
-            }
-
-            if (PQgetisnull(res, i, j)) {
-                row[jsonFieldName] = Json::Value::null;
-            } else {
-                const char* value = PQgetvalue(res, i, j);
-
-                // Handle boolean fields
-                if (colNameStr.find("_valid") != std::string::npos ||
-                    colNameStr.find("_checked") != std::string::npos ||
-                    colNameStr.find("_expired") != std::string::npos ||
-                    colNameStr == "revoked") {
-                    row[jsonFieldName] = (value[0] == 't' || value[0] == '1');
-                }
-                // Handle metadata JSON
-                else if (colNameStr == "metadata") {
-                    Json::CharReaderBuilder builder;
-                    Json::Value jsonValue;
-                    std::string errors;
-                    std::istringstream iss(value);
-                    if (Json::parseFromStream(builder, iss, &jsonValue, &errors)) {
-                        row[jsonFieldName] = jsonValue;
-                    } else {
-                        row[jsonFieldName] = value;
-                    }
-                }
-                else {
-                    row[jsonFieldName] = value;
-                }
-            }
+        if (affectedRows > 0) {
+            spdlog::info("[PaVerificationRepository] Status updated: {} -> {}", id, status);
+            return true;
         }
 
-        array.append(row);
+        spdlog::warn("[PaVerificationRepository] PA verification not found for update: {}", id);
+        return false;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[PaVerificationRepository] Update status failed: {}", e.what());
+        return false;
     }
-
-    return array;
 }
 
-domain::models::PaVerification PaVerificationRepository::resultToVerification(PGresult* res, int row) {
-    domain::models::PaVerification pv;
-
-    pv.id = PQgetvalue(res, row, PQfnumber(res, "id"));
-    pv.documentNumber = PQgetvalue(res, row, PQfnumber(res, "document_number"));
-    pv.countryCode = PQgetvalue(res, row, PQfnumber(res, "issuing_country"));
-    pv.verificationStatus = PQgetvalue(res, row, PQfnumber(res, "verification_status"));
-
-    // ... (additional field mapping as needed)
-
-    return pv;
-}
+// ============================================================================
+// Helper Methods
+// ============================================================================
 
 std::string PaVerificationRepository::buildWhereClause(
     const std::string& status,
@@ -502,6 +349,76 @@ std::string PaVerificationRepository::buildWhereClause(
     }
 
     return where.str();
+}
+
+Json::Value PaVerificationRepository::toCamelCase(const Json::Value& dbRow) {
+    // Field name mapping: snake_case (DB) -> camelCase (Frontend)
+    static const std::map<std::string, std::string> fieldMapping = {
+        {"id", "verificationId"},
+        {"verification_status", "status"},
+        {"request_timestamp", "verificationTimestamp"},
+        {"completed_timestamp", "completedTimestamp"},
+        {"issuing_country", "issuingCountry"},
+        {"document_number", "documentNumber"},
+        {"sod_hash", "sodHash"},
+        {"sod_binary", "sodBinary"},
+        {"sod_signature_valid", "sodSignatureValid"},
+        {"sod_signature_message", "sodSignatureMessage"},
+        {"trust_chain_valid", "trustChainValid"},
+        {"trust_chain_message", "trustChainMessage"},
+        {"dg_hashes_valid", "dgHashesValid"},
+        {"dg_hashes_message", "dgHashesMessage"},
+        {"crl_status", "crlStatus"},
+        {"crl_message", "crlMessage"},
+        {"dsc_subject_dn", "dscSubjectDn"},
+        {"dsc_serial_number", "dscSerialNumber"},
+        {"dsc_issuer_dn", "dscIssuerDn"},
+        {"dsc_fingerprint", "dscFingerprint"},
+        {"csca_subject_dn", "cscaSubjectDn"},
+        {"csca_fingerprint", "cscaFingerprint"},
+        {"verification_message", "verificationMessage"},
+        {"client_ip", "clientIp"},
+        {"user_agent", "userAgent"}
+    };
+
+    Json::Value camelCaseRow;
+
+    for (const auto& key : dbRow.getMemberNames()) {
+        std::string camelKey = key;
+
+        // Apply mapping if exists
+        auto it = fieldMapping.find(key);
+        if (it != fieldMapping.end()) {
+            camelKey = it->second;
+        }
+
+        const Json::Value& value = dbRow[key];
+
+        // Handle NULL values
+        if (value.isNull()) {
+            camelCaseRow[camelKey] = Json::Value::null;
+            continue;
+        }
+
+        // Handle boolean fields (PostgreSQL returns 't'/'f' strings)
+        if (key.find("_valid") != std::string::npos ||
+            key.find("_checked") != std::string::npos ||
+            key.find("_expired") != std::string::npos ||
+            key == "revoked") {
+            if (value.isString()) {
+                std::string strVal = value.asString();
+                camelCaseRow[camelKey] = (strVal == "t" || strVal == "true" || strVal == "1");
+            } else {
+                camelCaseRow[camelKey] = value.asBool();
+            }
+        }
+        // All other fields
+        else {
+            camelCaseRow[camelKey] = value;
+        }
+    }
+
+    return camelCaseRow;
 }
 
 } // namespace repositories
