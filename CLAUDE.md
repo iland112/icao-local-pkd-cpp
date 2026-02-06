@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.5.0 🎉
-**Last Updated**: 2026-02-05
-**Status**: Production Ready - Phase 4 Complete, Phase 5 Planned (PA Service & PKD Relay Oracle Support)
+**Current Version**: v2.5.0 Phase 5.2 🎉
+**Last Updated**: 2026-02-06
+**Status**: Production Ready - Phase 4 Complete, Phase 5.2 Complete (PKD Relay UUID Migration)
 
 ---
 
@@ -997,6 +997,183 @@ ldap_delete_all_crls       # Delete all CRLs (testing)
 ---
 
 ## Version History
+
+### v2.5.0 Phase 5.2 (2026-02-06) - PKD Relay UUID Migration Complete ✅
+
+#### Executive Summary
+
+Phase 5.2 successfully migrates PKD Relay service from integer-based primary keys to UUID-based identifiers, resolving database schema mismatches between PostgreSQL UUID columns and C++ int types. This migration maintains the Query Executor Pattern's database abstraction while establishing type consistency across all layers (domain → repository → service → controller).
+
+#### Key Achievements
+
+**UUID Support Implementation** (8 files modified):
+- ✅ **3 Domain Models Updated** - Changed `int id` to `std::string id` for UUID storage
+  - SyncStatus, ReconciliationSummary, ReconciliationLog
+  - Updated constructors, getters, setters, member variables
+
+- ✅ **2 Repositories Updated** - Changed JSON parsing from `asInt()` to `asString()`
+  - SyncStatusRepository: Lines 92, 190
+  - ReconciliationRepository: 11 changes across 6 methods
+  - Removed 5 unnecessary `std::to_string()` calls
+
+- ✅ **1 Service Updated** - Changed method signatures to accept UUID strings
+  - ReconciliationService: 3 methods (logReconciliation, complete, getDetails)
+  - Parameter type: `int` → `const std::string&`
+
+- ✅ **1 Controller Updated** - Removed std::stoi conversion
+  - main.cpp: Direct UUID string passing to service layer
+
+**Database Schema Alignment** (3 migrations applied):
+- ✅ Added `db_stored_in_ldap_count`, `ldap_total_entries` columns
+- ✅ Split `country_stats` into `db_country_stats` and `ldap_country_stats`
+- ✅ Added `status`, `error_message`, `check_duration_ms` columns
+
+#### Implementation Details
+
+**Domain Model Pattern**:
+```cpp
+// ❌ BEFORE: Integer IDs
+class SyncStatus {
+    int id_ = 0;
+public:
+    SyncStatus(int id, ...);
+    int getId() const { return id_; }
+};
+
+// ✅ AFTER: UUID Strings
+class SyncStatus {
+    std::string id_;
+public:
+    SyncStatus(const std::string& id, ...);
+    std::string getId() const { return id_; }
+};
+```
+
+**Repository Pattern**:
+```cpp
+// ❌ BEFORE: asInt() for integer parsing
+int id = result[0]["id"].asInt();
+syncStatus.setId(id);
+
+// ✅ AFTER: asString() for UUID parsing
+std::string id = result[0]["id"].asString();
+syncStatus.setId(id);
+```
+
+**Parameter Cleanup**:
+```cpp
+// ❌ BEFORE: Unnecessary conversion
+params.push_back(std::to_string(summary.getId()));
+
+// ✅ AFTER: Direct string usage
+params.push_back(summary.getId());
+```
+
+#### Code Metrics
+
+| Metric | Count |
+|--------|-------|
+| **Files Modified** | 8 + 3 migrations |
+| **asInt() → asString()** | 11 changes |
+| **std::to_string() Removed** | 5 locations |
+| **Method Signatures Updated** | 9 methods |
+| **Build Errors Fixed** | 4 iterations |
+
+#### Verification Results
+
+**Build Success**: ✅
+```bash
+docker compose -f docker/docker-compose.dev.yaml build --no-cache pkd-relay-dev
+# Exit code: 0, Compilation errors: 0
+```
+
+**API Test**: ✅
+```bash
+curl -s http://localhost:18083/api/sync/status | jq -r '.id'
+# Output: 0e5707bb-0f9b-4ef8-9ebe-07f2c65ac2b3
+```
+
+**Service Health**: ✅
+- Container: `icao-pkd-relay-dev` running
+- API endpoint: Responding with valid UUID
+- All sync statistics: Correct values
+
+#### Benefits Achieved
+
+**1. Database Consistency** ✅
+- PostgreSQL UUID columns match C++ std::string fields
+- Eliminates "Value is not convertible to Int" errors
+- Future-proof for distributed systems (UUID uniqueness)
+
+**2. Type Safety** ✅
+- Compiler catches type mismatches at compile time
+- No runtime std::stoi() conversion errors
+- Clear intent: `const std::string&` indicates UUID
+
+**3. Code Clarity** ✅
+- Direct UUID string handling, no conversions
+- Consistent pattern across all layers
+- Eliminates confusion between int IDs and UUID strings
+
+**4. Oracle Migration Ready** ✅
+- UUID support works with PostgreSQL and Oracle
+- PostgreSQL: `UUID` type → `asString()`
+- Oracle: `VARCHAR2(36)` → `asString()`
+- No code changes needed when switching databases
+
+#### Files Modified
+
+**Domain Models** (3 files):
+- `services/pkd-relay-service/src/domain/models/sync_status.h`
+- `services/pkd-relay-service/src/domain/models/reconciliation_summary.h`
+- `services/pkd-relay-service/src/domain/models/reconciliation_log.h`
+
+**Repositories** (3 files):
+- `services/pkd-relay-service/src/repositories/sync_status_repository.cpp`
+- `services/pkd-relay-service/src/repositories/reconciliation_repository.h`
+- `services/pkd-relay-service/src/repositories/reconciliation_repository.cpp`
+
+**Services** (2 files):
+- `services/pkd-relay-service/src/services/reconciliation_service.h`
+- `services/pkd-relay-service/src/services/reconciliation_service.cpp`
+
+**Controllers** (1 file):
+- `services/pkd-relay-service/src/main.cpp`
+
+**Database Migrations** (3 files):
+- `docker/db/relay-migrations/01-add-stored-count-columns.sql`
+- `docker/db/relay-migrations/02-add-country-stats-columns.sql`
+- `docker/db/relay-migrations/03-add-status-columns.sql`
+
+**Documentation** (1 file):
+- `docs/PHASE_5.2_PKD_RELAY_UUID_MIGRATION_COMPLETION.md` - Complete implementation report
+
+#### Lessons Learned
+
+1. **Database Schema First**: Always align code with actual database schema
+2. **Incremental Testing**: Test each layer incrementally to catch cascading errors
+3. **std::to_string() Anti-pattern**: Verify variable type before applying conversions
+4. **Method Signature Propagation**: Update all method signatures across layers
+
+#### Deferred Work
+
+**sync_status_id Field**: ReconciliationSummary still has `std::optional<int>` for foreign key reference. Deferred to Phase 5.3 as non-critical.
+
+#### Next Steps
+
+**Phase 5.3: PA Service UUID Migration** (Planned)
+- Apply same UUID pattern to PaVerificationRepository and DataGroupRepository
+- Estimated effort: 2-3 hours
+
+**Phase 5.4: PKD Management UUID Migration** (Planned)
+- Apply UUID pattern to all 5 repositories (Upload, Certificate, Validation, Audit, Statistics)
+- Estimated effort: 4-5 hours
+
+#### Related Documentation
+
+- [PHASE_5.2_PKD_RELAY_UUID_MIGRATION_COMPLETION.md](docs/PHASE_5.2_PKD_RELAY_UUID_MIGRATION_COMPLETION.md) - Complete implementation report
+
+---
 
 ### v2.5.0-dev (2026-02-04) - Oracle Database Migration Phase 1 Complete 🚧
 

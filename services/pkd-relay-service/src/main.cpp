@@ -49,6 +49,7 @@
 // Repository Pattern (Phase 4.4: Factory Pattern with Oracle support)
 #include "db_connection_pool.h"
 #include "db_connection_pool_factory.h"  // Phase 4.4: Factory Pattern (includes interface)
+#include "i_query_executor.h"            // Phase 5.3: Query Executor Factory
 #include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
 #include "repositories/sync_status_repository.h"
 #include "repositories/certificate_repository.h"
@@ -66,9 +67,10 @@ using namespace icao::relay;
 Config g_config;
 
 // =============================================================================
-// Repository Pattern - Global Service Instances (Phase 4.4: Factory Pattern)
+// Repository Pattern - Global Service Instances (Phase 5.2: Query Executor Pattern)
 // =============================================================================
 std::shared_ptr<common::IDbConnectionPool> g_dbPool;
+std::unique_ptr<common::IQueryExecutor> g_queryExecutor;  // Phase 5.3: Query Executor (PostgreSQL/Oracle)
 std::shared_ptr<common::LdapConnectionPool> g_ldapPool;  // v2.4.3: LDAP connection pool
 
 std::shared_ptr<repositories::SyncStatusRepository> g_syncStatusRepo;
@@ -1332,10 +1334,8 @@ void handleReconciliationDetails(const HttpRequestPtr& req, std::function<void(c
             return;
         }
 
-        int reconciliationId = std::stoi(reconciliationIdStr);
-
-        // Call service to get details
-        Json::Value result = g_reconciliationService->getReconciliationDetails(reconciliationId);
+        // Call service to get details (reconciliationId is UUID string)
+        Json::Value result = g_reconciliationService->getReconciliationDetails(reconciliationIdStr);
 
         auto resp = HttpResponse::newHttpJsonResponse(result);
         if (!result.get("success", true).asBool()) {
@@ -1639,6 +1639,10 @@ void initializeServices() {
         std::string dbType = g_dbPool->getDatabaseType();
         spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
+        // Phase 5.3: Create Query Executor using Factory Pattern (supports PostgreSQL and Oracle)
+        g_queryExecutor = common::createQueryExecutor(g_dbPool.get());
+        spdlog::info("✅ {} Query Executor created", dbType == "postgres" ? "PostgreSQL" : "Oracle");
+
         // v2.4.3: Initialize LDAP Connection Pool
         spdlog::info("Creating LDAP connection pool (min=2, max=10)...");
         std::string ldapUri = "ldap://" + g_config.ldapWriteHost + ":" +
@@ -1653,12 +1657,12 @@ void initializeServices() {
         );
         spdlog::info("✅ LDAP connection pool initialized ({})", ldapUri);
 
-        // Initialize Repositories with shared connection pool
-        spdlog::info("Creating repository instances with connection pool...");
-        g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(g_dbPool);
-        g_certificateRepo = std::make_shared<repositories::CertificateRepository>(g_dbPool);
-        g_crlRepo = std::make_shared<repositories::CrlRepository>(g_dbPool);
-        g_reconciliationRepo = std::make_shared<repositories::ReconciliationRepository>(g_dbPool);
+        // Phase 5.3: Initialize Repositories with Query Executor (database-agnostic)
+        spdlog::info("Creating repository instances with Query Executor...");
+        g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(g_queryExecutor.get());
+        g_certificateRepo = std::make_shared<repositories::CertificateRepository>(g_queryExecutor.get());
+        g_crlRepo = std::make_shared<repositories::CrlRepository>(g_queryExecutor.get());
+        g_reconciliationRepo = std::make_shared<repositories::ReconciliationRepository>(g_queryExecutor.get());
 
         // Initialize Services with dependency injection
         spdlog::info("Creating service instances with repository dependencies...");
@@ -1674,7 +1678,7 @@ void initializeServices() {
             g_crlRepo
         );
 
-        spdlog::info("✅ Repository Pattern services initialized successfully");
+        spdlog::info("✅ Repository Pattern initialization complete - Ready for Oracle migration");
 
     } catch (const std::exception& e) {
         spdlog::critical("Failed to initialize services: {}", e.what());
@@ -1694,6 +1698,9 @@ void shutdownServices() {
     g_crlRepo.reset();
     g_certificateRepo.reset();
     g_syncStatusRepo.reset();
+
+    // Phase 5.3: Query Executor will be automatically cleaned up by unique_ptr
+    g_queryExecutor.reset();
 
     // Database connection pool will be automatically cleaned up
     g_dbPool.reset();

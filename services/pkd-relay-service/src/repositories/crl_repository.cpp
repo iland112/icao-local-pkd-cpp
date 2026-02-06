@@ -6,36 +6,23 @@
 
 namespace icao::relay::repositories {
 
-CrlRepository::CrlRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
-    : dbPool_(dbPool) {
+CrlRepository::CrlRepository(common::IQueryExecutor* executor)
+    : queryExecutor_(executor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("CrlRepository: queryExecutor cannot be nullptr");
+    }
+
+    spdlog::debug("[CrlRepository] Initialized (DB type: {})",
+        queryExecutor_->getDatabaseType());
 }
 
 int CrlRepository::countAll() {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CrlRepository] Failed to acquire database connection");
-            return 0;
-        }
-
         const char* query = "SELECT COUNT(*) FROM crl";
 
-        PGresult* res = PQexec(conn.get(), query);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CrlRepository] Failed to count CRLs: {}", error);
-            return 0;
-        }
-
-        int count = 0;
-        if (PQntuples(res) > 0) {
-            count = std::atoi(PQgetvalue(res, 0, 0));
-        }
-
-        PQclear(res);
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[CrlRepository] Exception in countAll(): {}", e.what());
@@ -47,12 +34,6 @@ std::vector<domain::Crl> CrlRepository::findNotInLdap(int limit) {
     std::vector<domain::Crl> results;
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CrlRepository] Failed to acquire database connection");
-            return results;
-        }
-
         const char* query =
             "SELECT id, fingerprint_sha256, issuer_dn, country_code, "
             "this_update, next_update, stored_in_ldap, crl_data "
@@ -61,30 +42,15 @@ std::vector<domain::Crl> CrlRepository::findNotInLdap(int limit) {
             "ORDER BY this_update ASC "
             "LIMIT $1";
 
-        std::string limitStr = std::to_string(limit);
+        std::vector<std::string> params = {std::to_string(limit)};
 
-        const char* paramValues[1] = {
-            limitStr.c_str()
-        };
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 1, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CrlRepository] Failed to find CRLs not in LDAP: {}", error);
-            return results;
+        for (const auto& row : result) {
+            results.push_back(jsonToCrl(row));
         }
 
-        int rowCount = PQntuples(res);
-        for (int i = 0; i < rowCount; i++) {
-            results.push_back(resultToCrl(res, i));
-        }
-
-        PQclear(res);
+        spdlog::debug("[CrlRepository] Found {} CRLs not in LDAP", results.size());
         return results;
 
     } catch (const std::exception& e) {
@@ -99,47 +65,27 @@ int CrlRepository::markStoredInLdap(const std::vector<std::string>& fingerprints
     }
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CrlRepository] Failed to acquire database connection");
-            return 0;
-        }
-
         // Build parameterized query with IN clause
         // UPDATE crl SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN ($1, $2, ...)
         std::ostringstream queryBuilder;
         queryBuilder << "UPDATE crl SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN (";
 
-        std::vector<const char*> paramValues;
         for (size_t i = 0; i < fingerprints.size(); i++) {
             if (i > 0) {
                 queryBuilder << ", ";
             }
             queryBuilder << "$" << (i + 1);
-            paramValues.push_back(fingerprints[i].c_str());
         }
         queryBuilder << ")";
 
         std::string query = queryBuilder.str();
 
-        PGresult* res = PQexecParams(
-            conn.get(), query.c_str(),
-            paramValues.size(), nullptr,
-            paramValues.data(),
-            nullptr, nullptr, 0
-        );
+        // Convert fingerprints to std::vector<std::string> for Query Executor
+        std::vector<std::string> params(fingerprints.begin(), fingerprints.end());
 
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CrlRepository] Failed to mark CRLs stored in LDAP: {}", error);
-            return 0;
-        }
+        int count = queryExecutor_->executeCommand(query, params);
 
-        char* rowsAffected = PQcmdTuples(res);
-        int count = std::atoi(rowsAffected);
-
-        PQclear(res);
+        spdlog::debug("[CrlRepository] Marked {} CRLs as stored in LDAP", count);
         return count;
 
     } catch (const std::exception& e) {
@@ -150,36 +96,13 @@ int CrlRepository::markStoredInLdap(const std::vector<std::string>& fingerprints
 
 bool CrlRepository::markStoredInLdap(const std::string& fingerprint) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CrlRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query =
             "UPDATE crl SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
 
-        const char* paramValues[1] = {
-            fingerprint.c_str()
-        };
+        std::vector<std::string> params = {fingerprint};
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 1, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CrlRepository] Failed to mark CRL stored in LDAP: {}", error);
-            return false;
-        }
-
-        char* rowsAffected = PQcmdTuples(res);
-        bool success = (std::atoi(rowsAffected) > 0);
-
-        PQclear(res);
-        return success;
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
+        return (rowsAffected > 0);
 
     } catch (const std::exception& e) {
         spdlog::error("[CrlRepository] Exception in markStoredInLdap(single): {}", e.what());
@@ -187,44 +110,53 @@ bool CrlRepository::markStoredInLdap(const std::string& fingerprint) {
     }
 }
 
-domain::Crl CrlRepository::resultToCrl(PGresult* res, int row) {
-    // Parse all fields from result set
-    std::string id = PQgetvalue(res, row, 0);
-    std::string fingerprintSha256 = PQgetvalue(res, row, 1);
-    std::string issuerDn = PQgetvalue(res, row, 2);
-    std::string countryCode = PQgetvalue(res, row, 3);
+domain::Crl CrlRepository::jsonToCrl(const Json::Value& row) {
+    // Parse string fields
+    std::string id = row["id"].asString();
+    std::string fingerprintSha256 = row["fingerprint_sha256"].asString();
+    std::string issuerDn = row["issuer_dn"].asString();
+    std::string countryCode = row["country_code"].asString();
 
     // Parse timestamps
-    const char* thisUpdateStr = PQgetvalue(res, row, 4);
-    const char* nextUpdateStr = PQgetvalue(res, row, 5);
+    std::string thisUpdateStr = row["this_update"].asString();
+    std::string nextUpdateStr = row["next_update"].asString();
 
     std::tm tm = {};
     auto thisUpdate = std::chrono::system_clock::now();
-    if (strptime(thisUpdateStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+    if (strptime(thisUpdateStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
         thisUpdate = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
     tm = {};
     auto nextUpdate = std::chrono::system_clock::now();
-    if (strptime(nextUpdateStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+    if (strptime(nextUpdateStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
         nextUpdate = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
-    bool storedInLdap = (strcmp(PQgetvalue(res, row, 6), "t") == 0);
+    // Parse boolean field
+    bool storedInLdap = false;
+    if (row["stored_in_ldap"].isBool()) {
+        storedInLdap = row["stored_in_ldap"].asBool();
+    } else if (row["stored_in_ldap"].isString()) {
+        std::string val = row["stored_in_ldap"].asString();
+        storedInLdap = (val == "t" || val == "true" || val == "1");
+    }
 
     // Parse binary CRL data (bytea format: \x followed by hex)
     std::vector<unsigned char> crlData;
-    const char* crlDataHex = PQgetvalue(res, row, 7);
-    if (crlDataHex && strlen(crlDataHex) > 2 && crlDataHex[0] == '\\' && crlDataHex[1] == 'x') {
-        // Skip '\x' prefix and parse hex
-        const char* hexData = crlDataHex + 2;
-        size_t hexLen = strlen(hexData);
-        crlData.reserve(hexLen / 2);
+    if (!row["crl_data"].isNull() && row["crl_data"].isString()) {
+        std::string crlDataHex = row["crl_data"].asString();
+        if (crlDataHex.length() > 2 && crlDataHex[0] == '\\' && crlDataHex[1] == 'x') {
+            // Skip '\x' prefix and parse hex
+            const char* hexData = crlDataHex.c_str() + 2;
+            size_t hexLen = crlDataHex.length() - 2;
+            crlData.reserve(hexLen / 2);
 
-        for (size_t i = 0; i < hexLen; i += 2) {
-            char byteStr[3] = {hexData[i], hexData[i + 1], '\0'};
-            unsigned char byte = static_cast<unsigned char>(std::strtol(byteStr, nullptr, 16));
-            crlData.push_back(byte);
+            for (size_t i = 0; i < hexLen; i += 2) {
+                char byteStr[3] = {hexData[i], hexData[i + 1], '\0'};
+                unsigned char byte = static_cast<unsigned char>(std::strtol(byteStr, nullptr, 16));
+                crlData.push_back(byte);
+            }
         }
     }
 

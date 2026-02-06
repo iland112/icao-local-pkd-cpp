@@ -19,7 +19,7 @@ public:
     SyncStatus() = default;
 
     SyncStatus(
-        int id,
+        const std::string& id,
         const std::chrono::system_clock::time_point& checked_at,
         int db_csca_count, int ldap_csca_count, int csca_discrepancy,
         int db_mlsc_count, int ldap_mlsc_count, int mlsc_discrepancy,
@@ -56,7 +56,7 @@ public:
     {}
 
     // Getters
-    int getId() const { return id_; }
+    std::string getId() const { return id_; }
     std::chrono::system_clock::time_point getCheckedAt() const { return checked_at_; }
 
     // Database statistics
@@ -93,7 +93,7 @@ public:
     int getCheckDurationMs() const { return check_duration_ms_; }
 
     // Setters
-    void setId(int id) { id_ = id; }
+    void setId(const std::string& id) { id_ = id; }
     void setCheckedAt(const std::chrono::system_clock::time_point& checked_at) {
         checked_at_ = checked_at;
     }
@@ -108,7 +108,7 @@ public:
     Json::Value toJson() const;
 
 private:
-    int id_ = 0;
+    std::string id_;
     std::chrono::system_clock::time_point checked_at_;
 
     // Database counts

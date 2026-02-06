@@ -2,11 +2,19 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <cstring>
+#include <sstream>
 
 namespace icao::relay::repositories {
 
-ReconciliationRepository::ReconciliationRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
-    : dbPool_(dbPool) {
+ReconciliationRepository::ReconciliationRepository(common::IQueryExecutor* executor)
+    : queryExecutor_(executor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("ReconciliationRepository: queryExecutor cannot be nullptr");
+    }
+
+    spdlog::debug("[ReconciliationRepository] Initialized (DB type: {})",
+        queryExecutor_->getDatabaseType());
 }
 
 // ========================================================================
@@ -15,12 +23,6 @@ ReconciliationRepository::ReconciliationRepository(std::shared_ptr<common::IDbCo
 
 bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summary) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query =
             "INSERT INTO reconciliation_summary ("
             "triggered_by, triggered_at, status, dry_run, "
@@ -34,57 +36,35 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
             "$11, $12, $13, $14"
             ") RETURNING id, triggered_at";
 
-        const char* dryRun = summary.isDryRun() ? "true" : "false";
-
-        std::string successCount = std::to_string(summary.getSuccessCount());
-        std::string failedCount = std::to_string(summary.getFailedCount());
-        std::string cscaAdded = std::to_string(summary.getCscaAdded());
-        std::string dscAdded = std::to_string(summary.getDscAdded());
-        std::string dscNcAdded = std::to_string(summary.getDscNcAdded());
-        std::string crlAdded = std::to_string(summary.getCrlAdded());
-        std::string totalAdded = std::to_string(summary.getTotalAdded());
-        std::string cscaDeleted = std::to_string(summary.getCscaDeleted());
-        std::string dscDeleted = std::to_string(summary.getDscDeleted());
-        std::string dscNcDeleted = std::to_string(summary.getDscNcDeleted());
-        std::string crlDeleted = std::to_string(summary.getCrlDeleted());
-
-        const char* paramValues[14] = {
-            summary.getTriggeredBy().c_str(),
-            summary.getStatus().c_str(),
-            dryRun,
-            successCount.c_str(),
-            failedCount.c_str(),
-            cscaAdded.c_str(),
-            dscAdded.c_str(),
-            dscNcAdded.c_str(),
-            crlAdded.c_str(),
-            totalAdded.c_str(),
-            cscaDeleted.c_str(),
-            dscDeleted.c_str(),
-            dscNcDeleted.c_str(),
-            crlDeleted.c_str()
+        std::vector<std::string> params = {
+            summary.getTriggeredBy(),                           // $1
+            summary.getStatus(),                                 // $2
+            summary.isDryRun() ? "true" : "false",              // $3
+            std::to_string(summary.getSuccessCount()),          // $4
+            std::to_string(summary.getFailedCount()),           // $5
+            std::to_string(summary.getCscaAdded()),             // $6
+            std::to_string(summary.getDscAdded()),              // $7
+            std::to_string(summary.getDscNcAdded()),            // $8
+            std::to_string(summary.getCrlAdded()),              // $9
+            std::to_string(summary.getTotalAdded()),            // $10
+            std::to_string(summary.getCscaDeleted()),           // $11
+            std::to_string(summary.getDscDeleted()),            // $12
+            std::to_string(summary.getDscNcDeleted()),          // $13
+            std::to_string(summary.getCrlDeleted())             // $14
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 14, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to create summary: {}", error);
+        if (result.empty()) {
+            spdlog::error("[ReconciliationRepository] Insert returned no rows");
             return false;
         }
 
         // Update domain object with generated id
-        // Note: triggered_at is already set in the constructor and doesn't need updating
-        if (PQntuples(res) > 0) {
-            int id = std::atoi(PQgetvalue(res, 0, 0));
-            summary.setId(id);
-        }
+        std::string id = result[0]["id"].asString();
+        summary.setId(id);
 
-        PQclear(res);
+        spdlog::info("[ReconciliationRepository] Reconciliation summary created with ID: {}", id);
         return true;
 
     } catch (const std::exception& e) {
@@ -95,12 +75,6 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
 
 bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary& summary) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query =
             "UPDATE reconciliation_summary SET "
             "status = $1, "
@@ -119,7 +93,7 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
             "WHERE id = $14";
 
         // Format completed_at timestamp
-        std::string completedAtStr = "NULL";
+        std::string completedAtStr = "";
         if (summary.getCompletedAt().has_value()) {
             auto tp = summary.getCompletedAt().value();
             std::time_t t = std::chrono::system_clock::to_time_t(tp);
@@ -129,50 +103,32 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
             completedAtStr = buf;
         }
 
-        std::string successCount = std::to_string(summary.getSuccessCount());
-        std::string failedCount = std::to_string(summary.getFailedCount());
-        std::string cscaAdded = std::to_string(summary.getCscaAdded());
-        std::string dscAdded = std::to_string(summary.getDscAdded());
-        std::string dscNcAdded = std::to_string(summary.getDscNcAdded());
-        std::string crlAdded = std::to_string(summary.getCrlAdded());
-        std::string totalAdded = std::to_string(summary.getTotalAdded());
-        std::string cscaDeleted = std::to_string(summary.getCscaDeleted());
-        std::string dscDeleted = std::to_string(summary.getDscDeleted());
-        std::string dscNcDeleted = std::to_string(summary.getDscNcDeleted());
-        std::string crlDeleted = std::to_string(summary.getCrlDeleted());
-        std::string id = std::to_string(summary.getId());
-
-        const char* paramValues[14] = {
-            summary.getStatus().c_str(),
-            completedAtStr == "NULL" ? nullptr : completedAtStr.c_str(),
-            successCount.c_str(),
-            failedCount.c_str(),
-            cscaAdded.c_str(),
-            dscAdded.c_str(),
-            dscNcAdded.c_str(),
-            crlAdded.c_str(),
-            totalAdded.c_str(),
-            cscaDeleted.c_str(),
-            dscDeleted.c_str(),
-            dscNcDeleted.c_str(),
-            crlDeleted.c_str(),
-            id.c_str()
+        std::vector<std::string> params = {
+            summary.getStatus(),                                // $1
+            completedAtStr,                                     // $2 (empty string for NULL)
+            std::to_string(summary.getSuccessCount()),         // $3
+            std::to_string(summary.getFailedCount()),          // $4
+            std::to_string(summary.getCscaAdded()),            // $5
+            std::to_string(summary.getDscAdded()),             // $6
+            std::to_string(summary.getDscNcAdded()),           // $7
+            std::to_string(summary.getCrlAdded()),             // $8
+            std::to_string(summary.getTotalAdded()),           // $9
+            std::to_string(summary.getCscaDeleted()),          // $10
+            std::to_string(summary.getDscDeleted()),           // $11
+            std::to_string(summary.getDscNcDeleted()),         // $12
+            std::to_string(summary.getCrlDeleted()),           // $13
+            summary.getId()                                     // $14
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 14, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
 
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to update summary: {}", error);
-            return false;
+        if (rowsAffected > 0) {
+            spdlog::debug("[ReconciliationRepository] Updated reconciliation summary ID: {}", summary.getId());
+            return true;
         }
 
-        PQclear(res);
-        return true;
+        spdlog::warn("[ReconciliationRepository] Summary not found for update: {}", summary.getId());
+        return false;
 
     } catch (const std::exception& e) {
         spdlog::error("[ReconciliationRepository] Exception in updateSummary(): {}", e.what());
@@ -180,14 +136,8 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
     }
 }
 
-std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSummaryById(int id) {
+std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSummaryById(const std::string& id) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return std::nullopt;
-        }
-
         const char* query =
             "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
@@ -197,32 +147,15 @@ std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSumma
             "FROM reconciliation_summary "
             "WHERE id = $1";
 
-        std::string idStr = std::to_string(id);
+        std::vector<std::string> params = {id};
 
-        const char* paramValues[1] = {
-            idStr.c_str()
-        };
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 1, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to find summary by id: {}", error);
+        if (result.empty()) {
             return std::nullopt;
         }
 
-        if (PQntuples(res) == 0) {
-            PQclear(res);
-            return std::nullopt;
-        }
-
-        auto summary = resultToSummary(res, 0);
-        PQclear(res);
-        return summary;
+        return jsonToSummary(result[0]);
 
     } catch (const std::exception& e) {
         spdlog::error("[ReconciliationRepository] Exception in findSummaryById(): {}", e.what());
@@ -234,12 +167,6 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
     std::vector<domain::ReconciliationSummary> results;
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return results;
-        }
-
         const char* query =
             "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
@@ -250,32 +177,18 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
             "ORDER BY triggered_at DESC "
             "LIMIT $1 OFFSET $2";
 
-        std::string limitStr = std::to_string(limit);
-        std::string offsetStr = std::to_string(offset);
-
-        const char* paramValues[2] = {
-            limitStr.c_str(),
-            offsetStr.c_str()
+        std::vector<std::string> params = {
+            std::to_string(limit),
+            std::to_string(offset)
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 2, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to find all summaries: {}", error);
-            return results;
+        for (const auto& row : result) {
+            results.push_back(jsonToSummary(row));
         }
 
-        int rowCount = PQntuples(res);
-        for (int i = 0; i < rowCount; i++) {
-            results.push_back(resultToSummary(res, i));
-        }
-
-        PQclear(res);
+        spdlog::debug("[ReconciliationRepository] Found {} summaries", results.size());
         return results;
 
     } catch (const std::exception& e) {
@@ -286,30 +199,10 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
 
 int ReconciliationRepository::countSummaries() {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query = "SELECT COUNT(*) FROM reconciliation_summary";
 
-        PGresult* res = PQexec(conn.get(), query);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to count summaries: {}", error);
-            return 0;
-        }
-
-        int count = 0;
-        if (PQntuples(res) > 0) {
-            count = std::atoi(PQgetvalue(res, 0, 0));
-        }
-
-        PQclear(res);
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[ReconciliationRepository] Exception in countSummaries(): {}", e.what());
@@ -323,12 +216,6 @@ int ReconciliationRepository::countSummaries() {
 
 bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query =
             "INSERT INTO reconciliation_log ("
             "reconciliation_id, created_at, cert_fingerprint, cert_type, country_code, "
@@ -338,45 +225,28 @@ bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
             "$5, $6, $7"
             ") RETURNING id, created_at";
 
-        std::string reconciliationId = std::to_string(log.getReconciliationId());
-
-        const char* paramValues[7] = {
-            reconciliationId.c_str(),
-            log.getCertFingerprint().c_str(),
-            log.getCertType().c_str(),
-            log.getCountryCode().c_str(),
-            log.getAction().c_str(),
-            log.getResult().c_str(),
-            log.getErrorMessage().has_value() ? log.getErrorMessage().value().c_str() : nullptr
+        std::vector<std::string> params = {
+            log.getReconciliationId(),                      // $1
+            log.getCertFingerprint(),                       // $2
+            log.getCertType(),                              // $3
+            log.getCountryCode(),                           // $4
+            log.getAction(),                                // $5
+            log.getResult(),                                // $6
+            log.getErrorMessage().value_or("")              // $7 (empty string for NULL)
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 7, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to create log: {}", error);
+        if (result.empty()) {
+            spdlog::error("[ReconciliationRepository] Insert returned no rows");
             return false;
         }
 
-        // Update domain object with generated id and timestamp
-        if (PQntuples(res) > 0) {
-            int id = std::atoi(PQgetvalue(res, 0, 0));
-            log.setId(id);
+        // Update domain object with generated id
+        std::string id = result[0]["id"].asString();
+        log.setId(id);
 
-            const char* createdAtStr = PQgetvalue(res, 0, 1);
-            std::tm tm = {};
-            if (strptime(createdAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
-                auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-                // Note: ReconciliationLog doesn't have setCreatedAt in our model
-                // If needed, add it to the model
-            }
-        }
-
-        PQclear(res);
+        spdlog::debug("[ReconciliationRepository] Reconciliation log created with ID: {}", id);
         return true;
 
     } catch (const std::exception& e) {
@@ -386,19 +256,13 @@ bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
 }
 
 std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByReconciliationId(
-    int reconciliationId,
+    const std::string& reconciliationId,
     int limit,
     int offset
 ) {
     std::vector<domain::ReconciliationLog> results;
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return results;
-        }
-
         const char* query =
             "SELECT id, reconciliation_id, created_at, cert_fingerprint, cert_type, "
             "country_code, action, result, error_message "
@@ -407,34 +271,20 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
             "ORDER BY created_at ASC "
             "LIMIT $2 OFFSET $3";
 
-        std::string reconciliationIdStr = std::to_string(reconciliationId);
-        std::string limitStr = std::to_string(limit);
-        std::string offsetStr = std::to_string(offset);
-
-        const char* paramValues[3] = {
-            reconciliationIdStr.c_str(),
-            limitStr.c_str(),
-            offsetStr.c_str()
+        std::vector<std::string> params = {
+            reconciliationId,
+            std::to_string(limit),
+            std::to_string(offset)
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 3, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to find logs: {}", error);
-            return results;
+        for (const auto& row : result) {
+            results.push_back(jsonToLog(row));
         }
 
-        int rowCount = PQntuples(res);
-        for (int i = 0; i < rowCount; i++) {
-            results.push_back(resultToLog(res, i));
-        }
-
-        PQclear(res);
+        spdlog::debug("[ReconciliationRepository] Found {} logs for reconciliation ID: {}",
+            results.size(), reconciliationId);
         return results;
 
     } catch (const std::exception& e) {
@@ -443,41 +293,14 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
     }
 }
 
-int ReconciliationRepository::countLogsByReconciliationId(int reconciliationId) {
+int ReconciliationRepository::countLogsByReconciliationId(const std::string& reconciliationId) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[ReconciliationRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query = "SELECT COUNT(*) FROM reconciliation_log WHERE reconciliation_id = $1";
 
-        std::string reconciliationIdStr = std::to_string(reconciliationId);
+        std::vector<std::string> params = {reconciliationId};
 
-        const char* paramValues[1] = {
-            reconciliationIdStr.c_str()
-        };
-
-        PGresult* res = PQexecParams(
-            conn.get(), query, 1, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[ReconciliationRepository] Failed to count logs: {}", error);
-            return 0;
-        }
-
-        int count = 0;
-        if (PQntuples(res) > 0) {
-            count = std::atoi(PQgetvalue(res, 0, 0));
-        }
-
-        PQclear(res);
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[ReconciliationRepository] Exception in countLogsByReconciliationId(): {}", e.what());
@@ -489,61 +312,68 @@ int ReconciliationRepository::countLogsByReconciliationId(int reconciliationId) 
 // Helper Methods
 // ========================================================================
 
-domain::ReconciliationSummary ReconciliationRepository::resultToSummary(PGresult* res, int row) {
-    // Parse all fields from result set
-    int id = std::atoi(PQgetvalue(res, row, 0));
-    std::string triggeredBy = PQgetvalue(res, row, 1);
+domain::ReconciliationSummary ReconciliationRepository::jsonToSummary(const Json::Value& row) {
+    // Parse fields
+    std::string id = row["id"].asString();
+    std::string triggeredBy = row["triggered_by"].asString();
+    std::string status = row["status"].asString();
+
+    // Parse boolean field
+    bool dryRun = false;
+    if (row["dry_run"].isBool()) {
+        dryRun = row["dry_run"].asBool();
+    } else if (row["dry_run"].isString()) {
+        std::string val = row["dry_run"].asString();
+        dryRun = (val == "t" || val == "true" || val == "1");
+    }
 
     // Parse timestamps
-    const char* triggeredAtStr = PQgetvalue(res, row, 2);
+    std::string triggeredAtStr = row["triggered_at"].asString();
     std::tm tm = {};
     auto triggeredAt = std::chrono::system_clock::now();
-    if (strptime(triggeredAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+    if (strptime(triggeredAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
         triggeredAt = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
     std::optional<std::chrono::system_clock::time_point> completedAt = std::nullopt;
-    if (!PQgetisnull(res, row, 3)) {
-        const char* completedAtStr = PQgetvalue(res, row, 3);
+    if (!row["completed_at"].isNull() && row["completed_at"].isString()) {
+        std::string completedAtStr = row["completed_at"].asString();
         tm = {};
-        if (strptime(completedAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+        if (strptime(completedAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
             completedAt = std::chrono::system_clock::from_time_t(std::mktime(&tm));
         }
     }
 
-    std::string status = PQgetvalue(res, row, 4);
-    bool dryRun = (strcmp(PQgetvalue(res, row, 5), "t") == 0);
-
-    int successCount = std::atoi(PQgetvalue(res, row, 6));
-    int failedCount = std::atoi(PQgetvalue(res, row, 7));
-    int cscaAdded = std::atoi(PQgetvalue(res, row, 8));
-    int dscAdded = std::atoi(PQgetvalue(res, row, 9));
-    int dscNcAdded = std::atoi(PQgetvalue(res, row, 10));
-    int crlAdded = std::atoi(PQgetvalue(res, row, 11));
-    int totalAdded = std::atoi(PQgetvalue(res, row, 12));
-    int cscaDeleted = std::atoi(PQgetvalue(res, row, 13));
-    int dscDeleted = std::atoi(PQgetvalue(res, row, 14));
-    int dscNcDeleted = std::atoi(PQgetvalue(res, row, 15));
-    int crlDeleted = std::atoi(PQgetvalue(res, row, 16));
-
-    int durationMs = std::atoi(PQgetvalue(res, row, 17));
+    // Parse count fields
+    int successCount = row["success_count"].asInt();
+    int failedCount = row["failed_count"].asInt();
+    int cscaAdded = row["csca_added"].asInt();
+    int dscAdded = row["dsc_added"].asInt();
+    int dscNcAdded = row["dsc_nc_added"].asInt();
+    int crlAdded = row["crl_added"].asInt();
+    int totalAdded = row["total_added"].asInt();
+    int cscaDeleted = row["csca_deleted"].asInt();
+    int dscDeleted = row["dsc_deleted"].asInt();
+    int dscNcDeleted = row["dsc_nc_deleted"].asInt();
+    int crlDeleted = row["crl_deleted"].asInt();
+    int durationMs = row["duration_ms"].asInt();
 
     // Parse optional error_message
-    std::optional<std::string> errorMessage;
-    if (!PQgetisnull(res, row, 18)) {
-        const char* errorMessageStr = PQgetvalue(res, row, 18);
-        if (errorMessageStr && strlen(errorMessageStr) > 0) {
-            errorMessage = std::string(errorMessageStr);
+    std::optional<std::string> errorMessage = std::nullopt;
+    if (!row["error_message"].isNull() && row["error_message"].isString()) {
+        std::string msg = row["error_message"].asString();
+        if (!msg.empty()) {
+            errorMessage = msg;
         }
     }
 
     // Parse optional sync_status_id
-    std::optional<int> syncStatusId;
-    if (!PQgetisnull(res, row, 19)) {
-        syncStatusId = std::atoi(PQgetvalue(res, row, 19));
+    std::optional<int> syncStatusId = std::nullopt;
+    if (!row["sync_status_id"].isNull()) {
+        syncStatusId = row["sync_status_id"].asInt();
     }
 
-    // Construct and return domain object using constructor
+    // Construct and return domain object
     return domain::ReconciliationSummary(
         id, triggeredBy, triggeredAt, completedAt,
         status, dryRun,
@@ -557,29 +387,36 @@ domain::ReconciliationSummary ReconciliationRepository::resultToSummary(PGresult
     );
 }
 
-domain::ReconciliationLog ReconciliationRepository::resultToLog(PGresult* res, int row) {
-    int id = std::atoi(PQgetvalue(res, row, 0));
-    int reconciliationId = std::atoi(PQgetvalue(res, row, 1));
+domain::ReconciliationLog ReconciliationRepository::jsonToLog(const Json::Value& row) {
+    // Parse fields
+    std::string id = row["id"].asString();
+    std::string reconciliationId = row["reconciliation_id"].asString();
 
     // Parse timestamp
-    const char* createdAtStr = PQgetvalue(res, row, 2);
+    std::string createdAtStr = row["created_at"].asString();
     std::tm tm = {};
     auto createdAt = std::chrono::system_clock::now();
-    if (strptime(createdAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+    if (strptime(createdAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
         createdAt = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
-    std::string certFingerprint = PQgetvalue(res, row, 3);
-    std::string certType = PQgetvalue(res, row, 4);
-    std::string countryCode = PQgetvalue(res, row, 5);
-    std::string action = PQgetvalue(res, row, 6);
-    std::string result = PQgetvalue(res, row, 7);
+    // Parse string fields
+    std::string certFingerprint = row["cert_fingerprint"].asString();
+    std::string certType = row["cert_type"].asString();
+    std::string countryCode = row["country_code"].asString();
+    std::string action = row["action"].asString();
+    std::string result = row["result"].asString();
 
+    // Parse optional error_message
     std::optional<std::string> errorMessage = std::nullopt;
-    if (!PQgetisnull(res, row, 8)) {
-        errorMessage = PQgetvalue(res, row, 8);
+    if (!row["error_message"].isNull() && row["error_message"].isString()) {
+        std::string msg = row["error_message"].asString();
+        if (!msg.empty()) {
+            errorMessage = msg;
+        }
     }
 
+    // Construct and return domain object
     return domain::ReconciliationLog(
         id,
         reconciliationId,

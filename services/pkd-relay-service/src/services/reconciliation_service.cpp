@@ -74,7 +74,7 @@ Json::Value ReconciliationService::startReconciliation(
 }
 
 bool ReconciliationService::logReconciliationOperation(
-    int reconciliationId,
+    const std::string& reconciliationId,
     const std::string& certFingerprint,
     const std::string& certType,
     const std::string& countryCode,
@@ -112,7 +112,7 @@ bool ReconciliationService::logReconciliationOperation(
 }
 
 Json::Value ReconciliationService::completeReconciliation(
-    int reconciliationId,
+    const std::string& reconciliationId,
     const std::string& status,
     const domain::ReconciliationSummary& summary
 ) {
@@ -184,7 +184,7 @@ Json::Value ReconciliationService::getReconciliationHistory(int limit, int offse
 }
 
 Json::Value ReconciliationService::getReconciliationDetails(
-    int reconciliationId,
+    const std::string& reconciliationId,
     int logLimit,
     int logOffset
 ) {

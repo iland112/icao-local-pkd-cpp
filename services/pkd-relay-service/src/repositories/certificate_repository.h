@@ -1,30 +1,31 @@
 #pragma once
 
 #include "../domain/models/certificate.h"
-#include "db_connection_pool.h"
-#include "db_connection_interface.h"  // Phase 4.4: Interface for PostgreSQL/Oracle support
+#include "i_query_executor.h"
 #include <memory>
 #include <vector>
 #include <string>
-#include <libpq-fe.h>
+#include <json/json.h>
 
 namespace icao::relay::repositories {
 
 /**
- * @brief Repository for certificate table operations (reconciliation subset)
+ * @brief Repository for certificate table operations (Database-agnostic)
  *
  * Handles certificate-related database operations for DB-LDAP synchronization.
  * All queries use parameterized statements for SQL injection prevention.
+ * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
  *
- * Thread-safe: Uses DbConnectionPool for concurrent request handling.
+ * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class CertificateRepository {
 public:
     /**
-     * @brief Constructor (Phase 4.4: Supports PostgreSQL and Oracle via interface)
-     * @param dbPool Shared database connection pool (IDbConnectionPool interface)
+     * @brief Constructor with Query Executor injection
+     * @param executor Query Executor (must remain valid during repository lifetime)
+     * @throws std::invalid_argument if executor is nullptr
      */
-    explicit CertificateRepository(std::shared_ptr<common::IDbConnectionPool> dbPool);
+    explicit CertificateRepository(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -71,14 +72,13 @@ public:
 
 private:
     /**
-     * @brief Convert PostgreSQL result row to Certificate domain object
-     * @param res PGresult pointer
-     * @param row Row number in result set
+     * @brief Convert database result row (JSON) to Certificate domain object
+     * @param row Database result row as JSON
      * @return Certificate domain object
      */
-    domain::Certificate resultToCertificate(PGresult* res, int row);
+    domain::Certificate jsonToCertificate(const Json::Value& row);
 
-    std::shared_ptr<common::IDbConnectionPool> dbPool_;  // Phase 4.4: Interface for PostgreSQL/Oracle
+    common::IQueryExecutor* queryExecutor_;  // Not owned - do not free
 };
 
 } // namespace icao::relay::repositories

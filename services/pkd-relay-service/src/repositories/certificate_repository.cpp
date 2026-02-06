@@ -5,44 +5,25 @@
 
 namespace icao::relay::repositories {
 
-CertificateRepository::CertificateRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
-    : dbPool_(dbPool) {
+CertificateRepository::CertificateRepository(common::IQueryExecutor* executor)
+    : queryExecutor_(executor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("CertificateRepository: queryExecutor cannot be nullptr");
+    }
+
+    spdlog::debug("[CertificateRepository] Initialized (DB type: {})",
+        queryExecutor_->getDatabaseType());
 }
 
 int CertificateRepository::countByType(const std::string& certificateType) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CertificateRepository] Failed to acquire database connection");
-            return 0;
-        }
-
         const char* query = "SELECT COUNT(*) FROM certificate WHERE certificate_type = $1";
 
-        const char* paramValues[1] = {
-            certificateType.c_str()
-        };
+        std::vector<std::string> params = {certificateType};
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 1, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CertificateRepository] Failed to count by type '{}': {}",
-                          certificateType, error);
-            return 0;
-        }
-
-        int count = 0;
-        if (PQntuples(res) > 0) {
-            count = std::atoi(PQgetvalue(res, 0, 0));
-        }
-
-        PQclear(res);
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query, params);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Exception in countByType(): {}", e.what());
@@ -57,53 +38,32 @@ std::vector<domain::Certificate> CertificateRepository::findNotInLdap(
     std::vector<domain::Certificate> results;
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CertificateRepository] Failed to acquire database connection");
-            return results;
-        }
-
         std::string query =
             "SELECT id, fingerprint_sha256, certificate_type, country_code, "
             "subject_dn, issuer_dn, stored_in_ldap "
             "FROM certificate "
             "WHERE stored_in_ldap = FALSE";
 
-        std::vector<const char*> paramValues;
+        std::vector<std::string> params;
         int paramIndex = 1;
 
         // Add certificate type filter if provided
         if (!certificateType.empty()) {
             query += " AND certificate_type = $" + std::to_string(paramIndex++);
-            paramValues.push_back(certificateType.c_str());
+            params.push_back(certificateType);
         }
 
         // Add ORDER BY and LIMIT
         query += " ORDER BY created_at ASC LIMIT $" + std::to_string(paramIndex);
+        params.push_back(std::to_string(limit));
 
-        std::string limitStr = std::to_string(limit);
-        paramValues.push_back(limitStr.c_str());
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        PGresult* res = PQexecParams(
-            conn.get(), query.c_str(),
-            paramValues.size(), nullptr,
-            paramValues.data(),
-            nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CertificateRepository] Failed to find not in LDAP: {}", error);
-            return results;
+        for (const auto& row : result) {
+            results.push_back(jsonToCertificate(row));
         }
 
-        int rowCount = PQntuples(res);
-        for (int i = 0; i < rowCount; i++) {
-            results.push_back(resultToCertificate(res, i));
-        }
-
-        PQclear(res);
+        spdlog::debug("[CertificateRepository] Found {} certificates not in LDAP", results.size());
         return results;
 
     } catch (const std::exception& e) {
@@ -118,47 +78,27 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
     }
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CertificateRepository] Failed to acquire database connection");
-            return 0;
-        }
-
         // Build parameterized query with IN clause
         // UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN ($1, $2, ...)
         std::ostringstream queryBuilder;
         queryBuilder << "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN (";
 
-        std::vector<const char*> paramValues;
         for (size_t i = 0; i < fingerprints.size(); i++) {
             if (i > 0) {
                 queryBuilder << ", ";
             }
             queryBuilder << "$" << (i + 1);
-            paramValues.push_back(fingerprints[i].c_str());
         }
         queryBuilder << ")";
 
         std::string query = queryBuilder.str();
 
-        PGresult* res = PQexecParams(
-            conn.get(), query.c_str(),
-            paramValues.size(), nullptr,
-            paramValues.data(),
-            nullptr, nullptr, 0
-        );
+        // Convert fingerprints to std::vector<std::string> for Query Executor
+        std::vector<std::string> params(fingerprints.begin(), fingerprints.end());
 
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CertificateRepository] Failed to mark stored in LDAP: {}", error);
-            return 0;
-        }
+        int count = queryExecutor_->executeCommand(query, params);
 
-        char* rowsAffected = PQcmdTuples(res);
-        int count = std::atoi(rowsAffected);
-
-        PQclear(res);
+        spdlog::debug("[CertificateRepository] Marked {} certificates as stored in LDAP", count);
         return count;
 
     } catch (const std::exception& e) {
@@ -169,36 +109,13 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
 
 bool CertificateRepository::markStoredInLdap(const std::string& fingerprint) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[CertificateRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query =
             "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
 
-        const char* paramValues[1] = {
-            fingerprint.c_str()
-        };
+        std::vector<std::string> params = {fingerprint};
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 1, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
-
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[CertificateRepository] Failed to mark stored in LDAP: {}", error);
-            return false;
-        }
-
-        char* rowsAffected = PQcmdTuples(res);
-        bool success = (std::atoi(rowsAffected) > 0);
-
-        PQclear(res);
-        return success;
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
+        return (rowsAffected > 0);
 
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Exception in markStoredInLdap(single): {}", e.what());
@@ -206,15 +123,23 @@ bool CertificateRepository::markStoredInLdap(const std::string& fingerprint) {
     }
 }
 
-domain::Certificate CertificateRepository::resultToCertificate(PGresult* res, int row) {
-    // Parse all fields from result set
-    std::string id = PQgetvalue(res, row, 0);
-    std::string fingerprintSha256 = PQgetvalue(res, row, 1);
-    std::string certificateType = PQgetvalue(res, row, 2);
-    std::string countryCode = PQgetvalue(res, row, 3);
-    std::string subjectDn = PQgetvalue(res, row, 4);
-    std::string issuerDn = PQgetvalue(res, row, 5);
-    bool storedInLdap = (strcmp(PQgetvalue(res, row, 6), "t") == 0);
+domain::Certificate CertificateRepository::jsonToCertificate(const Json::Value& row) {
+    // Parse fields from JSON row
+    std::string id = row["id"].asString();
+    std::string fingerprintSha256 = row["fingerprint_sha256"].asString();
+    std::string certificateType = row["certificate_type"].asString();
+    std::string countryCode = row["country_code"].asString();
+    std::string subjectDn = row["subject_dn"].asString();
+    std::string issuerDn = row["issuer_dn"].asString();
+
+    // Handle boolean field (Query Executor returns proper boolean)
+    bool storedInLdap = false;
+    if (row["stored_in_ldap"].isBool()) {
+        storedInLdap = row["stored_in_ldap"].asBool();
+    } else if (row["stored_in_ldap"].isString()) {
+        std::string val = row["stored_in_ldap"].asString();
+        storedInLdap = (val == "t" || val == "true" || val == "1");
+    }
 
     // Construct and return domain object
     return domain::Certificate(

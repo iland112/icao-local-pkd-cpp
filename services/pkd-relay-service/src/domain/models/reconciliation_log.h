@@ -19,8 +19,8 @@ public:
     ReconciliationLog() = default;
 
     ReconciliationLog(
-        int id,
-        int reconciliation_id,
+        const std::string& id,
+        const std::string& reconciliation_id,
         const std::chrono::system_clock::time_point& created_at,
         const std::string& cert_fingerprint,
         const std::string& cert_type,
@@ -40,8 +40,8 @@ public:
     {}
 
     // Getters
-    int getId() const { return id_; }
-    int getReconciliationId() const { return reconciliation_id_; }
+    std::string getId() const { return id_; }
+    std::string getReconciliationId() const { return reconciliation_id_; }
     std::chrono::system_clock::time_point getCreatedAt() const { return created_at_; }
     std::string getCertFingerprint() const { return cert_fingerprint_; }
     std::string getCertType() const { return cert_type_; }
@@ -51,8 +51,8 @@ public:
     std::optional<std::string> getErrorMessage() const { return error_message_; }
 
     // Setters
-    void setId(int id) { id_ = id; }
-    void setReconciliationId(int reconciliation_id) { reconciliation_id_ = reconciliation_id; }
+    void setId(const std::string& id) { id_ = id; }
+    void setReconciliationId(const std::string& reconciliation_id) { reconciliation_id_ = reconciliation_id; }
     void setResult(const std::string& result) { result_ = result; }
     void setErrorMessage(const std::optional<std::string>& error_message) {
         error_message_ = error_message;
@@ -64,8 +64,8 @@ public:
     Json::Value toJson() const;
 
 private:
-    int id_ = 0;
-    int reconciliation_id_ = 0;
+    std::string id_;
+    std::string reconciliation_id_;
     std::chrono::system_clock::time_point created_at_;
     std::string cert_fingerprint_;
     std::string cert_type_;       // CSCA, MLSC, DSC, DSC_NC, CRL

@@ -19,7 +19,7 @@ public:
     ReconciliationSummary() = default;
 
     ReconciliationSummary(
-        int id,
+        const std::string& id,
         const std::string& triggered_by,
         const std::chrono::system_clock::time_point& triggered_at,
         const std::optional<std::chrono::system_clock::time_point>& completed_at,
@@ -50,7 +50,7 @@ public:
     {}
 
     // Getters
-    int getId() const { return id_; }
+    std::string getId() const { return id_; }
     std::string getTriggeredBy() const { return triggered_by_; }
     std::chrono::system_clock::time_point getTriggeredAt() const { return triggered_at_; }
     std::optional<std::chrono::system_clock::time_point> getCompletedAt() const {
@@ -82,7 +82,7 @@ public:
     std::optional<int> getSyncStatusId() const { return sync_status_id_; }
 
     // Setters
-    void setId(int id) { id_ = id; }
+    void setId(const std::string& id) { id_ = id; }
     void setCompletedAt(const std::chrono::system_clock::time_point& completed_at) {
         completed_at_ = completed_at;
     }
@@ -106,7 +106,7 @@ public:
     Json::Value toJson() const;
 
 private:
-    int id_ = 0;
+    std::string id_;
     std::string triggered_by_;
     std::chrono::system_clock::time_point triggered_at_;
     std::optional<std::chrono::system_clock::time_point> completed_at_;

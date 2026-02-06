@@ -48,7 +48,7 @@ public:
      * @return true if logged successfully
      */
     bool logReconciliationOperation(
-        int reconciliationId,
+        const std::string& reconciliationId,
         const std::string& certFingerprint,
         const std::string& certType,
         const std::string& countryCode,
@@ -65,7 +65,7 @@ public:
      * @return JSON response with completion status
      */
     Json::Value completeReconciliation(
-        int reconciliationId,
+        const std::string& reconciliationId,
         const std::string& status,
         const domain::ReconciliationSummary& summary
     );
@@ -86,7 +86,7 @@ public:
      * @return JSON response with summary and logs
      */
     Json::Value getReconciliationDetails(
-        int reconciliationId,
+        const std::string& reconciliationId,
         int logLimit = 1000,
         int logOffset = 0
     );

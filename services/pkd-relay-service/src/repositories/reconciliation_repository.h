@@ -2,30 +2,31 @@
 
 #include "../domain/models/reconciliation_summary.h"
 #include "../domain/models/reconciliation_log.h"
-#include "db_connection_pool.h"
-#include "db_connection_interface.h"  // Phase 4.4: Interface for PostgreSQL/Oracle support
+#include "i_query_executor.h"
 #include <memory>
 #include <vector>
 #include <optional>
-#include <libpq-fe.h>
+#include <json/json.h>
 
 namespace icao::relay::repositories {
 
 /**
- * @brief Repository for reconciliation_summary and reconciliation_log tables
+ * @brief Repository for reconciliation_summary and reconciliation_log tables (Database-agnostic)
  *
  * Handles all database operations for reconciliation tracking.
  * All queries use parameterized statements for SQL injection prevention.
+ * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
  *
- * Thread-safe: Uses DbConnectionPool for concurrent request handling.
+ * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class ReconciliationRepository {
 public:
     /**
-     * @brief Constructor (Phase 4.4: Supports PostgreSQL and Oracle via interface)
-     * @param dbPool Shared database connection pool (IDbConnectionPool interface)
+     * @brief Constructor with Query Executor injection
+     * @param executor Query Executor (must remain valid during repository lifetime)
+     * @throws std::invalid_argument if executor is nullptr
      */
-    explicit ReconciliationRepository(std::shared_ptr<common::IDbConnectionPool> dbPool);
+    explicit ReconciliationRepository(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -61,7 +62,7 @@ public:
      * @param id Reconciliation ID
      * @return Optional containing summary, or nullopt if not found
      */
-    std::optional<domain::ReconciliationSummary> findSummaryById(int id);
+    std::optional<domain::ReconciliationSummary> findSummaryById(const std::string& id);
 
     /**
      * @brief Get reconciliation history with pagination
@@ -96,7 +97,7 @@ public:
      * @return Vector of reconciliation logs
      */
     std::vector<domain::ReconciliationLog> findLogsByReconciliationId(
-        int reconciliationId,
+        const std::string& reconciliationId,
         int limit = 1000,
         int offset = 0
     );
@@ -106,26 +107,24 @@ public:
      * @param reconciliationId Reconciliation ID
      * @return Number of log entries
      */
-    int countLogsByReconciliationId(int reconciliationId);
+    int countLogsByReconciliationId(const std::string& reconciliationId);
 
 private:
     /**
-     * @brief Convert PostgreSQL result row to ReconciliationSummary domain object
-     * @param res PGresult pointer
-     * @param row Row number in result set
+     * @brief Convert database result row (JSON) to ReconciliationSummary domain object
+     * @param row Database result row as JSON
      * @return ReconciliationSummary domain object
      */
-    domain::ReconciliationSummary resultToSummary(PGresult* res, int row);
+    domain::ReconciliationSummary jsonToSummary(const Json::Value& row);
 
     /**
-     * @brief Convert PostgreSQL result row to ReconciliationLog domain object
-     * @param res PGresult pointer
-     * @param row Row number in result set
+     * @brief Convert database result row (JSON) to ReconciliationLog domain object
+     * @param row Database result row as JSON
      * @return ReconciliationLog domain object
      */
-    domain::ReconciliationLog resultToLog(PGresult* res, int row);
+    domain::ReconciliationLog jsonToLog(const Json::Value& row);
 
-    std::shared_ptr<common::IDbConnectionPool> dbPool_;  // Phase 4.4: Interface for PostgreSQL/Oracle
+    common::IQueryExecutor* queryExecutor_;  // Not owned - do not free
 };
 
 } // namespace icao::relay::repositories

@@ -2,21 +2,23 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <cstring>
+#include <sstream>
 
 namespace icao::relay::repositories {
 
-SyncStatusRepository::SyncStatusRepository(std::shared_ptr<common::IDbConnectionPool> dbPool)
-    : dbPool_(dbPool) {
+SyncStatusRepository::SyncStatusRepository(common::IQueryExecutor* executor)
+    : queryExecutor_(executor)
+{
+    if (!queryExecutor_) {
+        throw std::invalid_argument("SyncStatusRepository: queryExecutor cannot be nullptr");
+    }
+
+    spdlog::debug("[SyncStatusRepository] Initialized (DB type: {})",
+        queryExecutor_->getDatabaseType());
 }
 
 bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
-            return false;
-        }
-
         const char* query =
             "INSERT INTO sync_status ("
             "checked_at, "
@@ -34,25 +36,6 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
             "$21, $22, $23"
             ") RETURNING id, checked_at";
 
-        // Convert integers to strings (DB columns first, then LDAP)
-        std::string dbCscaCount = std::to_string(syncStatus.getDbCscaCount());
-        std::string dbDscCount = std::to_string(syncStatus.getDbDscCount());
-        std::string dbDscNcCount = std::to_string(syncStatus.getDbDscNcCount());
-        std::string dbCrlCount = std::to_string(syncStatus.getDbCrlCount());
-        std::string dbStoredInLdapCount = std::to_string(syncStatus.getDbStoredInLdapCount());
-
-        std::string ldapCscaCount = std::to_string(syncStatus.getLdapCscaCount());
-        std::string ldapDscCount = std::to_string(syncStatus.getLdapDscCount());
-        std::string ldapDscNcCount = std::to_string(syncStatus.getLdapDscNcCount());
-        std::string ldapCrlCount = std::to_string(syncStatus.getLdapCrlCount());
-        std::string ldapTotalEntries = std::to_string(syncStatus.getLdapTotalEntries());
-
-        std::string cscaDiscrepancy = std::to_string(syncStatus.getCscaDiscrepancy());
-        std::string dscDiscrepancy = std::to_string(syncStatus.getDscDiscrepancy());
-        std::string dscNcDiscrepancy = std::to_string(syncStatus.getDscNcDiscrepancy());
-        std::string crlDiscrepancy = std::to_string(syncStatus.getCrlDiscrepancy());
-        std::string totalDiscrepancy = std::to_string(syncStatus.getTotalDiscrepancy());
-
         // Serialize JSONB fields
         Json::StreamWriterBuilder builder;
         builder["indentation"] = "";
@@ -68,56 +51,56 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
             : "{}";
 
         // Get status and other fields
-        std::string status = syncStatus.getStatus();
         auto errorMessage = syncStatus.getErrorMessage();
         std::string errorMessageStr = errorMessage.has_value() ? errorMessage.value() : "";
-        std::string checkDurationMs = std::to_string(syncStatus.getCheckDurationMs());
 
-        // MLSC fields at end
-        std::string dbMlscCount = std::to_string(syncStatus.getDbMlscCount());
-        std::string ldapMlscCount = std::to_string(syncStatus.getLdapMlscCount());
-        std::string mlscDiscrepancy = std::to_string(syncStatus.getMlscDiscrepancy());
-
-        const char* paramValues[23] = {
-            dbCscaCount.c_str(), dbDscCount.c_str(), dbDscNcCount.c_str(),
-            dbCrlCount.c_str(), dbStoredInLdapCount.c_str(),
-            ldapCscaCount.c_str(), ldapDscCount.c_str(), ldapDscNcCount.c_str(),
-            ldapCrlCount.c_str(), ldapTotalEntries.c_str(),
-            cscaDiscrepancy.c_str(), dscDiscrepancy.c_str(), dscNcDiscrepancy.c_str(),
-            crlDiscrepancy.c_str(), totalDiscrepancy.c_str(),
-            dbCountryStatsJson.c_str(), ldapCountryStatsJson.c_str(),
-            status.c_str(), errorMessageStr.c_str(), checkDurationMs.c_str(),
-            dbMlscCount.c_str(), ldapMlscCount.c_str(), mlscDiscrepancy.c_str()
+        // Build parameter vector
+        std::vector<std::string> params = {
+            std::to_string(syncStatus.getDbCscaCount()),        // $1
+            std::to_string(syncStatus.getDbDscCount()),         // $2
+            std::to_string(syncStatus.getDbDscNcCount()),       // $3
+            std::to_string(syncStatus.getDbCrlCount()),         // $4
+            std::to_string(syncStatus.getDbStoredInLdapCount()),// $5
+            std::to_string(syncStatus.getLdapCscaCount()),      // $6
+            std::to_string(syncStatus.getLdapDscCount()),       // $7
+            std::to_string(syncStatus.getLdapDscNcCount()),     // $8
+            std::to_string(syncStatus.getLdapCrlCount()),       // $9
+            std::to_string(syncStatus.getLdapTotalEntries()),   // $10
+            std::to_string(syncStatus.getCscaDiscrepancy()),    // $11
+            std::to_string(syncStatus.getDscDiscrepancy()),     // $12
+            std::to_string(syncStatus.getDscNcDiscrepancy()),   // $13
+            std::to_string(syncStatus.getCrlDiscrepancy()),     // $14
+            std::to_string(syncStatus.getTotalDiscrepancy()),   // $15
+            dbCountryStatsJson,                                  // $16
+            ldapCountryStatsJson,                                // $17
+            syncStatus.getStatus(),                              // $18
+            errorMessageStr,                                     // $19
+            std::to_string(syncStatus.getCheckDurationMs()),    // $20
+            std::to_string(syncStatus.getDbMlscCount()),        // $21
+            std::to_string(syncStatus.getLdapMlscCount()),      // $22
+            std::to_string(syncStatus.getMlscDiscrepancy())     // $23
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 23, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[SyncStatusRepository] Failed to create sync_status: {}", error);
+        if (result.empty()) {
+            spdlog::error("[SyncStatusRepository] Insert returned no rows");
             return false;
         }
 
         // Update domain object with generated id and timestamp
-        if (PQntuples(res) > 0) {
-            int id = std::atoi(PQgetvalue(res, 0, 0));
-            syncStatus.setId(id);
+        std::string id = result[0]["id"].asString();
+        syncStatus.setId(id);
 
-            // Parse checked_at timestamp
-            const char* checkedAtStr = PQgetvalue(res, 0, 1);
-            // Simple timestamp parsing (PostgreSQL format: YYYY-MM-DD HH:MM:SS)
-            std::tm tm = {};
-            if (strptime(checkedAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
-                auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-                syncStatus.setCheckedAt(tp);
-            }
+        // Parse checked_at timestamp
+        std::string checkedAtStr = result[0]["checked_at"].asString();
+        std::tm tm = {};
+        if (strptime(checkedAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+            auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+            syncStatus.setCheckedAt(tp);
         }
 
-        PQclear(res);
+        spdlog::info("[SyncStatusRepository] Sync status created with ID: {}", id);
         return true;
 
     } catch (const std::exception& e) {
@@ -128,12 +111,6 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
 
 std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
-            return std::nullopt;
-        }
-
         const char* query =
             "SELECT id, checked_at, "
             "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
@@ -145,23 +122,14 @@ std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
             "ORDER BY checked_at DESC "
             "LIMIT 1";
 
-        PGresult* res = PQexec(conn.get(), query);
+        Json::Value result = queryExecutor_->executeQuery(query);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[SyncStatusRepository] Failed to find latest sync_status: {}", error);
+        if (result.empty()) {
+            spdlog::debug("[SyncStatusRepository] No sync status records found");
             return std::nullopt;
         }
 
-        if (PQntuples(res) == 0) {
-            PQclear(res);
-            return std::nullopt;
-        }
-
-        auto syncStatus = resultToSyncStatus(res, 0);
-        PQclear(res);
-        return syncStatus;
+        return jsonToSyncStatus(result[0]);
 
     } catch (const std::exception& e) {
         spdlog::error("[SyncStatusRepository] Exception in findLatest(): {}", e.what());
@@ -173,12 +141,6 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
     std::vector<domain::SyncStatus> results;
 
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
-            return results;
-        }
-
         const char* query =
             "SELECT id, checked_at, "
             "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
@@ -190,32 +152,18 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
             "ORDER BY checked_at DESC "
             "LIMIT $1 OFFSET $2";
 
-        std::string limitStr = std::to_string(limit);
-        std::string offsetStr = std::to_string(offset);
-
-        const char* paramValues[2] = {
-            limitStr.c_str(),
-            offsetStr.c_str()
+        std::vector<std::string> params = {
+            std::to_string(limit),   // $1
+            std::to_string(offset)   // $2
         };
 
-        PGresult* res = PQexecParams(
-            conn.get(), query, 2, nullptr,
-            paramValues, nullptr, nullptr, 0
-        );
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[SyncStatusRepository] Failed to find all sync_status: {}", error);
-            return results;
+        for (const auto& row : result) {
+            results.push_back(jsonToSyncStatus(row));
         }
 
-        int rowCount = PQntuples(res);
-        for (int i = 0; i < rowCount; i++) {
-            results.push_back(resultToSyncStatus(res, i));
-        }
-
-        PQclear(res);
+        spdlog::debug("[SyncStatusRepository] Found {} sync status records", results.size());
         return results;
 
     } catch (const std::exception& e) {
@@ -226,30 +174,10 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
 
 int SyncStatusRepository::count() {
     try {
-        auto conn = dbPool_->acquire();
-        if (!conn.isValid()) {
-            spdlog::error("[SyncStatusRepository] Failed to acquire database connection");
-            return 0;
-        }
-
         const char* query = "SELECT COUNT(*) FROM sync_status";
 
-        PGresult* res = PQexec(conn.get(), query);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn.get());
-            PQclear(res);
-            spdlog::error("[SyncStatusRepository] Failed to count sync_status: {}", error);
-            return 0;
-        }
-
-        int count = 0;
-        if (PQntuples(res) > 0) {
-            count = std::atoi(PQgetvalue(res, 0, 0));
-        }
-
-        PQclear(res);
-        return count;
+        Json::Value result = queryExecutor_->executeScalar(query);
+        return result.asInt();
 
     } catch (const std::exception& e) {
         spdlog::error("[SyncStatusRepository] Exception in count(): {}", e.what());
@@ -257,97 +185,67 @@ int SyncStatusRepository::count() {
     }
 }
 
-domain::SyncStatus SyncStatusRepository::resultToSyncStatus(PGresult* res, int row) {
-    // Parse all fields from result set
-    int id = std::atoi(PQgetvalue(res, row, 0));
+domain::SyncStatus SyncStatusRepository::jsonToSyncStatus(const Json::Value& row) {
+    // Parse id
+    std::string id = row["id"].asString();
 
     // Parse timestamp
-    const char* checkedAtStr = PQgetvalue(res, row, 1);
+    std::string checkedAtStr = row["checked_at"].asString();
     std::tm tm = {};
     auto checkedAt = std::chrono::system_clock::now();
-    if (strptime(checkedAtStr, "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
+    if (strptime(checkedAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
         checkedAt = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
     // Parse integer counts (DB columns first, then LDAP)
-    int dbCscaCount = std::atoi(PQgetvalue(res, row, 2));
-    int dbDscCount = std::atoi(PQgetvalue(res, row, 3));
-    int dbDscNcCount = std::atoi(PQgetvalue(res, row, 4));
-    int dbCrlCount = std::atoi(PQgetvalue(res, row, 5));
-    int dbStoredInLdapCount = std::atoi(PQgetvalue(res, row, 6));
+    int dbCscaCount = row["db_csca_count"].asInt();
+    int dbDscCount = row["db_dsc_count"].asInt();
+    int dbDscNcCount = row["db_dsc_nc_count"].asInt();
+    int dbCrlCount = row["db_crl_count"].asInt();
+    int dbStoredInLdapCount = row["db_stored_in_ldap_count"].asInt();
 
-    int ldapCscaCount = std::atoi(PQgetvalue(res, row, 7));
-    int ldapDscCount = std::atoi(PQgetvalue(res, row, 8));
-    int ldapDscNcCount = std::atoi(PQgetvalue(res, row, 9));
-    int ldapCrlCount = std::atoi(PQgetvalue(res, row, 10));
-    int ldapTotalEntries = std::atoi(PQgetvalue(res, row, 11));
+    int ldapCscaCount = row["ldap_csca_count"].asInt();
+    int ldapDscCount = row["ldap_dsc_count"].asInt();
+    int ldapDscNcCount = row["ldap_dsc_nc_count"].asInt();
+    int ldapCrlCount = row["ldap_crl_count"].asInt();
+    int ldapTotalEntries = row["ldap_total_entries"].asInt();
 
-    // Parse discrepancies (MLSC at end)
-    int cscaDiscrepancy = std::atoi(PQgetvalue(res, row, 12));
-    int dscDiscrepancy = std::atoi(PQgetvalue(res, row, 13));
-    int dscNcDiscrepancy = std::atoi(PQgetvalue(res, row, 14));
-    int crlDiscrepancy = std::atoi(PQgetvalue(res, row, 15));
-    int totalDiscrepancy = std::atoi(PQgetvalue(res, row, 16));
+    // Parse discrepancies
+    int cscaDiscrepancy = row["csca_discrepancy"].asInt();
+    int dscDiscrepancy = row["dsc_discrepancy"].asInt();
+    int dscNcDiscrepancy = row["dsc_nc_discrepancy"].asInt();
+    int crlDiscrepancy = row["crl_discrepancy"].asInt();
+    int totalDiscrepancy = row["total_discrepancy"].asInt();
 
-    // Parse JSONB db_country_stats
+    // Parse MLSC counts
+    int dbMlscCount = row["db_mlsc_count"].asInt();
+    int ldapMlscCount = row["ldap_mlsc_count"].asInt();
+    int mlscDiscrepancy = row["mlsc_discrepancy"].asInt();
+
+    // Parse JSONB fields (already parsed by Query Executor)
     std::optional<Json::Value> dbCountryStats;
-    const char* dbCountryStatsStr = PQgetvalue(res, row, 17);
-    if (dbCountryStatsStr && strlen(dbCountryStatsStr) > 0) {
-        Json::Value dbStats;
-        Json::CharReaderBuilder builder;
-        std::string errors;
-        std::istringstream iss(dbCountryStatsStr);
-        if (Json::parseFromStream(builder, iss, &dbStats, &errors)) {
-            dbCountryStats = dbStats;
-        } else {
-            spdlog::warn("[SyncStatusRepository] Failed to parse db_country_stats JSON: {}", errors);
-        }
+    if (!row["db_country_stats"].isNull() && row["db_country_stats"].isObject()) {
+        dbCountryStats = row["db_country_stats"];
     }
 
-    // Parse JSONB ldap_country_stats
     std::optional<Json::Value> ldapCountryStats;
-    const char* ldapCountryStatsStr = PQgetvalue(res, row, 18);
-    if (ldapCountryStatsStr && strlen(ldapCountryStatsStr) > 0) {
-        Json::Value ldapStats;
-        Json::CharReaderBuilder builder;
-        std::string errors;
-        std::istringstream iss(ldapCountryStatsStr);
-        if (Json::parseFromStream(builder, iss, &ldapStats, &errors)) {
-            ldapCountryStats = ldapStats;
-        } else {
-            spdlog::warn("[SyncStatusRepository] Failed to parse ldap_country_stats JSON: {}", errors);
-        }
+    if (!row["ldap_country_stats"].isNull() && row["ldap_country_stats"].isObject()) {
+        ldapCountryStats = row["ldap_country_stats"];
     }
 
     // Parse status string
-    std::string status = PQgetvalue(res, row, 19);
+    std::string status = row["status"].asString();
 
     // Parse optional error_message
     std::optional<std::string> errorMessage;
-    const char* errorMessageStr = PQgetvalue(res, row, 20);
-    if (errorMessageStr && strlen(errorMessageStr) > 0 && !PQgetisnull(res, row, 20)) {
-        errorMessage = std::string(errorMessageStr);
+    if (!row["error_message"].isNull() && !row["error_message"].asString().empty()) {
+        errorMessage = row["error_message"].asString();
     }
 
     // Parse check_duration_ms
-    int checkDurationMs = std::atoi(PQgetvalue(res, row, 21));
+    int checkDurationMs = row["check_duration_ms"].asInt();
 
-    // Parse MLSC counts (at end of result set)
-    int dbMlscCount = std::atoi(PQgetvalue(res, row, 22));
-    int ldapMlscCount = std::atoi(PQgetvalue(res, row, 23));
-    int mlscDiscrepancy = std::atoi(PQgetvalue(res, row, 24));
-
-    // Construct and return domain object with correct parameter order:
-    // (id, checked_at,
-    //  db_csca_count, ldap_csca_count, csca_discrepancy,
-    //  db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy,
-    //  db_dsc_count, ldap_dsc_count, dsc_discrepancy,
-    //  db_dsc_nc_count, ldap_dsc_nc_count, dsc_nc_discrepancy,
-    //  db_crl_count, ldap_crl_count, crl_discrepancy,
-    //  total_discrepancy,
-    //  db_stored_in_ldap_count, ldap_total_entries,
-    //  db_country_stats, ldap_country_stats,
-    //  status, error_message, check_duration_ms)
+    // Construct and return domain object with correct parameter order
     return domain::SyncStatus(
         id, checkedAt,
         dbCscaCount, ldapCscaCount, cscaDiscrepancy,

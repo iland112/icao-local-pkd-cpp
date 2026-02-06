@@ -1,0 +1,146 @@
+# ==============================================================================
+# ICAO Local PKD - PKD Relay Development Docker Compose
+# ==============================================================================
+# Purpose: Development environment for Oracle migration Phase 5.3 testing
+# Branch: feature/certificate-file-upload
+# Services: pkd-relay-dev (port 18083)
+# Databases: PostgreSQL (port 15434), Oracle XE (port 11522)
+# DB_TYPE: Configurable via environment variable (postgres or oracle)
+# LDAP: Uses production LDAP (shared with main docker network)
+# ==============================================================================
+
+version: '3.8'
+name: icao-relay-dev
+
+services:
+  # ---------------------------------------------------------------------------
+  # Oracle Database XE (PKD Relay Development Only)
+  # ---------------------------------------------------------------------------
+  oracle-xe-relay-dev:
+    image: gvenzl/oracle-xe:21-slim
+    container_name: icao-oracle-xe-relay-dev
+    ports:
+      - "11522:1521"  # Oracle listener port (relay-dev: 11522)
+      - "15501:5500"  # Oracle Enterprise Manager (relay-dev: 15501)
+    environment:
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD:-OraclePwd123}
+      - ORACLE_DATABASE=LOCALPKD
+      - APP_USER=pkd_relay
+      - APP_USER_PASSWORD=${ORACLE_RELAY_PASSWORD:-pkd_relay123}
+    volumes:
+      - oracle-xe-relay-dev-data:/opt/oracle/oradata
+      - ./db-oracle/relay-init:/container-entrypoint-initdb.d
+    networks:
+      - docker_pkd-network  # Connect to production network for LDAP access
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    shm_size: 1gb
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (PKD Relay Development Only)
+  # ---------------------------------------------------------------------------
+  postgres-relay-dev:
+    image: postgres:15
+    container_name: icao-postgres-relay-dev
+    ports:
+      - "15434:5432"  # PostgreSQL port (relay-dev: 15434)
+    environment:
+      - POSTGRES_USER=pkd_relay
+      - POSTGRES_PASSWORD=${POSTGRES_RELAY_PASSWORD:-pkd_relay_dev_password}
+      - POSTGRES_DB=localpkd_relay
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
+    volumes:
+      - postgres-relay-dev-data:/var/lib/postgresql/data
+      - ./db/relay-migrations:/docker-entrypoint-initdb.d:ro
+    networks:
+      - docker_pkd-network  # Connect to production network for LDAP access
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pkd_relay -d localpkd_relay"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PKD Relay Service (Development Version)
+  # ---------------------------------------------------------------------------
+  pkd-relay-dev:
+    build:
+      context: ..
+      dockerfile: services/pkd-relay-service/Dockerfile
+      args:
+        - BUILD_TYPE=Debug
+    container_name: icao-pkd-relay-dev
+    ports:
+      - "18083:18083"  # Development port (production: 8083)
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-relay-dev
+      - SERVER_PORT=18083  # Development port
+      # Database Configuration (Factory Pattern: choose PostgreSQL or Oracle)
+      - DB_TYPE=${DB_TYPE:-postgres}  # Options: postgres, oracle
+      # Generic Database Configuration (for legacy support)
+      - DB_HOST=postgres-relay-dev
+      - DB_PORT=5432
+      - DB_NAME=localpkd_relay
+      - DB_USER=pkd_relay
+      - DB_PASSWORD=${POSTGRES_RELAY_PASSWORD:-pkd_relay_dev_password}
+      # PostgreSQL Configuration (development database)
+      - PG_HOST=postgres-relay-dev
+      - PG_PORT=5432
+      - PG_DATABASE=localpkd_relay
+      - PG_USER=pkd_relay
+      - PG_PASSWORD=${POSTGRES_RELAY_PASSWORD:-pkd_relay_dev_password}
+      # Oracle Database Configuration (development testing)
+      - ORACLE_HOST=oracle-xe-relay-dev
+      - ORACLE_PORT=1521
+      - ORACLE_SERVICE_NAME=LOCALPKD
+      - ORACLE_USER=pkd_relay
+      - ORACLE_PASSWORD=${ORACLE_RELAY_PASSWORD:-pkd_relay123}
+      # LDAP Configuration (uses production LDAP)
+      - LDAP_HOST=openldap1
+      - LDAP_PORT=389
+      - LDAP_WRITE_HOST=openldap1
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD:-ldap_test_password_123}
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_DATA_CONTAINER=dc=data
+      - LDAP_NC_DATA_CONTAINER=dc=nc-data
+      # Reconciliation Configuration
+      - RECONCILIATION_BATCH_SIZE=${RECONCILIATION_BATCH_SIZE:-100}
+      - RECONCILIATION_DRY_RUN=${RECONCILIATION_DRY_RUN:-false}
+    volumes:
+      - pkd-relay-dev-logs:/app/logs
+    depends_on:
+      postgres-relay-dev:
+        condition: service_healthy
+      oracle-xe-relay-dev:
+        condition: service_healthy
+      # Note: LDAP services (openldap1, openldap2) are from production environment
+      # They must be running in docker_pkd-network for pkd-relay-dev to work
+    networks:
+      - docker_pkd-network  # Connect to production network for LDAP access
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:18083/api/sync/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  pkd-relay-dev-logs:
+  oracle-xe-relay-dev-data:
+  postgres-relay-dev-data:
+
+networks:
+  docker_pkd-network:
+    external: true  # Use existing production network for LDAP access

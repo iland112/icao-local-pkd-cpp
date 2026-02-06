@@ -1,30 +1,31 @@
 #pragma once
 
 #include "../domain/models/sync_status.h"
-#include "db_connection_pool.h"
-#include "db_connection_interface.h"  // Phase 4.4: Interface for PostgreSQL/Oracle support
+#include "i_query_executor.h"
 #include <memory>
 #include <vector>
 #include <optional>
-#include <libpq-fe.h>
+#include <json/json.h>
 
 namespace icao::relay::repositories {
 
 /**
- * @brief Repository for sync_status table operations
+ * @brief Repository for sync_status table operations (Database-agnostic)
  *
  * Handles all database operations for sync status tracking.
  * All queries use parameterized statements for SQL injection prevention.
+ * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
  *
- * Thread-safe: Uses DbConnectionPool for concurrent request handling.
+ * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class SyncStatusRepository {
 public:
     /**
-     * @brief Constructor (Phase 4.4: Supports PostgreSQL and Oracle via interface)
-     * @param dbPool Shared database connection pool (IDbConnectionPool interface)
+     * @brief Constructor with Query Executor injection
+     * @param executor Query Executor (must remain valid during repository lifetime)
+     * @throws std::invalid_argument if executor is nullptr
      */
-    explicit SyncStatusRepository(std::shared_ptr<common::IDbConnectionPool> dbPool);
+    explicit SyncStatusRepository(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -66,14 +67,13 @@ public:
 
 private:
     /**
-     * @brief Convert PostgreSQL result row to SyncStatus domain object
-     * @param res PGresult pointer
-     * @param row Row number in result set
+     * @brief Convert database result row (JSON) to SyncStatus domain object
+     * @param row Database result row as JSON
      * @return SyncStatus domain object
      */
-    domain::SyncStatus resultToSyncStatus(PGresult* res, int row);
+    domain::SyncStatus jsonToSyncStatus(const Json::Value& row);
 
-    std::shared_ptr<common::IDbConnectionPool> dbPool_;  // Phase 4.4: Interface for PostgreSQL/Oracle
+    common::IQueryExecutor* queryExecutor_;  // Not owned - do not free
 };
 
 
