@@ -23,48 +23,76 @@ ReconciliationRepository::ReconciliationRepository(common::IQueryExecutor* execu
 
 bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summary) {
     try {
+        // Step 1: Generate integer ID using database-specific sequence
+        // PostgreSQL: nextval('reconciliation_summary_id_seq')
+        // Oracle: seq_reconciliation_summary.NEXTVAL
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string idQuery;
+
+        if (dbType == "postgres") {
+            idQuery = "SELECT nextval('reconciliation_summary_id_seq') as id";
+        } else {
+            // Oracle: Use sequence
+            idQuery = "SELECT seq_reconciliation_summary.NEXTVAL as id FROM DUAL";
+        }
+
+        Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
+        if (idResult.empty()) {
+            spdlog::error("[ReconciliationRepository] Failed to generate ID");
+            return false;
+        }
+        // Oracle returns column names in UPPERCASE, PostgreSQL in lowercase
+        std::string generatedId = dbType == "postgres"
+            ? std::to_string(idResult[0]["id"].asInt())
+            : std::to_string(idResult[0]["ID"].asInt());
+
+        // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
         const char* query =
             "INSERT INTO reconciliation_summary ("
-            "triggered_by, triggered_at, status, dry_run, "
+            "id, triggered_by, triggered_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
             "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted"
             ") VALUES ("
-            "$1, NOW(), $2, $3, "
-            "$4, $5, "
-            "$6, $7, $8, $9, $10, "
-            "$11, $12, $13, $14"
-            ") RETURNING id, triggered_at";
+            "$1, $2, NOW(), $3, $4, "
+            "$5, $6, "
+            "$7, $8, $9, $10, $11, "
+            "$12, $13, $14, $15"
+            ")";
 
         std::vector<std::string> params = {
-            summary.getTriggeredBy(),                           // $1
-            summary.getStatus(),                                 // $2
-            summary.isDryRun() ? "true" : "false",              // $3
-            std::to_string(summary.getSuccessCount()),          // $4
-            std::to_string(summary.getFailedCount()),           // $5
-            std::to_string(summary.getCscaAdded()),             // $6
-            std::to_string(summary.getDscAdded()),              // $7
-            std::to_string(summary.getDscNcAdded()),            // $8
-            std::to_string(summary.getCrlAdded()),              // $9
-            std::to_string(summary.getTotalAdded()),            // $10
-            std::to_string(summary.getCscaDeleted()),           // $11
-            std::to_string(summary.getDscDeleted()),            // $12
-            std::to_string(summary.getDscNcDeleted()),          // $13
-            std::to_string(summary.getCrlDeleted())             // $14
+            generatedId,                                        // $1: id
+            summary.getTriggeredBy(),                           // $2
+            summary.getStatus(),                                 // $3
+            summary.isDryRun() ? "true" : "false",              // $4
+            std::to_string(summary.getSuccessCount()),          // $5
+            std::to_string(summary.getFailedCount()),           // $6
+            std::to_string(summary.getCscaAdded()),             // $7
+            std::to_string(summary.getDscAdded()),              // $8
+            std::to_string(summary.getDscNcAdded()),            // $9
+            std::to_string(summary.getCrlAdded()),              // $10
+            std::to_string(summary.getTotalAdded()),            // $11
+            std::to_string(summary.getCscaDeleted()),           // $12
+            std::to_string(summary.getDscDeleted()),            // $13
+            std::to_string(summary.getDscNcDeleted()),          // $14
+            std::to_string(summary.getCrlDeleted())             // $15
         };
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
 
-        if (result.empty()) {
-            spdlog::error("[ReconciliationRepository] Insert returned no rows");
+        // Oracle's OTL get_rpc() may return 0 even for successful INSERTs without RETURNING clause
+        // If execution reaches here without exception, INSERT was successful
+        std::string dbTypeCheck = queryExecutor_->getDatabaseType();
+        if (rowsAffected == 0 && dbTypeCheck == "postgres") {
+            // PostgreSQL should always return affected rows count
+            spdlog::error("[ReconciliationRepository] Insert failed: no rows affected");
             return false;
         }
 
         // Update domain object with generated id
-        std::string id = result[0]["id"].asString();
-        summary.setId(id);
+        summary.setId(generatedId);
 
-        spdlog::info("[ReconciliationRepository] Reconciliation summary created with ID: {}", id);
+        spdlog::info("[ReconciliationRepository] Reconciliation summary created with ID: {}", generatedId);
         return true;
 
     } catch (const std::exception& e) {
@@ -216,37 +244,65 @@ int ReconciliationRepository::countSummaries() {
 
 bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
     try {
+        // Step 1: Generate integer ID using database-specific sequence
+        // PostgreSQL: nextval('reconciliation_log_id_seq')
+        // Oracle: seq_reconciliation_log.NEXTVAL
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string idQuery;
+
+        if (dbType == "postgres") {
+            idQuery = "SELECT nextval('reconciliation_log_id_seq') as id";
+        } else {
+            // Oracle: Use sequence
+            idQuery = "SELECT seq_reconciliation_log.NEXTVAL as id FROM DUAL";
+        }
+
+        Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
+        if (idResult.empty()) {
+            spdlog::error("[ReconciliationRepository] Failed to generate ID");
+            return false;
+        }
+        // Oracle returns column names in UPPERCASE, PostgreSQL in lowercase
+        std::string generatedId = dbType == "postgres"
+            ? std::to_string(idResult[0]["id"].asInt())
+            : std::to_string(idResult[0]["ID"].asInt());
+
+        // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
         const char* query =
             "INSERT INTO reconciliation_log ("
-            "reconciliation_id, created_at, cert_fingerprint, cert_type, country_code, "
+            "id, reconciliation_id, created_at, cert_fingerprint, cert_type, country_code, "
             "action, result, error_message"
             ") VALUES ("
-            "$1, NOW(), $2, $3, $4, "
-            "$5, $6, $7"
-            ") RETURNING id, created_at";
+            "$1, $2, NOW(), $3, $4, $5, "
+            "$6, $7, $8"
+            ")";
 
         std::vector<std::string> params = {
-            log.getReconciliationId(),                      // $1
-            log.getCertFingerprint(),                       // $2
-            log.getCertType(),                              // $3
-            log.getCountryCode(),                           // $4
-            log.getAction(),                                // $5
-            log.getResult(),                                // $6
-            log.getErrorMessage().value_or("")              // $7 (empty string for NULL)
+            generatedId,                                    // $1: id
+            log.getReconciliationId(),                      // $2
+            log.getCertFingerprint(),                       // $3
+            log.getCertType(),                              // $4
+            log.getCountryCode(),                           // $5
+            log.getAction(),                                // $6
+            log.getResult(),                                // $7
+            log.getErrorMessage().value_or("")              // $8 (empty string for NULL)
         };
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
 
-        if (result.empty()) {
-            spdlog::error("[ReconciliationRepository] Insert returned no rows");
+        // Oracle's OTL get_rpc() may return 0 even for successful INSERTs without RETURNING clause
+        // If execution reaches here without exception, INSERT was successful
+        std::string dbTypeCheck = queryExecutor_->getDatabaseType();
+        if (rowsAffected == 0 && dbTypeCheck == "postgres") {
+            // PostgreSQL should always return affected rows count
+            spdlog::error("[ReconciliationRepository] Insert failed: no rows affected");
             return false;
         }
 
         // Update domain object with generated id
-        std::string id = result[0]["id"].asString();
-        log.setId(id);
+        log.setId(generatedId);
 
-        spdlog::debug("[ReconciliationRepository] Reconciliation log created with ID: {}", id);
+        spdlog::debug("[ReconciliationRepository] Reconciliation log created with ID: {}", generatedId);
         return true;
 
     } catch (const std::exception& e) {

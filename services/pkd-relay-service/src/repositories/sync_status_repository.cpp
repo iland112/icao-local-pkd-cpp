@@ -19,22 +19,51 @@ SyncStatusRepository::SyncStatusRepository(common::IQueryExecutor* executor)
 
 bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
     try {
+        // Step 1: Generate ID using database-specific method
+        // PostgreSQL: UUID (gen_random_uuid())
+        // Oracle: NUMBER (seq_sync_status.NEXTVAL)
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string idQuery;
+        std::string generatedId;
+
+        if (dbType == "postgres") {
+            // PostgreSQL uses UUID
+            idQuery = "SELECT gen_random_uuid()::text as id";
+            Json::Value result = queryExecutor_->executeQuery(idQuery, {});
+            if (result.empty()) {
+                spdlog::error("[SyncStatusRepository] Failed to generate UUID");
+                return false;
+            }
+            generatedId = result[0]["id"].asString();
+        } else {
+            // Oracle uses NUMBER with sequence
+            // NOTE: Oracle returns column names in UPPERCASE
+            idQuery = "SELECT seq_sync_status.NEXTVAL as id FROM DUAL";
+            Json::Value result = queryExecutor_->executeQuery(idQuery, {});
+            if (result.empty()) {
+                spdlog::error("[SyncStatusRepository] Failed to generate ID");
+                return false;
+            }
+            generatedId = std::to_string(result[0]["ID"].asInt());  // Oracle: uppercase column name
+        }
+
+        // Step 2: Insert with generated UUID and current timestamp (no RETURNING clause)
         const char* query =
             "INSERT INTO sync_status ("
-            "checked_at, "
+            "id, checked_at, "
             "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
             "ldap_csca_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
             "csca_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy, "
             "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms, "
             "db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy"
             ") VALUES ("
-            "NOW(), "
-            "$1, $2, $3, $4, $5, "
-            "$6, $7, $8, $9, $10, "
-            "$11, $12, $13, $14, $15, "
-            "$16::jsonb, $17::jsonb, $18, $19, $20, "
-            "$21, $22, $23"
-            ") RETURNING id, checked_at";
+            "$1, NOW(), "
+            "$2, $3, $4, $5, $6, "
+            "$7, $8, $9, $10, $11, "
+            "$12, $13, $14, $15, $16, "
+            "$17::jsonb, $18::jsonb, $19, $20, $21, "
+            "$22, $23, $24"
+            ")";
 
         // Serialize JSONB fields
         Json::StreamWriterBuilder builder;
@@ -56,51 +85,48 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
 
         // Build parameter vector
         std::vector<std::string> params = {
-            std::to_string(syncStatus.getDbCscaCount()),        // $1
-            std::to_string(syncStatus.getDbDscCount()),         // $2
-            std::to_string(syncStatus.getDbDscNcCount()),       // $3
-            std::to_string(syncStatus.getDbCrlCount()),         // $4
-            std::to_string(syncStatus.getDbStoredInLdapCount()),// $5
-            std::to_string(syncStatus.getLdapCscaCount()),      // $6
-            std::to_string(syncStatus.getLdapDscCount()),       // $7
-            std::to_string(syncStatus.getLdapDscNcCount()),     // $8
-            std::to_string(syncStatus.getLdapCrlCount()),       // $9
-            std::to_string(syncStatus.getLdapTotalEntries()),   // $10
-            std::to_string(syncStatus.getCscaDiscrepancy()),    // $11
-            std::to_string(syncStatus.getDscDiscrepancy()),     // $12
-            std::to_string(syncStatus.getDscNcDiscrepancy()),   // $13
-            std::to_string(syncStatus.getCrlDiscrepancy()),     // $14
-            std::to_string(syncStatus.getTotalDiscrepancy()),   // $15
-            dbCountryStatsJson,                                  // $16
-            ldapCountryStatsJson,                                // $17
-            syncStatus.getStatus(),                              // $18
-            errorMessageStr,                                     // $19
-            std::to_string(syncStatus.getCheckDurationMs()),    // $20
-            std::to_string(syncStatus.getDbMlscCount()),        // $21
-            std::to_string(syncStatus.getLdapMlscCount()),      // $22
-            std::to_string(syncStatus.getMlscDiscrepancy())     // $23
+            generatedId,                                         // $1: id
+            std::to_string(syncStatus.getDbCscaCount()),        // $2
+            std::to_string(syncStatus.getDbDscCount()),         // $3
+            std::to_string(syncStatus.getDbDscNcCount()),       // $4
+            std::to_string(syncStatus.getDbCrlCount()),         // $5
+            std::to_string(syncStatus.getDbStoredInLdapCount()),// $6
+            std::to_string(syncStatus.getLdapCscaCount()),      // $7
+            std::to_string(syncStatus.getLdapDscCount()),       // $8
+            std::to_string(syncStatus.getLdapDscNcCount()),     // $9
+            std::to_string(syncStatus.getLdapCrlCount()),       // $10
+            std::to_string(syncStatus.getLdapTotalEntries()),   // $11
+            std::to_string(syncStatus.getCscaDiscrepancy()),    // $12
+            std::to_string(syncStatus.getDscDiscrepancy()),     // $13
+            std::to_string(syncStatus.getDscNcDiscrepancy()),   // $14
+            std::to_string(syncStatus.getCrlDiscrepancy()),     // $15
+            std::to_string(syncStatus.getTotalDiscrepancy()),   // $16
+            dbCountryStatsJson,                                  // $17
+            ldapCountryStatsJson,                                // $18
+            syncStatus.getStatus(),                              // $19
+            errorMessageStr,                                     // $20
+            std::to_string(syncStatus.getCheckDurationMs()),    // $21
+            std::to_string(syncStatus.getDbMlscCount()),        // $22
+            std::to_string(syncStatus.getLdapMlscCount()),      // $23
+            std::to_string(syncStatus.getMlscDiscrepancy())     // $24
         };
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        int rowsAffected = queryExecutor_->executeCommand(query, params);
 
-        if (result.empty()) {
-            spdlog::error("[SyncStatusRepository] Insert returned no rows");
+        // Oracle's OTL get_rpc() may return 0 even for successful INSERTs without RETURNING clause
+        // If execution reaches here without exception, INSERT was successful
+        // Reuse dbType from line 25 (already declared in this scope)
+        if (rowsAffected == 0 && dbType == "postgres") {
+            // PostgreSQL should always return affected rows count
+            spdlog::error("[SyncStatusRepository] Insert failed: no rows affected");
             return false;
         }
 
-        // Update domain object with generated id and timestamp
-        std::string id = result[0]["id"].asString();
-        syncStatus.setId(id);
+        // Update domain object with generated id and current timestamp
+        syncStatus.setId(generatedId);
+        syncStatus.setCheckedAt(std::chrono::system_clock::now());
 
-        // Parse checked_at timestamp
-        std::string checkedAtStr = result[0]["checked_at"].asString();
-        std::tm tm = {};
-        if (strptime(checkedAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
-            auto tp = std::chrono::system_clock::from_time_t(std::mktime(&tm));
-            syncStatus.setCheckedAt(tp);
-        }
-
-        spdlog::info("[SyncStatusRepository] Sync status created with ID: {}", id);
+        spdlog::info("[SyncStatusRepository] Sync status created with ID: {}", generatedId);
         return true;
 
     } catch (const std::exception& e) {
