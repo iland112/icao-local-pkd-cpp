@@ -28,10 +28,11 @@ bool UploadRepository::insert(const Upload& upload)
     spdlog::debug("[UploadRepository] Inserting upload: {}", upload.fileName);
 
     try {
+        // Oracle: upload_timestamp is VARCHAR2, use TO_CHAR(SYSTIMESTAMP) to convert
         const char* query =
             "INSERT INTO uploaded_file "
             "(id, file_name, file_hash, file_format, file_size, status, uploaded_by, upload_timestamp) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())";
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))";
 
         std::vector<std::string> params = {
             upload.id,
@@ -59,6 +60,7 @@ std::optional<Upload> UploadRepository::findById(const std::string& uploadId)
     spdlog::debug("[UploadRepository] Finding upload by ID: {}", uploadId);
 
     try {
+        // Oracle: upload_timestamp, completed_timestamp are now VARCHAR2 (no conversion needed)
         const char* query =
             "SELECT id, file_name, file_hash, file_format, file_size, status, uploaded_by, "
             "error_message, processing_mode, total_entries, processed_entries, "
@@ -106,6 +108,8 @@ std::vector<Upload> UploadRepository::findAll(
 
     try {
         // Map domain field names to database column names (support both camelCase and snake_case)
+        // ORDER BY uses raw column names - Oracle handles TIMESTAMP sorting natively
+        // TO_CHAR() is only for SELECT clause to convert results to string for OTL
         std::string dbSortBy = sortBy;
         if (sortBy == "createdAt" || sortBy == "created_at") {
             dbSortBy = "upload_timestamp";
@@ -113,6 +117,7 @@ std::vector<Upload> UploadRepository::findAll(
             dbSortBy = "completed_timestamp";
         }
 
+        // Oracle: upload_timestamp, completed_timestamp are now VARCHAR2 (simplified query)
         std::ostringstream query;
         query << "SELECT id, file_name, file_hash, file_format, file_size, status, uploaded_by, "
               << "error_message, processing_mode, total_entries, processed_entries, "
@@ -129,7 +134,7 @@ std::vector<Upload> UploadRepository::findAll(
               << "COALESCE(revoked_count, 0) AS revoked_count "
               << "FROM uploaded_file "
               << "ORDER BY " << dbSortBy << " " << direction << " "
-              << "LIMIT " << limit << " OFFSET " << offset;
+              << "OFFSET " << offset << " ROWS FETCH NEXT " << limit << " ROWS ONLY";
 
         Json::Value result = queryExecutor_->executeQuery(query.str());
 
@@ -161,12 +166,12 @@ bool UploadRepository::updateStatus(
 
         if (errorMessage.empty()) {
             query = "UPDATE uploaded_file SET status = $1, "
-                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN NOW() ELSE completed_timestamp END "
+                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') ELSE completed_timestamp END "
                    "WHERE id = $2";
             params = {status, uploadId};
         } else {
             query = "UPDATE uploaded_file SET status = $1, error_message = $2, "
-                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN NOW() ELSE completed_timestamp END "
+                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') ELSE completed_timestamp END "
                    "WHERE id = $3";
             params = {status, errorMessage, uploadId};
         }
@@ -269,6 +274,7 @@ std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHa
     spdlog::debug("[UploadRepository] Finding upload by file hash: {}", fileHash.substr(0, 16) + "...");
 
     try {
+        // Oracle: upload_timestamp, completed_timestamp are now VARCHAR2 (simplified query)
         const char* query =
             "SELECT id, file_name, file_hash, file_format, file_size, status, uploaded_by, "
             "error_message, processing_mode, total_entries, processed_entries, "
@@ -283,7 +289,8 @@ std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHa
             "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
             "COALESCE(expired_count, 0) AS expired_count, "
             "COALESCE(revoked_count, 0) AS revoked_count "
-            "FROM uploaded_file WHERE file_hash = $1 LIMIT 1";
+            "FROM uploaded_file WHERE file_hash = $1 "
+            "FETCH FIRST 1 ROWS ONLY";
 
         std::vector<std::string> params = {fileHash};
         Json::Value result = queryExecutor_->executeQuery(query, params);

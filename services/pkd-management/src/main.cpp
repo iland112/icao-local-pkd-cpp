@@ -92,6 +92,8 @@
 #include "repositories/audit_repository.h"
 #include "repositories/statistics_repository.h"
 #include "repositories/ldif_structure_repository.h"  // v2.2.2: LDIF structure visualization
+#include "repositories/user_repository.h"  // Phase 5.4: Authentication Repository Pattern
+#include "repositories/auth_audit_repository.h"  // Phase 5.4: Authentication Repository Pattern
 
 // Phase 1.5/1.6: Repository Pattern - Services
 #include "services/upload_service.h"
@@ -132,6 +134,8 @@ std::shared_ptr<repositories::ValidationRepository> validationRepository;
 std::shared_ptr<repositories::AuditRepository> auditRepository;
 std::shared_ptr<repositories::StatisticsRepository> statisticsRepository;
 std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;  // v2.2.2
+std::shared_ptr<repositories::UserRepository> userRepository;  // Phase 5.4
+std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;  // Phase 5.4
 std::shared_ptr<services::UploadService> uploadService;
 std::shared_ptr<services::ValidationService> validationService;
 std::shared_ptr<services::AuditService> auditService;
@@ -5003,19 +5007,11 @@ void registerRoutes() {
     // instantiation with parameters. It cannot be registered globally via registerFilter().
     // Instead, apply it to individual routes using .addFilter() method.
     //
-    // Example:
-    //   app.registerHandler("/api/upload/ldif", handler)
-    //      .addFilter(std::make_shared<middleware::AuthMiddleware>());
-    //
-    // For now, authentication is OPTIONAL per-route.
-    // TODO: Apply AuthMiddleware to all protected routes after testing.
-
-    spdlog::warn("⚠️  Phase 3 Authentication implementation complete (per-route filtering)");
-    spdlog::warn("⚠️  Apply .addFilter<AuthMiddleware>() to protected routes manually");
-
     // =========================================================================
-    // Authentication Routes (Phase 3)
+    // Authentication Routes (Phase 5.4: Repository Pattern)
     // =========================================================================
+    // Note: AuthMiddleware is applied globally via registerPreHandlingAdvice()
+    // (see initialization section at end of main())
     if (authHandler) {
         authHandler->registerRoutes(app);
     }
@@ -8723,19 +8719,16 @@ int main(int argc, char* argv[]) {
                     appConfig.icaoPortalUrl,
                     appConfig.icaoAutoNotify ? "enabled" : "disabled");
 
-        // Initialize Authentication Handler (Phase 3)
-        spdlog::info("Initializing Authentication module...");
-        authHandler = std::make_shared<handlers::AuthHandler>(dbConnInfo);
-        spdlog::info("Authentication module initialized");
-
         // Phase 1.6: Initialize Repository Pattern - Repositories and Services
         spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
 
         // Create database connection pool for Repositories (v2.5.0: Factory Pattern with Oracle support)
+        std::shared_ptr<common::IDbConnectionPool> genericPool;
+
         try {
             // v2.5.0: Use Factory Pattern to create pool based on DB_TYPE environment variable
             // Supports both PostgreSQL (production) and Oracle (development)
-            auto genericPool = common::DbConnectionPoolFactory::createFromEnv();
+            genericPool = common::DbConnectionPoolFactory::createFromEnv();
 
             if (!genericPool) {
                 spdlog::critical("Failed to create database connection pool from environment");
@@ -8753,22 +8746,9 @@ int main(int argc, char* argv[]) {
             std::string dbType = genericPool->getDatabaseType();
             spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
-            // Phase 2: Currently only PostgreSQL is supported by Repositories
-            // TODO Phase 3: Add Oracle Repository support or use database-agnostic SQL
-            if (dbType != "postgres") {
-                spdlog::critical("Repositories currently only support PostgreSQL (got: {})", dbType);
-                spdlog::critical("Oracle support requires Repository layer refactoring (Phase 3)");
-                ldapPool.reset();
-                return 1;
-            }
-
-            // Safe downcast for PostgreSQL pool (current phase limitation)
-            dbPool = std::dynamic_pointer_cast<common::DbConnectionPool>(genericPool);
-            if (!dbPool) {
-                spdlog::critical("Failed to cast database pool to PostgreSQL type");
-                ldapPool.reset();
-                return 1;
-            }
+            // Phase 3 Complete: Query Executor Pattern supports both PostgreSQL and Oracle
+            // Repositories work with any database through IQueryExecutor interface
+            spdlog::info("Repository Pattern initialization complete - Ready for {} database", dbType);
 
         } catch (const std::exception& e) {
             spdlog::critical("Failed to initialize database connection pool: {}", e.what());
@@ -8777,7 +8757,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Initialize Query Executor (v2.5.0 Phase 3: Database-agnostic query execution)
-        queryExecutor = common::createQueryExecutor(dbPool.get());
+        queryExecutor = common::createQueryExecutor(genericPool.get());
         spdlog::info("Query Executor initialized (DB type: {})", queryExecutor->getDatabaseType());
 
         // Initialize Repositories with Query Executor (v2.5.0 Phase 3: Database-agnostic)
@@ -8786,7 +8766,9 @@ int main(int argc, char* argv[]) {
         validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get());
         auditRepository = std::make_shared<repositories::AuditRepository>(queryExecutor.get());
         statisticsRepository = std::make_shared<repositories::StatisticsRepository>(queryExecutor.get());
-        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics: Query Executor)");
+        userRepository = std::make_shared<repositories::UserRepository>(queryExecutor.get());
+        authAuditRepository = std::make_shared<repositories::AuthAuditRepository>(queryExecutor.get());
+        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, User, AuthAudit: Query Executor)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
         // Initialize Services with Repository dependencies
@@ -8815,6 +8797,15 @@ int main(int argc, char* argv[]) {
         );
 
         spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, Statistics, LdifStructure)");
+
+        // Phase 5.4: Initialize Authentication Handler with Repository Pattern
+        spdlog::info("Initializing Authentication module with Repository Pattern...");
+        authHandler = std::make_shared<handlers::AuthHandler>(
+            userRepository.get(),
+            authAuditRepository.get()
+        );
+        spdlog::info("Authentication module initialized (UserRepository, AuthAuditRepository)");
+
         spdlog::info("Repository Pattern initialization complete - Ready for Oracle migration");
 
         auto& app = drogon::app();

@@ -95,6 +95,8 @@ add_executable(${PROJECT_NAME}
     src/repositories/audit_repository.cpp
     src/repositories/statistics_repository.cpp
     src/repositories/ldif_structure_repository.cpp  # v2.2.2: LDIF structure visualization
+    src/repositories/user_repository.cpp  # Phase 5.4: AuthHandler migration
+    src/repositories/auth_audit_repository.cpp  # Phase 5.4: AuthHandler migration
 
     # Service Layer - main.cpp refactoring (v2.1.3)
     src/services/upload_service.cpp

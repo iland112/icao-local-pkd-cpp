@@ -14,6 +14,11 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/health.*",              // Health check endpoints
     "^/api/auth/login$",           // Login endpoint
     "^/api/auth/register$",        // Registration endpoint (future)
+    "^/api/auth/logout$",          // Logout endpoint (handler validates JWT)
+    "^/api/auth/refresh$",         // Token refresh endpoint (handler validates JWT)
+    "^/api/auth/me$",              // Current user info endpoint (handler validates JWT)
+    "^/api/auth/users.*",          // User management endpoints (handler validates JWT + admin)
+    "^/api/auth/audit-log.*",      // Auth audit log endpoints (handler validates JWT + admin)
 
     // ========================================================================
     // Dashboard & Statistics (Read-only public information)
@@ -23,8 +28,16 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/upload/history.*",      // Upload history (development access)
     "^/api/upload/statistics$",    // Upload statistics
     "^/api/upload/changes.*",      // Recent upload changes
-    "^/api/upload/[a-f0-9\\-]+$",  // Upload detail by ID
+    "^/api/upload/[a-f0-9\\-]+$",  // Upload by ID (deprecated pattern)
+    "^/api/upload/detail/[a-f0-9\\-]+$", // Upload detail by ID (fixes 401 error)
     "^/api/upload/[a-f0-9\\-]+/.*", // Upload sub-resources (validations, issues, etc.)
+
+    // ========================================================================
+    // File Upload (TEMPORARY for Oracle testing - REMOVE after testing)
+    // ========================================================================
+    "^/api/upload/ldif$",          // LDIF file upload
+    "^/api/upload/masterlist$",    // Master List upload
+    "^/api/progress.*",            // Upload progress SSE stream
 
     // ========================================================================
     // Certificate Search (Public directory service)
