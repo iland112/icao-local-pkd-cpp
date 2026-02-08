@@ -28,10 +28,52 @@ Json::Value PostgreSQLQueryExecutor::executeQuery(
 )
 {
     spdlog::debug("[PostgreSQLQueryExecutor] Executing SELECT query");
+    spdlog::debug("[PostgreSQLQueryExecutor] Query: {}", query);
+    spdlog::debug("[PostgreSQLQueryExecutor] Params count: {}", params.size());
+    for (size_t i = 0; i < params.size(); ++i) {
+        spdlog::debug("[PostgreSQLQueryExecutor] Param[{}]: '{}'", i, params[i]);
+    }
 
-    PGresult* res = executeRawQuery(query, params);
+    // Acquire connection from pool (RAII - held until function returns)
+    auto conn = pool_->acquire();
+    if (!conn.isValid()) {
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Failed to acquire connection from pool");
+    }
+
+    // Prepare parameter values for libpq
+    std::vector<const char*> paramValues;
+    for (const auto& param : params) {
+        paramValues.push_back(param.c_str());
+    }
+
+    // Execute parameterized query
+    PGresult* res = PQexecParams(
+        conn.get(),
+        query.c_str(),
+        params.size(),
+        nullptr,
+        paramValues.data(),
+        nullptr,
+        nullptr,
+        0
+    );
+
+    if (!res) {
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Query execution failed: null result");
+    }
+
+    // Check execution status
+    ExecStatusType status = PQresultStatus(res);
+    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
+        std::string error = PQerrorMessage(conn.get());
+        PQclear(res);
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Query failed: " + error);
+    }
+
+    // Convert to JSON while connection is still valid
     Json::Value result = pgResultToJson(res);
     PQclear(res);
+    // conn automatically returned to pool here
 
     return result;
 }
@@ -43,7 +85,41 @@ int PostgreSQLQueryExecutor::executeCommand(
 {
     spdlog::debug("[PostgreSQLQueryExecutor] Executing command");
 
-    PGresult* res = executeRawQuery(query, params);
+    // Acquire connection from pool (RAII - held until function returns)
+    auto conn = pool_->acquire();
+    if (!conn.isValid()) {
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Failed to acquire connection from pool");
+    }
+
+    // Prepare parameter values for libpq
+    std::vector<const char*> paramValues;
+    for (const auto& param : params) {
+        paramValues.push_back(param.c_str());
+    }
+
+    // Execute parameterized query
+    PGresult* res = PQexecParams(
+        conn.get(),
+        query.c_str(),
+        params.size(),
+        nullptr,
+        paramValues.data(),
+        nullptr,
+        nullptr,
+        0
+    );
+
+    if (!res) {
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Query execution failed: null result");
+    }
+
+    // Check execution status
+    ExecStatusType status = PQresultStatus(res);
+    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
+        std::string error = PQerrorMessage(conn.get());
+        PQclear(res);
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Query failed: " + error);
+    }
 
     // Get number of affected rows
     const char* affectedRowsStr = PQcmdTuples(res);
@@ -53,6 +129,7 @@ int PostgreSQLQueryExecutor::executeCommand(
     }
 
     PQclear(res);
+    // conn automatically returned to pool here
 
     spdlog::debug("[PostgreSQLQueryExecutor] Command executed, affected rows: {}", affectedRows);
     return affectedRows;
@@ -65,7 +142,41 @@ Json::Value PostgreSQLQueryExecutor::executeScalar(
 {
     spdlog::debug("[PostgreSQLQueryExecutor] Executing scalar query");
 
-    PGresult* res = executeRawQuery(query, params);
+    // Acquire connection from pool (RAII - held until function returns)
+    auto conn = pool_->acquire();
+    if (!conn.isValid()) {
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Failed to acquire connection from pool");
+    }
+
+    // Prepare parameter values for libpq
+    std::vector<const char*> paramValues;
+    for (const auto& param : params) {
+        paramValues.push_back(param.c_str());
+    }
+
+    // Execute parameterized query
+    PGresult* res = PQexecParams(
+        conn.get(),
+        query.c_str(),
+        params.size(),
+        nullptr,
+        paramValues.data(),
+        nullptr,
+        nullptr,
+        0
+    );
+
+    if (!res) {
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Query execution failed: null result");
+    }
+
+    // Check execution status
+    ExecStatusType status = PQresultStatus(res);
+    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
+        std::string error = PQerrorMessage(conn.get());
+        PQclear(res);
+        throw std::runtime_error("[PostgreSQLQueryExecutor] Query failed: " + error);
+    }
 
     if (PQntuples(res) == 0) {
         PQclear(res);
@@ -98,6 +209,7 @@ Json::Value PostgreSQLQueryExecutor::executeScalar(
     }
 
     PQclear(res);
+    // conn automatically returned to pool here
     return result;
 }
 
@@ -156,6 +268,8 @@ Json::Value PostgreSQLQueryExecutor::pgResultToJson(PGresult* res)
 
     int rows = PQntuples(res);
     int cols = PQnfields(res);
+
+    spdlog::debug("[PostgreSQLQueryExecutor] pgResultToJson: rows={}, cols={}", rows, cols);
 
     for (int i = 0; i < rows; ++i) {
         Json::Value row;
