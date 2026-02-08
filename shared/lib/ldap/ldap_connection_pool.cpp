@@ -184,13 +184,22 @@ LDAP* LdapConnectionPool::createConnection() {
         spdlog::warn("ldap_set_option NETWORK_TIMEOUT failed: {}", ldap_err2string(rc));
     }
 
-    // Perform simple bind
-    struct berval cred;
-    cred.bv_val = const_cast<char*>(bindPassword_.c_str());
-    cred.bv_len = bindPassword_.length();
+    // Perform simple bind with proper berval initialization
+    // Use ber_str2bv() to safely create berval structure
+    // Parameter 3 = 1 means duplicate the string (important for thread safety)
+    struct berval* cred = ber_str2bv(bindPassword_.c_str(), 0, 1, nullptr);
+    if (!cred) {
+        spdlog::error("ber_str2bv failed to create berval");
+        ldap_unbind_ext_s(ld, nullptr, nullptr);
+        return nullptr;
+    }
 
-    rc = ldap_sasl_bind_s(ld, bindDn_.c_str(), LDAP_SASL_SIMPLE, &cred,
+    rc = ldap_sasl_bind_s(ld, bindDn_.c_str(), LDAP_SASL_SIMPLE, cred,
                           nullptr, nullptr, nullptr);
+
+    // Free the berval structure
+    ber_bvfree(cred);
+
     if (rc != LDAP_SUCCESS) {
         spdlog::error("ldap_sasl_bind_s failed: {}", ldap_err2string(rc));
         ldap_unbind_ext_s(ld, nullptr, nullptr);
