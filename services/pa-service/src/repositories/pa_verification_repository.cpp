@@ -35,8 +35,31 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
     spdlog::debug("[PaVerificationRepository] Inserting PA verification record");
 
     try {
-        const char* query =
+        // Step 1: Generate UUID using database-specific function
+        // PostgreSQL: uuid_generate_v4()
+        // Oracle: LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), '([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', '\1-\2-\3-\4-\5'))
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string uuidQuery;
+
+        if (dbType == "postgres") {
+            uuidQuery = "SELECT uuid_generate_v4()::text as id";
+        } else {
+            // Oracle: Convert SYS_GUID() to UUID format (lowercase with hyphens)
+            uuidQuery = "SELECT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), "
+                       "'([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', "
+                       "'\\1-\\2-\\3-\\4-\\5')) as id FROM DUAL";
+        }
+
+        Json::Value uuidResult = queryExecutor_->executeQuery(uuidQuery, {});
+        if (uuidResult.empty()) {
+            throw std::runtime_error("Failed to generate UUID");
+        }
+        std::string generatedId = uuidResult[0]["id"].asString();
+
+        // Step 2: Insert with generated UUID (no RETURNING clause needed)
+        const char* insertQuery =
             "INSERT INTO pa_verification ("
+            "id, "  // Add id column
             "issuing_country, document_number, verification_status, sod_hash, sod_binary, "
             "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
             "csca_subject_dn, csca_fingerprint, "
@@ -47,51 +70,52 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             "verification_message, "
             "client_ip, user_agent"
             ") VALUES ("
-            "$1, $2, $3, $4, $5, "
-            "$6, $7, $8, $9, "
-            "$10, $11, "
-            "$12, $13, "
-            "$14, $15, "
-            "$16, $17, "
-            "$18, $19, "
-            "$20, "
-            "$21, $22"
-            ") RETURNING id";
+            "$1, "  // id value
+            "$2, $3, $4, $5, $6, "
+            "$7, $8, $9, $10, "
+            "$11, $12, "
+            "$13, $14, "
+            "$15, $16, "
+            "$17, $18, "
+            "$19, $20, "
+            "$21, "
+            "$22, $23"
+            ")";
 
         std::vector<std::string> params = {
-            verification.countryCode,                                        // $1
-            verification.documentNumber,                                     // $2
-            verification.verificationStatus,                                 // $3
-            verification.sodHash,                                            // $4
-            "",                                                              // $5: sod_binary (TODO)
-            verification.dscSubject,                                         // $6
-            verification.dscSerialNumber,                                    // $7
-            verification.dscIssuer,                                          // $8
-            "",                                                              // $9: dsc_fingerprint (TODO)
-            verification.cscaSubject,                                        // $10
-            "",                                                              // $11: csca_fingerprint (TODO)
-            verification.certificateChainValid ? "true" : "false",           // $12
-            "",                                                              // $13: trust_chain_message (TODO)
-            verification.sodSignatureValid ? "true" : "false",               // $14
-            "",                                                              // $15: sod_signature_message (TODO)
-            verification.dataGroupsValid ? "true" : "false",                 // $16
-            "",                                                              // $17: dg_hashes_message (TODO)
-            verification.crlStatus,                                          // $18
-            verification.crlMessage.value_or(""),                            // $19
-            verification.validationErrors.value_or(""),                      // $20
-            verification.ipAddress.value_or(""),                             // $21
-            verification.userAgent.value_or("")                              // $22
+            generatedId,                                                     // $1: id
+            verification.countryCode,                                        // $2
+            verification.documentNumber,                                     // $3
+            verification.verificationStatus,                                 // $4
+            verification.sodHash,                                            // $5
+            "",                                                              // $6: sod_binary (TODO)
+            verification.dscSubject,                                         // $7
+            verification.dscSerialNumber,                                    // $8
+            verification.dscIssuer,                                          // $9
+            "",                                                              // $10: dsc_fingerprint (TODO)
+            verification.cscaSubject,                                        // $11
+            "",                                                              // $12: csca_fingerprint (TODO)
+            verification.certificateChainValid ? "true" : "false",           // $13
+            "",                                                              // $14: trust_chain_message (TODO)
+            verification.sodSignatureValid ? "true" : "false",               // $15
+            "",                                                              // $16: sod_signature_message (TODO)
+            verification.dataGroupsValid ? "true" : "false",                 // $17
+            "",                                                              // $18: dg_hashes_message (TODO)
+            verification.crlStatus,                                          // $19
+            verification.crlMessage.value_or(""),                            // $20
+            verification.validationErrors.value_or(""),                      // $21
+            verification.ipAddress.value_or(""),                             // $22
+            verification.userAgent.value_or("")                              // $23
         };
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        int rowsAffected = queryExecutor_->executeCommand(insertQuery, params);
 
-        if (result.empty()) {
-            throw std::runtime_error("Insert returned no ID");
+        if (rowsAffected == 0) {
+            throw std::runtime_error("Insert failed: no rows affected");
         }
 
-        std::string id = result[0]["id"].asString();
-        spdlog::info("[PaVerificationRepository] PA verification inserted with ID: {}", id);
-        return id;
+        spdlog::info("[PaVerificationRepository] PA verification inserted with ID: {}", generatedId);
+        return generatedId;
 
     } catch (const std::exception& e) {
         spdlog::error("[PaVerificationRepository] Insert failed: {}", e.what());
@@ -225,7 +249,7 @@ Json::Value PaVerificationRepository::getStatistics() {
         Json::Value statusCounts;
         for (const auto& row : statusResult) {
             std::string status = row["verification_status"].asString();
-            int count = std::stoi(row["count"].asString());
+            int count = row["count"].asInt();  // Oracle returns count as int, not string
             statusCounts[status] = count;
         }
         stats["byStatus"] = statusCounts;
@@ -243,7 +267,7 @@ Json::Value PaVerificationRepository::getStatistics() {
         for (const auto& row : countryResult) {
             Json::Value country;
             country["country"] = row["issuing_country"].asString();
-            country["count"] = std::stoi(row["count"].asString());
+            country["count"] = row["count"].asInt();  // Oracle returns count as int, not string
             countryCounts.append(country);
         }
         stats["byCountry"] = countryCounts;
@@ -257,8 +281,8 @@ Json::Value PaVerificationRepository::getStatistics() {
         Json::Value successResult = queryExecutor_->executeQuery(successQuery);
 
         if (!successResult.empty()) {
-            int validCount = std::stoi(successResult[0]["valid_count"].asString());
-            int totalCount = std::stoi(successResult[0]["total_count"].asString());
+            int validCount = successResult[0]["valid_count"].asInt();  // Oracle returns count as int, not string
+            int totalCount = successResult[0]["total_count"].asInt();  // Oracle returns count as int, not string
             double successRate = totalCount > 0 ? (validCount * 100.0 / totalCount) : 0.0;
             stats["successRate"] = successRate;
         }

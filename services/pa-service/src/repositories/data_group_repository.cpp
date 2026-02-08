@@ -107,17 +107,38 @@ std::string DataGroupRepository::insert(
             dgNumber = std::stoi(dg.dgNumber.substr(2));
         }
 
-        const char* query = R"SQL(
+        // Step 1: Generate UUID using database-specific function
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string uuidQuery;
+
+        if (dbType == "postgres") {
+            uuidQuery = "SELECT uuid_generate_v4()::text as id";
+        } else {
+            // Oracle: Convert SYS_GUID() to UUID format
+            uuidQuery = "SELECT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), "
+                       "'([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', "
+                       "'\\1-\\2-\\3-\\4-\\5')) as id FROM DUAL";
+        }
+
+        Json::Value uuidResult = queryExecutor_->executeQuery(uuidQuery, {});
+        if (uuidResult.empty()) {
+            throw std::runtime_error("Failed to generate UUID");
+        }
+        std::string generatedId = uuidResult[0]["id"].asString();
+
+        // Step 2: Insert with generated UUID (no RETURNING clause needed)
+        const char* insertQuery = R"SQL(
             INSERT INTO pa_data_group (
-                verification_id, dg_number, expected_hash, actual_hash,
+                id, verification_id, dg_number, expected_hash, actual_hash,
                 hash_algorithm, hash_valid, dg_binary
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7
-            ) RETURNING id
+                $1, $2, $3, $4, $5, $6, $7, $8
+            )
         )SQL";
 
         // Prepare parameters
         std::vector<std::string> params;
+        params.push_back(generatedId);
         params.push_back(verificationId);
         params.push_back(std::to_string(dgNumber));
         params.push_back(dg.expectedHash);
@@ -139,15 +160,14 @@ std::string DataGroupRepository::insert(
         }
         params.push_back(binaryData);
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        int rowsAffected = queryExecutor_->executeCommand(insertQuery, params);
 
-        if (result.empty()) {
-            throw std::runtime_error("Insert returned no ID");
+        if (rowsAffected == 0) {
+            throw std::runtime_error("Insert failed: no rows affected");
         }
 
-        std::string id = result[0]["id"].asString();
-        spdlog::info("[DataGroupRepository] Data group inserted with ID: {}", id);
-        return id;
+        spdlog::info("[DataGroupRepository] Data group inserted with ID: {}", generatedId);
+        return generatedId;
 
     } catch (const std::exception& e) {
         spdlog::error("[DataGroupRepository] Insert failed: {}", e.what());
