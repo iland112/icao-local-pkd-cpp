@@ -23,7 +23,7 @@ proxy_busy_buffers_size 64k;
 proxy_temp_file_write_size 64k;
 
 # Cache control (disable for development/staging)
-proxy_buffering off;
+proxy_buffering on;  # Changed from off to fix duplicate header issue
 proxy_cache off;
 add_header Cache-Control "no-cache, no-store, must-revalidate" always;
 add_header Pragma "no-cache" always;
