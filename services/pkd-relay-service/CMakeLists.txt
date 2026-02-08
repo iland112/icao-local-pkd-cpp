@@ -57,14 +57,18 @@ set(SOURCE_FILES
     src/main.cpp
     src/relay/sync/ldap_operations.cpp
     src/relay/sync/reconciliation_engine.cpp
+    # Repository Pattern - Domain Models
+    src/domain/models/validation_result.cpp
     # Repository Pattern - Repositories
     src/repositories/sync_status_repository.cpp
     src/repositories/certificate_repository.cpp
     src/repositories/crl_repository.cpp
     src/repositories/reconciliation_repository.cpp
+    src/repositories/validation_repository.cpp
     # Repository Pattern - Services
     src/services/sync_service.cpp
     src/services/reconciliation_service.cpp
+    src/services/validation_service.cpp
 )
 
 set(HEADER_FILES
@@ -78,14 +82,17 @@ set(HEADER_FILES
     src/domain/models/reconciliation_log.h
     src/domain/models/crl.h
     src/domain/models/certificate.h
+    src/domain/models/validation_result.h
     # Repository Pattern - Repositories
     src/repositories/sync_status_repository.h
     src/repositories/certificate_repository.h
     src/repositories/crl_repository.h
     src/repositories/reconciliation_repository.h
+    src/repositories/validation_repository.h
     # Repository Pattern - Services
     src/services/sync_service.h
     src/services/reconciliation_service.h
+    src/services/validation_service.h
 )
 
 # =============================================================================

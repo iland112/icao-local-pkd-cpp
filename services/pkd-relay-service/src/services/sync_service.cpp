@@ -124,7 +124,7 @@ Json::Value SyncService::performSyncCheck(
         // Create SyncStatus domain object with constructor
         auto now = std::chrono::system_clock::now();
         domain::SyncStatus syncStatus(
-            0,                      // id (will be set by repository)
+            "",                     // id (empty string, will be set by repository)
             now,                    // checked_at
             dbCscaCount, ldapCscaCount, cscaDiscrepancy,
             dbMlscCount, ldapMlscCount, mlscDiscrepancy,
@@ -259,9 +259,9 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
     dbCounts["csca"] = syncStatus.getDbCscaCount();
     dbCounts["mlsc"] = syncStatus.getDbMlscCount();
     dbCounts["dsc"] = syncStatus.getDbDscCount();
-    dbCounts["dsc_nc"] = syncStatus.getDbDscNcCount();
+    dbCounts["dscNc"] = syncStatus.getDbDscNcCount();  // camelCase for frontend consistency
     dbCounts["crl"] = syncStatus.getDbCrlCount();
-    dbCounts["stored_in_ldap"] = syncStatus.getDbStoredInLdapCount();
+    dbCounts["storedInLdap"] = syncStatus.getDbStoredInLdapCount();  // camelCase for frontend consistency
     json["dbCounts"] = dbCounts;
 
     // LDAP counts
@@ -269,7 +269,7 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
     ldapCounts["csca"] = syncStatus.getLdapCscaCount();
     ldapCounts["mlsc"] = syncStatus.getLdapMlscCount();
     ldapCounts["dsc"] = syncStatus.getLdapDscCount();
-    ldapCounts["dsc_nc"] = syncStatus.getLdapDscNcCount();
+    ldapCounts["dscNc"] = syncStatus.getLdapDscNcCount();  // camelCase for frontend consistency
     ldapCounts["crl"] = syncStatus.getLdapCrlCount();
     json["ldapCounts"] = ldapCounts;
 
@@ -278,7 +278,7 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
     discrepancies["csca"] = syncStatus.getCscaDiscrepancy();
     discrepancies["mlsc"] = syncStatus.getMlscDiscrepancy();
     discrepancies["dsc"] = syncStatus.getDscDiscrepancy();
-    discrepancies["dsc_nc"] = syncStatus.getDscNcDiscrepancy();
+    discrepancies["dscNc"] = syncStatus.getDscNcDiscrepancy();  // camelCase for frontend consistency
     discrepancies["crl"] = syncStatus.getCrlDiscrepancy();
     discrepancies["total"] = syncStatus.getTotalDiscrepancy();
     json["discrepancies"] = discrepancies;
