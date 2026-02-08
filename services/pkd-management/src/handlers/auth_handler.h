@@ -3,8 +3,9 @@
 #include <drogon/HttpController.h>
 #include "../auth/jwt_service.h"
 #include "../auth/password_hash.h"
+#include "../repositories/user_repository.h"
+#include "../repositories/auth_audit_repository.h"
 #include <memory>
-#include <libpq-fe.h>
 
 namespace handlers {
 
@@ -16,17 +17,22 @@ namespace handlers {
  * - POST /api/auth/logout - User logout (client-side token deletion)
  * - POST /api/auth/refresh - Refresh JWT token
  * - GET /api/auth/me - Get current user info
+ *
+ * @note Phase 5.4: Migrated to Repository Pattern for Oracle support
  */
 class AuthHandler {
 public:
     /**
      * @brief Construct AuthHandler
      *
-     * Initializes JWT service and database connection.
+     * Initializes JWT service and repository dependencies.
      *
-     * @param dbConnInfo PostgreSQL connection string
+     * @param userRepository User repository (non-owning pointer)
+     * @param authAuditRepository Auth audit repository (non-owning pointer)
      */
-    explicit AuthHandler(const std::string& dbConnInfo);
+    explicit AuthHandler(
+        repositories::UserRepository* userRepository,
+        repositories::AuthAuditRepository* authAuditRepository);
 
     /**
      * @brief Register authentication routes
@@ -38,7 +44,8 @@ public:
     void registerRoutes(drogon::HttpAppFramework& app);
 
 private:
-    std::string dbConnInfo_;
+    repositories::UserRepository* userRepository_;
+    repositories::AuthAuditRepository* authAuditRepository_;
     std::shared_ptr<auth::JwtService> jwtService_;
 
     /**

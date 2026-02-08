@@ -3,12 +3,16 @@
 #include "i_query_executor.h"
 #include "oracle_connection_pool.h"
 
+// OCI (Oracle Call Interface) headers
+#include <oci.h>
+
 // Suppress OTL library warnings (third-party code)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
 
 // Define OTL configuration before including otlv4.h
 #define OTL_ORA11G_R2  // Oracle 11g Release 2 and higher
+#define OTL_ORA_TIMESTAMP  // Enable Oracle TIMESTAMP support
 #define OTL_STL        // Enable STL features
 #define OTL_ANSI_CPP   // Enable ANSI C++ mode
 #include "external/otl/otlv4.h"
@@ -48,7 +52,10 @@ public:
      */
     explicit OracleQueryExecutor(OracleConnectionPool* pool);
 
-    ~OracleQueryExecutor() override = default;
+    /**
+     * @brief Destructor - cleanup OCI handles
+     */
+    ~OracleQueryExecutor() override;
 
     /**
      * @brief Execute SELECT query with parameterized binding
@@ -100,6 +107,42 @@ public:
 
 private:
     OracleConnectionPool* pool_;  ///< Oracle connection pool
+
+    // OCI handles for stable VARCHAR2 TIMESTAMP handling
+    OCIEnv* ociEnv_;      ///< OCI environment handle
+    OCIError* ociErr_;    ///< OCI error handle
+    OCISvcCtx* ociSvcCtx_; ///< OCI service context (connection)
+    OCIServer* ociServer_; ///< OCI server handle
+    OCISession* ociSession_; ///< OCI session handle
+
+    std::string connString_; ///< Oracle connection string
+
+    /**
+     * @brief Initialize OCI environment and error handles
+     * @throws std::runtime_error on OCI initialization failure
+     */
+    void initializeOCI();
+
+    /**
+     * @brief Cleanup OCI handles
+     */
+    void cleanupOCI();
+
+    /**
+     * @brief Execute SELECT query using OCI (for stable TIMESTAMP handling)
+     *
+     * Uses OCI instead of OTL for queries that need stable VARCHAR2 reading.
+     * OTL has issues with describe_select() even for VARCHAR2 columns.
+     *
+     * @param query SQL query
+     * @param params Query parameters
+     * @return JSON array of result rows
+     * @throws std::runtime_error on OCI execution failure
+     */
+    Json::Value executeQueryWithOCI(
+        const std::string& query,
+        const std::vector<std::string>& params
+    );
 
     /**
      * @brief Convert PostgreSQL placeholder syntax to Oracle syntax

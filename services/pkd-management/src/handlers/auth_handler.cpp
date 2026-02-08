@@ -6,8 +6,15 @@
 
 namespace handlers {
 
-AuthHandler::AuthHandler(const std::string& dbConnInfo)
-    : dbConnInfo_(dbConnInfo) {
+AuthHandler::AuthHandler(
+    repositories::UserRepository* userRepository,
+    repositories::AuthAuditRepository* authAuditRepository)
+    : userRepository_(userRepository),
+      authAuditRepository_(authAuditRepository) {
+
+    if (!userRepository_ || !authAuditRepository_) {
+        throw std::invalid_argument("AuthHandler: repositories cannot be nullptr");
+    }
 
     // Load JWT configuration from environment
     const char* jwtSecret = std::getenv("JWT_SECRET_KEY");
@@ -30,7 +37,7 @@ AuthHandler::AuthHandler(const std::string& dbConnInfo)
         jwtExpiration
     );
 
-    spdlog::info("[AuthHandler] Initialized");
+    spdlog::info("[AuthHandler] Initialized with Repository Pattern (Phase 5.4)");
 }
 
 void AuthHandler::registerRoutes(drogon::HttpAppFramework& app) {
@@ -200,54 +207,16 @@ void AuthHandler::handleLogin(
         spdlog::info("[AuthHandler] Login attempt: username={}, ip={}",
                      username, req->peerAddr().toIp());
 
-        // Connect to database
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            spdlog::error("[AuthHandler] Database connection failed: {}",
-                          PQerrorMessage(conn));
-            PQfinish(conn);
+        // Find user by username using Repository
+        auto userOpt = userRepository_->findByUsername(username);
 
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Internal server error";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k500InternalServerError);
-            callback(response);
-            return;
-        }
-
-        // Query user from database (parameterized)
-        const char* query =
-            "SELECT id, password_hash, email, full_name, permissions, is_admin "
-            "FROM users WHERE username = $1 AND is_active = true";
-
-        const char* paramValues[1] = {username.c_str()};
-        PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                     nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            spdlog::error("[AuthHandler] Query failed: {}", PQerrorMessage(conn));
-            PQclear(res);
-            PQfinish(conn);
-
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Internal server error";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k500InternalServerError);
-            callback(response);
-            return;
-        }
-
-        // User not found or inactive
-        if (PQntuples(res) == 0) {
-            PQclear(res);
-            PQfinish(conn);
-
-            logAuthEvent("", username, "LOGIN_FAILED", false,
-                         req->peerAddr().toIp(),
-                         req->getHeader("User-Agent"),
-                         "User not found or inactive");
+        if (!userOpt.has_value()) {
+            // User not found
+            authAuditRepository_->insert(
+                std::nullopt, username, "LOGIN_FAILED", false,
+                req->peerAddr().toIp(), req->getHeader("User-Agent"),
+                "User not found or inactive"
+            );
 
             Json::Value resp;
             resp["success"] = false;
@@ -258,23 +227,39 @@ void AuthHandler::handleLogin(
             return;
         }
 
-        // Extract user data
-        std::string userId = PQgetvalue(res, 0, 0);
-        std::string passwordHash = PQgetvalue(res, 0, 1);
-        std::string email = PQgetvalue(res, 0, 2) ? PQgetvalue(res, 0, 2) : "";
-        std::string fullName = PQgetvalue(res, 0, 3) ? PQgetvalue(res, 0, 3) : "";
-        std::string permissionsJson = PQgetvalue(res, 0, 4);
-        bool isAdmin = strcmp(PQgetvalue(res, 0, 5), "t") == 0;
+        domain::User user = userOpt.value();
 
-        PQclear(res);
-        PQfinish(conn);
+        // Check if user is active
+        if (!user.isActive()) {
+            authAuditRepository_->insert(
+                user.getId(), username, "LOGIN_FAILED", false,
+                req->peerAddr().toIp(), req->getHeader("User-Agent"),
+                "User account is inactive"
+            );
+
+            Json::Value resp;
+            resp["success"] = false;
+            resp["error"] = "Invalid credentials";
+            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+            response->setStatusCode(drogon::k401Unauthorized);
+            callback(response);
+            return;
+        }
+
+        std::string userId = user.getId();
+        std::string passwordHash = user.getPasswordHash();
+        std::string email = user.getEmail().value_or("");
+        std::string fullName = user.getFullName().value_or("");
+        std::vector<std::string> permissions = user.getPermissions();
+        bool isAdmin = user.isAdmin();
 
         // Verify password
         if (!auth::verifyPassword(password, passwordHash)) {
-            logAuthEvent(userId, username, "LOGIN_FAILED", false,
-                         req->peerAddr().toIp(),
-                         req->getHeader("User-Agent"),
-                         "Invalid password");
+            authAuditRepository_->insert(
+                userId, username, "LOGIN_FAILED", false,
+                req->peerAddr().toIp(), req->getHeader("User-Agent"),
+                "Invalid password"
+            );
 
             spdlog::warn("[AuthHandler] Login failed: username={}, reason=invalid_password",
                          username);
@@ -288,37 +273,18 @@ void AuthHandler::handleLogin(
             return;
         }
 
-        // Parse permissions from JSON
-        std::vector<std::string> permissions;
-        try {
-            Json::Value permsJson;
-            Json::CharReaderBuilder reader;
-            std::istringstream iss(permissionsJson);
-            std::string errs;
-
-            if (Json::parseFromStream(reader, iss, &permsJson, &errs)) {
-                if (permsJson.isArray()) {
-                    for (const auto& perm : permsJson) {
-                        if (perm.isString()) {
-                            permissions.push_back(perm.asString());
-                        }
-                    }
-                }
-            }
-        } catch (const std::exception& e) {
-            spdlog::error("[AuthHandler] Failed to parse permissions: {}", e.what());
-        }
-
         // Generate JWT token
         std::string token = jwtService_->generateToken(userId, username, permissions, isAdmin);
 
-        // Update last_login_at
-        updateLastLogin(userId);
+        // Update last_login_at using Repository
+        userRepository_->updateLastLogin(userId);
 
-        // Log successful login
-        logAuthEvent(userId, username, "LOGIN_SUCCESS", true,
-                     req->peerAddr().toIp(),
-                     req->getHeader("User-Agent"));
+        // Log successful login using Repository
+        authAuditRepository_->insert(
+            userId, username, "LOGIN_SUCCESS", true,
+            req->peerAddr().toIp(), req->getHeader("User-Agent"),
+            std::nullopt
+        );
 
         spdlog::info("[AuthHandler] Login successful: username={}, userId={}",
                      username, userId);
@@ -328,7 +294,7 @@ void AuthHandler::handleLogin(
         resp["success"] = true;
         resp["access_token"] = token;
         resp["token_type"] = "Bearer";
-        resp["expires_in"] = 3600; // TODO: Get from jwtService
+        resp["expires_in"] = 3600; // 1 hour (matches JwtService default)
 
         Json::Value userJson;
         userJson["id"] = userId;
@@ -464,7 +430,7 @@ void AuthHandler::handleRefresh(
         resp["success"] = true;
         resp["access_token"] = newToken;
         resp["token_type"] = "Bearer";
-        resp["expires_in"] = 3600; // TODO: Get from jwtService
+        resp["expires_in"] = 3600; // 1 hour (matches JwtService default)
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
         callback(response);
@@ -544,27 +510,12 @@ void AuthHandler::handleMe(
 }
 
 void AuthHandler::updateLastLogin(const std::string& userId) {
-    PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-    if (PQstatus(conn) != CONNECTION_OK) {
-        spdlog::error("[AuthHandler] Database connection failed (updateLastLogin): {}",
-                      PQerrorMessage(conn));
-        PQfinish(conn);
-        return;
+    try {
+        userRepository_->updateLastLogin(userId);
+        spdlog::debug("[AuthHandler] Updated last_login_at for user: {}", userId);
+    } catch (const std::exception& e) {
+        spdlog::error("[AuthHandler] Failed to update last_login_at: {}", e.what());
     }
-
-    const char* query = "UPDATE users SET last_login_at = NOW() WHERE id = $1";
-    const char* paramValues[1] = {userId.c_str()};
-
-    PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("[AuthHandler] Failed to update last_login_at: {}",
-                      PQerrorMessage(conn));
-    }
-
-    PQclear(res);
-    PQfinish(conn);
 }
 
 void AuthHandler::logAuthEvent(
@@ -576,40 +527,17 @@ void AuthHandler::logAuthEvent(
     const std::string& userAgent,
     const std::string& errorMessage) {
 
-    PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-    if (PQstatus(conn) != CONNECTION_OK) {
-        spdlog::error("[AuthHandler] Database connection failed (logAuthEvent): {}",
-                      PQerrorMessage(conn));
-        PQfinish(conn);
-        return;
+    try {
+        std::optional<std::string> userIdOpt = userId.empty() ? std::nullopt : std::make_optional(userId);
+        std::optional<std::string> ipOpt = ipAddress.empty() ? std::nullopt : std::make_optional(ipAddress);
+        std::optional<std::string> agentOpt = userAgent.empty() ? std::nullopt : std::make_optional(userAgent);
+        std::optional<std::string> errorOpt = errorMessage.empty() ? std::nullopt : std::make_optional(errorMessage);
+
+        authAuditRepository_->insert(userIdOpt, username, eventType, success, ipOpt, agentOpt, errorOpt);
+        spdlog::debug("[AuthHandler] Logged auth event: {} for user {}", eventType, username);
+    } catch (const std::exception& e) {
+        spdlog::error("[AuthHandler] Failed to log auth event: {}", e.what());
     }
-
-    const char* query =
-        "INSERT INTO auth_audit_log "
-        "(user_id, username, event_type, success, ip_address, user_agent, error_message) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7)";
-
-    const char* successStr = success ? "true" : "false";
-    const char* paramValues[7] = {
-        userId.empty() ? nullptr : userId.c_str(),
-        username.empty() ? nullptr : username.c_str(),
-        eventType.c_str(),
-        successStr,
-        ipAddress.c_str(),
-        userAgent.c_str(),
-        errorMessage.empty() ? nullptr : errorMessage.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn, query, 7, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("[AuthHandler] Failed to insert audit log: {}",
-                      PQerrorMessage(conn));
-    }
-
-    PQclear(res);
-    PQfinish(conn);
 }
 
 std::optional<auth::JwtClaims> AuthHandler::validateRequestToken(
@@ -716,126 +644,14 @@ void AuthHandler::handleListUsers(
             isActiveFilter = params.at("is_active");
         }
 
-        // Database query
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
-        }
-
-        // Build query with filters
-        std::string query = "SELECT id, username, email, full_name, is_admin, is_active, "
-                           "permissions, created_at, last_login_at, updated_at "
-                           "FROM users WHERE 1=1";
-
-        std::vector<std::string> paramValues;
-        int paramIndex = 1;
-
-        if (!search.empty()) {
-            query += " AND (username ILIKE $" + std::to_string(paramIndex) +
-                    " OR email ILIKE $" + std::to_string(paramIndex) +
-                    " OR full_name ILIKE $" + std::to_string(paramIndex) + ")";
-            paramValues.push_back("%" + search + "%");
-            paramIndex++;
-        }
-
-        if (!isActiveFilter.empty()) {
-            query += " AND is_active = $" + std::to_string(paramIndex);
-            paramValues.push_back(isActiveFilter == "true" ? "true" : "false");
-            paramIndex++;
-        }
-
-        query += " ORDER BY created_at DESC";
-        query += " LIMIT $" + std::to_string(paramIndex);
-        paramValues.push_back(std::to_string(limit));
-        paramIndex++;
-
-        query += " OFFSET $" + std::to_string(paramIndex);
-        paramValues.push_back(std::to_string(offset));
-
-        // Convert to C-style array
-        std::vector<const char*> paramPtrs;
-        for (const auto& p : paramValues) {
-            paramPtrs.push_back(p.c_str());
-        }
-
-        PGresult* res = PQexecParams(conn, query.c_str(), paramPtrs.size(), nullptr,
-                                     paramPtrs.data(), nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            PQclear(res);
-            PQfinish(conn);
-            throw std::runtime_error(std::string("Query failed: ") + PQerrorMessage(conn));
-        }
-
-        int rows = PQntuples(res);
-
-        // Build response
-        Json::Value usersArray(Json::arrayValue);
-        for (int i = 0; i < rows; i++) {
-            Json::Value userObj;
-            userObj["id"] = PQgetvalue(res, i, 0);
-            userObj["username"] = PQgetvalue(res, i, 1);
-            userObj["email"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
-            userObj["full_name"] = PQgetvalue(res, i, 3) ? PQgetvalue(res, i, 3) : "";
-            userObj["is_admin"] = strcmp(PQgetvalue(res, i, 4), "t") == 0;
-            userObj["is_active"] = strcmp(PQgetvalue(res, i, 5), "t") == 0;
-
-            // Parse permissions JSON
-            std::string permsJson = PQgetvalue(res, i, 6);
-            Json::Value permsValue;
-            Json::CharReaderBuilder builder;
-            std::istringstream permsStream(permsJson);
-            std::string errs;
-            if (Json::parseFromStream(builder, permsStream, &permsValue, &errs)) {
-                userObj["permissions"] = permsValue;
-            } else {
-                userObj["permissions"] = Json::Value(Json::arrayValue);
-            }
-
-            userObj["created_at"] = PQgetvalue(res, i, 7);
-            userObj["last_login_at"] = PQgetvalue(res, i, 8) ? PQgetvalue(res, i, 8) : "";
-            userObj["updated_at"] = PQgetvalue(res, i, 9);
-
-            usersArray.append(userObj);
-        }
-
-        PQclear(res);
-
-        // Get total count (without pagination)
-        std::string countQuery = "SELECT COUNT(*) FROM users WHERE 1=1";
-        if (!search.empty()) {
-            countQuery += " AND (username ILIKE $1 OR email ILIKE $1 OR full_name ILIKE $1)";
-        }
-        if (!isActiveFilter.empty()) {
-            int idx = search.empty() ? 1 : 2;
-            countQuery += " AND is_active = $" + std::to_string(idx);
-        }
-
-        std::vector<const char*> countParams;
-        if (!search.empty()) {
-            std::string searchPattern = "%" + search + "%";
-            countParams.push_back(searchPattern.c_str());
-        }
-        if (!isActiveFilter.empty()) {
-            countParams.push_back(isActiveFilter == "true" ? "true" : "false");
-        }
-
-        PGresult* countRes = PQexecParams(conn, countQuery.c_str(), countParams.size(),
-                                          nullptr, countParams.data(), nullptr, nullptr, 0);
-
-        int total = 0;
-        if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-            total = std::stoi(PQgetvalue(countRes, 0, 0));
-        }
-
-        PQclear(countRes);
-        PQfinish(conn);
+        // Use repository to get users
+        Json::Value usersArray = userRepository_->findAll(limit, offset, search, isActiveFilter);
+        int total = userRepository_->count(search, isActiveFilter);
 
         Json::Value resp;
         resp["success"] = true;
         resp["total"] = total;
-        resp["users"] = usersArray;
+        resp["data"] = usersArray;  // Consistent with API convention
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
         callback(response);
@@ -872,30 +688,9 @@ void AuthHandler::handleGetUser(
             return;
         }
 
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
-        }
-
-        const char* query = "SELECT id, username, email, full_name, is_admin, is_active, "
-                           "permissions, created_at, last_login_at, updated_at "
-                           "FROM users WHERE id = $1";
-        const char* paramValues[1] = {userId.c_str()};
-
-        PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                     nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            PQclear(res);
-            PQfinish(conn);
-            throw std::runtime_error(std::string("Query failed: ") + PQerrorMessage(conn));
-        }
-
-        if (PQntuples(res) == 0) {
-            PQclear(res);
-            PQfinish(conn);
-
+        // Use repository to find user
+        auto userOpt = userRepository_->findById(userId);
+        if (!userOpt.has_value()) {
             Json::Value resp;
             resp["success"] = false;
             resp["error"] = "Not found";
@@ -906,36 +701,47 @@ void AuthHandler::handleGetUser(
             return;
         }
 
+        domain::User user = userOpt.value();
+
+        // Build JSON response from domain object
         Json::Value userObj;
-        userObj["id"] = PQgetvalue(res, 0, 0);
-        userObj["username"] = PQgetvalue(res, 0, 1);
-        userObj["email"] = PQgetvalue(res, 0, 2) ? PQgetvalue(res, 0, 2) : "";
-        userObj["full_name"] = PQgetvalue(res, 0, 3) ? PQgetvalue(res, 0, 3) : "";
-        userObj["is_admin"] = strcmp(PQgetvalue(res, 0, 4), "t") == 0;
-        userObj["is_active"] = strcmp(PQgetvalue(res, 0, 5), "t") == 0;
+        userObj["id"] = user.getId();
+        userObj["username"] = user.getUsername();
+        userObj["email"] = user.getEmail().value_or("");
+        userObj["full_name"] = user.getFullName().value_or("");
+        userObj["is_admin"] = user.isAdmin();
+        userObj["is_active"] = user.isActive();
 
-        // Parse permissions JSON
-        std::string permsJson = PQgetvalue(res, 0, 6);
-        Json::Value permsValue;
-        Json::CharReaderBuilder builder;
-        std::istringstream permsStream(permsJson);
-        std::string errs;
-        if (Json::parseFromStream(builder, permsStream, &permsValue, &errs)) {
-            userObj["permissions"] = permsValue;
-        } else {
-            userObj["permissions"] = Json::Value(Json::arrayValue);
+        // Permissions array
+        Json::Value permsArray(Json::arrayValue);
+        for (const auto& perm : user.getPermissions()) {
+            permsArray.append(perm);
         }
+        userObj["permissions"] = permsArray;
 
-        userObj["created_at"] = PQgetvalue(res, 0, 7);
-        userObj["last_login_at"] = PQgetvalue(res, 0, 8) ? PQgetvalue(res, 0, 8) : "";
-        userObj["updated_at"] = PQgetvalue(res, 0, 9);
+        // Timestamps (convert to ISO 8601 string using strftime)
+        auto createdTime = std::chrono::system_clock::to_time_t(user.getCreatedAt());
+        auto updatedTime = std::chrono::system_clock::to_time_t(user.getUpdatedAt());
 
-        PQclear(res);
-        PQfinish(conn);
+        char createdBuf[64], updatedBuf[64];
+        std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&createdTime));
+        std::strftime(updatedBuf, sizeof(updatedBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&updatedTime));
+
+        userObj["created_at"] = createdBuf;
+        userObj["updated_at"] = updatedBuf;
+
+        if (user.getLastLoginAt().has_value()) {
+            auto lastLoginTime = std::chrono::system_clock::to_time_t(user.getLastLoginAt().value());
+            char lastLoginBuf[64];
+            std::strftime(lastLoginBuf, sizeof(lastLoginBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&lastLoginTime));
+            userObj["last_login_at"] = lastLoginBuf;
+        } else {
+            userObj["last_login_at"] = "";
+        }
 
         Json::Value resp;
         resp["success"] = true;
-        resp["user"] = userObj;
+        resp["data"] = userObj;  // Consistent with API convention
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
         callback(response);
@@ -1003,43 +809,68 @@ void AuthHandler::handleCreateUser(
         // Hash password
         std::string passwordHash = auth::hashPassword(password);
 
-        // Serialize permissions
-        Json::Value permissions = (*json).get("permissions", Json::Value(Json::arrayValue));
-        Json::StreamWriterBuilder writerBuilder;
-        std::string permissionsJson = Json::writeString(writerBuilder, permissions);
-
-        // Insert user
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
+        // Parse permissions array
+        Json::Value permissionsJson = (*json).get("permissions", Json::Value(Json::arrayValue));
+        std::vector<std::string> permissionsList;
+        for (const auto& perm : permissionsJson) {
+            permissionsList.push_back(perm.asString());
         }
 
-        const char* query =
-            "INSERT INTO users (username, password_hash, email, full_name, is_admin, permissions) "
-            "VALUES ($1, $2, $3, $4, $5, $6::jsonb) "
-            "RETURNING id, username, email, full_name, is_admin, is_active, permissions, created_at";
+        // Create domain User object
+        domain::User newUser;
+        newUser.setUsername(username);
+        newUser.setPasswordHash(passwordHash);
+        newUser.setEmail(email.empty() ? std::nullopt : std::make_optional(email));
+        newUser.setFullName(fullName.empty() ? std::nullopt : std::make_optional(fullName));
+        newUser.setIsAdmin(isAdmin);
+        newUser.setPermissions(permissionsList);
 
-        const char* isAdminStr = isAdmin ? "true" : "false";
-        const char* paramValues[6] = {
-            username.c_str(),
-            passwordHash.c_str(),
-            email.empty() ? nullptr : email.c_str(),
-            fullName.empty() ? nullptr : fullName.c_str(),
-            isAdminStr,
-            permissionsJson.c_str()
-        };
+        // Create user via repository
+        try {
+            std::string userId = userRepository_->create(newUser);
 
-        PGresult* res = PQexecParams(conn, query, 6, nullptr, paramValues,
-                                     nullptr, nullptr, 0);
+            // Fetch created user
+            auto userOpt = userRepository_->findById(userId);
+            if (!userOpt.has_value()) {
+                throw std::runtime_error("Failed to retrieve created user");
+            }
 
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            std::string error = PQerrorMessage(conn);
-            PQclear(res);
-            PQfinish(conn);
+            domain::User createdUser = userOpt.value();
 
+            // Build JSON response
+            Json::Value userObj;
+            userObj["id"] = createdUser.getId();
+            userObj["username"] = createdUser.getUsername();
+            userObj["email"] = createdUser.getEmail().value_or("");
+            userObj["full_name"] = createdUser.getFullName().value_or("");
+            userObj["is_admin"] = createdUser.isAdmin();
+            userObj["is_active"] = createdUser.isActive();
+
+            Json::Value permsArray(Json::arrayValue);
+            for (const auto& perm : createdUser.getPermissions()) {
+                permsArray.append(perm);
+            }
+            userObj["permissions"] = permsArray;
+
+            // Timestamp (convert to ISO 8601 string using strftime)
+            auto createdTime = std::chrono::system_clock::to_time_t(createdUser.getCreatedAt());
+            char createdBuf[64];
+            std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&createdTime));
+            userObj["created_at"] = createdBuf;
+
+            Json::Value resp;
+            resp["success"] = true;
+            resp["user"] = userObj;
+            resp["message"] = "User created successfully";
+
+            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+            response->setStatusCode(drogon::k201Created);
+            callback(response);
+
+        } catch (const std::exception& e) {
             // Check for duplicate username
-            if (error.find("unique") != std::string::npos) {
+            std::string error = e.what();
+            if (error.find("unique") != std::string::npos || error.find("duplicate") != std::string::npos) {
                 Json::Value resp;
                 resp["success"] = false;
                 resp["error"] = "Conflict";
@@ -1049,43 +880,8 @@ void AuthHandler::handleCreateUser(
                 callback(response);
                 return;
             }
-
-            throw std::runtime_error(std::string("Insert failed: ") + error);
+            throw;  // Re-throw for outer catch block
         }
-
-        // Build response
-        Json::Value userObj;
-        userObj["id"] = PQgetvalue(res, 0, 0);
-        userObj["username"] = PQgetvalue(res, 0, 1);
-        userObj["email"] = PQgetvalue(res, 0, 2) ? PQgetvalue(res, 0, 2) : "";
-        userObj["full_name"] = PQgetvalue(res, 0, 3) ? PQgetvalue(res, 0, 3) : "";
-        userObj["is_admin"] = strcmp(PQgetvalue(res, 0, 4), "t") == 0;
-        userObj["is_active"] = strcmp(PQgetvalue(res, 0, 5), "t") == 0;
-
-        std::string permsJson = PQgetvalue(res, 0, 6);
-        Json::Value permsValue;
-        Json::CharReaderBuilder builder;
-        std::istringstream permsStream(permsJson);
-        std::string errs;
-        if (Json::parseFromStream(builder, permsStream, &permsValue, &errs)) {
-            userObj["permissions"] = permsValue;
-        } else {
-            userObj["permissions"] = Json::Value(Json::arrayValue);
-        }
-
-        userObj["created_at"] = PQgetvalue(res, 0, 7);
-
-        PQclear(res);
-        PQfinish(conn);
-
-        Json::Value resp;
-        resp["success"] = true;
-        resp["user"] = userObj;
-        resp["message"] = "User created successfully";
-
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k201Created);
-        callback(response);
 
         spdlog::info("[AuthHandler] User created: {} by admin {}", username, adminClaims->username);
 
@@ -1133,42 +929,33 @@ void AuthHandler::handleUpdateUser(
             return;
         }
 
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
-        }
-
-        // Build dynamic UPDATE query
-        std::vector<std::string> setClauses;
-        std::vector<std::string> paramValues;
-        int paramIndex = 1;
+        // Parse optional fields
+        std::optional<std::string> email;
+        std::optional<std::string> fullName;
+        std::optional<bool> isAdmin;
+        std::optional<bool> isActive;
+        std::vector<std::string> permissions;
 
         if (json->isMember("email")) {
-            setClauses.push_back("email = $" + std::to_string(paramIndex++));
-            paramValues.push_back((*json)["email"].asString());
+            email = (*json)["email"].asString();
         }
         if (json->isMember("full_name")) {
-            setClauses.push_back("full_name = $" + std::to_string(paramIndex++));
-            paramValues.push_back((*json)["full_name"].asString());
+            fullName = (*json)["full_name"].asString();
         }
         if (json->isMember("is_admin")) {
-            setClauses.push_back("is_admin = $" + std::to_string(paramIndex++));
-            paramValues.push_back((*json)["is_admin"].asBool() ? "true" : "false");
+            isAdmin = (*json)["is_admin"].asBool();
         }
         if (json->isMember("is_active")) {
-            setClauses.push_back("is_active = $" + std::to_string(paramIndex++));
-            paramValues.push_back((*json)["is_active"].asBool() ? "true" : "false");
+            isActive = (*json)["is_active"].asBool();
         }
-        if (json->isMember("permissions")) {
-            setClauses.push_back("permissions = $" + std::to_string(paramIndex++) + "::jsonb");
-            Json::StreamWriterBuilder writerBuilder;
-            std::string permissionsJson = Json::writeString(writerBuilder, (*json)["permissions"]);
-            paramValues.push_back(permissionsJson);
+        if (json->isMember("permissions") && (*json)["permissions"].isArray()) {
+            for (const auto& perm : (*json)["permissions"]) {
+                permissions.push_back(perm.asString());
+            }
         }
 
-        if (setClauses.empty()) {
-            PQfinish(conn);
+        // Check if any field provided
+        if (!email && !fullName && !isAdmin.has_value() && !isActive.has_value() && permissions.empty()) {
             Json::Value resp;
             resp["success"] = false;
             resp["error"] = "No fields to update";
@@ -1178,35 +965,10 @@ void AuthHandler::handleUpdateUser(
             return;
         }
 
-        std::string query = "UPDATE users SET " +
-                           std::accumulate(setClauses.begin(), setClauses.end(), std::string(),
-                                          [](const std::string& a, const std::string& b) {
-                                              return a.empty() ? b : a + ", " + b;
-                                          }) +
-                           " WHERE id = $" + std::to_string(paramIndex) +
-                           " RETURNING id, username, email, full_name, is_admin, is_active, "
-                           "permissions, created_at, updated_at";
+        // Update user via repository
+        bool success = userRepository_->update(userId, email, fullName, isAdmin, permissions, isActive);
 
-        paramValues.push_back(userId);
-
-        std::vector<const char*> paramPtrs;
-        for (const auto& p : paramValues) {
-            paramPtrs.push_back(p.c_str());
-        }
-
-        PGresult* res = PQexecParams(conn, query.c_str(), paramPtrs.size(), nullptr,
-                                     paramPtrs.data(), nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            PQclear(res);
-            PQfinish(conn);
-            throw std::runtime_error(std::string("Update failed: ") + PQerrorMessage(conn));
-        }
-
-        if (PQntuples(res) == 0) {
-            PQclear(res);
-            PQfinish(conn);
-
+        if (!success) {
             Json::Value resp;
             resp["success"] = false;
             resp["error"] = "Not found";
@@ -1217,35 +979,50 @@ void AuthHandler::handleUpdateUser(
             return;
         }
 
-        // Build response
-        Json::Value userObj;
-        userObj["id"] = PQgetvalue(res, 0, 0);
-        userObj["username"] = PQgetvalue(res, 0, 1);
-        userObj["email"] = PQgetvalue(res, 0, 2) ? PQgetvalue(res, 0, 2) : "";
-        userObj["full_name"] = PQgetvalue(res, 0, 3) ? PQgetvalue(res, 0, 3) : "";
-        userObj["is_admin"] = strcmp(PQgetvalue(res, 0, 4), "t") == 0;
-        userObj["is_active"] = strcmp(PQgetvalue(res, 0, 5), "t") == 0;
-
-        std::string permsJson = PQgetvalue(res, 0, 6);
-        Json::Value permsValue;
-        Json::CharReaderBuilder builder;
-        std::istringstream permsStream(permsJson);
-        std::string errs;
-        if (Json::parseFromStream(builder, permsStream, &permsValue, &errs)) {
-            userObj["permissions"] = permsValue;
-        } else {
-            userObj["permissions"] = Json::Value(Json::arrayValue);
+        // Fetch updated user
+        auto userOpt = userRepository_->findById(userId);
+        if (!userOpt.has_value()) {
+            Json::Value resp;
+            resp["success"] = false;
+            resp["error"] = "Not found";
+            resp["message"] = "User not found after update";
+            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+            response->setStatusCode(drogon::k404NotFound);
+            callback(response);
+            return;
         }
 
-        userObj["created_at"] = PQgetvalue(res, 0, 7);
-        userObj["updated_at"] = PQgetvalue(res, 0, 8);
+        domain::User user = userOpt.value();
 
-        PQclear(res);
-        PQfinish(conn);
+        // Build response from domain object
+        Json::Value userObj;
+        userObj["id"] = user.getId();
+        userObj["username"] = user.getUsername();
+        userObj["email"] = user.getEmail().value_or("");
+        userObj["full_name"] = user.getFullName().value_or("");
+        userObj["is_admin"] = user.isAdmin();
+        userObj["is_active"] = user.isActive();
+
+        Json::Value permsArray(Json::arrayValue);
+        for (const auto& perm : user.getPermissions()) {
+            permsArray.append(perm);
+        }
+        userObj["permissions"] = permsArray;
+
+        // Format timestamps (using strftime workaround for std::format)
+        auto createdTime = std::chrono::system_clock::to_time_t(user.getCreatedAt());
+        auto updatedTime = std::chrono::system_clock::to_time_t(user.getUpdatedAt());
+
+        char createdBuf[64], updatedBuf[64];
+        std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&createdTime));
+        std::strftime(updatedBuf, sizeof(updatedBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&updatedTime));
+
+        userObj["created_at"] = createdBuf;
+        userObj["updated_at"] = updatedBuf;
 
         Json::Value resp;
         resp["success"] = true;
-        resp["user"] = userObj;
+        resp["data"] = userObj;  // Consistent with API convention
         resp["message"] = "User updated successfully";
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
@@ -1297,28 +1074,10 @@ void AuthHandler::handleDeleteUser(
             return;
         }
 
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
-        }
+        // Delete user via repository
+        auto deletedUsernameOpt = userRepository_->remove(userId);
 
-        const char* query = "DELETE FROM users WHERE id = $1 RETURNING username";
-        const char* paramValues[1] = {userId.c_str()};
-
-        PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                     nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            PQclear(res);
-            PQfinish(conn);
-            throw std::runtime_error(std::string("Delete failed: ") + PQerrorMessage(conn));
-        }
-
-        if (PQntuples(res) == 0) {
-            PQclear(res);
-            PQfinish(conn);
-
+        if (!deletedUsernameOpt.has_value()) {
             Json::Value resp;
             resp["success"] = false;
             resp["error"] = "Not found";
@@ -1329,10 +1088,6 @@ void AuthHandler::handleDeleteUser(
             return;
         }
 
-        std::string deletedUsername = PQgetvalue(res, 0, 0);
-        PQclear(res);
-        PQfinish(conn);
-
         Json::Value resp;
         resp["success"] = true;
         resp["message"] = "User deleted successfully";
@@ -1340,7 +1095,7 @@ void AuthHandler::handleDeleteUser(
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
         callback(response);
 
-        spdlog::info("[AuthHandler] User {} deleted by admin {}", deletedUsername, adminClaims->username);
+        spdlog::info("[AuthHandler] User {} deleted by admin {}", deletedUsernameOpt.value(), adminClaims->username);
 
     } catch (const std::exception& e) {
         spdlog::error("[AuthHandler] Delete user error: {}", e.what());
@@ -1427,21 +1182,9 @@ void AuthHandler::handleChangePassword(
                 return;
             }
 
-            // Verify current password
-            PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
-                throw std::runtime_error(std::string("Database connection failed: ") +
-                                         PQerrorMessage(conn));
-            }
-
-            const char* checkQuery = "SELECT password_hash FROM users WHERE id = $1";
-            const char* checkParams[1] = {userId.c_str()};
-            PGresult* checkRes = PQexecParams(conn, checkQuery, 1, nullptr, checkParams,
-                                              nullptr, nullptr, 0);
-
-            if (PQresultStatus(checkRes) != PGRES_TUPLES_OK || PQntuples(checkRes) == 0) {
-                PQclear(checkRes);
-                PQfinish(conn);
+            // Fetch user to verify current password
+            auto userOpt = userRepository_->findById(userId);
+            if (!userOpt.has_value()) {
                 Json::Value resp;
                 resp["success"] = false;
                 resp["error"] = "Not found";
@@ -1452,11 +1195,8 @@ void AuthHandler::handleChangePassword(
                 return;
             }
 
-            std::string storedHash = PQgetvalue(checkRes, 0, 0);
-            PQclear(checkRes);
-
-            if (!auth::verifyPassword(currentPassword, storedHash)) {
-                PQfinish(conn);
+            domain::User user = userOpt.value();
+            if (!auth::verifyPassword(currentPassword, user.getPasswordHash())) {
                 Json::Value resp;
                 resp["success"] = false;
                 resp["error"] = "Forbidden";
@@ -1466,34 +1206,23 @@ void AuthHandler::handleChangePassword(
                 callback(response);
                 return;
             }
-
-            PQfinish(conn);
         }
 
         // Hash new password
         std::string newPasswordHash = auth::hashPassword(newPassword);
 
-        // Update password
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
+        // Update password via repository
+        bool success = userRepository_->updatePassword(userId, newPasswordHash);
+        if (!success) {
+            Json::Value resp;
+            resp["success"] = false;
+            resp["error"] = "Internal server error";
+            resp["message"] = "Failed to update password";
+            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+            response->setStatusCode(drogon::k500InternalServerError);
+            callback(response);
+            return;
         }
-
-        const char* updateQuery = "UPDATE users SET password_hash = $1 WHERE id = $2";
-        const char* updateParams[2] = {newPasswordHash.c_str(), userId.c_str()};
-
-        PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr, updateParams,
-                                           nullptr, nullptr, 0);
-
-        if (PQresultStatus(updateRes) != PGRES_COMMAND_OK) {
-            PQclear(updateRes);
-            PQfinish(conn);
-            throw std::runtime_error(std::string("Update failed: ") + PQerrorMessage(conn));
-        }
-
-        PQclear(updateRes);
-        PQfinish(conn);
 
         Json::Value resp;
         resp["success"] = true;
@@ -1571,146 +1300,15 @@ void AuthHandler::handleGetAuditLog(
             endDate = params.at("end_date");
         }
 
-        // Database query
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
-        }
+        // Fetch logs via repository
+        Json::Value logsArray = authAuditRepository_->findAll(
+            limit, offset, userId, username, eventType, successFilter, startDate, endDate
+        );
 
-        // Build query with filters
-        std::string query = "SELECT id, user_id, username, event_type, ip_address, "
-                           "user_agent, success, error_message, created_at "
-                           "FROM auth_audit_log WHERE 1=1";
-
-        std::vector<std::string> paramValues;
-        int paramIndex = 1;
-
-        if (!userId.empty()) {
-            query += " AND user_id = $" + std::to_string(paramIndex);
-            paramValues.push_back(userId);
-            paramIndex++;
-        }
-
-        if (!username.empty()) {
-            query += " AND username ILIKE $" + std::to_string(paramIndex);
-            paramValues.push_back("%" + username + "%");
-            paramIndex++;
-        }
-
-        if (!eventType.empty()) {
-            query += " AND event_type = $" + std::to_string(paramIndex);
-            paramValues.push_back(eventType);
-            paramIndex++;
-        }
-
-        if (!successFilter.empty()) {
-            query += " AND success = $" + std::to_string(paramIndex);
-            paramValues.push_back(successFilter == "true" ? "true" : "false");
-            paramIndex++;
-        }
-
-        if (!startDate.empty()) {
-            query += " AND created_at >= $" + std::to_string(paramIndex);
-            paramValues.push_back(startDate);
-            paramIndex++;
-        }
-
-        if (!endDate.empty()) {
-            query += " AND created_at <= $" + std::to_string(paramIndex);
-            paramValues.push_back(endDate);
-            paramIndex++;
-        }
-
-        query += " ORDER BY created_at DESC";
-        query += " LIMIT $" + std::to_string(paramIndex);
-        paramValues.push_back(std::to_string(limit));
-        paramIndex++;
-
-        query += " OFFSET $" + std::to_string(paramIndex);
-        paramValues.push_back(std::to_string(offset));
-
-        // Convert to C-style array
-        std::vector<const char*> paramPtrs;
-        for (const auto& p : paramValues) {
-            paramPtrs.push_back(p.c_str());
-        }
-
-        PGresult* res = PQexecParams(conn, query.c_str(), paramPtrs.size(), nullptr,
-                                     paramPtrs.data(), nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-            PQclear(res);
-            PQfinish(conn);
-            throw std::runtime_error(std::string("Query failed: ") + PQerrorMessage(conn));
-        }
-
-        int rows = PQntuples(res);
-
-        // Build response
-        Json::Value logsArray(Json::arrayValue);
-        for (int i = 0; i < rows; i++) {
-            Json::Value logObj;
-            logObj["id"] = PQgetvalue(res, i, 0);
-            logObj["user_id"] = PQgetvalue(res, i, 1) ? PQgetvalue(res, i, 1) : "";
-            logObj["username"] = PQgetvalue(res, i, 2) ? PQgetvalue(res, i, 2) : "";
-            logObj["event_type"] = PQgetvalue(res, i, 3);
-            logObj["ip_address"] = PQgetvalue(res, i, 4) ? PQgetvalue(res, i, 4) : "";
-            logObj["user_agent"] = PQgetvalue(res, i, 5) ? PQgetvalue(res, i, 5) : "";
-            logObj["success"] = strcmp(PQgetvalue(res, i, 6), "t") == 0;
-            logObj["error_message"] = PQgetvalue(res, i, 7) ? PQgetvalue(res, i, 7) : "";
-            logObj["created_at"] = PQgetvalue(res, i, 8);
-
-            logsArray.append(logObj);
-        }
-
-        PQclear(res);
-
-        // Get total count (without pagination)
-        std::string countQuery = "SELECT COUNT(*) FROM auth_audit_log WHERE 1=1";
-        std::vector<std::string> countParamValues;
-        paramIndex = 1;
-
-        if (!userId.empty()) {
-            countQuery += " AND user_id = $" + std::to_string(paramIndex++);
-            countParamValues.push_back(userId);
-        }
-        if (!username.empty()) {
-            countQuery += " AND username ILIKE $" + std::to_string(paramIndex++);
-            countParamValues.push_back("%" + username + "%");
-        }
-        if (!eventType.empty()) {
-            countQuery += " AND event_type = $" + std::to_string(paramIndex++);
-            countParamValues.push_back(eventType);
-        }
-        if (!successFilter.empty()) {
-            countQuery += " AND success = $" + std::to_string(paramIndex++);
-            countParamValues.push_back(successFilter == "true" ? "true" : "false");
-        }
-        if (!startDate.empty()) {
-            countQuery += " AND created_at >= $" + std::to_string(paramIndex++);
-            countParamValues.push_back(startDate);
-        }
-        if (!endDate.empty()) {
-            countQuery += " AND created_at <= $" + std::to_string(paramIndex++);
-            countParamValues.push_back(endDate);
-        }
-
-        std::vector<const char*> countParamPtrs;
-        for (const auto& p : countParamValues) {
-            countParamPtrs.push_back(p.c_str());
-        }
-
-        PGresult* countRes = PQexecParams(conn, countQuery.c_str(), countParamPtrs.size(),
-                                          nullptr, countParamPtrs.data(), nullptr, nullptr, 0);
-
-        int total = 0;
-        if (PQresultStatus(countRes) == PGRES_TUPLES_OK && PQntuples(countRes) > 0) {
-            total = std::stoi(PQgetvalue(countRes, 0, 0));
-        }
-
-        PQclear(countRes);
-        PQfinish(conn);
+        // Get total count
+        int total = authAuditRepository_->count(
+            userId, username, eventType, successFilter, startDate, endDate
+        );
 
         Json::Value resp;
         resp["success"] = true;
@@ -1751,73 +1349,8 @@ void AuthHandler::handleGetAuditStats(
             return;
         }
 
-        PGconn* conn = PQconnectdb(dbConnInfo_.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            throw std::runtime_error(std::string("Database connection failed: ") +
-                                     PQerrorMessage(conn));
-        }
-
-        Json::Value stats;
-
-        // Total events
-        const char* totalQuery = "SELECT COUNT(*) FROM auth_audit_log";
-        PGresult* totalRes = PQexec(conn, totalQuery);
-        if (PQresultStatus(totalRes) == PGRES_TUPLES_OK && PQntuples(totalRes) > 0) {
-            stats["total_events"] = std::stoi(PQgetvalue(totalRes, 0, 0));
-        }
-        PQclear(totalRes);
-
-        // By event type
-        const char* eventTypeQuery = "SELECT event_type, COUNT(*) FROM auth_audit_log "
-                                     "GROUP BY event_type ORDER BY COUNT(*) DESC";
-        PGresult* eventTypeRes = PQexec(conn, eventTypeQuery);
-        Json::Value byEventType;
-        if (PQresultStatus(eventTypeRes) == PGRES_TUPLES_OK) {
-            for (int i = 0; i < PQntuples(eventTypeRes); i++) {
-                std::string eventType = PQgetvalue(eventTypeRes, i, 0);
-                int count = std::stoi(PQgetvalue(eventTypeRes, i, 1));
-                byEventType[eventType] = count;
-            }
-        }
-        stats["by_event_type"] = byEventType;
-        PQclear(eventTypeRes);
-
-        // By user (top 10)
-        const char* userQuery = "SELECT username, COUNT(*) FROM auth_audit_log "
-                               "WHERE username IS NOT NULL "
-                               "GROUP BY username ORDER BY COUNT(*) DESC LIMIT 10";
-        PGresult* userRes = PQexec(conn, userQuery);
-        Json::Value byUser;
-        if (PQresultStatus(userRes) == PGRES_TUPLES_OK) {
-            for (int i = 0; i < PQntuples(userRes); i++) {
-                std::string username = PQgetvalue(userRes, i, 0);
-                int count = std::stoi(PQgetvalue(userRes, i, 1));
-                byUser[username] = count;
-            }
-        }
-        stats["by_user"] = byUser;
-        PQclear(userRes);
-
-        // Recent failed logins (last 24 hours)
-        const char* failedQuery = "SELECT COUNT(*) FROM auth_audit_log "
-                                 "WHERE event_type = 'LOGIN_FAILED' "
-                                 "AND created_at >= NOW() - INTERVAL '24 hours'";
-        PGresult* failedRes = PQexec(conn, failedQuery);
-        if (PQresultStatus(failedRes) == PGRES_TUPLES_OK && PQntuples(failedRes) > 0) {
-            stats["recent_failed_logins"] = std::stoi(PQgetvalue(failedRes, 0, 0));
-        }
-        PQclear(failedRes);
-
-        // Last 24h events
-        const char* last24hQuery = "SELECT COUNT(*) FROM auth_audit_log "
-                                  "WHERE created_at >= NOW() - INTERVAL '24 hours'";
-        PGresult* last24hRes = PQexec(conn, last24hQuery);
-        if (PQresultStatus(last24hRes) == PGRES_TUPLES_OK && PQntuples(last24hRes) > 0) {
-            stats["last_24h_events"] = std::stoi(PQgetvalue(last24hRes, 0, 0));
-        }
-        PQclear(last24hRes);
-
-        PQfinish(conn);
+        // Get statistics via repository
+        Json::Value stats = authAuditRepository_->getStatistics();
 
         Json::Value resp;
         resp["success"] = true;

@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.5.0 Phase 5 Complete 🎉
-**Last Updated**: 2026-02-06
-**Status**: Production Ready - Phase 5 Complete (All Services UUID Migration + Oracle Support)
+**Current Version**: v2.6.0-alpha 🔶
+**Last Updated**: 2026-02-08
+**Status**: Oracle Authentication Complete - Master List Upload Issue Known
 
 ---
 
@@ -997,6 +997,174 @@ ldap_delete_all_crls       # Delete all CRLs (testing)
 ---
 
 ## Version History
+
+### v2.6.0-alpha (2026-02-08) - Oracle Authentication Complete + Known Issues 🔶
+
+#### Executive Summary
+
+Successfully implemented complete Oracle database support for PKD Management authentication endpoints, achieving 100% functionality parity with PostgreSQL for user login, JWT authentication, and audit logging. However, Master List upload functionality is currently blocked due to async processing code not being migrated to Query Executor Pattern.
+
+#### Key Achievements
+
+**Oracle Authentication Implementation** ✅:
+- ✅ **Pure OCI API** - Complete rewrite from OTL to Oracle Call Interface
+  - Abandoned OTL due to SELECT execution timing issues (executes before parameter binding)
+  - Implemented explicit `OCIBindByPos()` before `OCIStmtExecute()`
+  - Lines 150-400 in [oracle_query_executor.cpp](shared/lib/database/oracle_query_executor.cpp)
+
+- ✅ **Column Name Case Sensitivity Fix** - CRITICAL FIX
+  - Oracle returns UPPERCASE column names (IS_ACTIVE), code expects lowercase (is_active)
+  - Added automatic `std::transform()` to lowercase conversion in OracleQueryExecutor
+  - Without this fix: `json["is_active"]` returns NULL → parsed as false
+  - Lines 238-245 in [oracle_query_executor.cpp](shared/lib/database/oracle_query_executor.cpp)
+
+- ✅ **Boolean Data Type Handling**
+  - Database-aware boolean formatting in AuthAuditRepository
+    - Oracle: "1"/"0" for NUMBER(1) columns
+    - PostgreSQL: "true"/"false" for BOOLEAN columns
+    - Lines 45-52 in [auth_audit_repository.cpp](services/pkd-management/src/repositories/auth_audit_repository.cpp)
+  - Comprehensive boolean parsing in UserRepository
+    - Handles bool/string/int/uint types from Oracle's "1"/"0" strings
+    - Lines 429-458 in [user_repository.cpp](services/pkd-management/src/repositories/user_repository.cpp)
+
+**Verification Results** ✅:
+- POST /api/auth/login - Oracle user lookup working
+- GET /api/auth/me - JWT token validation working
+- GET /api/auth/users - User list query working
+- auth_audit_log - Boolean values correctly stored as 1/0 in Oracle
+- Last login timestamps updating correctly
+
+#### Known Issues & Limitations
+
+**1. Master List Upload Not Supported** ❌ **BLOCKER**
+
+**Symptom**:
+- Upload record created successfully in Oracle (via Query Executor)
+- All certificate saves fail with PostgreSQL foreign key constraint violations
+- Error: `Key (upload_id)=(uuid) is not present in table "uploaded_file"`
+- Result: 0 certificates extracted, 0 stored in LDAP
+
+**Root Cause**: Async processing code not migrated to Query Executor Pattern
+- `processMasterListFileAsync()` in [main.cpp:4486-4493](services/pkd-management/src/main.cpp#L4486-L4493) uses hardcoded PostgreSQL connection:
+  ```cpp
+  void processMasterListFileAsync(...) {
+      // HARDCODED PostgreSQL connection!
+      std::string conninfo = "host=" + appConfig.dbHost + " port=" + ...;
+      PGconn* conn = PQconnectdb(conninfo.c_str());  // PostgreSQL only!
+  ```
+
+- `saveCertificateWithDuplicateCheck()` in [certificate_utils.cpp:16-30](services/pkd-management/src/common/certificate_utils.cpp#L16-L30) takes `PGconn*` parameter
+- All certificate save operations use direct PostgreSQL API calls
+
+**Impact**:
+- LDIF upload: ❌ Not tested with Oracle
+- Master List upload: ❌ Completely broken with Oracle
+- Certificate search: ✅ Works with Oracle
+- Authentication: ✅ Works with Oracle
+
+**Deferred Rationale** (from Phase 4.4):
+> Moving async processing to Service layer would require extensive refactoring of global dependencies (appConfig, LDAP connections, ProgressManager). High complexity (750+ lines, complex threading) for minimal architectural benefit.
+
+**2. Upload Detail API Error** ⚠️
+
+**Symptom**: `[UploadRepository] Find by ID failed: Value is not convertible to Int.`
+
+**Root Cause**: Some integer field in Upload domain model failing to parse Oracle's string representation
+
+**Impact**: Cannot view upload details in frontend when using Oracle
+
+**Status**: Not yet investigated (needs similar fix to boolean parsing)
+
+**3. Other Services Not Tested** ⚠️
+- PA Service: Uses raw PostgreSQL API (not Query Executor Pattern)
+- PKD Relay: Uses PostgreSQL-specific SQL
+
+#### Technical Challenges Resolved
+
+**Challenge 1: ORA-01008 Not All Variables Bound**
+- OTL's `otl_stream.open()` executes SELECT before parameters can be bound
+- Solution: Complete rewrite using pure OCI API with explicit binding
+
+**Challenge 2: Service Crashes (502 Bad Gateway)**
+- OTL exception handling causing service restart loop
+- Solution: Pure OCI implementation eliminated all crashes
+
+**Challenge 3: Boolean Type Mismatch**
+- Oracle NUMBER(1) stores 1/0 but returns as string "1"/"0" via SQLT_STR
+- Code trying to bind PostgreSQL "true"/"false" to Oracle NUMBER columns
+- Solution: Database-aware formatting + comprehensive type parsing
+
+**Challenge 4: Column Name Case Sensitivity** (CRITICAL FIX)
+- Oracle UPPERCASE column names broke lowercase field access
+- Solution: Automatic lowercase conversion in OracleQueryExecutor
+- This was THE fix that made authentication work
+
+#### Files Modified
+
+**Database Layer** (2 files):
+- `shared/lib/database/oracle_query_executor.cpp` - OCI implementation, column name conversion
+- `shared/lib/database/oracle_query_executor.h` - Method signatures
+
+**Repository Layer** (2 files):
+- `services/pkd-management/src/repositories/auth_audit_repository.cpp` - Boolean formatting
+- `services/pkd-management/src/repositories/user_repository.cpp` - Boolean parsing
+
+**Configuration** (1 file):
+- `.env` - DB_TYPE=oracle configuration
+
+#### Production Recommendations
+
+**Use PostgreSQL for Production** ✅
+
+From Phase 4.6 Performance Benchmarking:
+- PostgreSQL 10-50x faster for most operations
+- Oracle Upload History: 530ms vs PostgreSQL 10ms (53x slower)
+- Oracle Country Statistics: 565ms vs PostgreSQL 47ms (12x slower)
+- Lower resource usage (80MB vs 2.5GB container)
+- No licensing costs
+
+**Oracle Use Cases**:
+- Enterprise mandates requiring Oracle
+- Organizations with existing Oracle infrastructure
+- Development/testing Oracle compatibility
+- Large-scale deployments > 10M records (not applicable for ICAO PKD)
+
+#### Next Steps (Optional)
+
+**Phase 6.1: Master List Upload Oracle Support** (2-3 days)
+1. Migrate `processMasterListFileAsync()` to Query Executor Pattern
+2. Migrate `certificate_utils::saveCertificateWithDuplicateCheck()` to Repository
+3. Update `masterlist_processor.cpp` function signatures
+4. Integration testing with Oracle
+
+**Phase 6.2: Upload Detail API Fix** (1-2 hours)
+1. Identify integer field parsing issue
+2. Implement comprehensive type handling
+3. Test with Oracle upload records
+
+**Phase 6.3-6.4: PA Service & PKD Relay Oracle Support** (4-6 days total)
+- Migrate repositories to Query Executor Pattern
+- Enable all endpoints for Oracle
+
+#### Documentation
+
+- [ORACLE_AUTHENTICATION_COMPLETION.md](docs/ORACLE_AUTHENTICATION_COMPLETION.md) - Complete implementation report (NEW)
+- [PHASE_4.6_PERFORMANCE_COMPARISON_COMPLETION.md](docs/PHASE_4.6_PERFORMANCE_COMPARISON_COMPLETION.md) - PostgreSQL vs Oracle benchmarks
+- [REPOSITORY_PATTERN_IMPLEMENTATION_SUMMARY.md](docs/REPOSITORY_PATTERN_IMPLEMENTATION_SUMMARY.md) - Architecture overview
+
+#### Sign-off
+
+**Authentication**: ✅ **100% COMPLETE** (Oracle working)
+
+**Master List Upload**: ❌ **KNOWN BLOCKER** (async code not migrated)
+
+**Production Ready**: ✅ YES (for authentication + certificate search)
+
+**Recommended Configuration**: PostgreSQL (10-50x faster)
+
+**Oracle Support Status**: **Partial** (auth working, uploads blocked)
+
+---
 
 ### v2.5.0 Phase 5.3 (2026-02-06) - PKD Management UUID Migration Complete ✅
 
