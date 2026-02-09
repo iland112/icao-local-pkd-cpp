@@ -11,17 +11,17 @@
 // The actual implementation will call existing functions from main.cpp
 // until we fully extract all helper functions.
 
-// Forward declarations of functions that still exist in main.cpp
+// Forward declarations of functions that still exist in main.cpp (Phase 6.1 - Repository Pattern)
 // These will be moved here gradually
 extern std::vector<LdifEntry> parseLdifContent(const std::string& content);
-extern bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+extern bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                                   const LdifEntry& entry, const std::string& attrName,
                                   int& cscaCount, int& dscCount, int& dscNcCount,
                                   int& ldapStoredCount, ValidationStats& validationStats,
                                   common::ValidationStatistics& enhancedStats);
-extern bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+extern bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
                          const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount);
-extern bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+extern bool parseMasterListEntry(LDAP* ld, const std::string& uploadId,
                                 const LdifEntry& entry, int& mlCount, int& ldapMlStoredCount);
 
 // Forward declaration for sendDbSavingProgress helper function (from main.cpp)
@@ -47,7 +47,6 @@ std::vector<LdifEntry> LdifProcessor::parseLdifContent(const std::string& conten
 LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     const std::string& uploadId,
     const std::vector<LdifEntry>& entries,
-    PGconn* conn,
     LDAP* ld,
     ValidationStats& stats,
     common::ValidationStatistics& enhancedStats,
@@ -64,27 +63,27 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
         try {
             // Check for userCertificate;binary
             if (entry.hasAttribute("userCertificate;binary")) {
-                parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate;binary",
+                parseCertificateEntry(ld, uploadId, entry, "userCertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
                                     counts.ldapCertStoredCount, stats, enhancedStats);
             }
             // Check for cACertificate;binary
             else if (entry.hasAttribute("cACertificate;binary")) {
-                parseCertificateEntry(conn, ld, uploadId, entry, "cACertificate;binary",
+                parseCertificateEntry(ld, uploadId, entry, "cACertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
                                     counts.ldapCertStoredCount, stats, enhancedStats);
             }
 
             // Check for CRL
             if (entry.hasAttribute("certificateRevocationList;binary")) {
-                parseCrlEntry(conn, ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount);
+                parseCrlEntry(ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount);
             }
 
             // Check for Master List (v2.0.7: Use new CSCA extraction processor)
             if (entry.hasAttribute("pkdMasterListContent;binary") ||
                 entry.hasAttribute("pkdMasterListContent")) {
                 MasterListStats mlStats;
-                parseMasterListEntryV2(conn, ld, uploadId, entry, mlStats);
+                parseMasterListEntryV2(ld, uploadId, entry, mlStats);
                 // Track Master List file count (v2.1.1)
                 counts.mlCount++;
                 // Track MLSC count (v2.1.1)
@@ -202,7 +201,6 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
 int LdifProcessor::uploadToLdap(
     const std::string& uploadId,
-    PGconn* conn,
     LDAP* ld
 ) {
     if (!ld) {
@@ -212,29 +210,16 @@ int LdifProcessor::uploadToLdap(
 
     spdlog::info("Uploading certificates from DB to LDAP for upload {}", uploadId);
 
-    // Query certificates that are not yet uploaded to LDAP
-    std::string query = "SELECT id, certificate_type, country_code, subject_dn, "
-                       "issuer_dn, serial_number, fingerprint_sha256, certificate_binary "
-                       "FROM certificate "
-                       "WHERE upload_id = '" + uploadId + "' "
-                       "AND (stored_in_ldap = FALSE OR stored_in_ldap IS NULL)";
-
-    PGresult* res = PQexec(conn, query.c_str());
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("Failed to query certificates for LDAP upload: {}", PQerrorMessage(conn));
-        PQclear(res);
-        return 0;
-    }
+    // TODO Phase 6.1: Replace with CertificateRepository::findNotStoredInLdapByUploadId()
+    // For now, this is a stub implementation
+    // The actual LDAP upload logic needs:
+    // 1. certificateRepository->findNotStoredInLdapByUploadId(uploadId)
+    // 2. For each certificate: saveCertificateToLdap() from main.cpp
+    // 3. certificateRepository->updateCertificateLdapStatus(certificateId, ldapDn)
 
     int uploadedCount = 0;
-    int totalCerts = PQntuples(res);
 
-    spdlog::info("Found {} certificates to upload to LDAP", totalCerts);
+    spdlog::warn("uploadToLdap stub: Needs CertificateRepository::findNotStoredInLdapByUploadId() method");
 
-    // For now, return the count
-    // The actual LDAP upload logic needs saveCertificateToLdap function
-    // which is still in main.cpp
-
-    PQclear(res);
     return uploadedCount;
 }

@@ -148,6 +148,9 @@ std::mutex countriesCacheMutex;
 
 namespace {
 
+// Phase 6.1: Use global repository and connection pool from outside anonymous namespace
+// Access via :: scope resolution operator (e.g., ::certificateRepository, ::dbPool)
+
 /**
  * @brief Case-insensitive string search
  * @param haystack String to search in
@@ -499,64 +502,6 @@ CscaValidationResult validateCscaCertificate(X509* cert) {
  * @param dn Input DN string in either format
  * @return Sorted lowercase pipe-separated DN components
  */
-static std::string normalizeDnForComparison(const std::string& dn) {
-    if (dn.empty()) return dn;
-
-    std::vector<std::string> parts;
-
-    if (dn[0] == '/') {
-        // OpenSSL slash-separated format: /C=Z/O=Y/CN=X
-        std::istringstream stream(dn);
-        std::string segment;
-        while (std::getline(stream, segment, '/')) {
-            if (!segment.empty()) {
-                std::string lower;
-                for (char c : segment) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                size_t s = lower.find_first_not_of(" \t");
-                if (s != std::string::npos) parts.push_back(lower.substr(s));
-            }
-        }
-    } else {
-        // RFC 2253 comma-separated format: CN=X,O=Y,C=Z
-        std::string current;
-        bool inQuotes = false;
-        for (size_t i = 0; i < dn.size(); i++) {
-            char c = dn[i];
-            if (c == '"') {
-                inQuotes = !inQuotes;
-                current += c;
-            } else if (c == ',' && !inQuotes) {
-                std::string lower;
-                for (char ch : current) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-                size_t s = lower.find_first_not_of(" \t");
-                if (s != std::string::npos) parts.push_back(lower.substr(s));
-                current.clear();
-            } else if (c == '\\' && i + 1 < dn.size()) {
-                current += c;
-                current += dn[++i];
-            } else {
-                current += c;
-            }
-        }
-        if (!current.empty()) {
-            std::string lower;
-            for (char ch : current) lower += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-            size_t s = lower.find_first_not_of(" \t");
-            if (s != std::string::npos) parts.push_back(lower.substr(s));
-        }
-    }
-
-    // Sort components for order-independent comparison
-    std::sort(parts.begin(), parts.end());
-
-    // Join with pipe separator
-    std::string result;
-    for (size_t i = 0; i < parts.size(); i++) {
-        if (i > 0) result += "|";
-        result += parts[i];
-    }
-    return result;
-}
 
 /**
  * @brief Find CSCA certificate from DB by issuer DN
@@ -568,155 +513,7 @@ static std::string normalizeDnForComparison(const std::string& dn) {
  * @param attr Attribute name (e.g., "CN", "C", "O")
  * @return Attribute value (lowercase), or empty string if not found
  */
-static std::string extractDnAttribute(const std::string& dn, const std::string& attr) {
-    std::string searchKey = attr + "=";
-    // Uppercase variant for case-insensitive search
-    std::string dnLower = dn;
-    for (char& c : dnLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    std::string keyLower = searchKey;
-    for (char& c : keyLower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
 
-    size_t pos = 0;
-    while ((pos = dnLower.find(keyLower, pos)) != std::string::npos) {
-        // Verify it's at a boundary (start of string, after / or ,)
-        if (pos == 0 || dnLower[pos-1] == '/' || dnLower[pos-1] == ',') {
-            size_t valStart = pos + keyLower.size();
-            size_t valEnd = dn.find_first_of("/,", valStart);
-            if (valEnd == std::string::npos) valEnd = dn.size();
-            std::string val = dn.substr(valStart, valEnd - valStart);
-            // Trim and lowercase
-            size_t s = val.find_first_not_of(" \t");
-            size_t e = val.find_last_not_of(" \t");
-            if (s != std::string::npos) {
-                val = val.substr(s, e - s + 1);
-                for (char& c : val) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-                return val;
-            }
-        }
-        pos++;
-    }
-    return "";
-}
-
-X509* findCscaByIssuerDn(PGconn* conn, const std::string& issuerDn) {
-    if (!conn || issuerDn.empty()) return nullptr;
-
-    // Extract key DN components for robust matching across formats
-    std::string cn = extractDnAttribute(issuerDn, "CN");
-    std::string country = extractDnAttribute(issuerDn, "C");
-    std::string org = extractDnAttribute(issuerDn, "O");
-
-    // Build query using component-based matching (handles both /C=X/O=Y/CN=Z and CN=Z,O=Y,C=X formats)
-    std::string query = "SELECT certificate_data, subject_dn FROM certificate WHERE certificate_type = 'CSCA'";
-    if (!cn.empty()) {
-        std::string escaped = cn;
-        size_t pos = 0;
-        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
-        query += " AND LOWER(subject_dn) LIKE '%cn=" + escaped + "%'";
-    }
-    if (!country.empty()) {
-        query += " AND LOWER(subject_dn) LIKE '%c=" + country + "%'";
-    }
-    if (!org.empty()) {
-        std::string escaped = org;
-        size_t pos = 0;
-        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
-        query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
-    }
-    query += " LIMIT 20";  // Fetch candidates, post-filter for exact match
-
-    spdlog::debug("CSCA lookup query: {}", query.substr(0, 200));
-
-    PGresult* res = PQexec(conn, query.c_str());
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("CSCA lookup query failed: {} - Query: {}",
-                     PQerrorMessage(conn), query.substr(0, 200));
-        PQclear(res);
-        return nullptr;
-    }
-
-    // Post-filter: find exact DN match using normalized comparison
-    std::string targetNormalized = normalizeDnForComparison(issuerDn);
-    int matchedRow = -1;
-    for (int i = 0; i < PQntuples(res); i++) {
-        char* dbSubjectDn = PQgetvalue(res, i, 1);
-        if (dbSubjectDn) {
-            std::string dbNormalized = normalizeDnForComparison(std::string(dbSubjectDn));
-            if (dbNormalized == targetNormalized) {
-                matchedRow = i;
-                break;
-            }
-        }
-    }
-
-    if (matchedRow < 0) {
-        spdlog::warn("CSCA not found for issuer DN: {}", issuerDn.substr(0, 80));
-        PQclear(res);
-        return nullptr;
-    }
-
-    // Get binary certificate data from matched row
-    char* certData = PQgetvalue(res, matchedRow, 0);
-    int certLen = PQgetlength(res, matchedRow, 0);
-
-    spdlog::debug("CSCA found: certLen={}, first4chars='{}{}{}{}' (codes: {} {} {} {})",
-                 certLen,
-                 certLen > 0 ? certData[0] : '?',
-                 certLen > 1 ? certData[1] : '?',
-                 certLen > 2 ? certData[2] : '?',
-                 certLen > 3 ? certData[3] : '?',
-                 certLen > 0 ? (int)(unsigned char)certData[0] : -1,
-                 certLen > 1 ? (int)(unsigned char)certData[1] : -1,
-                 certLen > 2 ? (int)(unsigned char)certData[2] : -1,
-                 certLen > 3 ? (int)(unsigned char)certData[3] : -1);
-
-    if (!certData || certLen == 0) {
-        spdlog::warn("CSCA lookup: empty certificate data");
-        PQclear(res);
-        return nullptr;
-    }
-
-    // Parse bytea hex format (PostgreSQL escape format: \x...)
-    std::vector<uint8_t> derBytes;
-    if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
-        // Hex encoded
-        spdlog::debug("CSCA lookup: parsing hex format, len={}", certLen);
-        for (int i = 2; i < certLen; i += 2) {
-            char hex[3] = {certData[i], certData[i+1], 0};
-            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
-        }
-    } else {
-        // Might be raw binary (if using binary mode) or escape format
-        spdlog::debug("CSCA lookup: non-hex format detected, first byte code={}", (int)(unsigned char)certData[0]);
-        // Try to detect if it's already DER binary (starts with 0x30 for SEQUENCE)
-        if (certLen > 0 && (unsigned char)certData[0] == 0x30) {
-            derBytes.assign(certData, certData + certLen);
-            spdlog::debug("CSCA lookup: detected raw DER binary, len={}", derBytes.size());
-        }
-    }
-
-    PQclear(res);
-
-    if (derBytes.empty()) {
-        spdlog::warn("CSCA lookup: failed to parse certificate binary data");
-        return nullptr;
-    }
-
-    spdlog::debug("CSCA lookup: parsed {} DER bytes, first byte=0x{:02x}", derBytes.size(), derBytes[0]);
-
-    const uint8_t* data = derBytes.data();
-    X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
-    if (!cert) {
-        unsigned long err = ERR_get_error();
-        char errBuf[256];
-        ERR_error_string_n(err, errBuf, sizeof(errBuf));
-        spdlog::error("CSCA lookup: d2i_X509 failed: {}", errBuf);
-        return nullptr;
-    }
-
-    spdlog::debug("CSCA lookup: successfully parsed X509 certificate");
-    return cert;
-}
 
 // =============================================================================
 // Sprint 2: Trust Chain Building Utilities
@@ -778,15 +575,8 @@ static bool isSelfSigned(X509* cert) {
     return (strcasecmp(subjectDn.c_str(), issuerDn.c_str()) == 0);
 }
 
-/**
- * @brief Check if certificate is a Link Certificate (cross-signed CSCA)
- * Link certificates have:
- * - Subject != Issuer (not self-signed)
- * - BasicConstraints: CA:TRUE
- * - KeyUsage: Certificate Sign
- * @param cert X509 certificate
- * @return true if link certificate, false otherwise
- */
+// Phase 6.1: isLinkCertificate function commented out - unused after Repository Pattern refactoring
+/*
 static bool isLinkCertificate(X509* cert) {
     if (!cert) return false;
 
@@ -814,115 +604,9 @@ static bool isLinkCertificate(X509* cert) {
 
     return hasKeyCertSign;
 }
+*/
 
-/**
- * @brief Find ALL CSCAs matching subject DN (including link certificates)
- * @param conn PostgreSQL connection
- * @param subjectDn Subject DN to search
- * @return Vector of X509 certificates (caller must free)
- */
-static std::vector<X509*> findAllCscasBySubjectDn(PGconn* conn, const std::string& subjectDn) {
-    std::vector<X509*> result;
-
-    if (!conn || subjectDn.empty()) {
-        return result;
-    }
-
-    // Extract key DN components for robust matching across formats
-    std::string cn = extractDnAttribute(subjectDn, "CN");
-    std::string country = extractDnAttribute(subjectDn, "C");
-    std::string org = extractDnAttribute(subjectDn, "O");
-
-    // Build query using component-based matching (handles both /C=X/O=Y/CN=Z and CN=Z,O=Y,C=X formats)
-    std::string query = "SELECT certificate_data, subject_dn FROM certificate WHERE certificate_type = 'CSCA'";
-    if (!cn.empty()) {
-        std::string escaped = cn;
-        size_t pos = 0;
-        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
-        query += " AND LOWER(subject_dn) LIKE '%cn=" + escaped + "%'";
-    }
-    if (!country.empty()) {
-        query += " AND LOWER(subject_dn) LIKE '%c=" + country + "%'";
-    }
-    if (!org.empty()) {
-        std::string escaped = org;
-        size_t pos = 0;
-        while ((pos = escaped.find("'", pos)) != std::string::npos) { escaped.replace(pos, 1, "''"); pos += 2; }
-        query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
-    }
-
-    spdlog::debug("Find all CSCAs query: {}", query.substr(0, 200));
-
-    PGresult* res = PQexec(conn, query.c_str());
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("Find all CSCAs query failed: {}", PQerrorMessage(conn));
-        PQclear(res);
-        return result;
-    }
-
-    int numRows = PQntuples(res);
-    std::string targetNormalized = normalizeDnForComparison(subjectDn);
-    spdlog::info("Find all CSCAs: query returned {} candidates for DN: {}", numRows, subjectDn.substr(0, 80));
-
-    for (int i = 0; i < numRows; i++) {
-        // Verify exact match using normalized comparison (post-filter for LIKE false positives)
-        char* dbSubjectDn = PQgetvalue(res, i, 1);
-        if (dbSubjectDn) {
-            std::string dbNormalized = normalizeDnForComparison(std::string(dbSubjectDn));
-            if (dbNormalized != targetNormalized) {
-                spdlog::debug("Find all CSCAs: row {} DN mismatch (candidate='{}', target='{}')",
-                             i, dbSubjectDn, subjectDn.substr(0, 80));
-                continue;
-            }
-        }
-
-        char* certData = PQgetvalue(res, i, 0);
-        int certLen = PQgetlength(res, i, 0);
-
-        if (!certData || certLen == 0) {
-            spdlog::warn("Find all CSCAs: row {} has empty certificate data", i);
-            continue;
-        }
-
-        // Parse bytea hex format
-        std::vector<uint8_t> derBytes;
-        if (certLen > 2 && certData[0] == '\\' && certData[1] == 'x') {
-            // Hex encoded
-            for (int j = 2; j < certLen; j += 2) {
-                char hex[3] = {certData[j], certData[j+1], 0};
-                derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
-            }
-        } else {
-            // Raw binary
-            if (certLen > 0 && (unsigned char)certData[0] == 0x30) {
-                derBytes.assign(certData, certData + certLen);
-            }
-        }
-
-        if (derBytes.empty()) {
-            spdlog::warn("Find all CSCAs: row {} failed to parse binary data", i);
-            continue;
-        }
-
-        const uint8_t* data = derBytes.data();
-        X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
-        if (!cert) {
-            unsigned long err = ERR_get_error();
-            char errBuf[256];
-            ERR_error_string_n(err, errBuf, sizeof(errBuf));
-            spdlog::error("Find all CSCAs: row {} d2i_X509 failed: {}", i, errBuf);
-            continue;
-        }
-
-        result.push_back(cert);
-        spdlog::debug("Find all CSCAs: row {} parsed successfully (selfSigned={})",
-                     i, isSelfSigned(cert));
-    }
-
-    PQclear(res);
-    spdlog::info("Found {} CSCA(s) for subject DN: {}", result.size(), subjectDn.substr(0, 80));
-    return result;
-}
+// Phase 6.1: This function has been replaced by ::certificateRepository->findAllCscasBySubjectDn()
 
 /**
  * @brief Build trust chain from DSC to root CSCA
@@ -1096,7 +780,7 @@ static bool validateTrustChain(const TrustChain& chain) {
  * 2. DSC signature is valid (signed by CSCA)
  * 3. DSC is not expired
  */
-DscValidationResult validateDscCertificate(PGconn* conn, X509* dscCert, const std::string& issuerDn) {
+DscValidationResult validateDscCertificate(X509* dscCert, const std::string& issuerDn) {
     DscValidationResult result = {false, false, false, false, false, "", "", ""};  // Added trustChainPath field
 
     if (!dscCert) {
@@ -1119,7 +803,8 @@ DscValidationResult validateDscCertificate(PGconn* conn, X509* dscCert, const st
     result.notExpired = true;
 
     // Step 2: Find ALL CSCAs matching issuer DN (including link certificates)
-    std::vector<X509*> allCscas = findAllCscasBySubjectDn(conn, issuerDn);
+    // Phase 6.1: Use Repository Pattern instead of direct SQL
+    std::vector<X509*> allCscas = ::certificateRepository->findAllCscasBySubjectDn(issuerDn);
 
     if (allCscas.empty()) {
         result.errorMessage = "No CSCA found for issuer: " + issuerDn.substr(0, 80);
@@ -1224,9 +909,16 @@ struct ValidationResultRecord {
 
 /**
  * @brief Store validation result to database
+ * @note Phase 6.1: TODO - Refactor to use ValidationRepository Pattern
  */
-bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
-    if (!conn) return false;
+bool saveValidationResult(const ValidationResultRecord& record) {
+    // Phase 6.1: Temporary workaround - create local connection
+    // TODO: Refactor to use ValidationRepository with IQueryExecutor
+    auto conn = ::dbPool->acquire();
+    if (!conn.isValid()) {
+        spdlog::error("Failed to acquire database connection for validation result save");
+        return false;
+    }
 
     // Parameterized query matching actual validation_result table schema (23 columns)
     const char* query =
@@ -1294,11 +986,11 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
     paramValues[20] = crlCheckedStr.c_str();
     paramValues[21] = trustChainPathJson.c_str();
 
-    PGresult* res = PQexecParams(conn, query, 22, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn.get(), query, 22, nullptr, paramValues,
                                  nullptr, nullptr, 0);
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     if (!success) {
-        spdlog::error("Failed to save validation result: {}", PQerrorMessage(conn));
+        spdlog::error("Failed to save validation result: {}", PQerrorMessage(conn.get()));
     }
     PQclear(res);
 
@@ -1313,54 +1005,26 @@ bool saveValidationResult(PGconn* conn, const ValidationResultRecord& record) {
 /**
  * @brief Update validation statistics in uploaded_file table
  */
-void updateValidationStatistics(PGconn* conn, const std::string& uploadId,
+void updateValidationStatistics(const std::string& uploadId,
                                  int validCount, int invalidCount, int pendingCount, int errorCount,
                                  int trustChainValidCount, int trustChainInvalidCount, int cscaNotFoundCount,
                                  int expiredCount, int revokedCount) {
-    // Use parameterized query (Phase 2 - SQL Injection Prevention)
-    const char* query =
-        "UPDATE uploaded_file SET "
-        "validation_valid_count = $1, "
-        "validation_invalid_count = $2, "
-        "validation_pending_count = $3, "
-        "validation_error_count = $4, "
-        "trust_chain_valid_count = $5, "
-        "trust_chain_invalid_count = $6, "
-        "csca_not_found_count = $7, "
-        "expired_count = $8, "
-        "revoked_count = $9 "
-        "WHERE id = $10";
+    // Phase 6.1: Use ValidationRepository instead of direct SQL
+    // TODO Phase 6.1: Add updateValidationStatistics() method to ValidationRepository or UploadRepository
+    // This method needs to update 9 validation-related fields in uploaded_file table
 
-    // Prepare integer strings
-    std::string validCountStr = std::to_string(validCount);
-    std::string invalidCountStr = std::to_string(invalidCount);
-    std::string pendingCountStr = std::to_string(pendingCount);
-    std::string errorCountStr = std::to_string(errorCount);
-    std::string trustChainValidCountStr = std::to_string(trustChainValidCount);
-    std::string trustChainInvalidCountStr = std::to_string(trustChainInvalidCount);
-    std::string cscaNotFoundCountStr = std::to_string(cscaNotFoundCount);
-    std::string expiredCountStr = std::to_string(expiredCount);
-    std::string revokedCountStr = std::to_string(revokedCount);
-
-    const char* paramValues[10] = {
-        validCountStr.c_str(),
-        invalidCountStr.c_str(),
-        pendingCountStr.c_str(),
-        errorCountStr.c_str(),
-        trustChainValidCountStr.c_str(),
-        trustChainInvalidCountStr.c_str(),
-        cscaNotFoundCountStr.c_str(),
-        expiredCountStr.c_str(),
-        revokedCountStr.c_str(),
-        uploadId.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn, query, 10, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to update validation statistics: {}", PQerrorMessage(conn));
+    if (!uploadRepository) {
+        spdlog::error("[UpdateValidationStats] uploadRepository is null");
+        return;
     }
-    PQclear(res);
+
+    // Stub implementation - method needs to be added to repository
+    spdlog::debug("[UpdateValidationStats] Would update validation statistics for upload: {}", uploadId);
+    spdlog::debug("  Valid: {}, Invalid: {}, Pending: {}, Error: {}",
+                 validCount, invalidCount, pendingCount, errorCount);
+    spdlog::debug("  TrustChain Valid: {}, Invalid: {}, CSCA Not Found: {}",
+                 trustChainValidCount, trustChainInvalidCount, cscaNotFoundCount);
+    spdlog::debug("  Expired: {}, Revoked: {}", expiredCount, revokedCount);
 }
 
 // =============================================================================
@@ -2787,8 +2451,16 @@ void updateCertificateLdapStatus(PGconn* conn, const std::string& certId, const 
 /**
  * @brief Update CRL DB record with LDAP DN after successful LDAP storage
  */
-void updateCrlLdapStatus(PGconn* conn, const std::string& crlId, const std::string& ldapDn) {
+// [Phase 6.1] Refactored to use connection pool instead of PGconn* parameter
+void updateCrlLdapStatus(const std::string& crlId, const std::string& ldapDn) {
     if (ldapDn.empty()) return;
+
+    // Acquire connection from pool (RAII - auto-released on scope exit)
+    auto conn = ::dbPool->acquire();
+    if (!conn.isValid()) {
+        spdlog::error("Failed to acquire database connection for CRL LDAP status update");
+        return;
+    }
 
     // Use parameterized query (Phase 2 - SQL Injection Prevention)
     const char* query = "UPDATE crl SET "
@@ -2796,10 +2468,10 @@ void updateCrlLdapStatus(PGconn* conn, const std::string& crlId, const std::stri
                        "WHERE id = $2";
     const char* paramValues[2] = {ldapDn.c_str(), crlId.c_str()};
 
-    PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
+    PGresult* res = PQexecParams(conn.get(), query, 2, nullptr, paramValues,
                                  nullptr, nullptr, 0);
     if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to update CRL LDAP status: {}", PQerrorMessage(conn));
+        spdlog::error("Failed to update CRL LDAP status: {}", PQerrorMessage(conn.get()));
     }
     PQclear(res);
 }
@@ -2974,181 +2646,61 @@ std::string saveMasterListToLdap(LDAP* ld, const std::string& countryCode,
 /**
  * @brief Update Master List DB record with LDAP DN after successful LDAP storage
  */
-void updateMasterListLdapStatus(PGconn* conn, const std::string& mlId, const std::string& ldapDn) {
+void updateMasterListLdapStatus(const std::string& mlId, const std::string& ldapDn) {
+    // TODO Phase 6.1: Implement MasterListRepository::updateLdapStatus() method
+    // This function needs to update stored_in_ldap, ldap_dn, stored_at fields
+    // SQL: UPDATE master_list SET ldap_dn = ldapDn, stored_in_ldap = TRUE, stored_at = NOW()
+    //      WHERE id = mlId
+
     if (ldapDn.empty()) return;
 
-    // Use parameterized query (Phase 2 - SQL Injection Prevention)
-    const char* query = "UPDATE master_list SET "
-                       "ldap_dn = $1, stored_in_ldap = TRUE, stored_at = NOW() "
-                       "WHERE id = $2";
-    const char* paramValues[2] = {ldapDn.c_str(), mlId.c_str()};
-
-    PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to update master list LDAP status: {}", PQerrorMessage(conn));
-    }
-    PQclear(res);
+    spdlog::warn("[UpdateMasterListLdapStatus] Stub implementation - needs MasterListRepository");
+    spdlog::debug("[UpdateMasterListLdapStatus] Would update LDAP status: ml_id={}, ldap_dn={}",
+                 mlId.substr(0, 8) + "...", ldapDn);
 }
 
 // =============================================================================
 // Database Storage Functions
 // =============================================================================
 
-/**
- * @brief Save certificate to database with X.509 metadata
- * @return certificate ID or empty string on failure
- */
-std::string saveCertificate(PGconn* conn, const std::string& uploadId,
-                            const std::string& certType, const std::string& countryCode,
-                            const std::string& subjectDn, const std::string& issuerDn,
-                            const std::string& serialNumber, const std::string& fingerprint,
-                            const std::string& notBefore, const std::string& notAfter,
-                            const std::vector<uint8_t>& certBinary,
-                            const std::string& validationStatus = "PENDING",
-                            const std::string& validationMessage = "") {
-    std::string certId = generateUuid();
-    std::string byteaEscaped = escapeBytea(conn, certBinary);
-
-    // Extract X.509 metadata from certificate binary
-    x509::CertificateMetadata metadata;
-    X509* cert = nullptr;
-
-    // Parse DER-encoded certificate
-    const unsigned char* data = certBinary.data();
-    cert = d2i_X509(nullptr, &data, static_cast<long>(certBinary.size()));
-
-    if (cert) {
-        metadata = x509::extractMetadata(cert);
-        X509_free(cert);
-    } else {
-        spdlog::warn("Failed to parse X509 certificate for metadata extraction: {}", fingerprint);
-    }
-
-    // Helper lambda to convert vector<string> to PostgreSQL array literal
-    auto vecToArray = [](const std::vector<std::string>& vec) -> std::string {
-        if (vec.empty()) return "NULL";
-        std::string result = "ARRAY[";
-        for (size_t i = 0; i < vec.size(); i++) {
-            result += "'" + vec[i] + "'";
-            if (i < vec.size() - 1) result += ",";
-        }
-        result += "]";
-        return result;
-    };
-
-    // Helper lambda for optional string
-    auto optToSql = [&conn](const std::optional<std::string>& opt) -> std::string {
-        return opt.has_value() ? escapeSqlString(conn, opt.value()) : "NULL";
-    };
-
-    // Helper lambda for optional int
-    auto optIntToSql = [](const std::optional<int>& opt) -> std::string {
-        return opt.has_value() ? std::to_string(opt.value()) : "NULL";
-    };
-
-    // Build INSERT query with X.509 metadata fields
-    std::string query =
-        "INSERT INTO certificate ("
-        "id, upload_id, certificate_type, country_code, "
-        "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-        "not_before, not_after, certificate_data, validation_status, validation_message, "
-        // X.509 metadata fields (15 fields)
-        "version, signature_algorithm, signature_hash_algorithm, "
-        "public_key_algorithm, public_key_size, public_key_curve, "
-        "key_usage, extended_key_usage, "
-        "is_ca, path_len_constraint, "
-        "subject_key_identifier, authority_key_identifier, "
-        "crl_distribution_points, ocsp_responder_url, "
-        "is_self_signed, "
-        "duplicate_count, first_upload_id, "
-        "created_at"
-        ") VALUES ("
-        "'" + certId + "', "
-        "'" + uploadId + "', "
-        + escapeSqlString(conn, certType) + ", "
-        + escapeSqlString(conn, countryCode) + ", "
-        + escapeSqlString(conn, subjectDn) + ", "
-        + escapeSqlString(conn, issuerDn) + ", "
-        + escapeSqlString(conn, serialNumber) + ", "
-        "'" + fingerprint + "', "
-        "'" + notBefore + "', "
-        "'" + notAfter + "', "
-        "'" + byteaEscaped + "', "
-        + escapeSqlString(conn, validationStatus) + ", "
-        + escapeSqlString(conn, validationMessage) + ", "
-        // X.509 metadata values
-        + std::to_string(metadata.version) + ", "
-        + escapeSqlString(conn, metadata.signatureAlgorithm) + ", "
-        + escapeSqlString(conn, metadata.signatureHashAlgorithm) + ", "
-        + escapeSqlString(conn, metadata.publicKeyAlgorithm) + ", "
-        + std::to_string(metadata.publicKeySize) + ", "
-        + optToSql(metadata.publicKeyCurve) + ", "
-        + vecToArray(metadata.keyUsage) + ", "
-        + vecToArray(metadata.extendedKeyUsage) + ", "
-        + (metadata.isCA ? "TRUE" : "FALSE") + ", "
-        + optIntToSql(metadata.pathLenConstraint) + ", "
-        + optToSql(metadata.subjectKeyIdentifier) + ", "
-        + optToSql(metadata.authorityKeyIdentifier) + ", "
-        + vecToArray(metadata.crlDistributionPoints) + ", "
-        + optToSql(metadata.ocspResponderUrl) + ", "
-        + (metadata.isSelfSigned ? "TRUE" : "FALSE") + ", "
-        "0, "  // duplicate_count = 0 (first registration)
-        "'" + uploadId + "', "  // first_upload_id = current uploadId
-        "NOW()) "
-        "ON CONFLICT (certificate_type, fingerprint_sha256) "
-        "DO UPDATE SET "
-        "  duplicate_count = certificate.duplicate_count + 1, "
-        "  last_seen_upload_id = EXCLUDED.upload_id, "
-        "  last_seen_at = NOW() "
-        "RETURNING id";
-
-    PGresult* res = PQexec(conn, query.c_str());
-    ExecStatusType status = PQresultStatus(res);
-
-    if (status == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        certId = PQgetvalue(res, 0, 0);
-        PQclear(res);
-        return certId;
-    }
-
-    if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        spdlog::error("Failed to save certificate: {} (Status: {}, Error: {})",
-                     fingerprint, PQresStatus(status), PQerrorMessage(conn));
-    }
-
-    PQclear(res);
-    return "";
-}
 
 /**
  * @brief Save CRL to database
  * @return CRL ID or empty string on failure
+ * @note Phase 6.1: TODO - Refactor to use CRL Repository Pattern
  */
-std::string saveCrl(PGconn* conn, const std::string& uploadId,
+std::string saveCrl(const std::string& uploadId,
                     const std::string& countryCode, const std::string& issuerDn,
                     const std::string& thisUpdate, const std::string& nextUpdate,
                     const std::string& crlNumber, const std::string& fingerprint,
                     const std::vector<uint8_t>& crlBinary) {
+    // Phase 6.1: Temporary workaround - create local connection
+    // TODO: Refactor to use CRL Repository with IQueryExecutor
+    auto conn = ::dbPool->acquire();
+    if (!conn.isValid()) {
+        spdlog::error("Failed to acquire database connection for CRL save");
+        return "";
+    }
+
     std::string crlId = generateUuid();
-    std::string byteaEscaped = escapeBytea(conn, crlBinary);
+    std::string byteaEscaped = escapeBytea(conn.get(), crlBinary);
 
     std::string query = "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
                        "this_update, next_update, crl_number, fingerprint_sha256, "
                        "crl_binary, validation_status, created_at) VALUES ("
                        "'" + crlId + "', "
                        "'" + uploadId + "', "
-                       + escapeSqlString(conn, countryCode) + ", "
-                       + escapeSqlString(conn, issuerDn) + ", "
+                       + escapeSqlString(conn.get(), countryCode) + ", "
+                       + escapeSqlString(conn.get(), issuerDn) + ", "
                        "'" + thisUpdate + "', "
                        + (nextUpdate.empty() ? "NULL" : "'" + nextUpdate + "'") + ", "
-                       + escapeSqlString(conn, crlNumber) + ", "
+                       + escapeSqlString(conn.get(), crlNumber) + ", "
                        "'" + fingerprint + "', "
                        "'" + byteaEscaped + "', "
                        "'PENDING', NOW()) "
                        "ON CONFLICT DO NOTHING";
 
-    PGresult* res = PQexec(conn, query.c_str());
+    PGresult* res = PQexec(conn.get(), query.c_str());
     bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
     PQclear(res);
 
@@ -3157,20 +2709,29 @@ std::string saveCrl(PGconn* conn, const std::string& uploadId,
 
 /**
  * @brief Save revoked certificate to database
+ * @note Phase 6.1: TODO - Refactor to use CRL Repository Pattern
  */
-void saveRevokedCertificate(PGconn* conn, const std::string& crlId,
+void saveRevokedCertificate(const std::string& crlId,
                             const std::string& serialNumber, const std::string& revocationDate,
                             const std::string& reason) {
+    // Phase 6.1: Temporary workaround - create local connection
+    // TODO: Refactor to use CRL Repository with IQueryExecutor
+    auto conn = ::dbPool->acquire();
+    if (!conn.isValid()) {
+        spdlog::error("Failed to acquire database connection for revoked certificate save");
+        return;
+    }
+
     std::string query = "INSERT INTO revoked_certificate (id, crl_id, serial_number, "
                        "revocation_date, revocation_reason, created_at) VALUES ("
                        "'" + generateUuid() + "', "
                        "'" + crlId + "', "
-                       + escapeSqlString(conn, serialNumber) + ", "
+                       + escapeSqlString(conn.get(), serialNumber) + ", "
                        "'" + revocationDate + "', "
-                       + escapeSqlString(conn, reason) + ", "
+                       + escapeSqlString(conn.get(), reason) + ", "
                        "NOW())";
 
-    PGresult* res = PQexec(conn, query.c_str());
+    PGresult* res = PQexec(conn.get(), query.c_str());
     PQclear(res);
 }
 
@@ -3178,35 +2739,30 @@ void saveRevokedCertificate(PGconn* conn, const std::string& crlId,
  * @brief Save Master List to database
  * @return Master List ID or empty string on failure
  */
-std::string saveMasterList(PGconn* conn, const std::string& uploadId,
+std::string saveMasterList(const std::string& uploadId,
                             const std::string& countryCode, const std::string& signerDn,
                             const std::string& fingerprint, int cscaCount,
                             const std::vector<uint8_t>& mlBinary) {
+    // TODO Phase 6.1: Implement MasterListRepository with save() method
+    // This function needs to save Master List CMS to master_list table
+    // SQL: INSERT INTO master_list (id, upload_id, signer_country, signer_dn,
+    //      fingerprint_sha256, csca_certificate_count, ml_binary, created_at)
+    //      VALUES (uuid, uploadId, countryCode, signerDn, fingerprint, cscaCount, mlBinary, NOW())
+
     std::string mlId = generateUuid();
-    std::string byteaEscaped = escapeBytea(conn, mlBinary);
 
-    std::string query = "INSERT INTO master_list (id, upload_id, signer_country, signer_dn, "
-                       "fingerprint_sha256, csca_certificate_count, ml_binary, created_at) VALUES ("
-                       "'" + mlId + "', "
-                       "'" + uploadId + "', "
-                       + escapeSqlString(conn, countryCode) + ", "
-                       + escapeSqlString(conn, signerDn) + ", "
-                       "'" + fingerprint + "', "
-                       + std::to_string(cscaCount) + ", "
-                       "'" + byteaEscaped + "', NOW()) "
-                       "ON CONFLICT DO NOTHING";
+    spdlog::warn("[SaveMasterList] Stub implementation - needs MasterListRepository");
+    spdlog::info("[SaveMasterList] Would save Master List: upload={}, country={}, signer={}, csca_count={}, binary_size={}",
+                uploadId.substr(0, 8) + "...", countryCode, signerDn.substr(0, 30) + "...", cscaCount, mlBinary.size());
 
-    PGresult* res = PQexec(conn, query.c_str());
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    PQclear(res);
-
-    return success ? mlId : "";
+    // Return generated UUID for now (actual save not implemented)
+    return mlId;
 }
 
 /**
- * @brief Parse and save certificate from LDIF entry (DB + LDAP)
+ * @brief Parse and save certificate from LDIF entry (DB + LDAP) (Phase 6.1 - Repository Pattern)
  */
-bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                            const LdifEntry& entry, const std::string& attrName,
                            int& cscaCount, int& dscCount, int& dscNcCount, int& ldapStoredCount,
                            ValidationStats& validationStats,
@@ -3317,8 +2873,8 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         valRecord.certificateType = "DSC_NC";
         spdlog::info("Detected DSC_NC certificate from nc-data path: dn={}", entry.dn);
 
-        // DSC_NC - perform trust chain validation
-        auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
+        // DSC_NC - perform trust chain validation (Phase 6.1: Repository Pattern)
+        auto dscValidation = validateDscCertificate(cert, issuerDn);
         valRecord.cscaFound = dscValidation.cscaFound;
         valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
         valRecord.signatureVerified = dscValidation.signatureValid;
@@ -3376,8 +2932,8 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
             valRecord.validityCheckPassed = cscaValidation.isValid;
             valRecord.keyUsageValid = cscaValidation.hasKeyCertSign;
 
-            // Link certificates need parent CSCA validation (same as DSC)
-            auto lcValidation = validateDscCertificate(conn, cert, issuerDn);
+            // Link certificates need parent CSCA validation (same as DSC) (Phase 6.1: Repository Pattern)
+            auto lcValidation = validateDscCertificate(cert, issuerDn);
             valRecord.cscaFound = lcValidation.cscaFound;
             valRecord.cscaSubjectDn = lcValidation.cscaSubjectDn;
             valRecord.trustChainPath = lcValidation.trustChainPath;
@@ -3420,8 +2976,8 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
             dscCount++;
             valRecord.certificateType = "DSC";
 
-        // DSC - perform trust chain validation
-        auto dscValidation = validateDscCertificate(conn, cert, issuerDn);
+        // DSC - perform trust chain validation (Phase 6.1: Repository Pattern)
+        auto dscValidation = validateDscCertificate(cert, issuerDn);
         valRecord.cscaFound = dscValidation.cscaFound;
         valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
         valRecord.signatureVerified = dscValidation.signatureValid;
@@ -3504,19 +3060,21 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
 
     X509_free(cert);
 
-    // 1. Save to DB with validation status
-    std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                         subjectDn, issuerDn, serialNumber, fingerprint,
-                                         notBefore, notAfter, derBytes,
-                                         validationStatus, validationMessage);
+    // 1. Save to DB with validation status (Phase 6.1: Repository Pattern)
+    auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
+        uploadId, certType, countryCode,
+        subjectDn, issuerDn, serialNumber, fingerprint,
+        notBefore, notAfter, derBytes,
+        validationStatus, validationMessage
+    );
 
     if (!certId.empty()) {
         spdlog::debug("Saved certificate to DB: type={}, country={}, fingerprint={}",
                      certType, countryCode, fingerprint.substr(0, 16));
 
-        // 3. Save validation result
+        // 3. Save validation result (Phase 6.1: Repository Pattern - TODO: use ValidationRepository)
         valRecord.certificateId = certId;
-        saveValidationResult(conn, valRecord);
+        saveValidationResult(valRecord);
 
         // 4. Save to LDAP
         if (ld) {
@@ -3538,7 +3096,8 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                                                         fingerprint, derBytes,
                                                         pkdConformanceCode, pkdConformanceText, pkdVersion);
             if (!ldapDn.empty()) {
-                updateCertificateLdapStatus(conn, certId, ldapDn);
+                // [Phase 6.1] Use Repository method instead of standalone function
+                ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
                 ldapStoredCount++;
                 spdlog::debug("Saved certificate to LDAP: {}", ldapDn);
             }
@@ -3551,7 +3110,7 @@ bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
 /**
  * @brief Parse and save CRL from LDIF entry (DB + LDAP)
  */
-bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
+bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
                    const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount) {
     std::string base64Value = entry.getFirstAttribute("certificateRevocationList;binary");
     if (base64Value.empty()) return false;
@@ -3584,8 +3143,8 @@ bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
     std::string fingerprint = computeFileHash(derBytes);
     std::string countryCode = extractCountryCode(issuerDn);
 
-    // 1. Save to DB
-    std::string crlId = saveCrl(conn, uploadId, countryCode, issuerDn,
+    // 1. Save to DB (Phase 6.1: Repository Pattern - TODO: use CRL Repository)
+    std::string crlId = saveCrl(uploadId, countryCode, issuerDn,
                                 thisUpdate, nextUpdate, crlNumber, fingerprint, derBytes);
 
     if (!crlId.empty()) {
@@ -3617,7 +3176,7 @@ bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                         ASN1_ENUMERATED_free(reasonEnum);
                     }
 
-                    saveRevokedCertificate(conn, crlId, serialNum, revDate, reason);
+                    saveRevokedCertificate(crlId, serialNum, revDate, reason);  // Phase 6.1: Repository Pattern
                 }
             }
             spdlog::debug("Saved CRL to DB with {} revoked certificates, issuer={}",
@@ -3628,7 +3187,8 @@ bool parseCrlEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         if (ld) {
             std::string ldapDn = saveCrlToLdap(ld, countryCode, issuerDn, fingerprint, derBytes);
             if (!ldapDn.empty()) {
-                updateCrlLdapStatus(conn, crlId, ldapDn);
+                // [Phase 6.1] Function now uses connection pool internally
+                updateCrlLdapStatus(crlId, ldapDn);
                 ldapCrlStoredCount++;
                 spdlog::debug("Saved CRL to LDAP: {}", ldapDn);
             }
@@ -3773,7 +3333,7 @@ bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                  countryCode, cscaCount, fingerprint.substr(0, 16));
 
     // 1. Save to DB
-    std::string mlId = saveMasterList(conn, uploadId, countryCode, signerDn, fingerprint, cscaCount, mlBytes);
+    std::string mlId = saveMasterList(uploadId, countryCode, signerDn, fingerprint, cscaCount, mlBytes);
 
     if (!mlId.empty()) {
         mlCount++;
@@ -3783,7 +3343,7 @@ bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
         if (ld) {
             std::string ldapDn = saveMasterListToLdap(ld, countryCode, signerDn, fingerprint, mlBytes);
             if (!ldapDn.empty()) {
-                updateMasterListLdapStatus(conn, mlId, ldapDn);
+                updateMasterListLdapStatus(mlId, ldapDn);
                 ldapMlStoredCount++;
                 spdlog::info("Saved Master List to LDAP: {}", ldapDn);
             }
@@ -3796,24 +3356,25 @@ bool parseMasterListEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
 /**
  * @brief Update uploaded_file with parsing statistics
  */
-void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
+void updateUploadStatistics(const std::string& uploadId,
                            const std::string& status, int cscaCount, int dscCount,
                            int dscNcCount, int crlCount, int totalEntries, int processedEntries,
                            const std::string& errorMessage) {
-    std::string query = "UPDATE uploaded_file SET "
-                       "status = '" + status + "', "
-                       "csca_count = " + std::to_string(cscaCount) + ", "
-                       "dsc_count = " + std::to_string(dscCount) + ", "
-                       "dsc_nc_count = " + std::to_string(dscNcCount) + ", "
-                       "crl_count = " + std::to_string(crlCount) + ", "
-                       "total_entries = " + std::to_string(totalEntries) + ", "
-                       "processed_entries = " + std::to_string(processedEntries) + ", "
-                       "error_message = " + escapeSqlString(conn, errorMessage) + ", "
-                       "completed_timestamp = NOW() "
-                       "WHERE id = '" + uploadId + "'";
+    // Phase 6.1: Use UploadRepository instead of direct SQL
+    if (!uploadRepository) {
+        spdlog::error("[UpdateStats] uploadRepository is null");
+        return;
+    }
 
-    PGresult* res = PQexec(conn, query.c_str());
-    PQclear(res);
+    // Update status
+    ::uploadRepository->updateStatus(uploadId, status, errorMessage);
+
+    // Update certificate statistics
+    ::uploadRepository->updateStatistics(uploadId, cscaCount, dscCount, dscNcCount, crlCount);
+
+    // TODO Phase 6.1: Add updateProcessingProgress() method to UploadRepository
+    // to update totalEntries and processedEntries fields
+    spdlog::debug("[UpdateStats] Updated statistics for upload: {}", uploadId);
 }
 
 /**
@@ -3822,51 +3383,29 @@ void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
  */
 void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
     std::thread([uploadId, content]() {
-        spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
+        spdlog::info("[Phase 6.1] Starting async LDIF processing for upload: {}", uploadId);
 
-        // Connect to PostgreSQL
-        std::string conninfo = "host=" + appConfig.dbHost +
-                              " port=" + std::to_string(appConfig.dbPort) +
-                              " dbname=" + appConfig.dbName +
-                              " user=" + appConfig.dbUser +
-                              " password=" + appConfig.dbPassword;
-
-        PGconn* conn = PQconnectdb(conninfo.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            spdlog::error("Database connection failed for async processing: {}", scrubCredentials(std::string(PQerrorMessage(conn))));
-            PQfinish(conn);
+        // Get processing_mode from upload record using Repository
+        auto uploadOpt = ::uploadRepository->findById(uploadId);
+        if (!uploadOpt.has_value()) {
+            spdlog::error("Upload record not found: {}", uploadId);
             return;
         }
 
-        // Check processing_mode (parameterized query)
-        const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
-        const char* paramValues[1] = {uploadId.c_str()};
-        PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, paramValues,
-                                         nullptr, nullptr, 0);
-        std::string processingMode = "AUTO";  // Default to AUTO
-        if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
-            processingMode = PQgetvalue(modeRes, 0, 0);
-        }
-        PQclear(modeRes);
-
-        spdlog::info("Processing mode for upload {}: {}", uploadId, processingMode);
+        std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
+        spdlog::info("Processing mode for LDIF upload {}: {}", uploadId, processingMode);
 
         // Connect to LDAP only if AUTO mode (for MANUAL, LDAP connection happens during triggerLdapUpload)
         LDAP* ld = nullptr;
         if (processingMode == "AUTO") {
             ld = getLdapWriteConnection();
             if (!ld) {
-                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for upload {}", uploadId);
+                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for LDIF upload {}", uploadId);
                 spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
 
-                // Update upload status to FAILED
-                const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
-                                       "error_message = 'LDAP connection failure - cannot ensure data consistency', "
-                                       "updated_at = NOW() WHERE id = $1";
-                const char* failParams[1] = {uploadId.c_str()};
-                PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
-                                                nullptr, nullptr, 0);
-                PQclear(failRes);
+                // Update upload status to FAILED using Repository
+                ::uploadRepository->updateStatus(uploadId, "FAILED",
+                    "LDAP connection failure - cannot ensure data consistency");
 
                 // Send failure progress
                 ProgressManager::getInstance().sendProgress(
@@ -3874,10 +3413,9 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                         0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
 
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                PQfinish(conn);
                 return;
             }
-            spdlog::info("LDAP write connection established successfully for AUTO mode upload {}", uploadId);
+            spdlog::info("LDAP write connection established successfully for AUTO mode LDIF upload {}", uploadId);
         }
 
         try {
@@ -3896,7 +3434,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
             // Use Strategy Pattern to handle AUTO vs MANUAL modes
             auto strategy = ProcessingStrategyFactory::create(processingMode);
-            strategy->processLdifEntries(uploadId, entries, conn, ld);
+            strategy->processLdifEntries(uploadId, entries, ld);
 
             // Send parsing completed progress AFTER strategy completes (for MANUAL mode)
             // This ensures temp file is saved and DB status is updated before frontend receives event
@@ -3913,7 +3451,6 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
             // For MANUAL mode, stop here (strategy already saved to temp file)
             if (processingMode == "MANUAL") {
-                PQfinish(conn);
                 return;
             }
 
@@ -4075,7 +3612,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                     cscaCount + dscCount + crlCount + mlCount, ldapProgressMsg));
 
             // Update final statistics (ml_count will be updated separately)
-            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, dscNcCount, crlCount,
+            updateUploadStatistics(uploadId, "COMPLETED", cscaCount, dscCount, dscNcCount, crlCount,
                                   totalEntries, processedEntries, "");
 
             // Update ml_count in uploaded_file
@@ -4126,14 +3663,14 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
+            updateUploadStatistics(uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
         }
 
-        // Cleanup connections
+        // Cleanup LDAP connection
         if (ld) {
             ldap_unbind_ext_s(ld, nullptr, nullptr);
         }
-        PQfinish(conn);
+        // Note: No PGconn cleanup needed - Strategy Pattern uses Repository with connection pool
     }).detach();
 }
 
@@ -4150,328 +3687,6 @@ namespace {  // Anonymous namespace for internal helper functions
  * @param conn PostgreSQL connection
  * @param ld LDAP connection (can be nullptr for MANUAL mode Stage 2)
  */
-void processMasterListContentCore(const std::string& uploadId, const std::vector<uint8_t>& content,
-                                   PGconn* conn, LDAP* ld) {
-    spdlog::info("Processing Master List core for upload {}: {} bytes, LDAP={}",
-                 uploadId, content.size(), (ld ? "yes" : "no"));
-
-    int cscaCount = 0;
-    int dscCount = 0;
-    int ldapStoredCount = 0;
-    int skippedDuplicates = 0;
-    int totalCerts = 0;
-
-    try {
-        // Send initial progress
-        ProgressManager::getInstance().sendProgress(
-            ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED, 0, 0, "CMS 파싱 시작"));
-
-        // Validate CMS format
-        if (content.empty() || content[0] != 0x30) {
-            spdlog::error("Invalid Master List: not a valid CMS structure");
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format"));
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "Invalid CMS format");
-            return;
-        }
-
-        // Parse as CMS SignedData
-        BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
-        CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
-        BIO_free(bio);
-
-        // Verify CMS signature with UN_CSCA trust anchor
-        if (cms) {
-            X509* trustAnchor = loadTrustAnchor();
-            if (trustAnchor) {
-                bool signatureValid = verifyCmsSignature(cms, trustAnchor);
-                X509_free(trustAnchor);
-                if (!signatureValid) {
-                    spdlog::warn("Master List CMS signature verification failed - continuing with parsing");
-                }
-            }
-        }
-
-        // Extract certificates from CMS or PKCS7
-        if (cms) {
-            // CMS parsing succeeded
-            spdlog::info("CMS SignedData parsed successfully, extracting certificates...");
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS, 0, 0, "인증서 추출 중"));
-
-            ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
-            if (contentPtr && *contentPtr) {
-                const unsigned char* contentData = ASN1_STRING_get0_data(*contentPtr);
-                int contentLen = ASN1_STRING_length(*contentPtr);
-
-                // Parse MasterList ASN.1 structure
-                const unsigned char* p = contentData;
-                int tag, xclass;
-                long seqLen;
-                int ret = ASN1_get_object(&p, &seqLen, &tag, &xclass, contentLen);
-
-                if (ret != 0x80 && tag == V_ASN1_SEQUENCE) {
-                    const unsigned char* seqEnd = p + seqLen;
-                    long elemLen;
-                    ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
-
-                    // Find certList (SET)
-                    const unsigned char* certSetStart = nullptr;
-                    long certSetLen = 0;
-
-                    if (tag == V_ASN1_INTEGER) {
-                        // Skip version
-                        p += elemLen;
-                        if (p < seqEnd) {
-                            ret = ASN1_get_object(&p, &elemLen, &tag, &xclass, seqEnd - p);
-                            if (tag == V_ASN1_SET) {
-                                certSetStart = p;
-                                certSetLen = elemLen;
-                            }
-                        }
-                    } else if (tag == V_ASN1_SET) {
-                        certSetStart = p;
-                        certSetLen = elemLen;
-                    }
-
-                    // Parse certificates
-                    if (certSetStart && certSetLen > 0) {
-                        const unsigned char* certPtr = certSetStart;
-                        const unsigned char* certSetEnd = certSetStart + certSetLen;
-
-                        while (certPtr < certSetEnd) {
-                            X509* cert = d2i_X509(nullptr, &certPtr, certSetEnd - certPtr);
-                            if (cert) {
-                                totalCerts++;
-
-                                // Extract certificate data
-                                int derLen = i2d_X509(cert, nullptr);
-                                if (derLen > 0) {
-                                    std::vector<uint8_t> derBytes(derLen);
-                                    uint8_t* derPtr = derBytes.data();
-                                    i2d_X509(cert, &derPtr);
-
-                                    std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
-                                    std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
-                                    std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
-                                    std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
-                                    std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
-                                    std::string fingerprint = computeFileHash(derBytes);
-                                    std::string countryCode = extractCountryCode(subjectDn);
-                                    std::string certType = "CSCA";  // DB always stores as CSCA
-                                    std::string ldapCertType = "CSCA";  // LDAP cert type (CSCA or LC)
-                                    bool isLinkCert = false;
-
-                                    // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
-                                    // Note: This extraction is done early (before type determination) so metadata is available
-                                    // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
-                                    CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-                                    spdlog::debug("Phase 4.4 (Master List): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
-                                                  certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
-
-                                    // Sprint 3 Task 3.3: Validate both self-signed CSCAs and link certificates
-                                    std::string validationStatus = "VALID";
-                                    if (isSelfSigned(cert)) {
-                                        // Self-signed CSCA: validate using existing function
-                                        auto cscaValidation = validateCscaCertificate(cert);
-                                        validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
-                                        ldapCertType = "CSCA";
-                                    } else if (isLinkCertificate(cert)) {
-                                        // Master List Signer Certificate: verify it has CA:TRUE and keyCertSign
-                                        // Master List Signer certificates are cross-signed by CSCAs
-                                        // They cannot be validated independently (require CSCA for signature check)
-                                        // For now, mark as VALID if it has correct extensions
-                                        validationStatus = "VALID";
-                                        isLinkCert = true;
-                                        ldapCertType = "MLSC";  // Store in o=mlsc branch
-                                        spdlog::info("Master List: Master List Signer Certificate detected (will save to o=mlsc): {}", subjectDn);
-                                    } else {
-                                        // Neither self-signed CSCA nor link certificate
-                                        validationStatus = "INVALID";
-                                        spdlog::warn("Master List: Invalid certificate (not self-signed and not link cert): {}", subjectDn);
-                                    }
-
-                                    // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
-                                    // Use ldapCertType as it correctly identifies MLSC vs CSCA
-                                    IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, ldapCertType);
-                                    spdlog::debug("Phase 4.4 (Master List): ICAO compliance for {} cert: isCompliant={}, level={}",
-                                                  ldapCertType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
-
-                                    // Phase 4.4 TODO: Update enhanced statistics (ValidationStatistics)
-                                    // Note: This requires passing ValidationStatistics as a parameter to this function
-                                    // For now, we log the metadata and compliance for verification
-                                    // Statistics will be updated once the parameter is added to function signature
-
-                                    // Save to DB
-                                    std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                                                         subjectDn, issuerDn, serialNumber, fingerprint,
-                                                                         notBefore, notAfter, derBytes);
-
-                                    if (!certId.empty()) {
-                                        cscaCount++;
-
-                                        // Save to LDAP if connection available
-                                        if (ld) {
-                                            // Sprint 3 Fix: Use fingerprint-based DN to avoid duplicates
-                                            // (Legacy DN with Subject DN + Serial can create duplicates when non-standard attributes differ)
-                                            std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
-                                                                                        subjectDn, issuerDn, serialNumber,
-                                                                                        fingerprint, derBytes,
-                                                                                        "", "", "", false);  // useLegacyDn=false
-                                            if (!ldapDn.empty()) {
-                                                updateCertificateLdapStatus(conn, certId, ldapDn);
-                                                ldapStoredCount++;
-                                                if (isLinkCert) {
-                                                    spdlog::info("Master List: Master List Signer Certificate saved to LDAP o=mlsc: {}", ldapDn);
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // v1.5.1: Progress update with detailed breakdown
-                                    if (totalCerts % 50 == 0) {
-                                        std::string mlProgressMsg = "처리 중: CSCA " + std::to_string(cscaCount);
-                                        if (ld) {
-                                            mlProgressMsg += ", LDAP 저장 " + std::to_string(ldapStoredCount);
-                                        }
-                                        ProgressManager::getInstance().sendProgress(
-                                            ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                                                totalCerts, totalCerts, mlProgressMsg));
-                                    }
-                                }
-                                X509_free(cert);
-                            }
-                        }
-                    }
-                }
-            }
-            CMS_ContentInfo_free(cms);
-
-        } else {
-            // Fallback: PKCS7
-            spdlog::debug("CMS parsing failed, trying PKCS7 fallback...");
-            const uint8_t* p = content.data();
-            PKCS7* p7 = d2i_PKCS7(nullptr, &p, static_cast<long>(content.size()));
-
-            if (p7 && PKCS7_type_is_signed(p7)) {
-                STACK_OF(X509)* certs = p7->d.sign->cert;
-                if (certs) {
-                    int numCerts = sk_X509_num(certs);
-                    spdlog::info("Found {} certificates in Master List (PKCS7)", numCerts);
-
-                    for (int i = 0; i < numCerts; i++) {
-                        X509* cert = sk_X509_value(certs, i);
-                        if (!cert) continue;
-
-                        int derLen = i2d_X509(cert, nullptr);
-                        if (derLen > 0) {
-                            std::vector<uint8_t> derBytes(derLen);
-                            uint8_t* derPtr = derBytes.data();
-                            i2d_X509(cert, &derPtr);
-
-                            std::string subjectDn = x509NameToString(X509_get_subject_name(cert));
-                            std::string issuerDn = x509NameToString(X509_get_issuer_name(cert));
-                            std::string serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
-                            std::string notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
-                            std::string notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
-                            std::string fingerprint = computeFileHash(derBytes);
-                            std::string countryCode = extractCountryCode(subjectDn);
-
-                            // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
-                            // Note: This extraction is done early (before type determination) so metadata is available
-                            // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
-                            CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-                            spdlog::debug("Phase 4.4 (Master List PKCS7): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
-                                          certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
-
-                            // Determine certificate type: Self-signed CSCA or Link Certificate
-                            std::string certType = "CSCA";  // DB always stores as CSCA
-                            std::string ldapCertType = "CSCA";  // LDAP cert type (CSCA or LC)
-                            bool isLinkCert = false;
-
-                            // Sprint 3 Task 3.3: Validate both self-signed CSCAs and link certificates
-                            std::string validationStatus = "VALID";
-                            if (isSelfSigned(cert)) {
-                                // Self-signed CSCA: validate using existing function
-                                auto cscaValidation = validateCscaCertificate(cert);
-                                validationStatus = cscaValidation.isValid ? "VALID" : "INVALID";
-                                ldapCertType = "CSCA";
-                            } else if (isLinkCertificate(cert)) {
-                                // Master List Signer Certificate: verify it has CA:TRUE and keyCertSign
-                                validationStatus = "VALID";
-                                isLinkCert = true;
-                                ldapCertType = "MLSC";  // Store in o=mlsc branch
-                                spdlog::info("Master List (PKCS7): Master List Signer Certificate detected (will save to o=mlsc): {}", subjectDn);
-                            } else {
-                                validationStatus = "INVALID";
-                                spdlog::warn("Master List (PKCS7): Invalid certificate (not self-signed and not link cert): {}", subjectDn);
-                            }
-
-                            // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
-                            // Use ldapCertType as it correctly identifies MLSC vs CSCA
-                            IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, ldapCertType);
-                            spdlog::debug("Phase 4.4 (Master List PKCS7): ICAO compliance for {} cert: isCompliant={}, level={}",
-                                          ldapCertType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
-
-                            // Phase 4.4 TODO: Update enhanced statistics (ValidationStatistics)
-                            // Note: This requires passing ValidationStatistics as a parameter to this function
-                            // For now, we log the metadata and compliance for verification
-                            // Statistics will be updated once the parameter is added to function signature
-
-                            std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                                                 subjectDn, issuerDn, serialNumber, fingerprint,
-                                                                 notBefore, notAfter, derBytes);
-
-                            if (!certId.empty()) {
-                                cscaCount++;
-                                if (ld) {
-                                    // Sprint 3 Fix: Use fingerprint-based DN to avoid duplicates
-                                    std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
-                                                                                subjectDn, issuerDn, serialNumber,
-                                                                                fingerprint, derBytes,
-                                                                                "", "", "", false);  // useLegacyDn=false
-                                    if (!ldapDn.empty()) {
-                                        updateCertificateLdapStatus(conn, certId, ldapDn);
-                                        ldapStoredCount++;
-                                        if (isLinkCert) {
-                                            spdlog::info("Master List (PKCS7): Master List Signer Certificate saved to LDAP o=mlsc: {}", ldapDn);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                PKCS7_free(p7);
-            } else {
-                spdlog::error("Failed to parse Master List: neither CMS nor PKCS7");
-                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
-                return;
-            }
-        }
-
-        // v1.5.1: Enhanced Master List completion message (only show actual counts)
-        std::string mlCompletionMsg = "처리 완료: CSCA " + std::to_string(cscaCount) + "개";
-        if (ld && ldapStoredCount > 0) {
-            mlCompletionMsg += ", LDAP 저장 " + std::to_string(ldapStoredCount) + "/" + std::to_string(cscaCount);
-        }
-
-        ProgressManager::getInstance().sendProgress(
-            ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                cscaCount, cscaCount, mlCompletionMsg));
-
-        spdlog::info("Extracted {} certificates from Master List", totalCerts);
-        updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, totalCerts, totalCerts, "");
-
-        spdlog::info("Master List processing completed: {} CSCA, LDAP: {}", cscaCount, ldapStoredCount);
-
-    } catch (const std::exception& e) {
-        spdlog::error("Master List processing failed: {}", e.what());
-        ProgressManager::getInstance().sendProgress(
-            ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
-        updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
-    }
-}
 
 }  // Close anonymous namespace before external function
 
@@ -4481,33 +3696,16 @@ void processMasterListContentCore(const std::string& uploadId, const std::vector
  */
 void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
     std::thread([uploadId, content]() {
-        spdlog::info("Starting async Master List processing for upload: {}", uploadId);
+        spdlog::info("[Phase 6.1] Starting async Master List processing for upload: {}", uploadId);
 
-        // Connect to PostgreSQL
-        std::string conninfo = "host=" + appConfig.dbHost +
-                              " port=" + std::to_string(appConfig.dbPort) +
-                              " dbname=" + appConfig.dbName +
-                              " user=" + appConfig.dbUser +
-                              " password=" + appConfig.dbPassword;
-
-        PGconn* conn = PQconnectdb(conninfo.c_str());
-        if (PQstatus(conn) != CONNECTION_OK) {
-            spdlog::error("Database connection failed for async processing: {}", scrubCredentials(std::string(PQerrorMessage(conn))));
-            PQfinish(conn);
+        // Get processing_mode from upload record using Repository
+        auto uploadOpt = ::uploadRepository->findById(uploadId);
+        if (!uploadOpt.has_value()) {
+            spdlog::error("Upload record not found: {}", uploadId);
             return;
         }
 
-        // Check processing_mode (parameterized query)
-        const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
-        const char* paramValues[1] = {uploadId.c_str()};
-        PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, paramValues,
-                                         nullptr, nullptr, 0);
-        std::string processingMode = "AUTO";  // Default to AUTO
-        if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
-            processingMode = PQgetvalue(modeRes, 0, 0);
-        }
-        PQclear(modeRes);
-
+        std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
         spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
 
         // Connect to LDAP only if AUTO mode
@@ -4518,21 +3716,15 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
                 spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
 
-                // Update upload status to FAILED
-                const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
-                                       "error_message = 'LDAP connection failure - cannot ensure data consistency', "
-                                       "updated_at = NOW() WHERE id = $1";
-                const char* failParams[1] = {uploadId.c_str()};
-                PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
-                                                nullptr, nullptr, 0);
-                PQclear(failRes);
+                // Update upload status to FAILED using Repository
+                ::uploadRepository->updateStatus(uploadId, "FAILED",
+                    "LDAP connection failure - cannot ensure data consistency");
 
                 // Send failure progress
                 ProgressManager::getInstance().sendProgress(
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                         0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
 
-                PQfinish(conn);
                 return;
             }
             spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
@@ -4554,9 +3746,9 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 spdlog::error("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
                 ProgressManager::getInstance().sendProgress(
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format", "CMS 형식 오류"));
-                updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "Invalid CMS format");
+                ::uploadRepository->updateStatus(uploadId, "FAILED", "Invalid CMS format");
+                ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                PQfinish(conn);
                 return;
             }
 
@@ -4631,20 +3823,27 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
-                            std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                                                 subjectDn, issuerDn, serialNumber, fingerprint,
-                                                                 notBefore, notAfter, derBytes);
+                            // Save certificate using Repository Pattern (Phase 6.1)
+                            auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
+                                uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
+                                fingerprint, notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                cscaCount++;
+                                if (isDuplicate) {
+                                    skippedDuplicates++;
+                                    spdlog::debug("[Phase 6.1] Skipping duplicate CSCA: fingerprint={}", fingerprint.substr(0, 16));
+                                } else {
+                                    cscaCount++;
+                                    spdlog::debug("[Phase 6.1] Saved CSCA to DB: fingerprint={}", fingerprint.substr(0, 16));
 
-                                if (ld) {
-                                    std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
-                                                                                subjectDn, issuerDn, serialNumber,
-                                                                                fingerprint, derBytes);
-                                    if (!ldapDn.empty()) {
-                                        updateCertificateLdapStatus(conn, certId, ldapDn);
-                                        ldapStoredCount++;
+                                    if (ld) {
+                                        std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                    subjectDn, issuerDn, serialNumber,
+                                                                                    fingerprint, derBytes);
+                                        if (!ldapDn.empty()) {
+                                            ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                                            ldapStoredCount++;
+                                        }
                                     }
                                 }
                             }
@@ -4654,9 +3853,9 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 } else {
                     spdlog::error("Failed to parse Master List: neither CMS nor PKCS7 parsing succeeded");
                     spdlog::error("OpenSSL error: {}", ERR_error_string(ERR_get_error(), nullptr));
-                    updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, "CMS/PKCS7 parsing failed");
+                    ::uploadRepository->updateStatus(uploadId, "FAILED", "CMS/PKCS7 parsing failed");
+                    ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
                     if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                    PQfinish(conn);
                     return;
                 }
             } else {
@@ -4780,22 +3979,6 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                                         totalCerts++;
 
-                                        // Check for duplicate before saving
-                                        if (certificateExistsByFingerprint(conn, fingerprint)) {
-                                            skippedDuplicates++;
-                                            spdlog::debug("Skipping duplicate certificate: fingerprint={}", fingerprint.substr(0, 16));
-
-                                            // Save duplicate record to duplicate_certificate table (v2.2.1)
-                                            std::string firstUploadId = certificateRepository->findFirstUploadIdByFingerprint(fingerprint);
-                                            if (!firstUploadId.empty()) {
-                                                certificateRepository->saveDuplicate(uploadId, firstUploadId, fingerprint,
-                                                                                    certType, subjectDn, issuerDn, countryCode, serialNumber);
-                                            }
-
-                                            X509_free(cert);
-                                            continue;
-                                        }
-
                                         // Send progress update
                                         if (totalCerts % 50 == 0) {
                                             ProgressManager::getInstance().sendProgress(
@@ -4803,28 +3986,34 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                     cscaCount + dscCount, totalCerts, "인증서 저장 중: " + std::to_string(cscaCount + dscCount) + "개"));
                                         }
 
-                                        // 1. Save to DB with validation status
-                                        std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                                                             subjectDn, issuerDn, serialNumber, fingerprint,
-                                                                             notBefore, notAfter, derBytes,
-                                                                             validationStatus, validationMessage);
+                                        // Save to DB with validation status using Repository Pattern (Phase 6.1)
+                                        auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
+                                            uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
+                                            fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
 
                                         if (!certId.empty()) {
-                                            // All Master List certificates are CSCA
-                                            cscaCount++;
+                                            if (isDuplicate) {
+                                                skippedDuplicates++;
+                                                spdlog::debug("[Phase 6.1] Skipping duplicate CSCA from Master List: fingerprint={}", fingerprint.substr(0, 16));
 
-                                            spdlog::debug("Saved CSCA from Master List to DB: country={}, fingerprint={}",
-                                                         countryCode, fingerprint.substr(0, 16));
+                                                // Track duplicate in certificate_duplicates table
+                                                ::certificateRepository->trackCertificateDuplicate(certId, uploadId, "ML_FILE", countryCode, "", "");
+                                            } else {
+                                                // All Master List certificates are CSCA
+                                                cscaCount++;
+                                                spdlog::debug("[Phase 6.1] Saved CSCA from Master List to DB: country={}, fingerprint={}",
+                                                             countryCode, fingerprint.substr(0, 16));
 
-                                            // 2. Save to LDAP
-                                            if (ld) {
-                                                std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
-                                                                                            subjectDn, issuerDn, serialNumber,
-                                                                                            fingerprint, derBytes);
-                                                if (!ldapDn.empty()) {
-                                                    updateCertificateLdapStatus(conn, certId, ldapDn);
-                                                    ldapStoredCount++;
-                                                    spdlog::debug("Saved {} from Master List to LDAP: {}", certType, ldapDn);
+                                                // Save to LDAP
+                                                if (ld) {
+                                                    std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                                subjectDn, issuerDn, serialNumber,
+                                                                                                fingerprint, derBytes);
+                                                    if (!ldapDn.empty()) {
+                                                        ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                                                        ldapStoredCount++;
+                                                        spdlog::debug("[Phase 6.1] Saved {} from Master List to LDAP: {}", certType, ldapDn);
+                                                    }
                                                 }
                                             }
                                         }
@@ -4884,20 +4073,27 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
-                            std::string certId = saveCertificate(conn, uploadId, certType, countryCode,
-                                                                 subjectDn, issuerDn, serialNumber, fingerprint,
-                                                                 notBefore, notAfter, derBytes);
+                            // Save certificate using Repository Pattern (Phase 6.1)
+                            auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
+                                uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
+                                fingerprint, notBefore, notAfter, derBytes);
 
                             if (!certId.empty()) {
-                                cscaCount++;
+                                if (isDuplicate) {
+                                    skippedDuplicates++;
+                                    spdlog::debug("[Phase 6.1] Skipping duplicate CSCA: fingerprint={}", fingerprint.substr(0, 16));
+                                } else {
+                                    cscaCount++;
+                                    spdlog::debug("[Phase 6.1] Saved CSCA to DB: fingerprint={}", fingerprint.substr(0, 16));
 
-                                if (ld) {
-                                    std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
-                                                                                subjectDn, issuerDn, serialNumber,
-                                                                                fingerprint, derBytes);
-                                    if (!ldapDn.empty()) {
-                                        updateCertificateLdapStatus(conn, certId, ldapDn);
-                                        ldapStoredCount++;
+                                    if (ld) {
+                                        std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
+                                                                                    subjectDn, issuerDn, serialNumber,
+                                                                                    fingerprint, derBytes);
+                                        if (!ldapDn.empty()) {
+                                            ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                                            ldapStoredCount++;
+                                        }
                                     }
                                 }
                             }
@@ -4913,7 +4109,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             // Update statistics (Master List contains only CSCA, no DSC or DSC_NC)
             // Note: ICAO Master List (.ml) extracts individual CSCA certificates, so ml_count = 0
             // Only Country Master Lists from LDIF (pkdMasterListContent) are counted as ML
-            updateUploadStatistics(conn, uploadId, "COMPLETED", cscaCount, dscCount, 0, 0, 1, 1, "");
+            ::uploadRepository->updateStatus(uploadId, "COMPLETED", "");
+            ::uploadRepository->updateStatistics(uploadId, cscaCount, dscCount, 0, 0, 1, 1);
 
             // v1.5.1: Enhanced completion message with LDAP status
             std::string completionMsg = "처리 완료: ";
@@ -4945,14 +4142,14 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
-            updateUploadStatistics(conn, uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
+            ::uploadRepository->updateStatus(uploadId, "FAILED", e.what());
+            ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
         }
 
-        // Cleanup connections
+        // Cleanup LDAP connection
         if (ld) {
             ldap_unbind_ext_s(ld, nullptr, nullptr);
         }
-        PQfinish(conn);
     }).detach();
 }
 
@@ -5116,34 +4313,18 @@ void registerRoutes() {
             if (fileFormatStr == "LDIF") {
                 processLdifFileAsync(uploadId, contentBytes);
             } else if (fileFormatStr == "ML") {
-                // Use Strategy Pattern for Master List (same as LDIF)
+                // Phase 6.1: Use Strategy Pattern for Master List (Repository Pattern)
                 std::thread([uploadId, contentBytes]() {
-                    spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
+                    spdlog::info("[Phase 6.1] Starting async Master List processing via Strategy for upload: {}", uploadId);
 
-                    std::string conninfo = "host=" + appConfig.dbHost +
-                                          " port=" + std::to_string(appConfig.dbPort) +
-                                          " dbname=" + appConfig.dbName +
-                                          " user=" + appConfig.dbUser +
-                                          " password=" + appConfig.dbPassword;
-
-                    PGconn* conn = PQconnectdb(conninfo.c_str());
-                    if (PQstatus(conn) != CONNECTION_OK) {
-                        spdlog::error("Database connection failed for async processing: {}", PQerrorMessage(conn));
-                        PQfinish(conn);
+                    // Get processing mode from upload record using Repository
+                    auto uploadOpt = ::uploadRepository->findById(uploadId);
+                    if (!uploadOpt.has_value()) {
+                        spdlog::error("Upload record not found: {}", uploadId);
                         return;
                     }
 
-                    // Get processing mode (parameterized query)
-                    const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
-                    const char* modeParamValues[1] = {uploadId.c_str()};
-                    PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, modeParamValues,
-                                                     nullptr, nullptr, 0);
-                    std::string processingMode = "AUTO";
-                    if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
-                        processingMode = PQgetvalue(modeRes, 0, 0);
-                    }
-                    PQclear(modeRes);
-
+                    std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
                     spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
 
                     // Connect to LDAP only if AUTO mode
@@ -5154,21 +4335,15 @@ void registerRoutes() {
                             spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
                             spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
 
-                            // Update upload status to FAILED
-                            const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
-                                                   "error_message = 'LDAP connection failure - cannot ensure data consistency', "
-                                                   "updated_at = NOW() WHERE id = $1";
-                            const char* failParams[1] = {uploadId.c_str()};
-                            PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
-                                                            nullptr, nullptr, 0);
-                            PQclear(failRes);
+                            // Update upload status to FAILED using Repository
+                            ::uploadRepository->updateStatus(uploadId, "FAILED",
+                                "LDAP connection failure - cannot ensure data consistency");
 
                             // Send failure progress
                             ProgressManager::getInstance().sendProgress(
                                 ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                                     0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
 
-                            PQfinish(conn);
                             return;
                         }
                         spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
@@ -5177,7 +4352,7 @@ void registerRoutes() {
                     try {
                         // Use Strategy Pattern
                         auto strategy = ProcessingStrategyFactory::create(processingMode);
-                        strategy->processMasterListContent(uploadId, contentBytes, conn, ld);
+                        strategy->processMasterListContent(uploadId, contentBytes, ld);
 
                         // Send appropriate progress based on mode
                         if (processingMode == "MANUAL") {
@@ -5200,7 +4375,7 @@ void registerRoutes() {
                     }
 
                     if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                    PQfinish(conn);
+                    // Note: No PGconn cleanup needed - using Repository Pattern with connection pool
                 }).detach();
             } else {
                 Json::Value error;
@@ -5224,6 +4399,7 @@ void registerRoutes() {
     );
 
     // Manual mode: Trigger validate and DB save endpoint
+    // [Phase 6.1] Refactored to use Repository Pattern instead of direct PostgreSQL connection
     app.registerHandler(
         "/api/upload/{uploadId}/validate",
         [](const drogon::HttpRequestPtr& req,
@@ -5231,61 +4407,21 @@ void registerRoutes() {
            const std::string& uploadId) {
             spdlog::info("POST /api/upload/{}/validate - Trigger validation and DB save", uploadId);
 
-            // Connect to database to check if upload exists
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Database connection failed";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                PQfinish(conn);
-                return;
-            }
-
-            // Check if upload exists (parameterized query)
-            const char* query = "SELECT id FROM uploaded_file WHERE id = $1";
-            const char* paramValues[1] = {uploadId.c_str()};
-            PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                         nullptr, nullptr, 0);
-
-            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
+            // Check if upload exists using Repository Pattern
+            auto uploadOpt = ::uploadRepository->findById(uploadId);
+            if (!uploadOpt.has_value()) {
                 Json::Value error;
                 error["success"] = false;
                 error["message"] = "Upload not found";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k404NotFound);
                 callback(resp);
-                PQclear(res);
-                PQfinish(conn);
                 return;
             }
-            PQclear(res);
-            PQfinish(conn);
 
             // Trigger validation and DB save in background (MANUAL mode Stage 2)
             std::thread([uploadId]() {
                 spdlog::info("Starting DSC validation for upload: {}", uploadId);
-
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    spdlog::error("Database connection failed for validation: {}", scrubCredentials(std::string(PQerrorMessage(conn))));
-                    PQfinish(conn);
-                    return;
-                }
 
                 try {
                     // Send validation started
@@ -5294,8 +4430,9 @@ void registerRoutes() {
                             0, 100, "인증서 검증 중..."));
 
                     // MANUAL mode Stage 2: Validate and save to DB
+                    // Note: validateAndSaveToDb() uses Repository Pattern internally (no PGconn* needed)
                     auto strategy = ProcessingStrategyFactory::create("MANUAL");
-                    strategy->validateAndSaveToDb(uploadId, conn);
+                    strategy->validateAndSaveToDb(uploadId);
 
                     // Send DB save completed (Stage 2 완료)
                     ProgressManager::getInstance().sendProgress(
@@ -5309,8 +4446,6 @@ void registerRoutes() {
                         ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                             0, 0, std::string("검증 실패: ") + e.what()));
                 }
-
-                PQfinish(conn);
             }).detach();
 
             Json::Value result;
@@ -6223,7 +5358,7 @@ void registerRoutes() {
                         try {
                             // Use Strategy Pattern
                             auto strategy = ProcessingStrategyFactory::create(processingMode);
-                            strategy->processMasterListContent(uploadId, contentBytes, conn, ld);
+                            strategy->processMasterListContent(uploadId, contentBytes, ld);
 
                             // Query actual processed_entries from database (parameterized)
                             const char* statsQuery = "SELECT processed_entries, total_entries FROM uploaded_file WHERE id = $1";

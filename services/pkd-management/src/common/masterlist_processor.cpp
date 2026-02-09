@@ -95,7 +95,6 @@ static CertificateMetadata extractCertificateMetadata(X509* cert) {
 }
 
 bool parseMasterListEntryV2(
-    PGconn* conn,
     LDAP* ld,
     const std::string& uploadId,
     const LdifEntry& entry,
@@ -222,7 +221,7 @@ bool parseMasterListEntryV2(
 
                 // Save MLSC with duplicate check
                 auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
-                    conn, uploadId, "MLSC", certCountryCode,
+                    uploadId, "MLSC", certCountryCode,
                     meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
                     meta.notBefore, meta.notAfter, meta.derData,
                     "UNKNOWN", ""
@@ -236,12 +235,12 @@ bool parseMasterListEntryV2(
 
                 // Track source
                 certificate_utils::trackCertificateDuplicate(
-                    conn, certId, uploadId, "LDIF_002",
+                    certId, uploadId, "LDIF_002",
                     certCountryCode, entry.dn, ""
                 );
 
                 if (isDuplicate) {
-                    certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+                    certificate_utils::incrementDuplicateCount(certId, uploadId);
                     spdlog::info("[ML-LDIF] MLSC {}/{} - DUPLICATE - fingerprint: {}, cert_id: {}, reason: Already exists in DB",
                                 i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
                 } else {
@@ -260,7 +259,7 @@ bool parseMasterListEntryV2(
                         );
 
                         if (!ldapDn.empty()) {
-                            certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                            certificate_utils::updateCertificateLdapStatus(certId, ldapDn);
                             spdlog::info("[ML-LDIF] MLSC {}/{} - Saved to LDAP: {}", i + 1, numSigners, ldapDn);
                         } else {
                             spdlog::warn("[ML-LDIF] MLSC {}/{} - Failed to save to LDAP, reason: LDAP operation failed",
@@ -383,7 +382,7 @@ bool parseMasterListEntryV2(
 
             // Save with duplicate check
             auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
-                conn, uploadId, certType, certCountryCode,
+                uploadId, certType, certCountryCode,
                 meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
                 meta.notBefore, meta.notAfter, meta.derData,
                 "UNKNOWN", ""
@@ -398,13 +397,13 @@ bool parseMasterListEntryV2(
             }
 
             certificate_utils::trackCertificateDuplicate(
-                conn, certId, uploadId, "LDIF_002",
+                certId, uploadId, "LDIF_002",
                 certCountryCode, entry.dn, ""
             );
 
             if (isDuplicate) {
                 dupCount++;
-                certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+                certificate_utils::incrementDuplicateCount(certId, uploadId);
                 std::string certTypeLabel = isLinkCertificate ? "LC" : "CSCA";
                 spdlog::debug("[ML-LDIF] {} {} - DUPLICATE - fingerprint: {}, cert_id: {}, reason: Already exists in DB",
                             certTypeLabel, totalCerts, meta.fingerprint.substr(0, 16) + "...", certId);
@@ -425,7 +424,7 @@ bool parseMasterListEntryV2(
                     );
 
                     if (!ldapDn.empty()) {
-                        certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                        certificate_utils::updateCertificateLdapStatus(certId, ldapDn);
                         stats.ldapCscaStoredCount++;
                         spdlog::debug("[ML-LDIF] {} {} - Saved to LDAP: {}", certTypeLabel, totalCerts, ldapDn);
                     } else {
@@ -455,7 +454,7 @@ bool parseMasterListEntryV2(
     CMS_ContentInfo_free(cms);
 
     // Step 4: Save original Master List CMS to o=ml (backup)
-    std::string mlId = saveMasterList(conn, uploadId, countryCode, signerDn,
+    std::string mlId = saveMasterList(uploadId, countryCode, signerDn,
                                      mlFingerprint, totalCerts, mlBytes);
 
     if (!mlId.empty()) {
@@ -466,7 +465,7 @@ bool parseMasterListEntryV2(
             std::string ldapDn = saveMasterListToLdap(ld, countryCode, signerDn,
                                                      mlFingerprint, mlBytes);
             if (!ldapDn.empty()) {
-                updateMasterListLdapStatus(conn, mlId, ldapDn);
+                updateMasterListLdapStatus(mlId, ldapDn);
                 stats.ldapMlStoredCount++;
                 spdlog::info("[ML-LDIF] Saved Master List to LDAP o=ml: {}", ldapDn);
             } else {
@@ -479,7 +478,7 @@ bool parseMasterListEntryV2(
     }
 
     // Step 5: Update upload file statistics
-    certificate_utils::updateCscaExtractionStats(conn, uploadId, totalCerts, dupCount);
+    certificate_utils::updateCscaExtractionStats(uploadId, totalCerts, dupCount);
 
     return true;
 }
@@ -489,7 +488,6 @@ bool parseMasterListEntryV2(
 // Based on main.cpp 4270-4600 logic
 
 bool processMasterListFile(
-    PGconn* conn,
     LDAP* ld,
     const std::string& uploadId,
     const std::vector<uint8_t>& content,
@@ -609,7 +607,7 @@ bool processMasterListFile(
 
                 // Save MLSC with duplicate check
                 auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
-                    conn, uploadId, "MLSC", countryCode,
+                    uploadId, "MLSC", countryCode,
                     meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
                     meta.notBefore, meta.notAfter, meta.derData,
                     "UNKNOWN", ""
@@ -617,7 +615,7 @@ bool processMasterListFile(
 
                 if (!certId.empty()) {
                     certificate_utils::trackCertificateDuplicate(
-                        conn, certId, uploadId, "ML_FILE",
+                        certId, uploadId, "ML_FILE",
                         countryCode, "Master List Signer", ""
                     );
 
@@ -637,7 +635,7 @@ bool processMasterListFile(
                             );
 
                             if (!ldapDn.empty()) {
-                                certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                                certificate_utils::updateCertificateLdapStatus(certId, ldapDn);
                                 spdlog::info("[ML-FILE] MLSC {}/{} - Saved to LDAP: {}", i + 1, numSigners, ldapDn);
                             }
                         }
@@ -761,7 +759,7 @@ bool processMasterListFile(
 
             // Save with duplicate check
             auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
-                conn, uploadId, certType, certCountryCode,
+                uploadId, certType, certCountryCode,
                 meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
                 meta.notBefore, meta.notAfter, meta.derData,
                 "UNKNOWN", ""
@@ -774,13 +772,13 @@ bool processMasterListFile(
             }
 
             certificate_utils::trackCertificateDuplicate(
-                conn, certId, uploadId, "ML_FILE",
+                certId, uploadId, "ML_FILE",
                 certCountryCode, "Master List", ""
             );
 
             if (isDuplicate) {
                 dupCount++;
-                certificate_utils::incrementDuplicateCount(conn, certId, uploadId);
+                certificate_utils::incrementDuplicateCount(certId, uploadId);
             } else {
                 newCount++;
                 std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
@@ -798,7 +796,7 @@ bool processMasterListFile(
                     );
 
                     if (!ldapDn.empty()) {
-                        certificate_utils::updateCertificateLdapStatus(conn, certId, ldapDn);
+                        certificate_utils::updateCertificateLdapStatus(certId, ldapDn);
                         stats.ldapCscaStoredCount++;
                     }
                 }
@@ -816,14 +814,14 @@ bool processMasterListFile(
         stats.cscaDuplicateCount = dupCount;
 
         // Save Master List to DB
-        std::string mlId = saveMasterList(conn, uploadId, countryCode, signerDn,
+        std::string mlId = saveMasterList(uploadId, countryCode, signerDn,
                                          mlFingerprint, totalCerts, content);
 
         if (!mlId.empty()) {
             spdlog::info("[ML-FILE] Saved Master List to DB: id={}", mlId);
         }
 
-        certificate_utils::updateCscaExtractionStats(conn, uploadId, totalCerts, dupCount);
+        certificate_utils::updateCscaExtractionStats(uploadId, totalCerts, dupCount);
 
         CMS_ContentInfo_free(cms);
         return true;
