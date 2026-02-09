@@ -28,11 +28,16 @@ bool UploadRepository::insert(const Upload& upload)
     spdlog::debug("[UploadRepository] Inserting upload: {}", upload.fileName);
 
     try {
-        // Oracle: upload_timestamp is VARCHAR2, use TO_CHAR(SYSTIMESTAMP) to convert
-        const char* query =
+        // Database-aware timestamp - PostgreSQL uses CURRENT_TIMESTAMP directly, Oracle uses TO_CHAR(SYSTIMESTAMP)
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string timestampValue = (dbType == "oracle")
+            ? "TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')"
+            : "CURRENT_TIMESTAMP";
+
+        std::string query =
             "INSERT INTO uploaded_file "
             "(id, file_name, file_hash, file_format, file_size, status, uploaded_by, upload_timestamp) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS'))";
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, " + timestampValue + ")";
 
         std::vector<std::string> params = {
             upload.id,
@@ -161,17 +166,23 @@ bool UploadRepository::updateStatus(
     spdlog::debug("[UploadRepository] Updating status: {} -> {}", uploadId, status);
 
     try {
+        // Database-aware timestamp - PostgreSQL uses CURRENT_TIMESTAMP directly, Oracle uses TO_CHAR(SYSTIMESTAMP)
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string timestampValue = (dbType == "oracle")
+            ? "TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')"
+            : "CURRENT_TIMESTAMP";
+
         std::string query;
         std::vector<std::string> params;
 
         if (errorMessage.empty()) {
             query = "UPDATE uploaded_file SET status = $1, "
-                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') ELSE completed_timestamp END "
+                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
                    "WHERE id = $2";
             params = {status, uploadId};
         } else {
             query = "UPDATE uploaded_file SET status = $1, error_message = $2, "
-                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS') ELSE completed_timestamp END "
+                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
                    "WHERE id = $3";
             params = {status, errorMessage, uploadId};
         }
@@ -724,37 +735,37 @@ Upload UploadRepository::jsonToUpload(const Json::Value& json)
     upload.fileName = json.get("file_name", "").asString();
     upload.fileHash = json.get("file_hash", "").asString();
     upload.fileFormat = json.get("file_format", "").asString();
-    upload.fileSize = json.get("file_size", 0).asInt();
+    upload.fileSize = getInt(json, "file_size", 0);
     upload.status = json.get("status", "").asString();
     upload.uploadedBy = json.get("uploaded_by", "").asString();
 
     upload.errorMessage = getOptionalString(json, "error_message");
     upload.processingMode = getOptionalString(json, "processing_mode");
 
-    upload.totalEntries = json.get("total_entries", 0).asInt();
-    upload.processedEntries = json.get("processed_entries", 0).asInt();
+    upload.totalEntries = getInt(json, "total_entries", 0);
+    upload.processedEntries = getInt(json, "processed_entries", 0);
 
-    upload.cscaCount = json.get("csca_count", 0).asInt();
-    upload.dscCount = json.get("dsc_count", 0).asInt();
-    upload.dscNcCount = json.get("dsc_nc_count", 0).asInt();
-    upload.crlCount = json.get("crl_count", 0).asInt();
-    upload.mlscCount = json.get("mlsc_count", 0).asInt();
-    upload.mlCount = json.get("ml_count", 0).asInt();
+    upload.cscaCount = getInt(json, "csca_count", 0);
+    upload.dscCount = getInt(json, "dsc_count", 0);
+    upload.dscNcCount = getInt(json, "dsc_nc_count", 0);
+    upload.crlCount = getInt(json, "crl_count", 0);
+    upload.mlscCount = getInt(json, "mlsc_count", 0);
+    upload.mlCount = getInt(json, "ml_count", 0);
 
     // Timestamps
     upload.createdAt = json.get("upload_timestamp", "").asString();
     upload.updatedAt = json.get("completed_timestamp", "").asString();
 
     // Validation statistics
-    upload.validationValidCount = json.get("validation_valid_count", 0).asInt();
-    upload.validationInvalidCount = json.get("validation_invalid_count", 0).asInt();
-    upload.validationPendingCount = json.get("validation_pending_count", 0).asInt();
-    upload.validationErrorCount = json.get("validation_error_count", 0).asInt();
-    upload.trustChainValidCount = json.get("trust_chain_valid_count", 0).asInt();
-    upload.trustChainInvalidCount = json.get("trust_chain_invalid_count", 0).asInt();
-    upload.cscaNotFoundCount = json.get("csca_not_found_count", 0).asInt();
-    upload.expiredCount = json.get("expired_count", 0).asInt();
-    upload.revokedCount = json.get("revoked_count", 0).asInt();
+    upload.validationValidCount = getInt(json, "validation_valid_count", 0);
+    upload.validationInvalidCount = getInt(json, "validation_invalid_count", 0);
+    upload.validationPendingCount = getInt(json, "validation_pending_count", 0);
+    upload.validationErrorCount = getInt(json, "validation_error_count", 0);
+    upload.trustChainValidCount = getInt(json, "trust_chain_valid_count", 0);
+    upload.trustChainInvalidCount = getInt(json, "trust_chain_invalid_count", 0);
+    upload.cscaNotFoundCount = getInt(json, "csca_not_found_count", 0);
+    upload.expiredCount = getInt(json, "expired_count", 0);
+    upload.revokedCount = getInt(json, "revoked_count", 0);
 
     return upload;
 }
@@ -765,6 +776,58 @@ std::optional<std::string> UploadRepository::getOptionalString(const Json::Value
         return std::nullopt;
     }
     return json[field].asString();
+}
+
+/**
+ * @brief Comprehensive integer parsing helper (handles PostgreSQL and Oracle)
+ *
+ * PostgreSQL may return integers as int/uint types
+ * Oracle may return integers as string types (e.g., "123")
+ * This function handles all cases to prevent "Value is not convertible to Int" errors
+ *
+ * @param json JSON object containing the field
+ * @param field Field name to parse
+ * @param defaultValue Default value if field is missing/null
+ * @return Parsed integer value
+ */
+int UploadRepository::getInt(const Json::Value& json, const std::string& field, int defaultValue)
+{
+    if (!json.isMember(field) || json[field].isNull()) {
+        return defaultValue;
+    }
+
+    const Json::Value& value = json[field];
+
+    // Handle different JSON types that Oracle/PostgreSQL might return
+    if (value.isInt()) {
+        return value.asInt();
+    } else if (value.isUInt()) {
+        return static_cast<int>(value.asUInt());
+    } else if (value.isInt64()) {
+        return static_cast<int>(value.asInt64());
+    } else if (value.isUInt64()) {
+        return static_cast<int>(value.asUInt64());
+    } else if (value.isString()) {
+        // Oracle returns integers as strings
+        std::string str = value.asString();
+        if (str.empty()) {
+            return defaultValue;
+        }
+        try {
+            return std::stoi(str);
+        } catch (const std::exception& e) {
+            spdlog::warn("[UploadRepository] Failed to parse integer field '{}' with value '{}': {}",
+                         field, str, e.what());
+            return defaultValue;
+        }
+    } else if (value.isDouble()) {
+        // Handle numeric types
+        return static_cast<int>(value.asDouble());
+    }
+
+    spdlog::warn("[UploadRepository] Unexpected type for integer field '{}': {}",
+                 field, static_cast<int>(value.type()));
+    return defaultValue;
 }
 
 std::optional<int> UploadRepository::getOptionalInt(const Json::Value& json, const std::string& field)
