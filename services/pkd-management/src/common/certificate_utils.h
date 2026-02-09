@@ -145,7 +145,6 @@ std::string extractAsn1TextAuto(const std::vector<uint8_t>& fileData);
  * If exists, returns existing ID and isDuplicate=true.
  * If not exists, inserts new certificate and returns new ID and isDuplicate=false.
  *
- * @param conn PostgreSQL connection
  * @param uploadId Current upload UUID
  * @param certType Certificate type (CSCA, DSC, DSC_NC)
  * @param countryCode ISO 3166-1 alpha-2 country code
@@ -160,11 +159,10 @@ std::string extractAsn1TextAuto(const std::vector<uint8_t>& fileData);
  * @param validationMessage Validation message
  * @return std::pair<std::string, bool> (certificate_id UUID, isDuplicate)
  *
- * @note This function uses parameterized queries to prevent SQL injection
+ * @note Phase 6.1: Uses global certificateRepository for database operations
  * @note Returns empty string ("") on error
  */
 std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
-    PGconn* conn,
     const std::string& uploadId,
     const std::string& certType,
     const std::string& countryCode,
@@ -186,7 +184,6 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
  * This allows tracking all sources (ML_FILE, LDIF_001, LDIF_002, LDIF_003)
  * that contain the same certificate.
  *
- * @param conn PostgreSQL connection
  * @param certificateId Certificate UUID from certificate table
  * @param uploadId Upload UUID that contains this certificate
  * @param sourceType Source type (ML_FILE, LDIF_001, LDIF_002, LDIF_003)
@@ -194,9 +191,9 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
  * @param sourceEntryDn LDIF entry DN (optional, for LDIF sources)
  * @param sourceFileName Original filename (optional)
  * @return bool Success status
+ * @note Phase 6.1: Uses global certificateRepository for database operations
  */
 bool trackCertificateDuplicate(
-    PGconn* conn,
     const std::string& certificateId,
     const std::string& uploadId,
     const std::string& sourceType,
@@ -211,13 +208,12 @@ bool trackCertificateDuplicate(
  * Updates the duplicate_count, last_seen_upload_id, and last_seen_at
  * fields when a duplicate certificate is detected.
  *
- * @param conn PostgreSQL connection
  * @param certificateId Certificate UUID to update
  * @param uploadId Current upload UUID
  * @return bool Success status
+ * @note Phase 6.1: Uses global certificateRepository for database operations
  */
 bool incrementDuplicateCount(
-    PGconn* conn,
     const std::string& certificateId,
     const std::string& uploadId
 );
@@ -228,14 +224,13 @@ bool incrementDuplicateCount(
  * Updates csca_extracted_from_ml and csca_duplicates counters
  * for Collection 002 LDIF processing.
  *
- * @param conn PostgreSQL connection
  * @param uploadId Upload UUID
  * @param extractedCount Number of CSCAs extracted from Master Lists
  * @param duplicateCount Number of duplicates detected
  * @return bool Success status
+ * @note Phase 6.1: Uses global uploadRepository for database operations
  */
 bool updateCscaExtractionStats(
-    PGconn* conn,
     const std::string& uploadId,
     int extractedCount,
     int duplicateCount
@@ -246,13 +241,12 @@ bool updateCscaExtractionStats(
  *
  * Marks a certificate as stored in LDAP with the LDAP DN.
  *
- * @param conn PostgreSQL connection
  * @param certificateId Certificate UUID
  * @param ldapDn LDAP DN where certificate is stored
  * @return bool Success status
+ * @note Phase 6.1: Uses global certificateRepository for database operations
  */
 bool updateCertificateLdapStatus(
-    PGconn* conn,
     const std::string& certificateId,
     const std::string& ldapDn
 );

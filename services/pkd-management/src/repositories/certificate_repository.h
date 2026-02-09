@@ -204,6 +204,102 @@ public:
      */
     Json::Value findDscForRevalidation(int limit);
 
+    // ========================================================================
+    // Certificate Insert & Duplicate Tracking (Phase 6.1 - Oracle Migration)
+    // ========================================================================
+
+    /**
+     * @brief Save certificate with automatic duplicate detection
+     *
+     * Checks if certificate already exists (by type + fingerprint).
+     * If exists: returns existing ID with isDuplicate=true
+     * If new: inserts certificate with full X.509 metadata
+     *
+     * @param uploadId Upload UUID that contains this certificate
+     * @param certType Certificate type (CSCA, DSC, DSC_NC, MLSC)
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @param subjectDn Subject Distinguished Name
+     * @param issuerDn Issuer Distinguished Name
+     * @param serialNumber Serial number (hex string)
+     * @param fingerprint SHA-256 fingerprint (hex string, 64 chars)
+     * @param notBefore Validity start date (ISO 8601 format)
+     * @param notAfter Validity end date (ISO 8601 format)
+     * @param certData Certificate data (DER encoded bytes)
+     * @param validationStatus Validation status (UNKNOWN, VALID, INVALID, PENDING)
+     * @param validationMessage Validation error message (optional)
+     * @return pair<certificateId, isDuplicate> - UUID and duplicate flag
+     *
+     * @note Extracts 15 X.509 metadata fields automatically
+     * @note Database-agnostic (works with PostgreSQL and Oracle)
+     */
+    std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
+        const std::string& uploadId,
+        const std::string& certType,
+        const std::string& countryCode,
+        const std::string& subjectDn,
+        const std::string& issuerDn,
+        const std::string& serialNumber,
+        const std::string& fingerprint,
+        const std::string& notBefore,
+        const std::string& notAfter,
+        const std::vector<uint8_t>& certData,
+        const std::string& validationStatus = "UNKNOWN",
+        const std::string& validationMessage = ""
+    );
+
+    /**
+     * @brief Track certificate duplicate source
+     *
+     * Records duplicate certificate detection in certificate_duplicates table.
+     * Allows tracking all uploads that contain the same certificate.
+     *
+     * @param certificateId Certificate UUID from certificate table
+     * @param uploadId Upload UUID that detected this duplicate
+     * @param sourceType Source type (ML_FILE, LDIF_001, LDIF_002, LDIF_003)
+     * @param sourceCountry Country code from source (optional)
+     * @param sourceEntryDn LDIF entry DN (optional)
+     * @param sourceFileName Original filename (optional)
+     * @return true if tracked successfully, false on error
+     */
+    bool trackCertificateDuplicate(
+        const std::string& certificateId,
+        const std::string& uploadId,
+        const std::string& sourceType,
+        const std::string& sourceCountry = "",
+        const std::string& sourceEntryDn = "",
+        const std::string& sourceFileName = ""
+    );
+
+    /**
+     * @brief Increment duplicate count for existing certificate
+     *
+     * Updates certificate.duplicate_count, last_seen_upload_id, last_seen_at
+     * Called when the same certificate is encountered in another upload.
+     *
+     * @param certificateId Certificate UUID
+     * @param uploadId Upload UUID that re-encountered this certificate
+     * @return true if updated successfully, false on error
+     */
+    bool incrementDuplicateCount(
+        const std::string& certificateId,
+        const std::string& uploadId
+    );
+
+    /**
+     * @brief Update LDAP storage status for certificate
+     *
+     * Marks certificate as stored in LDAP with the LDAP DN.
+     * Called after successful LDAP add operation.
+     *
+     * @param certificateId Certificate UUID
+     * @param ldapDn LDAP DN where certificate was stored
+     * @return true if updated successfully, false on error
+     */
+    bool updateCertificateLdapStatus(
+        const std::string& certificateId,
+        const std::string& ldapDn
+    );
+
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 

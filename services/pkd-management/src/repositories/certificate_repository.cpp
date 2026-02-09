@@ -1,9 +1,11 @@
 #include "certificate_repository.h"
+#include "../common/x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
 #include <algorithm>
 #include <cstring>
+#include <iomanip>
 #include <openssl/x509.h>
 #include <openssl/err.h>
 
@@ -603,6 +605,301 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
     } catch (const std::exception& e) {
         spdlog::error("[CertificateRepository] Failed to save duplicate: {}", e.what());
         return false;
+    }
+}
+
+// ============================================================================
+// Certificate Insert & Duplicate Tracking (Phase 6.1 - Oracle Migration)
+// ============================================================================
+
+bool CertificateRepository::updateCertificateLdapStatus(
+    const std::string& certificateId,
+    const std::string& ldapDn
+)
+{
+    spdlog::debug("[CertificateRepository] Updating LDAP status: cert_id={}, ldap_dn={}",
+                  certificateId.substr(0, 8) + "...", ldapDn.substr(0, 40) + "...");
+
+    try {
+        const char* query =
+            "UPDATE certificate "
+            "SET stored_in_ldap = $1, ldap_dn = $2 "
+            "WHERE id = $3";
+
+        // Database-aware boolean formatting
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string storedValue = (dbType == "oracle") ? "1" : "true";
+
+        std::vector<std::string> params = {storedValue, ldapDn, certificateId};
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] LDAP status updated: cert_id={}",
+                     certificateId.substr(0, 8) + "...");
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] updateCertificateLdapStatus failed: {}", e.what());
+        return false;
+    }
+}
+
+bool CertificateRepository::incrementDuplicateCount(
+    const std::string& certificateId,
+    const std::string& uploadId
+)
+{
+    spdlog::debug("[CertificateRepository] Incrementing duplicate count: cert_id={}, upload={}",
+                  certificateId.substr(0, 8) + "...", uploadId.substr(0, 8) + "...");
+
+    try {
+        const char* query =
+            "UPDATE certificate "
+            "SET duplicate_count = duplicate_count + 1, "
+            "    last_seen_upload_id = $1, "
+            "    last_seen_at = CURRENT_TIMESTAMP "
+            "WHERE id = $2";
+
+        std::vector<std::string> params = {uploadId, certificateId};
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] Duplicate count incremented: cert_id={}",
+                     certificateId.substr(0, 8) + "...");
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] incrementDuplicateCount failed: {}", e.what());
+        return false;
+    }
+}
+
+bool CertificateRepository::trackCertificateDuplicate(
+    const std::string& certificateId,
+    const std::string& uploadId,
+    const std::string& sourceType,
+    const std::string& sourceCountry,
+    const std::string& sourceEntryDn,
+    const std::string& sourceFileName
+)
+{
+    spdlog::debug("[CertificateRepository] Tracking duplicate: cert_id={}, upload={}, source_type={}",
+                  certificateId.substr(0, 8) + "...", uploadId.substr(0, 8) + "...", sourceType);
+
+    try {
+        const char* query =
+            "INSERT INTO certificate_duplicates ("
+            "certificate_id, upload_id, source_type, source_country, "
+            "source_entry_dn, source_file_name, detected_at"
+            ") VALUES ("
+            "$1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP"
+            ") ON CONFLICT (certificate_id, upload_id, source_type) DO NOTHING";
+
+        std::vector<std::string> params = {
+            certificateId,
+            uploadId,
+            sourceType,
+            sourceCountry,
+            sourceEntryDn,
+            sourceFileName
+        };
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("[CertificateRepository] Duplicate tracked: cert_id={}, source_type={}",
+                     certificateId.substr(0, 8) + "...", sourceType);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] trackCertificateDuplicate failed: {}", e.what());
+        return false;
+    }
+}
+
+std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicateCheck(
+    const std::string& uploadId,
+    const std::string& certType,
+    const std::string& countryCode,
+    const std::string& subjectDn,
+    const std::string& issuerDn,
+    const std::string& serialNumber,
+    const std::string& fingerprint,
+    const std::string& notBefore,
+    const std::string& notAfter,
+    const std::vector<uint8_t>& certData,
+    const std::string& validationStatus,
+    const std::string& validationMessage
+)
+{
+    spdlog::debug("[CertificateRepository] Saving certificate: type={}, country={}, fingerprint={}",
+                  certType, countryCode, fingerprint.substr(0, 16) + "...");
+
+    try {
+        // ====================================================================
+        // Step 1: Check if certificate already exists
+        // ====================================================================
+        const char* checkQuery =
+            "SELECT id, first_upload_id FROM certificate "
+            "WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
+
+        std::vector<std::string> checkParams = {certType, fingerprint};
+        Json::Value checkResult = queryExecutor_->executeQuery(checkQuery, checkParams);
+
+        // If certificate exists, return existing ID with isDuplicate=true
+        if (!checkResult.empty()) {
+            std::string existingId = checkResult[0]["id"].asString();
+            spdlog::debug("[CertificateRepository] Duplicate certificate found: id={}, fingerprint={}",
+                         existingId.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
+            return std::make_pair(existingId, true);
+        }
+
+        // ====================================================================
+        // Step 2: Extract X.509 metadata from certificate
+        // ====================================================================
+        const unsigned char* certPtr = certData.data();
+        X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
+
+        x509::CertificateMetadata x509meta;
+        std::string versionStr, sigAlg, sigHashAlg, pubKeyAlg, pubKeySizeStr;
+        std::string pubKeyCurve, keyUsageStr, extKeyUsageStr, isCaStr;
+        std::string pathLenStr, ski, aki, crlDpStr, ocspUrl, isSelfSignedStr;
+
+        if (x509cert) {
+            x509meta = x509::extractMetadata(x509cert);
+            X509_free(x509cert);
+
+            // Convert metadata to SQL strings
+            versionStr = std::to_string(x509meta.version);
+            sigAlg = x509meta.signatureAlgorithm;
+            sigHashAlg = x509meta.signatureHashAlgorithm;
+            pubKeyAlg = x509meta.publicKeyAlgorithm;
+            pubKeySizeStr = std::to_string(x509meta.publicKeySize);
+            pubKeyCurve = x509meta.publicKeyCurve.value_or("");
+
+            // Convert arrays to comma-separated strings (database-agnostic)
+            std::ostringstream kuStream, ekuStream, crlStream;
+            for (size_t i = 0; i < x509meta.keyUsage.size(); i++) {
+                kuStream << x509meta.keyUsage[i];
+                if (i < x509meta.keyUsage.size() - 1) kuStream << ",";
+            }
+            keyUsageStr = kuStream.str();
+
+            for (size_t i = 0; i < x509meta.extendedKeyUsage.size(); i++) {
+                ekuStream << x509meta.extendedKeyUsage[i];
+                if (i < x509meta.extendedKeyUsage.size() - 1) ekuStream << ",";
+            }
+            extKeyUsageStr = ekuStream.str();
+
+            for (size_t i = 0; i < x509meta.crlDistributionPoints.size(); i++) {
+                crlStream << x509meta.crlDistributionPoints[i];
+                if (i < x509meta.crlDistributionPoints.size() - 1) crlStream << ",";
+            }
+            crlDpStr = crlStream.str();
+
+            // Database-aware boolean formatting
+            std::string dbType = queryExecutor_->getDatabaseType();
+            isCaStr = x509meta.isCA ? (dbType == "oracle" ? "1" : "TRUE") : (dbType == "oracle" ? "0" : "FALSE");
+            isSelfSignedStr = x509meta.isSelfSigned ? (dbType == "oracle" ? "1" : "TRUE") : (dbType == "oracle" ? "0" : "FALSE");
+
+            pathLenStr = x509meta.pathLenConstraint.has_value() ?
+                         std::to_string(x509meta.pathLenConstraint.value()) : "";
+            ski = x509meta.subjectKeyIdentifier.value_or("");
+            aki = x509meta.authorityKeyIdentifier.value_or("");
+            ocspUrl = x509meta.ocspResponderUrl.value_or("");
+        } else {
+            spdlog::warn("[CertificateRepository] Failed to parse X509 certificate for metadata extraction");
+            versionStr = "2";  // Default to v3
+            std::string dbType = queryExecutor_->getDatabaseType();
+            isCaStr = dbType == "oracle" ? "0" : "FALSE";
+            isSelfSignedStr = dbType == "oracle" ? "0" : "FALSE";
+            keyUsageStr = "";
+            extKeyUsageStr = "";
+            crlDpStr = "";
+        }
+
+        // ====================================================================
+        // Step 3: Insert new certificate with X.509 metadata
+        // ====================================================================
+
+        // Convert DER bytes to hex string (database-agnostic)
+        std::ostringstream hexStream;
+        hexStream << "\\\\x";  // PostgreSQL bytea format prefix (Oracle will handle differently)
+        for (size_t i = 0; i < certData.size(); i++) {
+            hexStream << std::hex << std::setw(2) << std::setfill('0')
+                     << static_cast<int>(certData[i]);
+        }
+        std::string certDataHex = hexStream.str();
+
+        const char* insertQuery =
+            "INSERT INTO certificate ("
+            "upload_id, certificate_type, country_code, "
+            "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+            "not_before, not_after, certificate_data, "
+            "validation_status, validation_message, "
+            "duplicate_count, first_upload_id, created_at, "
+            "version, signature_algorithm, signature_hash_algorithm, "
+            "public_key_algorithm, public_key_size, public_key_curve, "
+            "key_usage, extended_key_usage, "
+            "is_ca, path_len_constraint, "
+            "subject_key_identifier, authority_key_identifier, "
+            "crl_distribution_points, ocsp_responder_url, is_self_signed"
+            ") VALUES ("
+            "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1, CURRENT_TIMESTAMP, "
+            "$13, $14, $15, "
+            "$16, $17, $18, "
+            "$19, $20, "
+            "$21, $22, "
+            "$23, $24, "
+            "$25, $26, $27"
+            ") RETURNING id";
+
+        std::vector<std::string> insertParams = {
+            uploadId,                                // $1
+            certType,                                // $2
+            countryCode,                             // $3
+            subjectDn,                               // $4
+            issuerDn,                                // $5
+            serialNumber,                            // $6
+            fingerprint,                             // $7
+            notBefore,                               // $8
+            notAfter,                                // $9
+            certDataHex,                             // $10
+            validationStatus,                        // $11
+            validationMessage,                       // $12
+            versionStr,                              // $13
+            sigAlg.empty() ? "" : sigAlg,            // $14
+            sigHashAlg.empty() ? "" : sigHashAlg,    // $15
+            pubKeyAlg.empty() ? "" : pubKeyAlg,      // $16
+            pubKeySizeStr == "0" ? "" : pubKeySizeStr, // $17
+            pubKeyCurve,                             // $18
+            keyUsageStr,                             // $19
+            extKeyUsageStr,                          // $20
+            isCaStr,                                 // $21
+            pathLenStr,                              // $22
+            ski,                                     // $23
+            aki,                                     // $24
+            crlDpStr,                                // $25
+            ocspUrl,                                 // $26
+            isSelfSignedStr                          // $27
+        };
+
+        Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
+
+        if (insertResult.empty()) {
+            spdlog::error("[CertificateRepository] INSERT failed: no ID returned");
+            return std::make_pair(std::string(""), false);
+        }
+
+        std::string newId = insertResult[0]["id"].asString();
+
+        spdlog::debug("[CertificateRepository] New certificate inserted: id={}, type={}, country={}, fingerprint={}",
+                     newId.substr(0, 8) + "...", certType, countryCode, fingerprint.substr(0, 16) + "...");
+
+        return std::make_pair(newId, false);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] saveCertificateWithDuplicateCheck failed: {}", e.what());
+        return std::make_pair(std::string(""), false);
     }
 }
 
