@@ -18,43 +18,40 @@ public:
     virtual ~ProcessingStrategy() = default;
 
     /**
-     * @brief Process LDIF file according to the strategy
+     * @brief Process LDIF file according to the strategy (Phase 6.1 - Repository Pattern)
      * @param uploadId Upload record UUID
      * @param entries Parsed LDIF entries
-     * @param conn PostgreSQL connection
      * @param ld LDAP connection (can be nullptr)
+     * @note Uses global certificateRepository and uploadRepository for database operations
      */
     virtual void processLdifEntries(
         const std::string& uploadId,
         const std::vector<LdifEntry>& entries,
-        PGconn* conn,
         LDAP* ld
     ) = 0;
 
     /**
-     * @brief Process Master List file according to the strategy
+     * @brief Process Master List file according to the strategy (Phase 6.1 - Repository Pattern)
      * @param uploadId Upload record UUID
      * @param content Raw file content
-     * @param conn PostgreSQL connection
      * @param ld LDAP connection (can be nullptr)
+     * @note Uses global certificateRepository and uploadRepository for database operations
      */
     virtual void processMasterListContent(
         const std::string& uploadId,
         const std::vector<uint8_t>& content,
-        PGconn* conn,
         LDAP* ld
     ) = 0;
 
     /**
-     * @brief Validate and save to database (MANUAL mode Stage 2)
+     * @brief Validate and save to database (MANUAL mode Stage 2, Phase 6.1 - Repository Pattern)
      * @param uploadId Upload record UUID
-     * @param conn PostgreSQL connection
+     * @note Uses global certificateRepository and uploadRepository for database operations
      * @note Only implemented for ManualProcessingStrategy
      * @throws std::runtime_error if called on AutoProcessingStrategy
      */
     virtual void validateAndSaveToDb(
-        const std::string& uploadId,
-        PGconn* conn
+        const std::string& uploadId
     ) = 0;
 };
 
@@ -71,20 +68,17 @@ public:
     void processLdifEntries(
         const std::string& uploadId,
         const std::vector<LdifEntry>& entries,
-        PGconn* conn,
         LDAP* ld
     ) override;
 
     void processMasterListContent(
         const std::string& uploadId,
         const std::vector<uint8_t>& content,
-        PGconn* conn,
         LDAP* ld
     ) override;
 
     void validateAndSaveToDb(
-        const std::string& uploadId,
-        PGconn* conn
+        const std::string& uploadId
     ) override;
 };
 
@@ -101,27 +95,23 @@ public:
     void processLdifEntries(
         const std::string& uploadId,
         const std::vector<LdifEntry>& entries,
-        PGconn* conn,
         LDAP* ld
     ) override;
 
     void processMasterListContent(
         const std::string& uploadId,
         const std::vector<uint8_t>& content,
-        PGconn* conn,
         LDAP* ld
     ) override;
 
     // Stage 2: Validate and save to DB + LDAP
     void validateAndSaveToDb(
-        const std::string& uploadId,
-        PGconn* conn
+        const std::string& uploadId
     );
 
-    // Cleanup failed upload
+    // Cleanup failed upload (Phase 6.1 - Repository Pattern)
     static void cleanupFailedUpload(
-        const std::string& uploadId,
-        PGconn* conn
+        const std::string& uploadId
     );
 
 private:
@@ -130,7 +120,7 @@ private:
     std::vector<LdifEntry> loadLdifEntriesFromTempFile(const std::string& uploadId);
     void saveMasterListToTempFile(const std::string& uploadId, const std::vector<uint8_t>& content);
     std::vector<uint8_t> loadMasterListFromTempFile(const std::string& uploadId);
-    void processMasterListToDbAndLdap(const std::string& uploadId, const std::vector<uint8_t>& content, PGconn* conn, LDAP* ld);
+    void processMasterListToDbAndLdap(const std::string& uploadId, const std::vector<uint8_t>& content, LDAP* ld);
 };
 
 /**

@@ -27,13 +27,13 @@ public:
     static std::vector<LdifEntry> parseLdifContent(const std::string& content);
 
     /**
-     * @brief Process LDIF entries (save to DB and validate)
+     * @brief Process LDIF entries (save to DB and validate) (Phase 6.1 - Repository Pattern)
      * @param uploadId Upload record UUID
      * @param entries Parsed LDIF entries
-     * @param conn PostgreSQL connection
      * @param ld LDAP connection (can be nullptr to skip LDAP upload)
      * @param stats Output validation statistics
      * @return Processing counts (csca, dsc, dsc_nc, crl, ml)
+     * @note Uses global certificateRepository and uploadRepository for database operations
      */
     struct ProcessingCounts {
         int cscaCount = 0;
@@ -56,7 +56,6 @@ public:
     static ProcessingCounts processEntries(
         const std::string& uploadId,
         const std::vector<LdifEntry>& entries,
-        PGconn* conn,
         LDAP* ld,
         ValidationStats& stats,
         common::ValidationStatistics& enhancedStats,
@@ -64,15 +63,14 @@ public:
     );
 
     /**
-     * @brief Upload certificates from DB to LDAP
+     * @brief Upload certificates from DB to LDAP (Phase 6.1 - Repository Pattern)
      * @param uploadId Upload record UUID
-     * @param conn PostgreSQL connection
      * @param ld LDAP connection
      * @return Number of entries uploaded
+     * @note Uses global certificateRepository for database operations
      */
     static int uploadToLdap(
         const std::string& uploadId,
-        PGconn* conn,
         LDAP* ld
     );
 };

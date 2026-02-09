@@ -22,7 +22,7 @@ struct MasterListStats {
 };
 
 /**
- * @brief Parse Collection 002 Master List entry (v2.0.0)
+ * @brief Parse Collection 002 Master List entry (v2.0.0, Phase 6.1 - Repository Pattern)
  *
  * NEW BEHAVIOR (v2.0.0):
  * - Extracts individual CSCAs from each Master List CMS
@@ -42,12 +42,12 @@ struct MasterListStats {
  * 4. Save original Master List CMS to o=ml (backup)
  * 5. Update statistics
  *
- * @param conn PostgreSQL connection
  * @param ld LDAP connection (can be nullptr to skip LDAP operations)
  * @param uploadId Current upload UUID
  * @param entry LDIF entry containing pkdMasterListContent
  * @param stats Statistics counters (updated by reference)
  * @return bool Success status
+ * @note Uses global certificateRepository for database operations
  *
  * Logging Format:
  * [ML] CSCA 1/12 - NEW - fingerprint: abc123..., subject: C=KR,O=MOFA,CN=CSCA-KOREA
@@ -55,7 +55,6 @@ struct MasterListStats {
  * [ML] Master List saved to o=ml: c=KR,dc=data,...
  */
 bool parseMasterListEntryV2(
-    PGconn* conn,
     LDAP* ld,
     const std::string& uploadId,
     const LdifEntry& entry,
@@ -63,7 +62,7 @@ bool parseMasterListEntryV2(
 );
 
 /**
- * @brief Process Master List file (.ml format) - v2.1.1
+ * @brief Process Master List file (.ml format) - v2.1.1 (Phase 6.1 - Repository Pattern)
  *
  * CORRECT BEHAVIOR (v2.1.1):
  * - Extracts MLSC from CMS SignerInfo (1-2 certificates, saves to o=mlsc)
@@ -81,12 +80,12 @@ bool parseMasterListEntryV2(
  * 4. Save original Master List CMS to master_list table
  * 5. Update statistics
  *
- * @param conn PostgreSQL connection
  * @param ld LDAP connection (can be nullptr to skip LDAP operations)
  * @param uploadId Current upload UUID
  * @param content Master List file binary content
  * @param stats Statistics counters (updated by reference)
  * @return bool Success status
+ * @note Uses global certificateRepository for database operations
  *
  * Logging Format:
  * [ML] Found 1 SignerInfo(s) - extracting MLSC certificates
@@ -95,7 +94,6 @@ bool parseMasterListEntryV2(
  * [ML] LC (Link Certificate) 2/536 - NEW - fingerprint: ghi789..., subject: C=LV,O=NSA,CN=CSCA Latvia
  */
 bool processMasterListFile(
-    PGconn* conn,
     LDAP* ld,
     const std::string& uploadId,
     const std::vector<uint8_t>& content,

@@ -83,11 +83,10 @@ std::string extractCountryCode(const std::string& dn);
 std::string extractCountryCodeFromDn(const std::string& dn);
 
 /**
- * @brief Save Master List metadata to PostgreSQL database
+ * @brief Save Master List metadata to PostgreSQL database (Phase 6.1: Repository Pattern)
  *
  * Inserts Master List record into the master_list table.
  *
- * @param conn PostgreSQL connection (must be valid)
  * @param uploadId Upload UUID
  * @param countryCode ISO 3166-1 country code
  * @param signerDn Signer certificate Subject DN
@@ -97,10 +96,9 @@ std::string extractCountryCodeFromDn(const std::string& dn);
  * @return std::string Master List ID (UUID), or empty on failure
  *
  * @warning mlData should be valid CMS/PKCS#7 structure
- * @note NOT thread-safe (requires exclusive PostgreSQL connection)
+ * @note Uses global masterListRepository (stub implementation)
  */
 std::string saveMasterList(
-    PGconn* conn,
     const std::string& uploadId,
     const std::string& countryCode,
     const std::string& signerDn,
@@ -135,19 +133,17 @@ std::string saveMasterListToLdap(
 );
 
 /**
- * @brief Update Master List LDAP storage status in database
+ * @brief Update Master List LDAP storage status in database (Phase 6.1: Repository Pattern)
  *
  * Updates master_list.ldap_dn and ldap_stored_at fields.
  *
- * @param conn PostgreSQL connection (must be valid)
  * @param mlId Master List UUID
  * @param ldapDn LDAP DN where Master List is stored
  *
  * @note If ldapDn is empty, function returns without updating
- * @note NOT thread-safe (requires exclusive PostgreSQL connection)
+ * @note Uses global masterListRepository (stub implementation)
  */
 void updateMasterListLdapStatus(
-    PGconn* conn,
     const std::string& mlId,
     const std::string& ldapDn
 );
