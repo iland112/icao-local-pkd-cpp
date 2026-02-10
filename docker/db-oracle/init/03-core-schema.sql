@@ -326,8 +326,8 @@ CREATE TABLE pa_verification (
     date_of_expiry DATE,
 
     -- SOD info
-    sod_binary BLOB NOT NULL,
-    sod_hash VARCHAR2(64) NOT NULL,
+    sod_binary BLOB,
+    sod_hash VARCHAR2(64),
 
     -- DSC info (extracted from SOD)
     dsc_subject_dn CLOB,

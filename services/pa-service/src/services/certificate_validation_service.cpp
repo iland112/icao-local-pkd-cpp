@@ -93,6 +93,9 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
             }
         }
 
+        // Store extracted country code in result for caller use
+        result.countryCode = effectiveCountry;
+
         // Find CSCA certificate
         X509* cscaCert = certRepo_->findCscaByIssuerDn(result.dscIssuer, effectiveCountry);
         if (!cscaCert) {

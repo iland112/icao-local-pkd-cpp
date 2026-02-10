@@ -58,6 +58,9 @@ struct CertificateChainValidation {
     // Overall validation result
     bool valid = false;
 
+    // Country code (extracted from DSC issuer DN during validation)
+    std::string countryCode;
+
     // DSC certificate information
     std::string dscSubject;
     std::string dscSerialNumber;

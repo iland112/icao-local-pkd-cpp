@@ -82,7 +82,8 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         // Step 5: Create PA verification record
         domain::models::PaVerification verification;
         verification.documentNumber = documentNumber;
-        verification.countryCode = countryCode;
+        // Use country code extracted from DSC issuer if not provided in request
+        verification.countryCode = countryCode.empty() ? certValidation.countryCode : countryCode;
         verification.verificationStatus = (certValidation.valid && sodSignatureValid && dataGroupsValid) ? "VALID" : "INVALID";
 
         verification.dscSubject = certValidation.dscSubject;

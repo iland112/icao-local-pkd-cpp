@@ -453,6 +453,62 @@ CREATE TABLE revalidation_history (
 CREATE INDEX idx_reval_history_executed ON revalidation_history(executed_at DESC);
 
 -- =============================================================================
+-- PA (Passive Authentication) Tables
+-- =============================================================================
+
+CREATE TABLE pa_verification (
+    id VARCHAR2(36) DEFAULT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), '([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', '\1-\2-\3-\4-\5')) PRIMARY KEY,
+    issuing_country VARCHAR2(3) NOT NULL,
+    document_number VARCHAR2(50),
+    date_of_birth DATE,
+    date_of_expiry DATE,
+    sod_binary BLOB,
+    sod_hash VARCHAR2(64),
+    dsc_subject_dn CLOB,
+    dsc_issuer_dn CLOB,
+    dsc_serial_number VARCHAR2(100),
+    dsc_fingerprint VARCHAR2(64),
+    csca_subject_dn CLOB,
+    csca_fingerprint VARCHAR2(64),
+    verification_status VARCHAR2(30) NOT NULL,
+    verification_message CLOB,
+    trust_chain_valid NUMBER(1),
+    trust_chain_message CLOB,
+    sod_signature_valid NUMBER(1),
+    sod_signature_message CLOB,
+    dg_hashes_valid NUMBER(1),
+    dg_hashes_message CLOB,
+    crl_status VARCHAR2(20),
+    crl_message CLOB,
+    request_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
+    completed_timestamp TIMESTAMP,
+    processing_time_ms NUMBER(10),
+    client_ip VARCHAR2(45),
+    user_agent CLOB,
+    CONSTRAINT chk_pa_status CHECK (verification_status IN ('VALID', 'INVALID', 'ERROR', 'PENDING'))
+);
+
+CREATE INDEX idx_pa_status ON pa_verification(verification_status);
+CREATE INDEX idx_pa_country ON pa_verification(issuing_country);
+CREATE INDEX idx_pa_timestamp ON pa_verification(request_timestamp DESC);
+CREATE INDEX idx_pa_dsc ON pa_verification(dsc_fingerprint);
+
+CREATE TABLE pa_data_group (
+    id VARCHAR2(36) DEFAULT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), '([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', '\1-\2-\3-\4-\5')) PRIMARY KEY,
+    verification_id VARCHAR2(36),
+    dg_number NUMBER(2) NOT NULL,
+    expected_hash VARCHAR2(128) NOT NULL,
+    actual_hash VARCHAR2(128),
+    hash_algorithm VARCHAR2(20) NOT NULL,
+    hash_valid NUMBER(1),
+    dg_binary BLOB,
+    CONSTRAINT fk_pa_dg_verification FOREIGN KEY (verification_id) REFERENCES pa_verification(id) ON DELETE CASCADE,
+    CONSTRAINT chk_dg_number CHECK (dg_number BETWEEN 1 AND 16)
+);
+
+CREATE INDEX idx_pa_dg_verification ON pa_data_group(verification_id);
+
+-- =============================================================================
 -- Success Message
 -- =============================================================================
 SELECT 'Oracle PKD schema initialized successfully' AS status FROM dual;

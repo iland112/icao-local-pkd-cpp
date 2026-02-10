@@ -13,6 +13,22 @@
 namespace repositories {
 
 // ============================================================================
+// Helper: Safe integer extraction from Json::Value (Oracle returns strings)
+// ============================================================================
+
+static int safeInt(const Json::Value& val, int defaultValue = 0) {
+    if (val.isNull()) return defaultValue;
+    if (val.isInt()) return val.asInt();
+    if (val.isUInt()) return static_cast<int>(val.asUInt());
+    if (val.isString()) {
+        try { return std::stoi(val.asString()); }
+        catch (...) { return defaultValue; }
+    }
+    if (val.isDouble()) return static_cast<int>(val.asDouble());
+    return defaultValue;
+}
+
+// ============================================================================
 // Constructor
 // ============================================================================
 
@@ -82,6 +98,11 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             "$22, $23"
             ")";
 
+        // Database-aware boolean formatting (reuse dbType from line 41)
+        auto boolStr = [&dbType](bool val) -> std::string {
+            return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
+        };
+
         std::vector<std::string> params = {
             generatedId,                                                     // $1: id
             verification.countryCode,                                        // $2
@@ -95,11 +116,11 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             "",                                                              // $10: dsc_fingerprint (TODO)
             verification.cscaSubject,                                        // $11
             "",                                                              // $12: csca_fingerprint (TODO)
-            verification.certificateChainValid ? "true" : "false",           // $13
+            boolStr(verification.certificateChainValid),                     // $13
             "",                                                              // $14: trust_chain_message (TODO)
-            verification.sodSignatureValid ? "true" : "false",               // $15
+            boolStr(verification.sodSignatureValid),                         // $15
             "",                                                              // $16: sod_signature_message (TODO)
-            verification.dataGroupsValid ? "true" : "false",                 // $17
+            boolStr(verification.dataGroupsValid),                           // $17
             "",                                                              // $18: dg_hashes_message (TODO)
             verification.crlStatus,                                          // $19
             verification.crlMessage.value_or(""),                            // $20
@@ -177,7 +198,7 @@ Json::Value PaVerificationRepository::findAll(
         }
 
         Json::Value countResult = queryExecutor_->executeScalar(countQuery.str(), params);
-        int total = countResult.asInt();
+        int total = safeInt(countResult);
 
         // Data query
         std::ostringstream dataQuery;
@@ -237,7 +258,7 @@ Json::Value PaVerificationRepository::getStatistics() {
 
         // Total count
         const char* totalQuery = "SELECT COUNT(*) FROM pa_verification";
-        stats["totalVerifications"] = queryExecutor_->executeScalar(totalQuery).asInt();
+        stats["totalVerifications"] = safeInt(queryExecutor_->executeScalar(totalQuery));
 
         // Count by status
         const char* statusQuery =
@@ -249,8 +270,7 @@ Json::Value PaVerificationRepository::getStatistics() {
         Json::Value statusCounts;
         for (const auto& row : statusResult) {
             std::string status = row["verification_status"].asString();
-            int count = row["count"].asInt();  // Oracle returns count as int, not string
-            statusCounts[status] = count;
+            statusCounts[status] = safeInt(row["count"]);
         }
         stats["byStatus"] = statusCounts;
 
@@ -267,7 +287,7 @@ Json::Value PaVerificationRepository::getStatistics() {
         for (const auto& row : countryResult) {
             Json::Value country;
             country["country"] = row["issuing_country"].asString();
-            country["count"] = row["count"].asInt();  // Oracle returns count as int, not string
+            country["count"] = safeInt(row["count"]);
             countryCounts.append(country);
         }
         stats["byCountry"] = countryCounts;
@@ -281,8 +301,8 @@ Json::Value PaVerificationRepository::getStatistics() {
         Json::Value successResult = queryExecutor_->executeQuery(successQuery);
 
         if (!successResult.empty()) {
-            int validCount = successResult[0]["valid_count"].asInt();  // Oracle returns count as int, not string
-            int totalCount = successResult[0]["total_count"].asInt();  // Oracle returns count as int, not string
+            int validCount = safeInt(successResult[0]["valid_count"]);
+            int totalCount = safeInt(successResult[0]["total_count"]);
             double successRate = totalCount > 0 ? (validCount * 100.0 / totalCount) : 0.0;
             stats["successRate"] = successRate;
         }
