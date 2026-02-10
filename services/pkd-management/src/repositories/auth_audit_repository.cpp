@@ -91,6 +91,8 @@ Json::Value AuthAuditRepository::findAll(
         spdlog::debug("[AuthAuditRepository] Finding audit logs (limit: {}, offset: {})",
                      limit, offset);
 
+        std::string dbType = queryExecutor_->getDatabaseType();
+
         // Build WHERE clause
         std::string whereClause = "WHERE 1=1";
         std::vector<std::string> params;
@@ -102,7 +104,11 @@ Json::Value AuthAuditRepository::findAll(
         }
 
         if (!usernameFilter.empty()) {
-            whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
+            if (dbType == "oracle") {
+                whereClause += " AND UPPER(username) LIKE UPPER($" + std::to_string(paramIndex++) + ")";
+            } else {
+                whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
+            }
             params.push_back("%" + usernameFilter + "%");
         }
 
@@ -112,8 +118,14 @@ Json::Value AuthAuditRepository::findAll(
         }
 
         if (!successFilter.empty()) {
+            std::string boolVal;
+            if (dbType == "oracle") {
+                boolVal = (successFilter == "true" || successFilter == "1") ? "1" : "0";
+            } else {
+                boolVal = (successFilter == "true" || successFilter == "1") ? "true" : "false";
+            }
             whereClause += " AND success = $" + std::to_string(paramIndex++);
-            params.push_back(successFilter == "true" ? "true" : "false");
+            params.push_back(boolVal);
         }
 
         if (!startDate.empty()) {
@@ -126,27 +138,78 @@ Json::Value AuthAuditRepository::findAll(
             params.push_back(endDate);
         }
 
-        // Main query
+        // Main query with database-specific pagination
         std::string query =
             "SELECT id, user_id, username, event_type, ip_address, user_agent, "
             "success, error_message, created_at "
             "FROM auth_audit_log " + whereClause +
-            " ORDER BY created_at DESC "
-            "LIMIT $" + std::to_string(paramIndex++) +
-            " OFFSET $" + std::to_string(paramIndex++);
+            " ORDER BY created_at DESC";
 
-        params.push_back(std::to_string(limit));
-        params.push_back(std::to_string(offset));
+        if (dbType == "oracle") {
+            int offsetIdx = paramIndex++;
+            int limitIdx = paramIndex++;
+            query += " OFFSET $" + std::to_string(offsetIdx) + " ROWS FETCH NEXT $" + std::to_string(limitIdx) + " ROWS ONLY";
+            params.push_back(std::to_string(offset));
+            params.push_back(std::to_string(limit));
+        } else {
+            int limitIdx = paramIndex++;
+            int offsetIdx = paramIndex++;
+            query += " LIMIT $" + std::to_string(limitIdx) + " OFFSET $" + std::to_string(offsetIdx);
+            params.push_back(std::to_string(limit));
+            params.push_back(std::to_string(offset));
+        }
 
         Json::Value result = queryExecutor_->executeQuery(query, params);
         spdlog::debug("[AuthAuditRepository] Found {} audit logs", result.size());
 
-        return result;
+        // Convert to camelCase and handle type conversions
+        Json::Value array = Json::arrayValue;
+        for (const auto& row : result) {
+            Json::Value converted;
+            for (const auto& key : row.getMemberNames()) {
+                std::string camelKey = toCamelCase(key);
+
+                if (key == "success") {
+                    Json::Value val = row[key];
+                    if (val.isBool()) {
+                        converted[camelKey] = val.asBool();
+                    } else if (val.isString()) {
+                        std::string s = val.asString();
+                        converted[camelKey] = (s == "t" || s == "true" || s == "1");
+                    } else {
+                        converted[camelKey] = val;
+                    }
+                } else {
+                    converted[camelKey] = row[key];
+                }
+            }
+            array.append(converted);
+        }
+
+        return array;
 
     } catch (const std::exception& e) {
         spdlog::error("[AuthAuditRepository] findAll failed: {}", e.what());
         throw std::runtime_error("Failed to find auth audit logs: " + std::string(e.what()));
     }
+}
+
+// Helper: snake_case to camelCase
+std::string AuthAuditRepository::toCamelCase(const std::string& snake_case)
+{
+    std::string camelCase;
+    bool capitalizeNext = false;
+    for (char c : snake_case) {
+        if (c == '_') {
+            capitalizeNext = true;
+        } else if (capitalizeNext) {
+            camelCase += std::toupper(c);
+            capitalizeNext = false;
+        } else {
+            camelCase += c;
+        }
+    }
+    return camelCase;
 }
 
 int AuthAuditRepository::count(
@@ -160,6 +223,8 @@ int AuthAuditRepository::count(
     try {
         spdlog::debug("[AuthAuditRepository] Counting audit logs");
 
+        std::string dbType = queryExecutor_->getDatabaseType();
+
         // Build WHERE clause
         std::string whereClause = "WHERE 1=1";
         std::vector<std::string> params;
@@ -171,7 +236,11 @@ int AuthAuditRepository::count(
         }
 
         if (!usernameFilter.empty()) {
-            whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
+            if (dbType == "oracle") {
+                whereClause += " AND UPPER(username) LIKE UPPER($" + std::to_string(paramIndex++) + ")";
+            } else {
+                whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
+            }
             params.push_back("%" + usernameFilter + "%");
         }
 
@@ -181,8 +250,14 @@ int AuthAuditRepository::count(
         }
 
         if (!successFilter.empty()) {
+            std::string boolVal;
+            if (dbType == "oracle") {
+                boolVal = (successFilter == "true" || successFilter == "1") ? "1" : "0";
+            } else {
+                boolVal = (successFilter == "true" || successFilter == "1") ? "true" : "false";
+            }
             whereClause += " AND success = $" + std::to_string(paramIndex++);
-            params.push_back(successFilter == "true" ? "true" : "false");
+            params.push_back(boolVal);
         }
 
         if (!startDate.empty()) {
@@ -197,9 +272,12 @@ int AuthAuditRepository::count(
 
         std::string query = "SELECT COUNT(*) FROM auth_audit_log " + whereClause;
 
-        Json::Value result = queryExecutor_->executeScalar(query, params);
+        Json::Value result = params.empty() ?
+            queryExecutor_->executeScalar(query) :
+            queryExecutor_->executeScalar(query, params);
 
-        int count = result.asInt();
+        // Oracle returns strings, PostgreSQL returns ints
+        int count = result.isString() ? std::stoi(result.asString()) : result.asInt();
         spdlog::debug("[AuthAuditRepository] Total audit logs: {}", count);
 
         return count;
@@ -215,71 +293,92 @@ Json::Value AuthAuditRepository::getStatistics()
     try {
         spdlog::debug("[AuthAuditRepository] Getting statistics");
 
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Helper to parse int from Oracle string or PostgreSQL int
+        auto getInt = [](const Json::Value& val, int defaultVal) -> int {
+            if (val.isNull()) return defaultVal;
+            if (val.isInt()) return val.asInt();
+            if (val.isUInt()) return static_cast<int>(val.asUInt());
+            if (val.isString()) {
+                try { return std::stoi(val.asString()); } catch (...) { return defaultVal; }
+            }
+            if (val.isDouble()) return static_cast<int>(val.asDouble());
+            return defaultVal;
+        };
+
         Json::Value stats;
 
         // Total events
         {
             const char* query = "SELECT COUNT(*) FROM auth_audit_log";
-            Json::Value result = queryExecutor_->executeScalar(query, {});
-            stats["total_events"] = result.asInt();
+            Json::Value result = queryExecutor_->executeScalar(query);
+            stats["totalEvents"] = result.isString() ? std::stoi(result.asString()) : result.asInt();
         }
 
         // By event type
         {
             const char* query =
-                "SELECT event_type, COUNT(*) as count FROM auth_audit_log "
-                "GROUP BY event_type ORDER BY count DESC";
+                "SELECT event_type, COUNT(*) as cnt FROM auth_audit_log "
+                "GROUP BY event_type ORDER BY cnt DESC";
 
-            Json::Value result = queryExecutor_->executeQuery(query, {});
+            Json::Value result = queryExecutor_->executeQuery(query);
             Json::Value byEventType;
 
             for (const auto& row : result) {
-                byEventType[row["event_type"].asString()] = row["count"].asInt();
+                byEventType[row["event_type"].asString()] = getInt(row.get("cnt", 0), 0);
             }
 
-            stats["by_event_type"] = byEventType;
+            stats["byEventType"] = byEventType;
         }
 
-        // By user
+        // Top users
         {
-            const char* query =
-                "SELECT username, COUNT(*) as count FROM auth_audit_log "
+            std::string query =
+                "SELECT username, COUNT(*) as cnt FROM auth_audit_log "
                 "WHERE username != 'anonymous' "
-                "GROUP BY username ORDER BY count DESC LIMIT 10";
+                "GROUP BY username ORDER BY cnt DESC";
+            if (dbType == "oracle") {
+                query += " FETCH FIRST 10 ROWS ONLY";
+            } else {
+                query += " LIMIT 10";
+            }
 
-            Json::Value result = queryExecutor_->executeQuery(query, {});
-            Json::Value byUser;
+            Json::Value result = queryExecutor_->executeQuery(query);
+            Json::Value topUsers = Json::arrayValue;
 
             for (const auto& row : result) {
-                byUser[row["username"].asString()] = row["count"].asInt();
+                Json::Value user;
+                user["username"] = row["username"].asString();
+                user["count"] = getInt(row.get("cnt", 0), 0);
+                topUsers.append(user);
             }
 
-            stats["by_user"] = byUser;
+            stats["topUsers"] = topUsers;
         }
 
-        // Recent failed logins
+        // Failed logins count
         {
-            const char* query =
+            std::string boolFalse = (dbType == "oracle") ? "0" : "FALSE";
+            std::string query =
                 "SELECT COUNT(*) FROM auth_audit_log "
-                "WHERE event_type LIKE 'LOGIN%' AND success = false";
+                "WHERE event_type LIKE 'LOGIN%' AND success = " + boolFalse;
 
-            Json::Value result = queryExecutor_->executeScalar(query, {});
-            stats["recent_failed_logins"] = result.asInt();
+            Json::Value result = queryExecutor_->executeScalar(query);
+            stats["failedLogins"] = result.isString() ? std::stoi(result.asString()) : result.asInt();
         }
 
         // Last 24h events
         {
-            std::string dbType = queryExecutor_->getDatabaseType();
             std::string query;
-
             if (dbType == "postgres") {
                 query = "SELECT COUNT(*) FROM auth_audit_log WHERE created_at >= NOW() - INTERVAL '24 hours'";
             } else {
                 query = "SELECT COUNT(*) FROM auth_audit_log WHERE created_at >= SYSTIMESTAMP - INTERVAL '1' DAY";
             }
 
-            Json::Value result = queryExecutor_->executeScalar(query, {});
-            stats["last_24h_events"] = result.asInt();
+            Json::Value result = queryExecutor_->executeScalar(query);
+            stats["last24hEvents"] = result.isString() ? std::stoi(result.asString()) : result.asInt();
         }
 
         spdlog::debug("[AuthAuditRepository] Statistics retrieved successfully");

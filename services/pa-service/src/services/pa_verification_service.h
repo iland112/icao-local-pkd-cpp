@@ -14,6 +14,7 @@
 #include <json/json.h>
 #include "../domain/models/pa_verification.h"
 #include "../repositories/pa_verification_repository.h"
+#include "../repositories/data_group_repository.h"
 #include <sod_parser.h>
 #include "certificate_validation_service.h"
 #include <dg_parser.h>
@@ -23,6 +24,7 @@ namespace services {
 class PaVerificationService {
 private:
     repositories::PaVerificationRepository* paRepo_;
+    repositories::DataGroupRepository* dgRepo_;
     icao::SodParser* sodParser_;
     CertificateValidationService* certValidator_;
     icao::DgParser* dgParser_;
@@ -30,6 +32,7 @@ private:
 public:
     PaVerificationService(
         repositories::PaVerificationRepository* paRepo,
+        repositories::DataGroupRepository* dgRepo,
         icao::SodParser* sodParser,
         CertificateValidationService* certValidator,
         icao::DgParser* dgParser

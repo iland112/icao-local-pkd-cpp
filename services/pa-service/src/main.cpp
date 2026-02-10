@@ -1722,6 +1722,7 @@ void initializeServices() {
         spdlog::debug("Creating PaVerificationService...");
         paVerificationService = new services::PaVerificationService(
             paVerificationRepository,
+            dataGroupRepository,
             sodParserService,
             certificateValidationService,
             dataGroupParserService

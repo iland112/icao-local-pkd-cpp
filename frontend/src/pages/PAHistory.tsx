@@ -23,10 +23,9 @@ import {
   Link2,
   Hash,
   AlertTriangle,
-  CalendarX,
 } from 'lucide-react';
 import { paApi } from '@/services/api';
-import type { PAHistoryItem, PageResponse, PAStatus } from '@/types';
+import type { PAHistoryItem, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
 
@@ -93,12 +92,17 @@ export function PAHistory() {
         sort: 'verifiedAt',
         direction: 'DESC',
       });
-      const data: PageResponse<PAHistoryItem> = response.data;
-      setHistory(data.content);
-      setTotalPages(data.totalPages);
-      setTotalElements(data.totalElements);
+      // Backend returns: { success, total, page, size, data: [...] }
+      // Map to component state
+      const resData = response.data as unknown as Record<string, unknown>;
+      const items = (resData.data ?? resData.content ?? []) as PAHistoryItem[];
+      const total = (resData.total ?? resData.totalElements ?? 0) as number;
+      setHistory(items);
+      setTotalPages(Math.ceil(total / pageSize) || 1);
+      setTotalElements(total);
     } catch (error) {
       console.error('Failed to fetch PA history:', error);
+      setHistory([]);
     } finally {
       setLoading(false);
     }
@@ -694,24 +698,24 @@ export function PAHistory() {
                   {/* SOD Signature */}
                   <div className={cn(
                     'rounded-xl p-4 border-l-4',
-                    selectedRecord.sodSignatureValidation?.valid
+                    selectedRecord.sodSignatureValid
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                       : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                   )}>
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">SOD 서명 검증</p>
                     <div className="flex items-center gap-2">
-                      {selectedRecord.sodSignatureValidation?.valid ? (
+                      {selectedRecord.sodSignatureValid ? (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       ) : (
                         <XCircle className="w-5 h-5 text-red-500" />
                       )}
                       <span className={cn(
                         'text-sm font-bold',
-                        selectedRecord.sodSignatureValidation?.valid
+                        selectedRecord.sodSignatureValid
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
                       )}>
-                        {selectedRecord.sodSignatureValidation?.valid ? 'Valid' : 'Invalid'}
+                        {selectedRecord.sodSignatureValid ? 'Valid' : 'Invalid'}
                       </span>
                     </div>
                   </div>
@@ -719,7 +723,7 @@ export function PAHistory() {
                   {/* Certificate Chain */}
                   <div className={cn(
                     'rounded-xl p-4 border-l-4',
-                    selectedRecord.certificateChainValidation?.valid
+                    selectedRecord.trustChainValid
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                       : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                   )}>
@@ -728,18 +732,18 @@ export function PAHistory() {
                       <p className="text-xs font-semibold text-gray-600 dark:text-gray-400">인증서 체인 검증</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {selectedRecord.certificateChainValidation?.valid ? (
+                      {selectedRecord.trustChainValid ? (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       ) : (
                         <XCircle className="w-5 h-5 text-red-500" />
                       )}
                       <span className={cn(
                         'text-sm font-bold',
-                        selectedRecord.certificateChainValidation?.valid
+                        selectedRecord.trustChainValid
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
                       )}>
-                        {selectedRecord.certificateChainValidation?.valid ? 'Valid' : 'Invalid'}
+                        {selectedRecord.trustChainValid ? 'Valid' : 'Invalid'}
                       </span>
                     </div>
                   </div>
@@ -747,82 +751,56 @@ export function PAHistory() {
                   {/* Data Group Hash */}
                   <div className={cn(
                     'rounded-xl p-4 border-l-4',
-                    selectedRecord.dataGroupValidation?.valid
+                    selectedRecord.dgHashesValid
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                       : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                   )}>
                     <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">DG 해시 검증</p>
                     <div className="flex items-center gap-2">
-                      {selectedRecord.dataGroupValidation?.valid ? (
+                      {selectedRecord.dgHashesValid ? (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       ) : (
                         <XCircle className="w-5 h-5 text-red-500" />
                       )}
                       <span className={cn(
                         'text-sm font-bold',
-                        selectedRecord.dataGroupValidation?.valid
+                        selectedRecord.dgHashesValid
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-red-600 dark:text-red-400'
                       )}>
-                        {selectedRecord.dataGroupValidation?.valid ? 'Valid' : 'Invalid'}
+                        {selectedRecord.dgHashesValid ? 'Valid' : 'Invalid'}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Certificate Expiration Status - Show when expired or warning */}
-                {selectedRecord.certificateChainValidation?.expirationStatus &&
-                 selectedRecord.certificateChainValidation.expirationStatus !== 'VALID' && (
+                {/* CRL Status - Show when not VALID */}
+                {selectedRecord.crlStatus && selectedRecord.crlStatus !== 'VALID' && (
                   <div className={cn(
                     'rounded-xl p-4 flex items-start gap-3',
-                    selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED'
-                      ? 'bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800'
+                    selectedRecord.crlStatus === 'REVOKED' || selectedRecord.crlStatus === 'CRL_INVALID'
+                      ? 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
                       : 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
                   )}>
-                    {selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED' ? (
-                      <CalendarX className="w-5 h-5 text-orange-500 flex-shrink-0 mt-0.5" />
+                    {selectedRecord.crlStatus === 'REVOKED' || selectedRecord.crlStatus === 'CRL_INVALID' ? (
+                      <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
                     ) : (
-                      <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className={cn(
-                          'text-sm font-bold',
-                          selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED'
-                            ? 'text-orange-700 dark:text-orange-400'
-                            : 'text-yellow-700 dark:text-yellow-400'
-                        )}>
-                          {selectedRecord.certificateChainValidation.expirationStatus === 'EXPIRED'
-                            ? '인증서 만료'
-                            : '인증서 만료 임박'}
-                        </span>
-                        {selectedRecord.certificateChainValidation.validAtSigningTime && (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                            <CheckCircle className="w-3 h-3" />
-                            서명 당시 유효
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {selectedRecord.certificateChainValidation.expirationMessage}
-                      </p>
-                      <div className="flex gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400">
-                        {selectedRecord.certificateChainValidation.dscExpired && (
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-orange-500" />
-                            DSC 만료
-                          </span>
-                        )}
-                        {selectedRecord.certificateChainValidation.cscaExpired && (
-                          <span className="flex items-center gap-1.5">
-                            <span className="w-2 h-2 rounded-full bg-orange-500" />
-                            CSCA 만료
-                          </span>
-                        )}
-                        {selectedRecord.certificateChainValidation.notAfter && (
-                          <span>유효기간: ~ {selectedRecord.certificateChainValidation.notAfter}</span>
-                        )}
-                      </div>
+                      <span className={cn(
+                        'text-sm font-bold',
+                        selectedRecord.crlStatus === 'REVOKED' || selectedRecord.crlStatus === 'CRL_INVALID'
+                          ? 'text-red-700 dark:text-red-400'
+                          : 'text-yellow-700 dark:text-yellow-400'
+                      )}>
+                        CRL: {selectedRecord.crlStatus?.replace(/_/g, ' ')}
+                      </span>
+                      {selectedRecord.crlMessage && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {selectedRecord.crlMessage}
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}

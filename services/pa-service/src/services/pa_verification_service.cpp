@@ -4,6 +4,7 @@
  */
 
 #include "pa_verification_service.h"
+#include <data_group.h>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -11,10 +12,12 @@ namespace services {
 
 PaVerificationService::PaVerificationService(
     repositories::PaVerificationRepository* paRepo,
+    repositories::DataGroupRepository* dgRepo,
     icao::SodParser* sodParser,
     CertificateValidationService* certValidator,
     icao::DgParser* dgParser)
     : paRepo_(paRepo),
+      dgRepo_(dgRepo),
       sodParser_(sodParser),
       certValidator_(certValidator),
       dgParser_(dgParser)
@@ -22,7 +25,7 @@ PaVerificationService::PaVerificationService(
     if (!paRepo_ || !sodParser_ || !certValidator_ || !dgParser_) {
         throw std::invalid_argument("Service dependencies cannot be null");
     }
-    spdlog::debug("PaVerificationService initialized");
+    spdlog::debug("PaVerificationService initialized (dgRepo={})", dgRepo_ ? "yes" : "no");
 }
 
 Json::Value PaVerificationService::verifyPassiveAuthentication(
@@ -106,6 +109,22 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
 
         // Save to database
         std::string verificationId = paRepo_->insert(verification);
+
+        // Save data groups to database for later retrieval
+        if (dgRepo_) {
+            for (const auto& [dgNum, dgData] : dataGroups) {
+                icao::models::DataGroup dg;
+                dg.dgNumber = dgNum;
+                dg.expectedHash = sod.getDataGroupHash(dgNum);
+                dg.actualHash = dgParser_->computeHash(dgData, sod.hashAlgorithm);
+                dg.hashValid = (dg.actualHash == dg.expectedHash);
+                dg.hashAlgorithm = sod.hashAlgorithm;
+                dg.rawData = dgData;
+                dg.dataSize = dgData.size();
+                dgRepo_->insert(dg, verificationId);
+            }
+            spdlog::info("Saved {} data groups for verification {}", dataGroups.size(), verificationId);
+        }
 
         // Build response data
         Json::Value data;

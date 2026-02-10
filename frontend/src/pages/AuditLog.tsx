@@ -5,26 +5,20 @@ interface AuditLogEntry {
   id: string;
   userId: string;
   username: string;
-  operationType: string;
-  operationSubtype?: string;
+  eventType: string;
   ipAddress: string;
   userAgent: string;
-  requestMethod?: string;
-  requestPath?: string;
   success: boolean;
-  statusCode?: number;
   errorMessage?: string;
-  durationMs?: number;
   createdAt: string;
 }
 
 interface AuditStats {
-  totalOperations: number;
-  successfulOperations: number;
-  failedOperations: number;
-  operationsByType: Record<string, number>;
-  topUsers: { username: string; operationCount: number }[];
-  averageDurationMs: number;
+  totalEvents: number;
+  byEventType: Record<string, number>;
+  topUsers: { username: string; count: number }[];
+  failedLogins: number;
+  last24hEvents: number;
 }
 
 export function AuditLog() {
@@ -63,10 +57,10 @@ export function AuditLog() {
       });
 
       if (username) params.append('username', username);
-      if (eventType) params.append('operationType', eventType);
+      if (eventType) params.append('event_type', eventType);
       if (successFilter) params.append('success', successFilter);
 
-      const response = await fetch(`/api/audit/operations?${params}`, {
+      const response = await fetch(`/api/auth/audit-log?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -75,7 +69,7 @@ export function AuditLog() {
       if (!response.ok) throw new Error('Failed to fetch audit logs');
 
       const data = await response.json();
-      setLogs(data.data || []);
+      setLogs(data.logs || []);
       setTotal(data.total || 0);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
@@ -87,7 +81,7 @@ export function AuditLog() {
   const fetchStats = async () => {
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/audit/operations/stats', {
+      const response = await fetch('/api/auth/audit-log/stats', {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -96,7 +90,7 @@ export function AuditLog() {
       if (!response.ok) throw new Error('Failed to fetch stats');
 
       const data = await response.json();
-      setStats(data.data || null);
+      setStats(data.stats || null);
     } catch (error) {
       console.error('Error fetching stats:', error);
     }
@@ -111,12 +105,11 @@ export function AuditLog() {
 
   const totalPages = Math.ceil(total / limit);
 
-  const getEventBadgeColor = (operationType: string) => {
-    if (operationType === 'UPLOAD') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
-    if (operationType === 'PA_VERIFY') return 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300';
-    if (operationType === 'RECONCILIATION') return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
-    if (operationType === 'CERTIFICATE_SEARCH') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
-    if (operationType === 'EXPORT') return 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300';
+  const getEventBadgeColor = (eventType: string) => {
+    if (eventType === 'LOGIN') return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300';
+    if (eventType === 'LOGIN_FAILED') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300';
+    if (eventType === 'LOGOUT') return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+    if (eventType === 'TOKEN_REFRESH') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
     return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
   };
 
@@ -159,23 +152,9 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {(stats.totalOperations ?? 0).toLocaleString()}
+                  {(stats.totalEvents ?? 0).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">전체 이벤트</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {(stats.successfulOperations ?? 0).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">성공한 작업</p>
               </div>
             </div>
           </div>
@@ -187,9 +166,23 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {(stats.failedOperations ?? 0).toLocaleString()}
+                  {(stats.failedLogins ?? 0).toLocaleString()}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">실패한 작업</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">로그인 실패</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {(stats.last24hEvents ?? 0).toLocaleString()}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">최근 24시간</p>
               </div>
             </div>
           </div>
@@ -201,9 +194,9 @@ export function AuditLog() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {Math.round(stats.averageDurationMs ?? 0).toLocaleString()}ms
+                  {stats.topUsers?.length ?? 0}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">평균 처리 시간</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">활성 사용자</p>
               </div>
             </div>
           </div>
@@ -241,12 +234,10 @@ export function AuditLog() {
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">전체</option>
-              <option value="UPLOAD">파일 업로드</option>
-              <option value="CERTIFICATE_SEARCH">인증서 검색</option>
-              <option value="PA_VERIFY">PA 검증</option>
-              <option value="ICAO_SYNC">ICAO 동기화</option>
-              <option value="RECONCILIATION">조정</option>
-              <option value="EXPORT">내보내기</option>
+              <option value="LOGIN">로그인 성공</option>
+              <option value="LOGIN_FAILED">로그인 실패</option>
+              <option value="LOGOUT">로그아웃</option>
+              <option value="TOKEN_REFRESH">토큰 갱신</option>
             </select>
           </div>
 
@@ -330,8 +321,8 @@ export function AuditLog() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(log.operationType)}`}>
-                        {log.operationType}{log.operationSubtype ? ` / ${log.operationSubtype}` : ''}
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(log.eventType)}`}>
+                        {log.eventType}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-400 font-mono">
@@ -439,52 +430,18 @@ export function AuditLog() {
                 </dl>
               </div>
 
-              {/* Operation Information */}
+              {/* Event Information */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">작업 정보</h4>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">이벤트 정보</h4>
                 <dl className="grid grid-cols-2 gap-4">
                   <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">작업 유형</dt>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">이벤트 유형</dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(selectedLog.operationType)}`}>
-                        {selectedLog.operationType}
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(selectedLog.eventType)}`}>
+                        {selectedLog.eventType}
                       </span>
                     </dd>
                   </div>
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">하위 유형</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{selectedLog.operationSubtype || '-'}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              {/* Request Information */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">요청 정보</h4>
-                <dl className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">IP 주소</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.ipAddress}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">요청 방식</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.requestMethod || '-'}</dd>
-                  </div>
-                  <div className="col-span-2">
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">요청 경로</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1 break-all">{selectedLog.requestPath || '-'}</dd>
-                  </div>
-                  <div className="col-span-2">
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">User Agent</dt>
-                    <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-1 break-all">{selectedLog.userAgent || '-'}</dd>
-                  </div>
-                </dl>
-              </div>
-
-              {/* Result Information */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">결과 정보</h4>
-                <dl className="grid grid-cols-2 gap-4">
                   <div>
                     <dt className="text-xs text-gray-500 dark:text-gray-400">성공 여부</dt>
                     <dd className="text-sm mt-1">
@@ -501,16 +458,21 @@ export function AuditLog() {
                       )}
                     </dd>
                   </div>
+                </dl>
+              </div>
+
+              {/* Request Information */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">요청 정보</h4>
+                <dl className="grid grid-cols-2 gap-4">
                   <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">상태 코드</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.statusCode || '-'}</dd>
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">IP 주소</dt>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.ipAddress || '-'}</dd>
                   </div>
-                  {selectedLog.durationMs !== undefined && (
-                    <div>
-                      <dt className="text-xs text-gray-500 dark:text-gray-400">소요 시간</dt>
-                      <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.durationMs}ms</dd>
-                    </div>
-                  )}
+                  <div className="col-span-2">
+                    <dt className="text-xs text-gray-500 dark:text-gray-400">User Agent</dt>
+                    <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-1 break-all">{selectedLog.userAgent || '-'}</dd>
+                  </div>
                   {selectedLog.errorMessage && (
                     <div className="col-span-2">
                       <dt className="text-xs text-gray-500 dark:text-gray-400">오류 메시지</dt>

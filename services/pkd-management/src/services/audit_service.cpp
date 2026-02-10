@@ -76,19 +76,8 @@ Json::Value AuditService::getOperationStatistics()
         // Get statistics from repository (without date filter)
         Json::Value stats = auditRepo_->getStatistics("", "");
 
-        // Transform topUsers response format
-        // Repository returns: [{"username": "...", "count": 100}]
-        // Frontend expects: [{"username": "...", "operationCount": 100}]
-        if (stats.isMember("topUsers") && stats["topUsers"].isArray()) {
-            Json::Value transformedUsers = Json::arrayValue;
-            for (const auto& user : stats["topUsers"]) {
-                Json::Value transformedUser;
-                transformedUser["username"] = user.get("username", "").asString();
-                transformedUser["operationCount"] = user.get("count", 0).asInt();
-                transformedUsers.append(transformedUser);
-            }
-            stats["topUsers"] = transformedUsers;
-        }
+        // topUsers already has correct field names from repository
+        // (username, operationCount)
 
         // Build response
         Json::Value response;

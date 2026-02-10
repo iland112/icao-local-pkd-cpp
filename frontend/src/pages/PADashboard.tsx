@@ -35,10 +35,24 @@ export function PADashboard() {
         paApi.getStatistics(),
         paApi.getHistory({ page: 0, size: 100 }),
       ]);
-      if (statsResponse.data.data) {
-        setStats(statsResponse.data.data);
-      }
-      setRecentVerifications(historyResponse.data.content || []);
+
+      // Map backend statistics format to PAStatisticsOverview
+      // Backend returns flat: { totalVerifications, byStatus: {VALID: n}, byCountry: [...], successRate }
+      const raw = statsResponse.data as unknown as Record<string, unknown>;
+      const byStatus = (raw.byStatus ?? {}) as Record<string, number>;
+      setStats({
+        totalVerifications: (raw.totalVerifications as number) ?? 0,
+        validCount: byStatus['VALID'] ?? 0,
+        invalidCount: byStatus['INVALID'] ?? 0,
+        errorCount: byStatus['ERROR'] ?? 0,
+        averageProcessingTimeMs: 0,
+        countriesVerified: Array.isArray(raw.byCountry) ? (raw.byCountry as unknown[]).length : 0,
+      });
+
+      // Backend returns { success, total, page, size, data: [...] }
+      const histData = historyResponse.data as unknown as Record<string, unknown>;
+      const items = (histData.data ?? histData.content ?? []) as PAHistoryItem[];
+      setRecentVerifications(items);
     } catch (error) {
       console.error('Failed to fetch PA dashboard data:', error);
     } finally {

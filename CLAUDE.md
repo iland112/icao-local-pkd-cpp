@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.6.2 ✅
-**Last Updated**: 2026-02-10
-**Status**: Oracle Full Data Upload & Statistics Complete
+**Current Version**: v2.6.3 ✅
+**Last Updated**: 2026-02-11
+**Status**: Oracle Audit Log Complete
 
 ---
 
@@ -1010,6 +1010,98 @@ ldap_delete_all_crls       # Delete all CRLs (testing)
 ---
 
 ## Version History
+
+### v2.6.3 (2026-02-11) - Oracle Audit Log Pages Complete ✅
+
+#### Executive Summary
+
+Resolved all Oracle compatibility issues preventing both audit log pages ("로그인 이력" and "운영 감사 로그") from displaying data when running with `DB_TYPE=oracle`. Root cause: all 10 audit logging call sites in `main.cpp` used direct PostgreSQL `PGconn*` API via `logOperation(PGconn*, AuditLogEntry)`, which silently failed when Oracle was the active database. Additionally fixed Oracle-specific issues in auth audit repository (pagination, boolean handling, ILIKE) and operation audit repository (::jsonb cast, NOW() function).
+
+#### Key Achievements
+
+**1. Auth Audit Log Page (로그인 이력) Oracle Fix** ✅
+- **Frontend URL Fix**: Changed API endpoints from `/api/audit/operations` to `/api/auth/audit-log` and `/api/auth/audit-log/stats`
+- **AuthAuditRepository Oracle Compatibility**:
+  - PostgreSQL `ILIKE` → Oracle-compatible `UPPER(column) LIKE UPPER($N)`
+  - Boolean handling: Oracle `NUMBER(1)` returns "1"/"0" strings, not true/false
+  - Pagination fix: C++ undefined behavior with `paramIndex++` in same expression
+  - Added `toCamelCase()` conversion for snake_case → camelCase field names
+- **AuditService**: Removed redundant topUsers transformation (repository already returns correct field names)
+
+**2. Operation Audit Log Page (운영 감사 로그) Oracle Fix** ✅
+- **Root Cause**: `logOperation(PGconn*, AuditLogEntry)` in `audit_log.h` used PostgreSQL-only API
+- **Solution**: Added new `logOperation(common::IQueryExecutor*, const AuditLogEntry&)` overload in `audit_log.h`
+  - Database-aware boolean formatting (Oracle: "1"/"0", PostgreSQL: "TRUE"/"FALSE")
+  - Removed PostgreSQL-specific `::jsonb` type cast
+  - Uses `IQueryExecutor::executeCommand()` for database-agnostic INSERT
+- **main.cpp Migration**: Replaced all 10 `PGconn*`-based audit logging blocks with QueryExecutor pattern
+  - UPLOAD_DELETE: success + failure blocks
+  - FILE_UPLOAD LDIF: duplicate + failure + success blocks
+  - FILE_UPLOAD MASTER_LIST: duplicate + failure + success blocks
+  - CERT_EXPORT: single file + country ZIP blocks
+- **AuditRepository**: Fixed `insert()` method - removed `$6::jsonb` cast and `NOW()` for Oracle compatibility
+
+**3. Oracle Schema Updates** ✅
+- Added `error_code VARCHAR2(50)` column to `operation_audit_log` table
+- Extended CHECK constraint to include all 18 operation types (was 7)
+
+**4. PA Service Oracle Fixes** ✅
+- DataGroupRepository: Oracle uppercase column name handling
+- PaVerificationService: Added `getInt()` helper for Oracle string-to-int conversion
+- Frontend (PADashboard, PAHistory): Response structure alignment, Oracle data type handling
+
+#### Code Metrics
+
+| Metric | Value |
+|--------|-------|
+| Files Modified | 15 |
+| Lines Added | 533 |
+| Lines Removed | 422 |
+| PGconn audit blocks replaced | 10 (100%) |
+| Oracle schema updates | 2 (error_code column, CHECK constraint) |
+
+#### Verification Results
+
+**Oracle Audit Log API** ✅:
+| Endpoint | Result |
+|----------|--------|
+| GET /api/audit/operations | 2 entries returned (1 success, 1 failure) ✅ |
+| GET /api/audit/operations/stats | totalOperations: 2, successfulOperations: 1, failedOperations: 1 ✅ |
+| GET /api/auth/audit-log | Auth events displayed correctly ✅ |
+
+#### Files Modified
+
+**Shared Library** (1 file):
+- `shared/icao/audit/audit_log.h` - Added `logOperation(IQueryExecutor*, AuditLogEntry)` overload
+
+**PKD Management Backend** (4 files):
+- `services/pkd-management/src/main.cpp` - Replaced 10 PGconn-based audit logging blocks
+- `services/pkd-management/src/repositories/audit_repository.cpp` - Fixed insert() Oracle compatibility
+- `services/pkd-management/src/repositories/auth_audit_repository.cpp` - Oracle ILIKE, boolean, pagination fixes
+- `services/pkd-management/src/repositories/auth_audit_repository.h` - Added toCamelCase() declaration
+- `services/pkd-management/src/services/audit_service.cpp` - Removed redundant transformation
+
+**PA Service Backend** (3 files):
+- `services/pa-service/src/main.cpp` - Minor Oracle fix
+- `services/pa-service/src/repositories/data_group_repository.cpp` - Oracle column name handling
+- `services/pa-service/src/services/pa_verification_service.cpp` - getInt() helper
+- `services/pa-service/src/services/pa_verification_service.h` - getInt() declaration
+
+**Frontend** (3 files):
+- `frontend/src/pages/AuditLog.tsx` - API URL fix, response parsing
+- `frontend/src/pages/PADashboard.tsx` - Oracle data handling
+- `frontend/src/pages/PAHistory.tsx` - Oracle data handling
+- `frontend/src/types/index.ts` - Type updates
+
+**Database Schema** (1 file):
+- `docker/db/oracle-init/01-init-schema.sql` - error_code column, CHECK constraint
+
+#### Known Limitations
+
+- **durationMs not tracked**: FILE_UPLOAD audit entries have NULL durationMs (deferred to next session)
+- Requires `std::chrono` timing around upload processing to capture duration
+
+---
 
 ### v2.6.2 (2026-02-10) - Oracle Statistics & Full Data Upload Verification ✅
 

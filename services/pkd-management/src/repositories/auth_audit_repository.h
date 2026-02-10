@@ -99,6 +99,9 @@ public:
 
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
+
+    // Helper: snake_case to camelCase conversion
+    std::string toCamelCase(const std::string& snake_case);
 };
 
 } // namespace repositories

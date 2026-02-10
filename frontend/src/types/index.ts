@@ -362,19 +362,30 @@ export interface PAHistory {
 }
 
 // Alias for PAHistory used in dashboard/history pages
-// API returns: verificationId, verificationTimestamp, processingDurationMs
+// API returns flat fields from pa_verification table (snake_case → camelCase via toCamelCase)
 export interface PAHistoryItem {
   verificationId: string;
   status: PAStatus;
   issuingCountry?: string;
   documentNumber?: string;
   verificationTimestamp: string;
-  processingDurationMs: number;
+  completedTimestamp?: string;
   requestedBy?: string;
-  // Validation results from API
-  sodSignatureValidation?: { valid: boolean };
-  certificateChainValidation?: Partial<CertificateChainValidationDto>;
-  dataGroupValidation?: { valid: boolean };
+  // Flat validation result fields from backend
+  sodSignatureValid?: boolean;
+  sodSignatureMessage?: string;
+  trustChainValid?: boolean;
+  trustChainMessage?: string;
+  dgHashesValid?: boolean;
+  dgHashesMessage?: string;
+  crlStatus?: string;
+  crlMessage?: string;
+  // Certificate info
+  dscSubjectDn?: string;
+  dscSerialNumber?: string;
+  dscIssuerDn?: string;
+  cscaSubjectDn?: string;
+  verificationMessage?: string;
 }
 
 // Upload history item

@@ -101,10 +101,12 @@ std::string DataGroupRepository::insert(
         dg.dgNumber, verificationId);
 
     try {
-        // Extract DG number from string (e.g., "DG1" -> 1)
+        // Extract DG number from string (supports "DG1" -> 1 or "1" -> 1)
         int dgNumber = 0;
         if (dg.dgNumber.find("DG") == 0) {
             dgNumber = std::stoi(dg.dgNumber.substr(2));
+        } else {
+            try { dgNumber = std::stoi(dg.dgNumber); } catch (...) {}
         }
 
         // Step 1: Generate UUID using database-specific function
@@ -136,6 +138,11 @@ std::string DataGroupRepository::insert(
             )
         )SQL";
 
+        // Database-aware boolean formatting
+        auto boolStr = [&dbType](bool val) -> std::string {
+            return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
+        };
+
         // Prepare parameters
         std::vector<std::string> params;
         params.push_back(generatedId);
@@ -144,15 +151,16 @@ std::string DataGroupRepository::insert(
         params.push_back(dg.expectedHash);
         params.push_back(dg.actualHash);
         params.push_back(dg.hashAlgorithm);
-        params.push_back(dg.hashValid ? "true" : "false");
+        params.push_back(boolStr(dg.hashValid));
 
         // Handle binary data (empty if not present)
         std::string binaryData;
         if (dg.rawData.has_value() && !dg.rawData.value().empty()) {
-            // Convert vector<uint8_t> to hex string for PostgreSQL bytea
             const auto& data = dg.rawData.value();
             std::ostringstream oss;
-            oss << "\\x";  // PostgreSQL hex format
+            if (dbType != "oracle") {
+                oss << "\\x";  // PostgreSQL hex format
+            }
             for (uint8_t byte : data) {
                 oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
             }
@@ -162,7 +170,8 @@ std::string DataGroupRepository::insert(
 
         int rowsAffected = queryExecutor_->executeCommand(insertQuery, params);
 
-        if (rowsAffected == 0) {
+        // Oracle may return 0 for successful INSERTs without RETURNING clause
+        if (rowsAffected == 0 && dbType == "postgres") {
             throw std::runtime_error("Insert failed: no rows affected");
         }
 

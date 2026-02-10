@@ -3,10 +3,12 @@
 #include <string>
 #include <optional>
 #include <chrono>
+#include <vector>
 #include <libpq-fe.h>
 #include <json/json.h>
 #include <spdlog/spdlog.h>
 #include <drogon/HttpRequest.h>
+#include "i_query_executor.h"
 
 /**
  * @file audit_log.h
@@ -256,6 +258,92 @@ inline bool logOperation(PGconn* conn, const AuditLogEntry& entry) {
         PQclear(res);
 
         // Log success (debug level to avoid clutter)
+        spdlog::debug("[AuditLog] Operation logged: {} - {} (user: {}, success: {})",
+                     opTypeStr,
+                     entry.resourceId.value_or("N/A"),
+                     entry.username.value_or("anonymous"),
+                     entry.success ? "true" : "false");
+
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[AuditLog] Exception while logging operation: {}", e.what());
+        return false;
+    }
+}
+
+/**
+ * @brief Log operation to operation_audit_log table using Query Executor (database-agnostic)
+ *
+ * @param executor Query executor (PostgreSQL or Oracle)
+ * @param entry Audit log entry with operation details
+ * @return true if logging succeeded, false otherwise
+ *
+ * @note This function never throws exceptions. All errors are logged via spdlog.
+ * @note Supports both PostgreSQL and Oracle via IQueryExecutor abstraction.
+ */
+inline bool logOperation(common::IQueryExecutor* executor, const AuditLogEntry& entry) {
+    if (!executor) {
+        spdlog::warn("[AuditLog] Query executor not available for audit logging");
+        return false;
+    }
+
+    try {
+        std::string dbType = executor->getDatabaseType();
+
+        // Build metadata JSON string
+        std::string metadataStr;
+        if (entry.metadata.has_value()) {
+            Json::StreamWriterBuilder writer;
+            writer["indentation"] = "";
+            metadataStr = Json::writeString(writer, entry.metadata.value());
+        } else {
+            metadataStr = "{}";
+        }
+
+        // Convert OperationType to string
+        std::string opTypeStr = operationTypeToString(entry.operationType);
+
+        // Database-aware boolean formatting
+        std::string successStr;
+        if (dbType == "oracle") {
+            successStr = entry.success ? "1" : "0";
+        } else {
+            successStr = entry.success ? "TRUE" : "FALSE";
+        }
+
+        // Build query (without PostgreSQL-specific ::jsonb cast and NOW())
+        std::string query =
+            "INSERT INTO operation_audit_log ("
+            "user_id, username, operation_type, operation_subtype, "
+            "resource_id, resource_type, ip_address, user_agent, "
+            "request_method, request_path, success, error_message, "
+            "error_code, duration_ms, metadata"
+            ") VALUES ("
+            "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15"
+            ")";
+
+        // Build parameters
+        std::vector<std::string> params = {
+            entry.userId.value_or(""),
+            entry.username.value_or("anonymous"),
+            opTypeStr,
+            entry.operationSubtype.value_or(""),
+            entry.resourceId.value_or(""),
+            entry.resourceType.value_or(""),
+            entry.ipAddress.value_or(""),
+            entry.userAgent.value_or(""),
+            entry.requestMethod.value_or(""),
+            entry.requestPath.value_or(""),
+            successStr,
+            entry.errorMessage.value_or(""),
+            entry.errorCode.value_or(""),
+            entry.durationMs.has_value() ? std::to_string(entry.durationMs.value()) : "",
+            metadataStr
+        };
+
+        executor->executeCommand(query, params);
+
         spdlog::debug("[AuditLog] Operation logged: {} - {} (user: {}, success: {})",
                      opTypeStr,
                      entry.resourceId.value_or("N/A"),

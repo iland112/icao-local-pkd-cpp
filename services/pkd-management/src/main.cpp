@@ -4848,21 +4848,11 @@ void registerRoutes() {
                 callback(resp);
 
                 // Phase 3.1: Audit logging - UPLOAD_DELETE success
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                {
                     AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = extractUserFromRequest(req);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
+                    auto [userId, username] = extractUserFromRequest(req);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
                     auditEntry.operationType = OperationType::UPLOAD_DELETE;
                     auditEntry.operationSubtype = "UPLOAD";
                     auditEntry.resourceId = uploadId;
@@ -4872,34 +4862,21 @@ void registerRoutes() {
                     auditEntry.requestMethod = "DELETE";
                     auditEntry.requestPath = "/api/upload/" + uploadId;
                     auditEntry.success = true;
-
                     Json::Value metadata;
                     metadata["uploadId"] = uploadId;
                     auditEntry.metadata = metadata;
-
-                    logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
+                    logOperation(::queryExecutor.get(), auditEntry);
                 }
 
             } catch (const std::exception& e) {
                 spdlog::error("Failed to delete upload {}: {}", uploadId, e.what());
 
                 // Phase 3.1: Audit logging - UPLOAD_DELETE failed
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                {
                     AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = extractUserFromRequest(req);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
+                    auto [userId, username] = extractUserFromRequest(req);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
                     auditEntry.operationType = OperationType::UPLOAD_DELETE;
                     auditEntry.operationSubtype = "UPLOAD";
                     auditEntry.resourceId = uploadId;
@@ -4910,13 +4887,10 @@ void registerRoutes() {
                     auditEntry.requestPath = "/api/upload/" + uploadId;
                     auditEntry.success = false;
                     auditEntry.errorMessage = e.what();
-
                     Json::Value metadata;
                     metadata["uploadId"] = uploadId;
                     auditEntry.metadata = metadata;
-
-                    logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
+                    logOperation(::queryExecutor.get(), auditEntry);
                 }
 
                 Json::Value error;
@@ -5180,19 +5154,11 @@ void registerRoutes() {
                 // Handle duplicate file
                 if (result.status == "DUPLICATE") {
                     // Phase 3.1: Audit logging - FILE_UPLOAD failed (duplicate)
-                    std::string conninfo = "host=" + appConfig.dbHost +
-                                          " port=" + std::to_string(appConfig.dbPort) +
-                                          " dbname=" + appConfig.dbName +
-                                          " user=" + appConfig.dbUser +
-                                          " password=" + appConfig.dbPassword;
-                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    {
                         AuditLogEntry auditEntry;
-                        if (session) {
-                            auto [userId, sessionUsername] = extractUserFromRequest(req);
-                            auditEntry.userId = userId;
-                            auditEntry.username = sessionUsername;
-                        }
+                        auto [userId2, sessionUsername2] = extractUserFromRequest(req);
+                        auditEntry.userId = userId2;
+                        auditEntry.username = sessionUsername2;
                         auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "LDIF";
                         auditEntry.resourceType = "UPLOADED_FILE";
@@ -5202,15 +5168,12 @@ void registerRoutes() {
                         auditEntry.requestPath = "/api/upload/ldif";
                         auditEntry.success = false;
                         auditEntry.errorMessage = "Duplicate file detected";
-
                         Json::Value metadata;
                         metadata["fileName"] = fileName;
                         metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                         metadata["existingUploadId"] = result.uploadId;
                         auditEntry.metadata = metadata;
-
-                        logOperation(auditConn, auditEntry);
-                        PQfinish(auditConn);
+                        logOperation(::queryExecutor.get(), auditEntry);
                     }
 
                     Json::Value error;
@@ -5237,19 +5200,11 @@ void registerRoutes() {
                 // Handle upload failure
                 if (!result.success) {
                     // Phase 3.1: Audit logging - FILE_UPLOAD failed
-                    std::string conninfo = "host=" + appConfig.dbHost +
-                                          " port=" + std::to_string(appConfig.dbPort) +
-                                          " dbname=" + appConfig.dbName +
-                                          " user=" + appConfig.dbUser +
-                                          " password=" + appConfig.dbPassword;
-                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    {
                         AuditLogEntry auditEntry;
-                        if (session) {
-                            auto [userId, sessionUsername] = extractUserFromRequest(req);
-                            auditEntry.userId = userId;
-                            auditEntry.username = sessionUsername;
-                        }
+                        auto [userId3, sessionUsername3] = extractUserFromRequest(req);
+                        auditEntry.userId = userId3;
+                        auditEntry.username = sessionUsername3;
                         auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "LDIF";
                         auditEntry.resourceType = "UPLOADED_FILE";
@@ -5259,14 +5214,11 @@ void registerRoutes() {
                         auditEntry.requestPath = "/api/upload/ldif";
                         auditEntry.success = false;
                         auditEntry.errorMessage = result.errorMessage;
-
                         Json::Value metadata;
                         metadata["fileName"] = fileName;
                         metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                         auditEntry.metadata = metadata;
-
-                        logOperation(auditConn, auditEntry);
-                        PQfinish(auditConn);
+                        logOperation(::queryExecutor.get(), auditEntry);
                     }
 
                     Json::Value error;
@@ -5306,20 +5258,11 @@ void registerRoutes() {
                 callback(resp);
 
                 // Phase 3.1: Audit logging - FILE_UPLOAD success
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                {
                     AuditLogEntry auditEntry;
-                    if (session) {
-                        auto [userId, sessionUsername] = extractUserFromRequest(req);
-                        auditEntry.userId = userId;
-                        auditEntry.username = sessionUsername;
-                    }
-
+                    auto [userId4, sessionUsername4] = extractUserFromRequest(req);
+                    auditEntry.userId = userId4;
+                    auditEntry.username = sessionUsername4;
                     auditEntry.operationType = OperationType::FILE_UPLOAD;
                     auditEntry.operationSubtype = "LDIF";
                     auditEntry.resourceId = result.uploadId;
@@ -5329,16 +5272,12 @@ void registerRoutes() {
                     auditEntry.requestMethod = "POST";
                     auditEntry.requestPath = "/api/upload/ldif";
                     auditEntry.success = true;
-
-                    // Metadata
                     Json::Value metadata;
                     metadata["fileName"] = fileName;
                     metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                     metadata["processingMode"] = processingMode;
                     auditEntry.metadata = metadata;
-
-                    logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
+                    logOperation(::queryExecutor.get(), auditEntry);
                 }
 
             } catch (const std::exception& e) {
@@ -5442,19 +5381,11 @@ void registerRoutes() {
                 // Handle duplicate file
                 if (uploadResult.status == "DUPLICATE") {
                     // Phase 3.1: Audit logging - FILE_UPLOAD failed (duplicate)
-                    std::string conninfo = "host=" + appConfig.dbHost +
-                                          " port=" + std::to_string(appConfig.dbPort) +
-                                          " dbname=" + appConfig.dbName +
-                                          " user=" + appConfig.dbUser +
-                                          " password=" + appConfig.dbPassword;
-                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    {
                         AuditLogEntry auditEntry;
-                        if (session) {
-                            auto [userId, sessionUsername] = extractUserFromRequest(req);
-                            auditEntry.userId = userId;
-                            auditEntry.username = sessionUsername;
-                        }
+                        auto [userId5, sessionUsername5] = extractUserFromRequest(req);
+                        auditEntry.userId = userId5;
+                        auditEntry.username = sessionUsername5;
                         auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "MASTER_LIST";
                         auditEntry.resourceType = "UPLOADED_FILE";
@@ -5464,15 +5395,12 @@ void registerRoutes() {
                         auditEntry.requestPath = "/api/upload/masterlist";
                         auditEntry.success = false;
                         auditEntry.errorMessage = "Duplicate file detected";
-
                         Json::Value metadata;
                         metadata["fileName"] = fileName;
                         metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                         metadata["existingUploadId"] = uploadResult.uploadId;
                         auditEntry.metadata = metadata;
-
-                        logOperation(auditConn, auditEntry);
-                        PQfinish(auditConn);
+                        logOperation(::queryExecutor.get(), auditEntry);
                     }
 
                     Json::Value error;
@@ -5499,19 +5427,11 @@ void registerRoutes() {
                 // Handle upload failure
                 if (!uploadResult.success) {
                     // Phase 3.1: Audit logging - FILE_UPLOAD failed
-                    std::string conninfo = "host=" + appConfig.dbHost +
-                                          " port=" + std::to_string(appConfig.dbPort) +
-                                          " dbname=" + appConfig.dbName +
-                                          " user=" + appConfig.dbUser +
-                                          " password=" + appConfig.dbPassword;
-                    PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                    if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                    {
                         AuditLogEntry auditEntry;
-                        if (session) {
-                            auto [userId, sessionUsername] = extractUserFromRequest(req);
-                            auditEntry.userId = userId;
-                            auditEntry.username = sessionUsername;
-                        }
+                        auto [userId6, sessionUsername6] = extractUserFromRequest(req);
+                        auditEntry.userId = userId6;
+                        auditEntry.username = sessionUsername6;
                         auditEntry.operationType = OperationType::FILE_UPLOAD;
                         auditEntry.operationSubtype = "MASTER_LIST";
                         auditEntry.resourceType = "UPLOADED_FILE";
@@ -5521,14 +5441,11 @@ void registerRoutes() {
                         auditEntry.requestPath = "/api/upload/masterlist";
                         auditEntry.success = false;
                         auditEntry.errorMessage = uploadResult.errorMessage;
-
                         Json::Value metadata;
                         metadata["fileName"] = fileName;
                         metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                         auditEntry.metadata = metadata;
-
-                        logOperation(auditConn, auditEntry);
-                        PQfinish(auditConn);
+                        logOperation(::queryExecutor.get(), auditEntry);
                     }
 
                     Json::Value error;
@@ -5681,21 +5598,11 @@ void registerRoutes() {
                 callback(resp);
 
                 // Phase 3.1: Audit logging - FILE_UPLOAD success
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                {
                     AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = extractUserFromRequest(req);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
+                    auto [userId7, username7] = extractUserFromRequest(req);
+                    auditEntry.userId = userId7;
+                    auditEntry.username = username7;
                     auditEntry.operationType = OperationType::FILE_UPLOAD;
                     auditEntry.operationSubtype = "MASTER_LIST";
                     auditEntry.resourceId = uploadId;
@@ -5705,15 +5612,12 @@ void registerRoutes() {
                     auditEntry.requestMethod = "POST";
                     auditEntry.requestPath = "/api/upload/masterlist";
                     auditEntry.success = true;
-
                     Json::Value metadata;
                     metadata["fileName"] = fileName;
                     metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
                     metadata["processingMode"] = processingMode;
                     auditEntry.metadata = metadata;
-
-                    logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
+                    logOperation(::queryExecutor.get(), auditEntry);
                 }
 
             } catch (const std::exception& e) {
@@ -7118,21 +7022,11 @@ paths:
                 callback(resp);
 
                 // Phase 4.4: Audit logging - CERT_EXPORT success (single file)
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                {
                     AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = extractUserFromRequest(req);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
+                    auto [userId8, username8] = extractUserFromRequest(req);
+                    auditEntry.userId = userId8;
+                    auditEntry.username = username8;
                     auditEntry.operationType = OperationType::CERT_EXPORT;
                     auditEntry.operationSubtype = "SINGLE_CERT";
                     auditEntry.resourceId = dn;
@@ -7142,15 +7036,12 @@ paths:
                     auditEntry.requestMethod = "GET";
                     auditEntry.requestPath = "/api/certificates/export/file";
                     auditEntry.success = true;
-
                     Json::Value metadata;
                     metadata["format"] = format;
                     metadata["fileName"] = result.filename;
                     metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
                     auditEntry.metadata = metadata;
-
-                    logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
+                    logOperation(::queryExecutor.get(), auditEntry);
                 }
 
             } catch (const std::exception& e) {
@@ -7211,22 +7102,12 @@ paths:
                 resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
                 callback(resp);
 
-                // Phase 4.4: Audit logging - CERT_EXPORT success (country ZIP)
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* auditConn = PQconnectdb(conninfo.c_str());
-                if (auditConn && PQstatus(auditConn) == CONNECTION_OK) {
+                // Phase 3.1: Audit logging - CERT_EXPORT success (country ZIP)
+                {
                     AuditLogEntry auditEntry;
-                    auto session = req->getSession();
-                    if (session) {
-                        auto [userId, username] = extractUserFromRequest(req);
-                        auditEntry.userId = userId;
-                        auditEntry.username = username;
-                    }
-
+                    auto [userId, username] = extractUserFromRequest(req);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
                     auditEntry.operationType = OperationType::CERT_EXPORT;
                     auditEntry.operationSubtype = "COUNTRY_ZIP";
                     auditEntry.resourceId = country;
@@ -7236,17 +7117,13 @@ paths:
                     auditEntry.requestMethod = "GET";
                     auditEntry.requestPath = "/api/certificates/export/country";
                     auditEntry.success = true;
-
                     Json::Value metadata;
                     metadata["country"] = country;
                     metadata["format"] = format;
                     metadata["fileName"] = result.filename;
                     metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
-                    // Parse certificate count from filename if available
                     auditEntry.metadata = metadata;
-
-                    logOperation(auditConn, auditEntry);
-                    PQfinish(auditConn);
+                    logOperation(::queryExecutor.get(), auditEntry);
                 }
 
             } catch (const std::exception& e) {
