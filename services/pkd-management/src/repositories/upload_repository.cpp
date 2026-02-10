@@ -404,30 +404,37 @@ Json::Value UploadRepository::getStatisticsSummary()
     spdlog::debug("[UploadRepository] Getting statistics summary");
 
     Json::Value response;
+    std::string dbType = queryExecutor_->getDatabaseType();
 
     try {
         // Get total uploads
         Json::Value totalUploadsResult = queryExecutor_->executeScalar("SELECT COUNT(*) FROM uploaded_file");
-        int totalUploads = totalUploadsResult.asInt();
+        int totalUploads = scalarToInt(totalUploadsResult, 0);
 
-        // Get certificate counts by type
+        // Get certificate counts by type from actual certificate table (not uploaded_file sums)
+        // Using certificate table avoids double-counting from duplicate uploads
         const char* certQuery =
             "SELECT "
-            "COALESCE(SUM(csca_count), 0) as total_csca, "
-            "COALESCE(SUM(dsc_count), 0) as total_dsc, "
-            "COALESCE(SUM(dsc_nc_count), 0) as total_dsc_nc, "
-            "COALESCE(SUM(mlsc_count), 0) as total_mlsc, "
-            "COALESCE(SUM(crl_count), 0) as total_crl, "
-            "COALESCE(SUM(ml_count), 0) as total_ml "
-            "FROM uploaded_file";
+            "COALESCE(SUM(CASE WHEN certificate_type = 'CSCA' THEN 1 ELSE 0 END), 0) as total_csca, "
+            "COALESCE(SUM(CASE WHEN certificate_type = 'DSC' THEN 1 ELSE 0 END), 0) as total_dsc, "
+            "COALESCE(SUM(CASE WHEN certificate_type = 'DSC_NC' THEN 1 ELSE 0 END), 0) as total_dsc_nc, "
+            "COALESCE(SUM(CASE WHEN certificate_type = 'MLSC' THEN 1 ELSE 0 END), 0) as total_mlsc "
+            "FROM certificate";
 
         Json::Value certResult = queryExecutor_->executeQuery(certQuery);
-        int totalCsca = certResult[0]["total_csca"].asInt();
-        int totalDsc = certResult[0]["total_dsc"].asInt();
-        int totalDscNc = certResult[0]["total_dsc_nc"].asInt();
-        int totalMlsc = certResult[0]["total_mlsc"].asInt();
-        int totalCrl = certResult[0]["total_crl"].asInt();
-        int totalMl = certResult[0]["total_ml"].asInt();
+        int totalCsca = getInt(certResult[0], "total_csca", 0);
+        int totalDsc = getInt(certResult[0], "total_dsc", 0);
+        int totalDscNc = getInt(certResult[0], "total_dsc_nc", 0);
+        int totalMlsc = getInt(certResult[0], "total_mlsc", 0);
+
+        // CRL count from crl table (separate table)
+        Json::Value crlCountResult = queryExecutor_->executeScalar("SELECT COUNT(*) FROM crl");
+        int totalCrl = scalarToInt(crlCountResult, 0);
+
+        // ML count from uploaded_file (master list count is per-upload, not deduplicated)
+        Json::Value mlCountResult = queryExecutor_->executeScalar(
+            "SELECT COALESCE(SUM(ml_count), 0) FROM uploaded_file");
+        int totalMl = scalarToInt(mlCountResult, 0);
 
         // Get uploads by status (for successfulUploads/failedUploads)
         const char* statusQuery =
@@ -438,7 +445,7 @@ Json::Value UploadRepository::getStatisticsSummary()
         int failedUploads = 0;
         for (const auto& row : statusResult) {
             std::string status = row["status"].asString();
-            int count = row["count"].asInt();
+            int count = getInt(row, "count", 0);
             if (status == "COMPLETED") {
                 successfulUploads += count;
             } else if (status == "FAILED" || status == "ERROR") {
@@ -447,53 +454,82 @@ Json::Value UploadRepository::getStatisticsSummary()
         }
 
         // Get country count (distinct countries)
-        Json::Value countryResult = queryExecutor_->executeScalar(
-            "SELECT COUNT(DISTINCT country_code) FROM certificate "
-            "WHERE country_code IS NOT NULL AND country_code != ''"
-        );
-        int countriesCount = countryResult.asInt();
+        // Oracle treats '' as NULL, so country_code != '' would filter ALL rows
+        std::string countryCountQuery = (dbType == "oracle")
+            ? "SELECT COUNT(DISTINCT country_code) FROM certificate WHERE country_code IS NOT NULL"
+            : "SELECT COUNT(DISTINCT country_code) FROM certificate WHERE country_code IS NOT NULL AND country_code != ''";
+        Json::Value countryResult = queryExecutor_->executeScalar(countryCountQuery);
+        int countriesCount = scalarToInt(countryResult, 0);
 
         // Get validation statistics
-        const char* validationQuery =
-            "SELECT "
-            "COALESCE(SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END), 0) as valid_count, "
-            "COALESCE(SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END), 0) as invalid_count, "
-            "COALESCE(SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending_count, "
-            "COALESCE(SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END), 0) as error_count, "
-            "COALESCE(SUM(CASE WHEN trust_chain_valid = true THEN 1 ELSE 0 END), 0) as trust_chain_valid_count, "
-            "COALESCE(SUM(CASE WHEN trust_chain_valid = false THEN 1 ELSE 0 END), 0) as trust_chain_invalid_count, "
-            "COALESCE(SUM(CASE WHEN csca_found = false THEN 1 ELSE 0 END), 0) as csca_not_found_count, "
-            "COALESCE(SUM(CASE WHEN validity_period_valid = false THEN 1 ELSE 0 END), 0) as expired_count, "
-            "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
-            "FROM validation_result";
+        // Oracle uses NUMBER(1) for booleans: 1=true, 0=false
+        // PostgreSQL uses native BOOLEAN: true/false
+        std::string validationQuery;
+        if (dbType == "oracle") {
+            validationQuery =
+                "SELECT "
+                "COALESCE(SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END), 0) as valid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END), 0) as invalid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END), 0) as error_count, "
+                "COALESCE(SUM(CASE WHEN trust_chain_valid = 1 THEN 1 ELSE 0 END), 0) as trust_chain_valid_count, "
+                "COALESCE(SUM(CASE WHEN trust_chain_valid = 0 THEN 1 ELSE 0 END), 0) as trust_chain_invalid_count, "
+                "COALESCE(SUM(CASE WHEN csca_found = 0 THEN 1 ELSE 0 END), 0) as csca_not_found_count, "
+                "COALESCE(SUM(CASE WHEN validity_period_ok = 0 THEN 1 ELSE 0 END), 0) as expired_count, "
+                "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
+                "FROM validation_result";
+        } else {
+            validationQuery =
+                "SELECT "
+                "COALESCE(SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END), 0) as valid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END), 0) as invalid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END), 0) as error_count, "
+                "COALESCE(SUM(CASE WHEN trust_chain_valid = true THEN 1 ELSE 0 END), 0) as trust_chain_valid_count, "
+                "COALESCE(SUM(CASE WHEN trust_chain_valid = false THEN 1 ELSE 0 END), 0) as trust_chain_invalid_count, "
+                "COALESCE(SUM(CASE WHEN csca_found = false THEN 1 ELSE 0 END), 0) as csca_not_found_count, "
+                "COALESCE(SUM(CASE WHEN validity_period_valid = false THEN 1 ELSE 0 END), 0) as expired_count, "
+                "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
+                "FROM validation_result";
+        }
 
         Json::Value validationResult = queryExecutor_->executeQuery(validationQuery);
         Json::Value validation;
         if (!validationResult.empty()) {
-            validation["validCount"] = validationResult[0]["valid_count"].asInt();
-            validation["invalidCount"] = validationResult[0]["invalid_count"].asInt();
-            validation["pendingCount"] = validationResult[0]["pending_count"].asInt();
-            validation["errorCount"] = validationResult[0]["error_count"].asInt();
-            validation["trustChainValidCount"] = validationResult[0]["trust_chain_valid_count"].asInt();
-            validation["trustChainInvalidCount"] = validationResult[0]["trust_chain_invalid_count"].asInt();
-            validation["cscaNotFoundCount"] = validationResult[0]["csca_not_found_count"].asInt();
-            validation["expiredCount"] = validationResult[0]["expired_count"].asInt();
-            validation["revokedCount"] = validationResult[0]["revoked_count"].asInt();
+            validation["validCount"] = getInt(validationResult[0], "valid_count", 0);
+            validation["invalidCount"] = getInt(validationResult[0], "invalid_count", 0);
+            validation["pendingCount"] = getInt(validationResult[0], "pending_count", 0);
+            validation["errorCount"] = getInt(validationResult[0], "error_count", 0);
+            validation["trustChainValidCount"] = getInt(validationResult[0], "trust_chain_valid_count", 0);
+            validation["trustChainInvalidCount"] = getInt(validationResult[0], "trust_chain_invalid_count", 0);
+            validation["cscaNotFoundCount"] = getInt(validationResult[0], "csca_not_found_count", 0);
+            validation["expiredCount"] = getInt(validationResult[0], "expired_count", 0);
+            validation["revokedCount"] = getInt(validationResult[0], "revoked_count", 0);
         }
 
         // Get CSCA breakdown (self-signed vs link certificates)
-        const char* cscaBreakdownQuery =
-            "SELECT "
-            "COALESCE(SUM(CASE WHEN is_self_signed = true THEN 1 ELSE 0 END), 0) as self_signed_count, "
-            "COALESCE(SUM(CASE WHEN is_self_signed = false THEN 1 ELSE 0 END), 0) as link_cert_count "
-            "FROM certificate WHERE certificate_type = 'CSCA'";
+        // Oracle: is_self_signed is NUMBER(1), PostgreSQL: BOOLEAN
+        std::string cscaBreakdownQuery;
+        if (dbType == "oracle") {
+            cscaBreakdownQuery =
+                "SELECT "
+                "COALESCE(SUM(CASE WHEN is_self_signed = 1 THEN 1 ELSE 0 END), 0) as self_signed_count, "
+                "COALESCE(SUM(CASE WHEN is_self_signed = 0 THEN 1 ELSE 0 END), 0) as link_cert_count "
+                "FROM certificate WHERE certificate_type = 'CSCA'";
+        } else {
+            cscaBreakdownQuery =
+                "SELECT "
+                "COALESCE(SUM(CASE WHEN is_self_signed = true THEN 1 ELSE 0 END), 0) as self_signed_count, "
+                "COALESCE(SUM(CASE WHEN is_self_signed = false THEN 1 ELSE 0 END), 0) as link_cert_count "
+                "FROM certificate WHERE certificate_type = 'CSCA'";
+        }
 
         Json::Value cscaResult = queryExecutor_->executeQuery(cscaBreakdownQuery);
         int selfSignedCount = 0;
         int linkCertCount = 0;
         if (!cscaResult.empty()) {
-            selfSignedCount = cscaResult[0]["self_signed_count"].asInt();
-            linkCertCount = cscaResult[0]["link_cert_count"].asInt();
+            selfSignedCount = getInt(cscaResult[0], "self_signed_count", 0);
+            linkCertCount = getInt(cscaResult[0], "link_cert_count", 0);
         }
 
         // Build byType object with CSCA breakdown
@@ -529,7 +565,7 @@ Json::Value UploadRepository::getStatisticsSummary()
         response["validation"] = validation;
 
         spdlog::debug("[UploadRepository] Statistics: {} uploads ({} successful, {} failed), {} certificates, {} countries",
-            totalUploads, successfulUploads, failedUploads, response["totalCertificates"].asInt(), countriesCount);
+            totalUploads, successfulUploads, failedUploads, totalCsca + totalDsc + totalDscNc + totalMlsc, countriesCount);
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Get statistics summary failed: {}", e.what());
@@ -547,6 +583,12 @@ Json::Value UploadRepository::getCountryStatistics(int limit)
 
     try {
         // Get certificate counts by country and type
+        // Oracle treats '' as NULL, so only use IS NOT NULL for Oracle
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string countryFilter = (dbType == "oracle")
+            ? "WHERE c.country_code IS NOT NULL "
+            : "WHERE c.country_code IS NOT NULL AND c.country_code != '' ";
+
         std::ostringstream query;
         query << "SELECT "
               << "c.country_code, "
@@ -556,7 +598,7 @@ Json::Value UploadRepository::getCountryStatistics(int limit)
               << "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
               << "COUNT(*) as total_certificates "
               << "FROM certificate c "
-              << "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
+              << countryFilter
               << "GROUP BY c.country_code "
               << "ORDER BY total_certificates DESC ";
 
@@ -569,12 +611,12 @@ Json::Value UploadRepository::getCountryStatistics(int limit)
         Json::Value countries = Json::arrayValue;
         for (const auto& row : result) {
             Json::Value countryData;
-            countryData["country"] = row["country_code"];
-            countryData["csca"] = row["csca_count"];
-            countryData["mlsc"] = row["mlsc_count"];
-            countryData["dsc"] = row["dsc_count"];
-            countryData["dscNc"] = row["dsc_nc_count"];
-            countryData["total"] = row["total_certificates"];
+            countryData["country"] = row["country_code"].asString();
+            countryData["csca"] = getInt(row, "csca_count", 0);
+            countryData["mlsc"] = getInt(row, "mlsc_count", 0);
+            countryData["dsc"] = getInt(row, "dsc_count", 0);
+            countryData["dscNc"] = getInt(row, "dsc_nc_count", 0);
+            countryData["total"] = getInt(row, "total_certificates", 0);
             countries.append(countryData);
         }
 
@@ -599,6 +641,15 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
 
     try {
         // Get detailed certificate counts by country and type
+        // Oracle CRL table uses 'issuing_country', PostgreSQL uses 'country_code'
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string crlCountryCol = (dbType == "oracle") ? "issuing_country" : "country_code";
+
+        // Oracle treats '' as NULL, so only use IS NOT NULL for Oracle
+        std::string detailedCountryFilter = (dbType == "oracle")
+            ? "WHERE c.country_code IS NOT NULL "
+            : "WHERE c.country_code IS NOT NULL AND c.country_code != '' ";
+
         std::ostringstream query;
         query << "SELECT "
               << "c.country_code, "
@@ -607,10 +658,10 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
               << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn != c.issuer_dn THEN 1 ELSE 0 END) as csca_link_cert_count, "
               << "SUM(CASE WHEN c.certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
               << "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
-              << "COALESCE((SELECT COUNT(*) FROM crl WHERE country_code = c.country_code), 0) as crl_count, "
+              << "COALESCE((SELECT COUNT(*) FROM crl WHERE " << crlCountryCol << " = c.country_code), 0) as crl_count, "
               << "COUNT(*) as total_certificates "
               << "FROM certificate c "
-              << "WHERE c.country_code IS NOT NULL AND c.country_code != '' "
+              << detailedCountryFilter
               << "GROUP BY c.country_code "
               << "ORDER BY total_certificates DESC ";
 
@@ -623,14 +674,14 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
         Json::Value countries = Json::arrayValue;
         for (const auto& row : result) {
             Json::Value countryData;
-            countryData["countryCode"] = row["country_code"];
-            countryData["mlsc"] = row["mlsc_count"];
-            countryData["cscaSelfSigned"] = row["csca_self_signed_count"];
-            countryData["cscaLinkCert"] = row["csca_link_cert_count"];
-            countryData["dsc"] = row["dsc_count"];
-            countryData["dscNc"] = row["dsc_nc_count"];
-            countryData["crl"] = row["crl_count"];
-            countryData["totalCerts"] = row["total_certificates"];
+            countryData["countryCode"] = row["country_code"].asString();
+            countryData["mlsc"] = getInt(row, "mlsc_count", 0);
+            countryData["cscaSelfSigned"] = getInt(row, "csca_self_signed_count", 0);
+            countryData["cscaLinkCert"] = getInt(row, "csca_link_cert_count", 0);
+            countryData["dsc"] = getInt(row, "dsc_count", 0);
+            countryData["dscNc"] = getInt(row, "dsc_nc_count", 0);
+            countryData["crl"] = getInt(row, "crl_count", 0);
+            countryData["totalCerts"] = getInt(row, "total_certificates", 0);
             countries.append(countryData);
         }
 
@@ -862,7 +913,29 @@ std::optional<int> UploadRepository::getOptionalInt(const Json::Value& json, con
     if (!json.isMember(field) || json[field].isNull()) {
         return std::nullopt;
     }
-    return json[field].asInt();
+    return getInt(json, field, 0);
+}
+
+/**
+ * @brief Convert executeScalar() result to int
+ * Oracle returns scalar values as strings via OTL, PostgreSQL returns native ints.
+ */
+int UploadRepository::scalarToInt(const Json::Value& value, int defaultValue)
+{
+    if (value.isNull()) return defaultValue;
+    if (value.isInt()) return value.asInt();
+    if (value.isUInt()) return static_cast<int>(value.asUInt());
+    if (value.isString()) {
+        std::string str = value.asString();
+        if (str.empty()) return defaultValue;
+        try {
+            return std::stoi(str);
+        } catch (...) {
+            return defaultValue;
+        }
+    }
+    if (value.isDouble()) return static_cast<int>(value.asDouble());
+    return defaultValue;
 }
 
 } // namespace repositories

@@ -319,6 +319,11 @@ private:
      * @return Parsed integer value
      */
     int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0);
+
+    /**
+     * @brief Convert executeScalar() result to int (handles Oracle string returns)
+     */
+    int scalarToInt(const Json::Value& value, int defaultValue = 0);
 };
 
 } // namespace repositories

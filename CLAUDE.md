@@ -1,8 +1,8 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.6.1 ✅
-**Last Updated**: 2026-02-09
-**Status**: Oracle Support Complete - Master List Upload Working
+**Current Version**: v2.6.2 ✅
+**Last Updated**: 2026-02-10
+**Status**: Oracle Full Data Upload & Statistics Complete
 
 ---
 
@@ -1010,6 +1010,115 @@ ldap_delete_all_crls       # Delete all CRLs (testing)
 ---
 
 ## Version History
+
+### v2.6.2 (2026-02-10) - Oracle Statistics & Full Data Upload Verification ✅
+
+#### Executive Summary
+
+Phase 6.1 continuation: Resolved all Oracle statistics display issues after full production data upload (ML + Collections 001-003). Five distinct root causes were identified and fixed: doubled statistics from duplicate upload records, Oracle string-to-integer conversion in country statistics, Oracle empty-string-as-NULL filtering, OCI Session Pool implementation, and frontend table width optimization.
+
+#### Full Oracle Data Upload Verification ✅
+
+Successfully uploaded all production datasets to Oracle:
+
+| Dataset | Certificates | Duration | Status |
+|---------|-------------|----------|--------|
+| Master List file | 537 (1 MLSC + 536 CSCA/LC) | ~5s | ✅ |
+| Collection 001 (DSC LDIF) | 29,838 DSC + 69 CRL | ~7min | ✅ |
+| Collection 002 (CSCA LDIF) | 309 new CSCA (from 5,017) | ~10s | ✅ |
+| Collection 003 (DSC_NC LDIF) | 502 DSC_NC | ~8s | ✅ |
+| **Total** | **31,212** | | ✅ |
+
+**Oracle DB ↔ LDAP Consistency**:
+
+| Type | Oracle DB | LDAP | Coverage |
+|------|-----------|------|----------|
+| CSCA | 845 | 845 | 100% |
+| MLSC | 27 | 27 | 100% |
+| DSC | 29,838 | 29,838 | 100% |
+| DSC_NC | 502 | 502 | 100% |
+| CRL | 69 | 69 | 100% |
+| **Total** | **31,212** | **31,212** | **100%** |
+
+#### Bug Fixes
+
+**1. Doubled Statistics Values** ✅
+- **Symptom**: DSC count showed 59,676 (2x actual), total certs 61,050
+- **Root Cause**: `getStatisticsSummary()` summed from `uploaded_file` table which included duplicate upload records (Collection 001 uploaded twice)
+- **Fix**: Changed certificate counting from `uploaded_file` to `certificate` table (deduplicated)
+  ```cpp
+  // Before: sums from uploaded_file (includes duplicates)
+  "SELECT COALESCE(SUM(csca_count), 0) ... FROM uploaded_file"
+
+  // After: counts from certificate table (deduplicated)
+  "SELECT COALESCE(SUM(CASE WHEN certificate_type = 'CSCA' THEN 1 ELSE 0 END), 0) ... FROM certificate"
+  ```
+- CRL counted separately from `crl` table, ML count from `uploaded_file` (per-upload metric)
+
+**2. Oracle String-to-Integer Conversion in Country Statistics** ✅
+- **Symptom**: Country statistics dialog only showed MLSC column, totals were wrong
+- **Root Cause**: Oracle OCI returns ALL values as strings (SQLT_STR). In JavaScript, `0 + "37"` = `"037"` (string concatenation instead of addition), breaking `reduce()` totals
+- **Fix**: Applied `getInt()` conversion to all numeric fields in both `getCountryStatistics()` and `getDetailedCountryStatistics()`
+  ```cpp
+  // Before: direct copy (strings from Oracle)
+  countryData["csca"] = row["csca_count"];
+
+  // After: proper integer conversion
+  countryData["csca"] = getInt(row, "csca_count", 0);
+  ```
+
+**3. Oracle Empty String = NULL Issue** ✅
+- **Symptom**: Country statistics returned 0 countries
+- **Root Cause**: Oracle treats `''` as `NULL`, so `country_code != ''` becomes `country_code != NULL` which is always false
+- **Fix**: Database-specific WHERE clause in 3 locations
+  ```cpp
+  std::string filter = (dbType == "oracle")
+      ? "WHERE c.country_code IS NOT NULL"
+      : "WHERE c.country_code IS NOT NULL AND c.country_code != ''";
+  ```
+
+**4. OCI Session Pool Implementation** ✅
+- **Enhancement**: Replaced single OCI connection with session pool (min=2, max=10)
+- **Pattern**: `OCI_SPC_HOMOGENEOUS` with `OCISessionPoolCreate()`
+- **Benefits**: Thread-safe concurrent query execution, connection reuse
+
+**5. Country Statistics Table Width Optimization** ✅
+- **Symptom**: Table too wide, overlapped with sidebar navigation
+- **Fix**: Compact table layout in CountryStatisticsDialog.tsx
+  - Dialog: `max-w-7xl` → `max-w-4xl`
+  - Cell padding: `px-4 py-3` → `px-1.5 py-1.5`
+  - Font: `text-sm` → `text-xs` table-level
+  - Headers: plain colored text (no icon badges), right-aligned
+  - Cells: colored text with `tabular-nums` instead of pill badges
+
+#### Verification Results
+
+**Statistics API** ✅:
+| Endpoint | Result |
+|----------|--------|
+| GET /api/upload/statistics | total=31,212, DSC=29,838, CSCA=845, MLSC=27, CRL=69 ✅ |
+| GET /api/upload/countries | 139 countries, all values proper integers ✅ |
+| GET /api/upload/countries/detailed | Full breakdown, all integers ✅ |
+
+#### Files Modified
+
+**Backend** (4 files):
+- `services/pkd-management/src/repositories/upload_repository.cpp` - Statistics query fixes, Oracle string-to-int, empty string handling
+- `services/pkd-management/src/repositories/upload_repository.h` - Added scalarToInt() declaration
+- `shared/lib/database/oracle_query_executor.cpp` - OCI Session Pool implementation
+- `shared/lib/database/oracle_query_executor.h` - Session Pool type definitions
+
+**Frontend** (1 file):
+- `frontend/src/components/CountryStatisticsDialog.tsx` - Compact table layout
+
+**Other** (1 file):
+- `services/pkd-management/src/main.cpp` - CRL date format fix (ORA-01830), Oracle compatibility
+
+#### Related Documentation
+
+- [CLAUDE.md v2.6.1](#v261-2026-02-09---phase-61-complete-master-list-upload-oracle-support-) - Previous getInt() implementation
+
+---
 
 ### v2.6.1 (2026-02-09) - Phase 6.1 Complete: Master List Upload Oracle Support ✅
 

@@ -106,20 +106,70 @@ public:
     std::string getDatabaseType() const override { return "oracle"; }
 
 private:
-    OracleConnectionPool* pool_;  ///< Oracle connection pool
+    OracleConnectionPool* pool_;  ///< Oracle connection pool (for executeScalar via OTL)
 
-    // OCI handles for stable VARCHAR2 TIMESTAMP handling (deprecated - now per-query)
-    OCIEnv* ociEnv_;      ///< OCI environment handle (legacy, for executeQueryWithOCI)
-    OCIError* ociErr_;    ///< OCI error handle (legacy, for executeQueryWithOCI)
-    OCISvcCtx* ociSvcCtx_; ///< OCI service context (legacy, for executeQueryWithOCI)
-    OCIServer* ociServer_; ///< OCI server handle (legacy, for executeQueryWithOCI)
-    OCISession* ociSession_; ///< OCI session handle (legacy, for executeQueryWithOCI)
+    // Legacy OCI handles (for startup connectivity check)
+    OCIEnv* ociEnv_;
+    OCIError* ociErr_;
+    OCISvcCtx* ociSvcCtx_;
+    OCIServer* ociServer_;
+    OCISession* ociSession_;
 
-    std::string connString_; ///< Oracle connection string
+    std::string connString_; ///< Oracle connection string (user/password@host:port/service)
+
+    // =========================================================================
+    // OCI Session Pool (high-performance connection reuse)
+    // =========================================================================
 
     /**
-     * @brief OCI connection handles for per-query thread-safe usage
+     * @brief Pooled session handle returned by acquirePooledSession()
      */
+    struct PooledSession {
+        OCISvcCtx* svcCtx = nullptr;  ///< Service context from pool
+        OCIError* err = nullptr;      ///< Per-session error handle
+    };
+
+    OCIEnv* poolEnv_ = nullptr;       ///< Shared OCI environment for session pool
+    OCIError* poolErr_ = nullptr;     ///< Error handle for pool operations
+    OCISPool* sessionPool_ = nullptr; ///< OCI Session Pool handle
+    OraText* poolName_ = nullptr;     ///< Pool name (set by OCISessionPoolCreate)
+    ub4 poolNameLen_ = 0;             ///< Pool name length
+    bool sessionPoolReady_ = false;   ///< Whether session pool initialized successfully
+
+    static constexpr const char* NLS_SESSION_TAG = "NLS_ISO";  ///< Tag for NLS-configured sessions
+
+    /**
+     * @brief Initialize OCI Session Pool
+     * @throws std::runtime_error on pool creation failure
+     */
+    void initializeSessionPool();
+
+    /**
+     * @brief Destroy OCI Session Pool and free resources
+     */
+    void destroySessionPool();
+
+    /**
+     * @brief Acquire a session from the OCI Session Pool
+     *
+     * Returns a pre-authenticated session with NLS settings configured.
+     * Uses session tagging to skip NLS setup on reused sessions.
+     *
+     * @return PooledSession with valid svcCtx and err handles
+     * @throws std::runtime_error if pool is not ready or acquire fails
+     */
+    PooledSession acquirePooledSession();
+
+    /**
+     * @brief Release a session back to the OCI Session Pool
+     * @param session Session to release (handles are nulled after release)
+     */
+    void releasePooledSession(PooledSession& session);
+
+    // =========================================================================
+    // Legacy per-query connection methods (kept as fallback)
+    // =========================================================================
+
     struct OciConnection {
         OCIEnv* env = nullptr;
         OCIError* err = nullptr;
@@ -128,83 +178,24 @@ private:
         OCISession* session = nullptr;
     };
 
-    /**
-     * @brief Create new OCI connection handles and connect to Oracle
-     * @param[out] conn OCI connection structure to populate
-     * @throws std::runtime_error on connection failure
-     */
     void createOciConnection(OciConnection& conn);
-
-    /**
-     * @brief Disconnect OCI session and detach from server
-     * @param conn OCI connection to disconnect
-     */
     void disconnectOci(OciConnection& conn);
-
-    /**
-     * @brief Free all OCI handles
-     * @param conn OCI connection to free
-     */
     void freeOciHandles(OciConnection& conn);
 
-    /**
-     * @brief Initialize OCI environment and error handles
-     * @throws std::runtime_error on OCI initialization failure
-     */
-    void initializeOCI();
+    // =========================================================================
+    // OCI lifecycle and helpers
+    // =========================================================================
 
-    /**
-     * @brief Cleanup OCI handles
-     */
+    void initializeOCI();
     void cleanupOCI();
 
-    /**
-     * @brief Execute SELECT query using OCI (for stable TIMESTAMP handling)
-     *
-     * Uses OCI instead of OTL for queries that need stable VARCHAR2 reading.
-     * OTL has issues with describe_select() even for VARCHAR2 columns.
-     *
-     * @param query SQL query
-     * @param params Query parameters
-     * @return JSON array of result rows
-     * @throws std::runtime_error on OCI execution failure
-     */
     Json::Value executeQueryWithOCI(
         const std::string& query,
         const std::vector<std::string>& params
     );
 
-    /**
-     * @brief Convert PostgreSQL placeholder syntax to Oracle syntax
-     *
-     * PostgreSQL: SELECT * FROM users WHERE id = $1 AND name = $2
-     * Oracle:     SELECT * FROM users WHERE id = :1 AND name = :2
-     *
-     * @param query PostgreSQL-style query
-     * @return Oracle-style query
-     */
     std::string convertPlaceholders(const std::string& query);
-
-    /**
-     * @brief Convert OTL otlStream result to JSON array
-     *
-     * Reads all rows from OTL otlStream and converts to JSON format.
-     * Handles type detection based on column metadata.
-     *
-     * @param otlStream OTL otlStream with query results
-     * @return JSON array of rows
-     */
     Json::Value otlStreamToJson(otl_stream& otlStream);
-
-    /**
-     * @brief Detect and convert OTL column value to JSON
-     * @note Currently unused - kept for potential future refactoring
-     * @param otlStream OTL otlStream
-     * @param colIndex Column index (0-based)
-     * @param colType OTL column type
-     * @return JSON value (string, number, bool, or null)
-     */
-    // Json::Value otlValueToJson(otl_stream& otlStream, int colIndex, int colType);
 };
 
 } // namespace common

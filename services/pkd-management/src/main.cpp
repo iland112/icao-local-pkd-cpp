@@ -24,6 +24,7 @@
 #include <array>
 #include <thread>
 #include <future>
+#include <mutex>
 #include <atomic>  // For application-level LDAP load balancing round-robin
 
 // PostgreSQL header for direct connection test
@@ -904,97 +905,125 @@ struct ValidationResultRecord {
     std::string errorCode;
     std::string errorMessage;
 
+    // Fingerprint (needed for Oracle validation_result table)
+    std::string fingerprint;
+
     int validationDurationMs = 0;
 };
 
 /**
  * @brief Store validation result to database
- * @note Phase 6.1: TODO - Refactor to use ValidationRepository Pattern
+ * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
  */
 bool saveValidationResult(const ValidationResultRecord& record) {
-    // Phase 6.1: Temporary workaround - create local connection
-    // TODO: Refactor to use ValidationRepository with IQueryExecutor
-    auto conn = ::dbPool->acquire();
-    if (!conn.isValid()) {
-        spdlog::error("Failed to acquire database connection for validation result save");
+    if (!::queryExecutor) {
+        spdlog::error("[saveValidationResult] queryExecutor is null");
         return false;
     }
 
-    // Parameterized query matching actual validation_result table schema (23 columns)
-    const char* query =
-        "INSERT INTO validation_result ("
-        "certificate_id, upload_id, certificate_type, country_code, "
-        "subject_dn, issuer_dn, serial_number, "
-        "validation_status, trust_chain_valid, trust_chain_message, "
-        "csca_found, csca_subject_dn, csca_serial_number, csca_country, "
-        "signature_valid, signature_algorithm, "
-        "validity_period_valid, not_before, not_after, "
-        "revocation_status, crl_checked, "
-        "trust_chain_path"
-        ") VALUES ("
-        "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
-        "$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22"
-        ")";
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
 
-    // Prepare boolean strings
-    const std::string trustChainValidStr = record.trustChainValid ? "true" : "false";
-    const std::string cscaFoundStr = record.cscaFound ? "true" : "false";
-    const std::string signatureValidStr = record.signatureVerified ? "true" : "false";
-    const std::string validityPeriodValidStr = record.validityCheckPassed ? "true" : "false";
-    const std::string crlCheckedStr = (record.crlCheckStatus != "NOT_CHECKED") ? "true" : "false";
+        // Database-aware boolean formatting
+        auto boolStr = [&dbType](bool val) -> std::string {
+            if (dbType == "oracle") return val ? "1" : "0";
+            return val ? "true" : "false";
+        };
 
-    // Map crlCheckStatus to revocation_status (schema uses UNKNOWN/NOT_REVOKED/REVOKED)
-    std::string revocationStatus = "UNKNOWN";
-    if (record.crlCheckStatus == "REVOKED") revocationStatus = "REVOKED";
-    else if (record.crlCheckStatus == "NOT_REVOKED" || record.crlCheckStatus == "VALID") revocationStatus = "NOT_REVOKED";
+        // Prepare boolean strings
+        std::string trustChainValidStr = boolStr(record.trustChainValid);
+        std::string signatureVerifiedStr = boolStr(record.signatureVerified);
+        std::string isExpiredStr = boolStr(record.isExpired);
+        std::string crlCheckedStr = boolStr(record.crlCheckStatus != "NOT_CHECKED");
+        std::string crlRevokedStr = boolStr(record.crlCheckStatus == "REVOKED");
 
-    // Prepare trust_chain_path as JSON array (schema expects jsonb)
-    // chain.path is human-readable like "DSC → CN=CSCA → CN=Link"
-    // Wrap as JSON array for JSONB column
-    std::string trustChainPathJson;
-    if (record.trustChainPath.empty()) {
-        trustChainPathJson = "[]";
-    } else {
-        Json::Value pathArray(Json::arrayValue);
-        pathArray.append(record.trustChainPath);
-        Json::StreamWriterBuilder builder;
-        builder["indentation"] = "";
-        trustChainPathJson = Json::writeString(builder, pathArray);
+        // Prepare trust_chain_path as JSON/CLOB
+        std::string trustChainPathJson;
+        if (record.trustChainPath.empty()) {
+            trustChainPathJson = "[]";
+        } else {
+            Json::Value pathArray(Json::arrayValue);
+            pathArray.append(record.trustChainPath);
+            Json::StreamWriterBuilder builder;
+            builder["indentation"] = "";
+            trustChainPathJson = Json::writeString(builder, pathArray);
+        }
+
+        // Use fingerprint as the identifier (Oracle schema uses fingerprint_sha256)
+        std::string fingerprintValue = record.fingerprint;
+        if (fingerprintValue.empty()) {
+            // Fallback: use certificateId if fingerprint not set
+            fingerprintValue = record.certificateId;
+        }
+
+        // Database-specific INSERT query
+        std::string query;
+        std::vector<std::string> params;
+
+        if (dbType == "oracle") {
+            // Oracle actual schema: validity_period_ok (inverted is_expired),
+            //   revocation_status (VARCHAR2), validation_message (not error_message)
+            std::string validityPeriodOkStr = boolStr(!record.isExpired);  // inverted
+            std::string revocationStatus = record.crlCheckStatus;  // VALID/REVOKED/NOT_CHECKED etc.
+
+            query =
+                "INSERT INTO validation_result ("
+                "upload_id, fingerprint_sha256, certificate_type, "
+                "trust_chain_valid, trust_chain_path, csca_subject_dn, "
+                "signature_verified, validity_period_ok, crl_checked, revocation_status, "
+                "validation_status, validation_message"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12"
+                ")";
+
+            params = {
+                record.uploadId,                                                  // $1
+                fingerprintValue,                                                 // $2
+                record.certificateType,                                           // $3
+                trustChainValidStr,                                               // $4
+                trustChainPathJson,                                               // $5
+                record.cscaSubjectDn.empty() ? "" : record.cscaSubjectDn,         // $6
+                signatureVerifiedStr,                                             // $7
+                validityPeriodOkStr,                                              // $8
+                crlCheckedStr,                                                    // $9
+                revocationStatus,                                                 // $10
+                record.validationStatus,                                          // $11
+                record.errorMessage.empty() ? "" : record.errorMessage            // $12
+            };
+        } else {
+            // PostgreSQL schema: is_expired, crl_revoked, error_message
+            query =
+                "INSERT INTO validation_result ("
+                "upload_id, fingerprint_sha256, certificate_type, "
+                "trust_chain_valid, trust_chain_path, csca_subject_dn, "
+                "signature_verified, is_expired, crl_checked, crl_revoked, "
+                "validation_status, error_message"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12"
+                ")";
+
+            params = {
+                record.uploadId,                                                  // $1
+                fingerprintValue,                                                 // $2
+                record.certificateType,                                           // $3
+                trustChainValidStr,                                               // $4
+                trustChainPathJson,                                               // $5
+                record.cscaSubjectDn.empty() ? "" : record.cscaSubjectDn,         // $6
+                signatureVerifiedStr,                                             // $7
+                isExpiredStr,                                                     // $8
+                crlCheckedStr,                                                    // $9
+                crlRevokedStr,                                                    // $10
+                record.validationStatus,                                          // $11
+                record.errorMessage.empty() ? "" : record.errorMessage            // $12
+            };
+        }
+
+        ::queryExecutor->executeCommand(query, params);
+        return true;
+    } catch (const std::exception& e) {
+        spdlog::error("[saveValidationResult] Failed: {}", e.what());
+        return false;
     }
-
-    const char* paramValues[22];
-    paramValues[0] = record.certificateId.c_str();
-    paramValues[1] = record.uploadId.c_str();
-    paramValues[2] = record.certificateType.c_str();
-    paramValues[3] = record.countryCode.empty() ? nullptr : record.countryCode.c_str();
-    paramValues[4] = record.subjectDn.c_str();
-    paramValues[5] = record.issuerDn.c_str();
-    paramValues[6] = record.serialNumber.empty() ? nullptr : record.serialNumber.c_str();
-    paramValues[7] = record.validationStatus.c_str();
-    paramValues[8] = trustChainValidStr.c_str();
-    paramValues[9] = record.trustChainMessage.empty() ? nullptr : record.trustChainMessage.c_str();
-    paramValues[10] = cscaFoundStr.c_str();
-    paramValues[11] = record.cscaSubjectDn.empty() ? nullptr : record.cscaSubjectDn.c_str();
-    paramValues[12] = nullptr;  // csca_serial_number - not tracked in ValidationResultRecord
-    paramValues[13] = nullptr;  // csca_country - not tracked in ValidationResultRecord
-    paramValues[14] = signatureValidStr.c_str();
-    paramValues[15] = record.signatureAlgorithm.empty() ? nullptr : record.signatureAlgorithm.c_str();
-    paramValues[16] = validityPeriodValidStr.c_str();
-    paramValues[17] = record.notBefore.empty() ? nullptr : record.notBefore.c_str();
-    paramValues[18] = record.notAfter.empty() ? nullptr : record.notAfter.c_str();
-    paramValues[19] = revocationStatus.c_str();
-    paramValues[20] = crlCheckedStr.c_str();
-    paramValues[21] = trustChainPathJson.c_str();
-
-    PGresult* res = PQexecParams(conn.get(), query, 22, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    if (!success) {
-        spdlog::error("Failed to save validation result: {}", PQerrorMessage(conn.get()));
-    }
-    PQclear(res);
-
-    return success;
 }
 
 } // Close anonymous namespace temporarily for extern functions
@@ -2450,30 +2479,37 @@ void updateCertificateLdapStatus(PGconn* conn, const std::string& certId, const 
 
 /**
  * @brief Update CRL DB record with LDAP DN after successful LDAP storage
+ * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
  */
-// [Phase 6.1] Refactored to use connection pool instead of PGconn* parameter
 void updateCrlLdapStatus(const std::string& crlId, const std::string& ldapDn) {
     if (ldapDn.empty()) return;
 
-    // Acquire connection from pool (RAII - auto-released on scope exit)
-    auto conn = ::dbPool->acquire();
-    if (!conn.isValid()) {
-        spdlog::error("Failed to acquire database connection for CRL LDAP status update");
+    if (!::queryExecutor) {
+        spdlog::error("[updateCrlLdapStatus] queryExecutor is null");
         return;
     }
 
-    // Use parameterized query (Phase 2 - SQL Injection Prevention)
-    const char* query = "UPDATE crl SET "
-                       "ldap_dn = $1, stored_in_ldap = TRUE, stored_at = NOW() "
-                       "WHERE id = $2";
-    const char* paramValues[2] = {ldapDn.c_str(), crlId.c_str()};
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
+        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
 
-    PGresult* res = PQexecParams(conn.get(), query, 2, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to update CRL LDAP status: {}", PQerrorMessage(conn.get()));
+        std::string query;
+        if (dbType == "oracle") {
+            // Oracle CRL table has no stored_at column
+            query = "UPDATE crl SET "
+                    "ldap_dn = $1, stored_in_ldap = " + storedFlag + " "
+                    "WHERE id = $2";
+        } else {
+            query = "UPDATE crl SET "
+                    "ldap_dn = $1, stored_in_ldap = " + storedFlag + ", stored_at = NOW() "
+                    "WHERE id = $2";
+        }
+        std::vector<std::string> params = {ldapDn, crlId};
+
+        ::queryExecutor->executeCommand(query, params);
+    } catch (const std::exception& e) {
+        spdlog::error("[updateCrlLdapStatus] Failed: {}", e.what());
     }
-    PQclear(res);
 }
 
 /**
@@ -2667,72 +2703,144 @@ void updateMasterListLdapStatus(const std::string& mlId, const std::string& ldap
 /**
  * @brief Save CRL to database
  * @return CRL ID or empty string on failure
- * @note Phase 6.1: TODO - Refactor to use CRL Repository Pattern
+ * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
  */
 std::string saveCrl(const std::string& uploadId,
                     const std::string& countryCode, const std::string& issuerDn,
                     const std::string& thisUpdate, const std::string& nextUpdate,
                     const std::string& crlNumber, const std::string& fingerprint,
                     const std::vector<uint8_t>& crlBinary) {
-    // Phase 6.1: Temporary workaround - create local connection
-    // TODO: Refactor to use CRL Repository with IQueryExecutor
-    auto conn = ::dbPool->acquire();
-    if (!conn.isValid()) {
-        spdlog::error("Failed to acquire database connection for CRL save");
+    if (!::queryExecutor) {
+        spdlog::error("[saveCrl] queryExecutor is null");
         return "";
     }
 
-    std::string crlId = generateUuid();
-    std::string byteaEscaped = escapeBytea(conn.get(), crlBinary);
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
 
-    std::string query = "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
-                       "this_update, next_update, crl_number, fingerprint_sha256, "
-                       "crl_binary, validation_status, created_at) VALUES ("
-                       "'" + crlId + "', "
-                       "'" + uploadId + "', "
-                       + escapeSqlString(conn.get(), countryCode) + ", "
-                       + escapeSqlString(conn.get(), issuerDn) + ", "
-                       "'" + thisUpdate + "', "
-                       + (nextUpdate.empty() ? "NULL" : "'" + nextUpdate + "'") + ", "
-                       + escapeSqlString(conn.get(), crlNumber) + ", "
-                       "'" + fingerprint + "', "
-                       "'" + byteaEscaped + "', "
-                       "'PENDING', NOW()) "
-                       "ON CONFLICT DO NOTHING";
+        // Generate UUID
+        std::string crlId;
+        if (dbType == "oracle") {
+            Json::Value uuidResult = ::queryExecutor->executeQuery(
+                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+            if (uuidResult.empty()) {
+                spdlog::error("[saveCrl] Failed to generate UUID from Oracle");
+                return "";
+            }
+            crlId = uuidResult[0]["id"].asString();
+        } else {
+            crlId = generateUuid();
+        }
 
-    PGresult* res = PQexec(conn.get(), query.c_str());
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-    PQclear(res);
+        // Convert binary CRL to hex string (\\x prefix for BLOB detection)
+        std::ostringstream hexStream;
+        hexStream << "\\\\x";
+        for (size_t i = 0; i < crlBinary.size(); i++) {
+            hexStream << std::hex << std::setw(2) << std::setfill('0')
+                     << static_cast<int>(crlBinary[i]);
+        }
+        std::string crlDataHex = hexStream.str();
 
-    return success ? crlId : "";
+        // Database-specific INSERT query
+        std::string query;
+        std::vector<std::string> params;
+
+        if (dbType == "oracle") {
+            // Oracle actual schema: issuing_country (not country_code),
+            //   no fingerprint_sha256, no validation_status
+            // Use TO_TIMESTAMP() for date columns - Oracle can't implicitly convert
+            // ISO date strings with timezone suffix (e.g., "2025-01-15 10:30:00+00")
+            query =
+                "INSERT INTO crl (id, upload_id, issuing_country, issuer_dn, "
+                "this_update, next_update, crl_number, crl_data) VALUES ("
+                "$1, $2, $3, $4, "
+                "TO_TIMESTAMP($5, 'YYYY-MM-DD HH24:MI:SS'), "
+                "CASE WHEN $6 IS NULL OR $6 = '' THEN NULL ELSE TO_TIMESTAMP($6, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "$7, $8)";
+
+            // Strip timezone suffix (+00) from date strings for Oracle TO_TIMESTAMP
+            auto stripTz = [](const std::string& ts) -> std::string {
+                if (ts.empty()) return "";
+                // Truncate to 19 chars: "YYYY-MM-DD HH:MI:SS" (strip +00, Z, etc.)
+                return ts.length() > 19 ? ts.substr(0, 19) : ts;
+            };
+
+            params = {
+                crlId,                                           // $1
+                uploadId,                                        // $2
+                countryCode,                                     // $3
+                issuerDn,                                        // $4
+                stripTz(thisUpdate),                             // $5 (stripped for TO_TIMESTAMP)
+                nextUpdate.empty() ? "" : stripTz(nextUpdate),   // $6 (stripped for TO_TIMESTAMP)
+                crlNumber,                                       // $7
+                crlDataHex                                       // $8
+            };
+        } else {
+            // PostgreSQL schema: country_code, fingerprint_sha256, crl_binary, validation_status
+            query =
+                "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
+                "this_update, next_update, crl_number, fingerprint_sha256, "
+                "crl_binary, validation_status, created_at) VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', NOW()) "
+                "ON CONFLICT DO NOTHING";
+
+            params = {
+                crlId,                                           // $1
+                uploadId,                                        // $2
+                countryCode,                                     // $3
+                issuerDn,                                        // $4
+                thisUpdate,                                      // $5
+                nextUpdate.empty() ? "" : nextUpdate,             // $6
+                crlNumber,                                       // $7
+                fingerprint,                                     // $8
+                crlDataHex                                       // $9
+            };
+        }
+
+        ::queryExecutor->executeCommand(query, params);
+        return crlId;
+    } catch (const std::exception& e) {
+        spdlog::error("[saveCrl] Failed: {}", e.what());
+        return "";
+    }
 }
 
 /**
  * @brief Save revoked certificate to database
- * @note Phase 6.1: TODO - Refactor to use CRL Repository Pattern
+ * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
+ * @note revoked_certificate table does not exist in Oracle schema - skipped for Oracle
  */
 void saveRevokedCertificate(const std::string& crlId,
                             const std::string& serialNumber, const std::string& revocationDate,
                             const std::string& reason) {
-    // Phase 6.1: Temporary workaround - create local connection
-    // TODO: Refactor to use CRL Repository with IQueryExecutor
-    auto conn = ::dbPool->acquire();
-    if (!conn.isValid()) {
-        spdlog::error("Failed to acquire database connection for revoked certificate save");
+    if (!::queryExecutor) {
+        spdlog::error("[saveRevokedCertificate] queryExecutor is null");
         return;
     }
 
-    std::string query = "INSERT INTO revoked_certificate (id, crl_id, serial_number, "
-                       "revocation_date, revocation_reason, created_at) VALUES ("
-                       "'" + generateUuid() + "', "
-                       "'" + crlId + "', "
-                       + escapeSqlString(conn.get(), serialNumber) + ", "
-                       "'" + revocationDate + "', "
-                       + escapeSqlString(conn.get(), reason) + ", "
-                       "NOW())";
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
 
-    PGresult* res = PQexec(conn.get(), query.c_str());
-    PQclear(res);
+        // revoked_certificate table only exists in PostgreSQL schema
+        if (dbType == "oracle") {
+            spdlog::debug("[saveRevokedCertificate] Skipped - table not available in Oracle schema");
+            return;
+        }
+
+        std::string id = generateUuid();
+        std::string query =
+            "INSERT INTO revoked_certificate (id, crl_id, serial_number, "
+            "revocation_date, revocation_reason, created_at) VALUES ("
+            "$1, $2, $3, $4, $5, NOW())";
+
+        std::vector<std::string> params = {
+            id, crlId, serialNumber, revocationDate, reason
+        };
+
+        ::queryExecutor->executeCommand(query, params);
+    } catch (const std::exception& e) {
+        spdlog::error("[saveRevokedCertificate] Failed: {}", e.what());
+    }
 }
 
 /**
@@ -2816,6 +2924,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // Prepare validation result record
     ValidationResultRecord valRecord;
     valRecord.uploadId = uploadId;
+    valRecord.fingerprint = fingerprint;  // Phase 6.2: needed for Oracle validation_result table
     valRecord.countryCode = countryCode;
     valRecord.subjectDn = subjectDn;
     valRecord.issuerDn = issuerDn;
@@ -3381,14 +3490,35 @@ void updateUploadStatistics(const std::string& uploadId,
  * @brief Process LDIF file asynchronously with full parsing (DB + LDAP)
  * @note Defined outside anonymous namespace for external linkage (Phase 4.4)
  */
+// Guard against duplicate async processing (Phase 6.2)
+static std::mutex s_processingMutex;
+static std::set<std::string> s_processingUploads;
+
 void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
+    // Check and register this upload for processing (prevent duplicate threads)
+    {
+        std::lock_guard<std::mutex> lock(s_processingMutex);
+        if (s_processingUploads.count(uploadId) > 0) {
+            spdlog::warn("[processLdifFileAsync] Upload {} already being processed - skipping duplicate", uploadId);
+            return;
+        }
+        s_processingUploads.insert(uploadId);
+    }
+
     std::thread([uploadId, content]() {
-        spdlog::info("[Phase 6.1] Starting async LDIF processing for upload: {}", uploadId);
+        // Ensure cleanup on thread exit
+        auto cleanupGuard = [&uploadId]() {
+            std::lock_guard<std::mutex> lock(s_processingMutex);
+            s_processingUploads.erase(uploadId);
+        };
+
+        spdlog::info("[Phase 6.2] Starting async LDIF processing for upload: {}", uploadId);
 
         // Get processing_mode from upload record using Repository
         auto uploadOpt = ::uploadRepository->findById(uploadId);
         if (!uploadOpt.has_value()) {
             spdlog::error("Upload record not found: {}", uploadId);
+            cleanupGuard();
             return;
         }
 
@@ -3413,6 +3543,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                         0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
 
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                cleanupGuard();
                 return;
             }
             spdlog::info("LDAP write connection established successfully for AUTO mode LDIF upload {}", uploadId);
@@ -3671,6 +3802,9 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             ldap_unbind_ext_s(ld, nullptr, nullptr);
         }
         // Note: No PGconn cleanup needed - Strategy Pattern uses Repository with connection pool
+
+        // Phase 6.2: Remove from processing set
+        cleanupGuard();
     }).detach();
 }
 
@@ -3695,13 +3829,30 @@ namespace {  // Anonymous namespace for internal helper functions
  * @note Defined outside anonymous namespace for external linkage (Phase 4.4)
  */
 void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
+    // Check and register this upload for processing (prevent duplicate threads)
+    {
+        std::lock_guard<std::mutex> lock(s_processingMutex);
+        if (s_processingUploads.count(uploadId) > 0) {
+            spdlog::warn("[processMasterListFileAsync] Upload {} already being processed - skipping duplicate", uploadId);
+            return;
+        }
+        s_processingUploads.insert(uploadId);
+    }
+
     std::thread([uploadId, content]() {
-        spdlog::info("[Phase 6.1] Starting async Master List processing for upload: {}", uploadId);
+        // Ensure cleanup on thread exit
+        auto cleanupGuard = [&uploadId]() {
+            std::lock_guard<std::mutex> lock(s_processingMutex);
+            s_processingUploads.erase(uploadId);
+        };
+
+        spdlog::info("[Phase 6.2] Starting async Master List processing for upload: {}", uploadId);
 
         // Get processing_mode from upload record using Repository
         auto uploadOpt = ::uploadRepository->findById(uploadId);
         if (!uploadOpt.has_value()) {
             spdlog::error("Upload record not found: {}", uploadId);
+            cleanupGuard();
             return;
         }
 
@@ -3725,6 +3876,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                         0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
 
+                cleanupGuard();
                 return;
             }
             spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
@@ -3750,6 +3902,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 ::uploadRepository->updateStatus(uploadId, "FAILED", "Invalid CMS format");
                 ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                cleanupGuard();
                 return;
             }
 
@@ -4218,6 +4371,9 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
         if (ld) {
             ldap_unbind_ext_s(ld, nullptr, nullptr);
         }
+
+        // Phase 6.2: Remove from processing set
+        cleanupGuard();
     }).detach();
 }
 

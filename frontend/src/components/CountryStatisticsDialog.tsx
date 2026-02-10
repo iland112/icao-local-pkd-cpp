@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Globe, Shield, Key, FileText, Link, FileX, Download, Loader2 } from 'lucide-react';
+import { X, Globe, Download, Loader2 } from 'lucide-react';
 import { uploadHistoryApi } from '@/services/pkdApi';
 
 interface CountryStatistics {
@@ -85,7 +85,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[90vh] flex flex-col overflow-hidden m-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden m-4">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-800">
           <div className="flex items-center gap-3">
@@ -141,52 +141,34 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+              <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-100 dark:bg-gray-700">
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
                       #
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-16">
                       국가
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      <div className="flex items-center justify-center gap-2">
-                        <FileText className="w-4 h-4 text-purple-500" />
-                        <span>MLSC</span>
-                      </div>
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-purple-600 dark:text-purple-300 border-b-2 border-gray-300 dark:border-gray-600">
+                      MLSC
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      <div className="flex items-center justify-center gap-2">
-                        <Shield className="w-4 h-4 text-blue-500" />
-                        <span>CSCA (SS)</span>
-                      </div>
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-blue-600 dark:text-blue-300 border-b-2 border-gray-300 dark:border-gray-600">
+                      CSCA(SS)
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      <div className="flex items-center justify-center gap-2">
-                        <Link className="w-4 h-4 text-cyan-500" />
-                        <span>CSCA (LC)</span>
-                      </div>
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-cyan-600 dark:text-cyan-300 border-b-2 border-gray-300 dark:border-gray-600">
+                      CSCA(LC)
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      <div className="flex items-center justify-center gap-2">
-                        <Key className="w-4 h-4 text-green-500" />
-                        <span>DSC</span>
-                      </div>
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-green-600 dark:text-green-300 border-b-2 border-gray-300 dark:border-gray-600">
+                      DSC
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      <div className="flex items-center justify-center gap-2">
-                        <FileX className="w-4 h-4 text-amber-500" />
-                        <span>DSC_NC</span>
-                      </div>
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-amber-600 dark:text-amber-300 border-b-2 border-gray-300 dark:border-gray-600">
+                      DSC_NC
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      <div className="flex items-center justify-center gap-2">
-                        <FileText className="w-4 h-4 text-red-500" />
-                        <span>CRL</span>
-                      </div>
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-red-600 dark:text-red-300 border-b-2 border-gray-300 dark:border-gray-600">
+                      CRL
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-4 py-3 text-center text-sm font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
                       총계
                     </th>
                   </tr>
@@ -197,15 +179,15 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                       key={row.countryCode}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
+                      <td className="px-1.5 py-1.5 text-gray-400">
                         {index + 1}
                       </td>
-                      <td className="px-4 py-3 text-sm font-semibold text-gray-900 dark:text-white">
-                        <div className="flex items-center gap-2">
+                      <td className="px-1.5 py-1.5 font-medium text-gray-900 dark:text-white">
+                        <div className="flex items-center gap-1">
                           <img
                             src={`/svg/${row.countryCode.toLowerCase()}.svg`}
                             alt={row.countryCode}
-                            className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
+                            className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
                             onError={(e) => {
                               (e.target as HTMLImageElement).style.display = 'none';
                             }}
@@ -213,61 +195,49 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                           {row.countryCode}
                         </div>
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                         {row.mlsc > 0 ? (
-                          <span className="inline-block px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 rounded font-medium">
-                            {row.mlsc.toLocaleString()}
-                          </span>
+                          <span className="text-purple-600 dark:text-purple-300 font-medium">{row.mlsc.toLocaleString()}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                         {row.cscaSelfSigned > 0 ? (
-                          <span className="inline-block px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded font-medium">
-                            {row.cscaSelfSigned.toLocaleString()}
-                          </span>
+                          <span className="text-blue-600 dark:text-blue-300 font-medium">{row.cscaSelfSigned.toLocaleString()}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                         {row.cscaLinkCert > 0 ? (
-                          <span className="inline-block px-2 py-1 bg-cyan-100 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 rounded font-medium">
-                            {row.cscaLinkCert.toLocaleString()}
-                          </span>
+                          <span className="text-cyan-600 dark:text-cyan-300 font-medium">{row.cscaLinkCert.toLocaleString()}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                         {row.dsc > 0 ? (
-                          <span className="inline-block px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded font-medium">
-                            {row.dsc.toLocaleString()}
-                          </span>
+                          <span className="text-green-600 dark:text-green-300 font-medium">{row.dsc.toLocaleString()}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                         {row.dscNc > 0 ? (
-                          <span className="inline-block px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 rounded font-medium">
-                            {row.dscNc.toLocaleString()}
-                          </span>
+                          <span className="text-amber-600 dark:text-amber-300 font-medium">{row.dscNc.toLocaleString()}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center text-gray-700 dark:text-gray-300">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums text-gray-700 dark:text-gray-300">
                         {row.crl > 0 ? (
-                          <span className="inline-block px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded font-medium">
-                            {row.crl.toLocaleString()}
-                          </span>
+                          <span className="text-red-600 dark:text-red-300 font-medium">{row.crl.toLocaleString()}</span>
                         ) : (
-                          <span className="text-gray-400">-</span>
+                          <span className="text-gray-300 dark:text-gray-600">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-sm text-center font-bold text-gray-900 dark:text-white">
+                      <td className="px-1.5 py-1.5 text-right tabular-nums font-bold text-gray-900 dark:text-white">
                         {row.totalCerts.toLocaleString()}
                       </td>
                     </tr>
@@ -275,28 +245,28 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                 </tbody>
                 <tfoot>
                   <tr className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-gray-700 dark:to-gray-800 border-t-2 border-gray-300 dark:border-gray-600">
-                    <td className="px-4 py-3 text-sm font-bold text-gray-900 dark:text-white" colSpan={2}>
+                    <td className="px-1.5 py-2 font-bold text-gray-900 dark:text-white" colSpan={2}>
                       총계
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-purple-700 dark:text-purple-300">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-purple-600 dark:text-purple-300">
                       {totals.mlsc.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-blue-700 dark:text-blue-300">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-blue-600 dark:text-blue-300">
                       {totals.cscaSelfSigned.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-cyan-700 dark:text-cyan-300">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-cyan-600 dark:text-cyan-300">
                       {totals.cscaLinkCert.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-green-700 dark:text-green-300">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-green-600 dark:text-green-300">
                       {totals.dsc.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-amber-700 dark:text-amber-300">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-amber-600 dark:text-amber-300">
                       {totals.dscNc.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-red-700 dark:text-red-300">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-red-600 dark:text-red-300">
                       {totals.crl.toLocaleString()}
                     </td>
-                    <td className="px-4 py-3 text-sm text-center font-bold text-gray-900 dark:text-white text-lg">
+                    <td className="px-1.5 py-2 text-right tabular-nums font-bold text-gray-900 dark:text-white text-sm">
                       {totals.totalCerts.toLocaleString()}
                     </td>
                   </tr>
