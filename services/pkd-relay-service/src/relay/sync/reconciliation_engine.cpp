@@ -5,47 +5,89 @@
 namespace icao {
 namespace relay {
 
-// v2.4.3: Constructor now accepts LDAP connection pool
+// Helper: Oracle returns all values as strings, so .asInt() fails.
+static int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0) {
+    if (!json.isMember(field) || json[field].isNull()) return defaultValue;
+    const auto& v = json[field];
+    if (v.isInt()) return v.asInt();
+    if (v.isUInt()) return static_cast<int>(v.asUInt());
+    if (v.isString()) {
+        try { return std::stoi(v.asString()); }
+        catch (...) { return defaultValue; }
+    }
+    if (v.isDouble()) return static_cast<int>(v.asDouble());
+    return defaultValue;
+}
+
+// Phase 6.4: Constructor now accepts IQueryExecutor* for database-agnostic operation
 ReconciliationEngine::ReconciliationEngine(
     const Config& config,
-    common::LdapConnectionPool* ldapPool)
+    common::LdapConnectionPool* ldapPool,
+    common::IQueryExecutor* queryExecutor)
     : config_(config),
       ldapPool_(ldapPool),
+      queryExecutor_(queryExecutor),
       ldapOps_(std::make_unique<LdapOperations>(config)) {
 
     if (!ldapPool_) {
         throw std::runtime_error("ReconciliationEngine: ldapPool cannot be null");
     }
+    if (!queryExecutor_) {
+        throw std::runtime_error("ReconciliationEngine: queryExecutor cannot be null");
+    }
+    dbType_ = queryExecutor_->getDatabaseType();
+}
+
+// Helper: Get database-specific boolean literal for SQL WHERE clauses
+std::string ReconciliationEngine::boolLiteral(bool value) const {
+    if (dbType_ == "oracle") {
+        return value ? "1" : "0";
+    }
+    return value ? "TRUE" : "FALSE";
+}
+
+// Helper: Parse hex-encoded binary data (\x414243... format)
+// Both PostgreSQL bytea and Oracle BLOB (via OracleQueryExecutor) use this format
+std::vector<unsigned char> ReconciliationEngine::parseHexBinary(const std::string& hexStr) {
+    std::vector<unsigned char> result;
+
+    if (hexStr.size() > 2 && hexStr[0] == '\\' && hexStr[1] == 'x') {
+        // Parse hex format: \x414243...
+        for (size_t j = 2; j < hexStr.size(); j += 2) {
+            if (j + 1 < hexStr.size()) {
+                unsigned char byte = (unsigned char)std::stoi(
+                    hexStr.substr(j, 2), nullptr, 16);
+                result.push_back(byte);
+            }
+        }
+    }
+
+    return result;
 }
 
 std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
-    PGconn* pgConn,
     const std::string& certType,
     int limit) const {
 
     std::vector<CertificateInfo> result;
 
-    // v2.0.3: Use fingerprint-based DN (compatible with PKD Management)
-    // Query includes fingerprint_sha256 for proper DN construction
-    // v2.2.2 FIX: Filter by stored_in_ldap = FALSE to only retrieve certs that need adding
-    // This ensures we get the actual missing certificates regardless of ID order
-    const char* query = R"(
-        SELECT id, certificate_type, country_code, subject_dn, issuer_dn,
-               fingerprint_sha256, certificate_data
-        FROM certificate
-        WHERE certificate_type = $1 AND stored_in_ldap = FALSE
-        ORDER BY id
-        LIMIT $2
-    )";
+    try {
+        // Phase 6.4: Use database-specific boolean literal for stored_in_ldap filter
+        std::string query =
+            "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
+            "fingerprint_sha256, certificate_data "
+            "FROM certificate "
+            "WHERE certificate_type = $1 AND stored_in_ldap = " + boolLiteral(false) + " "
+            "ORDER BY id "
+            "LIMIT $2";
 
-    std::string limitStr = std::to_string(limit);
-    const char* paramValues[] = {certType.c_str(), limitStr.c_str()};
+        std::vector<std::string> params = {certType, std::to_string(limit)};
+        Json::Value rows = queryExecutor_->executeQuery(query, params);
 
-    PGresult* res = PQexecParams(pgConn, query, 2, nullptr, paramValues,
-                                nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
+        if (rows.empty()) {
+            spdlog::info("Found 0 {} certificates missing in LDAP", certType);
+            return result;
+        }
 
         // Connect to LDAP for existence checks
         LDAP* ldRead = nullptr;
@@ -54,7 +96,6 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
 
         if (rc != LDAP_SUCCESS) {
             spdlog::error("Failed to initialize LDAP for existence check: {}", ldap_err2string(rc));
-            PQclear(res);
             return result;
         }
 
@@ -72,28 +113,25 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
         if (rc != LDAP_SUCCESS) {
             spdlog::error("Failed to bind LDAP for existence check: {}", ldap_err2string(rc));
             ldap_unbind_ext_s(ldRead, nullptr, nullptr);
-            PQclear(res);
             return result;
         }
 
-        for (int i = 0; i < rows; i++) {
+        for (const auto& row : rows) {
             CertificateInfo cert;
-            cert.id = PQgetvalue(res, i, 0);
-            cert.certType = PQgetvalue(res, i, 1);
-            cert.countryCode = PQgetvalue(res, i, 2);
-            cert.subject = PQgetvalue(res, i, 3);
-            cert.issuer = PQgetvalue(res, i, 4);
-            cert.fingerprint = PQgetvalue(res, i, 5);  // v2.0.3: Get fingerprint
+            cert.id = row["id"].asString();
+            cert.certType = row["certificate_type"].asString();
+            cert.countryCode = row["country_code"].asString();
+            cert.subject = row["subject_dn"].asString();
+            cert.issuer = row["issuer_dn"].asString();
+            cert.fingerprint = row["fingerprint_sha256"].asString();
 
             // v2.2.2 FIX: Detect link certificates (subject != issuer)
-            // Link certs have certificate_type='CSCA' in DB but should be stored as o=lc in LDAP
             if (cert.certType == "CSCA" && cert.subject != cert.issuer) {
-                cert.certType = "LC";  // Update certType to Link Certificate
+                cert.certType = "LC";
                 spdlog::debug("Detected link certificate: {} (subject != issuer)", cert.id);
             }
 
-            // v2.0.3: Build DN with fingerprint (compatible with PKD Management)
-            // v2.2.2: cert.certType is now "LC" for link certificates
+            // Build DN with fingerprint
             cert.ldapDn = ldapOps_->buildDn(cert.certType, cert.countryCode, cert.fingerprint);
 
             // Check if entry exists in LDAP
@@ -106,20 +144,10 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
                                   nullptr, nullptr, &timeout, 0, &searchRes);
 
             if (rc == LDAP_NO_SUCH_OBJECT) {
-                // Entry does not exist in LDAP - this is a missing certificate
-                // Get binary certificate data (column 6, not 5 - fingerprint is 5)
-                const char* certHex = PQgetvalue(res, i, 6);
-                size_t certLen = PQgetlength(res, i, 6);
-                if (certLen > 2 && certHex[0] == '\\' && certHex[1] == 'x') {
-                    // Parse hex format: \x414243...
-                    for (size_t j = 2; j < certLen; j += 2) {
-                        if (j + 1 < certLen) {
-                            unsigned char byte = (unsigned char)std::stoi(
-                                std::string(certHex + j, 2), nullptr, 16);
-                            cert.certData.push_back(byte);
-                        }
-                    }
-                }
+                // Entry does not exist in LDAP - parse binary certificate data
+                std::string certHex = row["certificate_data"].asString();
+                cert.certData = parseHexBinary(certHex);
+
                 result.push_back(cert);
 
                 if (result.size() >= static_cast<size_t>(limit)) {
@@ -127,7 +155,6 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
                     break;
                 }
             } else if (rc == LDAP_SUCCESS) {
-                // Entry exists - skip
                 spdlog::debug("Certificate {} already exists in LDAP: {}",
                             cert.id, cert.ldapDn);
             } else {
@@ -138,45 +165,44 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
         }
 
         ldap_unbind_ext_s(ldRead, nullptr, nullptr);
+
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to find missing {} in LDAP: {}", certType, e.what());
     }
 
-    PQclear(res);
     spdlog::info("Found {} {} certificates missing in LDAP (verified against actual LDAP state)",
                 result.size(), certType);
     return result;
 }
 
-void ReconciliationEngine::markAsStoredInLdap(PGconn* pgConn, const std::string& certId) const {
-    const char* query = "UPDATE certificate SET stored_in_ldap = TRUE WHERE id = $1";
-    const char* paramValues[] = {certId.c_str()};
-
-    PGresult* res = PQexecParams(pgConn, query, 1, nullptr, paramValues,
-                                nullptr, nullptr, 0);
-    PQclear(res);
+void ReconciliationEngine::markAsStoredInLdap(const std::string& certId) const {
+    try {
+        std::string query = "UPDATE certificate SET stored_in_ldap = " + boolLiteral(true) + " WHERE id = $1";
+        queryExecutor_->executeCommand(query, {certId});
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to mark certificate {} as stored in LDAP: {}", certId, e.what());
+    }
 }
 
-// v2.0.5: Mark CRL as stored in LDAP
-void ReconciliationEngine::markCrlAsStoredInLdap(PGconn* pgConn, const std::string& crlId) const {
-    const char* query = "UPDATE crl SET stored_in_ldap = TRUE WHERE id = $1";
-    const char* paramValues[] = {crlId.c_str()};
-
-    PGresult* res = PQexecParams(pgConn, query, 1, nullptr, paramValues,
-                                nullptr, nullptr, 0);
-    PQclear(res);
+void ReconciliationEngine::markCrlAsStoredInLdap(const std::string& crlId) const {
+    try {
+        std::string query = "UPDATE crl SET stored_in_ldap = " + boolLiteral(true) + " WHERE id = $1";
+        queryExecutor_->executeCommand(query, {crlId});
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to mark CRL {} as stored in LDAP: {}", crlId, e.what());
+    }
 }
 
 void ReconciliationEngine::processCertificateType(
-    PGconn* pgConn,
     LDAP* ld,
     const std::string& certType,
     bool dryRun,
     ReconciliationResult& result,
-    int reconciliationId) const {
+    const std::string& reconciliationId) const {
 
     spdlog::info("Processing {} certificates...", certType);
 
-    // Find certificates missing in LDAP (v2.0.2: verifies actual LDAP existence)
-    auto missingCerts = findMissingInLdap(pgConn, certType, config_.maxReconcileBatchSize);
+    auto missingCerts = findMissingInLdap(certType, config_.maxReconcileBatchSize);
 
     for (const auto& cert : missingCerts) {
         result.totalProcessed++;
@@ -192,7 +218,7 @@ void ReconciliationEngine::processCertificateType(
         } else {
             success = ldapOps_->addCertificate(ld, cert, errorMsg);
             if (success) {
-                markAsStoredInLdap(pgConn, cert.id);
+                markAsStoredInLdap(cert.id);
             }
         }
 
@@ -200,10 +226,9 @@ void ReconciliationEngine::processCertificateType(
         int opDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             opEndTime - opStartTime).count();
 
-        // Log operation to reconciliation_log table
-        if (reconciliationId > 0) {
+        if (!reconciliationId.empty()) {
             logReconciliationOperation(
-                pgConn, reconciliationId, "ADD", certType, cert,
+                reconciliationId, "ADD", certType, cert,
                 success ? "SUCCESS" : "FAILED", errorMsg, opDurationMs);
         }
 
@@ -231,7 +256,6 @@ void ReconciliationEngine::processCertificateType(
 }
 
 ReconciliationResult ReconciliationEngine::performReconciliation(
-    PGconn* pgConn,
     bool dryRun,
     const std::string& triggeredBy,
     int syncStatusId) {
@@ -244,8 +268,8 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
                 dryRun, triggeredBy, syncStatusId);
 
     // Create reconciliation summary record
-    int reconciliationId = createReconciliationSummary(pgConn, triggeredBy, dryRun, syncStatusId);
-    if (reconciliationId == 0) {
+    std::string reconciliationId = createReconciliationSummary(triggeredBy, dryRun, syncStatusId);
+    if (reconciliationId.empty()) {
         result.success = false;
         result.status = "FAILED";
         result.errorMessage = "Failed to create reconciliation_summary record";
@@ -266,18 +290,15 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
     spdlog::info("Acquired LDAP connection from pool for reconciliation");
 
     // Process each certificate type in order: CSCA, DSC
-    // Note: DSC_NC excluded - ICAO deprecated nc-data branch in 2021 (legacy data only)
-    // See: ICAO PKD FAQ - "this data is no longer supported by the ICAO as an individual dataset"
+    // Note: DSC_NC excluded - ICAO deprecated nc-data branch in 2021
     std::vector<std::string> certTypes = {"CSCA", "DSC"};
 
     for (const auto& certType : certTypes) {
-        processCertificateType(pgConn, ld, certType, dryRun, result, reconciliationId);
+        processCertificateType(ld, certType, dryRun, result, reconciliationId);
     }
 
     // v2.0.5: Process CRLs
-    processCrls(pgConn, ld, dryRun, result, reconciliationId);
-
-    // v2.4.3: Connection automatically released when 'conn' goes out of scope (RAII)
+    processCrls(ld, dryRun, result, reconciliationId);
 
     // Calculate duration
     auto endTime = std::chrono::steady_clock::now();
@@ -290,8 +311,8 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
     }
 
     // Update reconciliation summary with final results
-    if (reconciliationId > 0) {
-        updateReconciliationSummary(pgConn, reconciliationId, result);
+    if (!reconciliationId.empty()) {
+        updateReconciliationSummary(reconciliationId, result);
     }
 
     spdlog::info("Reconciliation completed: {} processed, {} succeeded, {} failed ({}ms)",
@@ -301,112 +322,107 @@ ReconciliationResult ReconciliationEngine::performReconciliation(
     return result;
 }
 
-int ReconciliationEngine::createReconciliationSummary(
-    PGconn* pgConn,
+std::string ReconciliationEngine::createReconciliationSummary(
     const std::string& triggeredBy,
     bool dryRun,
     int syncStatusId) const {
 
-    const char* query =
-        "INSERT INTO reconciliation_summary "
-        "(triggered_by, dry_run, sync_status_id, status) "
-        "VALUES ($1, $2, $3, 'IN_PROGRESS') "
-        "RETURNING id";
+    try {
+        // Phase 6.4: Generate ID using database-specific sequence (same pattern as ReconciliationRepository)
+        std::string idQuery;
+        if (dbType_ == "postgres") {
+            idQuery = "SELECT nextval('reconciliation_summary_id_seq') as id";
+        } else {
+            idQuery = "SELECT SEQ_RECON_SUMMARY.NEXTVAL as id FROM DUAL";
+        }
 
-    const char* paramValues[3];
-    paramValues[0] = triggeredBy.c_str();
-    std::string dryRunStr = dryRun ? "true" : "false";
-    paramValues[1] = dryRunStr.c_str();
-    std::string syncStatusIdStr = std::to_string(syncStatusId);
-    paramValues[2] = (syncStatusId > 0) ? syncStatusIdStr.c_str() : nullptr;
+        Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
+        if (idResult.empty()) {
+            spdlog::error("Failed to generate reconciliation_summary ID");
+            return "";
+        }
+        std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
 
-    PGresult* res = PQexecParams(pgConn, query, 3, nullptr,
-                                paramValues, nullptr, nullptr, 0);
+        // Insert with generated ID (no RETURNING clause - works with both PostgreSQL and Oracle)
+        std::string query =
+            "INSERT INTO reconciliation_summary "
+            "(id, triggered_by, dry_run, sync_status_id, status) "
+            "VALUES ($1, $2, $3, $4, 'IN_PROGRESS')";
 
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("Failed to create reconciliation_summary: {}",
-                     PQerrorMessage(pgConn));
-        PQclear(res);
-        return 0;
+        // Oracle NUMBER(1) needs "1"/"0", PostgreSQL BOOLEAN needs "TRUE"/"FALSE"
+        std::string dryRunStr = boolLiteral(dryRun);
+        std::string syncStatusIdStr = (syncStatusId > 0) ? std::to_string(syncStatusId) : "";
+
+        std::vector<std::string> params = {
+            generatedId,
+            triggeredBy,
+            dryRunStr,
+            syncStatusIdStr
+        };
+
+        queryExecutor_->executeCommand(query, params);
+
+        spdlog::debug("Created reconciliation_summary id={}", generatedId);
+        return generatedId;
+
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to create reconciliation_summary: {}", e.what());
+        return "";
     }
-
-    int reconciliationId = std::atoi(PQgetvalue(res, 0, 0));
-    PQclear(res);
-
-    spdlog::debug("Created reconciliation_summary id={}", reconciliationId);
-    return reconciliationId;
 }
 
 void ReconciliationEngine::updateReconciliationSummary(
-    PGconn* pgConn,
-    int reconciliationId,
+    const std::string& reconciliationId,
     const ReconciliationResult& result) const {
 
-    const char* query =
-        "UPDATE reconciliation_summary SET "
-        "completed_at = CURRENT_TIMESTAMP, "
-        "status = $1, "
-        "total_processed = $2, "
-        "success_count = $3, "
-        "failed_count = $4, "
-        "csca_added = $5, "
-        "csca_deleted = $6, "
-        "dsc_added = $7, "
-        "dsc_deleted = $8, "
-        "dsc_nc_added = $9, "
-        "dsc_nc_deleted = $10, "
-        "crl_added = $11, "
-        "crl_deleted = $12, "
-        "duration_ms = $13, "
-        "error_message = $14 "
-        "WHERE id = $15";
+    try {
+        std::string query =
+            "UPDATE reconciliation_summary SET "
+            "completed_at = CURRENT_TIMESTAMP, "
+            "status = $1, "
+            "total_processed = $2, "
+            "success_count = $3, "
+            "failed_count = $4, "
+            "csca_added = $5, "
+            "csca_deleted = $6, "
+            "dsc_added = $7, "
+            "dsc_deleted = $8, "
+            "dsc_nc_added = $9, "
+            "dsc_nc_deleted = $10, "
+            "crl_added = $11, "
+            "crl_deleted = $12, "
+            "duration_ms = $13, "
+            "error_message = $14 "
+            "WHERE id = $15";
 
-    const char* paramValues[15];
-    paramValues[0] = result.status.c_str();
-    std::string totalProcessed = std::to_string(result.totalProcessed);
-    paramValues[1] = totalProcessed.c_str();
-    std::string successCount = std::to_string(result.successCount);
-    paramValues[2] = successCount.c_str();
-    std::string failedCount = std::to_string(result.failedCount);
-    paramValues[3] = failedCount.c_str();
-    std::string cscaAdded = std::to_string(result.cscaAdded);
-    paramValues[4] = cscaAdded.c_str();
-    std::string cscaDeleted = std::to_string(result.cscaDeleted);
-    paramValues[5] = cscaDeleted.c_str();
-    std::string dscAdded = std::to_string(result.dscAdded);
-    paramValues[6] = dscAdded.c_str();
-    std::string dscDeleted = std::to_string(result.dscDeleted);
-    paramValues[7] = dscDeleted.c_str();
-    std::string dscNcAdded = std::to_string(result.dscNcAdded);
-    paramValues[8] = dscNcAdded.c_str();
-    std::string dscNcDeleted = std::to_string(result.dscNcDeleted);
-    paramValues[9] = dscNcDeleted.c_str();
-    std::string crlAdded = std::to_string(result.crlAdded);
-    paramValues[10] = crlAdded.c_str();
-    std::string crlDeleted = std::to_string(result.crlDeleted);
-    paramValues[11] = crlDeleted.c_str();
-    std::string durationMs = std::to_string(result.durationMs);
-    paramValues[12] = durationMs.c_str();
-    paramValues[13] = result.errorMessage.empty() ? nullptr : result.errorMessage.c_str();
-    std::string idStr = std::to_string(reconciliationId);
-    paramValues[14] = idStr.c_str();
+        std::vector<std::string> params = {
+            result.status,
+            std::to_string(result.totalProcessed),
+            std::to_string(result.successCount),
+            std::to_string(result.failedCount),
+            std::to_string(result.cscaAdded),
+            std::to_string(result.cscaDeleted),
+            std::to_string(result.dscAdded),
+            std::to_string(result.dscDeleted),
+            std::to_string(result.dscNcAdded),
+            std::to_string(result.dscNcDeleted),
+            std::to_string(result.crlAdded),
+            std::to_string(result.crlDeleted),
+            std::to_string(result.durationMs),
+            result.errorMessage,
+            reconciliationId
+        };
 
-    PGresult* res = PQexecParams(pgConn, query, 15, nullptr,
-                                paramValues, nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to update reconciliation_summary: {}",
-                     PQerrorMessage(pgConn));
-    } else {
+        queryExecutor_->executeCommand(query, params);
         spdlog::debug("Updated reconciliation_summary id={}", reconciliationId);
-    }
 
-    PQclear(res);
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to update reconciliation_summary: {}", e.what());
+    }
 }
 
 void ReconciliationEngine::logReconciliationOperation(
-    PGconn* pgConn,
-    int reconciliationId,
+    const std::string& reconciliationId,
     const std::string& operation,
     const std::string& certType,
     const CertificateInfo& cert,
@@ -414,63 +430,57 @@ void ReconciliationEngine::logReconciliationOperation(
     const std::string& errorMsg,
     int durationMs) const {
 
-    // v2.0.5: Use cert_fingerprint instead of cert_id (UUID type incompatibility fix)
-    const char* query =
-        "INSERT INTO reconciliation_log "
-        "(reconciliation_id, operation, cert_type, cert_fingerprint, "
-        "country_code, subject, issuer, ldap_dn, status, error_message, duration_ms) "
-        "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
+    try {
+        // v2.0.5: Use cert_fingerprint instead of cert_id (UUID type incompatibility fix)
+        std::string query =
+            "INSERT INTO reconciliation_log "
+            "(reconciliation_id, operation, cert_type, cert_fingerprint, "
+            "country_code, subject, issuer, ldap_dn, status, error_message, duration_ms) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
 
-    const char* paramValues[11];
-    std::string reconIdStr = std::to_string(reconciliationId);
-    paramValues[0] = reconIdStr.c_str();
-    paramValues[1] = operation.c_str();
-    paramValues[2] = certType.c_str();
-    paramValues[3] = cert.fingerprint.c_str();  // v2.0.5: Use fingerprint instead of UUID
-    paramValues[4] = cert.countryCode.c_str();
-    paramValues[5] = cert.subject.c_str();
-    paramValues[6] = cert.issuer.c_str();
-    paramValues[7] = cert.ldapDn.c_str();
-    paramValues[8] = status.c_str();
-    paramValues[9] = errorMsg.empty() ? nullptr : errorMsg.c_str();
-    std::string durationStr = std::to_string(durationMs);
-    paramValues[10] = durationStr.c_str();
+        std::vector<std::string> params = {
+            reconciliationId,
+            operation,
+            certType,
+            cert.fingerprint,
+            cert.countryCode,
+            cert.subject,
+            cert.issuer,
+            cert.ldapDn,
+            status,
+            errorMsg,
+            std::to_string(durationMs)
+        };
 
-    PGresult* res = PQexecParams(pgConn, query, 11, nullptr,
-                                paramValues, nullptr, nullptr, 0);
+        queryExecutor_->executeCommand(query, params);
 
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::warn("Failed to log reconciliation operation: {}",
-                    PQerrorMessage(pgConn));
+    } catch (const std::exception& e) {
+        spdlog::warn("Failed to log reconciliation operation: {}", e.what());
     }
-
-    PQclear(res);
 }
 
 // v2.0.5: Find CRLs missing in LDAP
 std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
-    PGconn* pgConn,
     int limit) const {
 
     std::vector<CrlInfo> result;
 
-    // Query CRLs from crl table where stored_in_ldap is FALSE
-    const char* query = R"(
-        SELECT id, country_code, issuer_dn, fingerprint_sha256, crl_binary
-        FROM crl
-        WHERE stored_in_ldap = FALSE
-        ORDER BY id
-        LIMIT $1
-    )";
+    try {
+        // Phase 6.4: Use database-specific boolean literal
+        std::string query =
+            "SELECT id, country_code, issuer_dn, fingerprint_sha256, crl_binary "
+            "FROM crl "
+            "WHERE stored_in_ldap = " + boolLiteral(false) + " "
+            "ORDER BY id "
+            "LIMIT $1";
 
-    std::string limitStr = std::to_string(limit);
-    const char* paramValues[] = {limitStr.c_str()};
+        std::vector<std::string> params = {std::to_string(limit)};
+        Json::Value rows = queryExecutor_->executeQuery(query, params);
 
-    PGresult* res = PQexecParams(pgConn, query, 1, nullptr, paramValues,
-                                nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
+        if (rows.empty()) {
+            spdlog::info("Found 0 CRLs missing in LDAP");
+            return result;
+        }
 
         // Connect to LDAP for existence checks
         LDAP* ldRead = nullptr;
@@ -479,7 +489,6 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
 
         if (rc != LDAP_SUCCESS) {
             spdlog::error("Failed to initialize LDAP for CRL existence check: {}", ldap_err2string(rc));
-            PQclear(res);
             return result;
         }
 
@@ -497,34 +506,19 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
         if (rc != LDAP_SUCCESS) {
             spdlog::error("Failed to bind to LDAP for CRL existence check: {}", ldap_err2string(rc));
             ldap_unbind_ext_s(ldRead, nullptr, nullptr);
-            PQclear(res);
             return result;
         }
 
-        for (int i = 0; i < rows; ++i) {
+        for (const auto& row : rows) {
             CrlInfo crl;
-            crl.id = PQgetvalue(res, i, 0);
-            crl.countryCode = PQgetvalue(res, i, 1);
-            crl.issuerDn = PQgetvalue(res, i, 2);
-            crl.fingerprint = PQgetvalue(res, i, 3);
+            crl.id = row["id"].asString();
+            crl.countryCode = row["country_code"].asString();
+            crl.issuerDn = row["issuer_dn"].asString();
+            crl.fingerprint = row["fingerprint_sha256"].asString();
 
-            // Get binary CRL data
-            const unsigned char* crlBinary = reinterpret_cast<const unsigned char*>(
-                PQgetvalue(res, i, 4));
-            size_t crlLen = PQgetlength(res, i, 4);
-
-            if (crlLen > 0 && strncmp(reinterpret_cast<const char*>(crlBinary), "\\x", 2) == 0) {
-                // PostgreSQL bytea hex format: \x1234...
-                size_t byteLen = (crlLen - 2) / 2;
-                crl.crlData.resize(byteLen);
-                for (size_t j = 0; j < byteLen; ++j) {
-                    char hex[3] = {static_cast<char>(crlBinary[2 + j*2]),
-                                  static_cast<char>(crlBinary[3 + j*2]), '\0'};
-                    crl.crlData[j] = static_cast<unsigned char>(strtol(hex, nullptr, 16));
-                }
-            } else {
-                crl.crlData.assign(crlBinary, crlBinary + crlLen);
-            }
+            // Parse binary CRL data from hex string
+            std::string crlHex = row["crl_binary"].asString();
+            crl.crlData = parseHexBinary(crlHex);
 
             // Build DN for LDAP existence check
             crl.ldapDn = ldapOps_->buildCrlDn(crl.countryCode, crl.fingerprint);
@@ -539,7 +533,6 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
                                   nullptr, nullptr, &timeout, 0, &searchRes);
 
             if (rc == LDAP_NO_SUCH_OBJECT) {
-                // CRL does not exist in LDAP - add to missing list
                 result.push_back(crl);
 
                 if (result.size() >= static_cast<size_t>(limit)) {
@@ -547,7 +540,6 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
                     break;
                 }
             } else if (rc == LDAP_SUCCESS) {
-                // CRL exists - skip
                 spdlog::debug("CRL {} already exists in LDAP: {}",
                             crl.id, crl.ldapDn);
             } else {
@@ -558,9 +550,11 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
         }
 
         ldap_unbind_ext_s(ldRead, nullptr, nullptr);
+
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to find missing CRLs in LDAP: {}", e.what());
     }
 
-    PQclear(res);
     spdlog::info("Found {} CRLs missing in LDAP (verified against actual LDAP state)",
                 result.size());
     return result;
@@ -568,16 +562,14 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
 
 // v2.0.5: Process CRLs
 void ReconciliationEngine::processCrls(
-    PGconn* pgConn,
     LDAP* ld,
     bool dryRun,
     ReconciliationResult& result,
-    int reconciliationId) const {
+    const std::string& reconciliationId) const {
 
     spdlog::info("Processing CRLs...");
 
-    // Find CRLs missing in LDAP
-    auto missingCrls = findMissingCrlsInLdap(pgConn, config_.maxReconcileBatchSize);
+    auto missingCrls = findMissingCrlsInLdap(config_.maxReconcileBatchSize);
 
     for (const auto& crl : missingCrls) {
         result.totalProcessed++;
@@ -593,7 +585,7 @@ void ReconciliationEngine::processCrls(
         } else {
             success = ldapOps_->addCrl(ld, crl, errorMsg);
             if (success) {
-                markCrlAsStoredInLdap(pgConn, crl.id);
+                markCrlAsStoredInLdap(crl.id);
             }
         }
 
@@ -609,7 +601,7 @@ void ReconciliationEngine::processCrls(
         crlAsInfo.issuer = crl.issuerDn;
         crlAsInfo.fingerprint = crl.fingerprint;
         logReconciliationOperation(
-            pgConn, reconciliationId, "ADD", "CRL", crlAsInfo,
+            reconciliationId, "ADD", "CRL", crlAsInfo,
             success ? "SUCCESS" : "FAILED", errorMsg, opDurationMs);
 
         if (success) {

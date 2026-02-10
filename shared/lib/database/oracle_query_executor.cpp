@@ -113,11 +113,11 @@ Json::Value OracleQueryExecutor::executeQuery(
         std::regex nullif_integer(R"(NULLIF\(([^,]+),\s*''\s*\)::INTEGER)", std::regex::icase);
         oracleQuery = std::regex_replace(oracleQuery, nullif_integer, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
 
-        // Convert LIMIT/OFFSET syntax
-        std::regex limit_offset_regex(R"(\s+LIMIT\s+(\d+)\s+OFFSET\s+(\d+)\s*$)", std::regex::icase);
+        // Convert LIMIT/OFFSET syntax (handles both literal numbers and :N bind variables)
+        std::regex limit_offset_regex(R"(\s+LIMIT\s+(\d+|:\d+)\s+OFFSET\s+(\d+|:\d+)\s*$)", std::regex::icase);
         oracleQuery = std::regex_replace(oracleQuery, limit_offset_regex, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
 
-        std::regex limit_regex(R"(\s+LIMIT\s+(\d+)\s*$)", std::regex::icase);
+        std::regex limit_regex(R"(\s+LIMIT\s+(\d+|:\d+)\s*$)", std::regex::icase);
         oracleQuery = std::regex_replace(oracleQuery, limit_regex, " FETCH FIRST $1 ROWS ONLY");
 
         // Handle DML with RETURNING clause
@@ -253,10 +253,12 @@ Json::Value OracleQueryExecutor::executeQuery(
         // Build JSON result
         Json::Value result = Json::arrayValue;
 
-        // Define output buffers for each column
-        std::vector<char*> colBuffers(colCount);
+        // Define output buffers for each column (with BLOB/CLOB LOB locator support)
+        std::vector<char*> colBuffers(colCount, nullptr);
         std::vector<sb2> indicators(colCount);
         std::vector<std::string> colNames(colCount);
+        std::vector<ub2> colTypes(colCount, 0);
+        std::vector<OCILobLocator*> lobLocators(colCount, nullptr);
 
         for (ub4 i = 0; i < colCount; ++i) {
             OCIParam* col = nullptr;
@@ -273,13 +275,32 @@ Json::Value OracleQueryExecutor::executeQuery(
                           [](unsigned char c){ return std::tolower(c); });
             colNames[i] = columnName;
 
-            colBuffers[i] = new char[4001];
-            memset(colBuffers[i], 0, 4001);
+            // Detect column data type for BLOB/CLOB handling
+            ub2 dataType = 0;
+            OCIAttrGet(col, OCI_DTYPE_PARAM, &dataType, nullptr,
+                      OCI_ATTR_DATA_TYPE, session.err);
+            colTypes[i] = dataType;
 
             OCIDefine* def = nullptr;
-            OCIDefineByPos(stmt, &def, session.err, i + 1,
-                          colBuffers[i], 4000, SQLT_STR,
-                          &indicators[i], nullptr, nullptr, OCI_DEFAULT);
+
+            if (dataType == SQLT_BLOB || dataType == SQLT_CLOB) {
+                // BLOB/CLOB: use LOB locator for proper large data reading
+                OCIDescriptorAlloc(poolEnv_, reinterpret_cast<void**>(&lobLocators[i]),
+                                  OCI_DTYPE_LOB, 0, nullptr);
+                OCIDefineByPos(stmt, &def, session.err, i + 1,
+                              &lobLocators[i], sizeof(OCILobLocator*),
+                              dataType,
+                              &indicators[i], nullptr, nullptr, OCI_DEFAULT);
+                spdlog::debug("[OracleQueryExecutor] Column {} ({}) defined as LOB type {}",
+                             i + 1, columnName, dataType);
+            } else {
+                // Regular columns: use string buffer
+                colBuffers[i] = new char[4001];
+                memset(colBuffers[i], 0, 4001);
+                OCIDefineByPos(stmt, &def, session.err, i + 1,
+                              colBuffers[i], 4000, SQLT_STR,
+                              &indicators[i], nullptr, nullptr, OCI_DEFAULT);
+            }
         }
 
         // Fetch all rows
@@ -292,6 +313,45 @@ Json::Value OracleQueryExecutor::executeQuery(
             for (ub4 i = 0; i < colCount; ++i) {
                 if (indicators[i] == -1) {
                     row[colNames[i]] = Json::nullValue;
+                } else if (colTypes[i] == SQLT_BLOB) {
+                    // Read BLOB binary data via LOB locator, convert to PostgreSQL hex format
+                    ub4 lobLen = 0;
+                    OCILobGetLength(session.svcCtx, session.err, lobLocators[i], &lobLen);
+
+                    if (lobLen > 0) {
+                        std::vector<uint8_t> lobBuf(lobLen);
+                        ub4 amtp = lobLen;
+                        OCILobRead(session.svcCtx, session.err, lobLocators[i],
+                                  &amtp, 1, lobBuf.data(), lobLen,
+                                  nullptr, nullptr, 0, SQLCS_IMPLICIT);
+
+                        // Convert to PostgreSQL bytea hex format (\x...) for parseCertificateDataFromHex()
+                        std::string hexStr = "\\x";
+                        hexStr.reserve(2 + amtp * 2);
+                        static const char hexChars[] = "0123456789abcdef";
+                        for (ub4 j = 0; j < amtp; ++j) {
+                            hexStr += hexChars[lobBuf[j] >> 4];
+                            hexStr += hexChars[lobBuf[j] & 0x0f];
+                        }
+                        row[colNames[i]] = hexStr;
+                    } else {
+                        row[colNames[i]] = "";
+                    }
+                } else if (colTypes[i] == SQLT_CLOB) {
+                    // Read CLOB text data via LOB locator
+                    ub4 lobLen = 0;
+                    OCILobGetLength(session.svcCtx, session.err, lobLocators[i], &lobLen);
+
+                    if (lobLen > 0) {
+                        std::vector<char> lobBuf(lobLen + 1, 0);
+                        ub4 amtp = lobLen;
+                        OCILobRead(session.svcCtx, session.err, lobLocators[i],
+                                  &amtp, 1, lobBuf.data(), lobLen,
+                                  nullptr, nullptr, 0, SQLCS_IMPLICIT);
+                        row[colNames[i]] = std::string(lobBuf.data(), amtp);
+                    } else {
+                        row[colNames[i]] = "";
+                    }
                 } else {
                     row[colNames[i]] = Json::Value(colBuffers[i]);
                 }
@@ -299,8 +359,11 @@ Json::Value OracleQueryExecutor::executeQuery(
             result.append(row);
         }
 
-        // Cleanup buffers
-        for (char* buf : colBuffers) delete[] buf;
+        // Cleanup buffers and LOB locators
+        for (ub4 i = 0; i < colCount; ++i) {
+            if (colBuffers[i]) delete[] colBuffers[i];
+            if (lobLocators[i]) OCIDescriptorFree(lobLocators[i], OCI_DTYPE_LOB);
+        }
         for (char* buf : paramBuffers) delete[] buf;
         OCIHandleFree(stmt, OCI_HTYPE_STMT);
 
@@ -502,82 +565,28 @@ Json::Value OracleQueryExecutor::executeScalar(
     const std::vector<std::string>& params
 )
 {
-    spdlog::debug("[OracleQueryExecutor] Executing scalar query");
+    spdlog::debug("[OracleQueryExecutor] Executing scalar query via OCI session pool");
 
-    try {
-        auto conn = pool_->acquire();
-        if (!conn.isValid()) {
-            throw std::runtime_error("Failed to acquire Oracle connection from pool");
-        }
+    // Delegate to executeQuery() (OCI session pool) and extract first column of first row
+    // This avoids OTL issues (ORA-00923, premature execution, etc.)
+    Json::Value rows = executeQuery(query, params);
 
-        std::string oracleQuery = convertPlaceholders(query);
-
-        // Get OTL connection (cast from void*)
-        otl_connect* otl_conn = static_cast<otl_connect*>(conn.get());
-
-        otl_stream otlStream;
-        otlStream.open(50, oracleQuery.c_str(), *otl_conn);  // Buffer size increased
-
-        // Bind parameters
-        for (size_t i = 0; i < params.size(); ++i) {
-            otlStream << params[i];
-        }
-
-        // Check if we have any rows
-        if (otlStream.eof()) {
-            otlStream.close();
-            throw std::runtime_error("Scalar query returned no rows");
-        }
-
-        // Get column count
-        int colCount = 0;
-        otl_column_desc* desc = otlStream.describe_select(colCount);
-        if (colCount != 1) {
-            otlStream.close();
-            throw std::runtime_error("Scalar query must return exactly one column");
-        }
-
-        // Read single value based on Oracle data type
-        Json::Value result;
-        int dbtype = desc[0].dbtype;
-
-        // Oracle NUMBER types (including COUNT(*), SUM, etc.)
-        // OTL maps NUMBER to otl_var_int, otl_var_long, otl_var_double depending on precision
-        if (dbtype == otl_var_int || dbtype == otl_var_unsigned_int ||
-            dbtype == otl_var_long_int || dbtype == otl_var_bigint) {
-            long value;
-            otlStream >> value;
-            result = Json::Value(static_cast<int>(value));
-        }
-        else if (dbtype == otl_var_double || dbtype == otl_var_float) {
-            double value;
-            otlStream >> value;
-            result = Json::Value(value);
-        }
-        else if (dbtype == otl_var_timestamp) {
-            // Oracle TIMESTAMP columns - read as string (Oracle auto-converts)
-            std::string value;
-            otlStream >> value;
-            result = Json::Value(value);
-        }
-        else {
-            // VARCHAR2, CHAR, DATE, etc. - read as string
-            std::string value;
-            otlStream >> value;
-            result = Json::Value(value);
-        }
-
-        otlStream.close();
-        return result;
-
-    } catch (const otl_exception& e) {
-        std::string error = std::string(reinterpret_cast<const char*>(e.msg));
-        spdlog::error("[OracleQueryExecutor] OTL exception: {}", error);
-        throw std::runtime_error("Oracle scalar query failed: " + error);
+    if (rows.empty()) {
+        throw std::runtime_error("Scalar query returned no rows");
     }
 
-    // Should not reach here
-    return Json::nullValue;
+    const Json::Value& firstRow = rows[0];
+    if (firstRow.empty()) {
+        throw std::runtime_error("Scalar query returned empty row");
+    }
+
+    // Return the first column value
+    auto members = firstRow.getMemberNames();
+    if (members.empty()) {
+        throw std::runtime_error("Scalar query returned no columns");
+    }
+
+    return firstRow[members[0]];
 }
 
 // ============================================================================

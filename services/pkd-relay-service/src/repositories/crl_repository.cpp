@@ -22,6 +22,11 @@ int CrlRepository::countAll() {
         const char* query = "SELECT COUNT(*) FROM crl";
 
         Json::Value result = queryExecutor_->executeScalar(query);
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) {
+            try { return std::stoi(result.asString()); }
+            catch (...) { return 0; }
+        }
         return result.asInt();
 
     } catch (const std::exception& e) {

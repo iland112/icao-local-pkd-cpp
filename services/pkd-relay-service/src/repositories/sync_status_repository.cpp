@@ -6,6 +6,21 @@
 
 namespace icao::relay::repositories {
 
+// Helper: Oracle returns all values as strings, so .asInt() fails.
+// This handles int, uint, string, double types gracefully.
+static int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0) {
+    if (!json.isMember(field) || json[field].isNull()) return defaultValue;
+    const auto& v = json[field];
+    if (v.isInt()) return v.asInt();
+    if (v.isUInt()) return static_cast<int>(v.asUInt());
+    if (v.isString()) {
+        try { return std::stoi(v.asString()); }
+        catch (...) { return defaultValue; }
+    }
+    if (v.isDouble()) return static_cast<int>(v.asDouble());
+    return defaultValue;
+}
+
 SyncStatusRepository::SyncStatusRepository(common::IQueryExecutor* executor)
     : queryExecutor_(executor)
 {
@@ -44,7 +59,8 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
                 spdlog::error("[SyncStatusRepository] Failed to generate ID");
                 return false;
             }
-            generatedId = std::to_string(result[0]["ID"].asInt());  // Oracle: uppercase column name
+            // OracleQueryExecutor converts column names to lowercase
+            generatedId = std::to_string(getInt(result[0], "id", 0));
         }
 
         // Step 2: Insert with generated UUID and current timestamp (no RETURNING clause)
@@ -203,6 +219,11 @@ int SyncStatusRepository::count() {
         const char* query = "SELECT COUNT(*) FROM sync_status";
 
         Json::Value result = queryExecutor_->executeScalar(query);
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) {
+            try { return std::stoi(result.asString()); }
+            catch (...) { return 0; }
+        }
         return result.asInt();
 
     } catch (const std::exception& e) {
@@ -223,30 +244,30 @@ domain::SyncStatus SyncStatusRepository::jsonToSyncStatus(const Json::Value& row
         checkedAt = std::chrono::system_clock::from_time_t(std::mktime(&tm));
     }
 
-    // Parse integer counts (DB columns first, then LDAP)
-    int dbCscaCount = row["db_csca_count"].asInt();
-    int dbDscCount = row["db_dsc_count"].asInt();
-    int dbDscNcCount = row["db_dsc_nc_count"].asInt();
-    int dbCrlCount = row["db_crl_count"].asInt();
-    int dbStoredInLdapCount = row["db_stored_in_ldap_count"].asInt();
+    // Parse integer counts - use getInt() for Oracle string compatibility
+    int dbCscaCount = getInt(row, "db_csca_count");
+    int dbDscCount = getInt(row, "db_dsc_count");
+    int dbDscNcCount = getInt(row, "db_dsc_nc_count");
+    int dbCrlCount = getInt(row, "db_crl_count");
+    int dbStoredInLdapCount = getInt(row, "db_stored_in_ldap_count");
 
-    int ldapCscaCount = row["ldap_csca_count"].asInt();
-    int ldapDscCount = row["ldap_dsc_count"].asInt();
-    int ldapDscNcCount = row["ldap_dsc_nc_count"].asInt();
-    int ldapCrlCount = row["ldap_crl_count"].asInt();
-    int ldapTotalEntries = row["ldap_total_entries"].asInt();
+    int ldapCscaCount = getInt(row, "ldap_csca_count");
+    int ldapDscCount = getInt(row, "ldap_dsc_count");
+    int ldapDscNcCount = getInt(row, "ldap_dsc_nc_count");
+    int ldapCrlCount = getInt(row, "ldap_crl_count");
+    int ldapTotalEntries = getInt(row, "ldap_total_entries");
 
     // Parse discrepancies
-    int cscaDiscrepancy = row["csca_discrepancy"].asInt();
-    int dscDiscrepancy = row["dsc_discrepancy"].asInt();
-    int dscNcDiscrepancy = row["dsc_nc_discrepancy"].asInt();
-    int crlDiscrepancy = row["crl_discrepancy"].asInt();
-    int totalDiscrepancy = row["total_discrepancy"].asInt();
+    int cscaDiscrepancy = getInt(row, "csca_discrepancy");
+    int dscDiscrepancy = getInt(row, "dsc_discrepancy");
+    int dscNcDiscrepancy = getInt(row, "dsc_nc_discrepancy");
+    int crlDiscrepancy = getInt(row, "crl_discrepancy");
+    int totalDiscrepancy = getInt(row, "total_discrepancy");
 
     // Parse MLSC counts
-    int dbMlscCount = row["db_mlsc_count"].asInt();
-    int ldapMlscCount = row["ldap_mlsc_count"].asInt();
-    int mlscDiscrepancy = row["mlsc_discrepancy"].asInt();
+    int dbMlscCount = getInt(row, "db_mlsc_count");
+    int ldapMlscCount = getInt(row, "ldap_mlsc_count");
+    int mlscDiscrepancy = getInt(row, "mlsc_discrepancy");
 
     // Parse JSONB fields (already parsed by Query Executor)
     std::optional<Json::Value> dbCountryStats;
@@ -269,7 +290,7 @@ domain::SyncStatus SyncStatusRepository::jsonToSyncStatus(const Json::Value& row
     }
 
     // Parse check_duration_ms
-    int checkDurationMs = row["check_duration_ms"].asInt();
+    int checkDurationMs = getInt(row, "check_duration_ms");
 
     // Construct and return domain object with correct parameter order
     return domain::SyncStatus(

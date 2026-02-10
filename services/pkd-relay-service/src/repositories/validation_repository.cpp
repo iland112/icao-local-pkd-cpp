@@ -101,7 +101,10 @@ int ValidationRepository::countExpiredByUploadId(const std::string& uploadId) {
         Json::Value result = queryExecutor_->executeQuery(query, params);
 
         if (result.isArray() && !result.empty()) {
-            int count = result[0]["count"].asInt();
+            int count = 0;
+            const auto& v = result[0]["count"];
+            if (v.isInt()) count = v.asInt();
+            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) {} }
             spdlog::debug("[ValidationRepository] Found {} expired certificates for upload {}", count, uploadId);
             return count;
         }

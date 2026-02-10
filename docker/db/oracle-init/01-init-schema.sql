@@ -179,7 +179,7 @@ CREATE TABLE crl (
     issuer_dn CLOB NOT NULL,
     this_update TIMESTAMP NOT NULL,
     next_update TIMESTAMP,
-    crl_data BLOB NOT NULL,
+    crl_binary BLOB NOT NULL,
     crl_number VARCHAR2(100),
     fingerprint_sha256 VARCHAR2(64) NOT NULL,
 
@@ -290,43 +290,63 @@ CREATE TABLE sync_status (
 
 CREATE INDEX idx_sync_status_checked_at ON sync_status(checked_at DESC);
 
--- Reconciliation summary
+-- Sequences for reconciliation tables
+CREATE SEQUENCE seq_recon_summary START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE seq_recon_log START WITH 1 INCREMENT BY 1;
+CREATE SEQUENCE seq_sync_status START WITH 1 INCREMENT BY 1;
+
+-- Reconciliation summary (aligned with pkd-relay-service code expectations)
 CREATE TABLE reconciliation_summary (
     id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
+    sync_status_id VARCHAR2(36),
+    triggered_by VARCHAR2(50),
+    status VARCHAR2(30) DEFAULT 'IN_PROGRESS',
     started_at TIMESTAMP DEFAULT SYSTIMESTAMP,
     completed_at TIMESTAMP,
     duration_ms NUMBER(19),
 
     dry_run NUMBER(1) DEFAULT 0 NOT NULL,
 
-    csca_processed NUMBER(10) DEFAULT 0,
-    dsc_processed NUMBER(10) DEFAULT 0,
-    dsc_nc_processed NUMBER(10) DEFAULT 0,
-    crl_processed NUMBER(10) DEFAULT 0,
+    total_processed NUMBER(10) DEFAULT 0,
+    success_count NUMBER(10) DEFAULT 0,
+    failed_count NUMBER(10) DEFAULT 0,
+
+    csca_added NUMBER(10) DEFAULT 0,
+    dsc_added NUMBER(10) DEFAULT 0,
+    dsc_nc_added NUMBER(10) DEFAULT 0,
+    crl_added NUMBER(10) DEFAULT 0,
+    total_added NUMBER(10) DEFAULT 0,
 
     csca_deleted NUMBER(10) DEFAULT 0,
     dsc_deleted NUMBER(10) DEFAULT 0,
     dsc_nc_deleted NUMBER(10) DEFAULT 0,
     crl_deleted NUMBER(10) DEFAULT 0,
 
-    success_count NUMBER(10) DEFAULT 0,
-    failed_count NUMBER(10) DEFAULT 0,
-
-    error_message CLOB
+    error_message CLOB,
+    metadata CLOB
 );
 
 CREATE INDEX idx_recon_summary_started ON reconciliation_summary(started_at DESC);
 
--- Reconciliation logs (detailed per-certificate)
+-- Reconciliation logs (aligned with pkd-relay-service code expectations)
 CREATE TABLE reconciliation_log (
     id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
     reconciliation_id VARCHAR2(36) NOT NULL,
-    cert_fingerprint VARCHAR2(64) NOT NULL,
-    cert_type VARCHAR2(20) NOT NULL,
     operation VARCHAR2(20) NOT NULL,
-    success NUMBER(1) DEFAULT 1,
+    certificate_type VARCHAR2(20),
+    cert_type VARCHAR2(20),
+    country_code VARCHAR2(3),
+    subject_dn CLOB,
+    subject VARCHAR2(4000),
+    issuer VARCHAR2(4000),
+    fingerprint_sha256 VARCHAR2(64),
+    cert_fingerprint VARCHAR2(64),
+    ldap_dn VARCHAR2(4000),
+    status VARCHAR2(30),
     error_message CLOB,
-    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    started_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    completed_at TIMESTAMP,
+    duration_ms NUMBER(10),
 
     CONSTRAINT fk_recon_log_summary FOREIGN KEY (reconciliation_id) REFERENCES reconciliation_summary(id) ON DELETE CASCADE,
     CONSTRAINT chk_recon_operation CHECK (operation IN ('ADD', 'UPDATE', 'DELETE', 'SKIP'))
@@ -413,6 +433,24 @@ CREATE TABLE icao_version_history (
 );
 
 CREATE INDEX idx_icao_version_checked ON icao_version_history(checked_at DESC);
+
+-- =============================================================================
+-- 14. Revalidation History
+-- =============================================================================
+CREATE SEQUENCE seq_revalidation_history START WITH 1 INCREMENT BY 1;
+
+CREATE TABLE revalidation_history (
+    id NUMBER DEFAULT seq_revalidation_history.NEXTVAL PRIMARY KEY,
+    executed_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    total_processed NUMBER DEFAULT 0 NOT NULL,
+    newly_expired NUMBER DEFAULT 0 NOT NULL,
+    newly_valid NUMBER DEFAULT 0 NOT NULL,
+    unchanged NUMBER DEFAULT 0 NOT NULL,
+    errors NUMBER DEFAULT 0 NOT NULL,
+    duration_ms NUMBER DEFAULT 0 NOT NULL
+);
+
+CREATE INDEX idx_reval_history_executed ON revalidation_history(executed_at DESC);
 
 -- =============================================================================
 -- Success Message

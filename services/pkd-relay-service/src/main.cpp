@@ -126,6 +126,58 @@ private:
 // Config Database Operations
 // =============================================================================
 bool Config::loadFromDatabase() {
+    // Phase 6.4: Use Query Executor if available, fallback to PgConnection for early startup
+    if (g_queryExecutor) {
+        try {
+            const char* query = "SELECT daily_sync_enabled, daily_sync_hour, daily_sync_minute, "
+                               "auto_reconcile, revalidate_certs_on_sync, max_reconcile_batch_size "
+                               "FROM sync_config WHERE id = 1";
+
+            Json::Value result = g_queryExecutor->executeQuery(query, {});
+            if (result.empty()) {
+                spdlog::warn("No configuration found in database, using defaults");
+                return false;
+            }
+
+            const auto& row = result[0];
+            std::string dbType = g_queryExecutor->getDatabaseType();
+
+            // Helper: parse boolean from various DB formats
+            auto parseBool = [&](const std::string& field) -> bool {
+                const auto& v = row[field];
+                if (v.isBool()) return v.asBool();
+                if (v.isString()) {
+                    std::string s = v.asString();
+                    return (s == "t" || s == "true" || s == "TRUE" || s == "1");
+                }
+                if (v.isInt()) return v.asInt() != 0;
+                return false;
+            };
+
+            // Helper: parse int from various DB formats
+            auto parseInt = [&](const std::string& field, int def = 0) -> int {
+                const auto& v = row[field];
+                if (v.isInt()) return v.asInt();
+                if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return def; } }
+                return def;
+            };
+
+            dailySyncEnabled = parseBool("daily_sync_enabled");
+            dailySyncHour = parseInt("daily_sync_hour", 0);
+            dailySyncMinute = parseInt("daily_sync_minute", 0);
+            autoReconcile = parseBool("auto_reconcile");
+            revalidateCertsOnSync = parseBool("revalidate_certs_on_sync");
+            maxReconcileBatchSize = parseInt("max_reconcile_batch_size", 100);
+
+            spdlog::info("Loaded configuration from database (via QueryExecutor)");
+            return true;
+        } catch (const std::exception& e) {
+            spdlog::warn("Failed to load config via QueryExecutor: {}", e.what());
+            return false;
+        }
+    }
+
+    // Fallback: Direct PostgreSQL connection (used before initializeServices())
     PgConnection conn;
     if (!conn.connect()) {
         spdlog::warn("Failed to connect to database for loading config");
@@ -160,84 +212,85 @@ bool Config::loadFromDatabase() {
 // =============================================================================
 DbStats getDbStats() {
     DbStats stats;
-    PgConnection conn;
 
-    if (!conn.connect()) {
-        spdlog::error("Failed to connect to database for stats");
+    if (!g_queryExecutor) {
+        spdlog::error("Query executor not initialized for DB stats");
         return stats;
     }
 
-    // Sprint 3: Get CSCA count (excluding MLSC)
-    PGresult* res = PQexec(conn.get(),
-        "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA' AND (ldap_dn_v2 NOT LIKE '%o=mlsc%' OR ldap_dn_v2 IS NULL)");
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        stats.cscaCount = std::stoi(PQgetvalue(res, 0, 0));
-    }
-    PQclear(res);
+    try {
+        std::string dbType = g_queryExecutor->getDatabaseType();
 
-    // Sprint 3: Get MLSC count (stored as CSCA but distinguished by ldap_dn_v2)
-    res = PQexec(conn.get(), "SELECT COUNT(*) FROM certificate WHERE ldap_dn_v2 LIKE '%o=mlsc%'");
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        stats.mlscCount = std::stoi(PQgetvalue(res, 0, 0));
-    }
-    PQclear(res);
+        // Helper lambda for scalar count queries
+        auto scalarCount = [&](const std::string& query, const std::vector<std::string>& params = {}) -> int {
+            Json::Value result = g_queryExecutor->executeScalar(query, params);
+            if (result.isInt()) return result.asInt();
+            if (result.isString()) {
+                try { return std::stoi(result.asString()); } catch (...) { return 0; }
+            }
+            return 0;
+        };
 
-    // Get DSC and DSC_NC counts
-    const char* certQuery = R"(
-        SELECT certificate_type, COUNT(*) as cnt
-        FROM certificate
-        WHERE certificate_type IN ('DSC', 'DSC_NC')
-        GROUP BY certificate_type
-    )";
+        // Phase 6.4: Get CSCA count (certificate_type = 'CSCA', excludes MLSC which has its own type)
+        stats.cscaCount = scalarCount(
+            "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA'");
 
-    res = PQexec(conn.get(), certQuery);
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
-            std::string type = PQgetvalue(res, i, 0);
-            int count = std::stoi(PQgetvalue(res, i, 1));
+        // Phase 6.4: Get MLSC count (certificate_type = 'MLSC')
+        // Previously used ldap_dn_v2 LIKE '%o=mlsc%' but ldap_dn_v2 is NULL in Oracle
+        stats.mlscCount = scalarCount(
+            "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'MLSC'");
+
+        // Get DSC and DSC_NC counts
+        std::string certQuery =
+            "SELECT certificate_type, COUNT(*) as cnt "
+            "FROM certificate "
+            "WHERE certificate_type IN ('DSC', 'DSC_NC') "
+            "GROUP BY certificate_type";
+
+        Json::Value certResult = g_queryExecutor->executeQuery(certQuery, {});
+        for (const auto& row : certResult) {
+            std::string type = row["certificate_type"].asString();
+            int count = 0;
+            const auto& v = row["cnt"];
+            if (v.isInt()) count = v.asInt();
+            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) {} }
+
             if (type == "DSC") stats.dscCount = count;
             else if (type == "DSC_NC") stats.dscNcCount = count;
         }
-    }
-    PQclear(res);
 
-    // Get CRL count
-    res = PQexec(conn.get(), "SELECT COUNT(*) FROM crl");
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        stats.crlCount = std::stoi(PQgetvalue(res, 0, 0));
-    }
-    PQclear(res);
+        // Get CRL count
+        stats.crlCount = scalarCount("SELECT COUNT(*) FROM crl");
 
-    // Get stored_in_ldap count
-    res = PQexec(conn.get(), "SELECT COUNT(*) FROM certificate WHERE stored_in_ldap = TRUE");
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        stats.storedInLdapCount = std::stoi(PQgetvalue(res, 0, 0));
-    }
-    PQclear(res);
+        // Get stored_in_ldap count - Oracle uses NUMBER(1) with 1/0
+        std::string storedQuery = (dbType == "oracle")
+            ? "SELECT COUNT(*) FROM certificate WHERE stored_in_ldap = 1"
+            : "SELECT COUNT(*) FROM certificate WHERE stored_in_ldap = TRUE";
+        stats.storedInLdapCount = scalarCount(storedQuery);
 
-    // Get country breakdown
-    const char* countryQuery = R"(
-        SELECT country_code, certificate_type, COUNT(*) as cnt
-        FROM certificate
-        GROUP BY country_code, certificate_type
-        ORDER BY country_code
-    )";
+        // Get country breakdown
+        std::string countryQuery =
+            "SELECT country_code, certificate_type, COUNT(*) as cnt "
+            "FROM certificate "
+            "GROUP BY country_code, certificate_type "
+            "ORDER BY country_code";
 
-    res = PQexec(conn.get(), countryQuery);
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
-            std::string country = PQgetvalue(res, i, 0);
-            std::string type = PQgetvalue(res, i, 1);
-            int count = std::stoi(PQgetvalue(res, i, 2));
+        Json::Value countryResult = g_queryExecutor->executeQuery(countryQuery, {});
+        for (const auto& row : countryResult) {
+            std::string country = row["country_code"].asString();
+            std::string type = row["certificate_type"].asString();
+            int count = 0;
+            const auto& v = row["cnt"];
+            if (v.isInt()) count = v.asInt();
+            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) {} }
 
             if (type == "CSCA") stats.countryStats[country]["csca"] = count;
             else if (type == "DSC") stats.countryStats[country]["dsc"] = count;
             else if (type == "DSC_NC") stats.countryStats[country]["dsc_nc"] = count;
         }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to get DB stats: {}", e.what());
     }
-    PQclear(res);
 
     return stats;
 }
@@ -317,107 +370,8 @@ int saveSyncStatus(const SyncResult& result) {
     return syncId;
 }
 
-Json::Value getLatestSyncStatus() {
-    PgConnection conn;
-    Json::Value result(Json::objectValue);
-
-    if (!conn.connect()) {
-        result["error"] = "Database connection failed";
-        return result;
-    }
-
-    const char* query = R"(
-        SELECT id, checked_at,
-               db_csca_count, db_mlsc_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count,
-               ldap_csca_count, ldap_mlsc_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries,
-               csca_discrepancy, mlsc_discrepancy, dsc_discrepancy, dsc_nc_discrepancy, crl_discrepancy, total_discrepancy,
-               status, error_message, check_duration_ms
-        FROM sync_status
-        ORDER BY checked_at DESC
-        LIMIT 1
-    )";
-
-    PGresult* res = PQexec(conn.get(), query);
-
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        result["id"] = std::stoi(PQgetvalue(res, 0, 0));
-        result["checkedAt"] = PQgetvalue(res, 0, 1);
-
-        Json::Value dbStats(Json::objectValue);
-        dbStats["csca"] = std::stoi(PQgetvalue(res, 0, 2));
-        dbStats["mlsc"] = std::stoi(PQgetvalue(res, 0, 3));
-        dbStats["dsc"] = std::stoi(PQgetvalue(res, 0, 4));
-        dbStats["dscNc"] = std::stoi(PQgetvalue(res, 0, 5));
-        dbStats["crl"] = std::stoi(PQgetvalue(res, 0, 6));
-        dbStats["storedInLdap"] = std::stoi(PQgetvalue(res, 0, 7));
-        result["dbStats"] = dbStats;
-
-        Json::Value ldapStats(Json::objectValue);
-        ldapStats["csca"] = std::stoi(PQgetvalue(res, 0, 8));
-        ldapStats["mlsc"] = std::stoi(PQgetvalue(res, 0, 9));
-        ldapStats["dsc"] = std::stoi(PQgetvalue(res, 0, 10));
-        ldapStats["dscNc"] = std::stoi(PQgetvalue(res, 0, 11));
-        ldapStats["crl"] = std::stoi(PQgetvalue(res, 0, 12));
-        ldapStats["total"] = std::stoi(PQgetvalue(res, 0, 13));
-        result["ldapStats"] = ldapStats;
-
-        Json::Value discrepancy(Json::objectValue);
-        discrepancy["csca"] = std::stoi(PQgetvalue(res, 0, 14));
-        discrepancy["mlsc"] = std::stoi(PQgetvalue(res, 0, 15));
-        discrepancy["dsc"] = std::stoi(PQgetvalue(res, 0, 16));
-        discrepancy["dscNc"] = std::stoi(PQgetvalue(res, 0, 17));
-        discrepancy["crl"] = std::stoi(PQgetvalue(res, 0, 18));
-        discrepancy["total"] = std::stoi(PQgetvalue(res, 0, 19));
-        result["discrepancy"] = discrepancy;
-
-        result["status"] = PQgetvalue(res, 0, 20);
-        if (!PQgetisnull(res, 0, 21)) {
-            result["errorMessage"] = PQgetvalue(res, 0, 21);
-        }
-        result["checkDurationMs"] = std::stoi(PQgetvalue(res, 0, 22));
-    } else {
-        result["status"] = "NO_DATA";
-        result["message"] = "No sync status found";
-    }
-    PQclear(res);
-
-    return result;
-}
-
-Json::Value getSyncHistory(int limit = 20) {
-    PgConnection conn;
-    Json::Value result(Json::arrayValue);
-
-    if (!conn.connect()) {
-        return result;
-    }
-
-    std::string query = "SELECT id, checked_at, "
-        "db_csca_count + db_dsc_count + db_dsc_nc_count as db_total, "
-        "ldap_csca_count + ldap_dsc_count + ldap_dsc_nc_count as ldap_total, "
-        "total_discrepancy, status, check_duration_ms "
-        "FROM sync_status ORDER BY checked_at DESC LIMIT " + std::to_string(limit);
-
-    PGresult* res = PQexec(conn.get(), query.c_str());
-
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
-            Json::Value item(Json::objectValue);
-            item["id"] = std::stoi(PQgetvalue(res, i, 0));
-            item["checkedAt"] = PQgetvalue(res, i, 1);
-            item["dbTotal"] = std::stoi(PQgetvalue(res, i, 2));
-            item["ldapTotal"] = std::stoi(PQgetvalue(res, i, 3));
-            item["totalDiscrepancy"] = std::stoi(PQgetvalue(res, i, 4));
-            item["status"] = PQgetvalue(res, i, 5);
-            item["checkDurationMs"] = std::stoi(PQgetvalue(res, i, 6));
-            result.append(item);
-        }
-    }
-    PQclear(res);
-
-    return result;
-}
+// NOTE: getLatestSyncStatus() and getSyncHistory() removed in Phase 6.4
+// These functions were replaced by SyncService (g_syncService->getCurrentStatus() and getSyncHistory())
 
 // =============================================================================
 // LDAP Operations
@@ -573,240 +527,50 @@ SyncResult performSyncCheck() {
 
 // =============================================================================
 // Certificate Re-validation
+// NOTE: performCertificateRevalidation(), saveRevalidationResult(), RevalidationResult struct
+// removed in Phase 6.4 - replaced by g_validationService->revalidateAll() (database-agnostic)
 // =============================================================================
-
-struct RevalidationResult {
-    int totalProcessed = 0;
-    int newlyExpired = 0;
-    int newlyValid = 0;
-    int unchanged = 0;
-    int errors = 0;
-    int durationMs = 0;
-};
-
-// Check if certificate is expired based on not_after timestamp
-bool isCertificateExpired(const std::string& notAfterStr) {
-    if (notAfterStr.empty()) return false;
-
-    // Parse PostgreSQL timestamp format: "2025-12-31 23:59:59+00"
-    std::tm tm = {};
-    std::istringstream ss(notAfterStr);
-    ss >> std::get_time(&tm, "%Y-%m-%d %H:%M:%S");
-    if (ss.fail()) {
-        // Try ISO format: "2025-12-31T23:59:59"
-        ss.clear();
-        ss.str(notAfterStr);
-        ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
-        if (ss.fail()) {
-            spdlog::warn("Failed to parse timestamp: {}", notAfterStr);
-            return false;
-        }
-    }
-
-    time_t certTime = std::mktime(&tm);
-    time_t now = std::time(nullptr);
-
-    return now > certTime;
-}
-
-// Re-validate all certificates and update expiration status
-RevalidationResult performCertificateRevalidation() {
-    RevalidationResult result;
-    auto startTime = std::chrono::high_resolution_clock::now();
-
-    spdlog::info("Starting certificate re-validation...");
-
-    PgConnection conn;
-    if (!conn.connect()) {
-        spdlog::error("Failed to connect to database for certificate re-validation");
-        result.errors = 1;
-        return result;
-    }
-
-    // Get all validation results with expiration info
-    const char* selectQuery = R"(
-        SELECT vr.id, vr.certificate_id, vr.certificate_type, vr.country_code,
-               vr.validity_period_valid, vr.validation_status, vr.not_after
-        FROM validation_result vr
-        WHERE vr.not_after IS NOT NULL
-    )";
-
-    PGresult* res = PQexec(conn.get(), selectQuery);
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::error("Failed to query validation results: {}", PQerrorMessage(conn.get()));
-        PQclear(res);
-        result.errors = 1;
-        return result;
-    }
-
-    int rows = PQntuples(res);
-    spdlog::info("Processing {} certificates for expiration check", rows);
-
-    // Process each certificate
-    for (int i = 0; i < rows; i++) {
-        std::string vrId = PQgetvalue(res, i, 0);
-        std::string certId = PQgetvalue(res, i, 1);
-        std::string certType = PQgetvalue(res, i, 2);
-        std::string countryCode = PQgetvalue(res, i, 3);
-        // validity_period_valid: TRUE = valid, FALSE = expired
-        bool wasExpired = std::string(PQgetvalue(res, i, 4)) == "f";  // FALSE means expired
-        std::string oldStatus = PQgetvalue(res, i, 5);
-        std::string notAfter = PQgetvalue(res, i, 6);
-
-        bool isNowExpired = isCertificateExpired(notAfter);
-
-        result.totalProcessed++;
-
-        // Check if status changed
-        if (isNowExpired != wasExpired) {
-            // Update validation_result
-            std::string newStatus = isNowExpired ? "INVALID" : "VALID";
-
-            // If certificate just expired, update status
-            // If certificate is no longer expired (unlikely but handle it), update status
-            std::string updateQuery = "UPDATE validation_result SET validity_period_valid = $1, "
-                "validation_status = CASE WHEN $1 = FALSE THEN 'INVALID' ELSE validation_status END, "
-                "validation_timestamp = NOW() WHERE id = $2";
-
-            const char* paramValues[2];
-            // validity_period_valid: TRUE = valid, FALSE = expired
-            std::string validStr = isNowExpired ? "FALSE" : "TRUE";  // Inverted logic
-            paramValues[0] = validStr.c_str();
-            paramValues[1] = vrId.c_str();
-
-            PGresult* updateRes = PQexecParams(conn.get(), updateQuery.c_str(), 2, nullptr, paramValues, nullptr, nullptr, 0);
-
-            if (PQresultStatus(updateRes) == PGRES_COMMAND_OK) {
-                if (isNowExpired) {
-                    result.newlyExpired++;
-                    spdlog::debug("Certificate {} ({} {}) marked as expired", certId, countryCode, certType);
-                } else {
-                    result.newlyValid++;
-                    spdlog::debug("Certificate {} ({} {}) no longer expired", certId, countryCode, certType);
-                }
-            } else {
-                result.errors++;
-                spdlog::error("Failed to update certificate {}: {}", certId, PQerrorMessage(conn.get()));
-            }
-            PQclear(updateRes);
-        } else {
-            result.unchanged++;
-        }
-    }
-    PQclear(res);
-
-    // Update upload file statistics if any changes were made
-    if (result.newlyExpired > 0 || result.newlyValid > 0) {
-        const char* updateStatsQuery = R"(
-            UPDATE uploaded_file uf SET
-                expired_count = COALESCE((
-                    SELECT COUNT(*) FROM validation_result vr
-                    WHERE vr.upload_id = uf.id AND vr.is_expired = TRUE
-                ), 0)
-            WHERE EXISTS (SELECT 1 FROM validation_result vr WHERE vr.upload_id = uf.id)
-        )";
-
-        PGresult* statsRes = PQexec(conn.get(), updateStatsQuery);
-        if (PQresultStatus(statsRes) != PGRES_COMMAND_OK) {
-            spdlog::warn("Failed to update upload file statistics: {}", PQerrorMessage(conn.get()));
-        }
-        PQclear(statsRes);
-    }
-
-    auto endTime = std::chrono::high_resolution_clock::now();
-    result.durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-
-    spdlog::info("Certificate re-validation completed: {} processed, {} newly expired, {} unchanged, {} errors ({}ms)",
-                 result.totalProcessed, result.newlyExpired, result.unchanged, result.errors, result.durationMs);
-
-    return result;
-}
-
-// Save re-validation result to database
-void saveRevalidationResult(const RevalidationResult& result) {
-    PgConnection conn;
-    if (!conn.connect()) {
-        spdlog::error("Failed to connect to database for saving revalidation result");
-        return;
-    }
-
-    // Create table if not exists
-    const char* createTableQuery = R"(
-        CREATE TABLE IF NOT EXISTS revalidation_history (
-            id SERIAL PRIMARY KEY,
-            executed_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            total_processed INTEGER NOT NULL DEFAULT 0,
-            newly_expired INTEGER NOT NULL DEFAULT 0,
-            newly_valid INTEGER NOT NULL DEFAULT 0,
-            unchanged INTEGER NOT NULL DEFAULT 0,
-            errors INTEGER NOT NULL DEFAULT 0,
-            duration_ms INTEGER NOT NULL DEFAULT 0
-        )
-    )";
-
-    PGresult* createRes = PQexec(conn.get(), createTableQuery);
-    if (PQresultStatus(createRes) != PGRES_COMMAND_OK) {
-        spdlog::warn("Failed to create revalidation_history table: {}", PQerrorMessage(conn.get()));
-    }
-    PQclear(createRes);
-
-    // Insert result
-    std::string insertQuery = "INSERT INTO revalidation_history "
-        "(total_processed, newly_expired, newly_valid, unchanged, errors, duration_ms) "
-        "VALUES ($1, $2, $3, $4, $5, $6)";
-
-    std::string totalStr = std::to_string(result.totalProcessed);
-    std::string expiredStr = std::to_string(result.newlyExpired);
-    std::string validStr = std::to_string(result.newlyValid);
-    std::string unchangedStr = std::to_string(result.unchanged);
-    std::string errorsStr = std::to_string(result.errors);
-    std::string durationStr = std::to_string(result.durationMs);
-
-    const char* paramValues[6] = {
-        totalStr.c_str(), expiredStr.c_str(), validStr.c_str(),
-        unchangedStr.c_str(), errorsStr.c_str(), durationStr.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn.get(), insertQuery.c_str(), 6, nullptr, paramValues, nullptr, nullptr, 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to save revalidation result: {}", PQerrorMessage(conn.get()));
-    } else {
-        spdlog::info("Revalidation result saved to database");
-    }
-    PQclear(res);
-}
 
 // Get revalidation history
 Json::Value getRevalidationHistory(int limit = 10) {
-    PgConnection conn;
     Json::Value result(Json::arrayValue);
 
-    if (!conn.connect()) {
+    if (!g_queryExecutor) {
+        spdlog::error("Query executor not available for revalidation history");
         return result;
     }
 
-    std::string query = "SELECT id, executed_at, total_processed, newly_expired, newly_valid, "
-        "unchanged, errors, duration_ms FROM revalidation_history "
-        "ORDER BY executed_at DESC LIMIT " + std::to_string(limit);
+    try {
+        // Phase 6.4: Use Query Executor (database-agnostic)
+        std::string query = "SELECT id, executed_at, total_processed, newly_expired, newly_valid, "
+            "unchanged, errors, duration_ms FROM revalidation_history "
+            "ORDER BY executed_at DESC LIMIT $1";
 
-    PGresult* res = PQexec(conn.get(), query.c_str());
+        std::vector<std::string> params = { std::to_string(limit) };
+        Json::Value rows = g_queryExecutor->executeQuery(query, params);
 
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
+        // Helper: parse int from various DB formats
+        auto getInt = [](const Json::Value& v, int def = 0) -> int {
+            if (v.isInt()) return v.asInt();
+            if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return def; } }
+            return def;
+        };
+
+        for (const auto& row : rows) {
             Json::Value item(Json::objectValue);
-            item["id"] = std::stoi(PQgetvalue(res, i, 0));
-            item["executedAt"] = PQgetvalue(res, i, 1);
-            item["totalProcessed"] = std::stoi(PQgetvalue(res, i, 2));
-            item["newlyExpired"] = std::stoi(PQgetvalue(res, i, 3));
-            item["newlyValid"] = std::stoi(PQgetvalue(res, i, 4));
-            item["unchanged"] = std::stoi(PQgetvalue(res, i, 5));
-            item["errors"] = std::stoi(PQgetvalue(res, i, 6));
-            item["durationMs"] = std::stoi(PQgetvalue(res, i, 7));
+            item["id"] = getInt(row["id"]);
+            item["executedAt"] = row["executed_at"].asString();
+            item["totalProcessed"] = getInt(row["total_processed"]);
+            item["newlyExpired"] = getInt(row["newly_expired"]);
+            item["newlyValid"] = getInt(row["newly_valid"]);
+            item["unchanged"] = getInt(row["unchanged"]);
+            item["errors"] = getInt(row["errors"]);
+            item["durationMs"] = getInt(row["duration_ms"]);
             result.append(item);
         }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to get revalidation history: {}", e.what());
     }
-    PQclear(res);
 
     return result;
 }
@@ -903,8 +667,13 @@ public:
                             // 2. Re-validate certificates if enabled
                             if (g_config.revalidateCertsOnSync) {
                                 spdlog::info("[Daily] Step 2: Performing certificate re-validation...");
-                                RevalidationResult revalResult = performCertificateRevalidation();
-                                saveRevalidationResult(revalResult);
+                                // Phase 6.4: Use ValidationService (database-agnostic)
+                                Json::Value revalResult = g_validationService->revalidateAll();
+                                if (revalResult.get("success", false).asBool()) {
+                                    spdlog::info("[Daily] Re-validation completed successfully");
+                                } else {
+                                    spdlog::warn("[Daily] Re-validation had issues: {}", revalResult.get("error", "unknown").asString());
+                                }
                             }
 
                             // 3. Auto reconcile if enabled and discrepancies detected
@@ -912,22 +681,17 @@ public:
                                 spdlog::info("[Daily] Step 3: Auto reconcile triggered (discrepancy: {})",
                                            syncResult.totalDiscrepancy);
 
-                                PgConnection pgConn;
-                                if (pgConn.connect()) {
-                                    // v2.4.3: Pass LDAP connection pool to ReconciliationEngine
-                                    ReconciliationEngine engine(g_config, g_ldapPool.get());
-                                    ReconciliationResult reconResult = engine.performReconciliation(
-                                        pgConn.get(), false, "DAILY_SYNC", syncStatusId);
+                                // Phase 6.4: Use Query Executor (database-agnostic)
+                                ReconciliationEngine engine(g_config, g_ldapPool.get(), g_queryExecutor.get());
+                                ReconciliationResult reconResult = engine.performReconciliation(
+                                    false, "DAILY_SYNC", syncStatusId);
 
-                                    if (reconResult.success) {
-                                        spdlog::info("[Daily] Auto reconcile completed: {} processed, {} succeeded, {} failed",
-                                                   reconResult.totalProcessed, reconResult.successCount,
-                                                   reconResult.failedCount);
-                                    } else {
-                                        spdlog::error("[Daily] Auto reconcile failed: {}", reconResult.errorMessage);
-                                    }
+                                if (reconResult.success) {
+                                    spdlog::info("[Daily] Auto reconcile completed: {} processed, {} succeeded, {} failed",
+                                               reconResult.totalProcessed, reconResult.successCount,
+                                               reconResult.failedCount);
                                 } else {
-                                    spdlog::error("[Daily] Failed to connect to database for auto reconcile");
+                                    spdlog::error("[Daily] Auto reconcile failed: {}", reconResult.errorMessage);
                                 }
                             } else if (!g_config.autoReconcile) {
                                 spdlog::debug("[Daily] Auto reconcile disabled in configuration");
@@ -998,11 +762,20 @@ void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePt
     response["service"] = "sync-service";
     response["timestamp"] = trantor::Date::now().toFormattedString(false);
 
-    // Check DB connection
-    PgConnection conn;
-    if (conn.connect()) {
-        response["database"] = "UP";
-    } else {
+    // Phase 6.4: Check DB connection via Query Executor (database-agnostic)
+    try {
+        if (g_queryExecutor) {
+            // Oracle requires FROM DUAL for any SELECT
+            std::string healthQuery = (g_queryExecutor->getDatabaseType() == "oracle")
+                ? "SELECT 1 FROM DUAL" : "SELECT 1";
+            g_queryExecutor->executeScalar(healthQuery, {});
+            response["database"] = "UP";
+            response["databaseType"] = g_queryExecutor->getDatabaseType();
+        } else {
+            response["database"] = "DOWN";
+            response["status"] = "DEGRADED";
+        }
+    } catch (...) {
         response["database"] = "DOWN";
         response["status"] = "DEGRADED";
     }
@@ -1104,48 +877,54 @@ void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpRespons
 
 // Get unresolved discrepancies
 void handleDiscrepancies(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
-    PgConnection conn;
-    if (!conn.connect()) {
+    try {
+        std::string dbType = g_queryExecutor->getDatabaseType();
+        // Phase 6.4: Database-agnostic boolean literal
+        std::string boolFalse = (dbType == "oracle") ? "0" : "FALSE";
+
+        std::string query =
+            "SELECT id, detected_at, item_type, certificate_type, country_code, fingerprint, "
+            "issue_type, db_exists, ldap_exists "
+            "FROM sync_discrepancy "
+            "WHERE resolved = " + boolFalse + " "
+            "ORDER BY detected_at DESC "
+            "LIMIT 100";
+
+        Json::Value rows = g_queryExecutor->executeQuery(query, {});
+
+        Json::Value result(Json::arrayValue);
+        for (const auto& row : rows) {
+            Json::Value item(Json::objectValue);
+            item["id"] = row["id"].asString();
+            item["detectedAt"] = row["detected_at"].asString();
+            item["itemType"] = row["item_type"].asString();
+            if (!row["certificate_type"].isNull()) item["certificateType"] = row["certificate_type"].asString();
+            if (!row["country_code"].isNull()) item["countryCode"] = row["country_code"].asString();
+            if (!row["fingerprint"].isNull()) item["fingerprint"] = row["fingerprint"].asString();
+            item["issueType"] = row["issue_type"].asString();
+
+            // Parse boolean: PostgreSQL returns bool, Oracle returns "1"/"0"
+            auto parseBool = [](const Json::Value& v) -> bool {
+                if (v.isBool()) return v.asBool();
+                if (v.isString()) { std::string s = v.asString(); return (s == "t" || s == "true" || s == "1"); }
+                if (v.isInt()) return v.asInt() != 0;
+                return false;
+            };
+            item["dbExists"] = parseBool(row["db_exists"]);
+            item["ldapExists"] = parseBool(row["ldap_exists"]);
+            result.append(item);
+        }
+
+        auto resp = HttpResponse::newHttpJsonResponse(result);
+        callback(resp);
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to get discrepancies: {}", e.what());
         Json::Value error(Json::objectValue);
-        error["error"] = "Database connection failed";
+        error["error"] = std::string("Failed to get discrepancies: ") + e.what();
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
         callback(resp);
-        return;
     }
-
-    const char* query = R"(
-        SELECT id, detected_at, item_type, certificate_type, country_code, fingerprint,
-               issue_type, db_exists, ldap_exists
-        FROM sync_discrepancy
-        WHERE resolved = FALSE
-        ORDER BY detected_at DESC
-        LIMIT 100
-    )";
-
-    PGresult* res = PQexec(conn.get(), query);
-
-    Json::Value result(Json::arrayValue);
-    if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-        int rows = PQntuples(res);
-        for (int i = 0; i < rows; i++) {
-            Json::Value item(Json::objectValue);
-            item["id"] = PQgetvalue(res, i, 0);
-            item["detectedAt"] = PQgetvalue(res, i, 1);
-            item["itemType"] = PQgetvalue(res, i, 2);
-            if (!PQgetisnull(res, i, 3)) item["certificateType"] = PQgetvalue(res, i, 3);
-            if (!PQgetisnull(res, i, 4)) item["countryCode"] = PQgetvalue(res, i, 4);
-            if (!PQgetisnull(res, i, 5)) item["fingerprint"] = PQgetvalue(res, i, 5);
-            item["issueType"] = PQgetvalue(res, i, 6);
-            item["dbExists"] = std::string(PQgetvalue(res, i, 7)) == "t";
-            item["ldapExists"] = std::string(PQgetvalue(res, i, 8)) == "t";
-            result.append(item);
-        }
-    }
-    PQclear(res);
-
-    auto resp = HttpResponse::newHttpJsonResponse(result);
-    callback(resp);
 }
 
 // Trigger reconciliation
@@ -1168,21 +947,9 @@ void handleReconcile(const HttpRequestPtr& req, std::function<void(const HttpRes
     }
 
     try {
-        // Connect to PostgreSQL
-        PgConnection pgConn;
-        if (!pgConn.connect()) {
-            Json::Value error(Json::objectValue);
-            error["success"] = false;
-            error["error"] = "Database connection failed";
-            auto resp = HttpResponse::newHttpJsonResponse(error);
-            resp->setStatusCode(k500InternalServerError);
-            callback(resp);
-            return;
-        }
-
-        // v2.4.3: Create reconciliation engine with LDAP pool and perform reconciliation
-        ReconciliationEngine engine(g_config, g_ldapPool.get());
-        ReconciliationResult result = engine.performReconciliation(pgConn.get(), dryRun);
+        // Phase 6.4: Create reconciliation engine with Query Executor (database-agnostic)
+        ReconciliationEngine engine(g_config, g_ldapPool.get(), g_queryExecutor.get());
+        ReconciliationResult result = engine.performReconciliation(dryRun);
 
         // Build JSON response
         Json::Value response(Json::objectValue);
@@ -1368,17 +1135,14 @@ void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const 
             }
         }
 
-        // Connect to database
-        PgConnection conn;
-        if (!conn.connect()) {
-            Json::Value error(Json::objectValue);
-            error["success"] = false;
-            error["error"] = "Database connection failed";
-            auto resp = HttpResponse::newHttpJsonResponse(error);
-            resp->setStatusCode(k500InternalServerError);
-            callback(resp);
-            return;
-        }
+        // Phase 6.4: Use Query Executor (database-agnostic)
+        std::string dbType = g_queryExecutor->getDatabaseType();
+
+        // Helper: format boolean for database
+        auto boolStr = [&](bool val) -> std::string {
+            if (dbType == "oracle") return val ? "1" : "0";
+            return val ? "TRUE" : "FALSE";
+        };
 
         // Build UPDATE query dynamically
         std::vector<std::string> setClauses;
@@ -1387,7 +1151,7 @@ void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const 
 
         if (json.isMember("dailySyncEnabled")) {
             setClauses.push_back("daily_sync_enabled = $" + std::to_string(paramIndex++));
-            paramValues.push_back(json["dailySyncEnabled"].asBool() ? "TRUE" : "FALSE");
+            paramValues.push_back(boolStr(json["dailySyncEnabled"].asBool()));
         }
         if (json.isMember("dailySyncHour")) {
             setClauses.push_back("daily_sync_hour = $" + std::to_string(paramIndex++));
@@ -1399,11 +1163,11 @@ void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const 
         }
         if (json.isMember("autoReconcile")) {
             setClauses.push_back("auto_reconcile = $" + std::to_string(paramIndex++));
-            paramValues.push_back(json["autoReconcile"].asBool() ? "TRUE" : "FALSE");
+            paramValues.push_back(boolStr(json["autoReconcile"].asBool()));
         }
         if (json.isMember("revalidateCertsOnSync")) {
             setClauses.push_back("revalidate_certs_on_sync = $" + std::to_string(paramIndex++));
-            paramValues.push_back(json["revalidateCertsOnSync"].asBool() ? "TRUE" : "FALSE");
+            paramValues.push_back(boolStr(json["revalidateCertsOnSync"].asBool()));
         }
         if (json.isMember("maxReconcileBatchSize")) {
             setClauses.push_back("max_reconcile_batch_size = $" + std::to_string(paramIndex++));
@@ -1430,17 +1194,8 @@ void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const 
                                          }) +
                            " WHERE id = 1";
 
-        // Convert to const char* array
-        std::vector<const char*> paramPtrs;
-        for (const auto& val : paramValues) {
-            paramPtrs.push_back(val.c_str());
-        }
-
-        PGresult* res = PQexecParams(conn.get(), query.c_str(), paramValues.size(),
-                                    nullptr, paramPtrs.data(), nullptr, nullptr, 0);
-
-        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-            PQclear(res);
+        int rowsAffected = g_queryExecutor->executeCommand(query, paramValues);
+        if (rowsAffected == 0 && dbType == "postgres") {
             Json::Value error(Json::objectValue);
             error["success"] = false;
             error["error"] = "Failed to update configuration";
@@ -1449,7 +1204,6 @@ void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const 
             callback(resp);
             return;
         }
-        PQclear(res);
 
         // Reload configuration from database
         g_config.loadFromDatabase();

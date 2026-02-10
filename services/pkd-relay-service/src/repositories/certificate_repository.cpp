@@ -23,6 +23,11 @@ int CertificateRepository::countByType(const std::string& certificateType) {
         std::vector<std::string> params = {certificateType};
 
         Json::Value result = queryExecutor_->executeScalar(query, params);
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) {
+            try { return std::stoi(result.asString()); }
+            catch (...) { return 0; }
+        }
         return result.asInt();
 
     } catch (const std::exception& e) {

@@ -6,6 +6,21 @@
 
 namespace icao::relay::repositories {
 
+// Helper: Oracle returns all values as strings, so .asInt() fails.
+// This handles int, uint, string, double types gracefully.
+static int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0) {
+    if (!json.isMember(field) || json[field].isNull()) return defaultValue;
+    const auto& v = json[field];
+    if (v.isInt()) return v.asInt();
+    if (v.isUInt()) return static_cast<int>(v.asUInt());
+    if (v.isString()) {
+        try { return std::stoi(v.asString()); }
+        catch (...) { return defaultValue; }
+    }
+    if (v.isDouble()) return static_cast<int>(v.asDouble());
+    return defaultValue;
+}
+
 ReconciliationRepository::ReconciliationRepository(common::IQueryExecutor* executor)
     : queryExecutor_(executor)
 {
@@ -33,7 +48,7 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
             idQuery = "SELECT nextval('reconciliation_summary_id_seq') as id";
         } else {
             // Oracle: Use sequence
-            idQuery = "SELECT seq_reconciliation_summary.NEXTVAL as id FROM DUAL";
+            idQuery = "SELECT SEQ_RECON_SUMMARY.NEXTVAL as id FROM DUAL";
         }
 
         Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
@@ -41,15 +56,13 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
             spdlog::error("[ReconciliationRepository] Failed to generate ID");
             return false;
         }
-        // Oracle returns column names in UPPERCASE, PostgreSQL in lowercase
-        std::string generatedId = dbType == "postgres"
-            ? std::to_string(idResult[0]["id"].asInt())
-            : std::to_string(idResult[0]["ID"].asInt());
+        // OracleQueryExecutor converts column names to lowercase
+        std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
 
         // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
         const char* query =
             "INSERT INTO reconciliation_summary ("
-            "id, triggered_by, triggered_at, status, dry_run, "
+            "id, triggered_by, started_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
             "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted"
@@ -60,11 +73,17 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
             "$12, $13, $14, $15"
             ")";
 
+        // Oracle NUMBER(1) needs "1"/"0", PostgreSQL BOOLEAN needs "true"/"false"
+        // Reuse dbType from line 44 (already declared in this scope)
+        auto boolStr = [&dbType](bool val) -> std::string {
+            return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
+        };
+
         std::vector<std::string> params = {
             generatedId,                                        // $1: id
             summary.getTriggeredBy(),                           // $2
             summary.getStatus(),                                 // $3
-            summary.isDryRun() ? "true" : "false",              // $4
+            boolStr(summary.isDryRun()),                        // $4
             std::to_string(summary.getSuccessCount()),          // $5
             std::to_string(summary.getFailedCount()),           // $6
             std::to_string(summary.getCscaAdded()),             // $7
@@ -167,7 +186,7 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
 std::optional<domain::ReconciliationSummary> ReconciliationRepository::findSummaryById(const std::string& id) {
     try {
         const char* query =
-            "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
+            "SELECT id, triggered_by, started_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
             "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted, "
@@ -196,13 +215,13 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
 
     try {
         const char* query =
-            "SELECT id, triggered_by, triggered_at, completed_at, status, dry_run, "
+            "SELECT id, triggered_by, started_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
             "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted, "
             "duration_ms, error_message, sync_status_id "
             "FROM reconciliation_summary "
-            "ORDER BY triggered_at DESC "
+            "ORDER BY started_at DESC "
             "LIMIT $1 OFFSET $2";
 
         std::vector<std::string> params = {
@@ -230,6 +249,11 @@ int ReconciliationRepository::countSummaries() {
         const char* query = "SELECT COUNT(*) FROM reconciliation_summary";
 
         Json::Value result = queryExecutor_->executeScalar(query);
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) {
+            try { return std::stoi(result.asString()); }
+            catch (...) { return 0; }
+        }
         return result.asInt();
 
     } catch (const std::exception& e) {
@@ -254,7 +278,7 @@ bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
             idQuery = "SELECT nextval('reconciliation_log_id_seq') as id";
         } else {
             // Oracle: Use sequence
-            idQuery = "SELECT seq_reconciliation_log.NEXTVAL as id FROM DUAL";
+            idQuery = "SELECT SEQ_RECON_LOG.NEXTVAL as id FROM DUAL";
         }
 
         Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
@@ -262,16 +286,14 @@ bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
             spdlog::error("[ReconciliationRepository] Failed to generate ID");
             return false;
         }
-        // Oracle returns column names in UPPERCASE, PostgreSQL in lowercase
-        std::string generatedId = dbType == "postgres"
-            ? std::to_string(idResult[0]["id"].asInt())
-            : std::to_string(idResult[0]["ID"].asInt());
+        // OracleQueryExecutor converts column names to lowercase
+        std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
 
         // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
         const char* query =
             "INSERT INTO reconciliation_log ("
-            "id, reconciliation_id, created_at, cert_fingerprint, cert_type, country_code, "
-            "action, result, error_message"
+            "id, summary_id, started_at, fingerprint_sha256, certificate_type, country_code, "
+            "operation, status, error_message"
             ") VALUES ("
             "$1, $2, NOW(), $3, $4, $5, "
             "$6, $7, $8"
@@ -320,11 +342,11 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
 
     try {
         const char* query =
-            "SELECT id, reconciliation_id, created_at, cert_fingerprint, cert_type, "
-            "country_code, action, result, error_message "
+            "SELECT id, summary_id, started_at, fingerprint_sha256, certificate_type, "
+            "country_code, operation, status, error_message "
             "FROM reconciliation_log "
-            "WHERE reconciliation_id = $1 "
-            "ORDER BY created_at ASC "
+            "WHERE summary_id = $1 "
+            "ORDER BY started_at ASC "
             "LIMIT $2 OFFSET $3";
 
         std::vector<std::string> params = {
@@ -351,11 +373,16 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
 
 int ReconciliationRepository::countLogsByReconciliationId(const std::string& reconciliationId) {
     try {
-        const char* query = "SELECT COUNT(*) FROM reconciliation_log WHERE reconciliation_id = $1";
+        const char* query = "SELECT COUNT(*) FROM reconciliation_log WHERE summary_id = $1";
 
         std::vector<std::string> params = {reconciliationId};
 
         Json::Value result = queryExecutor_->executeScalar(query, params);
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) {
+            try { return std::stoi(result.asString()); }
+            catch (...) { return 0; }
+        }
         return result.asInt();
 
     } catch (const std::exception& e) {
@@ -384,7 +411,7 @@ domain::ReconciliationSummary ReconciliationRepository::jsonToSummary(const Json
     }
 
     // Parse timestamps
-    std::string triggeredAtStr = row["triggered_at"].asString();
+    std::string triggeredAtStr = row["started_at"].asString();
     std::tm tm = {};
     auto triggeredAt = std::chrono::system_clock::now();
     if (strptime(triggeredAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
@@ -400,19 +427,19 @@ domain::ReconciliationSummary ReconciliationRepository::jsonToSummary(const Json
         }
     }
 
-    // Parse count fields
-    int successCount = row["success_count"].asInt();
-    int failedCount = row["failed_count"].asInt();
-    int cscaAdded = row["csca_added"].asInt();
-    int dscAdded = row["dsc_added"].asInt();
-    int dscNcAdded = row["dsc_nc_added"].asInt();
-    int crlAdded = row["crl_added"].asInt();
-    int totalAdded = row["total_added"].asInt();
-    int cscaDeleted = row["csca_deleted"].asInt();
-    int dscDeleted = row["dsc_deleted"].asInt();
-    int dscNcDeleted = row["dsc_nc_deleted"].asInt();
-    int crlDeleted = row["crl_deleted"].asInt();
-    int durationMs = row["duration_ms"].asInt();
+    // Parse count fields - use getInt() for Oracle string compatibility
+    int successCount = getInt(row, "success_count");
+    int failedCount = getInt(row, "failed_count");
+    int cscaAdded = getInt(row, "csca_added");
+    int dscAdded = getInt(row, "dsc_added");
+    int dscNcAdded = getInt(row, "dsc_nc_added");
+    int crlAdded = getInt(row, "crl_added");
+    int totalAdded = getInt(row, "total_added");
+    int cscaDeleted = getInt(row, "csca_deleted");
+    int dscDeleted = getInt(row, "dsc_deleted");
+    int dscNcDeleted = getInt(row, "dsc_nc_deleted");
+    int crlDeleted = getInt(row, "crl_deleted");
+    int durationMs = getInt(row, "duration_ms");
 
     // Parse optional error_message
     std::optional<std::string> errorMessage = std::nullopt;
@@ -423,10 +450,10 @@ domain::ReconciliationSummary ReconciliationRepository::jsonToSummary(const Json
         }
     }
 
-    // Parse optional sync_status_id
+    // Parse optional sync_status_id - use getInt() for Oracle string compatibility
     std::optional<int> syncStatusId = std::nullopt;
     if (!row["sync_status_id"].isNull()) {
-        syncStatusId = row["sync_status_id"].asInt();
+        syncStatusId = getInt(row, "sync_status_id");
     }
 
     // Construct and return domain object
@@ -446,10 +473,10 @@ domain::ReconciliationSummary ReconciliationRepository::jsonToSummary(const Json
 domain::ReconciliationLog ReconciliationRepository::jsonToLog(const Json::Value& row) {
     // Parse fields
     std::string id = row["id"].asString();
-    std::string reconciliationId = row["reconciliation_id"].asString();
+    std::string reconciliationId = row["summary_id"].asString();
 
     // Parse timestamp
-    std::string createdAtStr = row["created_at"].asString();
+    std::string createdAtStr = row["started_at"].asString();
     std::tm tm = {};
     auto createdAt = std::chrono::system_clock::now();
     if (strptime(createdAtStr.c_str(), "%Y-%m-%d %H:%M:%S", &tm) != nullptr) {
@@ -457,11 +484,11 @@ domain::ReconciliationLog ReconciliationRepository::jsonToLog(const Json::Value&
     }
 
     // Parse string fields
-    std::string certFingerprint = row["cert_fingerprint"].asString();
-    std::string certType = row["cert_type"].asString();
+    std::string certFingerprint = row["fingerprint_sha256"].asString();
+    std::string certType = row["certificate_type"].asString();
     std::string countryCode = row["country_code"].asString();
-    std::string action = row["action"].asString();
-    std::string result = row["result"].asString();
+    std::string action = row["operation"].asString();
+    std::string result = row["status"].asString();
 
     // Parse optional error_message
     std::optional<std::string> errorMessage = std::nullopt;

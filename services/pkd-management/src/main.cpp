@@ -960,6 +960,9 @@ bool saveValidationResult(const ValidationResultRecord& record) {
         std::string query;
         std::vector<std::string> params;
 
+        // csca_found boolean
+        std::string cscaFoundStr = boolStr(record.cscaFound);
+
         if (dbType == "oracle") {
             // Oracle actual schema: validity_period_ok (inverted is_expired),
             //   revocation_status (VARCHAR2), validation_message (not error_message)
@@ -969,11 +972,11 @@ bool saveValidationResult(const ValidationResultRecord& record) {
             query =
                 "INSERT INTO validation_result ("
                 "upload_id, fingerprint_sha256, certificate_type, "
-                "trust_chain_valid, trust_chain_path, csca_subject_dn, "
+                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
                 "signature_verified, validity_period_ok, crl_checked, revocation_status, "
                 "validation_status, validation_message"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
                 ")";
 
             params = {
@@ -983,23 +986,24 @@ bool saveValidationResult(const ValidationResultRecord& record) {
                 trustChainValidStr,                                               // $4
                 trustChainPathJson,                                               // $5
                 record.cscaSubjectDn.empty() ? "" : record.cscaSubjectDn,         // $6
-                signatureVerifiedStr,                                             // $7
-                validityPeriodOkStr,                                              // $8
-                crlCheckedStr,                                                    // $9
-                revocationStatus,                                                 // $10
-                record.validationStatus,                                          // $11
-                record.errorMessage.empty() ? "" : record.errorMessage            // $12
+                cscaFoundStr,                                                     // $7
+                signatureVerifiedStr,                                             // $8
+                validityPeriodOkStr,                                              // $9
+                crlCheckedStr,                                                    // $10
+                revocationStatus,                                                 // $11
+                record.validationStatus,                                          // $12
+                record.errorMessage.empty() ? "" : record.errorMessage            // $13
             };
         } else {
             // PostgreSQL schema: is_expired, crl_revoked, error_message
             query =
                 "INSERT INTO validation_result ("
                 "upload_id, fingerprint_sha256, certificate_type, "
-                "trust_chain_valid, trust_chain_path, csca_subject_dn, "
+                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
                 "signature_verified, is_expired, crl_checked, crl_revoked, "
                 "validation_status, error_message"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
                 ")";
 
             params = {
@@ -1009,12 +1013,13 @@ bool saveValidationResult(const ValidationResultRecord& record) {
                 trustChainValidStr,                                               // $4
                 trustChainPathJson,                                               // $5
                 record.cscaSubjectDn.empty() ? "" : record.cscaSubjectDn,         // $6
-                signatureVerifiedStr,                                             // $7
-                isExpiredStr,                                                     // $8
-                crlCheckedStr,                                                    // $9
-                crlRevokedStr,                                                    // $10
-                record.validationStatus,                                          // $11
-                record.errorMessage.empty() ? "" : record.errorMessage            // $12
+                cscaFoundStr,                                                     // $7
+                signatureVerifiedStr,                                             // $8
+                isExpiredStr,                                                     // $9
+                crlCheckedStr,                                                    // $10
+                crlRevokedStr,                                                    // $11
+                record.validationStatus,                                          // $12
+                record.errorMessage.empty() ? "" : record.errorMessage            // $13
             };
         }
 
@@ -1038,22 +1043,41 @@ void updateValidationStatistics(const std::string& uploadId,
                                  int validCount, int invalidCount, int pendingCount, int errorCount,
                                  int trustChainValidCount, int trustChainInvalidCount, int cscaNotFoundCount,
                                  int expiredCount, int revokedCount) {
-    // Phase 6.1: Use ValidationRepository instead of direct SQL
-    // TODO Phase 6.1: Add updateValidationStatistics() method to ValidationRepository or UploadRepository
-    // This method needs to update 9 validation-related fields in uploaded_file table
-
-    if (!uploadRepository) {
-        spdlog::error("[UpdateValidationStats] uploadRepository is null");
+    if (!::queryExecutor) {
+        spdlog::error("[UpdateValidationStats] queryExecutor is null");
         return;
     }
 
-    // Stub implementation - method needs to be added to repository
-    spdlog::debug("[UpdateValidationStats] Would update validation statistics for upload: {}", uploadId);
-    spdlog::debug("  Valid: {}, Invalid: {}, Pending: {}, Error: {}",
-                 validCount, invalidCount, pendingCount, errorCount);
-    spdlog::debug("  TrustChain Valid: {}, Invalid: {}, CSCA Not Found: {}",
-                 trustChainValidCount, trustChainInvalidCount, cscaNotFoundCount);
-    spdlog::debug("  Expired: {}, Revoked: {}", expiredCount, revokedCount);
+    try {
+        std::string query =
+            "UPDATE uploaded_file SET "
+            "validation_valid_count = $1, validation_invalid_count = $2, "
+            "validation_pending_count = $3, validation_error_count = $4, "
+            "trust_chain_valid_count = $5, trust_chain_invalid_count = $6, "
+            "csca_not_found_count = $7, expired_count = $8, revoked_count = $9 "
+            "WHERE id = $10";
+
+        std::vector<std::string> params = {
+            std::to_string(validCount),
+            std::to_string(invalidCount),
+            std::to_string(pendingCount),
+            std::to_string(errorCount),
+            std::to_string(trustChainValidCount),
+            std::to_string(trustChainInvalidCount),
+            std::to_string(cscaNotFoundCount),
+            std::to_string(expiredCount),
+            std::to_string(revokedCount),
+            uploadId
+        };
+
+        ::queryExecutor->executeCommand(query, params);
+        spdlog::info("[UpdateValidationStats] Updated validation stats for upload {}: "
+                    "valid={}, invalid={}, pending={}, trustChainValid={}, cscaNotFound={}",
+                    uploadId, validCount, invalidCount, pendingCount,
+                    trustChainValidCount, cscaNotFoundCount);
+    } catch (const std::exception& e) {
+        spdlog::error("[UpdateValidationStats] Failed to update stats for {}: {}", uploadId, e.what());
+    }
 }
 
 // =============================================================================
