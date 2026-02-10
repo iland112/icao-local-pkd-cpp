@@ -148,6 +148,19 @@ public:
     );
 
     /**
+     * @brief Update upload progress (total_entries, processed_entries)
+     * @param uploadId Upload UUID
+     * @param totalEntries Total entries to process
+     * @param processedEntries Entries processed so far
+     * @return true if updated successfully
+     */
+    bool updateProgress(
+        const std::string& uploadId,
+        int totalEntries,
+        int processedEntries
+    );
+
+    /**
      * @brief Delete upload by ID
      * @param uploadId Upload UUID
      * @return true if deleted successfully

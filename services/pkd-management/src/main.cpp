@@ -3736,6 +3736,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             int ldapStoredCount = 0;
             int skippedDuplicates = 0;
             int totalCerts = 0;
+            int totalCertsInML = 0;  // Pre-counted total for progress percentage
 
             // Send initial progress
             ProgressManager::getInstance().sendProgress(
@@ -3788,7 +3789,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                     if (certs) {
                         int numCerts = sk_X509_num(certs);
-                        spdlog::info("Found {} certificates in Master List (PKCS7 fallback)", numCerts);
+                        totalCertsInML = numCerts;
+                        spdlog::info("Found {} certificates in Master List (PKCS7 fallback path)", numCerts);
 
                         for (int i = 0; i < numCerts; i++) {
                             X509* cert = sk_X509_value(certs, i);
@@ -3822,6 +3824,23 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
                             spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
+
+                            totalCerts++;
+
+                            // Send progress update every 10 certs (PKCS7 fallback path)
+                            if (totalCerts % 10 == 0) {
+                                int savedCount = cscaCount + dscCount;
+                                int pct = 30 + (70 * totalCerts / std::max(1, totalCertsInML));
+                                auto progress = ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                                        savedCount, totalCertsInML,
+                                        "인증서 처리 중: " + std::to_string(totalCerts) + "/" + std::to_string(totalCertsInML) + "개");
+                                progress.percentage = std::min(pct, 99);
+                                ProgressManager::getInstance().sendProgress(progress);
+
+                                if (totalCerts % 50 == 0) {
+                                    ::uploadRepository->updateProgress(uploadId, totalCertsInML, savedCount);
+                                }
+                            }
 
                             // Save certificate using Repository Pattern (Phase 6.1)
                             auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
@@ -3914,6 +3933,23 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                         }
 
                         if (certSetStart && certSetLen > 0) {
+                            // Pre-count certificates for progress percentage
+                            {
+                                const unsigned char* scanPtr = certSetStart;
+                                const unsigned char* scanEnd = certSetStart + certSetLen;
+                                while (scanPtr < scanEnd) {
+                                    const unsigned char* scanStart = scanPtr;
+                                    X509* scanCert = d2i_X509(nullptr, &scanPtr, scanEnd - scanStart);
+                                    if (scanCert) {
+                                        totalCertsInML++;
+                                        X509_free(scanCert);
+                                    } else {
+                                        break;
+                                    }
+                                }
+                                spdlog::info("Pre-counted {} certificates in Master List", totalCertsInML);
+                            }
+
                             // Parse certificates from SET
                             const unsigned char* certPtr = certSetStart;
                             const unsigned char* certSetEnd = certSetStart + certSetLen;
@@ -3979,11 +4015,22 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                                         totalCerts++;
 
-                                        // Send progress update
-                                        if (totalCerts % 50 == 0) {
-                                            ProgressManager::getInstance().sendProgress(
-                                                ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                                                    cscaCount + dscCount, totalCerts, "인증서 저장 중: " + std::to_string(cscaCount + dscCount) + "개"));
+                                        // Send progress update every 10 certs (more frequent for better UX)
+                                        if (totalCerts % 10 == 0) {
+                                            int savedCount = cscaCount + dscCount;
+                                            // ML processing does DB+LDAP in same loop, so use full 30-100% range
+                                            // (parsing takes ~1s, saving takes ~3min)
+                                            int pct = 30 + (70 * totalCerts / std::max(1, totalCertsInML));
+                                            auto progress = ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                                                    savedCount, totalCertsInML,
+                                                    "인증서 처리 중: " + std::to_string(totalCerts) + "/" + std::to_string(totalCertsInML) + "개");
+                                            progress.percentage = std::min(pct, 99);  // Cap at 99% until truly complete
+                                            ProgressManager::getInstance().sendProgress(progress);
+
+                                            // Update DB progress for polling fallback
+                                            if (totalCerts % 50 == 0) {
+                                                ::uploadRepository->updateProgress(uploadId, totalCertsInML, savedCount);
+                                            }
                                         }
 
                                         // Save to DB with validation status using Repository Pattern (Phase 6.1)
@@ -4038,6 +4085,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                     if (certs) {
                         int numCerts = sk_X509_num(certs);
+                        totalCertsInML = numCerts;
                         spdlog::info("Found {} certificates in CMS certificate store", numCerts);
 
                         for (int i = 0; i < numCerts; i++) {
@@ -4061,7 +4109,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                             // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
                             CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                            spdlog::debug("Phase 4.4 (Master List CMS store): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                           certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
 
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
@@ -4070,8 +4118,25 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                             // Phase 4.4: Check ICAO 9303 compliance
                             IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
-                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
+                            spdlog::debug("Phase 4.4 (Master List CMS store): ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
+
+                            totalCerts++;
+
+                            // Send progress update every 10 certs (CMS certificate store path)
+                            if (totalCerts % 10 == 0) {
+                                int savedCount = cscaCount + dscCount;
+                                int pct = 30 + (70 * totalCerts / std::max(1, totalCertsInML));
+                                auto progress = ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+                                        savedCount, totalCertsInML,
+                                        "인증서 처리 중: " + std::to_string(totalCerts) + "/" + std::to_string(totalCertsInML) + "개");
+                                progress.percentage = std::min(pct, 99);
+                                ProgressManager::getInstance().sendProgress(progress);
+
+                                if (totalCerts % 50 == 0) {
+                                    ::uploadRepository->updateProgress(uploadId, totalCertsInML, savedCount);
+                                }
+                            }
 
                             // Save certificate using Repository Pattern (Phase 6.1)
                             auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
@@ -4111,6 +4176,9 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             // Only Country Master Lists from LDIF (pkdMasterListContent) are counted as ML
             ::uploadRepository->updateStatus(uploadId, "COMPLETED", "");
             ::uploadRepository->updateStatistics(uploadId, cscaCount, dscCount, 0, 0, 1, 1);
+            // Update final progress counts for polling fallback
+            int finalTotal = totalCertsInML > 0 ? totalCertsInML : totalCerts;
+            ::uploadRepository->updateProgress(uploadId, finalTotal, cscaCount + dscCount);
 
             // v1.5.1: Enhanced completion message with LDAP status
             std::string completionMsg = "처리 완료: ";

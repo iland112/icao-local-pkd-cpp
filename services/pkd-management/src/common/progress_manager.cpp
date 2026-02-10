@@ -373,10 +373,19 @@ void ProgressManager::sendProgress(const ProcessingProgress& progress) {
         try {
             std::string sseData = "event: progress\ndata: " + progress.toJson() + "\n\n";
             it->second(sseData);
+            spdlog::info("[SSE] Sent event: {} - {} ({}%) processed={}/{}",
+                progress.uploadId.substr(0, 8), stageToString(progress.stage),
+                progress.percentage, progress.processedCount, progress.totalCount);
+        } catch (const std::exception& e) {
+            spdlog::warn("[SSE] Callback failed for {}: {}", progress.uploadId.substr(0, 8), e.what());
+            sseCallbacks_.erase(it);
         } catch (...) {
-            // Callback failed - remove it
+            spdlog::warn("[SSE] Callback failed for {} (unknown error)", progress.uploadId.substr(0, 8));
             sseCallbacks_.erase(it);
         }
+    } else {
+        spdlog::debug("[SSE] No callback registered for {} - {} ({}%)",
+            progress.uploadId.substr(0, 8), stageToString(progress.stage), progress.percentage);
     }
 
     spdlog::debug("Progress: {} - {} ({}%)", progress.uploadId, stageToString(progress.stage), progress.percentage);
@@ -385,12 +394,17 @@ void ProgressManager::sendProgress(const ProcessingProgress& progress) {
 void ProgressManager::registerSseCallback(const std::string& uploadId, std::function<void(const std::string&)> callback) {
     std::lock_guard<std::mutex> lock(mutex_);
     sseCallbacks_[uploadId] = callback;
+    spdlog::info("[SSE] Callback registered for upload: {}", uploadId.substr(0, 8));
 
     // Send cached progress if available
     auto it = progressCache_.find(uploadId);
     if (it != progressCache_.end()) {
         std::string sseData = "event: progress\ndata: " + it->second.toJson() + "\n\n";
         callback(sseData);
+        spdlog::info("[SSE] Sent cached progress: {} - {} ({}%)",
+            uploadId.substr(0, 8), stageToString(it->second.stage), it->second.percentage);
+    } else {
+        spdlog::info("[SSE] No cached progress for {}", uploadId.substr(0, 8));
     }
 }
 

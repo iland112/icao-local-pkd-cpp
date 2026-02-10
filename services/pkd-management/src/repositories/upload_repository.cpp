@@ -238,6 +238,33 @@ bool UploadRepository::updateStatistics(
     }
 }
 
+bool UploadRepository::updateProgress(
+    const std::string& uploadId,
+    int totalEntries,
+    int processedEntries
+)
+{
+    try {
+        const char* query =
+            "UPDATE uploaded_file SET "
+            "total_entries = $1, processed_entries = $2 "
+            "WHERE id = $3";
+
+        std::vector<std::string> params = {
+            std::to_string(totalEntries),
+            std::to_string(processedEntries),
+            uploadId
+        };
+
+        queryExecutor_->executeCommand(query, params);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[UploadRepository] Update progress failed: {}", e.what());
+        return false;
+    }
+}
+
 bool UploadRepository::deleteById(const std::string& uploadId)
 {
     spdlog::debug("[UploadRepository] Deleting upload: {}", uploadId);
