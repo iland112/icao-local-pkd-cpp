@@ -8,8 +8,55 @@
 #include <iomanip>
 #include <openssl/x509.h>
 #include <openssl/err.h>
+#include <unordered_map>
 
 namespace repositories {
+
+// Convert certificate date to Oracle-safe ISO 8601 format (no timezone suffix)
+// Handles two input formats:
+//   1. ASN1_TIME_print: "Jan 15 10:30:00 2024 GMT" → "2024-01-15 10:30:00"
+//   2. ISO with TZ:     "2024-04-15 15:00:00+00"   → "2024-04-15 15:00:00"
+// Oracle TO_TIMESTAMP expects exactly 'YYYY-MM-DD HH24:MI:SS' (19 chars)
+static std::string convertDateToIso(const std::string& opensslDate) {
+    if (opensslDate.empty()) return "";
+
+    // Check if already in ISO-like format (starts with digit: "2024-...")
+    if (!opensslDate.empty() && std::isdigit(opensslDate[0])) {
+        // Already ISO format, just strip timezone suffix (+00, +00:00, Z, etc.)
+        std::string result = opensslDate;
+        // Find the position after "YYYY-MM-DD HH:MI:SS" (19 chars)
+        if (result.length() > 19) {
+            result = result.substr(0, 19);
+        }
+        return result;
+    }
+
+    // ASN1_TIME_print format: "Jan 15 10:30:00 2024 GMT"
+    static const std::unordered_map<std::string, std::string> months = {
+        {"Jan", "01"}, {"Feb", "02"}, {"Mar", "03"}, {"Apr", "04"},
+        {"May", "05"}, {"Jun", "06"}, {"Jul", "07"}, {"Aug", "08"},
+        {"Sep", "09"}, {"Oct", "10"}, {"Nov", "11"}, {"Dec", "12"}
+    };
+
+    std::istringstream iss(opensslDate);
+    std::string month, day, time, year;
+    iss >> month >> day >> time >> year;
+
+    auto it = months.find(month);
+    if (it == months.end()) {
+        // Unknown format — truncate to 19 chars as safety measure
+        return opensslDate.length() > 19 ? opensslDate.substr(0, 19) : opensslDate;
+    }
+
+    if (day.length() == 1) day = "0" + day;
+
+    // Truncate time to HH:MI:SS (strip any fractional seconds)
+    if (time.length() > 8) {
+        time = time.substr(0, 8);
+    }
+
+    return year + "-" + it->second + "-" + day + " " + time;
+}
 
 CertificateRepository::CertificateRepository(common::IQueryExecutor* queryExecutor)
     : queryExecutor_(queryExecutor)
@@ -777,27 +824,42 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             pubKeyCurve = x509meta.publicKeyCurve.value_or("");
 
             // Convert arrays to comma-separated strings (database-agnostic)
+            // PostgreSQL requires TEXT[] format: {element1,element2} or {} for empty
+            // Oracle uses VARCHAR2: element1,element2 or empty string
+            std::string dbType = queryExecutor_->getDatabaseType();
+
             std::ostringstream kuStream, ekuStream, crlStream;
             for (size_t i = 0; i < x509meta.keyUsage.size(); i++) {
                 kuStream << x509meta.keyUsage[i];
                 if (i < x509meta.keyUsage.size() - 1) kuStream << ",";
             }
             keyUsageStr = kuStream.str();
+            if (dbType == "postgres") {
+                // PostgreSQL: wrap in braces, use {} for empty
+                keyUsageStr = keyUsageStr.empty() ? "{}" : "{" + keyUsageStr + "}";
+            }
 
             for (size_t i = 0; i < x509meta.extendedKeyUsage.size(); i++) {
                 ekuStream << x509meta.extendedKeyUsage[i];
                 if (i < x509meta.extendedKeyUsage.size() - 1) ekuStream << ",";
             }
             extKeyUsageStr = ekuStream.str();
+            if (dbType == "postgres") {
+                // PostgreSQL: wrap in braces, use {} for empty
+                extKeyUsageStr = extKeyUsageStr.empty() ? "{}" : "{" + extKeyUsageStr + "}";
+            }
 
             for (size_t i = 0; i < x509meta.crlDistributionPoints.size(); i++) {
                 crlStream << x509meta.crlDistributionPoints[i];
                 if (i < x509meta.crlDistributionPoints.size() - 1) crlStream << ",";
             }
             crlDpStr = crlStream.str();
+            if (dbType == "postgres") {
+                // PostgreSQL: wrap in braces, use {} for empty
+                crlDpStr = crlDpStr.empty() ? "{}" : "{" + crlDpStr + "}";
+            }
 
-            // Database-aware boolean formatting
-            std::string dbType = queryExecutor_->getDatabaseType();
+            // Database-aware boolean formatting (dbType already retrieved above)
             isCaStr = x509meta.isCA ? (dbType == "oracle" ? "1" : "TRUE") : (dbType == "oracle" ? "0" : "FALSE");
             isSelfSignedStr = x509meta.isSelfSigned ? (dbType == "oracle" ? "1" : "TRUE") : (dbType == "oracle" ? "0" : "FALSE");
 
@@ -821,76 +883,159 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
         // Step 3: Insert new certificate with X.509 metadata
         // ====================================================================
 
-        // Convert DER bytes to hex string (database-agnostic)
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Convert DER bytes to hex string
         std::ostringstream hexStream;
-        hexStream << "\\\\x";  // PostgreSQL bytea format prefix (Oracle will handle differently)
+        hexStream << "\\\\x";  // PostgreSQL bytea hex format prefix (also used as BLOB marker for Oracle)
         for (size_t i = 0; i < certData.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(certData[i]);
         }
         std::string certDataHex = hexStream.str();
 
-        const char* insertQuery =
-            "INSERT INTO certificate ("
-            "upload_id, certificate_type, country_code, "
-            "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-            "not_before, not_after, certificate_data, "
-            "validation_status, validation_message, "
-            "duplicate_count, first_upload_id, created_at, "
-            "version, signature_algorithm, signature_hash_algorithm, "
-            "public_key_algorithm, public_key_size, public_key_curve, "
-            "key_usage, extended_key_usage, "
-            "is_ca, path_len_constraint, "
-            "subject_key_identifier, authority_key_identifier, "
-            "crl_distribution_points, ocsp_responder_url, is_self_signed"
-            ") VALUES ("
-            "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1, CURRENT_TIMESTAMP, "
-            "$13, $14, $15, "
-            "$16, $17, $18, "
-            "$19, $20, "
-            "$21, $22, "
-            "$23, $24, "
-            "$25, $26, $27"
-            ") RETURNING id";
+        std::string newId;
 
-        std::vector<std::string> insertParams = {
-            uploadId,                                // $1
-            certType,                                // $2
-            countryCode,                             // $3
-            subjectDn,                               // $4
-            issuerDn,                                // $5
-            serialNumber,                            // $6
-            fingerprint,                             // $7
-            notBefore,                               // $8
-            notAfter,                                // $9
-            certDataHex,                             // $10
-            validationStatus,                        // $11
-            validationMessage,                       // $12
-            versionStr,                              // $13
-            sigAlg.empty() ? "" : sigAlg,            // $14
-            sigHashAlg.empty() ? "" : sigHashAlg,    // $15
-            pubKeyAlg.empty() ? "" : pubKeyAlg,      // $16
-            pubKeySizeStr == "0" ? "" : pubKeySizeStr, // $17
-            pubKeyCurve,                             // $18
-            keyUsageStr,                             // $19
-            extKeyUsageStr,                          // $20
-            isCaStr,                                 // $21
-            pathLenStr,                              // $22
-            ski,                                     // $23
-            aki,                                     // $24
-            crlDpStr,                                // $25
-            ocspUrl,                                 // $26
-            isSelfSignedStr                          // $27
-        };
+        if (dbType == "oracle") {
+            // Oracle: Pre-generate UUID, no RETURNING clause needed
+            Json::Value uuidResult = queryExecutor_->executeQuery(
+                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+            if (uuidResult.empty()) {
+                spdlog::error("[CertificateRepository] Failed to generate UUID from Oracle");
+                return std::make_pair(std::string(""), false);
+            }
+            newId = uuidResult[0]["id"].asString();
 
-        Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
+            std::string insertQuery =
+                "INSERT INTO certificate ("
+                "id, upload_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "not_before, not_after, certificate_data, "
+                "validation_status, validation_message, "
+                "duplicate_count, first_upload_id, created_at, "
+                "version, signature_algorithm, signature_hash_algorithm, "
+                "public_key_algorithm, public_key_size, public_key_curve, "
+                "key_usage, extended_key_usage, "
+                "is_ca, path_len_constraint, "
+                "subject_key_identifier, authority_key_identifier, "
+                "crl_distribution_points, ocsp_responder_url, is_self_signed"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, "
+                "CASE WHEN $9 IS NULL OR $9 = '' THEN NULL ELSE TO_TIMESTAMP($9, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "CASE WHEN $10 IS NULL OR $10 = '' THEN NULL ELSE TO_TIMESTAMP($10, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "$11, $12, $13, 0, $2, SYSTIMESTAMP, "
+                "$14, $15, $16, "
+                "$17, NULLIF($18, '')::INTEGER, $19, "
+                "$20, $21, "
+                "$22, NULLIF($23, '')::INTEGER, "
+                "$24, $25, "
+                "$26, $27, $28"
+                ")";
 
-        if (insertResult.empty()) {
-            spdlog::error("[CertificateRepository] INSERT failed: no ID returned");
-            return std::make_pair(std::string(""), false);
+            // Convert OpenSSL date format to ISO for Oracle TIMESTAMP columns
+            // "Jan 15 10:30:00 2024 GMT" → "2024-01-15 10:30:00"
+            std::string notBeforeIso = convertDateToIso(notBefore);
+            std::string notAfterIso = convertDateToIso(notAfter);
+            spdlog::debug("[CertificateRepository] Oracle date conversion: '{}' → '{}', '{}' → '{}'",
+                notBefore, notBeforeIso, notAfter, notAfterIso);
+
+            std::vector<std::string> insertParams = {
+                newId,                                   // $1 (pre-generated id)
+                uploadId,                                // $2
+                certType,                                // $3
+                countryCode,                             // $4
+                subjectDn,                               // $5
+                issuerDn,                                // $6
+                serialNumber,                            // $7
+                fingerprint,                             // $8
+                notBeforeIso,                            // $9  (ISO format for Oracle)
+                notAfterIso,                             // $10 (ISO format for Oracle)
+                certDataHex,                             // $11
+                validationStatus,                        // $12
+                validationMessage,                       // $13
+                versionStr,                              // $14
+                sigAlg.empty() ? "" : sigAlg,            // $15
+                sigHashAlg.empty() ? "" : sigHashAlg,    // $16
+                pubKeyAlg.empty() ? "" : pubKeyAlg,      // $17
+                pubKeySizeStr == "0" ? "" : pubKeySizeStr, // $18
+                pubKeyCurve,                             // $19
+                keyUsageStr,                             // $20
+                extKeyUsageStr,                          // $21
+                isCaStr,                                 // $22
+                pathLenStr,                              // $23
+                ski,                                     // $24
+                aki,                                     // $25
+                crlDpStr,                                // $26
+                ocspUrl,                                 // $27
+                isSelfSignedStr                          // $28
+            };
+
+            queryExecutor_->executeCommand(insertQuery, insertParams);
+
+        } else {
+            // PostgreSQL: Use RETURNING id
+            const char* insertQuery =
+                "INSERT INTO certificate ("
+                "upload_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "not_before, not_after, certificate_data, "
+                "validation_status, validation_message, "
+                "duplicate_count, first_upload_id, created_at, "
+                "version, signature_algorithm, signature_hash_algorithm, "
+                "public_key_algorithm, public_key_size, public_key_curve, "
+                "key_usage, extended_key_usage, "
+                "is_ca, path_len_constraint, "
+                "subject_key_identifier, authority_key_identifier, "
+                "crl_distribution_points, ocsp_responder_url, is_self_signed"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1, CURRENT_TIMESTAMP, "
+                "$13, $14, $15, "
+                "$16, NULLIF($17, '')::INTEGER, $18, "
+                "$19, $20, "
+                "$21, NULLIF($22, '')::INTEGER, "
+                "$23, $24, "
+                "$25, $26, $27"
+                ") RETURNING id";
+
+            std::vector<std::string> insertParams = {
+                uploadId,                                // $1
+                certType,                                // $2
+                countryCode,                             // $3
+                subjectDn,                               // $4
+                issuerDn,                                // $5
+                serialNumber,                            // $6
+                fingerprint,                             // $7
+                notBefore,                               // $8
+                notAfter,                                // $9
+                certDataHex,                             // $10
+                validationStatus,                        // $11
+                validationMessage,                       // $12
+                versionStr,                              // $13
+                sigAlg.empty() ? "" : sigAlg,            // $14
+                sigHashAlg.empty() ? "" : sigHashAlg,    // $15
+                pubKeyAlg.empty() ? "" : pubKeyAlg,      // $16
+                pubKeySizeStr == "0" ? "" : pubKeySizeStr, // $17
+                pubKeyCurve,                             // $18
+                keyUsageStr,                             // $19
+                extKeyUsageStr,                          // $20
+                isCaStr,                                 // $21
+                pathLenStr,                              // $22
+                ski,                                     // $23
+                aki,                                     // $24
+                crlDpStr,                                // $25
+                ocspUrl,                                 // $26
+                isSelfSignedStr                          // $27
+            };
+
+            Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
+
+            if (insertResult.empty()) {
+                spdlog::error("[CertificateRepository] INSERT failed: no ID returned");
+                return std::make_pair(std::string(""), false);
+            }
+
+            newId = insertResult[0]["id"].asString();
         }
-
-        std::string newId = insertResult[0]["id"].asString();
 
         spdlog::debug("[CertificateRepository] New certificate inserted: id={}, type={}, country={}, fingerprint={}",
                      newId.substr(0, 8) + "...", certType, countryCode, fingerprint.substr(0, 16) + "...");
@@ -898,7 +1043,26 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
         return std::make_pair(newId, false);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CertificateRepository] saveCertificateWithDuplicateCheck failed: {}", e.what());
+        std::string errMsg = e.what();
+        // ORA-00001: unique constraint violated — treat as duplicate (race condition)
+        // This is equivalent to PostgreSQL's ON CONFLICT DO NOTHING behavior
+        if (errMsg.find("ORA-00001") != std::string::npos) {
+            spdlog::debug("[CertificateRepository] Concurrent duplicate detected (ORA-00001): type={}, fingerprint={}",
+                         certType, fingerprint.substr(0, 16) + "...");
+            // Re-query to get the existing certificate ID
+            try {
+                const char* reCheckQuery =
+                    "SELECT id FROM certificate WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
+                Json::Value reResult = queryExecutor_->executeQuery(reCheckQuery, {certType, fingerprint});
+                if (!reResult.empty()) {
+                    return std::make_pair(reResult[0]["id"].asString(), true);
+                }
+            } catch (...) {
+                // Ignore re-query failure
+            }
+            return std::make_pair(std::string(""), true);  // isDuplicate=true
+        }
+        spdlog::error("[CertificateRepository] saveCertificateWithDuplicateCheck failed: {}", errMsg);
         return std::make_pair(std::string(""), false);
     }
 }

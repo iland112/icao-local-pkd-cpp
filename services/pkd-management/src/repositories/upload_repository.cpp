@@ -176,13 +176,13 @@ bool UploadRepository::updateStatus(
         std::vector<std::string> params;
 
         if (errorMessage.empty()) {
-            query = "UPDATE uploaded_file SET status = $1, "
-                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
+            query = "UPDATE uploaded_file SET status = $1::VARCHAR, "
+                   "completed_timestamp = CASE WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
                    "WHERE id = $2";
             params = {status, uploadId};
         } else {
-            query = "UPDATE uploaded_file SET status = $1, error_message = $2, "
-                   "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
+            query = "UPDATE uploaded_file SET status = $1::VARCHAR, error_message = $2, "
+                   "completed_timestamp = CASE WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
                    "WHERE id = $3";
             params = {status, errorMessage, uploadId};
         }

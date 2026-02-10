@@ -176,8 +176,36 @@ std::string UserRepository::create(const domain::User& user)
         std::string dbType = queryExecutor_->getDatabaseType();
         std::string query;
         std::vector<std::string> params;
+        std::string userId;
 
-        if (dbType == "postgres") {
+        if (dbType == "oracle") {
+            // Oracle: Pre-generate UUID, no RETURNING clause
+            Json::Value uuidResult = queryExecutor_->executeQuery(
+                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+            if (uuidResult.empty()) {
+                throw std::runtime_error("Failed to generate UUID from Oracle");
+            }
+            userId = uuidResult[0]["id"].asString();
+
+            query =
+                "INSERT INTO users (id, username, password_hash, email, full_name, is_admin, permissions, is_active) "
+                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8)";
+
+            params = {
+                userId,
+                user.getUsername(),
+                user.getPasswordHash(),
+                user.getEmail().value_or(""),
+                user.getFullName().value_or(""),
+                user.isAdmin() ? "1" : "0",
+                permissionsStr,
+                user.isActive() ? "1" : "0"
+            };
+
+            queryExecutor_->executeCommand(query, params);
+
+        } else {
+            // PostgreSQL: Use RETURNING id
             query =
                 "INSERT INTO users (username, password_hash, email, full_name, is_admin, permissions, is_active) "
                 "VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7) "
@@ -192,31 +220,16 @@ std::string UserRepository::create(const domain::User& user)
                 permissionsStr,
                 user.isActive() ? "true" : "false"
             };
-        } else {
-            // Oracle
-            query =
-                "INSERT INTO users (username, password_hash, email, full_name, is_admin, permissions, is_active) "
-                "VALUES (:1, :2, :3, :4, :5, :6, :7) "
-                "RETURNING id INTO :8";
 
-            params = {
-                user.getUsername(),
-                user.getPasswordHash(),
-                user.getEmail().value_or(""),
-                user.getFullName().value_or(""),
-                user.isAdmin() ? "1" : "0",
-                permissionsStr,
-                user.isActive() ? "1" : "0"
-            };
+            Json::Value result = queryExecutor_->executeQuery(query, params);
+
+            if (result.empty() || !result[0].isMember("id")) {
+                throw std::runtime_error("Failed to get generated user ID");
+            }
+
+            userId = result[0]["id"].asString();
         }
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
-
-        if (result.empty() || !result[0].isMember("id")) {
-            throw std::runtime_error("Failed to get generated user ID");
-        }
-
-        std::string userId = result[0]["id"].asString();
         spdlog::info("[UserRepository] User created successfully: {} (ID: {})",
                     user.getUsername(), userId);
 
@@ -325,17 +338,33 @@ std::optional<std::string> UserRepository::remove(const std::string& id)
     try {
         spdlog::debug("[UserRepository] Removing user: {}", id);
 
-        const char* query = "DELETE FROM users WHERE id = $1 RETURNING username";
-        std::vector<std::string> params = {id};
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string username;
 
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        if (dbType == "oracle") {
+            // Oracle: Query username first, then delete (no RETURNING support)
+            Json::Value userResult = queryExecutor_->executeQuery(
+                "SELECT username FROM users WHERE id = $1", {id});
+            if (userResult.empty()) {
+                spdlog::warn("[UserRepository] User not found: {}", id);
+                return std::nullopt;
+            }
+            username = userResult[0]["username"].asString();
 
-        if (result.empty()) {
-            spdlog::warn("[UserRepository] User not found: {}", id);
-            return std::nullopt;
+            queryExecutor_->executeCommand(
+                "DELETE FROM users WHERE id = $1", {id});
+        } else {
+            // PostgreSQL: DELETE with RETURNING
+            const char* query = "DELETE FROM users WHERE id = $1 RETURNING username";
+            Json::Value result = queryExecutor_->executeQuery(query, {id});
+
+            if (result.empty()) {
+                spdlog::warn("[UserRepository] User not found: {}", id);
+                return std::nullopt;
+            }
+            username = result[0]["username"].asString();
         }
 
-        std::string username = result[0]["username"].asString();
         spdlog::info("[UserRepository] User deleted: {} (ID: {})", username, id);
 
         return username;

@@ -108,14 +108,44 @@ public:
 private:
     OracleConnectionPool* pool_;  ///< Oracle connection pool
 
-    // OCI handles for stable VARCHAR2 TIMESTAMP handling
-    OCIEnv* ociEnv_;      ///< OCI environment handle
-    OCIError* ociErr_;    ///< OCI error handle
-    OCISvcCtx* ociSvcCtx_; ///< OCI service context (connection)
-    OCIServer* ociServer_; ///< OCI server handle
-    OCISession* ociSession_; ///< OCI session handle
+    // OCI handles for stable VARCHAR2 TIMESTAMP handling (deprecated - now per-query)
+    OCIEnv* ociEnv_;      ///< OCI environment handle (legacy, for executeQueryWithOCI)
+    OCIError* ociErr_;    ///< OCI error handle (legacy, for executeQueryWithOCI)
+    OCISvcCtx* ociSvcCtx_; ///< OCI service context (legacy, for executeQueryWithOCI)
+    OCIServer* ociServer_; ///< OCI server handle (legacy, for executeQueryWithOCI)
+    OCISession* ociSession_; ///< OCI session handle (legacy, for executeQueryWithOCI)
 
     std::string connString_; ///< Oracle connection string
+
+    /**
+     * @brief OCI connection handles for per-query thread-safe usage
+     */
+    struct OciConnection {
+        OCIEnv* env = nullptr;
+        OCIError* err = nullptr;
+        OCISvcCtx* svcCtx = nullptr;
+        OCIServer* server = nullptr;
+        OCISession* session = nullptr;
+    };
+
+    /**
+     * @brief Create new OCI connection handles and connect to Oracle
+     * @param[out] conn OCI connection structure to populate
+     * @throws std::runtime_error on connection failure
+     */
+    void createOciConnection(OciConnection& conn);
+
+    /**
+     * @brief Disconnect OCI session and detach from server
+     * @param conn OCI connection to disconnect
+     */
+    void disconnectOci(OciConnection& conn);
+
+    /**
+     * @brief Free all OCI handles
+     * @param conn OCI connection to free
+     */
+    void freeOciHandles(OciConnection& conn);
 
     /**
      * @brief Initialize OCI environment and error handles

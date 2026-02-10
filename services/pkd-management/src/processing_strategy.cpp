@@ -104,18 +104,11 @@ void AutoProcessingStrategy::processLdifEntries(
                               stats.trustChainInvalidCount, stats.cscaNotFoundCount,
                               stats.expiredCount, stats.revokedCount);
 
-    // Update ML count if any (using repository)
-    if (counts.mlCount > 0) {
-        // NOTE: Need to add updateMlCount() method to UploadRepository
-        // For now, this needs to be handled by uploadRepository
-        spdlog::warn("ML count update needs UploadRepository::updateMlCount() method");
-    }
-
-    // Update MLSC count if any (v2.1.1)
-    if (counts.mlscCount > 0) {
-        // NOTE: Need to add updateMlscCount() method to UploadRepository
-        // For now, this needs to be handled by uploadRepository
-        spdlog::warn("MLSC count update needs UploadRepository::updateMlscCount() method");
+    // Update ML and MLSC counts via repository (v2.6.2 fix)
+    if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
+        ::uploadRepository->updateStatistics(uploadId,
+            counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
+            counts.mlscCount, counts.mlCount);
     }
 
     spdlog::info("AUTO mode: Completed - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}, MLSC: {}, LDAP: {} certs, {} CRLs, {} MLs",
@@ -177,12 +170,15 @@ void AutoProcessingStrategy::processMasterListContent(
                           stats.cscaExtractedCount,   // processed_entries
                           "");                        // error_message
 
-    // Update MLSC-specific count (v2.1.1)
-    // NOTE: Need to add updateMlscCount() method to UploadRepository
-    spdlog::warn("MLSC count update needs UploadRepository::updateMlscCount() method");
+    // Update MLSC and ML counts directly via repository (v2.6.2 fix)
+    if (::uploadRepository) {
+        ::uploadRepository->updateStatistics(uploadId,
+            stats.cscaExtractedCount, 0, 0, 0,
+            stats.mlscCount, stats.mlCount);
+    }
 
     spdlog::info("AUTO mode: Statistics updated - status=COMPLETED, mlsc_count={}, csca_count={}",
-                stats.mlCount, stats.cscaExtractedCount);
+                stats.mlscCount, stats.cscaExtractedCount);
 }
 
 void AutoProcessingStrategy::validateAndSaveToDb(
@@ -474,30 +470,11 @@ void ManualProcessingStrategy::validateAndSaveToDb(
                                   stats.trustChainInvalidCount, stats.cscaNotFoundCount,
                                   stats.expiredCount, stats.revokedCount);
 
-        // Update ML count if any (parameterized query)
-        if (counts.mlCount > 0) {
-            const char* mlUpdateQuery = "UPDATE uploaded_file SET ml_count = $1 WHERE id = $2";
-            std::string mlCountStr = std::to_string(counts.mlCount);
-            const char* paramValues[2] = {mlCountStr.c_str(), uploadId.c_str()};
-            PGresult* mlRes = PQexecParams(conn, mlUpdateQuery, 2, nullptr, paramValues,
-                                           nullptr, nullptr, 0);
-            if (PQresultStatus(mlRes) != PGRES_COMMAND_OK) {
-                spdlog::error("Failed to update ML count: {}", PQerrorMessage(conn));
-            }
-            PQclear(mlRes);
-        }
-
-        // Update MLSC count if any (v2.1.1)
-        if (counts.mlscCount > 0) {
-            const char* mlscUpdateQuery = "UPDATE uploaded_file SET mlsc_count = $1 WHERE id = $2";
-            std::string mlscCountStr = std::to_string(counts.mlscCount);
-            const char* paramValues[2] = {mlscCountStr.c_str(), uploadId.c_str()};
-            PGresult* mlscRes = PQexecParams(conn, mlscUpdateQuery, 2, nullptr, paramValues,
-                                             nullptr, nullptr, 0);
-            if (PQresultStatus(mlscRes) != PGRES_COMMAND_OK) {
-                spdlog::error("Failed to update MLSC count: {}", PQerrorMessage(conn));
-            }
-            PQclear(mlscRes);
+        // Update ML and MLSC counts via repository (v2.6.2 fix - Oracle compatible)
+        if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
+            ::uploadRepository->updateStatistics(uploadId,
+                counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
+                counts.mlscCount, counts.mlCount);
         }
 
         spdlog::info("MANUAL mode Stage 2: Processed {} LDIF entries - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}, MLSC: {}",
@@ -666,10 +643,13 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
                           stats.cscaExtractedCount,   // processed_entries
                           "");                        // error_message
 
-    // Update MLSC-specific count (v2.1.1)
-    // NOTE: Need to add updateMlscCount() method to UploadRepository
-    spdlog::warn("MLSC count update needs UploadRepository::updateMlscCount() method");
+    // Update MLSC and ML counts directly via repository (v2.6.2 fix)
+    if (::uploadRepository) {
+        ::uploadRepository->updateStatistics(uploadId,
+            stats.cscaExtractedCount, 0, 0, 0,
+            stats.mlscCount, stats.mlCount);
+    }
 
     spdlog::info("MANUAL mode Stage 2: Statistics updated - mlsc_count={}, csca_count={}",
-                stats.mlCount, stats.cscaExtractedCount);
+                stats.mlscCount, stats.cscaExtractedCount);
 }

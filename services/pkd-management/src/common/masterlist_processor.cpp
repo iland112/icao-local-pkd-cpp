@@ -620,7 +620,7 @@ bool processMasterListFile(
                     );
 
                     if (!isDuplicate) {
-                        stats.mlCount++;
+                        stats.mlscCount++;
                         spdlog::info("[ML-FILE] MLSC {}/{} - NEW - fingerprint: {}, cert_id: {}",
                                     i + 1, numSigners, meta.fingerprint.substr(0, 16) + "...", certId);
 
@@ -809,6 +809,7 @@ bool processMasterListFile(
                     totalCerts, newCount, dupCount);
 
         // Update statistics
+        stats.mlCount = 1;  // One Master List file processed
         stats.cscaExtractedCount = totalCerts;
         stats.cscaNewCount = newCount;
         stats.cscaDuplicateCount = dupCount;
