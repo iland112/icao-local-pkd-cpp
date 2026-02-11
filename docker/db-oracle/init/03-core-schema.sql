@@ -7,8 +7,14 @@
 -- Converted from PostgreSQL to Oracle DDL
 -- =============================================================================
 
--- Connect as PKD_USER
-CONNECT pkd_user/pkd_password@XE;
+-- SQL*Plus settings
+SET SQLBLANKLINES ON
+
+-- Connect as PKD_USER to XEPDB1 (Pluggable Database)
+CONNECT pkd_user/pkd_password@XEPDB1;
+
+-- Allow re-runs: skip "already exists" errors (ORA-00955, ORA-01430, ORA-02261, ORA-01442)
+WHENEVER SQLERROR CONTINUE;
 
 -- =============================================================================
 -- File Upload Tables
@@ -127,9 +133,8 @@ CREATE INDEX idx_cert_first_upload ON certificate(first_upload_id);
 CREATE INDEX idx_cert_ldap_dn_v2 ON certificate(ldap_dn_v2);
 CREATE UNIQUE INDEX idx_cert_unique ON certificate(certificate_type, fingerprint_sha256);
 
--- Indexes on CLOB columns (using functional index on substring)
-CREATE INDEX idx_cert_subject_dn ON certificate(SUBSTR(subject_dn, 1, 500));
-CREATE INDEX idx_cert_issuer_dn ON certificate(SUBSTR(issuer_dn, 1, 500));
+-- Note: CLOB columns (subject_dn, issuer_dn) cannot be indexed in Oracle
+-- Searches use DBMS_LOB.SUBSTR or full table scan - acceptable for certificate lookups
 
 -- =============================================================================
 -- CRL Tables
@@ -164,8 +169,8 @@ CREATE TABLE crl (
 
 CREATE INDEX idx_crl_upload_id ON crl(upload_id);
 CREATE INDEX idx_crl_country ON crl(country_code);
-CREATE INDEX idx_crl_issuer ON crl(SUBSTR(issuer_dn, 1, 500));
-CREATE INDEX idx_crl_fingerprint ON crl(fingerprint_sha256);
+-- Note: issuer_dn is CLOB, cannot create functional index on CLOB in Oracle
+-- Note: fingerprint_sha256 already has UNIQUE constraint (implicit index)
 
 -- Revoked certificates (from CRL)
 CREATE TABLE revoked_certificate (

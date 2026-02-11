@@ -30,8 +30,12 @@
 -- 22. system_metrics
 -- =============================================================================
 
--- Connect as PKD_USER
-CONNECT pkd_user/pkd_password@XE;
+-- SQL*Plus settings
+SET SQLBLANKLINES ON
+
+-- Connect as PKD_USER to XEPDB1 (Pluggable Database)
+-- Note: pkd_user is created in XEPDB1 by 01-create-user.sql
+CONNECT pkd_user/pkd_password@XEPDB1;
 
 -- Placeholder for schema creation
 -- TO BE IMPLEMENTED IN PHASE 4.3

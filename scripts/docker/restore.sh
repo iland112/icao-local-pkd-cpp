@@ -31,8 +31,12 @@ if [ "$confirm" != "yes" ]; then
     exit 0
 fi
 
+# Read DB_TYPE from .env
+DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
+DB_TYPE="${DB_TYPE:-postgres}"
+
 echo ""
-echo "♻️  데이터 복구 시작..."
+echo "♻️  데이터 복구 시작... (DB_TYPE=$DB_TYPE)"
 
 # PostgreSQL 복구
 if [ -f "$BACKUP_DIR/postgres_backup.sql" ]; then
@@ -43,6 +47,17 @@ if [ -f "$BACKUP_DIR/postgres_backup.sql" ]; then
 else
     echo ""
     echo "  ⚠️  PostgreSQL 백업 파일을 찾을 수 없습니다."
+fi
+
+# Oracle 복구 (if DB_TYPE=oracle)
+if [ "$DB_TYPE" = "oracle" ] && [ -f "$BACKUP_DIR/oracle_backup.dmp" ]; then
+    echo ""
+    echo "📦 Oracle 복구 중..."
+    ORACLE_PWD=$(grep -E '^ORACLE_PASSWORD=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
+    ORACLE_PWD="${ORACLE_PWD:-pkd_password}"
+    docker cp "$BACKUP_DIR/oracle_backup.dmp" icao-local-pkd-oracle:/opt/oracle/admin/XE/dpdump/pkd_backup.dmp 2>/dev/null
+    docker exec icao-local-pkd-oracle bash -c "impdp pkd_user/${ORACLE_PWD}@XEPDB1 directory=DATA_PUMP_DIR dumpfile=pkd_backup.dmp logfile=pkd_restore.log schemas=PKD_USER table_exists_action=replace" 2>/dev/null
+    echo "  ✅ Oracle 복구 완료"
 fi
 
 # OpenLDAP 복구

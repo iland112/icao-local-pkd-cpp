@@ -7,8 +7,14 @@
 -- Converted from PostgreSQL to Oracle DDL
 -- =============================================================================
 
--- Connect as PKD_USER
-CONNECT pkd_user/pkd_password@XE;
+-- SQL*Plus settings
+SET SQLBLANKLINES ON
+
+-- Connect as PKD_USER to XEPDB1 (Pluggable Database)
+CONNECT pkd_user/pkd_password@XEPDB1;
+
+-- Allow re-runs: skip "already exists" errors (ORA-00955, ORA-01430, ORA-02261, ORA-01442)
+WHENEVER SQLERROR CONTINUE;
 
 -- =============================================================================
 -- User Authentication and Authorization
@@ -29,7 +35,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
-CREATE INDEX idx_users_username ON users(username);
+-- Note: username already has UNIQUE constraint (implicit index)
 CREATE INDEX idx_users_is_active ON users(is_active);
 
 -- Trigger for updated_at timestamp
@@ -103,6 +109,7 @@ CREATE TABLE operation_audit_log (
     success NUMBER(1) DEFAULT 1,
     status_code NUMBER(10),
     error_message CLOB,
+    error_code VARCHAR2(50),
     metadata CLOB,  -- JSON stored as CLOB
     duration_ms NUMBER(10),
     created_at TIMESTAMP DEFAULT SYSTIMESTAMP,

@@ -26,6 +26,22 @@ echo -e "${BLUE}=============================================${NC}"
 echo ""
 
 # =============================================================================
+# Read DB_TYPE from .env (postgres or oracle)
+# =============================================================================
+DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
+DB_TYPE="${DB_TYPE:-postgres}"
+
+# Set docker compose profile based on DB_TYPE
+if [ "$DB_TYPE" = "oracle" ]; then
+    PROFILE_FLAG="--profile oracle"
+    echo -e "${BLUE}Database mode: Oracle${NC}"
+else
+    PROFILE_FLAG="--profile postgres"
+    echo -e "${BLUE}Database mode: PostgreSQL${NC}"
+fi
+echo ""
+
+# =============================================================================
 # Step 1: Stop and remove all containers
 # =============================================================================
 echo -e "${YELLOW}[Step 1/6] Stopping and removing all containers...${NC}"
@@ -35,7 +51,7 @@ echo "  Removing any existing icao-local-pkd-* containers..."
 docker ps -a --filter "name=icao-local-pkd-" --format "{{.Names}}" | xargs -r docker rm -f 2>/dev/null || true
 
 # Then stop and remove compose-managed containers
-docker compose -f docker/docker-compose.yaml down 2>/dev/null || true
+docker compose -f docker/docker-compose.yaml $PROFILE_FLAG down -v 2>/dev/null || true
 
 echo -e "${GREEN}✓ All containers stopped and removed${NC}"
 echo ""
@@ -70,33 +86,92 @@ mkdir -p .docker-data/sync-logs
 mkdir -p .docker-data/monitoring-logs
 mkdir -p .docker-data/gateway-logs
 
+# Oracle uses named volume (oracle-data), but remove it for clean init
+if [ "$DB_TYPE" = "oracle" ]; then
+    echo "  Removing Oracle named volume..."
+    docker volume rm icao-local-pkd-oracle-data 2>/dev/null || true
+fi
+
 # Set proper permissions (777 for all to avoid permission issues)
 sudo chmod -R 777 .docker-data/
 echo -e "${GREEN}✓ Data directories created and permissions set${NC}"
 echo ""
 
 # =============================================================================
-# Step 4: Start infrastructure services (PostgreSQL, OpenLDAP)
+# Step 4: Start infrastructure services (Database, OpenLDAP)
 # =============================================================================
 echo -e "${YELLOW}[Step 4/6] Starting infrastructure services...${NC}"
-docker compose -f docker/docker-compose.yaml up -d postgres openldap1 openldap2
 
-# Wait for PostgreSQL
-echo -n "  Waiting for PostgreSQL"
-for i in {1..30}; do
-    if docker exec icao-local-pkd-postgres pg_isready -U pkd -d localpkd > /dev/null 2>&1; then
-        echo ""
-        echo -e "${GREEN}✓ PostgreSQL is ready${NC}"
-        break
-    fi
-    echo -n "."
-    sleep 1
-    if [ $i -eq 30 ]; then
-        echo ""
-        echo -e "${RED}✗ PostgreSQL failed to start${NC}"
-        exit 1
-    fi
-done
+# Start DB + LDAP (profile selects the correct database)
+docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d openldap1 openldap2
+
+# Wait for database based on DB_TYPE
+if [ "$DB_TYPE" = "oracle" ]; then
+    # Start Oracle explicitly (profiled service)
+    docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d oracle
+
+    echo -n "  Waiting for Oracle (this may take 3-5 minutes on first run)"
+    for i in {1..180}; do
+        ORACLE_HEALTH=$(docker inspect icao-local-pkd-oracle --format='{{.State.Health.Status}}' 2>/dev/null || echo "not-found")
+        if [ "$ORACLE_HEALTH" = "healthy" ]; then
+            echo ""
+            echo -e "${GREEN}✓ Oracle container is healthy${NC}"
+            # Wait for init scripts to complete (pkd_user must be accessible)
+            echo -n "  Waiting for Oracle init scripts (pkd_user)"
+            ORACLE_PWD=$(grep -E '^ORACLE_PASSWORD=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
+            ORACLE_PWD="${ORACLE_PWD:-pkd_password}"
+            for j in {1..30}; do
+                INIT_CHECK=$(docker exec icao-local-pkd-oracle bash -c "echo 'SELECT 1 FROM DUAL;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1 2>/dev/null | grep -c '1'" 2>/dev/null || echo "0")
+                if [ "$INIT_CHECK" -ge 1 ] 2>/dev/null; then
+                    echo ""
+                    echo -e "${GREEN}✓ Oracle pkd_user is ready${NC}"
+                    break 2  # break both loops
+                fi
+                echo -n "."
+                sleep 3
+                if [ $j -eq 30 ]; then
+                    echo ""
+                    echo -e "${RED}✗ Oracle init scripts failed (pkd_user not accessible)${NC}"
+                    docker logs icao-local-pkd-oracle 2>&1 | grep -E "(ERROR|error|01-create)" | tail -10
+                    exit 1
+                fi
+            done
+            break
+        fi
+        if [ $((i % 10)) -eq 0 ]; then
+            echo -n " ${i}s"
+        else
+            echo -n "."
+        fi
+        sleep 2
+        if [ $i -eq 180 ]; then
+            echo ""
+            echo -e "${RED}✗ Oracle failed to start (timeout after 360s)${NC}"
+            echo "  Oracle container status: $ORACLE_HEALTH"
+            docker logs icao-local-pkd-oracle 2>&1 | tail -20
+            exit 1
+        fi
+    done
+else
+    # Start PostgreSQL explicitly (profiled service)
+    docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d postgres
+
+    echo -n "  Waiting for PostgreSQL"
+    for i in {1..30}; do
+        if docker exec icao-local-pkd-postgres pg_isready -U pkd -d localpkd > /dev/null 2>&1; then
+            echo ""
+            echo -e "${GREEN}✓ PostgreSQL is ready${NC}"
+            break
+        fi
+        echo -n "."
+        sleep 1
+        if [ $i -eq 30 ]; then
+            echo ""
+            echo -e "${RED}✗ PostgreSQL failed to start${NC}"
+            exit 1
+        fi
+    done
+fi
 
 # Wait for OpenLDAP
 echo -n "  Waiting for OpenLDAP1"
@@ -219,7 +294,7 @@ echo ""
 # Step 6: Start application services
 # =============================================================================
 echo -e "${YELLOW}[Step 6/6] Starting application services...${NC}"
-docker compose -f docker/docker-compose.yaml up -d
+docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d
 
 # Wait for services to be healthy
 echo -n "  Waiting for services to be healthy"
@@ -251,13 +326,16 @@ echo -e "${BLUE}=============================================${NC}"
 echo ""
 
 echo "Container Status:"
-docker compose -f docker/docker-compose.yaml ps
+docker compose -f docker/docker-compose.yaml $PROFILE_FLAG ps
 
 echo ""
-echo -e "${GREEN}✓ System is ready for use${NC}"
+echo -e "${GREEN}✓ System is ready for use (DB_TYPE=$DB_TYPE)${NC}"
 echo ""
 echo "Access URLs:"
 echo "  - Frontend: http://localhost:3000"
 echo "  - API Gateway: http://localhost:8080/api"
 echo "  - API Documentation: http://localhost:8090"
+if [ "$DB_TYPE" = "oracle" ]; then
+    echo "  - Oracle: localhost:11521 (SYS/SYSTEM)"
+fi
 echo ""

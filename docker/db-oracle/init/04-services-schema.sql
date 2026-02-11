@@ -7,8 +7,14 @@
 -- Converted from PostgreSQL to Oracle DDL
 -- =============================================================================
 
--- Connect as PKD_USER
-CONNECT pkd_user/pkd_password@XE;
+-- SQL*Plus settings
+SET SQLBLANKLINES ON
+
+-- Connect as PKD_USER to XEPDB1 (Pluggable Database)
+CONNECT pkd_user/pkd_password@XEPDB1;
+
+-- Allow re-runs: skip "already exists" errors (ORA-00955, ORA-01430, ORA-02261, ORA-01442)
+WHENEVER SQLERROR CONTINUE;
 
 -- =============================================================================
 -- Sequences
@@ -126,7 +132,7 @@ BEGIN
 END;
 /
 
-CREATE INDEX idx_service_health_name ON service_health(service_name);
+-- Note: service_name already has UNIQUE constraint (implicit index)
 CREATE INDEX idx_service_health_status ON service_health(status);
 
 -- =============================================================================

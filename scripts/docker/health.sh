@@ -13,17 +13,41 @@ LDAP_BIND_PW="${LDAP_BIND_PW:-ldap_test_password_123}"
 LDAP_CONFIG_PW="$(grep -E '^LDAP_CONFIG_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
 LDAP_CONFIG_PW="${LDAP_CONFIG_PW:-config_test_123}"
 
-echo "🏥 컨테이너 헬스 체크..."
+# Read DB_TYPE from .env
+DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
+DB_TYPE="${DB_TYPE:-postgres}"
+
+if [ "$DB_TYPE" = "oracle" ]; then
+    PROFILE_FLAG="--profile oracle"
+else
+    PROFILE_FLAG="--profile postgres"
+fi
+
+echo "🏥 컨테이너 헬스 체크... (DB_TYPE=$DB_TYPE)"
 echo ""
 
-# PostgreSQL 체크
-echo "🐘 PostgreSQL:"
-if docker exec icao-local-pkd-postgres pg_isready -U pkd -d localpkd > /dev/null 2>&1; then
-    VERSION=$(docker exec icao-local-pkd-postgres psql -U pkd -d localpkd -t -c "SELECT version();" 2>/dev/null | head -1 | xargs)
-    echo "  ✅ 정상 (ready to accept connections)"
-    echo "     Version: $VERSION"
+# Database 체크
+if [ "$DB_TYPE" = "oracle" ]; then
+    echo "🔶 Oracle:"
+    ORACLE_HEALTH=$(docker inspect icao-local-pkd-oracle --format='{{.State.Health.Status}}' 2>/dev/null || echo "not-found")
+    if [ "$ORACLE_HEALTH" = "healthy" ]; then
+        echo "  ✅ 정상 (healthy)"
+    elif [ "$ORACLE_HEALTH" = "starting" ]; then
+        echo "  ⏳ 시작 중 (starting...)"
+    elif [ "$ORACLE_HEALTH" = "not-found" ]; then
+        echo "  ❌ Oracle 컨테이너가 없습니다"
+    else
+        echo "  ❌ 오류 (status: $ORACLE_HEALTH)"
+    fi
 else
-    echo "  ❌ 오류 (not responding)"
+    echo "🐘 PostgreSQL:"
+    if docker exec icao-local-pkd-postgres pg_isready -U pkd -d localpkd > /dev/null 2>&1; then
+        VERSION=$(docker exec icao-local-pkd-postgres psql -U pkd -d localpkd -t -c "SELECT version();" 2>/dev/null | head -1 | xargs)
+        echo "  ✅ 정상 (ready to accept connections)"
+        echo "     Version: $VERSION"
+    else
+        echo "  ❌ 오류 (not responding)"
+    fi
 fi
 
 # OpenLDAP 체크
@@ -139,12 +163,12 @@ fi
 # 컨테이너 상태
 echo ""
 echo "📊 컨테이너 상태:"
-docker compose -f docker/docker-compose.yaml ps
+docker compose -f docker/docker-compose.yaml $PROFILE_FLAG ps
 
 # 리소스 사용량
 echo ""
 echo "💻 리소스 사용량:"
-docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" $(docker compose -f docker/docker-compose.yaml ps -q 2>/dev/null) 2>/dev/null || echo "  ⚠️  컨테이너가 실행 중이지 않습니다"
+docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" $(docker compose -f docker/docker-compose.yaml $PROFILE_FLAG ps -q 2>/dev/null) 2>/dev/null || echo "  ⚠️  컨테이너가 실행 중이지 않습니다"
 
 echo ""
 echo "✅ 헬스 체크 완료!"

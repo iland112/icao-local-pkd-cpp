@@ -36,7 +36,17 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-echo "🚀 ICAO PKD Docker 컨테이너 시작..."
+# Read DB_TYPE from .env
+DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
+DB_TYPE="${DB_TYPE:-postgres}"
+
+if [ "$DB_TYPE" = "oracle" ]; then
+    PROFILE_FLAG="--profile oracle"
+else
+    PROFILE_FLAG="--profile postgres"
+fi
+
+echo "🚀 ICAO PKD Docker 컨테이너 시작... (DB_TYPE=$DB_TYPE)"
 echo ""
 
 # 1. 필요한 디렉토리 생성
@@ -70,12 +80,11 @@ cd docker
 
 if [ -n "$SKIP_APP" ]; then
     if [ -n "$SKIP_LDAP" ]; then
-        # PostgreSQL만 시작
-        docker compose up -d $BUILD_FLAG postgres
+        # DB만 시작 (profile이 postgres/oracle 선택)
+        docker compose $PROFILE_FLAG up -d $BUILD_FLAG
     else
-        # PostgreSQL, OpenLDAP 시작
-        # MMR setup 컨테이너가 자동으로 실행되고, ldap-init이 PKD DIT 초기화
-        docker compose up -d $BUILD_FLAG postgres openldap1 openldap2
+        # DB + OpenLDAP 시작
+        docker compose $PROFILE_FLAG up -d $BUILD_FLAG openldap1 openldap2
     fi
 elif [ -n "$LEGACY" ]; then
     # Legacy 단일 앱 모드
@@ -84,7 +93,8 @@ else
     # 마이크로서비스 모드 (frontend + pkd-management + pa-service + sync-service)
     # 서비스 의존성 순서:
     #   openldap1/2 -> ldap-mmr-setup1/2 -> ldap-init -> apps
-    docker compose up -d $BUILD_FLAG
+    # Profile selects: --profile postgres (postgres + monitoring) or --profile oracle (oracle)
+    docker compose $PROFILE_FLAG up -d $BUILD_FLAG
 fi
 
 cd ..
@@ -119,7 +129,11 @@ fi
 
 echo ""
 echo "📌 접속 정보:"
+echo "   - Database:      DB_TYPE=$DB_TYPE"
 echo "   - PostgreSQL:    localhost:15432 (pkd/pkd)"
+if [ "$DB_TYPE" = "oracle" ]; then
+    echo "   - Oracle:        localhost:11521 (XEPDB1)"
+fi
 if [ -z "$SKIP_LDAP" ]; then
     echo "   - OpenLDAP 1:    ldap://localhost:3891 (직접 연결)"
     echo "   - OpenLDAP 2:    ldap://localhost:3892 (직접 연결)"
