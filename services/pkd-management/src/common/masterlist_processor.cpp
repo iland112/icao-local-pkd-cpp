@@ -771,13 +771,12 @@ bool processMasterListFile(
                 continue;
             }
 
-            certificate_utils::trackCertificateDuplicate(
-                certId, uploadId, "ML_FILE",
-                certCountryCode, "Master List", ""
-            );
-
             if (isDuplicate) {
                 dupCount++;
+                certificate_utils::trackCertificateDuplicate(
+                    certId, uploadId, "ML_FILE",
+                    certCountryCode, "Master List", ""
+                );
                 certificate_utils::incrementDuplicateCount(certId, uploadId);
             } else {
                 newCount++;

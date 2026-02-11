@@ -22,7 +22,6 @@
 // Once these are refactored to shared headers/libs, the logic can be moved here
 
 extern void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
-extern void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 
 namespace services {
 
@@ -178,9 +177,8 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
         std::string tempFilePath = saveToTempFile(result.uploadId, fileContent, ".ml");
         spdlog::debug("Saved to temp file: {}", tempFilePath);
 
-        // Step 7: Trigger async processing (Phase 4.4)
-        processMasterListAsync(result.uploadId, fileContent);
-        spdlog::info("UploadService::uploadMasterList - Async Master List processing triggered for upload: {}", result.uploadId);
+        // Note: Async processing is handled by Strategy Pattern thread in the upload handler (main.cpp)
+        // processMasterListAsync was removed to prevent dual-processing bug
 
         result.success = true;
         result.status = "PENDING";
@@ -502,16 +500,6 @@ void UploadService::processLdifAsync(const std::string& uploadId, const std::vec
 
     spdlog::info("[UploadService] Delegating LDIF async processing to main.cpp implementation");
     processLdifFileAsync(uploadId, content);
-}
-
-void UploadService::processMasterListAsync(const std::string& uploadId, const std::vector<uint8_t>& content)
-{
-    // Phase 4.4 Note: Currently delegates to main.cpp implementation
-    // Full migration requires same refactorings as processLdifAsync
-    // (ProgressManager, ProcessingStrategy, helper functions)
-
-    spdlog::info("[UploadService] Delegating Master List async processing to main.cpp implementation");
-    processMasterListFileAsync(uploadId, content);
 }
 
 } // namespace services

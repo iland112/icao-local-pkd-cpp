@@ -162,17 +162,8 @@ public:
         const std::string& uploadedBy
     );
 
-    /**
-     * @brief Process Master List file asynchronously (Phase 4.4)
-     *
-     * @param uploadId Upload UUID
-     * @param content File content bytes
-     *
-     * Migrated from main.cpp processMasterListFileAsync().
-     * Runs in background thread, parses CMS SignedData, extracts CSCA certificates,
-     * validates and saves to DB & LDAP, sends progress updates via ProgressManager.
-     */
-    void processMasterListAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
+    // Note: Master List async processing is handled by Strategy Pattern thread in the upload handler (main.cpp)
+    // processMasterListAsync was removed to prevent dual-processing bug
 
     // ========================================================================
     // Upload Management (MANUAL mode)

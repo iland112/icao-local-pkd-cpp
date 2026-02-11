@@ -1322,39 +1322,39 @@ Json::Value checkDatabase() {
     Json::Value result;
     result["name"] = "database";
 
-    auto start = std::chrono::steady_clock::now();
-
-    std::string conninfo = "host=" + appConfig.dbHost +
-                          " port=" + std::to_string(appConfig.dbPort) +
-                          " dbname=" + appConfig.dbName +
-                          " user=" + appConfig.dbUser +
-                          " password=" + appConfig.dbPassword +
-                          " connect_timeout=5";
-
-    PGconn* conn = PQconnectdb(conninfo.c_str());
-
-    auto end = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-    if (PQstatus(conn) == CONNECTION_OK) {
-        // Execute a simple query to verify
-        PGresult* res = PQexec(conn, "SELECT version()");
-        if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-            result["status"] = "UP";
-            result["responseTimeMs"] = static_cast<int>(duration.count());
-            result["type"] = "PostgreSQL";
-            result["version"] = PQgetvalue(res, 0, 0);
-        } else {
-            result["status"] = "DOWN";
-            result["error"] = PQerrorMessage(conn);
-        }
-        PQclear(res);
-    } else {
+    if (!::queryExecutor) {
         result["status"] = "DOWN";
-        result["error"] = PQerrorMessage(conn);
+        result["error"] = "Query executor not initialized";
+        return result;
     }
 
-    PQfinish(conn);
+    auto start = std::chrono::steady_clock::now();
+
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
+        std::string versionQuery = (dbType == "oracle")
+            ? "SELECT banner AS version FROM v$version WHERE ROWNUM = 1"
+            : "SELECT version()";
+
+        auto rows = ::queryExecutor->executeQuery(versionQuery);
+
+        auto end = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        result["status"] = "UP";
+        result["responseTimeMs"] = static_cast<int>(duration.count());
+        result["type"] = (dbType == "oracle") ? "Oracle" : "PostgreSQL";
+        if (rows.size() > 0 && rows[0].isMember("version")) {
+            result["version"] = rows[0]["version"].asString();
+        }
+    } catch (const std::exception& e) {
+        auto end = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        result["status"] = "DOWN";
+        result["error"] = e.what();
+        result["responseTimeMs"] = static_cast<int>(duration.count());
+    }
+
     return result;
 }
 
@@ -5466,29 +5466,23 @@ void registerRoutes() {
                 std::thread([uploadId, contentBytes]() {
                         spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
-                        std::string conninfo = "host=" + appConfig.dbHost +
-                                              " port=" + std::to_string(appConfig.dbPort) +
-                                              " dbname=" + appConfig.dbName +
-                                              " user=" + appConfig.dbUser +
-                                              " password=" + appConfig.dbPassword;
-
-                        PGconn* conn = PQconnectdb(conninfo.c_str());
-                        if (PQstatus(conn) != CONNECTION_OK) {
-                            spdlog::error("Database connection failed for async processing: {}", PQerrorMessage(conn));
-                            PQfinish(conn);
+                        // Use QueryExecutor (Oracle/PostgreSQL agnostic) instead of PGconn
+                        if (!::queryExecutor) {
+                            spdlog::error("QueryExecutor is null for async processing");
                             return;
                         }
 
-                        // Get processing mode (parameterized query)
-                        const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
-                        const char* modeParamValues[1] = {uploadId.c_str()};
-                        PGresult* modeRes = PQexecParams(conn, modeQuery, 1, nullptr, modeParamValues,
-                                                         nullptr, nullptr, 0);
+                        // Get processing mode via QueryExecutor
                         std::string processingMode = "AUTO";
-                        if (PQresultStatus(modeRes) == PGRES_TUPLES_OK && PQntuples(modeRes) > 0) {
-                            processingMode = PQgetvalue(modeRes, 0, 0);
+                        try {
+                            const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
+                            Json::Value modeResult = ::queryExecutor->executeQuery(modeQuery, {uploadId});
+                            if (!modeResult.empty() && modeResult[0].isMember("processing_mode")) {
+                                processingMode = modeResult[0]["processing_mode"].asString();
+                            }
+                        } catch (const std::exception& e) {
+                            spdlog::warn("Failed to get processing mode, defaulting to AUTO: {}", e.what());
                         }
-                        PQclear(modeRes);
 
                         spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
 
@@ -5500,21 +5494,17 @@ void registerRoutes() {
                                 spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for upload {}", uploadId);
                                 spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
 
-                                // Update upload status to FAILED
-                                const char* failQuery = "UPDATE uploaded_file SET status = 'FAILED', "
-                                                       "error_message = 'LDAP connection failure - cannot ensure data consistency', "
-                                                       "updated_at = NOW() WHERE id = $1";
-                                const char* failParams[1] = {uploadId.c_str()};
-                                PGresult* failRes = PQexecParams(conn, failQuery, 1, nullptr, failParams,
-                                                                nullptr, nullptr, 0);
-                                PQclear(failRes);
+                                // Update upload status to FAILED via Repository
+                                if (::uploadRepository) {
+                                    ::uploadRepository->updateStatus(uploadId, "FAILED",
+                                        "LDAP connection failure - cannot ensure data consistency");
+                                }
 
                                 // Send failure progress
                                 ProgressManager::getInstance().sendProgress(
                                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                                         0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
 
-                                PQfinish(conn);
                                 return;
                             }
                             spdlog::info("LDAP write connection established successfully for AUTO mode");
@@ -5525,43 +5515,59 @@ void registerRoutes() {
                             auto strategy = ProcessingStrategyFactory::create(processingMode);
                             strategy->processMasterListContent(uploadId, contentBytes, ld);
 
-                            // Query actual processed_entries from database (parameterized)
-                            const char* statsQuery = "SELECT processed_entries, total_entries FROM uploaded_file WHERE id = $1";
-                            const char* statsParams[1] = {uploadId.c_str()};
-                            PGresult* statsRes = PQexecParams(conn, statsQuery, 1, nullptr, statsParams, nullptr, nullptr, 0);
-
-                            int processedEntries = 0;
-                            int totalEntries = 0;
-                            if (PQresultStatus(statsRes) == PGRES_TUPLES_OK && PQntuples(statsRes) > 0) {
-                                const char* processedStr = PQgetvalue(statsRes, 0, 0);
-                                const char* totalStr = PQgetvalue(statsRes, 0, 1);
-                                if (processedStr && processedStr[0] != '\0') {
-                                    processedEntries = std::atoi(processedStr);
+                            // Query statistics from database via QueryExecutor (Oracle/PostgreSQL agnostic)
+                            int cscaCount = 0, totalEntries = 0, processedEntries = 0, mlscCount = 0;
+                            try {
+                                const char* statsQuery = "SELECT csca_count, total_entries, processed_entries, mlsc_count FROM uploaded_file WHERE id = $1";
+                                Json::Value statsResult = ::queryExecutor->executeQuery(statsQuery, {uploadId});
+                                if (!statsResult.empty()) {
+                                    const auto& row = statsResult[0];
+                                    // Use safe parsing for Oracle string compatibility
+                                    auto safeInt = [](const Json::Value& v) -> int {
+                                        if (v.isInt()) return v.asInt();
+                                        if (v.isUInt()) return static_cast<int>(v.asUInt());
+                                        if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
+                                        if (v.isDouble()) return static_cast<int>(v.asDouble());
+                                        return 0;
+                                    };
+                                    if (row.isMember("csca_count")) cscaCount = safeInt(row["csca_count"]);
+                                    if (row.isMember("total_entries")) totalEntries = safeInt(row["total_entries"]);
+                                    if (row.isMember("processed_entries")) processedEntries = safeInt(row["processed_entries"]);
+                                    if (row.isMember("mlsc_count")) mlscCount = safeInt(row["mlsc_count"]);
                                 }
-                                if (totalStr && totalStr[0] != '\0') {
-                                    totalEntries = std::atoi(totalStr);
+                            } catch (const std::exception& e) {
+                                spdlog::warn("Failed to query stats for completion message: {}", e.what());
+                            }
+
+                            int dupCount = totalEntries - processedEntries;
+                            int totalCount = processedEntries + mlscCount;
+
+                            spdlog::info("Master List processing completed - csca_count: {}, total_entries: {}, processed_entries: {}, mlsc_count: {}, dupCount: {}",
+                                        cscaCount, totalEntries, processedEntries, mlscCount, dupCount);
+
+                            // Build detailed completion message
+                            std::string completionMsg;
+                            if (processingMode == "MANUAL") {
+                                completionMsg = "Master List 파싱 완료 - 검증 대기";
+                            } else {
+                                completionMsg = "처리 완료: CSCA " + std::to_string(processedEntries);
+                                if (dupCount > 0) {
+                                    completionMsg += " (중복 " + std::to_string(dupCount) + "개 건너뜀)";
+                                }
+                                if (mlscCount > 0) {
+                                    completionMsg += ", MLSC " + std::to_string(mlscCount);
                                 }
                             }
-                            PQclear(statsRes);
 
-                            // For Master List: processed_entries contains extracted certificate count (e.g., 537)
-                            // totalEntries is 0 for ML files, so we use processedEntries as the count
-                            int count = processedEntries > 0 ? processedEntries : totalEntries;
-
-                            spdlog::info("Master List processing completed - processedEntries: {}, totalEntries: {}, using count: {}",
-                                        processedEntries, totalEntries, count);
-
-                            // Send appropriate progress based on mode with actual count
+                            // Send appropriate progress based on mode
                             if (processingMode == "MANUAL") {
-                                // MANUAL mode: Only parsing completed, waiting for Stage 2
                                 ProgressManager::getInstance().sendProgress(
                                     ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                                        count, count, "Master List 파싱 완료 - 검증 대기"));
+                                        totalCount, totalCount, completionMsg));
                             } else {
-                                // AUTO mode: All processing completed
                                 ProgressManager::getInstance().sendProgress(
                                     ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                        count, count, "Master List 처리 완료"));
+                                        totalCount, totalCount, completionMsg));
                             }
 
                         } catch (const std::exception& e) {
@@ -5572,7 +5578,6 @@ void registerRoutes() {
                         }
 
                         if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                        PQfinish(conn);
                 }).detach();
 
                 // Return success response
@@ -7139,65 +7144,41 @@ paths:
         {drogon::Get}
     );
 
-    // GET /api/certificates/countries - Get list of available countries (PostgreSQL)
+    // GET /api/certificates/countries - Get list of available countries
     app.registerHandler(
         "/api/certificates/countries",
         [&](const drogon::HttpRequestPtr& req,
             std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
             try {
-                spdlog::debug("Fetching list of available countries from PostgreSQL");
+                spdlog::debug("Fetching list of available countries");
 
-                // Connect to PostgreSQL
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    std::string error = "Database connection failed: " + std::string(PQerrorMessage(conn));
-                    PQfinish(conn);
-                    throw std::runtime_error(error);
+                if (!::queryExecutor) {
+                    throw std::runtime_error("Query executor not initialized");
                 }
 
-                // Query distinct countries from PostgreSQL (fast: ~67ms)
-                const char* query = "SELECT DISTINCT country_code FROM certificate "
-                                   "WHERE country_code IS NOT NULL "
-                                   "ORDER BY country_code";
+                std::string query = "SELECT DISTINCT country_code FROM certificate "
+                                    "WHERE country_code IS NOT NULL "
+                                    "ORDER BY country_code";
 
-                PGresult* res = PQexec(conn, query);
+                auto rows = ::queryExecutor->executeQuery(query);
 
-                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-                    std::string error = "Query failed: " + std::string(PQerrorMessage(conn));
-                    PQclear(res);
-                    PQfinish(conn);
-                    throw std::runtime_error(error);
-                }
-
-                // Build JSON response
-                int rowCount = PQntuples(res);
                 Json::Value response;
                 response["success"] = true;
-                response["count"] = rowCount;
+                response["count"] = static_cast<int>(rows.size());
 
                 Json::Value countryList(Json::arrayValue);
-                for (int i = 0; i < rowCount; i++) {
-                    std::string country = PQgetvalue(res, i, 0);
-                    countryList.append(country);
+                for (const auto& row : rows) {
+                    countryList.append(row["country_code"].asString());
                 }
                 response["countries"] = countryList;
 
-                PQclear(res);
-                PQfinish(conn);
-
-                spdlog::info("Countries list fetched: {} countries from PostgreSQL", rowCount);
+                spdlog::info("Countries list fetched: {} countries", rows.size());
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
 
             } catch (const std::exception& e) {
-                spdlog::error("Error fetching countries from PostgreSQL: {}", e.what());
+                spdlog::error("Error fetching countries: {}", e.what());
                 Json::Value error;
                 error["success"] = false;
                 error["error"] = e.what();

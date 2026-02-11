@@ -159,26 +159,29 @@ void AutoProcessingStrategy::processMasterListContent(
                 stats.mlCount, stats.cscaExtractedCount, stats.cscaNewCount, stats.cscaDuplicateCount);
 
     // Update uploaded_file table with final statistics
-    // Note: ml_count represents Master List files from LDIF entries, not the .ml file itself
-    // MLSC and CSCA certificates are counted separately
+    // csca_count = newly inserted CSCA count (not total in file)
+    // total_entries = total CSCA certificates in ML file
+    // processed_entries = newly inserted CSCA count
     updateUploadStatistics(uploadId, "COMPLETED",
-                          stats.cscaExtractedCount,  // csca_count (includes both MLSC and CSCA/LC)
-                          0,                          // dsc_count (Master Lists don't contain DSC)
-                          0,                          // dsc_nc_count
-                          0,                          // crl_count
-                          stats.mlCount,              // ml_count (stored Master List entries)
-                          stats.cscaExtractedCount,   // processed_entries
-                          "");                        // error_message
+                          stats.cscaNewCount,          // csca_count (newly inserted only)
+                          0,                            // dsc_count (Master Lists don't contain DSC)
+                          0,                            // dsc_nc_count
+                          0,                            // crl_count
+                          0,                            // ml_count (unused in this call)
+                          0,                            // processed_entries (unused - set via updateProgress below)
+                          "");                          // error_message
 
-    // Update MLSC and ML counts directly via repository (v2.6.2 fix)
+    // Update all statistics via repository: csca_count, mlsc_count, ml_count, total_entries, processed_entries
     if (::uploadRepository) {
         ::uploadRepository->updateStatistics(uploadId,
-            stats.cscaExtractedCount, 0, 0, 0,
+            stats.cscaNewCount, 0, 0, 0,
             stats.mlscCount, stats.mlCount);
+        ::uploadRepository->updateProgress(uploadId,
+            stats.cscaExtractedCount, stats.cscaNewCount);
     }
 
-    spdlog::info("AUTO mode: Statistics updated - status=COMPLETED, mlsc_count={}, csca_count={}",
-                stats.mlscCount, stats.cscaExtractedCount);
+    spdlog::info("AUTO mode: Statistics updated - status=COMPLETED, csca_count={}, mlsc_count={}, total_entries={}, processed_entries={}",
+                stats.cscaNewCount, stats.mlscCount, stats.cscaExtractedCount, stats.cscaNewCount);
 }
 
 void AutoProcessingStrategy::validateAndSaveToDb(

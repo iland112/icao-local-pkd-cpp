@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS operation_audit_log (
     success BOOLEAN DEFAULT true,
     status_code INTEGER,
     error_message TEXT,
+    error_code VARCHAR(50),
     metadata JSONB,
     duration_ms INTEGER,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
