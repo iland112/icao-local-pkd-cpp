@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { Layout } from '@/components/layout';
 import { ToastContainer, PrivateRoute } from '@/components/common';
-import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login, Profile, AuditLog, UserManagement } from '@/pages';
+import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login, Profile, AuditLog, UserManagement, CertificateUpload } from '@/pages';
 import MonitoringDashboard from '@/pages/MonitoringDashboard';
 import CertificateSearch from '@/pages/CertificateSearch';
 import IcaoStatus from '@/pages/IcaoStatus';
@@ -49,6 +49,7 @@ function App() {
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
             <Route index element={<Dashboard />} />
             <Route path="upload" element={<FileUpload />} />
+            <Route path="upload/certificate" element={<CertificateUpload />} />
             <Route path="pkd/certificates" element={<CertificateSearch />} />
             <Route path="upload-history" element={<UploadHistory />} />
             <Route path="upload/:uploadId" element={<UploadDetail />} />

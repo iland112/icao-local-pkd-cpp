@@ -238,10 +238,8 @@ export function FileUpload() {
     const name = file.name.toLowerCase();
 
     if (name.endsWith('.ml') || name.endsWith('.bin')) {
-      // Master List files contain MLSC + CSCA (including link certificates)
       return ['MLSC', 'CSCA', 'Link Cert'];
     } else if (name.endsWith('.ldif')) {
-      // LDIF files can contain DSC, DSC_NC, CSCA, CRL, and embedded Master Lists
       return ['DSC', 'DSC_NC', 'CSCA', 'CRL', 'Master List'];
     }
     return [];
@@ -303,6 +301,7 @@ export function FileUpload() {
       // Start upload
       setUploadStage({ status: 'IN_PROGRESS', message: '파일 업로드 중...', percentage: 0 });
 
+      // LDIF / Master List upload (async with SSE)
       const isLdif = selectedFile.name.toLowerCase().endsWith('.ldif');
       const uploadFn = isLdif ? uploadApi.uploadLdif : uploadApi.uploadMasterList;
 
@@ -310,17 +309,14 @@ export function FileUpload() {
 
       if (response.data.success && response.data.data) {
         const uploadedFile = response.data.data;
-        // Backend returns uploadId, but type defines id - handle both
         const fileId = (uploadedFile as { uploadId?: string }).uploadId || uploadedFile.id;
         setUploadId(fileId);
         setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
 
-        // Save uploadId to localStorage for MANUAL mode state restoration
         if (processingMode === 'MANUAL') {
           localStorage.setItem('currentUploadId', fileId);
         }
 
-        // Connect to SSE for progress updates (both AUTO and MANUAL modes)
         connectToProgressStream(fileId);
       } else {
         throw new Error(response.data.error || '업로드 실패');
@@ -744,7 +740,7 @@ export function FileUpload() {
               PKD 파일 업로드
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              ICAO PKD LDIF 또는 Master List 파일을 업로드합니다. 파일 형식이 자동으로 감지됩니다.
+              ICAO PKD LDIF 또는 Master List 파일을 업로드합니다.
             </p>
           </div>
         </div>
@@ -762,7 +758,7 @@ export function FileUpload() {
                 <div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">파일 업로드</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    LDIF, Master List 파일을 처리 서버에 업로드합니다.
+                    LDIF, Master List 파일을 업로드합니다.
                   </p>
                 </div>
               </div>
@@ -836,7 +832,7 @@ export function FileUpload() {
                         파일을 여기로 드래그하거나 클릭하여 선택하세요
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        LDIF, ML 파일 지원 (최대 100MB)
+                        LDIF, Master List (.ml, .bin) 파일 지원
                       </p>
                     </>
                   ) : (
@@ -845,11 +841,11 @@ export function FileUpload() {
                       <p className="text-sm text-gray-500">{formatFileSize(selectedFile.size)}</p>
                       <span className={cn(
                         'inline-block px-2 py-0.5 rounded text-xs font-medium',
-                        selectedFile.name.endsWith('.ldif')
+                        selectedFile.name.toLowerCase().endsWith('.ldif')
                           ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
                           : 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300'
                       )}>
-                        {selectedFile.name.endsWith('.ldif') ? 'LDIF' : 'Master List'}
+                        {selectedFile.name.toLowerCase().endsWith('.ldif') ? 'LDIF' : 'Master List'}
                       </span>
                     </div>
                   )}
@@ -861,7 +857,7 @@ export function FileUpload() {
                 <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
                   <span className="text-sm text-yellow-700 dark:text-yellow-400">
-                    지원하지 않는 파일 형식입니다. LDIF 또는 ML 파일을 선택해주세요.
+                    지원하지 않는 파일 형식입니다. LDIF 또는 Master List (.ml, .bin) 파일을 선택해주세요. 개별 인증서는 인증서 업로드 페이지를 이용해주세요.
                   </span>
                 </div>
               )}

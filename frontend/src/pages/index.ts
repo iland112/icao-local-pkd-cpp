@@ -13,3 +13,4 @@ export { Profile } from './Profile';
 export { AuditLog } from './AuditLog';
 export { OperationAuditLog } from './OperationAuditLog';
 export { UserManagement } from './UserManagement';
+export { default as CertificateUpload } from './CertificateUpload';

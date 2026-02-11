@@ -13,7 +13,7 @@ find_package(OpenSSL REQUIRED)
 set(CERTIFICATE_PARSER_SOURCES
     src/file_detector.cpp
     src/cert_type_detector.cpp
-    src/dvl_parser.cpp
+    src/dl_parser.cpp
     src/pem_parser.cpp
     src/der_parser.cpp
     src/cert_validator.cpp

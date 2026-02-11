@@ -15,42 +15,27 @@ ValidationRepository::ValidationRepository(common::IQueryExecutor* queryExecutor
 
 bool ValidationRepository::save(const domain::models::ValidationResult& result)
 {
-    spdlog::debug("[ValidationRepository] Saving validation for cert: {}...",
-                  result.certificateId.substr(0, 8));
+    spdlog::debug("[ValidationRepository] Saving validation for upload: {}...",
+                  result.uploadId.substr(0, 8));
 
     try {
-        // Parameterized query matching actual validation_result table schema (22 columns)
-        const char* query =
-            "INSERT INTO validation_result ("
-            "certificate_id, upload_id, certificate_type, country_code, "
-            "subject_dn, issuer_dn, serial_number, "
-            "validation_status, trust_chain_valid, trust_chain_message, "
-            "csca_found, csca_subject_dn, csca_serial_number, csca_country, "
-            "signature_valid, signature_algorithm, "
-            "validity_period_valid, not_before, not_after, "
-            "revocation_status, crl_checked, "
-            "trust_chain_path"
-            ") VALUES ("
-            "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
-            "$11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22"
-            ")";
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Database-aware boolean formatting
+        auto boolStr = [&dbType](bool val) -> std::string {
+            if (dbType == "oracle") return val ? "1" : "0";
+            return val ? "true" : "false";
+        };
 
         // Prepare boolean strings
-        const std::string trustChainValidStr = result.trustChainValid ? "true" : "false";
-        const std::string cscaFoundStr = result.cscaFound ? "true" : "false";
-        const std::string signatureValidStr = result.signatureVerified ? "true" : "false";
-        const std::string validityPeriodValidStr = result.validityCheckPassed ? "true" : "false";
-        const std::string crlCheckedStr = (result.crlCheckStatus != "NOT_CHECKED") ? "true" : "false";
+        std::string trustChainValidStr = boolStr(result.trustChainValid);
+        std::string signatureVerifiedStr = boolStr(result.signatureVerified);
+        std::string isExpiredStr = boolStr(result.isExpired);
+        std::string cscaFoundStr = boolStr(result.cscaFound);
+        std::string crlCheckedStr = boolStr(result.crlCheckStatus != "NOT_CHECKED");
+        std::string crlRevokedStr = boolStr(result.crlCheckStatus == "REVOKED");
 
-        // Map crlCheckStatus to revocation_status (schema uses UNKNOWN/NOT_REVOKED/REVOKED)
-        std::string revocationStatus = "UNKNOWN";
-        if (result.crlCheckStatus == "REVOKED") {
-            revocationStatus = "REVOKED";
-        } else if (result.crlCheckStatus == "NOT_REVOKED" || result.crlCheckStatus == "VALID") {
-            revocationStatus = "NOT_REVOKED";
-        }
-
-        // Prepare trust_chain_path as JSON array (schema expects jsonb)
+        // Prepare trust_chain_path as JSON
         std::string trustChainPathJson;
         if (result.trustChainPath.empty()) {
             trustChainPathJson = "[]";
@@ -62,31 +47,75 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
             trustChainPathJson = Json::writeString(builder, pathArray);
         }
 
-        // Prepare parameter values as vector
-        std::vector<std::string> params = {
-            result.certificateId,
-            result.uploadId,
-            result.certificateType,
-            result.countryCode.empty() ? "" : result.countryCode,
-            result.subjectDn,
-            result.issuerDn,
-            result.serialNumber.empty() ? "" : result.serialNumber,
-            result.validationStatus,
-            trustChainValidStr,
-            result.trustChainMessage.empty() ? "" : result.trustChainMessage,
-            cscaFoundStr,
-            result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn,
-            "",  // csca_serial_number - not tracked
-            "",  // csca_country - not tracked
-            signatureValidStr,
-            result.signatureAlgorithm.empty() ? "" : result.signatureAlgorithm,
-            validityPeriodValidStr,
-            result.notBefore.empty() ? "" : result.notBefore,
-            result.notAfter.empty() ? "" : result.notAfter,
-            revocationStatus,
-            crlCheckedStr,
-            trustChainPathJson
-        };
+        // Use fingerprint as the identifier
+        std::string fingerprintValue = result.fingerprint;
+        if (fingerprintValue.empty()) {
+            fingerprintValue = result.certificateId;
+        }
+
+        // Database-specific INSERT query
+        std::string query;
+        std::vector<std::string> params;
+
+        if (dbType == "oracle") {
+            // Oracle schema: validity_period_ok (inverted is_expired),
+            //   revocation_status (VARCHAR2), validation_message (not error_message)
+            std::string validityPeriodOkStr = boolStr(!result.isExpired);
+            std::string revocationStatus = result.crlCheckStatus;
+
+            query =
+                "INSERT INTO validation_result ("
+                "upload_id, fingerprint_sha256, certificate_type, "
+                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
+                "signature_verified, validity_period_ok, crl_checked, revocation_status, "
+                "validation_status, validation_message"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
+                ")";
+
+            params = {
+                result.uploadId,
+                fingerprintValue,
+                result.certificateType,
+                trustChainValidStr,
+                trustChainPathJson,
+                result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn,
+                cscaFoundStr,
+                signatureVerifiedStr,
+                validityPeriodOkStr,
+                crlCheckedStr,
+                revocationStatus,
+                result.validationStatus,
+                result.errorMessage.empty() ? "" : result.errorMessage
+            };
+        } else {
+            // PostgreSQL schema: is_expired, crl_revoked, error_message
+            query =
+                "INSERT INTO validation_result ("
+                "upload_id, fingerprint_sha256, certificate_type, "
+                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
+                "signature_verified, is_expired, crl_checked, crl_revoked, "
+                "validation_status, error_message"
+                ") VALUES ("
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
+                ")";
+
+            params = {
+                result.uploadId,
+                fingerprintValue,
+                result.certificateType,
+                trustChainValidStr,
+                trustChainPathJson,
+                result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn,
+                cscaFoundStr,
+                signatureVerifiedStr,
+                isExpiredStr,
+                crlCheckedStr,
+                crlRevokedStr,
+                result.validationStatus,
+                result.errorMessage.empty() ? "" : result.errorMessage
+            };
+        }
 
         queryExecutor_->executeCommand(query, params);
         spdlog::debug("[ValidationRepository] Validation result saved successfully");

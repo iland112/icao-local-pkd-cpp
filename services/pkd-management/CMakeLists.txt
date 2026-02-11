@@ -97,6 +97,8 @@ add_executable(${PROJECT_NAME}
     src/repositories/ldif_structure_repository.cpp  # v2.2.2: LDIF structure visualization
     src/repositories/user_repository.cpp  # Phase 5.4: AuthHandler migration
     src/repositories/auth_audit_repository.cpp  # Phase 5.4: AuthHandler migration
+    src/repositories/crl_repository.cpp  # Phase 6.4: CRL operations
+    src/repositories/deviation_list_repository.cpp  # DL deviation data storage
 
     # Service Layer - main.cpp refactoring (v2.1.3)
     src/services/upload_service.cpp
@@ -135,6 +137,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     icao::config         # Shared configuration management library (NEW)
     icao::exception      # Shared exception handling library (NEW)
     icao::logging        # Shared structured logging library (NEW)
+    icao::certificate-parser  # Certificate parsing (FileDetector, PemParser, DerParser, CertTypeDetector)
     icao-common
     Drogon::Drogon
     OpenSSL::SSL

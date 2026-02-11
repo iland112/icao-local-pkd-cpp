@@ -166,25 +166,37 @@ bool UploadRepository::updateStatus(
     spdlog::debug("[UploadRepository] Updating status: {} -> {}", uploadId, status);
 
     try {
-        // Database-aware timestamp - PostgreSQL uses CURRENT_TIMESTAMP directly, Oracle uses TO_CHAR(SYSTIMESTAMP)
         std::string dbType = queryExecutor_->getDatabaseType();
-        std::string timestampValue = (dbType == "oracle")
-            ? "TO_CHAR(SYSTIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')"
-            : "CURRENT_TIMESTAMP";
-
         std::string query;
         std::vector<std::string> params;
 
-        if (errorMessage.empty()) {
-            query = "UPDATE uploaded_file SET status = $1::VARCHAR, "
-                   "completed_timestamp = CASE WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
-                   "WHERE id = $2";
-            params = {status, uploadId};
+        if (dbType == "oracle") {
+            // Oracle: SYSTIMESTAMP returns TIMESTAMP (same type as completed_timestamp column)
+            // No ::VARCHAR cast needed
+            if (errorMessage.empty()) {
+                query = "UPDATE uploaded_file SET status = $1, "
+                       "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN SYSTIMESTAMP ELSE completed_timestamp END "
+                       "WHERE id = $2";
+                params = {status, uploadId};
+            } else {
+                query = "UPDATE uploaded_file SET status = $1, error_message = $2, "
+                       "completed_timestamp = CASE WHEN $1 IN ('COMPLETED', 'FAILED') THEN SYSTIMESTAMP ELSE completed_timestamp END "
+                       "WHERE id = $3";
+                params = {status, errorMessage, uploadId};
+            }
         } else {
-            query = "UPDATE uploaded_file SET status = $1::VARCHAR, error_message = $2, "
-                   "completed_timestamp = CASE WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN " + timestampValue + " ELSE completed_timestamp END "
-                   "WHERE id = $3";
-            params = {status, errorMessage, uploadId};
+            // PostgreSQL: CURRENT_TIMESTAMP returns TIMESTAMP
+            if (errorMessage.empty()) {
+                query = "UPDATE uploaded_file SET status = $1::VARCHAR, "
+                       "completed_timestamp = CASE WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_timestamp END "
+                       "WHERE id = $2";
+                params = {status, uploadId};
+            } else {
+                query = "UPDATE uploaded_file SET status = $1::VARCHAR, error_message = $2, "
+                       "completed_timestamp = CASE WHEN $1::VARCHAR IN ('COMPLETED', 'FAILED') THEN CURRENT_TIMESTAMP ELSE completed_timestamp END "
+                       "WHERE id = $3";
+                params = {status, errorMessage, uploadId};
+            }
         }
 
         queryExecutor_->executeCommand(query, params);
@@ -799,6 +811,59 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
     }
 
     return result;
+}
+
+// ============================================================================
+// Phase 2-3: Upload Change History (CTE with deltas)
+// ============================================================================
+
+Json::Value UploadRepository::getChangeHistory(int limit) {
+    // Oracle: CASE WHEN IS NULL instead of COALESCE(..., '') since '' = NULL in Oracle
+    std::string query =
+        "WITH ranked_uploads AS ( "
+        "  SELECT "
+        "    id, "
+        "    original_file_name, "
+        "    upload_timestamp, "
+        "    csca_count, "
+        "    dsc_count, "
+        "    dsc_nc_count, "
+        "    crl_count, "
+        "    ml_count, "
+        "    mlsc_count, "
+        "    collection_number, "
+        "    ROW_NUMBER() OVER ( "
+        "      ORDER BY upload_timestamp DESC "
+        "    ) as rn "
+        "  FROM uploaded_file "
+        "  WHERE status = 'COMPLETED' "
+        ") "
+        "SELECT "
+        "  curr.id, "
+        "  curr.original_file_name, "
+        "  CASE WHEN curr.collection_number IS NULL THEN 'N/A' ELSE curr.collection_number END as collection_number, "
+        "  to_char(curr.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as upload_time, "
+        "  curr.csca_count, "
+        "  curr.dsc_count, "
+        "  curr.dsc_nc_count, "
+        "  curr.crl_count, "
+        "  curr.ml_count, "
+        "  curr.mlsc_count, "
+        "  curr.csca_count - COALESCE(prev.csca_count, 0) as csca_change, "
+        "  curr.dsc_count - COALESCE(prev.dsc_count, 0) as dsc_change, "
+        "  curr.dsc_nc_count - COALESCE(prev.dsc_nc_count, 0) as dsc_nc_change, "
+        "  curr.crl_count - COALESCE(prev.crl_count, 0) as crl_change, "
+        "  curr.ml_count - COALESCE(prev.ml_count, 0) as ml_change, "
+        "  curr.mlsc_count - COALESCE(prev.mlsc_count, 0) as mlsc_change, "
+        "  prev.original_file_name as previous_file, "
+        "  to_char(prev.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as previous_upload_time "
+        "FROM ranked_uploads curr "
+        "LEFT JOIN ranked_uploads prev "
+        "  ON prev.rn = curr.rn + 1 "
+        "WHERE curr.rn <= " + std::to_string(limit) + " "
+        "ORDER BY curr.upload_timestamp DESC";
+
+    return queryExecutor_->executeQuery(query);
 }
 
 // ============================================================================

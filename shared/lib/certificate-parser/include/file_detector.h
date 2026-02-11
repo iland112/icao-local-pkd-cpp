@@ -16,9 +16,11 @@ enum class FileFormat {
     DER,         ///< DER format (binary ASN.1 encoding)
     CER,         ///< CER format (Windows convention for DER)
     BIN,         ///< Generic binary format
-    DVL,         ///< Deviation List (CMS SignedData)
+    DL,          ///< Document List / Deviation List (CMS SignedData)
     LDIF,        ///< LDAP Data Interchange Format
-    ML           ///< Master List (CMS SignedData)
+    ML,          ///< Master List (CMS SignedData)
+    P7B,         ///< PKCS#7 certificate bundle (CMS SignedData without ICAO OID)
+    CRL          ///< Certificate Revocation List (DER or PEM encoded)
 };
 
 /**
@@ -63,7 +65,7 @@ public:
      * @brief Convert FileFormat enum to string for database storage
      *
      * @param format File format enum
-     * @return String representation (e.g., "PEM", "DER", "DVL")
+     * @return String representation (e.g., "PEM", "DER", "DL")
      */
     static std::string formatToString(FileFormat format);
 
@@ -84,9 +86,11 @@ private:
      * - .der → DER
      * - .cer → CER
      * - .bin → BIN
-     * - .dvl → DVL
+     * - .dvl, .dl → DL
      * - .ldif → LDIF
      * - .ml → ML
+     * - .p7b, .p7c → P7B
+     * - .crl → CRL
      */
     static FileFormat detectByExtension(const std::string& filename);
 
@@ -96,8 +100,11 @@ private:
      * Headers:
      * - "-----BEGIN" → PEM
      * - 0x30 0x82 or 0x30 0x81 → DER/CER/BIN
-     * - PKCS#7 with OID 2.23.136.1.1.7 → DVL
+     * - PKCS#7 with OID 2.23.136.1.1.7 → DL
      * - PKCS#7 with OID 2.23.136.1.1.2 → ML
+     * - PKCS#7 SignedData (no ICAO OID) → P7B
+     * - "-----BEGIN X509 CRL-----" → CRL (PEM)
+     * - DER with CRL structure → CRL (DER)
      * - "dn:" or "version:" → LDIF
      */
     static FileFormat detectByContent(const std::vector<uint8_t>& content);
@@ -119,13 +126,13 @@ private:
     static bool isDER(const std::vector<uint8_t>& content);
 
     /**
-     * @brief Check if content is Deviation List (CMS SignedData)
+     * @brief Check if content is Document List / Deviation List (CMS SignedData)
      *
-     * DVL contains:
+     * DL contains:
      * - PKCS#7 SignedData structure
      * - OID 2.23.136.1.1.7 (ICAO deviationList)
      */
-    static bool isDVL(const std::vector<uint8_t>& content);
+    static bool isDL(const std::vector<uint8_t>& content);
 
     /**
      * @brief Check if content is Master List (CMS SignedData)
@@ -135,6 +142,22 @@ private:
      * - OID 2.23.136.1.1.2 (ICAO cscaMasterList)
      */
     static bool isMasterList(const std::vector<uint8_t>& content);
+
+    /**
+     * @brief Check if content is PKCS#7 bundle (without ICAO-specific OID)
+     *
+     * P7B contains PKCS#7 SignedData structure but NOT DL or ML OIDs
+     */
+    static bool isP7B(const std::vector<uint8_t>& content);
+
+    /**
+     * @brief Check if content is Certificate Revocation List
+     *
+     * CRL formats:
+     * - PEM: "-----BEGIN X509 CRL-----"
+     * - DER: ASN.1 SEQUENCE with CRL-specific structure
+     */
+    static bool isCRL(const std::vector<uint8_t>& content);
 
     /**
      * @brief Check if content is LDIF format

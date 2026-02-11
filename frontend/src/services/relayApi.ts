@@ -22,6 +22,7 @@ import type {
   SyncHistoryItem,
   SyncCheckResponse,
   SyncDiscrepancyItem,
+  CertificatePreviewResult,
 } from '@/types';
 
 // =============================================================================
@@ -96,6 +97,38 @@ export const uploadApi = {
     return relayApi.post<ApiResponse<UploadedFile>>('/upload/masterlist', formData, {
       headers: { 'Content-Type': undefined },
       timeout: 300000, // 5 minutes for large files
+    });
+  },
+
+  /**
+   * Upload individual certificate file (PEM, DER, CER, P7B, DL, CRL)
+   * Synchronous processing - no SSE needed
+   * @param file - Certificate file to upload
+   * @returns Upload result with certificate counts
+   */
+  uploadCertificate: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return relayApi.post<ApiResponse<UploadedFile>>('/upload/certificate', formData, {
+      headers: { 'Content-Type': undefined },
+      timeout: 120000, // 2 minutes
+    });
+  },
+
+  /**
+   * Preview certificate file (parse only, no DB/LDAP save)
+   * Returns parsed metadata for user review before confirming save.
+   * @param file - Certificate file to preview
+   * @returns Parsed certificate metadata
+   */
+  previewCertificate: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return relayApi.post<CertificatePreviewResult>('/upload/certificate/preview', formData, {
+      headers: { 'Content-Type': undefined },
+      timeout: 60000, // 1 minute
     });
   },
 

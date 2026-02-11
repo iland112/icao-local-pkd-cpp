@@ -20,7 +20,7 @@ export interface HealthStatus {
 }
 
 // Upload types
-export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST';  // Backend uses 'ML', some places use 'MASTER_LIST'
+export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST' | 'PEM' | 'DER' | 'CER' | 'P7B' | 'DL' | 'CRL';  // Backend uses 'ML', some places use 'MASTER_LIST'
 export type UploadStatus = 'PENDING' | 'UPLOADING' | 'PARSING' | 'VALIDATING' | 'SAVING_DB' | 'SAVING_LDAP' | 'COMPLETED' | 'FAILED';
 export type ProcessingMode = 'AUTO' | 'MANUAL';
 
@@ -604,4 +604,58 @@ export interface LdifStructureData {
   totalAttributes: number;                      // Total attributes across all entries
   objectClassCounts: Record<string, number>;    // Count of entries by objectClass
   truncated: boolean;                           // True if totalEntries > displayedEntries
+}
+
+// =============================================================================
+// Certificate Preview Types (preview-before-save workflow)
+// =============================================================================
+
+export interface CertificatePreviewItem {
+  subjectDn: string;
+  issuerDn: string;
+  serialNumber: string;
+  countryCode: string;
+  certificateType: string;
+  isSelfSigned: boolean;
+  isLinkCertificate: boolean;
+  notBefore: string;
+  notAfter: string;
+  isExpired: boolean;
+  signatureAlgorithm: string;
+  publicKeyAlgorithm: string;
+  keySize: number;
+  fingerprintSha256: string;
+}
+
+export interface DeviationPreviewItem {
+  certificateIssuerDn: string;
+  certificateSerialNumber: string;
+  defectDescription: string;
+  defectTypeOid: string;
+  defectCategory: string;
+}
+
+export interface CrlPreviewItem {
+  issuerDn: string;
+  countryCode: string;
+  thisUpdate: string;
+  nextUpdate: string;
+  crlNumber: string;
+  revokedCount: number;
+}
+
+export interface CertificatePreviewResult {
+  success: boolean;
+  fileFormat: string;
+  isDuplicate: boolean;
+  duplicateUploadId?: string;
+  message?: string;
+  errorMessage?: string;
+  certificates: CertificatePreviewItem[];
+  deviations?: DeviationPreviewItem[];
+  crlInfo?: CrlPreviewItem;
+  dlIssuerCountry?: string;
+  dlVersion?: number;
+  dlHashAlgorithm?: string;
+  dlSignatureValid?: boolean;
 }

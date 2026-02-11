@@ -24,7 +24,7 @@ ADD CONSTRAINT chk_cert_source_type CHECK (
         'PA_EXTRACTED',      -- Extracted from passport during PA verification
         'LDIF_PARSED',       -- Parsed from LDIF file
         'ML_PARSED',         -- Parsed from Master List
-        'DVL_PARSED',        -- Parsed from Deviation List
+        'DL_PARSED',         -- Parsed from Document List (Deviation List)
         'API_REGISTERED',    -- Direct API call
         'SYSTEM_GENERATED'   -- System generated (testing)
     )

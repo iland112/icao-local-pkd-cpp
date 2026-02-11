@@ -95,6 +95,8 @@
 #include "repositories/ldif_structure_repository.h"  // v2.2.2: LDIF structure visualization
 #include "repositories/user_repository.h"  // Phase 5.4: Authentication Repository Pattern
 #include "repositories/auth_audit_repository.h"  // Phase 5.4: Authentication Repository Pattern
+#include "repositories/crl_repository.h"  // Phase 6.4: CRL operations
+#include "repositories/deviation_list_repository.h"  // DL deviation data
 
 // Phase 1.5/1.6: Repository Pattern - Services
 #include "services/upload_service.h"
@@ -137,6 +139,8 @@ std::shared_ptr<repositories::StatisticsRepository> statisticsRepository;
 std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;  // v2.2.2
 std::shared_ptr<repositories::UserRepository> userRepository;  // Phase 5.4
 std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;  // Phase 5.4
+std::shared_ptr<repositories::CrlRepository> crlRepository;  // Phase 6.4
+std::shared_ptr<repositories::DeviationListRepository> deviationListRepository;  // DL deviation data
 std::shared_ptr<services::UploadService> uploadService;
 std::shared_ptr<services::ValidationService> validationService;
 std::shared_ptr<services::AuditService> auditService;
@@ -852,233 +856,10 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
     return result;
 }
 
-// =============================================================================
-// Validation Result Storage
-// =============================================================================
-
-/**
- * @brief Structure to hold detailed validation result for storage
- */
-struct ValidationResultRecord {
-    std::string certificateId;
-    std::string uploadId;
-    std::string certificateType;
-    std::string countryCode;
-    std::string subjectDn;
-    std::string issuerDn;
-    std::string serialNumber;
-
-    // Overall result
-    std::string validationStatus;  // VALID, INVALID, PENDING, ERROR
-
-    // Trust chain
-    bool trustChainValid = false;
-    std::string trustChainMessage;
-    std::string trustChainPath;  // Sprint 3: Human-readable chain path
-    bool cscaFound = false;
-    std::string cscaSubjectDn;
-    std::string cscaFingerprint;
-    bool signatureVerified = false;
-    std::string signatureAlgorithm;
-
-    // Validity period
-    bool validityCheckPassed = false;
-    bool isExpired = false;
-    bool isNotYetValid = false;
-    std::string notBefore;
-    std::string notAfter;
-
-    // CSCA specific
-    bool isCa = false;
-    bool isSelfSigned = false;
-    int pathLengthConstraint = -1;
-
-    // Key usage
-    bool keyUsageValid = false;
-    std::string keyUsageFlags;
-
-    // CRL check
-    std::string crlCheckStatus = "NOT_CHECKED";
-    std::string crlCheckMessage;
-
-    // Error
-    std::string errorCode;
-    std::string errorMessage;
-
-    // Fingerprint (needed for Oracle validation_result table)
-    std::string fingerprint;
-
-    int validationDurationMs = 0;
-};
-
-/**
- * @brief Store validation result to database
- * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
- */
-bool saveValidationResult(const ValidationResultRecord& record) {
-    if (!::queryExecutor) {
-        spdlog::error("[saveValidationResult] queryExecutor is null");
-        return false;
-    }
-
-    try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
-
-        // Database-aware boolean formatting
-        auto boolStr = [&dbType](bool val) -> std::string {
-            if (dbType == "oracle") return val ? "1" : "0";
-            return val ? "true" : "false";
-        };
-
-        // Prepare boolean strings
-        std::string trustChainValidStr = boolStr(record.trustChainValid);
-        std::string signatureVerifiedStr = boolStr(record.signatureVerified);
-        std::string isExpiredStr = boolStr(record.isExpired);
-        std::string crlCheckedStr = boolStr(record.crlCheckStatus != "NOT_CHECKED");
-        std::string crlRevokedStr = boolStr(record.crlCheckStatus == "REVOKED");
-
-        // Prepare trust_chain_path as JSON/CLOB
-        std::string trustChainPathJson;
-        if (record.trustChainPath.empty()) {
-            trustChainPathJson = "[]";
-        } else {
-            Json::Value pathArray(Json::arrayValue);
-            pathArray.append(record.trustChainPath);
-            Json::StreamWriterBuilder builder;
-            builder["indentation"] = "";
-            trustChainPathJson = Json::writeString(builder, pathArray);
-        }
-
-        // Use fingerprint as the identifier (Oracle schema uses fingerprint_sha256)
-        std::string fingerprintValue = record.fingerprint;
-        if (fingerprintValue.empty()) {
-            // Fallback: use certificateId if fingerprint not set
-            fingerprintValue = record.certificateId;
-        }
-
-        // Database-specific INSERT query
-        std::string query;
-        std::vector<std::string> params;
-
-        // csca_found boolean
-        std::string cscaFoundStr = boolStr(record.cscaFound);
-
-        if (dbType == "oracle") {
-            // Oracle actual schema: validity_period_ok (inverted is_expired),
-            //   revocation_status (VARCHAR2), validation_message (not error_message)
-            std::string validityPeriodOkStr = boolStr(!record.isExpired);  // inverted
-            std::string revocationStatus = record.crlCheckStatus;  // VALID/REVOKED/NOT_CHECKED etc.
-
-            query =
-                "INSERT INTO validation_result ("
-                "upload_id, fingerprint_sha256, certificate_type, "
-                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
-                "signature_verified, validity_period_ok, crl_checked, revocation_status, "
-                "validation_status, validation_message"
-                ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
-                ")";
-
-            params = {
-                record.uploadId,                                                  // $1
-                fingerprintValue,                                                 // $2
-                record.certificateType,                                           // $3
-                trustChainValidStr,                                               // $4
-                trustChainPathJson,                                               // $5
-                record.cscaSubjectDn.empty() ? "" : record.cscaSubjectDn,         // $6
-                cscaFoundStr,                                                     // $7
-                signatureVerifiedStr,                                             // $8
-                validityPeriodOkStr,                                              // $9
-                crlCheckedStr,                                                    // $10
-                revocationStatus,                                                 // $11
-                record.validationStatus,                                          // $12
-                record.errorMessage.empty() ? "" : record.errorMessage            // $13
-            };
-        } else {
-            // PostgreSQL schema: is_expired, crl_revoked, error_message
-            query =
-                "INSERT INTO validation_result ("
-                "upload_id, fingerprint_sha256, certificate_type, "
-                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
-                "signature_verified, is_expired, crl_checked, crl_revoked, "
-                "validation_status, error_message"
-                ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
-                ")";
-
-            params = {
-                record.uploadId,                                                  // $1
-                fingerprintValue,                                                 // $2
-                record.certificateType,                                           // $3
-                trustChainValidStr,                                               // $4
-                trustChainPathJson,                                               // $5
-                record.cscaSubjectDn.empty() ? "" : record.cscaSubjectDn,         // $6
-                cscaFoundStr,                                                     // $7
-                signatureVerifiedStr,                                             // $8
-                isExpiredStr,                                                     // $9
-                crlCheckedStr,                                                    // $10
-                crlRevokedStr,                                                    // $11
-                record.validationStatus,                                          // $12
-                record.errorMessage.empty() ? "" : record.errorMessage            // $13
-            };
-        }
-
-        ::queryExecutor->executeCommand(query, params);
-        return true;
-    } catch (const std::exception& e) {
-        spdlog::error("[saveValidationResult] Failed: {}", e.what());
-        return false;
-    }
-}
-
 } // Close anonymous namespace temporarily for extern functions
 
 // Functions that need to be accessible from other compilation units
 // (processing_strategy.cpp, ldif_processor.cpp)
-
-/**
- * @brief Update validation statistics in uploaded_file table
- */
-void updateValidationStatistics(const std::string& uploadId,
-                                 int validCount, int invalidCount, int pendingCount, int errorCount,
-                                 int trustChainValidCount, int trustChainInvalidCount, int cscaNotFoundCount,
-                                 int expiredCount, int revokedCount) {
-    if (!::queryExecutor) {
-        spdlog::error("[UpdateValidationStats] queryExecutor is null");
-        return;
-    }
-
-    try {
-        std::string query =
-            "UPDATE uploaded_file SET "
-            "validation_valid_count = $1, validation_invalid_count = $2, "
-            "validation_pending_count = $3, validation_error_count = $4, "
-            "trust_chain_valid_count = $5, trust_chain_invalid_count = $6, "
-            "csca_not_found_count = $7, expired_count = $8, revoked_count = $9 "
-            "WHERE id = $10";
-
-        std::vector<std::string> params = {
-            std::to_string(validCount),
-            std::to_string(invalidCount),
-            std::to_string(pendingCount),
-            std::to_string(errorCount),
-            std::to_string(trustChainValidCount),
-            std::to_string(trustChainInvalidCount),
-            std::to_string(cscaNotFoundCount),
-            std::to_string(expiredCount),
-            std::to_string(revokedCount),
-            uploadId
-        };
-
-        ::queryExecutor->executeCommand(query, params);
-        spdlog::info("[UpdateValidationStats] Updated validation stats for upload {}: "
-                    "valid={}, invalid={}, pending={}, trustChainValid={}, cscaNotFound={}",
-                    uploadId, validCount, invalidCount, pendingCount,
-                    trustChainValidCount, cscaNotFoundCount);
-    } catch (const std::exception& e) {
-        spdlog::error("[UpdateValidationStats] Failed to update stats for {}: {}", uploadId, e.what());
-    }
-}
 
 // =============================================================================
 // Credential Scrubbing Utility
@@ -1210,34 +991,6 @@ bool isValidP7sFile(const std::vector<uint8_t>& content) {
 
     // Invalid length encoding
     return false;
-}
-
-// =============================================================================
-// Certificate Duplicate Check
-// =============================================================================
-
-/**
- * @brief Check if certificate with given fingerprint already exists in DB
- * @note v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
- */
-bool certificateExistsByFingerprint(const std::string& fingerprint) {
-    if (!::queryExecutor) {
-        spdlog::error("[certificateExistsByFingerprint] queryExecutor is null");
-        return false;
-    }
-
-    try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
-        std::string query = (dbType == "oracle")
-            ? "SELECT 1 FROM certificate WHERE fingerprint_sha256 = $1 AND ROWNUM = 1"
-            : "SELECT 1 FROM certificate WHERE fingerprint_sha256 = $1 LIMIT 1";
-
-        auto rows = ::queryExecutor->executeQuery(query, {fingerprint});
-        return rows.size() > 0;
-    } catch (const std::exception& e) {
-        spdlog::error("[certificateExistsByFingerprint] Query failed: {}", e.what());
-        return false;
-    }
 }
 
 /**
@@ -2419,68 +2172,8 @@ std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
     return dn;
 }
 
-/**
- * @brief Update DB record with LDAP DN after successful LDAP storage
- * @note v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
- */
-void updateCertificateLdapStatus(const std::string& certId, const std::string& ldapDn) {
-    if (ldapDn.empty()) return;
-
-    if (!::queryExecutor) {
-        spdlog::error("[updateCertificateLdapStatus] queryExecutor is null");
-        return;
-    }
-
-    try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
-        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
-        std::string nowFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
-
-        std::string query = "UPDATE certificate SET "
-                           "ldap_dn = $1, ldap_dn_v2 = $2, stored_in_ldap = " + storedFlag + ", "
-                           "stored_at = " + nowFunc + " "
-                           "WHERE id = $3";
-
-        ::queryExecutor->executeCommand(query, {ldapDn, ldapDn, certId});
-    } catch (const std::exception& e) {
-        spdlog::error("Failed to update certificate LDAP status: {}", e.what());
-    }
-}
-
-/**
- * @brief Update CRL DB record with LDAP DN after successful LDAP storage
- * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
- */
-void updateCrlLdapStatus(const std::string& crlId, const std::string& ldapDn) {
-    if (ldapDn.empty()) return;
-
-    if (!::queryExecutor) {
-        spdlog::error("[updateCrlLdapStatus] queryExecutor is null");
-        return;
-    }
-
-    try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
-        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
-
-        std::string query;
-        if (dbType == "oracle") {
-            // Oracle CRL table has no stored_at column
-            query = "UPDATE crl SET "
-                    "ldap_dn = $1, stored_in_ldap = " + storedFlag + " "
-                    "WHERE id = $2";
-        } else {
-            query = "UPDATE crl SET "
-                    "ldap_dn = $1, stored_in_ldap = " + storedFlag + ", stored_at = NOW() "
-                    "WHERE id = $2";
-        }
-        std::vector<std::string> params = {ldapDn, crlId};
-
-        ::queryExecutor->executeCommand(query, params);
-    } catch (const std::exception& e) {
-        spdlog::error("[updateCrlLdapStatus] Failed: {}", e.what());
-    }
-}
+// updateCertificateLdapStatus → CertificateRepository::updateCertificateLdapStatus() (Phase 6.4)
+// updateCrlLdapStatus → CrlRepository::updateLdapStatus() (Phase 6.4)
 
 /**
  * @brief Build DN for Master List entry in LDAP (o=ml node)
@@ -2670,148 +2363,8 @@ void updateMasterListLdapStatus(const std::string& mlId, const std::string& ldap
 // =============================================================================
 
 
-/**
- * @brief Save CRL to database
- * @return CRL ID or empty string on failure
- * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
- */
-std::string saveCrl(const std::string& uploadId,
-                    const std::string& countryCode, const std::string& issuerDn,
-                    const std::string& thisUpdate, const std::string& nextUpdate,
-                    const std::string& crlNumber, const std::string& fingerprint,
-                    const std::vector<uint8_t>& crlBinary) {
-    if (!::queryExecutor) {
-        spdlog::error("[saveCrl] queryExecutor is null");
-        return "";
-    }
-
-    try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
-
-        // Generate UUID
-        std::string crlId;
-        if (dbType == "oracle") {
-            Json::Value uuidResult = ::queryExecutor->executeQuery(
-                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
-            if (uuidResult.empty()) {
-                spdlog::error("[saveCrl] Failed to generate UUID from Oracle");
-                return "";
-            }
-            crlId = uuidResult[0]["id"].asString();
-        } else {
-            crlId = generateUuid();
-        }
-
-        // Convert binary CRL to hex string (\\x prefix for BLOB detection)
-        std::ostringstream hexStream;
-        hexStream << "\\\\x";
-        for (size_t i = 0; i < crlBinary.size(); i++) {
-            hexStream << std::hex << std::setw(2) << std::setfill('0')
-                     << static_cast<int>(crlBinary[i]);
-        }
-        std::string crlDataHex = hexStream.str();
-
-        // Database-specific INSERT query
-        std::string query;
-        std::vector<std::string> params;
-
-        if (dbType == "oracle") {
-            // Oracle actual schema: issuing_country (not country_code),
-            //   no fingerprint_sha256, no validation_status
-            // Use TO_TIMESTAMP() for date columns - Oracle can't implicitly convert
-            // ISO date strings with timezone suffix (e.g., "2025-01-15 10:30:00+00")
-            query =
-                "INSERT INTO crl (id, upload_id, issuing_country, issuer_dn, "
-                "this_update, next_update, crl_number, crl_data) VALUES ("
-                "$1, $2, $3, $4, "
-                "TO_TIMESTAMP($5, 'YYYY-MM-DD HH24:MI:SS'), "
-                "CASE WHEN $6 IS NULL OR $6 = '' THEN NULL ELSE TO_TIMESTAMP($6, 'YYYY-MM-DD HH24:MI:SS') END, "
-                "$7, $8)";
-
-            // Strip timezone suffix (+00) from date strings for Oracle TO_TIMESTAMP
-            auto stripTz = [](const std::string& ts) -> std::string {
-                if (ts.empty()) return "";
-                // Truncate to 19 chars: "YYYY-MM-DD HH:MI:SS" (strip +00, Z, etc.)
-                return ts.length() > 19 ? ts.substr(0, 19) : ts;
-            };
-
-            params = {
-                crlId,                                           // $1
-                uploadId,                                        // $2
-                countryCode,                                     // $3
-                issuerDn,                                        // $4
-                stripTz(thisUpdate),                             // $5 (stripped for TO_TIMESTAMP)
-                nextUpdate.empty() ? "" : stripTz(nextUpdate),   // $6 (stripped for TO_TIMESTAMP)
-                crlNumber,                                       // $7
-                crlDataHex                                       // $8
-            };
-        } else {
-            // PostgreSQL schema: country_code, fingerprint_sha256, crl_binary, validation_status
-            query =
-                "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
-                "this_update, next_update, crl_number, fingerprint_sha256, "
-                "crl_binary, validation_status, created_at) VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, 'PENDING', NOW()) "
-                "ON CONFLICT DO NOTHING";
-
-            params = {
-                crlId,                                           // $1
-                uploadId,                                        // $2
-                countryCode,                                     // $3
-                issuerDn,                                        // $4
-                thisUpdate,                                      // $5
-                nextUpdate.empty() ? "" : nextUpdate,             // $6
-                crlNumber,                                       // $7
-                fingerprint,                                     // $8
-                crlDataHex                                       // $9
-            };
-        }
-
-        ::queryExecutor->executeCommand(query, params);
-        return crlId;
-    } catch (const std::exception& e) {
-        spdlog::error("[saveCrl] Failed: {}", e.what());
-        return "";
-    }
-}
-
-/**
- * @brief Save revoked certificate to database
- * @note Phase 6.2: Migrated to Query Executor Pattern (database-agnostic)
- * @note revoked_certificate table does not exist in Oracle schema - skipped for Oracle
- */
-void saveRevokedCertificate(const std::string& crlId,
-                            const std::string& serialNumber, const std::string& revocationDate,
-                            const std::string& reason) {
-    if (!::queryExecutor) {
-        spdlog::error("[saveRevokedCertificate] queryExecutor is null");
-        return;
-    }
-
-    try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
-
-        // revoked_certificate table only exists in PostgreSQL schema
-        if (dbType == "oracle") {
-            spdlog::debug("[saveRevokedCertificate] Skipped - table not available in Oracle schema");
-            return;
-        }
-
-        std::string id = generateUuid();
-        std::string query =
-            "INSERT INTO revoked_certificate (id, crl_id, serial_number, "
-            "revocation_date, revocation_reason, created_at) VALUES ("
-            "$1, $2, $3, $4, $5, NOW())";
-
-        std::vector<std::string> params = {
-            id, crlId, serialNumber, revocationDate, reason
-        };
-
-        ::queryExecutor->executeCommand(query, params);
-    } catch (const std::exception& e) {
-        spdlog::error("[saveRevokedCertificate] Failed: {}", e.what());
-    }
-}
+// saveCrl → CrlRepository::save() (Phase 6.4)
+// saveRevokedCertificate → CrlRepository::saveRevokedCertificate() (Phase 6.4)
 
 /**
  * @brief Save Master List to database
@@ -2892,7 +2445,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     std::string validationMessage = "";
 
     // Prepare validation result record
-    ValidationResultRecord valRecord;
+    domain::models::ValidationResult valRecord;
     valRecord.uploadId = uploadId;
     valRecord.fingerprint = fingerprint;  // Phase 6.2: needed for Oracle validation_result table
     valRecord.countryCode = countryCode;
@@ -3151,9 +2704,9 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         spdlog::debug("Saved certificate to DB: type={}, country={}, fingerprint={}",
                      certType, countryCode, fingerprint.substr(0, 16));
 
-        // 3. Save validation result (Phase 6.1: Repository Pattern - TODO: use ValidationRepository)
+        // 3. Save validation result via ValidationRepository
         valRecord.certificateId = certId;
-        saveValidationResult(valRecord);
+        ::validationRepository->save(valRecord);
 
         // 4. Save to LDAP
         if (ld) {
@@ -3222,9 +2775,9 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
     std::string fingerprint = computeFileHash(derBytes);
     std::string countryCode = extractCountryCode(issuerDn);
 
-    // 1. Save to DB (Phase 6.1: Repository Pattern - TODO: use CRL Repository)
-    std::string crlId = saveCrl(uploadId, countryCode, issuerDn,
-                                thisUpdate, nextUpdate, crlNumber, fingerprint, derBytes);
+    // 1. Save to DB via CrlRepository
+    std::string crlId = ::crlRepository->save(uploadId, countryCode, issuerDn,
+                                               thisUpdate, nextUpdate, crlNumber, fingerprint, derBytes);
 
     if (!crlId.empty()) {
         crlCount++;
@@ -3255,7 +2808,7 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
                         ASN1_ENUMERATED_free(reasonEnum);
                     }
 
-                    saveRevokedCertificate(crlId, serialNum, revDate, reason);  // Phase 6.1: Repository Pattern
+                    ::crlRepository->saveRevokedCertificate(crlId, serialNum, revDate, reason);
                 }
             }
             spdlog::debug("Saved CRL to DB with {} revoked certificates, issuer={}",
@@ -3266,8 +2819,7 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
         if (ld) {
             std::string ldapDn = saveCrlToLdap(ld, countryCode, issuerDn, fingerprint, derBytes);
             if (!ldapDn.empty()) {
-                // [Phase 6.1] Function now uses connection pool internally
-                updateCrlLdapStatus(crlId, ldapDn);
+                ::crlRepository->updateLdapStatus(crlId, ldapDn);
                 ldapCrlStoredCount++;
                 spdlog::debug("Saved CRL to LDAP: {}", ldapDn);
             }
@@ -3558,209 +3110,6 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             // For AUTO mode, strategy has already processed everything
             // No additional work needed here
             spdlog::info("AUTO mode: Processing completed by Strategy Pattern");
-
-            /* OLD CODE - Replaced by Strategy Pattern - KEEP THIS COMMENTED OUT!
-            if (processingMode == "MANUAL_OLD") {
-                spdlog::info("MANUAL mode OLD: Saving parsed entries to temp file");
-
-                // Serialize LDIF entries to JSON
-                Json::Value jsonEntries(Json::arrayValue);
-                for (const auto& entry : entries) {
-                    Json::Value jsonEntry;
-                    jsonEntry["dn"] = entry.dn;
-
-                    // Serialize attributes
-                    Json::Value jsonAttrs(Json::objectValue);
-                    for (const auto& attr : entry.attributes) {
-                        Json::Value jsonValues(Json::arrayValue);
-                        for (const auto& val : attr.second) {
-                            jsonValues.append(val);
-                        }
-                        jsonAttrs[attr.first] = jsonValues;
-                    }
-                    jsonEntry["attributes"] = jsonAttrs;
-                    jsonEntries.append(jsonEntry);
-                }
-
-                // Save to temp file
-                std::string tempDir = "/app/temp";
-                std::string tempFile = tempDir + "/" + uploadId + "_ldif.json";
-
-                // Create temp directory if not exists
-                std::filesystem::create_directories(tempDir);
-
-                std::ofstream outFile(tempFile);
-                if (outFile.is_open()) {
-                    Json::StreamWriterBuilder writer;
-                    writer["indentation"] = "";  // Compact JSON
-                    std::unique_ptr<Json::StreamWriter> jsonWriter(writer.newStreamWriter());
-                    jsonWriter->write(jsonEntries, &outFile);
-                    outFile.close();
-                    spdlog::info("MANUAL mode: Saved {} entries to {}", totalEntries, tempFile);
-                } else {
-                    spdlog::error("MANUAL mode: Failed to save temp file: {}", tempFile);
-                }
-
-                // Update status to show parsing is done
-                std::string updateQuery = "UPDATE uploaded_file SET status = 'PENDING', "
-                                         "total_entries = " + std::to_string(totalEntries) + " "
-                                         "WHERE id = '" + uploadId + "'";
-                PGresult* updateRes = PQexec(conn, updateQuery.c_str());
-                PQclear(updateRes);
-
-                PQfinish(conn);
-                return;  // Stop here for MANUAL mode
-            }
-
-            // AUTO mode: Continue with validation and DB save
-            // Send validation started progress
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
-                    0, totalEntries, "인증서 검증 및 DB 저장 중..."));
-
-            int cscaCount = 0;
-            int dscCount = 0;
-            int dscNcCount = 0;
-            int crlCount = 0;
-            int mlCount = 0;  // Master List count
-            int processedEntries = 0;
-            int ldapCertStoredCount = 0;
-            int ldapCrlStoredCount = 0;
-            int ldapMlStoredCount = 0;  // LDAP Master List count
-            ValidationStats validationStats;  // Track validation statistics
-            MasterListStats mlStats;  // Master List processing statistics (v2.0.0)
-
-            // Process each entry
-            for (const auto& entry : entries) {
-                try {
-                    // Check for userCertificate;binary
-                    if (entry.hasAttribute("userCertificate;binary")) {
-                        parseCertificateEntry(conn, ld, uploadId, entry, "userCertificate;binary",
-                                             cscaCount, dscCount, dscNcCount, ldapCertStoredCount, validationStats);
-                    }
-                    // Check for cACertificate;binary
-                    else if (entry.hasAttribute("cACertificate;binary")) {
-                        parseCertificateEntry(conn, ld, uploadId, entry, "cACertificate;binary",
-                                             cscaCount, dscCount, dscNcCount, ldapCertStoredCount, validationStats);
-                    }
-
-                    // Check for CRL
-                    if (entry.hasAttribute("certificateRevocationList;binary")) {
-                        parseCrlEntry(conn, ld, uploadId, entry, crlCount, ldapCrlStoredCount);
-                    }
-
-                    // Check for Master List (pkdMasterListContent;binary - LDIF parser adds ;binary for base64 values)
-                    // v2.0.0: Use new processor that extracts individual CSCAs
-                    if (entry.hasAttribute("pkdMasterListContent;binary") || entry.hasAttribute("pkdMasterListContent")) {
-                        parseMasterListEntryV2(conn, ld, uploadId, entry, mlStats);
-                        // Update legacy counters for backward compatibility
-                        mlCount = mlStats.mlCount;
-                        ldapMlStoredCount = mlStats.ldapMlStoredCount;
-                        cscaCount += mlStats.cscaNewCount;  // Add new CSCAs to count
-                        ldapCertStoredCount += mlStats.ldapCscaStoredCount;  // Add LDAP stored CSCAs
-                    }
-
-                } catch (const std::exception& e) {
-                    spdlog::warn("Error processing entry {}: {}", entry.dn, e.what());
-                }
-
-                processedEntries++;
-
-                // Send progress update every 50 entries
-                if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
-                    // v1.5.1: Enhanced progress message with detailed certificate type breakdown
-                    std::string progressMsg = "처리 중: ";
-                    std::vector<std::string> parts;
-                    if (cscaCount > 0) parts.push_back("CSCA " + std::to_string(cscaCount));
-                    if (dscCount > 0) parts.push_back("DSC " + std::to_string(dscCount));
-                    if (dscNcCount > 0) parts.push_back("DSC_NC " + std::to_string(dscNcCount));
-                    if (crlCount > 0) parts.push_back("CRL " + std::to_string(crlCount));
-                    if (mlCount > 0) parts.push_back("ML " + std::to_string(mlCount));
-
-                    for (size_t i = 0; i < parts.size(); ++i) {
-                        if (i > 0) progressMsg += ", ";
-                        progressMsg += parts[i];
-                    }
-
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
-                            processedEntries, totalEntries, progressMsg));
-
-                    spdlog::info("Processing progress: {}/{} entries, {} certs ({} LDAP), {} CRLs ({} LDAP), {} MLs ({} LDAP)",
-                                processedEntries, totalEntries,
-                                cscaCount + dscCount, ldapCertStoredCount,
-                                crlCount, ldapCrlStoredCount,
-                                mlCount, ldapMlStoredCount);
-                }
-            }
-
-            // v1.5.1: Enhanced LDAP progress message with detailed breakdown
-            std::string ldapProgressMsg = "LDAP 저장: ";
-            std::vector<std::string> ldapParts;
-            int totalCerts = cscaCount + dscCount + dscNcCount;
-            if (totalCerts > 0) ldapParts.push_back("인증서 " + std::to_string(ldapCertStoredCount) + "/" + std::to_string(totalCerts));
-            if (crlCount > 0) ldapParts.push_back("CRL " + std::to_string(ldapCrlStoredCount) + "/" + std::to_string(crlCount));
-            if (mlCount > 0) ldapParts.push_back("ML " + std::to_string(ldapMlStoredCount) + "/" + std::to_string(mlCount));
-
-            for (size_t i = 0; i < ldapParts.size(); ++i) {
-                if (i > 0) ldapProgressMsg += ", ";
-                ldapProgressMsg += ldapParts[i];
-            }
-
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::LDAP_SAVING_IN_PROGRESS,
-                    ldapCertStoredCount + ldapCrlStoredCount + ldapMlStoredCount,
-                    cscaCount + dscCount + crlCount + mlCount, ldapProgressMsg));
-
-            // Update final statistics (ml_count will be updated separately)
-            updateUploadStatistics(uploadId, "COMPLETED", cscaCount, dscCount, dscNcCount, crlCount,
-                                  totalEntries, processedEntries, "");
-
-            // Update ml_count in uploaded_file
-            if (mlCount > 0) {
-                std::string mlUpdateQuery = "UPDATE uploaded_file SET ml_count = " + std::to_string(mlCount) +
-                                           " WHERE id = '" + uploadId + "'";
-                PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
-                PQclear(mlRes);
-            }
-
-            // Update validation statistics
-            updateValidationStatistics(conn, uploadId,
-                                       validationStats.validCount, validationStats.invalidCount,
-                                       validationStats.pendingCount, validationStats.errorCount,
-                                       validationStats.trustChainValidCount, validationStats.trustChainInvalidCount,
-                                       validationStats.cscaNotFoundCount, validationStats.expiredCount,
-                                       validationStats.revokedCount);
-
-            // v1.5.1: Send completion progress with validation info (only show non-zero counts)
-            std::string completionMsg = "처리 완료: ";
-            std::vector<std::string> completionParts;
-            if (cscaCount > 0) completionParts.push_back("CSCA " + std::to_string(cscaCount) + "개");
-            if (dscCount > 0) completionParts.push_back("DSC " + std::to_string(dscCount) + "개");
-            if (dscNcCount > 0) completionParts.push_back("DSC_NC " + std::to_string(dscNcCount) + "개");
-            if (crlCount > 0) completionParts.push_back("CRL " + std::to_string(crlCount) + "개");
-            if (mlCount > 0) completionParts.push_back("ML " + std::to_string(mlCount) + "개");
-
-            for (size_t i = 0; i < completionParts.size(); ++i) {
-                if (i > 0) completionMsg += ", ";
-                completionMsg += completionParts[i];
-            }
-
-            completionMsg += " (검증: " + std::to_string(validationStats.validCount) + " 성공, " +
-                            std::to_string(validationStats.invalidCount) + " 실패, " +
-                            std::to_string(validationStats.pendingCount) + " 보류)";
-            int totalItems = cscaCount + dscCount + dscNcCount + crlCount + mlCount;
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                    totalItems, totalItems, completionMsg));
-
-            spdlog::info("LDIF processing completed for upload {}: {} CSCA, {} DSC, {} DSC_NC, {} CRLs, {} MLs (LDAP: {} certs, {} CRLs, {} MLs)",
-                        uploadId, cscaCount, dscCount, dscNcCount, crlCount, mlCount,
-                        ldapCertStoredCount, ldapCrlStoredCount, ldapMlStoredCount);
-            spdlog::info("Validation stats: {} valid, {} invalid, {} pending, {} csca_not_found, {} expired",
-                        validationStats.validCount, validationStats.invalidCount, validationStats.pendingCount,
-                        validationStats.cscaNotFoundCount, validationStats.expiredCount);
-            */ // END OLD CODE
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
@@ -5410,13 +4759,12 @@ void registerRoutes() {
                             return;
                         }
 
-                        // Get processing mode via QueryExecutor
+                        // Get processing mode via UploadRepository
                         std::string processingMode = "AUTO";
                         try {
-                            const char* modeQuery = "SELECT processing_mode FROM uploaded_file WHERE id = $1";
-                            Json::Value modeResult = ::queryExecutor->executeQuery(modeQuery, {uploadId});
-                            if (!modeResult.empty() && modeResult[0].isMember("processing_mode")) {
-                                processingMode = modeResult[0]["processing_mode"].asString();
+                            auto uploadOpt = ::uploadRepository->findById(uploadId);
+                            if (uploadOpt.has_value() && uploadOpt->processingMode.has_value()) {
+                                processingMode = uploadOpt->processingMode.value();
                             }
                         } catch (const std::exception& e) {
                             spdlog::warn("Failed to get processing mode, defaulting to AUTO: {}", e.what());
@@ -5453,25 +4801,15 @@ void registerRoutes() {
                             auto strategy = ProcessingStrategyFactory::create(processingMode);
                             strategy->processMasterListContent(uploadId, contentBytes, ld);
 
-                            // Query statistics from database via QueryExecutor (Oracle/PostgreSQL agnostic)
+                            // Query statistics from database via UploadRepository
                             int cscaCount = 0, totalEntries = 0, processedEntries = 0, mlscCount = 0;
                             try {
-                                const char* statsQuery = "SELECT csca_count, total_entries, processed_entries, mlsc_count FROM uploaded_file WHERE id = $1";
-                                Json::Value statsResult = ::queryExecutor->executeQuery(statsQuery, {uploadId});
-                                if (!statsResult.empty()) {
-                                    const auto& row = statsResult[0];
-                                    // Use safe parsing for Oracle string compatibility
-                                    auto safeInt = [](const Json::Value& v) -> int {
-                                        if (v.isInt()) return v.asInt();
-                                        if (v.isUInt()) return static_cast<int>(v.asUInt());
-                                        if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
-                                        if (v.isDouble()) return static_cast<int>(v.asDouble());
-                                        return 0;
-                                    };
-                                    if (row.isMember("csca_count")) cscaCount = safeInt(row["csca_count"]);
-                                    if (row.isMember("total_entries")) totalEntries = safeInt(row["total_entries"]);
-                                    if (row.isMember("processed_entries")) processedEntries = safeInt(row["processed_entries"]);
-                                    if (row.isMember("mlsc_count")) mlscCount = safeInt(row["mlsc_count"]);
+                                auto uploadOpt = ::uploadRepository->findById(uploadId);
+                                if (uploadOpt.has_value()) {
+                                    cscaCount = uploadOpt->cscaCount;
+                                    totalEntries = uploadOpt->totalEntries;
+                                    processedEntries = uploadOpt->processedEntries;
+                                    mlscCount = uploadOpt->mlscCount;
                                 }
                             } catch (const std::exception& e) {
                                 spdlog::warn("Failed to query stats for completion message: {}", e.what());
@@ -5568,6 +4906,266 @@ void registerRoutes() {
                 Json::Value error;
                 error["success"] = false;
                 error["message"] = std::string("Upload failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Post}
+    );
+
+    // Upload individual certificate file endpoint (PEM, DER, CER, P7B, CRL)
+    app.registerHandler(
+        "/api/upload/certificate",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/upload/certificate - Individual certificate file upload");
+
+            try {
+                drogon::MultiPartParser fileParser;
+                if (fileParser.parse(req) != 0) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Invalid multipart form data";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                auto& files = fileParser.getFiles();
+                if (files.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "No file uploaded";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                auto& file = files[0];
+                std::string fileName = file.getFileName();
+                auto fileContent = file.fileContent();
+                size_t fileSize = file.fileLength();
+
+                spdlog::info("Certificate file: name={}, size={}", fileName, fileSize);
+
+                // Validate file size (max 10MB for individual cert files)
+                if (fileSize > 10 * 1024 * 1024) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "File too large. Maximum size is 10MB for certificate files.";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                // Extract username from JWT
+                std::string uploadedBy = "unknown";
+                auto jwtPayload = req->getAttributes()->get<Json::Value>("jwt_payload");
+                if (jwtPayload.isMember("username")) {
+                    uploadedBy = jwtPayload["username"].asString();
+                }
+
+                // Convert to bytes
+                std::vector<uint8_t> contentBytes(fileContent.begin(), fileContent.end());
+
+                // Call UploadService
+                auto result = uploadService->uploadCertificate(fileName, contentBytes, uploadedBy);
+
+                Json::Value response;
+                response["success"] = result.success;
+                response["message"] = result.message;
+                response["uploadId"] = result.uploadId;
+                response["fileFormat"] = result.fileFormat;
+                response["status"] = result.status;
+                response["certificateCount"] = result.certificateCount;
+                response["cscaCount"] = result.cscaCount;
+                response["dscCount"] = result.dscCount;
+                response["dscNcCount"] = result.dscNcCount;
+                response["mlscCount"] = result.mlscCount;
+                response["crlCount"] = result.crlCount;
+                response["ldapStoredCount"] = result.ldapStoredCount;
+                response["duplicateCount"] = result.duplicateCount;
+                if (!result.errorMessage.empty()) {
+                    response["errorMessage"] = result.errorMessage;
+                }
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                if (result.success) {
+                    resp->setStatusCode(drogon::k200OK);
+                } else if (result.status == "DUPLICATE") {
+                    resp->setStatusCode(drogon::k409Conflict);
+                } else {
+                    resp->setStatusCode(drogon::k400BadRequest);
+                }
+
+                // Audit log
+                if (::queryExecutor) {
+                    AuditLogEntry auditEntry;
+                    auditEntry.username = uploadedBy;
+                    auditEntry.operationType = OperationType::FILE_UPLOAD;
+                    auditEntry.operationSubtype = "CERTIFICATE_" + result.fileFormat;
+                    auditEntry.resourceId = result.uploadId;
+                    auditEntry.resourceType = "UPLOADED_FILE";
+                    auditEntry.ipAddress = extractIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "POST";
+                    auditEntry.requestPath = "/api/upload/certificate";
+                    auditEntry.success = result.success;
+                    Json::Value metadata;
+                    metadata["fileName"] = fileName;
+                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
+                    metadata["fileFormat"] = result.fileFormat;
+                    metadata["certificateCount"] = result.certificateCount;
+                    metadata["crlCount"] = result.crlCount;
+                    auditEntry.metadata = metadata;
+                    logOperation(::queryExecutor.get(), auditEntry);
+                }
+
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate upload failed: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = std::string("Upload failed: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Post}
+    );
+
+    // Preview certificate file endpoint (parse only, no DB/LDAP save)
+    app.registerHandler(
+        "/api/upload/certificate/preview",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("POST /api/upload/certificate/preview - Certificate file preview");
+
+            try {
+                drogon::MultiPartParser fileParser;
+                if (fileParser.parse(req) != 0) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Invalid multipart form data";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                auto& files = fileParser.getFiles();
+                if (files.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "No file uploaded";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                auto& file = files[0];
+                std::string fileName = file.getFileName();
+                auto fileContent = file.fileContent();
+                size_t fileSize = file.fileLength();
+
+                // Validate file size (max 10MB)
+                if (fileSize > 10 * 1024 * 1024) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "File too large. Maximum size is 10MB for certificate files.";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                std::vector<uint8_t> contentBytes(fileContent.begin(), fileContent.end());
+
+                auto result = uploadService->previewCertificate(fileName, contentBytes);
+
+                Json::Value response;
+                response["success"] = result.success;
+                response["fileFormat"] = result.fileFormat;
+                response["isDuplicate"] = result.isDuplicate;
+                if (!result.duplicateUploadId.empty()) {
+                    response["duplicateUploadId"] = result.duplicateUploadId;
+                }
+                if (!result.message.empty()) {
+                    response["message"] = result.message;
+                }
+                if (!result.errorMessage.empty()) {
+                    response["errorMessage"] = result.errorMessage;
+                }
+
+                // Certificates array
+                Json::Value certsArray(Json::arrayValue);
+                for (const auto& cert : result.certificates) {
+                    Json::Value certJson;
+                    certJson["subjectDn"] = cert.subjectDn;
+                    certJson["issuerDn"] = cert.issuerDn;
+                    certJson["serialNumber"] = cert.serialNumber;
+                    certJson["countryCode"] = cert.countryCode;
+                    certJson["certificateType"] = cert.certificateType;
+                    certJson["isSelfSigned"] = cert.isSelfSigned;
+                    certJson["isLinkCertificate"] = cert.isLinkCertificate;
+                    certJson["notBefore"] = cert.notBefore;
+                    certJson["notAfter"] = cert.notAfter;
+                    certJson["isExpired"] = cert.isExpired;
+                    certJson["signatureAlgorithm"] = cert.signatureAlgorithm;
+                    certJson["publicKeyAlgorithm"] = cert.publicKeyAlgorithm;
+                    certJson["keySize"] = cert.keySize;
+                    certJson["fingerprintSha256"] = cert.fingerprintSha256;
+                    certsArray.append(certJson);
+                }
+                response["certificates"] = certsArray;
+
+                // Deviations array (DL files)
+                if (!result.deviations.empty()) {
+                    Json::Value devsArray(Json::arrayValue);
+                    for (const auto& dev : result.deviations) {
+                        Json::Value devJson;
+                        devJson["certificateIssuerDn"] = dev.certificateIssuerDn;
+                        devJson["certificateSerialNumber"] = dev.certificateSerialNumber;
+                        devJson["defectDescription"] = dev.defectDescription;
+                        devJson["defectTypeOid"] = dev.defectTypeOid;
+                        devJson["defectCategory"] = dev.defectCategory;
+                        devsArray.append(devJson);
+                    }
+                    response["deviations"] = devsArray;
+                    response["dlIssuerCountry"] = result.dlIssuerCountry;
+                    response["dlVersion"] = result.dlVersion;
+                    response["dlHashAlgorithm"] = result.dlHashAlgorithm;
+                    response["dlSignatureValid"] = result.dlSignatureValid;
+                }
+
+                // CRL info
+                if (result.hasCrlInfo) {
+                    Json::Value crlJson;
+                    crlJson["issuerDn"] = result.crlInfo.issuerDn;
+                    crlJson["countryCode"] = result.crlInfo.countryCode;
+                    crlJson["thisUpdate"] = result.crlInfo.thisUpdate;
+                    crlJson["nextUpdate"] = result.crlInfo.nextUpdate;
+                    crlJson["crlNumber"] = result.crlInfo.crlNumber;
+                    crlJson["revokedCount"] = result.crlInfo.revokedCount;
+                    response["crlInfo"] = crlJson;
+                }
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                resp->setStatusCode(drogon::k200OK);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Certificate preview failed: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = std::string("Preview failed: ") + e.what();
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
@@ -5684,28 +5282,13 @@ void registerRoutes() {
                     return;
                 }
 
-                // v2.6.4: Migrated LDAP status check from PGconn to QueryExecutor for Oracle support
-                if (::queryExecutor) {
+                // LDAP status count via CertificateRepository
+                if (::certificateRepository) {
                     try {
-                        std::string boolTrue = (::queryExecutor->getDatabaseType() == "oracle") ? "1" : "true";
-                        std::string ldapQuery = "SELECT COUNT(*) as total, "
-                                              "COALESCE(SUM(CASE WHEN stored_in_ldap = " + boolTrue + " THEN 1 ELSE 0 END), 0) as in_ldap "
-                                              "FROM certificate WHERE upload_id = $1";
-                        auto rows = ::queryExecutor->executeQuery(ldapQuery, {uploadId});
-                        if (!rows.empty()) {
-                            auto safeInt = [](const Json::Value& v) -> int {
-                                if (v.isInt()) return v.asInt();
-                                if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
-                                return 0;
-                            };
-                            int totalCerts = safeInt(rows[0]["total"]);
-                            int ldapCerts = safeInt(rows[0]["in_ldap"]);
-                            uploadData["ldapUploadedCount"] = ldapCerts;
-                            uploadData["ldapPendingCount"] = totalCerts - ldapCerts;
-                        } else {
-                            uploadData["ldapUploadedCount"] = 0;
-                            uploadData["ldapPendingCount"] = 0;
-                        }
+                        int totalCerts = 0, ldapCerts = 0;
+                        ::certificateRepository->countLdapStatusByUploadId(uploadId, totalCerts, ldapCerts);
+                        uploadData["ldapUploadedCount"] = ldapCerts;
+                        uploadData["ldapPendingCount"] = totalCerts - ldapCerts;
                     } catch (const std::exception& e) {
                         spdlog::warn("LDAP status query failed: {}", e.what());
                         uploadData["ldapUploadedCount"] = 0;
@@ -5886,8 +5469,8 @@ void registerRoutes() {
             Json::Value result;
             result["success"] = false;
 
-            if (!::queryExecutor) {
-                result["error"] = "Query executor not initialized";
+            if (!::uploadRepository) {
+                result["error"] = "Upload repository not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
@@ -5895,53 +5478,7 @@ void registerRoutes() {
             }
 
             try {
-                // Oracle: COALESCE(collection_number, '') returns NULL since '' = NULL in Oracle
-                // Use CASE WHEN collection_number IS NULL instead of checking = ''
-                std::string query =
-                    "WITH ranked_uploads AS ( "
-                    "  SELECT "
-                    "    id, "
-                    "    original_file_name, "
-                    "    upload_timestamp, "
-                    "    csca_count, "
-                    "    dsc_count, "
-                    "    dsc_nc_count, "
-                    "    crl_count, "
-                    "    ml_count, "
-                    "    mlsc_count, "
-                    "    collection_number, "
-                    "    ROW_NUMBER() OVER ( "
-                    "      ORDER BY upload_timestamp DESC "
-                    "    ) as rn "
-                    "  FROM uploaded_file "
-                    "  WHERE status = 'COMPLETED' "
-                    ") "
-                    "SELECT "
-                    "  curr.id, "
-                    "  curr.original_file_name, "
-                    "  CASE WHEN curr.collection_number IS NULL THEN 'N/A' ELSE curr.collection_number END as collection_number, "
-                    "  to_char(curr.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as upload_time, "
-                    "  curr.csca_count, "
-                    "  curr.dsc_count, "
-                    "  curr.dsc_nc_count, "
-                    "  curr.crl_count, "
-                    "  curr.ml_count, "
-                    "  curr.mlsc_count, "
-                    "  curr.csca_count - COALESCE(prev.csca_count, 0) as csca_change, "
-                    "  curr.dsc_count - COALESCE(prev.dsc_count, 0) as dsc_change, "
-                    "  curr.dsc_nc_count - COALESCE(prev.dsc_nc_count, 0) as dsc_nc_change, "
-                    "  curr.crl_count - COALESCE(prev.crl_count, 0) as crl_change, "
-                    "  curr.ml_count - COALESCE(prev.ml_count, 0) as ml_change, "
-                    "  curr.mlsc_count - COALESCE(prev.mlsc_count, 0) as mlsc_change, "
-                    "  prev.original_file_name as previous_file, "
-                    "  to_char(prev.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as previous_upload_time "
-                    "FROM ranked_uploads curr "
-                    "LEFT JOIN ranked_uploads prev "
-                    "  ON prev.rn = curr.rn + 1 "
-                    "WHERE curr.rn <= " + std::to_string(limit) + " "
-                    "ORDER BY curr.upload_timestamp DESC";
-
-                auto rows = ::queryExecutor->executeQuery(query);
+                auto rows = ::uploadRepository->getChangeHistory(limit);
 
                 // Oracle safeInt helper: Oracle returns all values as strings
                 auto safeInt = [](const Json::Value& v) -> int {
@@ -7085,15 +6622,11 @@ paths:
             try {
                 spdlog::debug("Fetching list of available countries");
 
-                if (!::queryExecutor) {
-                    throw std::runtime_error("Query executor not initialized");
+                if (!::certificateRepository) {
+                    throw std::runtime_error("Certificate repository not initialized");
                 }
 
-                std::string query = "SELECT DISTINCT country_code FROM certificate "
-                                    "WHERE country_code IS NOT NULL "
-                                    "ORDER BY country_code";
-
-                auto rows = ::queryExecutor->executeQuery(query);
+                auto rows = ::certificateRepository->getDistinctCountries();
 
                 Json::Value response;
                 response["success"] = true;
@@ -7293,11 +6826,10 @@ paths:
                 return;
             }
 
-            // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
-            if (!::queryExecutor) {
+            if (!::certificateRepository) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Query executor not initialized";
+                error["error"] = "Certificate repository not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
@@ -7305,44 +6837,11 @@ paths:
             }
 
             try {
-                std::string dbType = ::queryExecutor->getDatabaseType();
-                std::string boolTrue = (dbType == "oracle") ? "1" : "true";
-
-                // Build SQL query with parameterized parameters
-                std::ostringstream sql;
-                sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-                    << "old_csca_subject_dn, new_csca_subject_dn, "
-                    << "trust_chain_valid, created_at, country_code "
-                    << "FROM link_certificate WHERE 1=1";
-
-                std::vector<std::string> paramValues;
-                int paramIndex = 1;
-
-                if (!country.empty()) {
-                    sql << " AND country_code = $" << paramIndex++;
-                    paramValues.push_back(country);
-                }
-
-                if (validOnly) {
-                    sql << " AND trust_chain_valid = " << boolTrue;
-                }
-
-                // Oracle: use OFFSET/FETCH instead of LIMIT/OFFSET
-                if (dbType == "oracle") {
-                    sql << " ORDER BY created_at DESC"
-                        << " OFFSET $" << paramIndex++ << " ROWS"
-                        << " FETCH NEXT $" << paramIndex++ << " ROWS ONLY";
-                    paramValues.push_back(std::to_string(offset));
-                    paramValues.push_back(std::to_string(limit));
-                } else {
-                    sql << " ORDER BY created_at DESC LIMIT $" << paramIndex++ << " OFFSET $" << paramIndex++;
-                    paramValues.push_back(std::to_string(limit));
-                    paramValues.push_back(std::to_string(offset));
-                }
-
-                auto rows = ::queryExecutor->executeQuery(sql.str(), paramValues);
+                std::string validFilter = validOnly ? "true" : "";
+                auto rows = ::certificateRepository->searchLinkCertificates(country, validFilter, limit, offset);
 
                 // Helper for Oracle boolean values
+                std::string dbType = ::queryExecutor ? ::queryExecutor->getDatabaseType() : "postgres";
                 auto parseBool = [&dbType](const Json::Value& v) -> bool {
                     if (v.isBool()) return v.asBool();
                     std::string s = v.asString();
@@ -7399,11 +6898,10 @@ paths:
            const std::string& id) {
             spdlog::info("GET /api/link-certs/{} - Get Link Certificate details", id);
 
-            // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
-            if (!::queryExecutor) {
+            if (!::certificateRepository) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Query executor not initialized";
+                error["error"] = "Certificate repository not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
@@ -7411,7 +6909,7 @@ paths:
             }
 
             try {
-                std::string dbType = ::queryExecutor->getDatabaseType();
+                std::string dbType = ::queryExecutor ? ::queryExecutor->getDatabaseType() : "postgres";
 
                 // Helper for Oracle boolean values
                 auto parseBool = [&dbType](const Json::Value& v) -> bool {
@@ -7426,22 +6924,10 @@ paths:
                     return 0;
                 };
 
-                // Query LC by ID (parameterized query)
-                std::string query =
-                    "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-                    "old_csca_subject_dn, old_csca_fingerprint, "
-                    "new_csca_subject_dn, new_csca_fingerprint, "
-                    "trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
-                    "validity_period_valid, not_before, not_after, "
-                    "extensions_valid, basic_constraints_ca, basic_constraints_pathlen, "
-                    "key_usage, extended_key_usage, "
-                    "revocation_status, revocation_message, "
-                    "ldap_dn_v2, stored_in_ldap, created_at, country_code "
-                    "FROM link_certificate WHERE id = $1";
+                // Query LC by ID via CertificateRepository
+                Json::Value rowValue = ::certificateRepository->findLinkCertificateById(id);
 
-                auto rows = ::queryExecutor->executeQuery(query, {id});
-
-                if (rows.empty()) {
+                if (rowValue.isNull()) {
                     Json::Value error;
                     error["success"] = false;
                     error["error"] = "Link Certificate not found";
@@ -7451,7 +6937,7 @@ paths:
                     return;
                 }
 
-                const auto& row = rows[0];
+                const auto& row = rowValue;
 
                 // Build JSON response
                 Json::Value response;
@@ -7884,7 +7370,9 @@ int main(int argc, char* argv[]) {
         statisticsRepository = std::make_shared<repositories::StatisticsRepository>(queryExecutor.get());
         userRepository = std::make_shared<repositories::UserRepository>(queryExecutor.get());
         authAuditRepository = std::make_shared<repositories::AuthAuditRepository>(queryExecutor.get());
-        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, User, AuthAudit: Query Executor)");
+        crlRepository = std::make_shared<repositories::CrlRepository>(queryExecutor.get());
+        deviationListRepository = std::make_shared<repositories::DeviationListRepository>(queryExecutor.get());
+        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, User, AuthAudit, CRL, DL: Query Executor)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
         // Initialize ICAO Auto Sync Module (v1.7.0, migrated to IQueryExecutor v2.6.4)
@@ -7919,7 +7407,8 @@ int main(int argc, char* argv[]) {
         uploadService = std::make_shared<services::UploadService>(
             uploadRepository.get(),
             certificateRepository.get(),
-            ldapPool.get()  // v2.4.3: Use LDAP connection pool instead of direct connection
+            ldapPool.get(),  // v2.4.3: Use LDAP connection pool instead of direct connection
+            deviationListRepository.get()  // DL deviation data storage
         );
 
         validationService = std::make_shared<services::ValidationService>(

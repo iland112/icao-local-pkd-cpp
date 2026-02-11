@@ -41,7 +41,7 @@ END;
 -- File Upload Tables
 -- =============================================================================
 
--- Uploaded files tracking (LDIF, Master List, Certificate files, DVL, etc.)
+-- Uploaded files tracking (LDIF, Master List, Certificate files, DL, etc.)
 CREATE TABLE uploaded_file (
     id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
     file_name VARCHAR2(255) NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE uploaded_file (
     csca_extracted_from_ml NUMBER(10) DEFAULT 0 NOT NULL,
     csca_duplicates NUMBER(10) DEFAULT 0 NOT NULL,
 
-    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML', 'PEM', 'DER', 'CER', 'BIN', 'DVL', 'MASTER_LIST')),
+    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML', 'PEM', 'DER', 'CER', 'P7B', 'DL', 'CRL')),
     CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
     CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO', 'MANUAL'))
 );
@@ -92,7 +92,7 @@ CREATE INDEX idx_uploaded_file_file_hash ON uploaded_file(file_hash);
 -- Certificate Tables
 -- =============================================================================
 
--- Certificates (CSCA, DSC, DSC_NC, MLSC, LINK_CERT, DVL_SIGNER)
+-- Certificates (CSCA, DSC, DSC_NC, MLSC, LINK_CERT, DL_SIGNER)
 CREATE TABLE certificate (
     id VARCHAR2(36) DEFAULT uuid_generate_v4() PRIMARY KEY,
     upload_id VARCHAR2(36),
@@ -156,8 +156,8 @@ CREATE TABLE certificate (
     CONSTRAINT fk_cert_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
     CONSTRAINT fk_cert_first_upload FOREIGN KEY (first_upload_id) REFERENCES uploaded_file(id),
     CONSTRAINT fk_cert_last_upload FOREIGN KEY (last_seen_upload_id) REFERENCES uploaded_file(id),
-    CONSTRAINT chk_cert_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC', 'LINK_CERT', 'DVL_SIGNER')),
-    CONSTRAINT chk_cert_source_type CHECK (source_type IN ('FILE_UPLOAD', 'PA_EXTRACTED', 'LDIF_PARSED', 'ML_PARSED', 'DVL_PARSED', 'API_REGISTERED', 'SYSTEM_GENERATED'))
+    CONSTRAINT chk_cert_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC', 'LINK_CERT', 'DL_SIGNER')),
+    CONSTRAINT chk_cert_source_type CHECK (source_type IN ('FILE_UPLOAD', 'PA_EXTRACTED', 'LDIF_PARSED', 'ML_PARSED', 'DL_PARSED', 'API_REGISTERED', 'SYSTEM_GENERATED'))
 );
 
 CREATE UNIQUE INDEX idx_cert_fingerprint ON certificate(fingerprint_sha256);

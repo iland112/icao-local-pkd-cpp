@@ -4,6 +4,8 @@
 #include "common/masterlist_processor.h"
 #include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
 #include "repositories/upload_repository.h"  // Phase 6.1: Repository Pattern
+#include "repositories/validation_repository.h"  // Phase 6.4: ValidationRepository for updateStatistics
+#include "domain/models/validation_statistics.h"
 #include "i_query_executor.h"  // Phase 6.3: Database-agnostic query execution
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
@@ -24,8 +26,10 @@ using common::ProcessingStage;
 // Forward declare the class first
 namespace repositories {
     class UploadRepository;
+    class ValidationRepository;
 }
 extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
+extern std::shared_ptr<repositories::ValidationRepository> validationRepository;
 
 // This file will be implemented in phases
 // For now, we provide the factory implementation
@@ -50,11 +54,6 @@ extern void updateUploadStatistics(const std::string& uploadId,
                                    int dscCount, int dscNcCount, int crlCount,
                                    int totalEntries, int processedEntries,
                                    const std::string& errorMessage);
-extern void updateValidationStatistics(const std::string& uploadId,
-                                      int validCount, int invalidCount, int pendingCount,
-                                      int errorCount, int trustChainValidCount,
-                                      int trustChainInvalidCount, int cscaNotFoundCount,
-                                      int expiredCount, int revokedCount);
 extern void sendCompletionProgress(const std::string& uploadId, int totalItems, const std::string& message);
 
 // processMasterListContentCore is now declared in common.h
@@ -97,12 +96,20 @@ void AutoProcessingStrategy::processLdifEntries(
                           counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                           entries.size(), entries.size(), "");
 
-    // Update validation statistics
-    updateValidationStatistics(uploadId,
-                              stats.validCount, stats.invalidCount, stats.pendingCount,
-                              stats.errorCount, stats.trustChainValidCount,
-                              stats.trustChainInvalidCount, stats.cscaNotFoundCount,
-                              stats.expiredCount, stats.revokedCount);
+    // Update validation statistics via ValidationRepository
+    if (::validationRepository) {
+        domain::models::ValidationStatistics valStats;
+        valStats.validCount = stats.validCount;
+        valStats.invalidCount = stats.invalidCount;
+        valStats.pendingCount = stats.pendingCount;
+        valStats.errorCount = stats.errorCount;
+        valStats.trustChainValidCount = stats.trustChainValidCount;
+        valStats.trustChainInvalidCount = stats.trustChainInvalidCount;
+        valStats.cscaNotFoundCount = stats.cscaNotFoundCount;
+        valStats.expiredCount = stats.expiredCount;
+        valStats.revokedCount = stats.revokedCount;
+        ::validationRepository->updateStatistics(uploadId, valStats);
+    }
 
     // Update ML and MLSC counts via repository (v2.6.2 fix)
     if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
@@ -462,12 +469,20 @@ void ManualProcessingStrategy::validateAndSaveToDb(
                               counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                               entries.size(), entries.size(), "");
 
-        // Update validation statistics
-        updateValidationStatistics(uploadId,
-                                  stats.validCount, stats.invalidCount, stats.pendingCount,
-                                  stats.errorCount, stats.trustChainValidCount,
-                                  stats.trustChainInvalidCount, stats.cscaNotFoundCount,
-                                  stats.expiredCount, stats.revokedCount);
+        // Update validation statistics via ValidationRepository
+        if (::validationRepository) {
+            domain::models::ValidationStatistics valStats;
+            valStats.validCount = stats.validCount;
+            valStats.invalidCount = stats.invalidCount;
+            valStats.pendingCount = stats.pendingCount;
+            valStats.errorCount = stats.errorCount;
+            valStats.trustChainValidCount = stats.trustChainValidCount;
+            valStats.trustChainInvalidCount = stats.trustChainInvalidCount;
+            valStats.cscaNotFoundCount = stats.cscaNotFoundCount;
+            valStats.expiredCount = stats.expiredCount;
+            valStats.revokedCount = stats.revokedCount;
+            ::validationRepository->updateStatistics(uploadId, valStats);
+        }
 
         // Update ML and MLSC counts via repository (v2.6.2 fix - Oracle compatible)
         if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {

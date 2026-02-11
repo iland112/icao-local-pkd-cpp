@@ -38,9 +38,9 @@ CertificateInfo CertTypeDetector::detectType(X509* cert) {
             return info;
         }
 
-        // 2. Check Extended Key Usage for DVL Signer
+        // 2. Check Extended Key Usage for DL Signer
         if (isDeviationListSigner(cert)) {
-            info.type = CertificateType::DVL_SIGNER;
+            info.type = CertificateType::DL_SIGNER;
             return info;
         }
 
@@ -76,7 +76,7 @@ std::string CertTypeDetector::typeToString(CertificateType type) {
         case CertificateType::DSC_NC:       return "DSC_NC";
         case CertificateType::MLSC:         return "MLSC";
         case CertificateType::LINK_CERT:    return "LINK_CERT";
-        case CertificateType::DVL_SIGNER:   return "DVL_SIGNER";
+        case CertificateType::DL_SIGNER:    return "DL_SIGNER";
         case CertificateType::UNKNOWN:
         default:                            return "UNKNOWN";
     }
@@ -91,7 +91,7 @@ CertificateType CertTypeDetector::stringToType(const std::string& str) {
     if (upper == "DSC_NC")      return CertificateType::DSC_NC;
     if (upper == "MLSC")        return CertificateType::MLSC;
     if (upper == "LINK_CERT")   return CertificateType::LINK_CERT;
-    if (upper == "DVL_SIGNER")  return CertificateType::DVL_SIGNER;
+    if (upper == "DL_SIGNER")   return CertificateType::DL_SIGNER;
 
     return CertificateType::UNKNOWN;
 }

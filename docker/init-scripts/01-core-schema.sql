@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS uploaded_file (
     csca_extracted_from_ml INTEGER NOT NULL DEFAULT 0,
     csca_duplicates INTEGER NOT NULL DEFAULT 0,
 
-    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML')),
+    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML', 'PEM', 'DER', 'CER', 'P7B', 'DL', 'CRL')),
     CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
     CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO', 'MANUAL'))
 );
@@ -201,6 +201,47 @@ CREATE TABLE IF NOT EXISTS master_list (
 CREATE INDEX idx_ml_upload_id ON master_list(upload_id);
 CREATE INDEX idx_ml_signer_country ON master_list(signer_country);
 CREATE INDEX idx_ml_fingerprint ON master_list(fingerprint_sha256);
+
+-- =============================================================================
+-- Deviation List Tables
+-- =============================================================================
+
+-- Deviation List (ICAO Doc 9303 Part 12 - CMS SignedData with OID 2.23.136.1.1.7)
+CREATE TABLE IF NOT EXISTS deviation_list (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    upload_id UUID REFERENCES uploaded_file(id) ON DELETE CASCADE,
+    issuer_country VARCHAR(3) NOT NULL,
+    version INTEGER DEFAULT 0,
+    hash_algorithm VARCHAR(20),
+    signing_time TIMESTAMP WITH TIME ZONE,
+    dl_binary BYTEA NOT NULL,
+    fingerprint_sha256 VARCHAR(64) NOT NULL UNIQUE,
+    signer_dn TEXT,
+    signer_certificate_id UUID REFERENCES certificate(id),
+    signature_valid BOOLEAN,
+    deviation_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dl_upload_id ON deviation_list(upload_id);
+CREATE INDEX IF NOT EXISTS idx_dl_issuer_country ON deviation_list(issuer_country);
+
+-- Deviation entries (individual defect records from DL)
+CREATE TABLE IF NOT EXISTS deviation_entry (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    deviation_list_id UUID NOT NULL REFERENCES deviation_list(id) ON DELETE CASCADE,
+    certificate_issuer_dn TEXT,
+    certificate_serial_number VARCHAR(100),
+    matched_certificate_id UUID REFERENCES certificate(id),
+    defect_description TEXT,
+    defect_type_oid VARCHAR(50) NOT NULL,
+    defect_category VARCHAR(20),
+    defect_parameters BYTEA,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_de_dl_id ON deviation_entry(deviation_list_id);
+CREATE INDEX IF NOT EXISTS idx_de_category ON deviation_entry(defect_category);
 
 -- =============================================================================
 -- Validation Result Table

@@ -40,6 +40,8 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     // ========================================================================
     "^/api/upload/ldif$",          // LDIF file upload
     "^/api/upload/masterlist$",    // Master List upload
+    "^/api/upload/certificate$",           // Individual certificate file upload (PEM, DER, CER, P7B, CRL)
+    "^/api/upload/certificate/preview$",   // Certificate preview (parse only, no save)
     "^/api/progress.*",            // Upload progress SSE stream
 
     // ========================================================================

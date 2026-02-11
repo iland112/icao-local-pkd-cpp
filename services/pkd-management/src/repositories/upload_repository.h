@@ -258,6 +258,13 @@ public:
     Json::Value getDetailedCountryStatistics(int limit = 0);
 
     /**
+     * @brief Get upload change history (deltas between consecutive uploads)
+     * @param limit Maximum number of recent uploads to compare
+     * @return JSON array of upload rows with current counts and delta columns
+     */
+    Json::Value getChangeHistory(int limit);
+
+    /**
      * @brief Get duplicate certificates for an upload
      * @param uploadId Upload UUID
      * @return JSON object with duplicate certificate information

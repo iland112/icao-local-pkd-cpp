@@ -69,6 +69,9 @@ struct ValidationResult {
     std::string errorCode;            // Error code if validation failed
     std::string errorMessage;         // Error message if validation failed
 
+    // Fingerprint (needed for validation_result table)
+    std::string fingerprint;          // SHA-256 fingerprint of the certificate
+
     // Performance metrics
     int validationDurationMs = 0;     // Time taken for validation in milliseconds
 };

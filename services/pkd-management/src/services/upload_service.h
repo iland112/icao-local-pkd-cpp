@@ -9,6 +9,7 @@
 #include "../common.h"
 #include "../repositories/upload_repository.h"
 #include "../repositories/certificate_repository.h"
+#include "../repositories/deviation_list_repository.h"
 #include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool (NEW)
 
 /**
@@ -53,13 +54,126 @@ public:
     UploadService(
         repositories::UploadRepository* uploadRepo,
         repositories::CertificateRepository* certRepo,
-        common::LdapConnectionPool* ldapPool
+        common::LdapConnectionPool* ldapPool,
+        repositories::DeviationListRepository* dlRepo = nullptr
     );
 
     /**
      * @brief Destructor
      */
     ~UploadService() = default;
+
+    // ========================================================================
+    // Certificate Preview (parse only, no DB/LDAP save)
+    // ========================================================================
+
+    struct CertificatePreviewItem {
+        std::string subjectDn;
+        std::string issuerDn;
+        std::string serialNumber;
+        std::string countryCode;
+        std::string certificateType;  // CSCA, DSC, DSC_NC, MLSC
+        bool isSelfSigned = false;
+        bool isLinkCertificate = false;
+        std::string notBefore;
+        std::string notAfter;
+        bool isExpired = false;
+        std::string signatureAlgorithm;
+        std::string publicKeyAlgorithm;
+        int keySize = 0;
+        std::string fingerprintSha256;
+    };
+
+    struct DeviationPreviewItem {
+        std::string certificateIssuerDn;
+        std::string certificateSerialNumber;
+        std::string defectDescription;
+        std::string defectTypeOid;
+        std::string defectCategory;
+    };
+
+    struct CrlPreviewItem {
+        std::string issuerDn;
+        std::string countryCode;
+        std::string thisUpdate;
+        std::string nextUpdate;
+        std::string crlNumber;
+        int revokedCount = 0;
+    };
+
+    struct CertificatePreviewResult {
+        bool success = false;
+        std::string fileFormat;
+        bool isDuplicate = false;
+        std::string duplicateUploadId;
+        std::string message;
+        std::string errorMessage;
+        std::vector<CertificatePreviewItem> certificates;
+        std::vector<DeviationPreviewItem> deviations;  // DL files only
+        CrlPreviewItem crlInfo;
+        bool hasCrlInfo = false;
+        // DL metadata
+        std::string dlIssuerCountry;
+        int dlVersion = 0;
+        std::string dlHashAlgorithm;
+        bool dlSignatureValid = false;
+    };
+
+    /**
+     * @brief Preview certificate file (parse only, no DB/LDAP save)
+     *
+     * Parses the file and returns metadata for user review before saving.
+     * Re-uses format detection + parsing logic from uploadCertificate().
+     */
+    CertificatePreviewResult previewCertificate(
+        const std::string& fileName,
+        const std::vector<uint8_t>& fileContent
+    );
+
+    // ========================================================================
+    // Individual Certificate Upload (PEM, DER, CER, P7B, DL, CRL)
+    // ========================================================================
+
+    /**
+     * @brief Individual Certificate Upload Result
+     */
+    struct CertificateUploadResult {
+        bool success;
+        std::string uploadId;
+        std::string message;
+        std::string fileFormat;       // Detected format: PEM, DER, CER, P7B, DL, CRL
+        int certificateCount = 0;     // Number of certificates processed
+        int cscaCount = 0;
+        int dscCount = 0;
+        int dscNcCount = 0;
+        int mlscCount = 0;
+        int crlCount = 0;
+        int ldapStoredCount = 0;
+        int duplicateCount = 0;
+        std::string status;           // "COMPLETED", "FAILED"
+        std::string errorMessage;
+    };
+
+    /**
+     * @brief Upload individual certificate file (synchronous - AUTO mode only)
+     *
+     * Supports: PEM (single/multi), DER, CER, P7B (PKCS#7 bundle), DL (Document List), CRL
+     * Processing: synchronous (file sizes small, no SSE needed)
+     *
+     * Flow:
+     * 1. SHA-256 hash → duplicate file check
+     * 2. Format detection (FileDetector or explicit)
+     * 3. Parse certificates: PEM→PemParser, DER/CER→DerParser, P7B/DL→extractCertificatesFromCms, CRL→d2i_X509_CRL
+     * 4. Type detection: CertTypeDetector::detectType() → CSCA/DSC/MLSC
+     * 5. Save to DB (CertificateRepository) with duplicate check
+     * 6. Save to LDAP (if connected)
+     * 7. Update upload statistics
+     */
+    CertificateUploadResult uploadCertificate(
+        const std::string& fileName,
+        const std::vector<uint8_t>& fileContent,
+        const std::string& uploadedBy
+    );
 
     // ========================================================================
     // LDIF Upload
@@ -372,6 +486,7 @@ private:
     repositories::UploadRepository* uploadRepo_;
     repositories::CertificateRepository* certRepo_;
     common::LdapConnectionPool* ldapPool_;  // v2.4.3: LDAP connection pool (changed from LDAP* ldapConn_)
+    repositories::DeviationListRepository* dlRepo_;  // DL deviation data storage
 
     // ========================================================================
     // Helper Methods
@@ -411,6 +526,28 @@ private:
      * @return std::string Scrubbed message
      */
     static std::string scrubCredentials(const std::string& message);
+
+    /**
+     * @brief Process a single X.509 certificate (detect type, save to DB + LDAP)
+     */
+    void processSingleCertificate(CertificateUploadResult& result, X509* cert,
+                                   const std::vector<uint8_t>& rawContent, LDAP* ld);
+
+    /**
+     * @brief Process CRL file (parse, save to DB + LDAP)
+     */
+    void processCrlFile(CertificateUploadResult& result,
+                        const std::vector<uint8_t>& fileContent, LDAP* ld);
+
+    /**
+     * @brief Process DL file (parse deviations, save metadata + entries to DB)
+     *
+     * DL-specific processing: uses DlParser to extract deviation data,
+     * saves DL metadata to deviation_list table and individual entries to deviation_entry table.
+     * Certificates from CMS wrapper are still processed via processSingleCertificate().
+     */
+    void processDlFile(CertificateUploadResult& result,
+                       const std::vector<uint8_t>& fileContent, LDAP* ld);
 };
 
 } // namespace services

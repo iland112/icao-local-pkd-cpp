@@ -70,7 +70,7 @@ CREATE TABLE uploaded_file (
     csca_extracted_from_ml NUMBER(10) DEFAULT 0 NOT NULL,
     csca_duplicates NUMBER(10) DEFAULT 0 NOT NULL,
 
-    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML')),
+    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML', 'PEM', 'DER', 'CER', 'P7B', 'DL', 'CRL')),
     CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
     CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO', 'MANUAL'))
 );
@@ -115,6 +115,23 @@ CREATE TABLE certificate (
     first_upload_id VARCHAR2(36),
     last_seen_upload_id VARCHAR2(36),
     last_seen_at TIMESTAMP,
+
+    -- X.509 metadata fields (15 fields)
+    version NUMBER(3) DEFAULT 2,
+    signature_algorithm VARCHAR2(50),
+    signature_hash_algorithm VARCHAR2(20),
+    public_key_algorithm VARCHAR2(30),
+    public_key_size NUMBER(10),
+    public_key_curve VARCHAR2(50),
+    key_usage VARCHAR2(500),
+    extended_key_usage VARCHAR2(500),
+    is_ca NUMBER(1) DEFAULT 0,
+    path_len_constraint NUMBER(10),
+    subject_key_identifier VARCHAR2(100),
+    authority_key_identifier VARCHAR2(100),
+    crl_distribution_points VARCHAR2(2000),
+    ocsp_responder_url VARCHAR2(500),
+    is_self_signed NUMBER(1) DEFAULT 0,
 
     CONSTRAINT fk_cert_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
     CONSTRAINT fk_cert_first_upload FOREIGN KEY (first_upload_id) REFERENCES uploaded_file(id),
@@ -225,6 +242,52 @@ CREATE TABLE master_list (
 CREATE INDEX idx_ml_upload_id ON master_list(upload_id);
 CREATE INDEX idx_ml_signer_country ON master_list(signer_country);
 CREATE INDEX idx_ml_fingerprint ON master_list(fingerprint_sha256);
+
+-- =============================================================================
+-- Deviation List Tables
+-- =============================================================================
+
+-- Deviation List (ICAO Doc 9303 Part 12 - CMS SignedData with OID 2.23.136.1.1.7)
+CREATE TABLE deviation_list (
+    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+    upload_id VARCHAR2(36),
+    issuer_country VARCHAR2(3) NOT NULL,
+    version NUMBER(10) DEFAULT 0,
+    hash_algorithm VARCHAR2(20),
+    signing_time TIMESTAMP,
+    dl_binary BLOB NOT NULL,
+    fingerprint_sha256 VARCHAR2(64) NOT NULL,
+    signer_dn CLOB,
+    signer_certificate_id VARCHAR2(36),
+    signature_valid NUMBER(1),
+    deviation_count NUMBER(10) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    CONSTRAINT fk_dl_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
+    CONSTRAINT fk_dl_signer_cert FOREIGN KEY (signer_certificate_id) REFERENCES certificate(id),
+    CONSTRAINT uk_dl_fingerprint UNIQUE (fingerprint_sha256)
+);
+
+CREATE INDEX idx_dl_upload_id ON deviation_list(upload_id);
+CREATE INDEX idx_dl_issuer_country ON deviation_list(issuer_country);
+
+-- Deviation entries (individual defect records from DL)
+CREATE TABLE deviation_entry (
+    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+    deviation_list_id VARCHAR2(36) NOT NULL,
+    certificate_issuer_dn CLOB,
+    certificate_serial_number VARCHAR2(100),
+    matched_certificate_id VARCHAR2(36),
+    defect_description CLOB,
+    defect_type_oid VARCHAR2(50) NOT NULL,
+    defect_category VARCHAR2(20),
+    defect_parameters BLOB,
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    CONSTRAINT fk_de_dl FOREIGN KEY (deviation_list_id) REFERENCES deviation_list(id) ON DELETE CASCADE,
+    CONSTRAINT fk_de_cert FOREIGN KEY (matched_certificate_id) REFERENCES certificate(id)
+);
+
+CREATE INDEX idx_de_dl_id ON deviation_entry(deviation_list_id);
+CREATE INDEX idx_de_category ON deviation_entry(defect_category);
 
 -- =============================================================================
 -- Validation Result Table

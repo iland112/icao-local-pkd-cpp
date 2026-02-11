@@ -10,6 +10,7 @@
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 #include <openssl/pkcs7.h>
+#include <openssl/cms.h>
 #include <openssl/evp.h>
 #include <openssl/err.h>
 #include <algorithm>
@@ -52,12 +53,23 @@ namespace {
             return false;
         }
 
-        // Try to parse as PKCS7
+        // Try legacy PKCS7 API first
         const unsigned char* p = data.data();
         PKCS7* pkcs7 = d2i_PKCS7(nullptr, &p, data.size());
         if (pkcs7) {
             bool is_signed = PKCS7_type_is_signed(pkcs7);
             PKCS7_free(pkcs7);
+            return is_signed;
+        }
+
+        // Fallback: CMS API (handles ICAO DL/ML CMS v3)
+        ERR_clear_error();
+        const unsigned char* q = data.data();
+        CMS_ContentInfo* cms = d2i_CMS_ContentInfo(nullptr, &q, data.size());
+        if (cms) {
+            const ASN1_OBJECT* ctype = CMS_get0_type(cms);
+            bool is_signed = (OBJ_obj2nid(ctype) == NID_pkcs7_signed);
+            CMS_ContentInfo_free(cms);
             return is_signed;
         }
 
@@ -196,44 +208,58 @@ std::vector<X509*> extractCertificatesFromCms(const std::vector<uint8_t>& cmsDat
         return certificates;
     }
 
-    // Parse PKCS7 structure
+    // Strategy 1: Try legacy PKCS7 API (works for standard P7B files)
     const unsigned char* p = cmsData.data();
     PKCS7* pkcs7 = d2i_PKCS7(nullptr, &p, cmsData.size());
-    if (!pkcs7) {
-        return certificates;
-    }
-
-    // Check if it's SignedData
-    if (!PKCS7_type_is_signed(pkcs7)) {
-        PKCS7_free(pkcs7);
-        return certificates;
-    }
-
-    // Get certificates from SignedData
-    STACK_OF(X509)* certs_stack = nullptr;
-    int type = OBJ_obj2nid(pkcs7->type);
-
-    if (type == NID_pkcs7_signed) {
-        certs_stack = pkcs7->d.sign->cert;
-    }
-
-    // Extract certificates
-    if (certs_stack) {
-        int num_certs = sk_X509_num(certs_stack);
-        for (int i = 0; i < num_certs; ++i) {
-            X509* cert = sk_X509_value(certs_stack, i);
-            if (cert) {
-                // Duplicate certificate (increase reference count)
-                X509* cert_copy = X509_dup(cert);
-                if (cert_copy) {
-                    certificates.push_back(cert_copy);
+    if (pkcs7) {
+        if (PKCS7_type_is_signed(pkcs7)) {
+            STACK_OF(X509)* certs_stack = nullptr;
+            if (OBJ_obj2nid(pkcs7->type) == NID_pkcs7_signed) {
+                certs_stack = pkcs7->d.sign->cert;
+            }
+            if (certs_stack) {
+                int num_certs = sk_X509_num(certs_stack);
+                for (int i = 0; i < num_certs; ++i) {
+                    X509* cert = sk_X509_value(certs_stack, i);
+                    if (cert) {
+                        X509* cert_copy = X509_dup(cert);
+                        if (cert_copy) {
+                            certificates.push_back(cert_copy);
+                        }
+                    }
                 }
             }
         }
+        PKCS7_free(pkcs7);
+
+        if (!certificates.empty()) {
+            return certificates;
+        }
     }
 
-    // Cleanup PKCS7 structure
-    PKCS7_free(pkcs7);
+    // Strategy 2: CMS API fallback (handles CMS v3 SignedData used by ICAO DL/ML files)
+    // ICAO Deviation Lists use SubjectKeyIdentifier-based SignerInfo which
+    // the legacy PKCS7 API cannot parse.
+    ERR_clear_error();
+    const unsigned char* q = cmsData.data();
+    CMS_ContentInfo* cms = d2i_CMS_ContentInfo(nullptr, &q, cmsData.size());
+    if (cms) {
+        STACK_OF(X509)* cms_certs = CMS_get1_certs(cms);
+        if (cms_certs) {
+            int num_certs = sk_X509_num(cms_certs);
+            for (int i = 0; i < num_certs; ++i) {
+                X509* cert = sk_X509_value(cms_certs, i);
+                if (cert) {
+                    X509* cert_copy = X509_dup(cert);
+                    if (cert_copy) {
+                        certificates.push_back(cert_copy);
+                    }
+                }
+            }
+            sk_X509_pop_free(cms_certs, X509_free);
+        }
+        CMS_ContentInfo_free(cms);
+    }
 
     return certificates;
 }

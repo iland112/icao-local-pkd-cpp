@@ -26,9 +26,11 @@ std::string FileDetector::formatToString(FileFormat format) {
         case FileFormat::DER:    return "DER";
         case FileFormat::CER:    return "CER";
         case FileFormat::BIN:    return "BIN";
-        case FileFormat::DVL:    return "DVL";
+        case FileFormat::DL:     return "DL";
         case FileFormat::LDIF:   return "LDIF";
         case FileFormat::ML:     return "ML";
+        case FileFormat::P7B:    return "P7B";
+        case FileFormat::CRL:    return "CRL";
         case FileFormat::UNKNOWN:
         default:                 return "UNKNOWN";
     }
@@ -42,9 +44,11 @@ FileFormat FileDetector::stringToFormat(const std::string& str) {
     if (upper == "DER")    return FileFormat::DER;
     if (upper == "CER")    return FileFormat::CER;
     if (upper == "BIN")    return FileFormat::BIN;
-    if (upper == "DVL")    return FileFormat::DVL;
+    if (upper == "DL")     return FileFormat::DL;
     if (upper == "LDIF")   return FileFormat::LDIF;
     if (upper == "ML")     return FileFormat::ML;
+    if (upper == "P7B")    return FileFormat::P7B;
+    if (upper == "CRL")    return FileFormat::CRL;
 
     return FileFormat::UNKNOWN;
 }
@@ -64,14 +68,20 @@ FileFormat FileDetector::detectByExtension(const std::string& filename) {
     if (ext == ".bin") {
         return FileFormat::BIN;
     }
-    if (ext == ".dvl") {
-        return FileFormat::DVL;
+    if (ext == ".dvl" || ext == ".dl") {
+        return FileFormat::DL;
     }
     if (ext == ".ldif") {
         return FileFormat::LDIF;
     }
     if (ext == ".ml") {
         return FileFormat::ML;
+    }
+    if (ext == ".p7b" || ext == ".p7c") {
+        return FileFormat::P7B;
+    }
+    if (ext == ".crl") {
+        return FileFormat::CRL;
     }
 
     return FileFormat::UNKNOWN;
@@ -92,14 +102,24 @@ FileFormat FileDetector::detectByContent(const std::vector<uint8_t>& content) {
         return FileFormat::LDIF;
     }
 
-    // Check Deviation List (PKCS#7 with DVL OID)
-    if (isDVL(content)) {
-        return FileFormat::DVL;
+    // Check CRL (PEM or DER) - before generic DER check
+    if (isCRL(content)) {
+        return FileFormat::CRL;
+    }
+
+    // Check Document List / Deviation List (PKCS#7 with DL OID)
+    if (isDL(content)) {
+        return FileFormat::DL;
     }
 
     // Check Master List (PKCS#7 with ML OID)
     if (isMasterList(content)) {
         return FileFormat::ML;
+    }
+
+    // Check generic PKCS#7 bundle (no ICAO OID)
+    if (isP7B(content)) {
+        return FileFormat::P7B;
     }
 
     // Check DER (binary ASN.1)
@@ -146,7 +166,7 @@ bool FileDetector::isDER(const std::vector<uint8_t>& content) {
     return false;
 }
 
-bool FileDetector::isDVL(const std::vector<uint8_t>& content) {
+bool FileDetector::isDL(const std::vector<uint8_t>& content) {
     if (content.size() < 50) {
         return false;
     }
@@ -158,12 +178,12 @@ bool FileDetector::isDVL(const std::vector<uint8_t>& content) {
 
     // Look for ICAO deviationList OID: 2.23.136.1.1.7
     // DER encoding: 06 06 67 81 08 01 01 07
-    const uint8_t dvlOid[] = {0x06, 0x06, 0x67, 0x81, 0x08, 0x01, 0x01, 0x07};
+    const uint8_t dlOid[] = {0x06, 0x06, 0x67, 0x81, 0x08, 0x01, 0x01, 0x07};
 
     // Search for OID in first 1KB (should be near the beginning)
     size_t searchLimit = std::min(content.size(), size_t(1024));
-    for (size_t i = 0; i < searchLimit - sizeof(dvlOid); ++i) {
-        if (std::memcmp(content.data() + i, dvlOid, sizeof(dvlOid)) == 0) {
+    for (size_t i = 0; i < searchLimit - sizeof(dlOid); ++i) {
+        if (std::memcmp(content.data() + i, dlOid, sizeof(dlOid)) == 0) {
             return true;
         }
     }
@@ -193,6 +213,59 @@ bool FileDetector::isMasterList(const std::vector<uint8_t>& content) {
         }
     }
 
+    return false;
+}
+
+bool FileDetector::isP7B(const std::vector<uint8_t>& content) {
+    if (content.size() < 50) {
+        return false;
+    }
+
+    // Must be DER-encoded
+    if (!isDER(content)) {
+        return false;
+    }
+
+    // Look for PKCS#7 SignedData OID: 1.2.840.113549.1.7.2
+    // DER encoding: 06 09 2A 86 48 86 F7 0D 01 07 02
+    const uint8_t signedDataOid[] = {0x06, 0x09, 0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x07, 0x02};
+
+    size_t searchLimit = std::min(content.size(), size_t(256));
+    for (size_t i = 0; i < searchLimit - sizeof(signedDataOid); ++i) {
+        if (std::memcmp(content.data() + i, signedDataOid, sizeof(signedDataOid)) == 0) {
+            // Found SignedData OID - but NOT DL or ML (already checked before this)
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FileDetector::isCRL(const std::vector<uint8_t>& content) {
+    if (content.size() < 10) {
+        return false;
+    }
+
+    // Check PEM-encoded CRL
+    const char* crlPemHeader = "-----BEGIN X509 CRL-----";
+    if (content.size() >= 24 &&
+        std::memcmp(content.data(), crlPemHeader, 24) == 0) {
+        return true;
+    }
+
+    // DER-encoded CRL: starts with SEQUENCE tag (0x30), then contains
+    // a TBSCertList starting with another SEQUENCE that has a version INTEGER
+    // CRL structure: SEQUENCE { tbsCertList, signatureAlgorithm, signatureValue }
+    // tbsCertList: SEQUENCE { version (optional), signature, issuer, thisUpdate, ... }
+    // Key distinguisher from certificates: no explicit version tag [0] like X.509 certs
+    // Instead, CRLs typically have version INTEGER directly or algorithm OID early
+    if (!isDER(content)) {
+        return false;
+    }
+
+    // For DER-encoded data, we can't easily distinguish CRL from certificate
+    // by content alone without full ASN.1 parsing. Return false here -
+    // DER CRL files should use .crl extension for detection.
     return false;
 }
 

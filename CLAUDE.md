@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.6.3
-**Last Updated**: 2026-02-11
+**Current Version**: v2.7.0
+**Last Updated**: 2026-02-12
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -112,11 +112,12 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.6.3)
+## Current Features (v2.7.0)
 
 ### Core Functionality
 
 - LDIF/Master List upload (AUTO/MANUAL modes)
+- Individual certificate upload with preview-before-save workflow (PEM, DER, P7B, DL, CRL)
 - Master List file processing (537 certificates: 1 MLSC + 536 CSCA/LC)
 - Country-based LDAP storage (95+ countries)
 - Certificate validation (Trust Chain, CRL, Link Certificates)
@@ -158,6 +159,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 **Upload Management**:
 - `POST /api/upload/ldif` - Upload LDIF file
 - `POST /api/upload/masterlist` - Upload Master List file
+- `POST /api/upload/certificate` - Upload individual certificate (PEM, DER, P7B, DL, CRL)
+- `POST /api/upload/certificate/preview` - Preview certificate (parse only, no save)
 - `GET /api/upload/history` - Upload history (paginated)
 - `GET /api/upload/detail/{id}` - Upload detail by ID
 - `DELETE /api/upload/{id}` - Delete upload
@@ -219,19 +222,20 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, ICAO monitoring, Sync status, PA verification, Static files
-- **Protected**: File uploads, User management, Audit logs, Upload deletion
+- **Public**: Health checks, Dashboard statistics, Certificate search, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
+- **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion
 
 ---
 
 ## Frontend
 
-### Pages (19 total)
+### Pages (20 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
 | Dashboard | `/` | Homepage with certificate statistics |
 | FileUpload | `/upload` | LDIF/Master List upload |
+| CertificateUpload | `/upload/certificate` | Individual certificate upload (preview-before-save) |
 | CertificateSearch | `/pkd/certificates` | Certificate search & detail |
 | UploadHistory | `/upload-history` | Upload management |
 | UploadDetail | `/upload/:uploadId` | Upload detail & structure |
@@ -417,7 +421,7 @@ scripts/
 ### Database Schema
 - UUIDs for primary keys across all services
 - Fingerprint-based LDAP DNs (SHA-256 hex)
-- Separate tables: certificate, crl, master_list, uploaded_file
+- Separate tables: certificate, crl, master_list, uploaded_file, deviation_list, deviation_entry
 - Audit tables: operation_audit_log, auth_audit_log
 - Sync tables: sync_status, reconciliation_summary, reconciliation_log
 
@@ -456,6 +460,20 @@ scripts/
 ---
 
 ## Version History
+
+### v2.7.0 (2026-02-12) - Individual Certificate Upload + Preview-before-Save
+- Separated individual certificate upload to dedicated page (`/upload/certificate`)
+- Preview-before-save workflow: parse → preview → confirm → save to DB+LDAP
+- Backend `POST /api/upload/certificate/preview` endpoint (parse only, no save)
+- Supports PEM, DER, CER, P7B, DL (Deviation List), CRL file formats
+- Certificate detail tree view (TreeViewer) in preview with General/Details tabs
+- DL file support: deviation data parsing + preview (DlParser replacing DvlParser)
+- CRL metadata preview (issuer, validity, revoked count)
+- Duplicate file detection via SHA-256 hash before save
+- FileUpload page narrowed to LDIF/Master List only
+- New repositories: CrlRepository, DeviationListRepository
+- Complete PGconn→QueryExecutor migration for Oracle compatibility
+- Refactored main.cpp upload handlers (~500 lines reduced via UploadService)
 
 ### v2.6.3 (2026-02-11) - Oracle Audit Log Complete + ICAO Endpoint Fix
 - Complete Oracle compatibility for both `auth_audit_log` and `operation_audit_log` pages

@@ -6,11 +6,35 @@
 #include <algorithm>
 #include <cstring>
 #include <iomanip>
+#include <random>
 #include <openssl/x509.h>
 #include <openssl/err.h>
 #include <unordered_map>
 
 namespace repositories {
+
+// Thread-local UUID generator (same pattern as CrlRepository)
+static std::string generateUuid() {
+    static thread_local std::random_device rd;
+    static thread_local std::mt19937_64 gen(rd());
+    static thread_local std::uniform_int_distribution<uint64_t> dis;
+
+    uint64_t ab = dis(gen);
+    uint64_t cd = dis(gen);
+
+    ab = (ab & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+    cd = (cd & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+    std::ostringstream ss;
+    ss << std::hex << std::setfill('0');
+    ss << std::setw(8) << (ab >> 32) << '-';
+    ss << std::setw(4) << ((ab >> 16) & 0xFFFF) << '-';
+    ss << std::setw(4) << (ab & 0xFFFF) << '-';
+    ss << std::setw(4) << (cd >> 48) << '-';
+    ss << std::setw(12) << (cd & 0x0000FFFFFFFFFFFFULL);
+
+    return ss.str();
+}
 
 // Convert certificate date to Oracle-safe ISO 8601 format (no timezone suffix)
 // Handles two input formats:
@@ -897,14 +921,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
         std::string newId;
 
         if (dbType == "oracle") {
-            // Oracle: Pre-generate UUID, no RETURNING clause needed
-            Json::Value uuidResult = queryExecutor_->executeQuery(
-                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
-            if (uuidResult.empty()) {
-                spdlog::error("[CertificateRepository] Failed to generate UUID from Oracle");
-                return std::make_pair(std::string(""), false);
-            }
-            newId = uuidResult[0]["id"].asString();
+            // Oracle: Generate UUID in C++ (uuid_generate_v4 is PostgreSQL-only)
+            newId = generateUuid();
 
             std::string insertQuery =
                 "INSERT INTO certificate ("
@@ -924,16 +942,15 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 "CASE WHEN $9 IS NULL OR $9 = '' THEN NULL ELSE TO_TIMESTAMP($9, 'YYYY-MM-DD HH24:MI:SS') END, "
                 "CASE WHEN $10 IS NULL OR $10 = '' THEN NULL ELSE TO_TIMESTAMP($10, 'YYYY-MM-DD HH24:MI:SS') END, "
                 "$11, $12, $13, 0, $2, SYSTIMESTAMP, "
-                "$14, $15, $16, "
-                "$17, NULLIF($18, '')::INTEGER, $19, "
+                "TO_NUMBER(NULLIF($14, '')), $15, $16, "
+                "$17, TO_NUMBER(NULLIF($18, '')), $19, "
                 "$20, $21, "
-                "$22, NULLIF($23, '')::INTEGER, "
+                "TO_NUMBER(NULLIF($22, '')), TO_NUMBER(NULLIF($23, '')), "
                 "$24, $25, "
-                "$26, $27, $28"
+                "$26, $27, TO_NUMBER(NULLIF($28, ''))"
                 ")";
 
             // Convert OpenSSL date format to ISO for Oracle TIMESTAMP columns
-            // "Jan 15 10:30:00 2024 GMT" → "2024-01-15 10:30:00"
             std::string notBeforeIso = convertDateToIso(notBefore);
             std::string notAfterIso = convertDateToIso(notAfter);
             spdlog::debug("[CertificateRepository] Oracle date conversion: '{}' → '{}', '{}' → '{}'",
@@ -1065,6 +1082,121 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
         spdlog::error("[CertificateRepository] saveCertificateWithDuplicateCheck failed: {}", errMsg);
         return std::make_pair(std::string(""), false);
     }
+}
+
+// ============================================================================
+// Phase 2-2: LDAP Status Count by Upload ID
+// ============================================================================
+
+void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap) {
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string boolTrue = (dbType == "oracle") ? "1" : "true";
+
+    std::string query = "SELECT COUNT(*) as total, "
+                        "COALESCE(SUM(CASE WHEN stored_in_ldap = " + boolTrue + " THEN 1 ELSE 0 END), 0) as in_ldap "
+                        "FROM certificate WHERE upload_id = $1";
+
+    auto rows = queryExecutor_->executeQuery(query, {uploadId});
+
+    if (!rows.empty()) {
+        auto safeInt = [](const Json::Value& v) -> int {
+            if (v.isInt()) return v.asInt();
+            if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
+            return 0;
+        };
+        outTotal = safeInt(rows[0]["total"]);
+        outInLdap = safeInt(rows[0]["in_ldap"]);
+    } else {
+        outTotal = 0;
+        outInLdap = 0;
+    }
+}
+
+// ============================================================================
+// Phase 2-4: Distinct Countries
+// ============================================================================
+
+Json::Value CertificateRepository::getDistinctCountries() {
+    std::string query = "SELECT DISTINCT country_code FROM certificate "
+                        "WHERE country_code IS NOT NULL "
+                        "ORDER BY country_code";
+
+    return queryExecutor_->executeQuery(query);
+}
+
+// ============================================================================
+// Phase 2-5: Link Certificate Search
+// ============================================================================
+
+Json::Value CertificateRepository::searchLinkCertificates(
+    const std::string& countryFilter,
+    const std::string& validFilter,
+    int limit, int offset)
+{
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string boolTrue = (dbType == "oracle") ? "1" : "true";
+
+    std::ostringstream sql;
+    sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+        << "old_csca_subject_dn, new_csca_subject_dn, "
+        << "trust_chain_valid, created_at, country_code "
+        << "FROM link_certificate WHERE 1=1";
+
+    std::vector<std::string> paramValues;
+    int paramIndex = 1;
+
+    if (!countryFilter.empty()) {
+        sql << " AND country_code = $" << paramIndex++;
+        paramValues.push_back(countryFilter);
+    }
+
+    if (validFilter == "true") {
+        sql << " AND trust_chain_valid = " << boolTrue;
+    }
+
+    if (dbType == "oracle") {
+        sql << " ORDER BY created_at DESC"
+            << " OFFSET $" << paramIndex << " ROWS";
+        paramIndex++;
+        sql << " FETCH NEXT $" << paramIndex << " ROWS ONLY";
+        paramIndex++;
+        paramValues.push_back(std::to_string(offset));
+        paramValues.push_back(std::to_string(limit));
+    } else {
+        sql << " ORDER BY created_at DESC LIMIT $" << paramIndex;
+        paramIndex++;
+        sql << " OFFSET $" << paramIndex;
+        paramIndex++;
+        paramValues.push_back(std::to_string(limit));
+        paramValues.push_back(std::to_string(offset));
+    }
+
+    return queryExecutor_->executeQuery(sql.str(), paramValues);
+}
+
+// ============================================================================
+// Phase 2-5: Link Certificate Detail by ID
+// ============================================================================
+
+Json::Value CertificateRepository::findLinkCertificateById(const std::string& id) {
+    std::string query =
+        "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+        "old_csca_subject_dn, old_csca_fingerprint, "
+        "new_csca_subject_dn, new_csca_fingerprint, "
+        "trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
+        "validity_period_valid, not_before, not_after, "
+        "extensions_valid, basic_constraints_ca, basic_constraints_pathlen, "
+        "key_usage, extended_key_usage, "
+        "revocation_status, revocation_message, "
+        "ldap_dn_v2, stored_in_ldap, created_at, country_code "
+        "FROM link_certificate WHERE id = $1";
+
+    auto rows = queryExecutor_->executeQuery(query, {id});
+
+    if (rows.empty()) {
+        return Json::Value::null;
+    }
+    return rows[0];
 }
 
 } // namespace repositories

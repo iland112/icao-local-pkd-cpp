@@ -17,7 +17,7 @@ enum class CertificateType {
     DSC_NC,         ///< Non-Conformant Document Signer Certificate
     MLSC,           ///< Master List Signer Certificate
     LINK_CERT,      ///< Link Certificate (Intermediate CSCA)
-    DVL_SIGNER      ///< Deviation List Signer Certificate
+    DL_SIGNER       ///< Document List / Deviation List Signer Certificate
 };
 
 /**
@@ -43,7 +43,7 @@ struct CertificateInfo {
  * ICAO Doc 9303 Part 12 specifications.
  *
  * Detection Algorithm:
- * 1. Check Extended Key Usage for MLSC/DVL Signer OIDs
+ * 1. Check Extended Key Usage for MLSC/DL Signer OIDs
  * 2. Check Basic Constraints (CA flag)
  * 3. Check Key Usage (keyCertSign)
  * 4. Check if self-signed (Issuer DN == Subject DN)
@@ -103,7 +103,7 @@ public:
      * 2.23.136.1.1.10 (id-icao-mrtd-security-deviationListSigner)
      *
      * @param cert X509 certificate
-     * @return True if DVL Signer
+     * @return True if DL Signer
      */
     static bool isDeviationListSigner(X509* cert);
 

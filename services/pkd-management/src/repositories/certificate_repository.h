@@ -300,6 +300,34 @@ public:
         const std::string& ldapDn
     );
 
+    /**
+     * @brief Count LDAP-stored vs total certificates for an upload
+     * @param uploadId Upload UUID
+     * @param outTotal Total certificate count (output)
+     * @param outInLdap Count stored in LDAP (output)
+     */
+    void countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap);
+
+    /**
+     * @brief Get distinct country codes from certificates
+     * @return JSON array of country code strings
+     */
+    Json::Value getDistinctCountries();
+
+    /**
+     * @brief Search link certificates with filters
+     * @return JSON object with search results
+     */
+    Json::Value searchLinkCertificates(const std::string& countryFilter,
+                                        const std::string& validFilter,
+                                        int limit, int offset);
+
+    /**
+     * @brief Find link certificate by ID
+     * @return JSON object with link certificate details, or null
+     */
+    Json::Value findLinkCertificateById(const std::string& id);
+
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 
