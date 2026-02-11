@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 #include <memory>
-#include <libpq-fe.h>
 #include <ldap.h>
 #include "common.h"
 

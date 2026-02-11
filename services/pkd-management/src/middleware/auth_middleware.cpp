@@ -1,8 +1,11 @@
 #include "auth_middleware.h"
+#include "../repositories/auth_audit_repository.h"
 #include <spdlog/spdlog.h>
-#include <libpq-fe.h>
 #include <cstdlib>
 #include <regex>
+
+// Global authAuditRepository (defined in main.cpp)
+extern std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;
 
 namespace middleware {
 
@@ -263,59 +266,25 @@ void AuthMiddleware::logAuthEvent(
     const std::string& userAgent,
     const std::string& errorMessage) {
 
-    // Get database connection info from environment
-    const char* dbHost = std::getenv("DB_HOST");
-    const char* dbPort = std::getenv("DB_PORT");
-    const char* dbName = std::getenv("DB_NAME");
-    const char* dbUser = std::getenv("DB_USER");
-    const char* dbPassword = std::getenv("DB_PASSWORD");
-
-    if (!dbHost || !dbPort || !dbName || !dbUser || !dbPassword) {
-        spdlog::warn("[AuthMiddleware] Database connection info not available, skipping audit log");
+    // Use global AuthAuditRepository (supports both PostgreSQL and Oracle)
+    if (!::authAuditRepository) {
+        spdlog::warn("[AuthMiddleware] authAuditRepository not available, skipping audit log");
         return;
     }
 
-    // Build connection string
-    std::string conninfo = "host=" + std::string(dbHost) +
-                          " port=" + std::string(dbPort) +
-                          " dbname=" + std::string(dbName) +
-                          " user=" + std::string(dbUser) +
-                          " password=" + std::string(dbPassword);
-
-    PGconn* conn = PQconnectdb(conninfo.c_str());
-    if (PQstatus(conn) != CONNECTION_OK) {
-        spdlog::error("[AuthMiddleware] Database connection failed: {}",
-                      PQerrorMessage(conn));
-        PQfinish(conn);
-        return;
+    try {
+        ::authAuditRepository->insert(
+            std::nullopt,  // userId (not available at middleware level)
+            username.empty() ? "anonymous" : username,
+            eventType,
+            success,
+            ipAddress.empty() ? std::nullopt : std::make_optional(ipAddress),
+            userAgent.empty() ? std::nullopt : std::make_optional(userAgent),
+            errorMessage.empty() ? std::nullopt : std::make_optional(errorMessage)
+        );
+    } catch (const std::exception& e) {
+        spdlog::error("[AuthMiddleware] Failed to insert audit log: {}", e.what());
     }
-
-    // Insert audit log (parameterized query)
-    const char* query =
-        "INSERT INTO auth_audit_log "
-        "(username, event_type, success, ip_address, user_agent, error_message) "
-        "VALUES ($1, $2, $3, $4, $5, $6)";
-
-    const char* successStr = success ? "true" : "false";
-    const char* paramValues[6] = {
-        username.empty() ? nullptr : username.c_str(),
-        eventType.c_str(),
-        successStr,
-        ipAddress.c_str(),
-        userAgent.c_str(),
-        errorMessage.empty() ? nullptr : errorMessage.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn, query, 6, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("[AuthMiddleware] Failed to insert audit log: {}",
-                      PQerrorMessage(conn));
-    }
-
-    PQclear(res);
-    PQfinish(conn);
 }
 
 } // namespace middleware

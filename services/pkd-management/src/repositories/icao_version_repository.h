@@ -3,7 +3,8 @@
 #include <string>
 #include <vector>
 #include <optional>
-#include <libpq-fe.h>
+#include <json/json.h>
+#include "i_query_executor.h"
 #include "../domain/models/icao_version.h"
 
 namespace repositories {
@@ -13,14 +14,18 @@ namespace repositories {
  *
  * Handles database operations for the icao_pkd_versions table.
  * Provides CRUD operations and business-specific queries.
+ *
+ * Uses IQueryExecutor for database-agnostic operation (PostgreSQL + Oracle).
+ *
+ * @note Migrated from PGconn to IQueryExecutor for Oracle support (v2.6.4)
  */
 class IcaoVersionRepository {
 public:
     /**
      * @brief Constructor
-     * @param connInfo PostgreSQL connection string
+     * @param executor Query executor (PostgreSQL or Oracle, non-owning pointer)
      */
-    explicit IcaoVersionRepository(const std::string& connInfo);
+    explicit IcaoVersionRepository(common::IQueryExecutor* executor);
     ~IcaoVersionRepository();
 
     /**
@@ -79,22 +84,27 @@ public:
     std::vector<std::tuple<std::string, int, int, std::string>> getVersionComparison();
 
 private:
-    std::string connInfo_;
+    common::IQueryExecutor* executor_;  // Query executor (non-owning)
 
     /**
-     * @brief Helper to convert PGresult row to IcaoVersion object
+     * @brief Helper to convert JSON row to IcaoVersion object
      */
-    domain::models::IcaoVersion resultToVersion(PGresult* res, int row);
+    domain::models::IcaoVersion jsonToVersion(const Json::Value& row);
 
     /**
-     * @brief Helper to get optional string from PGresult
+     * @brief Helper to get optional string from JSON value
      */
-    std::optional<std::string> getOptionalString(PGresult* res, int row, int col);
+    std::optional<std::string> getOptionalString(const Json::Value& val);
 
     /**
-     * @brief Helper to get optional int from PGresult
+     * @brief Helper to get optional int from JSON value
      */
-    std::optional<int> getOptionalInt(PGresult* res, int row, int col);
+    std::optional<int> getOptionalInt(const Json::Value& val);
+
+    /**
+     * @brief Helper to parse int from JSON value (handles Oracle string returns)
+     */
+    int getInt(const Json::Value& val, int defaultVal = 0);
 };
 
 } // namespace repositories

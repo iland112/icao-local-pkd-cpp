@@ -19,9 +19,25 @@
 
 namespace crl {
 
-CrlValidator::CrlValidator(PGconn* conn) : conn_(conn) {
-    if (!conn_ || PQstatus(conn_) != CONNECTION_OK) {
-        throw std::runtime_error("Invalid PostgreSQL connection");
+// Helper: Convert hex string (with optional \x prefix) to binary bytes
+static std::vector<uint8_t> hexToBytes(const std::string& hex) {
+    std::string data = hex;
+    // Remove PostgreSQL BYTEA prefix if present
+    if (data.size() >= 2 && data[0] == '\\' && data[1] == 'x') {
+        data = data.substr(2);
+    }
+    std::vector<uint8_t> bytes;
+    bytes.reserve(data.length() / 2);
+    for (size_t i = 0; i + 1 < data.length(); i += 2) {
+        char hexByte[3] = {data[i], data[i + 1], 0};
+        bytes.push_back(static_cast<uint8_t>(strtol(hexByte, nullptr, 16)));
+    }
+    return bytes;
+}
+
+CrlValidator::CrlValidator(common::IQueryExecutor* executor) : executor_(executor) {
+    if (!executor_) {
+        throw std::runtime_error("Invalid query executor (nullptr)");
     }
 }
 
@@ -40,19 +56,27 @@ RevocationCheckResult CrlValidator::checkRevocation(
     result.message = "CRL check not performed";
 
     // Step 1: Find latest CRL for issuer
-    const char* query =
+    std::string dbType = executor_->getDatabaseType();
+    std::string query =
         "SELECT id, crl_binary, this_update, next_update "
         "FROM crl "
         "WHERE issuer_dn = $1 "
-        "ORDER BY this_update DESC "
-        "LIMIT 1";
+        "ORDER BY this_update DESC ";
+    if (dbType == "oracle") {
+        query += "FETCH FIRST 1 ROWS ONLY";
+    } else {
+        query += "LIMIT 1";
+    }
 
-    const char* paramValues[1] = {issuerDn.c_str()};
-    PGresult* res = PQexecParams(conn_, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
+    Json::Value rows;
+    try {
+        rows = executor_->executeQuery(query, {issuerDn});
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlValidator] Query failed: {}", e.what());
+        rows = Json::Value(Json::arrayValue);
+    }
 
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-        PQclear(res);
+    if (rows.empty()) {
         spdlog::warn("[CrlValidator] No CRL found for issuer: {}", issuerDn);
 
         result.status = RevocationStatus::UNKNOWN;
@@ -68,20 +92,16 @@ RevocationCheckResult CrlValidator::checkRevocation(
     }
 
     // Extract CRL metadata
-    std::string crlId = PQgetvalue(res, 0, 0);
-    result.crlThisUpdate = PQgetvalue(res, 0, 2);
-    result.crlNextUpdate = PQgetvalue(res, 0, 3);
+    std::string crlId = rows[0].get("id", "").asString();
+    result.crlThisUpdate = rows[0].get("this_update", "").asString();
+    result.crlNextUpdate = rows[0].get("next_update", "").asString();
 
-    // Step 2: Parse CRL binary
-    size_t crlLen;
-    unsigned char* crlData = PQunescapeBytea(
-        reinterpret_cast<const unsigned char*>(PQgetvalue(res, 0, 1)),
-        &crlLen
-    );
+    // Step 2: Parse CRL binary from hex-encoded string
+    std::string crlHex = rows[0].get("crl_binary", "").asString();
+    std::vector<uint8_t> crlBytes = hexToBytes(crlHex);
 
-    if (!crlData) {
-        PQclear(res);
-        spdlog::error("[CrlValidator] Failed to unescape CRL binary");
+    if (crlBytes.empty()) {
+        spdlog::error("[CrlValidator] Failed to decode CRL binary from hex");
 
         result.status = RevocationStatus::UNKNOWN;
         result.message = "Failed to parse CRL binary";
@@ -95,10 +115,8 @@ RevocationCheckResult CrlValidator::checkRevocation(
         return result;
     }
 
-    const unsigned char* p = crlData;
-    X509_CRL* crl = d2i_X509_CRL(nullptr, &p, crlLen);
-    PQfreemem(crlData);
-    PQclear(res);
+    const unsigned char* p = crlBytes.data();
+    X509_CRL* crl = d2i_X509_CRL(nullptr, &p, static_cast<long>(crlBytes.size()));
 
     if (!crl) {
         spdlog::error("[CrlValidator] Failed to parse CRL (d2i_X509_CRL failed)");
@@ -228,47 +246,57 @@ bool CrlValidator::isCrlExpired(const std::string& issuerDn) {
     auto [thisUpdate, nextUpdate, crlId] = *metadata;
 
     // Simple check: nextUpdate < NOW()
-    const char* query = "SELECT NOW() > $1::timestamp";
-    const char* paramValues[1] = {nextUpdate.c_str()};
-
-    PGresult* res = PQexecParams(conn_, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    bool expired = false;
-    if (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0) {
-        std::string result = PQgetvalue(res, 0, 0);
-        expired = (result == "t");  // PostgreSQL boolean true
+    std::string dbType = executor_->getDatabaseType();
+    std::string query;
+    if (dbType == "oracle") {
+        query = "SELECT CASE WHEN SYSTIMESTAMP > TO_TIMESTAMP($1, 'YYYY-MM-DD HH24:MI:SS') THEN 1 ELSE 0 END AS expired FROM DUAL";
+    } else {
+        query = "SELECT NOW() > $1::timestamp AS expired";
     }
 
-    PQclear(res);
-    return expired;
+    try {
+        Json::Value rows = executor_->executeQuery(query, {nextUpdate});
+        if (!rows.empty()) {
+            std::string val = rows[0].get("expired", "").asString();
+            // PostgreSQL returns "t"/"f", Oracle returns "1"/"0"
+            return (val == "t" || val == "1" || val == "true");
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlValidator] isCrlExpired query failed: {}", e.what());
+    }
+
+    return true;  // On error, consider expired
 }
 
 std::optional<std::tuple<std::string, std::string, std::string>>
 CrlValidator::getLatestCrlMetadata(const std::string& issuerDn) {
-    const char* query =
+    std::string dbType = executor_->getDatabaseType();
+    std::string query =
         "SELECT this_update, next_update, id "
         "FROM crl "
         "WHERE issuer_dn = $1 "
-        "ORDER BY this_update DESC "
-        "LIMIT 1";
-
-    const char* paramValues[1] = {issuerDn.c_str()};
-    PGresult* res = PQexecParams(conn_, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-        PQclear(res);
-        return std::nullopt;
+        "ORDER BY this_update DESC ";
+    if (dbType == "oracle") {
+        query += "FETCH FIRST 1 ROWS ONLY";
+    } else {
+        query += "LIMIT 1";
     }
 
-    std::string thisUpdate = PQgetvalue(res, 0, 0);
-    std::string nextUpdate = PQgetvalue(res, 0, 1);
-    std::string crlId = PQgetvalue(res, 0, 2);
+    try {
+        Json::Value rows = executor_->executeQuery(query, {issuerDn});
+        if (rows.empty()) {
+            return std::nullopt;
+        }
 
-    PQclear(res);
+        std::string thisUpdate = rows[0].get("this_update", "").asString();
+        std::string nextUpdate = rows[0].get("next_update", "").asString();
+        std::string crlId = rows[0].get("id", "").asString();
 
-    return std::make_tuple(thisUpdate, nextUpdate, crlId);
+        return std::make_tuple(thisUpdate, nextUpdate, crlId);
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlValidator] getLatestCrlMetadata query failed: {}", e.what());
+        return std::nullopt;
+    }
 }
 
 void CrlValidator::logRevocationCheck(
@@ -280,14 +308,17 @@ void CrlValidator::logRevocationCheck(
     const std::string& subjectDn,
     const std::string& crlId
 ) {
-    const char* query =
+    std::string dbType = executor_->getDatabaseType();
+    std::string nowFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+
+    std::string query =
         "INSERT INTO crl_revocation_log ("
         "    certificate_id, certificate_type, serial_number, fingerprint_sha256, "
         "    subject_dn, revocation_status, revocation_reason, revocation_date, "
         "    crl_id, crl_issuer_dn, crl_this_update, crl_next_update, "
         "    checked_at, check_duration_ms"
         ") VALUES ("
-        "    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13"
+        "    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, " + nowFunc + ", $13"
         ")";
 
     std::string statusStr = revocationStatusToString(result.status);
@@ -297,31 +328,27 @@ void CrlValidator::logRevocationCheck(
     std::string checkDurationStr = std::to_string(result.checkDurationMs);
     std::string crlIdParam = crlId.empty() ? "" : crlId;
 
-    const char* paramValues[13] = {
-        certificateId.c_str(),
-        certificateType.c_str(),
-        serialNumber.c_str(),
-        fingerprint.c_str(),
-        subjectDn.c_str(),
-        statusStr.c_str(),
-        reasonStr.c_str(),
-        revDateStr.c_str(),
-        crlIdParam.empty() ? nullptr : crlIdParam.c_str(),
-        result.crlIssuerDn.c_str(),
-        result.crlThisUpdate.c_str(),
-        result.crlNextUpdate.c_str(),
-        checkDurationStr.c_str()
+    std::vector<std::string> params = {
+        certificateId,          // $1
+        certificateType,        // $2
+        serialNumber,           // $3
+        fingerprint,            // $4
+        subjectDn,              // $5
+        statusStr,              // $6
+        reasonStr,              // $7
+        revDateStr,             // $8
+        crlIdParam,             // $9
+        result.crlIssuerDn,     // $10
+        result.crlThisUpdate,   // $11
+        result.crlNextUpdate,   // $12
+        checkDurationStr        // $13
     };
 
-    PGresult* res = PQexecParams(conn_, query, 13, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("[CrlValidator] Failed to log revocation check: {}",
-                      PQerrorMessage(conn_));
+    try {
+        executor_->executeCommand(query, params);
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlValidator] Failed to log revocation check: {}", e.what());
     }
-
-    PQclear(res);
 }
 
 // ============================================================================

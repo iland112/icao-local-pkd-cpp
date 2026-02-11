@@ -22,13 +22,29 @@
 
 namespace lc {
 
-LcValidator::LcValidator(PGconn* conn) : conn_(conn) {
-    if (!conn_ || PQstatus(conn_) != CONNECTION_OK) {
-        throw std::runtime_error("Invalid PostgreSQL connection");
+// Helper: Convert hex string (with optional \x prefix) to binary bytes
+static std::vector<uint8_t> hexToBytes(const std::string& hex) {
+    std::string data = hex;
+    // Remove PostgreSQL BYTEA prefix if present
+    if (data.size() >= 2 && data[0] == '\\' && data[1] == 'x') {
+        data = data.substr(2);
+    }
+    std::vector<uint8_t> bytes;
+    bytes.reserve(data.length() / 2);
+    for (size_t i = 0; i + 1 < data.length(); i += 2) {
+        char hexByte[3] = {data[i], data[i + 1], 0};
+        bytes.push_back(static_cast<uint8_t>(strtol(hexByte, nullptr, 16)));
+    }
+    return bytes;
+}
+
+LcValidator::LcValidator(common::IQueryExecutor* executor) : executor_(executor) {
+    if (!executor_) {
+        throw std::runtime_error("Invalid query executor (nullptr)");
     }
 
     // Initialize CRL validator
-    crlValidator_ = std::make_unique<crl::CrlValidator>(conn_);
+    crlValidator_ = std::make_unique<crl::CrlValidator>(executor_);
 }
 
 LcValidationResult LcValidator::validateLinkCertificate(
@@ -278,90 +294,153 @@ std::string LcValidator::storeLinkCertificate(
     std::string notBefore = asn1TimeToIso8601(X509_getm_notBefore(linkCert));
     std::string notAfter = asn1TimeToIso8601(X509_getm_notAfter(linkCert));
 
-    // Get certificate binary
+    // Get certificate binary and convert to hex string
     std::vector<uint8_t> certBinary = LcValidator::getCertificateDer(linkCert);
-
-    // Escape bytea
-    unsigned char* byteaEscaped = PQescapeByteaConn(
-        conn_,
-        reinterpret_cast<const unsigned char*>(certBinary.data()),
-        certBinary.size(),
-        nullptr
-    );
-
-    if (!byteaEscaped) {
-        spdlog::error("[LcValidator] Failed to escape certificate binary");
-        return "";
+    std::ostringstream hexStream;
+    hexStream << "\\x";
+    for (uint8_t byte : certBinary) {
+        hexStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
     }
+    std::string certHexStr = hexStream.str();
 
-    std::string byteaStr = reinterpret_cast<const char*>(byteaEscaped);
-    PQfreemem(byteaEscaped);
+    std::string dbType = executor_->getDatabaseType();
+    std::string nowFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
 
-    // Prepare INSERT query
-    const char* query =
-        "INSERT INTO link_certificate ("
-        "    upload_id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
-        "    not_before, not_after, country_code, "
-        "    old_csca_subject_dn, old_csca_fingerprint, "
-        "    new_csca_subject_dn, new_csca_fingerprint, "
-        "    trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
-        "    validity_period_valid, extensions_valid, "
-        "    revocation_status, validation_message, validation_timestamp, "
-        "    basic_constraints_ca, basic_constraints_pathlen, key_usage, extended_key_usage, "
-        "    certificate_binary, created_at"
-        ") VALUES ("
-        "    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
-        "    $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW(), "
-        "    $20, $21, $22, $23, $24, NOW()"
-        ") RETURNING id";
-
-    std::string trustChainValidStr = validationResult.trustChainValid ? "true" : "false";
-    std::string oldCscaSigValidStr = validationResult.oldCscaSignatureValid ? "true" : "false";
-    std::string newCscaSigValidStr = validationResult.newCscaSignatureValid ? "true" : "false";
-    std::string validityValidStr = validationResult.validityPeriodValid ? "true" : "false";
-    std::string extensionsValidStr = validationResult.extensionsValid ? "true" : "false";
-    std::string revocationStatusStr = crl::revocationStatusToString(validationResult.revocationStatus);
-    std::string basicConstraintsCaStr = validationResult.basicConstraintsCa ? "true" : "false";
-    std::string basicConstraintsPathlenStr = std::to_string(validationResult.basicConstraintsPathlen);
-
-    const char* paramValues[24] = {
-        uploadId.empty() ? nullptr : uploadId.c_str(),
-        subjectDn.c_str(),
-        issuerDn.c_str(),
-        serialNumber.c_str(),
-        fingerprint.c_str(),
-        notBefore.c_str(),
-        notAfter.c_str(),
-        countryCode.empty() ? nullptr : countryCode.c_str(),
-        validationResult.oldCscaSubjectDn.c_str(),
-        validationResult.oldCscaFingerprint.c_str(),
-        validationResult.newCscaSubjectDn.c_str(),
-        validationResult.newCscaFingerprint.c_str(),
-        trustChainValidStr.c_str(),
-        oldCscaSigValidStr.c_str(),
-        newCscaSigValidStr.c_str(),
-        validityValidStr.c_str(),
-        extensionsValidStr.c_str(),
-        revocationStatusStr.c_str(),
-        validationResult.validationMessage.c_str(),
-        basicConstraintsCaStr.c_str(),
-        basicConstraintsPathlenStr.c_str(),
-        validationResult.keyUsage.c_str(),
-        validationResult.extendedKeyUsage.c_str(),
-        byteaStr.c_str()
+    // Database-aware boolean formatting
+    auto boolStr = [&dbType](bool val) -> std::string {
+        if (dbType == "oracle") {
+            return val ? "1" : "0";
+        }
+        return val ? "true" : "false";
     };
 
-    PGresult* res = PQexecParams(conn_, query, 24, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
+    std::string trustChainValidStr = boolStr(validationResult.trustChainValid);
+    std::string oldCscaSigValidStr = boolStr(validationResult.oldCscaSignatureValid);
+    std::string newCscaSigValidStr = boolStr(validationResult.newCscaSignatureValid);
+    std::string validityValidStr = boolStr(validationResult.validityPeriodValid);
+    std::string extensionsValidStr = boolStr(validationResult.extensionsValid);
+    std::string revocationStatusStr = crl::revocationStatusToString(validationResult.revocationStatus);
+    std::string basicConstraintsCaStr = boolStr(validationResult.basicConstraintsCa);
+    std::string basicConstraintsPathlenStr = std::to_string(validationResult.basicConstraintsPathlen);
 
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-        spdlog::error("[LcValidator] Failed to store LC: {}", PQerrorMessage(conn_));
-        PQclear(res);
+    std::string lcId;
+
+    try {
+        if (dbType == "oracle") {
+            // Oracle: Pre-generate UUID, no RETURNING clause
+            Json::Value uuidResult = executor_->executeQuery(
+                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+            if (uuidResult.empty()) {
+                spdlog::error("[LcValidator] Failed to generate UUID from Oracle");
+                return "";
+            }
+            lcId = uuidResult[0]["id"].asString();
+
+            std::string query =
+                "INSERT INTO link_certificate ("
+                "    id, upload_id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "    not_before, not_after, country_code, "
+                "    old_csca_subject_dn, old_csca_fingerprint, "
+                "    new_csca_subject_dn, new_csca_fingerprint, "
+                "    trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
+                "    validity_period_valid, extensions_valid, "
+                "    revocation_status, validation_message, validation_timestamp, "
+                "    basic_constraints_ca, basic_constraints_pathlen, key_usage, extended_key_usage, "
+                "    certificate_binary, created_at"
+                ") VALUES ("
+                "    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, "
+                "    $12, $13, $14, $15, $16, $17, $18, $19, $20, " + nowFunc + ", "
+                "    $21, $22, $23, $24, $25, " + nowFunc +
+                ")";
+
+            std::vector<std::string> params = {
+                lcId,                                           // $1 (pre-generated id)
+                uploadId,                                       // $2
+                subjectDn,                                      // $3
+                issuerDn,                                       // $4
+                serialNumber,                                   // $5
+                fingerprint,                                    // $6
+                notBefore,                                      // $7
+                notAfter,                                       // $8
+                countryCode,                                    // $9
+                validationResult.oldCscaSubjectDn,              // $10
+                validationResult.oldCscaFingerprint,            // $11
+                validationResult.newCscaSubjectDn,              // $12
+                validationResult.newCscaFingerprint,            // $13
+                trustChainValidStr,                             // $14
+                oldCscaSigValidStr,                             // $15
+                newCscaSigValidStr,                             // $16
+                validityValidStr,                               // $17
+                extensionsValidStr,                             // $18
+                revocationStatusStr,                            // $19
+                validationResult.validationMessage,             // $20
+                basicConstraintsCaStr,                          // $21
+                basicConstraintsPathlenStr,                     // $22
+                validationResult.keyUsage,                      // $23
+                validationResult.extendedKeyUsage,              // $24
+                certHexStr                                      // $25
+            };
+
+            executor_->executeCommand(query, params);
+
+        } else {
+            // PostgreSQL: Use RETURNING id
+            std::string query =
+                "INSERT INTO link_certificate ("
+                "    upload_id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "    not_before, not_after, country_code, "
+                "    old_csca_subject_dn, old_csca_fingerprint, "
+                "    new_csca_subject_dn, new_csca_fingerprint, "
+                "    trust_chain_valid, old_csca_signature_valid, new_csca_signature_valid, "
+                "    validity_period_valid, extensions_valid, "
+                "    revocation_status, validation_message, validation_timestamp, "
+                "    basic_constraints_ca, basic_constraints_pathlen, key_usage, extended_key_usage, "
+                "    certificate_binary, created_at"
+                ") VALUES ("
+                "    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, "
+                "    $11, $12, $13, $14, $15, $16, $17, $18, $19, " + nowFunc + ", "
+                "    $20, $21, $22, $23, $24, " + nowFunc +
+                ") RETURNING id";
+
+            std::vector<std::string> params = {
+                uploadId,                                       // $1
+                subjectDn,                                      // $2
+                issuerDn,                                       // $3
+                serialNumber,                                   // $4
+                fingerprint,                                    // $5
+                notBefore,                                      // $6
+                notAfter,                                       // $7
+                countryCode,                                    // $8
+                validationResult.oldCscaSubjectDn,              // $9
+                validationResult.oldCscaFingerprint,            // $10
+                validationResult.newCscaSubjectDn,              // $11
+                validationResult.newCscaFingerprint,            // $12
+                trustChainValidStr,                             // $13
+                oldCscaSigValidStr,                             // $14
+                newCscaSigValidStr,                             // $15
+                validityValidStr,                               // $16
+                extensionsValidStr,                             // $17
+                revocationStatusStr,                            // $18
+                validationResult.validationMessage,             // $19
+                basicConstraintsCaStr,                          // $20
+                basicConstraintsPathlenStr,                     // $21
+                validationResult.keyUsage,                      // $22
+                validationResult.extendedKeyUsage,              // $23
+                certHexStr                                      // $24
+            };
+
+            Json::Value result = executor_->executeQuery(query, params);
+            if (result.empty()) {
+                spdlog::error("[LcValidator] Failed to store LC: no id returned");
+                return "";
+            }
+            lcId = result[0].get("id", "").asString();
+        }
+
+    } catch (const std::exception& e) {
+        spdlog::error("[LcValidator] Failed to store LC: {}", e.what());
         return "";
     }
-
-    std::string lcId = PQgetvalue(res, 0, 0);
-    PQclear(res);
 
     spdlog::info("[LcValidator] Stored LC in database: id={}, fingerprint={}",
                  lcId, fingerprint);
@@ -374,73 +453,71 @@ std::string LcValidator::storeLinkCertificate(
 // ============================================================================
 
 X509* LcValidator::findCscaBySubjectDn(const std::string& subjectDn) {
-    const char* query =
+    std::string dbType = executor_->getDatabaseType();
+    std::string query =
         "SELECT certificate_binary FROM certificate "
-        "WHERE certificate_type = 'CSCA' AND subject_dn = $1 "
-        "LIMIT 1";
-
-    const char* paramValues[1] = {subjectDn.c_str()};
-    PGresult* res = PQexecParams(conn_, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-        PQclear(res);
-        return nullptr;
+        "WHERE certificate_type = 'CSCA' AND subject_dn = $1 ";
+    if (dbType == "oracle") {
+        query += "FETCH FIRST 1 ROWS ONLY";
+    } else {
+        query += "LIMIT 1";
     }
 
-    // Parse certificate binary
-    size_t certLen;
-    unsigned char* certData = PQunescapeBytea(
-        reinterpret_cast<const unsigned char*>(PQgetvalue(res, 0, 0)),
-        &certLen
-    );
+    try {
+        Json::Value rows = executor_->executeQuery(query, {subjectDn});
+        if (rows.empty()) {
+            return nullptr;
+        }
 
-    if (!certData) {
-        PQclear(res);
+        // Parse certificate binary from hex-encoded string
+        std::string certHex = rows[0].get("certificate_binary", "").asString();
+        std::vector<uint8_t> certBytes = hexToBytes(certHex);
+        if (certBytes.empty()) {
+            return nullptr;
+        }
+
+        const unsigned char* p = certBytes.data();
+        X509* cert = d2i_X509(nullptr, &p, static_cast<long>(certBytes.size()));
+        return cert;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[LcValidator] findCscaBySubjectDn query failed: {}", e.what());
         return nullptr;
     }
-
-    const unsigned char* p = certData;
-    X509* cert = d2i_X509(nullptr, &p, certLen);
-    PQfreemem(certData);
-    PQclear(res);
-
-    return cert;
 }
 
 X509* LcValidator::findCscaByIssuerDn(const std::string& issuerDn) {
-    const char* query =
+    std::string dbType = executor_->getDatabaseType();
+    std::string query =
         "SELECT certificate_binary FROM certificate "
-        "WHERE certificate_type = 'CSCA' AND issuer_dn = $1 "
-        "LIMIT 1";
-
-    const char* paramValues[1] = {issuerDn.c_str()};
-    PGresult* res = PQexecParams(conn_, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-
-    if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-        PQclear(res);
-        return nullptr;
+        "WHERE certificate_type = 'CSCA' AND issuer_dn = $1 ";
+    if (dbType == "oracle") {
+        query += "FETCH FIRST 1 ROWS ONLY";
+    } else {
+        query += "LIMIT 1";
     }
 
-    // Parse certificate binary
-    size_t certLen;
-    unsigned char* certData = PQunescapeBytea(
-        reinterpret_cast<const unsigned char*>(PQgetvalue(res, 0, 0)),
-        &certLen
-    );
+    try {
+        Json::Value rows = executor_->executeQuery(query, {issuerDn});
+        if (rows.empty()) {
+            return nullptr;
+        }
 
-    if (!certData) {
-        PQclear(res);
+        // Parse certificate binary from hex-encoded string
+        std::string certHex = rows[0].get("certificate_binary", "").asString();
+        std::vector<uint8_t> certBytes = hexToBytes(certHex);
+        if (certBytes.empty()) {
+            return nullptr;
+        }
+
+        const unsigned char* p = certBytes.data();
+        X509* cert = d2i_X509(nullptr, &p, static_cast<long>(certBytes.size()));
+        return cert;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[LcValidator] findCscaByIssuerDn query failed: {}", e.what());
         return nullptr;
     }
-
-    const unsigned char* p = certData;
-    X509* cert = d2i_X509(nullptr, &p, certLen);
-    PQfreemem(certData);
-    PQclear(res);
-
-    return cert;
 }
 
 // ============================================================================

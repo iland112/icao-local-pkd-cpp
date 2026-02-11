@@ -1218,51 +1218,57 @@ bool isValidP7sFile(const std::vector<uint8_t>& content) {
 
 /**
  * @brief Check if certificate with given fingerprint already exists in DB
+ * @note v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
  */
-bool certificateExistsByFingerprint(PGconn* conn, const std::string& fingerprint) {
-    const char* query = "SELECT 1 FROM certificate WHERE fingerprint_sha256 = $1 LIMIT 1";
-    const char* paramValues[1] = {fingerprint.c_str()};
-    PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
+bool certificateExistsByFingerprint(const std::string& fingerprint) {
+    if (!::queryExecutor) {
+        spdlog::error("[certificateExistsByFingerprint] queryExecutor is null");
+        return false;
+    }
 
-    bool exists = (PQresultStatus(res) == PGRES_TUPLES_OK && PQntuples(res) > 0);
-    PQclear(res);
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
+        std::string query = (dbType == "oracle")
+            ? "SELECT 1 FROM certificate WHERE fingerprint_sha256 = $1 AND ROWNUM = 1"
+            : "SELECT 1 FROM certificate WHERE fingerprint_sha256 = $1 LIMIT 1";
 
-    return exists;
+        auto rows = ::queryExecutor->executeQuery(query, {fingerprint});
+        return rows.size() > 0;
+    } catch (const std::exception& e) {
+        spdlog::error("[certificateExistsByFingerprint] Query failed: {}", e.what());
+        return false;
+    }
 }
 
 /**
  * @brief Check if a file with the same hash already exists
- * @param conn PostgreSQL connection
+ * @note v2.6.4: Migrated from PGconn to UploadRepository for Oracle support
  * @param fileHash SHA-256 hash of the file
  * @return JSON object with existing upload details if duplicate found, null otherwise
  */
-Json::Value checkDuplicateFile(PGconn* conn, const std::string& fileHash) {
+Json::Value checkDuplicateFile(const std::string& fileHash) {
     Json::Value result;  // null by default
 
-    std::string query = "SELECT id, file_name, upload_timestamp, status, "
-                       "processing_mode, file_format FROM uploaded_file "
-                       "WHERE file_hash = '" + fileHash + "' LIMIT 1";
-
-    PGresult* res = PQexec(conn, query.c_str());
-
-    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-        spdlog::warn("Duplicate check query failed (continuing with upload): {}",
-                     PQerrorMessage(conn));
-        PQclear(res);
+    if (!::uploadRepository) {
+        spdlog::warn("Duplicate check skipped: uploadRepository is null (continuing with upload)");
         return result;  // Fail open: allow upload if check fails
     }
 
-    if (PQntuples(res) > 0) {
-        result["uploadId"] = PQgetvalue(res, 0, 0);
-        result["fileName"] = PQgetvalue(res, 0, 1);
-        result["uploadTimestamp"] = PQgetvalue(res, 0, 2);
-        result["status"] = PQgetvalue(res, 0, 3);
-        result["processingMode"] = PQgetvalue(res, 0, 4);
-        result["fileFormat"] = PQgetvalue(res, 0, 5);
+    try {
+        auto uploadOpt = ::uploadRepository->findByFileHash(fileHash);
+        if (uploadOpt.has_value()) {
+            const auto& upload = uploadOpt.value();
+            result["uploadId"] = upload.id;
+            result["fileName"] = upload.fileName;
+            result["uploadTimestamp"] = upload.createdAt;
+            result["status"] = upload.status;
+            result["processingMode"] = upload.processingMode.value_or("");
+            result["fileFormat"] = upload.fileFormat;
+        }
+    } catch (const std::exception& e) {
+        spdlog::warn("Duplicate check query failed (continuing with upload): {}", e.what());
     }
 
-    PQclear(res);
     return result;
 }
 
@@ -1403,64 +1409,12 @@ std::string computeFileHash(const std::vector<uint8_t>& content) {
     return ss.str();
 }
 
-/**
- * @brief Escape string for SQL
- */
-std::string escapeSqlString(PGconn* conn, const std::string& str) {
-    char* escaped = PQescapeLiteral(conn, str.c_str(), str.length());
-    if (!escaped) return "''";
-    std::string result(escaped);
-    PQfreemem(escaped);
-    return result;
-}
+// escapeSqlString() DELETED in v2.6.4 - no longer needed with parameterized queries via QueryExecutor
 
-/**
- * @brief Save upload record to database
- */
-std::string saveUploadRecord(PGconn* conn, const std::string& fileName,
-                              int64_t fileSize, const std::string& format,
-                              const std::string& fileHash, const std::string& processingMode = "AUTO") {
-    std::string uploadId = generateUuid();
+// saveUploadRecord() DELETED in v2.6.4 - use ::uploadRepository->insert() instead
+// saveUploadRecord() body DELETED in v2.6.4 - use ::uploadRepository->insert() instead
 
-    std::string query = "INSERT INTO uploaded_file (id, file_name, original_file_name, file_hash, "
-                       "file_size, file_format, status, processing_mode, upload_timestamp) VALUES ("
-                       "'" + uploadId + "', "
-                       + escapeSqlString(conn, fileName) + ", "
-                       + escapeSqlString(conn, fileName) + ", "
-                       "'" + fileHash + "', "
-                       + std::to_string(fileSize) + ", "
-                       "'" + format + "', "
-                       "'PROCESSING', "
-                       "'" + processingMode + "', "
-                       "NOW())";
-
-    PGresult* res = PQexec(conn, query.c_str());
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        std::string error = PQerrorMessage(conn);
-        PQclear(res);
-        throw std::runtime_error("Failed to save upload record: " + error);
-    }
-    PQclear(res);
-
-    return uploadId;
-}
-
-/**
- * @brief Update upload status in database
- */
-void updateUploadStatus(PGconn* conn, const std::string& uploadId,
-                        const std::string& status, int certCount, int crlCount,
-                        const std::string& errorMessage) {
-    std::string query = "UPDATE uploaded_file SET status = '" + status + "', "
-                       "csca_count = " + std::to_string(certCount) + ", "
-                       "crl_count = " + std::to_string(crlCount) + ", "
-                       "error_message = " + escapeSqlString(conn, errorMessage) + ", "
-                       "completed_timestamp = NOW() "
-                       "WHERE id = '" + uploadId + "'";
-
-    PGresult* res = PQexec(conn, query.c_str());
-    PQclear(res);
-}
+// updateUploadStatus() DELETED in v2.6.4 - use ::uploadRepository->updateStatus() instead
 
 /**
  * @brief Send enhanced progress update with optional certificate metadata
@@ -1739,23 +1693,7 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
     return entries;
 }
 
-/**
- * @brief Escape binary data for PostgreSQL BYTEA
- */
-std::string escapeBytea(PGconn* conn, const std::vector<uint8_t>& data) {
-    if (data.size() >= 4) {
-        spdlog::debug("escapeBytea input: size={}, first4bytes=0x{:02x}{:02x}{:02x}{:02x}",
-                     data.size(), data[0], data[1], data[2], data[3]);
-    }
-    size_t toLen = 0;
-    unsigned char* escaped = PQescapeByteaConn(conn, data.data(), data.size(), &toLen);
-    if (!escaped) return "";
-    std::string result(reinterpret_cast<char*>(escaped), toLen - 1);
-    PQfreemem(escaped);
-    spdlog::debug("escapeBytea output: len={}, first20chars={}", result.size(),
-                 result.size() >= 20 ? result.substr(0, 20) : result);
-    return result;
-}
+// escapeBytea() DELETED in v2.6.4 - PostgreSQL-specific, not needed with QueryExecutor
 
 // =============================================================================
 // LDAP Storage Functions
@@ -2483,22 +2421,30 @@ std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
 
 /**
  * @brief Update DB record with LDAP DN after successful LDAP storage
+ * @note v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
  */
-void updateCertificateLdapStatus(PGconn* conn, const std::string& certId, const std::string& ldapDn) {
+void updateCertificateLdapStatus(const std::string& certId, const std::string& ldapDn) {
     if (ldapDn.empty()) return;
 
-    // Use parameterized query (Phase 2 - SQL Injection Prevention)
-    const char* query = "UPDATE certificate SET "
-                       "ldap_dn = $1, ldap_dn_v2 = $2, stored_in_ldap = TRUE, stored_at = NOW() "
-                       "WHERE id = $3";
-    const char* paramValues[3] = {ldapDn.c_str(), ldapDn.c_str(), certId.c_str()};
-
-    PGresult* res = PQexecParams(conn, query, 3, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to update certificate LDAP status: {}", PQerrorMessage(conn));
+    if (!::queryExecutor) {
+        spdlog::error("[updateCertificateLdapStatus] queryExecutor is null");
+        return;
     }
-    PQclear(res);
+
+    try {
+        std::string dbType = ::queryExecutor->getDatabaseType();
+        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+        std::string nowFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+
+        std::string query = "UPDATE certificate SET "
+                           "ldap_dn = $1, ldap_dn_v2 = $2, stored_in_ldap = " + storedFlag + ", "
+                           "stored_at = " + nowFunc + " "
+                           "WHERE id = $3";
+
+        ::queryExecutor->executeCommand(query, {ldapDn, ldapDn, certId});
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to update certificate LDAP status: {}", e.what());
+    }
 }
 
 /**
@@ -4473,63 +4419,45 @@ void registerRoutes() {
            const std::string& uploadId) {
             spdlog::info("POST /api/upload/{}/parse - Trigger parsing", uploadId);
 
-            // Connect to database to check if upload exists
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
+            // v2.6.4: Use QueryExecutor instead of PGconn for Oracle support
+            if (!::queryExecutor) {
                 Json::Value error;
                 error["success"] = false;
-                error["message"] = "Database connection failed";
+                error["message"] = "Query executor not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
-                PQfinish(conn);
                 return;
             }
 
-            // Check if upload exists and get file path (parameterized query)
-            const char* query = "SELECT id, file_path, file_format FROM uploaded_file WHERE id = $1";
-            const char* paramValues[1] = {uploadId.c_str()};
-            PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                         nullptr, nullptr, 0);
+            try {
+                // Check if upload exists and get file path (parameterized query)
+                std::string query = "SELECT id, file_path, file_format FROM uploaded_file WHERE id = $1";
+                auto rows = ::queryExecutor->executeQuery(query, {uploadId});
 
-            if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Upload not found";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k404NotFound);
-                callback(resp);
-                PQclear(res);
-                PQfinish(conn);
-                return;
-            }
+                if (rows.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "Upload not found";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    return;
+                }
 
-            // Get file path and format
-            char* filePath = PQgetvalue(res, 0, 1);
-            char* fileFormat = PQgetvalue(res, 0, 2);
+                // Get file path and format
+                std::string filePathStr = rows[0].get("file_path", "").asString();
+                std::string fileFormatStr = rows[0].get("file_format", "").asString();
 
-            if (!filePath || strlen(filePath) == 0) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "File path not found. File may not have been saved.";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k404NotFound);
-                callback(resp);
-                PQclear(res);
-                PQfinish(conn);
-                return;
-            }
-
-            std::string filePathStr(filePath);
-            std::string fileFormatStr(fileFormat);
-            PQclear(res);
-            PQfinish(conn);
+                if (filePathStr.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["message"] = "File path not found. File may not have been saved.";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k404NotFound);
+                    callback(resp);
+                    return;
+                }
 
             // Read file from disk
             std::ifstream inFile(filePathStr, std::ios::binary | std::ios::ate);
@@ -4642,6 +4570,16 @@ void registerRoutes() {
 
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("POST /api/upload/{}/parse error: {}", uploadId, e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["message"] = std::string("Internal error: ") + e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
         },
         {drogon::Post}
     );
@@ -5746,32 +5684,37 @@ void registerRoutes() {
                     return;
                 }
 
-                // TODO Phase 4: Move LDAP status check to CertificateRepository
-                // For now, keep this as a separate query
-                std::string conninfo = "host=" + appConfig.dbHost +
-                                      " port=" + std::to_string(appConfig.dbPort) +
-                                      " dbname=" + appConfig.dbName +
-                                      " user=" + appConfig.dbUser +
-                                      " password=" + appConfig.dbPassword;
-                PGconn* conn = PQconnectdb(conninfo.c_str());
-
-                if (PQstatus(conn) == CONNECTION_OK) {
-                    std::string ldapQuery = "SELECT COUNT(*) as total, "
-                                          "COALESCE(SUM(CASE WHEN stored_in_ldap = true THEN 1 ELSE 0 END), 0) as in_ldap "
-                                          "FROM certificate WHERE upload_id = '" + uploadId + "'";
-                    PGresult* ldapRes = PQexec(conn, ldapQuery.c_str());
-                    if (PQresultStatus(ldapRes) == PGRES_TUPLES_OK && PQntuples(ldapRes) > 0) {
-                        int totalCerts = std::stoi(PQgetvalue(ldapRes, 0, 0));
-                        int ldapCerts = std::stoi(PQgetvalue(ldapRes, 0, 1));
-                        uploadData["ldapUploadedCount"] = ldapCerts;
-                        uploadData["ldapPendingCount"] = totalCerts - ldapCerts;
-                    } else {
+                // v2.6.4: Migrated LDAP status check from PGconn to QueryExecutor for Oracle support
+                if (::queryExecutor) {
+                    try {
+                        std::string boolTrue = (::queryExecutor->getDatabaseType() == "oracle") ? "1" : "true";
+                        std::string ldapQuery = "SELECT COUNT(*) as total, "
+                                              "COALESCE(SUM(CASE WHEN stored_in_ldap = " + boolTrue + " THEN 1 ELSE 0 END), 0) as in_ldap "
+                                              "FROM certificate WHERE upload_id = $1";
+                        auto rows = ::queryExecutor->executeQuery(ldapQuery, {uploadId});
+                        if (!rows.empty()) {
+                            auto safeInt = [](const Json::Value& v) -> int {
+                                if (v.isInt()) return v.asInt();
+                                if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
+                                return 0;
+                            };
+                            int totalCerts = safeInt(rows[0]["total"]);
+                            int ldapCerts = safeInt(rows[0]["in_ldap"]);
+                            uploadData["ldapUploadedCount"] = ldapCerts;
+                            uploadData["ldapPendingCount"] = totalCerts - ldapCerts;
+                        } else {
+                            uploadData["ldapUploadedCount"] = 0;
+                            uploadData["ldapPendingCount"] = 0;
+                        }
+                    } catch (const std::exception& e) {
+                        spdlog::warn("LDAP status query failed: {}", e.what());
                         uploadData["ldapUploadedCount"] = 0;
                         uploadData["ldapPendingCount"] = 0;
                     }
-                    PQclear(ldapRes);
+                } else {
+                    uploadData["ldapUploadedCount"] = 0;
+                    uploadData["ldapPendingCount"] = 0;
                 }
-                PQfinish(conn);
 
                 Json::Value result;
                 result["success"] = true;
@@ -5831,31 +5774,21 @@ void registerRoutes() {
             Json::Value result;
             result["success"] = false;
 
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-
             try {
-                if (PQstatus(conn) != CONNECTION_OK) {
-                    throw std::runtime_error(std::string("Database connection failed: ") + PQerrorMessage(conn));
+                // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
+                if (!::queryExecutor) {
+                    throw std::runtime_error("Query executor not initialized");
                 }
 
-                // Query upload file information
-                const char* query =
+                // Query upload file information (no $1::uuid cast for Oracle compatibility)
+                std::string query =
                     "SELECT file_name, original_file_name, file_format, file_size, file_path "
                     "FROM uploaded_file "
-                    "WHERE id = $1::uuid";
+                    "WHERE id = $1";
 
-                const char* paramValues[] = { uploadId.c_str() };
-                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues, nullptr, nullptr, 0);
+                auto rows = ::queryExecutor->executeQuery(query, {uploadId});
 
-                if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-                    PQclear(res);
-                    PQfinish(conn);
+                if (rows.empty()) {
                     result["error"] = "Upload not found";
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                     resp->setStatusCode(drogon::k404NotFound);
@@ -5863,16 +5796,12 @@ void registerRoutes() {
                     return;
                 }
 
-                std::string fileName = PQgetvalue(res, 0, 0);
-                // Use fileName (stored name) if originalFileName is NULL
-                std::string displayName = (PQgetvalue(res, 0, 1) && strlen(PQgetvalue(res, 0, 1)) > 0)
-                    ? PQgetvalue(res, 0, 1)
-                    : fileName;
-                std::string fileFormat = PQgetvalue(res, 0, 2);
-                std::string fileSizeStr = PQgetvalue(res, 0, 3);
-                std::string filePath = PQgetvalue(res, 0, 4) ? PQgetvalue(res, 0, 4) : "";
-                PQclear(res);
-                PQfinish(conn);
+                std::string fileName = rows[0].get("file_name", "").asString();
+                std::string origFileName = rows[0].get("original_file_name", "").asString();
+                std::string displayName = origFileName.empty() ? fileName : origFileName;
+                std::string fileFormat = rows[0].get("file_format", "").asString();
+                std::string fileSizeStr = rows[0].get("file_size", "0").asString();
+                std::string filePath = rows[0].get("file_path", "").asString();
 
                 // Check if this is a Master List file
                 if (fileFormat != "ML" && fileFormat != "MASTER_LIST") {
@@ -5915,7 +5844,7 @@ void registerRoutes() {
                 // Build response
                 result["success"] = true;
                 result["fileName"] = displayName;
-                result["fileSize"] = std::stoi(fileSizeStr);
+                try { result["fileSize"] = std::stoi(fileSizeStr); } catch (...) { result["fileSize"] = 0; }
                 result["asn1Tree"] = asn1Result["tree"];
                 result["statistics"] = asn1Result["statistics"];
                 result["maxLines"] = asn1Result["maxLines"];
@@ -5926,9 +5855,6 @@ void registerRoutes() {
 
             } catch (const std::exception& e) {
                 spdlog::error("GET /api/upload/{}/masterlist-structure error: {}", uploadId, e.what());
-                if (PQstatus(conn) == CONNECTION_OK) {
-                    PQfinish(conn);
-                }
                 result["error"] = e.what();
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 resp->setStatusCode(drogon::k500InternalServerError);
@@ -5956,18 +5882,21 @@ void registerRoutes() {
                 }
             }
 
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
+            // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
             Json::Value result;
             result["success"] = false;
 
-            if (PQstatus(conn) == CONNECTION_OK) {
-                // Query to calculate changes between consecutive uploads (chronological order)
+            if (!::queryExecutor) {
+                result["error"] = "Query executor not initialized";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+                return;
+            }
+
+            try {
+                // Oracle: COALESCE(collection_number, '') returns NULL since '' = NULL in Oracle
+                // Use CASE WHEN collection_number IS NULL instead of checking = ''
                 std::string query =
                     "WITH ranked_uploads AS ( "
                     "  SELECT "
@@ -5980,7 +5909,7 @@ void registerRoutes() {
                     "    crl_count, "
                     "    ml_count, "
                     "    mlsc_count, "
-                    "    COALESCE(collection_number, '') as collection_number, "
+                    "    collection_number, "
                     "    ROW_NUMBER() OVER ( "
                     "      ORDER BY upload_timestamp DESC "
                     "    ) as rn "
@@ -5990,7 +5919,7 @@ void registerRoutes() {
                     "SELECT "
                     "  curr.id, "
                     "  curr.original_file_name, "
-                    "  CASE WHEN curr.collection_number = '' THEN 'N/A' ELSE curr.collection_number END as collection_number, "
+                    "  CASE WHEN curr.collection_number IS NULL THEN 'N/A' ELSE curr.collection_number END as collection_number, "
                     "  to_char(curr.upload_timestamp, 'YYYY-MM-DD HH24:MI:SS') as upload_time, "
                     "  curr.csca_count, "
                     "  curr.dsc_count, "
@@ -6012,72 +5941,76 @@ void registerRoutes() {
                     "WHERE curr.rn <= " + std::to_string(limit) + " "
                     "ORDER BY curr.upload_timestamp DESC";
 
-                PGresult* res = PQexec(conn, query.c_str());
-                if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                    result["success"] = true;
-                    result["count"] = PQntuples(res);
+                auto rows = ::queryExecutor->executeQuery(query);
 
-                    Json::Value changes(Json::arrayValue);
-                    for (int i = 0; i < PQntuples(res); i++) {
-                        Json::Value change;
-                        change["uploadId"] = PQgetvalue(res, i, 0);
-                        change["fileName"] = PQgetvalue(res, i, 1);
-                        change["collectionNumber"] = PQgetvalue(res, i, 2);
-                        change["uploadTime"] = PQgetvalue(res, i, 3);
+                // Oracle safeInt helper: Oracle returns all values as strings
+                auto safeInt = [](const Json::Value& v) -> int {
+                    if (v.isInt()) return v.asInt();
+                    if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
+                    return 0;
+                };
 
-                        // Current counts
-                        Json::Value counts;
-                        counts["csca"] = std::stoi(PQgetvalue(res, i, 4));
-                        counts["dsc"] = std::stoi(PQgetvalue(res, i, 5));
-                        counts["dscNc"] = std::stoi(PQgetvalue(res, i, 6));
-                        counts["crl"] = std::stoi(PQgetvalue(res, i, 7));
-                        counts["ml"] = std::stoi(PQgetvalue(res, i, 8));
-                        counts["mlsc"] = std::stoi(PQgetvalue(res, i, 9));
-                        change["counts"] = counts;
+                result["success"] = true;
+                result["count"] = static_cast<int>(rows.size());
 
-                        // Changes (deltas)
-                        Json::Value deltas;
-                        deltas["csca"] = std::stoi(PQgetvalue(res, i, 10));
-                        deltas["dsc"] = std::stoi(PQgetvalue(res, i, 11));
-                        deltas["dscNc"] = std::stoi(PQgetvalue(res, i, 12));
-                        deltas["crl"] = std::stoi(PQgetvalue(res, i, 13));
-                        deltas["ml"] = std::stoi(PQgetvalue(res, i, 14));
-                        deltas["mlsc"] = std::stoi(PQgetvalue(res, i, 15));
-                        change["changes"] = deltas;
+                Json::Value changes(Json::arrayValue);
+                for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+                    const auto& row = rows[i];
+                    Json::Value change;
+                    change["uploadId"] = row.get("id", "").asString();
+                    change["fileName"] = row.get("original_file_name", "").asString();
+                    change["collectionNumber"] = row.get("collection_number", "N/A").asString();
+                    change["uploadTime"] = row.get("upload_time", "").asString();
 
-                        // Calculate total change
-                        int totalChange = std::abs(std::stoi(PQgetvalue(res, i, 10))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 11))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 12))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 13))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 14))) +
-                                        std::abs(std::stoi(PQgetvalue(res, i, 15)));
-                        change["totalChange"] = totalChange;
+                    // Current counts
+                    Json::Value counts;
+                    counts["csca"] = safeInt(row["csca_count"]);
+                    counts["dsc"] = safeInt(row["dsc_count"]);
+                    counts["dscNc"] = safeInt(row["dsc_nc_count"]);
+                    counts["crl"] = safeInt(row["crl_count"]);
+                    counts["ml"] = safeInt(row["ml_count"]);
+                    counts["mlsc"] = safeInt(row["mlsc_count"]);
+                    change["counts"] = counts;
 
-                        // Previous upload info (if exists)
-                        if (!PQgetisnull(res, i, 16)) {
-                            Json::Value previous;
-                            previous["fileName"] = PQgetvalue(res, i, 16);
-                            previous["uploadTime"] = PQgetvalue(res, i, 17);
-                            change["previousUpload"] = previous;
-                        } else {
-                            change["previousUpload"] = Json::Value::null;
-                        }
+                    // Changes (deltas)
+                    Json::Value deltas;
+                    deltas["csca"] = safeInt(row["csca_change"]);
+                    deltas["dsc"] = safeInt(row["dsc_change"]);
+                    deltas["dscNc"] = safeInt(row["dsc_nc_change"]);
+                    deltas["crl"] = safeInt(row["crl_change"]);
+                    deltas["ml"] = safeInt(row["ml_change"]);
+                    deltas["mlsc"] = safeInt(row["mlsc_change"]);
+                    change["changes"] = deltas;
 
-                        changes.append(change);
+                    // Calculate total change
+                    int totalChange = std::abs(safeInt(row["csca_change"])) +
+                                    std::abs(safeInt(row["dsc_change"])) +
+                                    std::abs(safeInt(row["dsc_nc_change"])) +
+                                    std::abs(safeInt(row["crl_change"])) +
+                                    std::abs(safeInt(row["ml_change"])) +
+                                    std::abs(safeInt(row["mlsc_change"]));
+                    change["totalChange"] = totalChange;
+
+                    // Previous upload info (if exists)
+                    std::string prevFile = row.get("previous_file", "").asString();
+                    if (!prevFile.empty()) {
+                        Json::Value previous;
+                        previous["fileName"] = prevFile;
+                        previous["uploadTime"] = row.get("previous_upload_time", "").asString();
+                        change["previousUpload"] = previous;
+                    } else {
+                        change["previousUpload"] = Json::Value::null;
                     }
-                    result["changes"] = changes;
-                } else {
-                    result["error"] = "Query failed: " + std::string(PQerrorMessage(conn));
-                    spdlog::error("[UploadChanges] Query failed: {}", PQerrorMessage(conn));
+
+                    changes.append(change);
                 }
-                PQclear(res);
-            } else {
-                result["error"] = "Database connection failed";
-                spdlog::error("[UploadChanges] DB connection failed");
+                result["changes"] = changes;
+
+            } catch (const std::exception& e) {
+                result["error"] = std::string("Query failed: ") + e.what();
+                spdlog::error("[UploadChanges] Query failed: {}", e.what());
             }
 
-            PQfinish(conn);
             auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
             callback(resp);
         },
@@ -7257,28 +7190,20 @@ paths:
                 return;
             }
 
-            // Connect to database
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
+            // v2.6.4: Use QueryExecutor for Oracle support
+            if (!::queryExecutor) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Database connection failed";
+                error["error"] = "Query executor not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
-                PQfinish(conn);
                 return;
             }
 
             try {
-                // Create LC validator
-                lc::LcValidator validator(conn);
+                // Create LC validator with QueryExecutor (Oracle/PostgreSQL agnostic)
+                lc::LcValidator validator(::queryExecutor.get());
 
                 // Validate Link Certificate
                 auto result = validator.validateLinkCertificate(certBinary);
@@ -7326,6 +7251,7 @@ paths:
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
+                // dbConn RAII: connection auto-released here
 
             } catch (const std::exception& e) {
                 Json::Value error;
@@ -7335,8 +7261,6 @@ paths:
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
             }
-
-            PQfinish(conn);
         },
         {drogon::Post}
     );
@@ -7369,26 +7293,21 @@ paths:
                 return;
             }
 
-            // Connect to database
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
+            // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
+            if (!::queryExecutor) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Database connection failed";
+                error["error"] = "Query executor not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
-                PQfinish(conn);
                 return;
             }
 
             try {
+                std::string dbType = ::queryExecutor->getDatabaseType();
+                std::string boolTrue = (dbType == "oracle") ? "1" : "true";
+
                 // Build SQL query with parameterized parameters
                 std::ostringstream sql;
                 sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
@@ -7405,63 +7324,57 @@ paths:
                 }
 
                 if (validOnly) {
-                    sql << " AND trust_chain_valid = true";
+                    sql << " AND trust_chain_valid = " << boolTrue;
                 }
 
-                sql << " ORDER BY created_at DESC LIMIT $" << paramIndex++ << " OFFSET $" << paramIndex++;
-                paramValues.push_back(std::to_string(limit));
-                paramValues.push_back(std::to_string(offset));
-
-                // Prepare parameter pointers
-                std::vector<const char*> paramPointers;
-                for (const auto& pv : paramValues) {
-                    paramPointers.push_back(pv.c_str());
+                // Oracle: use OFFSET/FETCH instead of LIMIT/OFFSET
+                if (dbType == "oracle") {
+                    sql << " ORDER BY created_at DESC"
+                        << " OFFSET $" << paramIndex++ << " ROWS"
+                        << " FETCH NEXT $" << paramIndex++ << " ROWS ONLY";
+                    paramValues.push_back(std::to_string(offset));
+                    paramValues.push_back(std::to_string(limit));
+                } else {
+                    sql << " ORDER BY created_at DESC LIMIT $" << paramIndex++ << " OFFSET $" << paramIndex++;
+                    paramValues.push_back(std::to_string(limit));
+                    paramValues.push_back(std::to_string(offset));
                 }
 
-                // Execute query
-                PGresult* res = PQexecParams(
-                    conn,
-                    sql.str().c_str(),
-                    paramPointers.size(),
-                    nullptr,
-                    paramPointers.data(),
-                    nullptr,
-                    nullptr,
-                    0
-                );
+                auto rows = ::queryExecutor->executeQuery(sql.str(), paramValues);
 
-                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
-                    PQclear(res);
-                    throw std::runtime_error("Database query failed");
-                }
+                // Helper for Oracle boolean values
+                auto parseBool = [&dbType](const Json::Value& v) -> bool {
+                    if (v.isBool()) return v.asBool();
+                    std::string s = v.asString();
+                    return (s == "t" || s == "true" || s == "1" || s == "TRUE");
+                };
 
                 // Build JSON response
                 Json::Value response;
                 response["success"] = true;
-                response["total"] = PQntuples(res);
+                response["total"] = static_cast<int>(rows.size());
                 response["limit"] = limit;
                 response["offset"] = offset;
 
                 Json::Value certificates(Json::arrayValue);
-                for (int i = 0; i < PQntuples(res); i++) {
+                for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+                    const auto& row = rows[i];
                     Json::Value cert;
-                    cert["id"] = PQgetvalue(res, i, 0);
-                    cert["subjectDn"] = PQgetvalue(res, i, 1);
-                    cert["issuerDn"] = PQgetvalue(res, i, 2);
-                    cert["serialNumber"] = PQgetvalue(res, i, 3);
-                    cert["fingerprint"] = PQgetvalue(res, i, 4);
-                    cert["oldCscaSubjectDn"] = PQgetvalue(res, i, 5);
-                    cert["newCscaSubjectDn"] = PQgetvalue(res, i, 6);
-                    cert["trustChainValid"] = (strcmp(PQgetvalue(res, i, 7), "t") == 0);
-                    cert["createdAt"] = PQgetvalue(res, i, 8);
-                    cert["countryCode"] = PQgetvalue(res, i, 9);
+                    cert["id"] = row.get("id", "").asString();
+                    cert["subjectDn"] = row.get("subject_dn", "").asString();
+                    cert["issuerDn"] = row.get("issuer_dn", "").asString();
+                    cert["serialNumber"] = row.get("serial_number", "").asString();
+                    cert["fingerprint"] = row.get("fingerprint_sha256", "").asString();
+                    cert["oldCscaSubjectDn"] = row.get("old_csca_subject_dn", "").asString();
+                    cert["newCscaSubjectDn"] = row.get("new_csca_subject_dn", "").asString();
+                    cert["trustChainValid"] = parseBool(row["trust_chain_valid"]);
+                    cert["createdAt"] = row.get("created_at", "").asString();
+                    cert["countryCode"] = row.get("country_code", "").asString();
 
                     certificates.append(cert);
                 }
 
                 response["certificates"] = certificates;
-
-                PQclear(res);
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
@@ -7474,8 +7387,6 @@ paths:
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
             }
-
-            PQfinish(conn);
         },
         {drogon::Get}
     );
@@ -7488,28 +7399,35 @@ paths:
            const std::string& id) {
             spdlog::info("GET /api/link-certs/{} - Get Link Certificate details", id);
 
-            // Connect to database
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
+            // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
+            if (!::queryExecutor) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Database connection failed";
+                error["error"] = "Query executor not initialized";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
-                PQfinish(conn);
                 return;
             }
 
             try {
+                std::string dbType = ::queryExecutor->getDatabaseType();
+
+                // Helper for Oracle boolean values
+                auto parseBool = [&dbType](const Json::Value& v) -> bool {
+                    if (v.isBool()) return v.asBool();
+                    std::string s = v.asString();
+                    return (s == "t" || s == "true" || s == "1" || s == "TRUE");
+                };
+
+                auto safeInt = [](const Json::Value& v) -> int {
+                    if (v.isInt()) return v.asInt();
+                    if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
+                    return 0;
+                };
+
                 // Query LC by ID (parameterized query)
-                const char* query =
+                std::string query =
                     "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
                     "old_csca_subject_dn, old_csca_fingerprint, "
                     "new_csca_subject_dn, new_csca_fingerprint, "
@@ -7521,70 +7439,66 @@ paths:
                     "ldap_dn_v2, stored_in_ldap, created_at, country_code "
                     "FROM link_certificate WHERE id = $1";
 
-                const char* paramValues[1] = {id.c_str()};
-                PGresult* res = PQexecParams(conn, query, 1, nullptr, paramValues,
-                                             nullptr, nullptr, 0);
+                auto rows = ::queryExecutor->executeQuery(query, {id});
 
-                if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
-                    PQclear(res);
+                if (rows.empty()) {
                     Json::Value error;
                     error["success"] = false;
                     error["error"] = "Link Certificate not found";
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                     resp->setStatusCode(drogon::k404NotFound);
                     callback(resp);
-                    PQfinish(conn);
                     return;
                 }
+
+                const auto& row = rows[0];
 
                 // Build JSON response
                 Json::Value response;
                 response["success"] = true;
 
                 Json::Value cert;
-                cert["id"] = PQgetvalue(res, 0, 0);
-                cert["subjectDn"] = PQgetvalue(res, 0, 1);
-                cert["issuerDn"] = PQgetvalue(res, 0, 2);
-                cert["serialNumber"] = PQgetvalue(res, 0, 3);
-                cert["fingerprint"] = PQgetvalue(res, 0, 4);
+                cert["id"] = row.get("id", "").asString();
+                cert["subjectDn"] = row.get("subject_dn", "").asString();
+                cert["issuerDn"] = row.get("issuer_dn", "").asString();
+                cert["serialNumber"] = row.get("serial_number", "").asString();
+                cert["fingerprint"] = row.get("fingerprint_sha256", "").asString();
 
                 Json::Value signatures;
-                signatures["oldCscaSubjectDn"] = PQgetvalue(res, 0, 5);
-                signatures["oldCscaFingerprint"] = PQgetvalue(res, 0, 6);
-                signatures["newCscaSubjectDn"] = PQgetvalue(res, 0, 7);
-                signatures["newCscaFingerprint"] = PQgetvalue(res, 0, 8);
-                signatures["trustChainValid"] = (strcmp(PQgetvalue(res, 0, 9), "t") == 0);
-                signatures["oldCscaSignatureValid"] = (strcmp(PQgetvalue(res, 0, 10), "t") == 0);
-                signatures["newCscaSignatureValid"] = (strcmp(PQgetvalue(res, 0, 11), "t") == 0);
+                signatures["oldCscaSubjectDn"] = row.get("old_csca_subject_dn", "").asString();
+                signatures["oldCscaFingerprint"] = row.get("old_csca_fingerprint", "").asString();
+                signatures["newCscaSubjectDn"] = row.get("new_csca_subject_dn", "").asString();
+                signatures["newCscaFingerprint"] = row.get("new_csca_fingerprint", "").asString();
+                signatures["trustChainValid"] = parseBool(row["trust_chain_valid"]);
+                signatures["oldCscaSignatureValid"] = parseBool(row["old_csca_signature_valid"]);
+                signatures["newCscaSignatureValid"] = parseBool(row["new_csca_signature_valid"]);
                 cert["signatures"] = signatures;
 
                 Json::Value properties;
-                properties["validityPeriodValid"] = (strcmp(PQgetvalue(res, 0, 12), "t") == 0);
-                properties["notBefore"] = PQgetvalue(res, 0, 13);
-                properties["notAfter"] = PQgetvalue(res, 0, 14);
-                properties["extensionsValid"] = (strcmp(PQgetvalue(res, 0, 15), "t") == 0);
+                properties["validityPeriodValid"] = parseBool(row["validity_period_valid"]);
+                properties["notBefore"] = row.get("not_before", "").asString();
+                properties["notAfter"] = row.get("not_after", "").asString();
+                properties["extensionsValid"] = parseBool(row["extensions_valid"]);
                 cert["properties"] = properties;
 
                 Json::Value extensions;
-                extensions["basicConstraintsCa"] = (strcmp(PQgetvalue(res, 0, 16), "t") == 0);
-                extensions["basicConstraintsPathlen"] = std::stoi(PQgetvalue(res, 0, 17));
-                extensions["keyUsage"] = PQgetvalue(res, 0, 18);
-                extensions["extendedKeyUsage"] = PQgetvalue(res, 0, 19);
+                extensions["basicConstraintsCa"] = parseBool(row["basic_constraints_ca"]);
+                extensions["basicConstraintsPathlen"] = safeInt(row["basic_constraints_pathlen"]);
+                extensions["keyUsage"] = row.get("key_usage", "").asString();
+                extensions["extendedKeyUsage"] = row.get("extended_key_usage", "").asString();
                 cert["extensions"] = extensions;
 
                 Json::Value revocation;
-                revocation["status"] = PQgetvalue(res, 0, 20);
-                revocation["message"] = PQgetvalue(res, 0, 21);
+                revocation["status"] = row.get("revocation_status", "").asString();
+                revocation["message"] = row.get("revocation_message", "").asString();
                 cert["revocation"] = revocation;
 
-                cert["ldapDn"] = PQgetvalue(res, 0, 22);
-                cert["storedInLdap"] = (strcmp(PQgetvalue(res, 0, 23), "t") == 0);
-                cert["createdAt"] = PQgetvalue(res, 0, 24);
-                cert["countryCode"] = PQgetvalue(res, 0, 25);
+                cert["ldapDn"] = row.get("ldap_dn_v2", "").asString();
+                cert["storedInLdap"] = parseBool(row["stored_in_ldap"]);
+                cert["createdAt"] = row.get("created_at", "").asString();
+                cert["countryCode"] = row.get("country_code", "").asString();
 
                 response["certificate"] = cert;
-
-                PQclear(res);
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
                 callback(resp);
@@ -7597,8 +7511,6 @@ paths:
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
             }
-
-            PQfinish(conn);
         },
         {drogon::Get}
     );
@@ -7652,22 +7564,29 @@ paths:
 
             spdlog::info("Migration batch - offset: {}, limit: {}, mode: {}", offset, limit, mode);
 
-            // Connect to database
-            std::string conninfo = "host=" + appConfig.dbHost +
-                                  " port=" + std::to_string(appConfig.dbPort) +
-                                  " dbname=" + appConfig.dbName +
-                                  " user=" + appConfig.dbUser +
-                                  " password=" + appConfig.dbPassword;
-
-            PGconn* conn = PQconnectdb(conninfo.c_str());
-            if (PQstatus(conn) != CONNECTION_OK) {
+            // v2.6.4: Migrated from PGconn to connection pool + QueryExecutor
+            // NOTE: This endpoint uses PQunescapeBytea for certificate_data (BYTEA column).
+            // For PostgreSQL, we use the connection pool. For Oracle, this internal migration
+            // endpoint is not applicable (Oracle uses a different DN migration approach).
+            if (!::dbPool) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Database connection failed";
+                error["error"] = "Database connection pool not initialized (PostgreSQL only endpoint)";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
-                PQfinish(conn);
+                return;
+            }
+
+            common::DbConnection dbConn = ::dbPool->acquire();
+            PGconn* conn = dbConn.get();
+            if (!conn) {
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = "Failed to acquire database connection from pool";
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
                 return;
             }
 
@@ -7681,7 +7600,6 @@ paths:
                     Json::Value error;
                     error["success"] = false;
                     error["error"] = "LDAP initialization failed";
-                    PQfinish(conn);
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                     resp->setStatusCode(drogon::k500InternalServerError);
                     callback(resp);
@@ -7702,7 +7620,6 @@ paths:
                     Json::Value error;
                     error["success"] = false;
                     error["error"] = std::string("LDAP bind failed: ") + ldap_err2string(rc);
-                    PQfinish(conn);
                     ldap_unbind_ext_s(ld, nullptr, nullptr);
                     auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                     resp->setStatusCode(drogon::k500InternalServerError);
@@ -7711,7 +7628,7 @@ paths:
                 }
             }
 
-            // Fetch batch of certificates
+            // Fetch batch of certificates (PostgreSQL-specific due to BYTEA handling)
             const char* query =
                 "SELECT id, fingerprint_sha256, certificate_type, country_code, "
                 "       certificate_data, subject_dn, serial_number, issuer_dn "
@@ -7720,9 +7637,9 @@ paths:
                 "ORDER BY id "
                 "OFFSET $1 LIMIT $2";
 
-            std::string offsetStr = std::to_string(offset);
-            std::string limitStr = std::to_string(limit);
-            const char* paramValues[2] = {offsetStr.c_str(), limitStr.c_str()};
+            std::string offsetStr2 = std::to_string(offset);
+            std::string limitStr2 = std::to_string(limit);
+            const char* paramValues[2] = {offsetStr2.c_str(), limitStr2.c_str()};
 
             PGresult* res = PQexecParams(conn, query, 2, nullptr, paramValues,
                                         nullptr, nullptr, 0);
@@ -7732,7 +7649,6 @@ paths:
                 error["success"] = false;
                 error["error"] = std::string("DB query failed: ") + PQerrorMessage(conn);
                 PQclear(res);
-                PQfinish(conn);
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
@@ -7752,7 +7668,7 @@ paths:
                 std::string certType = PQgetvalue(res, i, 2);
                 std::string country = PQgetvalue(res, i, 3);
 
-                // Get binary certificate data
+                // Get binary certificate data (PostgreSQL BYTEA specific)
                 size_t certDataLen = 0;
                 unsigned char* certDataEscaped = PQunescapeBytea(
                     reinterpret_cast<const unsigned char*>(PQgetvalue(res, i, 4)),
@@ -7793,54 +7709,44 @@ paths:
                     }
                 }
 
-                // Update database with new DN
+                // Update database with new DN using QueryExecutor
                 if (ldapSuccess || mode == "test") {
-                    const char* updateQuery = "UPDATE certificate SET ldap_dn_v2 = $1 WHERE id = $2";
-                    const char* updateParams[2] = {newDn.c_str(), certId.c_str()};
-
-                    PGresult* updateRes = PQexecParams(conn, updateQuery, 2, nullptr,
-                                                      updateParams, nullptr, nullptr, 0);
-
-                    if (PQresultStatus(updateRes) == PGRES_COMMAND_OK) {
+                    try {
+                        ::queryExecutor->executeCommand(
+                            "UPDATE certificate SET ldap_dn_v2 = $1 WHERE id = $2",
+                            {newDn, certId});
                         successCount++;
                         spdlog::debug("Migrated certificate {} to new DN: {}", certId, newDn);
-                    } else {
+                    } catch (const std::exception& e) {
                         failedCount++;
-                        errors.append(certId + ": DB update failed");
+                        errors.append(certId + ": DB update failed - " + std::string(e.what()));
                     }
-                    PQclear(updateRes);
                 }
             }
 
             PQclear(res);
-            PQfinish(conn);
+            // dbConn RAII: connection auto-released when scope exits
             if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
 
-            // Update migration status
-            std::string statusConninfo = "host=" + appConfig.dbHost +
-                                        " port=" + std::to_string(appConfig.dbPort) +
-                                        " dbname=" + appConfig.dbName +
-                                        " user=" + appConfig.dbUser +
-                                        " password=" + appConfig.dbPassword;
-            PGconn* statusConn = PQconnectdb(statusConninfo.c_str());
-            if (PQstatus(statusConn) == CONNECTION_OK) {
-                const char* statusQuery =
-                    "UPDATE ldap_migration_status "
-                    "SET migrated_records = migrated_records + $1, "
-                    "    failed_records = failed_records + $2, "
-                    "    updated_at = NOW() "
-                    "WHERE table_name = 'certificate' "
-                    "  AND status = 'IN_PROGRESS'";
+            // Update migration status using QueryExecutor
+            if (::queryExecutor) {
+                try {
+                    std::string dbType = ::queryExecutor->getDatabaseType();
+                    std::string nowFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+                    std::string statusQuery =
+                        "UPDATE ldap_migration_status "
+                        "SET migrated_records = migrated_records + $1, "
+                        "    failed_records = failed_records + $2, "
+                        "    updated_at = " + nowFunc + " "
+                        "WHERE table_name = 'certificate' "
+                        "  AND status = 'IN_PROGRESS'";
 
-                std::string successStr = std::to_string(successCount);
-                std::string failedStr = std::to_string(failedCount);
-                const char* statusParams[2] = {successStr.c_str(), failedStr.c_str()};
-
-                PGresult* statusRes = PQexecParams(statusConn, statusQuery, 2, nullptr,
-                                                  statusParams, nullptr, nullptr, 0);
-                PQclear(statusRes);
+                    ::queryExecutor->executeCommand(statusQuery,
+                        {std::to_string(successCount), std::to_string(failedCount)});
+                } catch (const std::exception& e) {
+                    spdlog::warn("Failed to update migration status: {}", e.what());
+                }
             }
-            PQfinish(statusConn);
 
             // Return results
             Json::Value resp;
@@ -7926,39 +7832,8 @@ int main(int argc, char* argv[]) {
         // Countries API now uses PostgreSQL for instant response (~70ms)
         spdlog::info("Countries API configured (PostgreSQL query, ~70ms response time)");
 
-        // Initialize ICAO Auto Sync Module (v1.7.0)
-        spdlog::info("Initializing ICAO Auto Sync module...");
-
-        std::string dbConnInfo = "host=" + appConfig.dbHost +
-                                " port=" + std::to_string(appConfig.dbPort) +
-                                " dbname=" + appConfig.dbName +
-                                " user=" + appConfig.dbUser +
-                                " password=" + appConfig.dbPassword;
-
-        auto icaoRepo = std::make_shared<repositories::IcaoVersionRepository>(dbConnInfo);
-        auto httpClient = std::make_shared<infrastructure::http::HttpClient>();
-
-        infrastructure::notification::EmailSender::EmailConfig emailConfig;
-        emailConfig.smtpHost = "localhost";
-        emailConfig.smtpPort = 25;
-        emailConfig.fromAddress = appConfig.notificationEmail;
-        emailConfig.useTls = false;
-        auto emailSender = std::make_shared<infrastructure::notification::EmailSender>(emailConfig);
-
-        services::IcaoSyncService::Config icaoConfig;
-        icaoConfig.icaoPortalUrl = appConfig.icaoPortalUrl;
-        icaoConfig.notificationEmail = appConfig.notificationEmail;
-        icaoConfig.autoNotify = appConfig.icaoAutoNotify;
-        icaoConfig.httpTimeoutSeconds = appConfig.icaoHttpTimeout;
-
-        auto icaoService = std::make_shared<services::IcaoSyncService>(
-            icaoRepo, httpClient, emailSender, icaoConfig
-        );
-
-        icaoHandler = std::make_shared<handlers::IcaoHandler>(icaoService);
-        spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
-                    appConfig.icaoPortalUrl,
-                    appConfig.icaoAutoNotify ? "enabled" : "disabled");
+        // ICAO Auto Sync Module initialization deferred to after QueryExecutor init (v2.6.4)
+        // IcaoVersionRepository now uses IQueryExecutor instead of PGconn
 
         // Phase 1.6: Initialize Repository Pattern - Repositories and Services
         spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
@@ -8011,6 +7886,34 @@ int main(int argc, char* argv[]) {
         authAuditRepository = std::make_shared<repositories::AuthAuditRepository>(queryExecutor.get());
         spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, User, AuthAudit: Query Executor)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
+
+        // Initialize ICAO Auto Sync Module (v1.7.0, migrated to IQueryExecutor v2.6.4)
+        spdlog::info("Initializing ICAO Auto Sync module...");
+
+        auto icaoRepo = std::make_shared<repositories::IcaoVersionRepository>(queryExecutor.get());
+        auto httpClient = std::make_shared<infrastructure::http::HttpClient>();
+
+        infrastructure::notification::EmailSender::EmailConfig emailConfig;
+        emailConfig.smtpHost = "localhost";
+        emailConfig.smtpPort = 25;
+        emailConfig.fromAddress = appConfig.notificationEmail;
+        emailConfig.useTls = false;
+        auto emailSender = std::make_shared<infrastructure::notification::EmailSender>(emailConfig);
+
+        services::IcaoSyncService::Config icaoConfig;
+        icaoConfig.icaoPortalUrl = appConfig.icaoPortalUrl;
+        icaoConfig.notificationEmail = appConfig.notificationEmail;
+        icaoConfig.autoNotify = appConfig.icaoAutoNotify;
+        icaoConfig.httpTimeoutSeconds = appConfig.icaoHttpTimeout;
+
+        auto icaoService = std::make_shared<services::IcaoSyncService>(
+            icaoRepo, httpClient, emailSender, icaoConfig
+        );
+
+        icaoHandler = std::make_shared<handlers::IcaoHandler>(icaoService);
+        spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
+                    appConfig.icaoPortalUrl,
+                    appConfig.icaoAutoNotify ? "enabled" : "disabled");
 
         // Initialize Services with Repository dependencies
         uploadService = std::make_shared<services::UploadService>(

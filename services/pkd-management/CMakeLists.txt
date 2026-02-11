@@ -204,10 +204,12 @@ add_executable(test_crl_validator
 target_include_directories(test_crl_validator PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../shared
     ${PostgreSQL_INCLUDE_DIRS}
 )
 
 target_link_libraries(test_crl_validator PRIVATE
+    icao::database
     GTest::gtest
     GTest::gtest_main
     OpenSSL::SSL

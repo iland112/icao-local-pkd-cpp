@@ -19,7 +19,7 @@
 #include <optional>
 #include <vector>
 #include <memory>
-#include <libpq-fe.h>
+#include "i_query_executor.h"
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 #include <openssl/evp.h>
@@ -96,9 +96,9 @@ class LcValidator {
 public:
     /**
      * @brief Construct LC validator
-     * @param conn PostgreSQL connection (must be valid)
+     * @param executor Query executor for database operations (must be valid)
      */
-    explicit LcValidator(PGconn* conn);
+    explicit LcValidator(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -155,7 +155,7 @@ public:
     );
 
 private:
-    PGconn* conn_;                           ///< PostgreSQL connection (non-owning)
+    common::IQueryExecutor* executor_;       ///< Query executor (non-owning)
     std::unique_ptr<crl::CrlValidator> crlValidator_;  ///< CRL validator instance
 
     /**

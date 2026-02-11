@@ -14,7 +14,7 @@
 #include <string>
 #include <optional>
 #include <chrono>
-#include <libpq-fe.h>
+#include "i_query_executor.h"
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 
@@ -64,15 +64,16 @@ struct RevocationCheckResult {
  * @brief CRL Validator class
  *
  * Provides CRL-based certificate revocation checking following RFC 5280.
- * Queries PostgreSQL for latest CRL, parses binary, and checks serial number.
+ * Queries database for latest CRL, parses binary, and checks serial number.
+ * Supports PostgreSQL and Oracle via IQueryExecutor abstraction.
  */
 class CrlValidator {
 public:
     /**
      * @brief Construct CRL validator
-     * @param conn PostgreSQL connection (must be valid)
+     * @param executor Query executor for database operations (must be valid)
      */
-    explicit CrlValidator(PGconn* conn);
+    explicit CrlValidator(common::IQueryExecutor* executor);
 
     /**
      * @brief Destructor
@@ -128,7 +129,7 @@ public:
     getLatestCrlMetadata(const std::string& issuerDn);
 
 private:
-    PGconn* conn_;  ///< PostgreSQL connection (non-owning)
+    common::IQueryExecutor* executor_;  ///< Query executor (non-owning)
 
     /**
      * @brief Convert RevocationReason enum to string

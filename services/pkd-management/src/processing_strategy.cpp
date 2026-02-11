@@ -4,6 +4,7 @@
 #include "common/masterlist_processor.h"
 #include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
 #include "repositories/upload_repository.h"  // Phase 6.1: Repository Pattern
+#include "i_query_executor.h"  // Phase 6.3: Database-agnostic query execution
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
 #include <spdlog/spdlog.h>
@@ -11,7 +12,6 @@
 #include <filesystem>
 #include <stdexcept>
 #include <memory>
-#include <libpq-fe.h>
 #include <ldap.h>
 
 // Phase 4.4: Using declarations for enhanced progress tracking
@@ -419,10 +419,6 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         throw std::runtime_error("Stage 1 parsing not completed. Current status: " + status);
     }
 
-    // TODO Phase 6.1: This method has many PGconn* usages that need to be replaced with repository calls
-    // For now, using nullptr as conn for external functions that haven't been updated yet
-    PGconn* conn = nullptr;  // Temporary: Will be removed when all external functions are updated
-
     // Connect to LDAP for write operations
     LDAP* ld = getLdapWriteConnection();
     if (!ld) {
@@ -511,11 +507,10 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         spdlog::info("MANUAL mode Stage 2: Processing Master List ({} bytes)", content.size());
         processMasterListToDbAndLdap(uploadId, content, ld);
 
-        // Update upload status to COMPLETED
-        std::string mlUpdateQuery = "UPDATE uploaded_file SET status = 'COMPLETED', completed_timestamp = NOW() "
-                                   " WHERE id = '" + uploadId + "'";
-        PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
-        PQclear(mlRes);
+        // Update upload status to COMPLETED via repository (Oracle compatible)
+        if (::uploadRepository) {
+            ::uploadRepository->updateStatus(uploadId, "COMPLETED", "");
+        }
 
         spdlog::info("MANUAL mode Stage 2: Master List processing completed");
 
@@ -536,61 +531,38 @@ void ManualProcessingStrategy::cleanupFailedUpload(
 ) {
     spdlog::info("Cleaning up failed upload: {}", uploadId);
 
-    // TODO Phase 6.1: Replace direct SQL with repository methods:
-    // - certificateRepository->deleteByUploadId(uploadId)
-    // - crlRepository->deleteByUploadId(uploadId)
-    // - masterListRepository->deleteByUploadId(uploadId)
-    // - uploadRepository->delete(uploadId)
-    // For now, keeping direct SQL with nullptr conn (will fail at runtime)
-    PGconn* conn = nullptr;  // Temporary: Needs proper repository methods
+    // Use QueryExecutor for cascading deletes (Oracle + PostgreSQL compatible)
+    // Note: FK ON DELETE CASCADE on uploaded_file would handle child tables,
+    // but we delete explicitly for logging counts
+    extern std::unique_ptr<common::IQueryExecutor> queryExecutor;
 
-    // Prepare parameter (used for all DELETE queries)
-    const char* paramValues[1] = {uploadId.c_str()};
-
-    // Delete certificates (parameterized query)
-    const char* deleteCerts = "DELETE FROM certificate WHERE upload_id = $1";
-    PGresult* res = PQexecParams(conn, deleteCerts, 1, nullptr, paramValues,
-                                 nullptr, nullptr, 0);
     int certsDeleted = 0;
-    if (PQresultStatus(res) == PGRES_COMMAND_OK) {
-        certsDeleted = atoi(PQcmdTuples(res));
-    } else {
-        spdlog::error("Failed to delete certificates: {}", PQerrorMessage(conn));
-    }
-    PQclear(res);
-
-    // Delete CRLs (parameterized query)
-    const char* deleteCrls = "DELETE FROM crl WHERE upload_id = $1";
-    res = PQexecParams(conn, deleteCrls, 1, nullptr, paramValues,
-                       nullptr, nullptr, 0);
     int crlsDeleted = 0;
-    if (PQresultStatus(res) == PGRES_COMMAND_OK) {
-        crlsDeleted = atoi(PQcmdTuples(res));
-    } else {
-        spdlog::error("Failed to delete CRLs: {}", PQerrorMessage(conn));
-    }
-    PQclear(res);
-
-    // Delete master lists (parameterized query)
-    const char* deleteMls = "DELETE FROM master_list WHERE upload_id = $1";
-    res = PQexecParams(conn, deleteMls, 1, nullptr, paramValues,
-                       nullptr, nullptr, 0);
     int mlsDeleted = 0;
-    if (PQresultStatus(res) == PGRES_COMMAND_OK) {
-        mlsDeleted = atoi(PQcmdTuples(res));
-    } else {
-        spdlog::error("Failed to delete master lists: {}", PQerrorMessage(conn));
-    }
-    PQclear(res);
 
-    // Delete upload record (parameterized query)
-    const char* deleteUpload = "DELETE FROM uploaded_file WHERE id = $1";
-    res = PQexecParams(conn, deleteUpload, 1, nullptr, paramValues,
-                       nullptr, nullptr, 0);
-    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
-        spdlog::error("Failed to delete upload record: {}", PQerrorMessage(conn));
+    try {
+        if (queryExecutor) {
+            // Delete certificates
+            certsDeleted = queryExecutor->executeCommand(
+                "DELETE FROM certificate WHERE upload_id = $1", {uploadId});
+
+            // Delete CRLs
+            crlsDeleted = queryExecutor->executeCommand(
+                "DELETE FROM crl WHERE upload_id = $1", {uploadId});
+
+            // Delete master lists
+            mlsDeleted = queryExecutor->executeCommand(
+                "DELETE FROM master_list WHERE upload_id = $1", {uploadId});
+
+            // Delete upload record
+            queryExecutor->executeCommand(
+                "DELETE FROM uploaded_file WHERE id = $1", {uploadId});
+        } else {
+            spdlog::error("queryExecutor is null, cannot cleanup upload");
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to cleanup upload {}: {}", uploadId, e.what());
     }
-    PQclear(res);
 
     // Delete temp files
     ManualProcessingStrategy strategy;
