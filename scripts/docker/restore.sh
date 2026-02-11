@@ -1,9 +1,13 @@
 #!/bin/bash
 # docker-restore.sh - 데이터 복구 스크립트
-# Updated: 2026-01-02 - Updated paths for bind mount structure
+# Updated: 2026-02-11 - Fixed LDAP password to read from .env
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
+
+# Load LDAP password from .env
+LDAP_BIND_PW="$(grep -E '^LDAP_ADMIN_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
+LDAP_BIND_PW="${LDAP_BIND_PW:-ldap_test_password_123}"
 
 BACKUP_DIR=${1:-}
 
@@ -47,7 +51,7 @@ if [ -f "$BACKUP_DIR/ldap_backup.ldif" ]; then
     echo "📦 OpenLDAP 복구 중..."
     docker exec -i icao-local-pkd-openldap1 ldapadd -x \
         -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-        -w admin \
+        -w "$LDAP_BIND_PW" \
         -H ldap://localhost \
         -c < $BACKUP_DIR/ldap_backup.ldif 2>/dev/null || true
     echo "  ✅ OpenLDAP 복구 완료 (MMR 통해 자동 복제됨)"

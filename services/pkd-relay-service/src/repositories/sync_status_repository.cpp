@@ -42,8 +42,8 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
         std::string generatedId;
 
         if (dbType == "postgres") {
-            // PostgreSQL uses UUID
-            idQuery = "SELECT gen_random_uuid()::text as id";
+            // PostgreSQL uses INTEGER with sequence
+            idQuery = "SELECT nextval('sync_status_id_seq')::text as id";
             Json::Value result = queryExecutor_->executeQuery(idQuery, {});
             if (result.empty()) {
                 spdlog::error("[SyncStatusRepository] Failed to generate UUID");

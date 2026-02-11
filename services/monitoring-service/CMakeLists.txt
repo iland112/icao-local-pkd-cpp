@@ -11,9 +11,10 @@ find_package(spdlog CONFIG REQUIRED)
 find_package(jsoncpp CONFIG REQUIRED)
 find_package(CURL REQUIRED)
 
-# PostgreSQL - use system package
+# PostgreSQL - use system or vcpkg package
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBPQ REQUIRED libpq)
+link_directories(${LIBPQ_LIBRARY_DIRS})
 
 # Source files
 set(SOURCES

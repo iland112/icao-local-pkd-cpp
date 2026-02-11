@@ -1,93 +1,17 @@
 # =============================================================================
 # PA Service Dockerfile
-# Multi-stage build for optimized production image with aggressive caching
+# Uses shared icao-vcpkg-base image for pre-built vcpkg dependencies
 # Supports: linux/amd64, linux/arm64
 # =============================================================================
 
-# Stage 1: vcpkg Base (rarely changes - heavily cached)
-FROM debian:bookworm AS vcpkg-base
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    curl \
-    wget \
-    zip \
-    unzip \
-    tar \
-    pkg-config \
-    ninja-build \
-    libssl-dev \
-    libpq-dev \
-    libldap2-dev \
-    uuid-dev \
-    libjsoncpp-dev \
-    libc-ares-dev \
-    libbrotli-dev \
-    zlib1g-dev \
-    bison \
-    flex \
-    autoconf \
-    ca-certificates \
-    libaio1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Oracle Instant Client (Phase 4.4: for Oracle database support)
-# Version: 21.13 (compatible with Oracle 11g, 12c, 18c, 19c, 21c)
-RUN mkdir -p /opt/oracle && cd /opt/oracle && \
-    # Download Oracle Instant Client Basic and SDK
-    wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
-    wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
-    # Extract files
-    unzip -q instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
-    unzip -q instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
-    # Cleanup zip files
-    rm -f *.zip && \
-    # Create symbolic links for compatibility
-    cd instantclient_21_13 && \
-    ln -sf libclntsh.so.21.1 libclntsh.so && \
-    ln -sf libocci.so.21.1 libocci.so && \
-    echo "Oracle Instant Client installed successfully"
-
-# Set Oracle environment variables (Phase 4.4)
-ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
-ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
-ENV PATH=$ORACLE_HOME:$PATH
-
-WORKDIR /opt
-RUN git clone https://github.com/microsoft/vcpkg.git \
-    && cd vcpkg \
-    && git checkout 2023.12.12 \
-    && ./bootstrap-vcpkg.sh
-
-ENV VCPKG_ROOT=/opt/vcpkg
-ENV PATH="${VCPKG_ROOT}:${PATH}"
-
-# Stage 2: vcpkg Dependencies (changes only when vcpkg.json changes)
-FROM vcpkg-base AS vcpkg-deps
+# Stage 1: Application Build
+FROM icao-vcpkg-base:latest AS builder
 
 WORKDIR /app
-COPY services/pa-service/vcpkg.json ./
-
-# Copy host vcpkg binary cache to avoid re-downloading/building (optional - only exists in local builds)
-# Note: .vcpkg-cache is in .gitignore and won't be available in CI/CD builds
-# GitHub Actions uses GitHub cache instead (see build-arm64.yml cache-from/cache-to)
-# Uncomment for local builds if .vcpkg-cache exists:
-# COPY .vcpkg-cache/ /root/.cache/vcpkg/archives/
-
-RUN ARCH=$(uname -m) && \
-    if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
-    vcpkg install --triplet $TRIPLET
-
-# Stage 3: Application Build (changes frequently)
-FROM vcpkg-deps AS builder
 
 COPY services/pa-service/CMakeLists.txt ./
 
-# Copy shared library (Phase 5: common-lib)
+# Copy shared library (common-lib)
 COPY services/common-lib/ ../common-lib/
 
 COPY shared/ ./shared/
@@ -113,13 +37,10 @@ RUN if [ "$RUN_TESTS" = "true" ]; then \
         && cd build-test && ctest --output-on-failure; \
     fi
 
-# Stage 4: Runtime
+# Stage 2: Runtime
 FROM debian:bookworm-slim AS runtime
 
-# ARG to force cache invalidation (must be re-declared in each stage)
 ARG CACHE_BUST=unknown
-RUN echo "=== Runtime Cache Bust Token: $CACHE_BUST ===" && \
-    echo "This ensures fresh binary copy from builder"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Seoul
@@ -140,8 +61,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libaio1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Oracle Instant Client from builder (Phase 4.4: Oracle support)
-COPY --from=vcpkg-base /opt/oracle/instantclient_21_13 /opt/oracle/instantclient_21_13
+# Copy Oracle Instant Client from builder
+COPY --from=builder /opt/oracle/instantclient_21_13 /opt/oracle/instantclient_21_13
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
 ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
 ENV PATH=$ORACLE_HOME:$PATH
@@ -153,7 +74,7 @@ RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
 
 COPY --from=builder /app/build/bin/pa-service /app/
 
-# Phase 5: Copy shared library (common-lib)
+# Copy shared library (common-lib)
 COPY --from=builder /app/build/lib/libicao-common.so* /usr/local/lib/
 RUN ldconfig
 
@@ -161,8 +82,8 @@ COPY shared/static/swagger-ui/ /app/static/swagger-ui/
 
 WORKDIR /app
 
-ENV PA Service=PA Service
-ENV 8082=8082
+ENV SERVICE_NAME=pa-service
+ENV SERVER_PORT=8082
 ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_NAME=localpkd

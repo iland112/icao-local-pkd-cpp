@@ -11,6 +11,18 @@
 
 services:
   # ---------------------------------------------------------------------------
+  # Shared vcpkg Base Image (build once, reused by all C++ services)
+  # Usage: docker compose build vcpkg-base  (first, then build services)
+  # ---------------------------------------------------------------------------
+  vcpkg-base:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vcpkg-base
+    image: icao-vcpkg-base:latest
+    profiles:
+      - build-only  # Never runs as a container, only builds the image
+
+  # ---------------------------------------------------------------------------
   # API Gateway (Nginx - Unified API Entry Point)
   # ---------------------------------------------------------------------------
   api-gateway:
@@ -187,7 +199,6 @@ services:
   # - DB-LDAP Sync Monitoring
   # ---------------------------------------------------------------------------
   pkd-relay:
-    image: icao-pkd-relay:v2.0.5
     build:
       context: ..
       dockerfile: services/pkd-relay-service/Dockerfile
@@ -448,9 +459,6 @@ services:
   # OpenLDAP Node 2 (MMR Master - Shared)
   # ---------------------------------------------------------------------------
   openldap2:
-    build:
-      context: ../openldap
-      dockerfile: Dockerfile
     image: icao-local-pkd-openldap:1.5.0
     container_name: icao-local-pkd-openldap2
     hostname: openldap2
@@ -505,7 +513,7 @@ services:
         echo "Setting up MMR on openldap1 (Server ID: 1)..."
 
         # Load syncprov module
-        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: cn=module{0},cn=config
         changetype: modify
         add: olcModuleLoad
@@ -513,7 +521,7 @@ services:
         EOF
 
         # Create syncprov overlay
-        ldapadd -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapadd -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: olcOverlay=syncprov,olcDatabase={1}mdb,cn=config
         objectClass: olcOverlayConfig
         objectClass: olcSyncProvConfig
@@ -522,7 +530,7 @@ services:
         EOF
 
         # Set server ID
-        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: cn=config
         changetype: modify
         add: olcServerID
@@ -530,12 +538,12 @@ services:
         EOF
 
         # Configure MMR replication
-        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: olcDatabase={1}mdb,cn=config
         changetype: modify
         add: olcSyncRepl
-        olcSyncRepl: {0}rid=001 provider=ldap://openldap1:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
-        olcSyncRepl: {1}rid=002 provider=ldap://openldap2:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        olcSyncRepl: {0}rid=001 provider=ldap://openldap1:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=$$LDAP_ADMIN_PASSWORD searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        olcSyncRepl: {1}rid=002 provider=ldap://openldap2:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=$$LDAP_ADMIN_PASSWORD searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
         -
         add: olcMirrorMode
         olcMirrorMode: TRUE
@@ -570,7 +578,7 @@ services:
         echo "Setting up MMR on openldap2 (Server ID: 2)..."
 
         # Load syncprov module
-        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: cn=module{0},cn=config
         changetype: modify
         add: olcModuleLoad
@@ -578,7 +586,7 @@ services:
         EOF
 
         # Create syncprov overlay
-        ldapadd -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapadd -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: olcOverlay=syncprov,olcDatabase={1}mdb,cn=config
         objectClass: olcOverlayConfig
         objectClass: olcSyncProvConfig
@@ -587,7 +595,7 @@ services:
         EOF
 
         # Set server ID
-        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: cn=config
         changetype: modify
         add: olcServerID
@@ -595,12 +603,12 @@ services:
         EOF
 
         # Configure MMR replication
-        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w config 2>/dev/null <<EOF || true
+        ldapmodify -x -H $$LDAP_URI -D "cn=admin,cn=config" -w "$$LDAP_CONFIG_PASSWORD" 2>/dev/null <<EOF || true
         dn: olcDatabase={1}mdb,cn=config
         changetype: modify
         add: olcSyncRepl
-        olcSyncRepl: {0}rid=001 provider=ldap://openldap1:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
-        olcSyncRepl: {1}rid=002 provider=ldap://openldap2:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=admin searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        olcSyncRepl: {0}rid=001 provider=ldap://openldap1:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=$$LDAP_ADMIN_PASSWORD searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
+        olcSyncRepl: {1}rid=002 provider=ldap://openldap2:389 binddn="cn=admin,dc=ldap,dc=smartcoreinc,dc=com" bindmethod=simple credentials=$$LDAP_ADMIN_PASSWORD searchbase="dc=ldap,dc=smartcoreinc,dc=com" scope=sub schemachecking=on type=refreshAndPersist retry="30 5 300 3" timeout=1
         -
         add: olcMirrorMode
         olcMirrorMode: TRUE

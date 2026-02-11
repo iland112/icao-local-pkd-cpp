@@ -25,8 +25,10 @@ Json::Value SyncService::getCurrentStatus() {
         auto syncStatus = syncStatusRepo_->findLatest();
 
         if (!syncStatus.has_value()) {
-            response["success"] = false;
+            response["success"] = true;
+            response["initialized"] = false;
             response["message"] = "No sync status found. Run sync check first.";
+            response["data"] = Json::nullValue;
             return response;
         }
 
@@ -174,8 +176,10 @@ Json::Value SyncService::getSyncStatistics() {
         auto latestSync = syncStatusRepo_->findLatest();
 
         if (!latestSync.has_value()) {
-            response["success"] = false;
+            response["success"] = true;
+            response["initialized"] = false;
             response["message"] = "No sync data available";
+            response["data"] = Json::nullValue;
             return response;
         }
 

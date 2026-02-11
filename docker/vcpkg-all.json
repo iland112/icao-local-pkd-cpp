@@ -1,0 +1,20 @@
+{
+  "name": "icao-vcpkg-all",
+  "version": "1.0.0",
+  "description": "Union of all vcpkg dependencies across all ICAO Local PKD services",
+  "dependencies": [
+    "drogon",
+    "openssl",
+    "libpq",
+    "nlohmann-json",
+    {
+      "name": "spdlog",
+      "features": ["fmt"]
+    },
+    "libzip",
+    "catch2",
+    "gtest",
+    "jsoncpp",
+    "curl"
+  ]
+}

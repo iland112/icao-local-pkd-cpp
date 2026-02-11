@@ -1,0 +1,77 @@
+# =============================================================================
+# ICAO Local PKD - Shared vcpkg Base Image
+# Pre-builds ALL vcpkg dependencies used across all services
+# Build once, reuse for pkd-management, pa-service, pkd-relay, monitoring
+# Supports: linux/amd64, linux/arm64
+# =============================================================================
+
+FROM debian:bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies (union of all services)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    curl \
+    wget \
+    zip \
+    unzip \
+    tar \
+    pkg-config \
+    ninja-build \
+    libssl-dev \
+    libpq-dev \
+    libldap2-dev \
+    uuid-dev \
+    libjsoncpp-dev \
+    libc-ares-dev \
+    libbrotli-dev \
+    zlib1g-dev \
+    bison \
+    flex \
+    autoconf \
+    ca-certificates \
+    libaio1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Oracle Instant Client 21.13 (for Oracle database support)
+# Compatible with Oracle 11g, 12c, 18c, 19c, 21c
+RUN mkdir -p /opt/oracle && cd /opt/oracle && \
+    wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
+    wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
+    unzip -q instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
+    unzip -q instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
+    rm -f *.zip && \
+    cd instantclient_21_13 && \
+    ln -sf libclntsh.so.21.1 libclntsh.so && \
+    ln -sf libocci.so.21.1 libocci.so && \
+    echo "Oracle Instant Client installed successfully"
+
+# Set Oracle environment variables
+ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
+ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
+ENV PATH=$ORACLE_HOME:$PATH
+
+# Install vcpkg
+WORKDIR /opt
+RUN git clone https://github.com/microsoft/vcpkg.git \
+    && cd vcpkg \
+    && ./bootstrap-vcpkg.sh
+
+ENV VCPKG_ROOT=/opt/vcpkg
+ENV PATH="${VCPKG_ROOT}:${PATH}"
+
+# Install ALL vcpkg dependencies (union of all services)
+WORKDIR /app
+COPY docker/vcpkg-all.json ./vcpkg.json
+
+RUN ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then TRIPLET="x64-linux"; else TRIPLET="arm64-linux"; fi && \
+    for i in 1 2 3; do \
+        echo "=== vcpkg install attempt $i ===" && \
+        vcpkg install --triplet $TRIPLET && break || \
+        echo "=== Attempt $i failed, retrying... ===" && sleep 5; \
+    done && \
+    echo "=== All vcpkg dependencies installed successfully ==="

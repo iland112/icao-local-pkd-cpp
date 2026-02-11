@@ -119,7 +119,7 @@ fi
 
 echo ""
 echo "📌 접속 정보:"
-echo "   - PostgreSQL:    localhost:5432 (pkd/pkd)"
+echo "   - PostgreSQL:    localhost:15432 (pkd/pkd)"
 if [ -z "$SKIP_LDAP" ]; then
     echo "   - OpenLDAP 1:    ldap://localhost:3891 (직접 연결)"
     echo "   - OpenLDAP 2:    ldap://localhost:3892 (직접 연결)"
@@ -127,9 +127,8 @@ if [ -z "$SKIP_LDAP" ]; then
 fi
 if [ -z "$SKIP_APP" ]; then
     echo "   - Frontend:      http://localhost:3000"
-    echo "   - PKD Management: http://localhost:8081/api"
-    echo "   - PA Service:    http://localhost:8082/api (via nginx proxy)"
-    echo "   - Sync Service:  http://localhost:8083/api/sync (via nginx proxy)"
+    echo "   - API Gateway:   http://localhost:8080/api"
+    echo "   - Swagger UI:    http://localhost:8090"
 fi
 echo ""
 echo "🔍 로그 확인: ./docker-logs.sh [서비스명]"

@@ -1,9 +1,17 @@
 #!/bin/bash
 # docker-health.sh - 헬스 체크 스크립트
-# Updated: 2026-01-03 - Added Sync Service health check
+# Updated: 2026-02-11 - Fixed container names, LDAP passwords, port references
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
+
+# Load LDAP password from .env
+LDAP_BIND_DN="cn=admin,dc=ldap,dc=smartcoreinc,dc=com"
+LDAP_BIND_PW="$(grep -E '^LDAP_ADMIN_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
+LDAP_BIND_PW="${LDAP_BIND_PW:-ldap_test_password_123}"
+
+LDAP_CONFIG_PW="$(grep -E '^LDAP_CONFIG_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
+LDAP_CONFIG_PW="${LDAP_CONFIG_PW:-config_test_123}"
 
 echo "🏥 컨테이너 헬스 체크..."
 echo ""
@@ -25,9 +33,6 @@ LDAP1_OK=false
 LDAP2_OK=false
 LDAP1_COUNT=0
 LDAP2_COUNT=0
-
-LDAP_BIND_DN="cn=admin,dc=ldap,dc=smartcoreinc,dc=com"
-LDAP_BIND_PW="admin"
 
 if docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
     LDAP1_RESULT=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost \
@@ -63,7 +68,7 @@ if [ "$LDAP1_OK" = true ] && [ "$LDAP2_OK" = true ]; then
 
     # MMR 설정 확인
     MMR_CONFIG=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost \
-        -D "cn=admin,cn=config" -w config \
+        -D "cn=admin,cn=config" -w "$LDAP_CONFIG_PW" \
         -b "olcDatabase={1}mdb,cn=config" "(objectClass=*)" olcMirrorMode 2>/dev/null | grep "olcMirrorMode" || echo "")
     if [ -n "$MMR_CONFIG" ]; then
         echo "  ✅ MMR 설정 활성화됨"
@@ -74,17 +79,21 @@ else
     echo "  ❌ OpenLDAP 노드 확인 필요"
 fi
 
-# HAProxy removed - using direct OpenLDAP connections (v2.0.1+)
-
-# PKD Management API 체크
+# PKD Management API 체크 (via API Gateway)
 echo ""
 echo "🔧 PKD Management Service:"
-if curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
-    HEALTH=$(curl -s http://localhost:8081/api/health 2>/dev/null)
-    echo "  ✅ 정상"
+if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then
+    HEALTH=$(curl -s http://localhost:8080/api/health 2>/dev/null)
+    echo "  ✅ 정상 (via API Gateway :8080)"
     echo "     $HEALTH"
 else
-    echo "  ❌ 오류 (not responding)"
+    if docker exec icao-local-pkd-management curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
+        HEALTH=$(docker exec icao-local-pkd-management curl -s http://localhost:8081/api/health 2>/dev/null)
+        echo "  ✅ 정상 (내부 포트 8081, API Gateway 미실행)"
+        echo "     $HEALTH"
+    else
+        echo "  ❌ 오류 (not responding)"
+    fi
 fi
 
 # PA Service API 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
@@ -98,20 +107,29 @@ else
     echo "  ❌ 오류 (not responding)"
 fi
 
-# Sync Service API 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
+# PKD Relay Service 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
 echo ""
-echo "🔄 Sync Service:"
-if docker exec icao-local-pkd-sync-service curl -sf http://localhost:8083/api/sync/health > /dev/null 2>&1; then
-    HEALTH=$(docker exec icao-local-pkd-sync-service curl -s http://localhost:8083/api/sync/health 2>/dev/null)
+echo "🔄 PKD Relay Service:"
+if docker exec icao-local-pkd-relay curl -sf http://localhost:8083/api/sync/health > /dev/null 2>&1; then
+    HEALTH=$(docker exec icao-local-pkd-relay curl -s http://localhost:8083/api/sync/health 2>/dev/null)
     echo "  ✅ 정상 (내부 포트 8083)"
     echo "     $HEALTH"
 else
     echo "  ❌ 오류 (not responding)"
 fi
 
+# API Gateway 체크
+echo ""
+echo "🌐 API Gateway:"
+if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+    echo "  ✅ 정상 (http://localhost:8080)"
+else
+    echo "  ❌ 오류 (not responding)"
+fi
+
 # Frontend 체크
 echo ""
-echo "🌐 Frontend:"
+echo "🖥️  Frontend:"
 if curl -sf http://localhost:3000 > /dev/null 2>&1; then
     echo "  ✅ 정상 (http://localhost:3000)"
 else
@@ -126,7 +144,7 @@ docker compose -f docker/docker-compose.yaml ps
 # 리소스 사용량
 echo ""
 echo "💻 리소스 사용량:"
-docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" $(docker compose -f docker/docker-compose.yaml ps -q) 2>/dev/null || echo "  ⚠️  컨테이너가 실행 중이지 않습니다"
+docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" $(docker compose -f docker/docker-compose.yaml ps -q 2>/dev/null) 2>/dev/null || echo "  ⚠️  컨테이너가 실행 중이지 않습니다"
 
 echo ""
 echo "✅ 헬스 체크 완료!"

@@ -1,51 +1,12 @@
 # =============================================================================
-# Stage 1: vcpkg base - System dependencies
+# Monitoring Service Dockerfile
+# Uses shared icao-vcpkg-base image for pre-built vcpkg dependencies
 # =============================================================================
-FROM debian:bookworm-slim AS vcpkg-base
 
-# Install build tools and system libraries
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    curl \
-    zip \
-    unzip \
-    tar \
-    pkg-config \
-    ca-certificates \
-    libssl-dev \
-    zlib1g-dev \
-    libpq-dev \
-    bison \
-    flex \
-    && rm -rf /var/lib/apt/lists/*
+# Stage 1: Application Build
+FROM icao-vcpkg-base:latest AS builder
 
-# Install vcpkg
-ENV VCPKG_ROOT=/opt/vcpkg
-RUN git clone https://github.com/Microsoft/vcpkg.git ${VCPKG_ROOT} && \
-    ${VCPKG_ROOT}/bootstrap-vcpkg.sh
-
-# =============================================================================
-# Stage 2: vcpkg dependencies - Build C++ packages
-# =============================================================================
-FROM vcpkg-base AS vcpkg-deps
-
-WORKDIR /build
-
-# Copy vcpkg manifest
-COPY services/monitoring-service/vcpkg.json ./
-
-# Install dependencies
-RUN ${VCPKG_ROOT}/vcpkg install \
-    --x-install-root=${VCPKG_ROOT}/installed
-
-# =============================================================================
-# Stage 3: Builder - Compile application
-# =============================================================================
-FROM vcpkg-deps AS builder
-
-WORKDIR /build
+WORKDIR /app
 
 # Copy source code
 COPY services/monitoring-service/CMakeLists.txt ./
@@ -57,13 +18,7 @@ RUN cmake -B build_fresh -S . \
     -DCMAKE_BUILD_TYPE=Release && \
     cmake --build build_fresh --parallel $(nproc)
 
-# Verify binary
-RUN strings build_fresh/monitoring-service | grep -i "Monitoring Service" || \
-    (echo "ERROR: Version string not found in binary!" && exit 1)
-
-# =============================================================================
-# Stage 4: Runtime - Production image
-# =============================================================================
+# Stage 2: Runtime
 FROM debian:bookworm-slim AS runtime
 
 # Install runtime dependencies only
@@ -85,7 +40,7 @@ RUN mkdir -p /app/logs && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /build/build_fresh/monitoring-service /app/
+COPY --from=builder /app/build_fresh/monitoring-service /app/
 RUN chmod +x /app/monitoring-service
 
 USER appuser

@@ -1,9 +1,13 @@
 #!/bin/bash
 # docker-backup.sh - 데이터 백업 스크립트
-# Updated: 2026-01-02 - Updated paths for bind mount structure
+# Updated: 2026-02-11 - Fixed LDAP password to read from .env
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
+
+# Load LDAP password from .env
+LDAP_BIND_PW="$(grep -E '^LDAP_ADMIN_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
+LDAP_BIND_PW="${LDAP_BIND_PW:-ldap_test_password_123}"
 
 BACKUP_DIR="./backups/$(date +%Y%m%d_%H%M%S)"
 
@@ -26,7 +30,7 @@ echo "📦 OpenLDAP 백업 중..."
 if docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
     docker exec icao-local-pkd-openldap1 ldapsearch -x \
         -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-        -w admin \
+        -w "$LDAP_BIND_PW" \
         -H ldap://localhost \
         -b "dc=ldap,dc=smartcoreinc,dc=com" \
         -LLL > $BACKUP_DIR/ldap_backup.ldif 2>/dev/null
