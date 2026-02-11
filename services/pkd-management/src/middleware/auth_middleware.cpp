@@ -53,6 +53,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/icao/status$",          // ICAO version status comparison
     "^/api/icao/latest$",          // Latest ICAO version information
     "^/api/icao/history.*",        // Version check history
+    "^/api/icao/check-updates$",   // Trigger ICAO version check
 
     // ========================================================================
     // Sync Dashboard (Read-only monitoring)
