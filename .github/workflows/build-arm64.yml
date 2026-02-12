@@ -1,4 +1,6 @@
-# ARM64 Docker Images Build Pipeline (Parallel Jobs with Change Detection)
+# ARM64 Docker Images Build Pipeline
+# Builds PostgreSQL-only ARM64 images for Luckfox deployment
+# vcpkg-base → GHCR → Service builds → Artifacts
 name: Build ARM64 Docker Images
 
 on:
@@ -18,17 +20,21 @@ on:
     branches:
       - main
       - feature/arm64-support
-      - feature/openapi-support
     paths:
       - 'services/**'
       - 'shared/**'
       - 'frontend/**'
       - 'nginx/**'
+      - 'docker/Dockerfile.vcpkg-base-arm64'
+      - 'docker/vcpkg-all.json'
       - '.github/workflows/build-arm64.yml'
+
+env:
+  GHCR_BASE_IMAGE: ghcr.io/iland112/icao-vcpkg-base:arm64
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Detect Changes (runs first to determine which services need building)
+  # Detect Changes
   # ---------------------------------------------------------------------------
   detect-changes:
     runs-on: ubuntu-latest
@@ -37,6 +43,7 @@ jobs:
       pa-service: ${{ steps.filter.outputs.pa-service }}
       pkd-relay: ${{ steps.filter.outputs.pkd-relay }}
       frontend: ${{ steps.filter.outputs.frontend }}
+      vcpkg-base: ${{ steps.filter.outputs.vcpkg-base }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,15 +52,20 @@ jobs:
         uses: dorny/paths-filter@v3
         id: filter
         with:
-          # Compare with previous commit (HEAD^) instead of base branch
           base: ${{ github.event.before }}
           filters: |
+            vcpkg-base:
+              - 'docker/Dockerfile.vcpkg-base-arm64'
+              - 'docker/vcpkg-all.json'
+              - '.github/workflows/build-arm64.yml'
             pkd-management:
               - 'services/pkd-management/**'
+              - 'services/common-lib/**'
               - 'shared/**'
               - '.github/workflows/build-arm64.yml'
             pa-service:
               - 'services/pa-service/**'
+              - 'services/common-lib/**'
               - 'shared/**'
               - '.github/workflows/build-arm64.yml'
             pkd-relay:
@@ -64,12 +76,66 @@ jobs:
               - 'frontend/**'
               - 'nginx/**'
               - '.github/workflows/build-arm64.yml'
+
+  # ---------------------------------------------------------------------------
+  # Build vcpkg-base and push to GHCR (shared by all C++ services)
+  # ---------------------------------------------------------------------------
+  build-vcpkg-base:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.vcpkg-base == 'true' ||
+      needs.detect-changes.outputs.pkd-management == 'true' ||
+      needs.detect-changes.outputs.pa-service == 'true' ||
+      needs.detect-changes.outputs.pkd-relay == 'true' ||
+      github.event.inputs.force_build_all == 'true' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    permissions:
+      packages: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push vcpkg-base
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.vcpkg-base-arm64
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.GHCR_BASE_IMAGE }}
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
+          cache-from: type=gha,scope=vcpkg-base-arm64
+          cache-to: type=gha,mode=max,scope=vcpkg-base-arm64
+
   # ---------------------------------------------------------------------------
   # PKD Management Service
   # ---------------------------------------------------------------------------
   build-pkd-management:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.pkd-management == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
+    needs: [detect-changes, build-vcpkg-base]
+    if: >-
+      always() && needs.build-vcpkg-base.result != 'failure' &&
+      (needs.detect-changes.outputs.pkd-management == 'true' ||
+       github.event.inputs.force_build_all == 'true' ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -84,9 +150,13 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
         with:
-          driver-opts: |
-            image=moby/buildkit:latest
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and export PKD Management Service
         uses: docker/build-push-action@v5
@@ -98,15 +168,12 @@ jobs:
           outputs: type=oci,dest=pkd-management-arm64.tar
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
+            BASE_IMAGE=${{ env.GHCR_BASE_IMAGE }}
+            ENABLE_ORACLE=OFF
             CACHE_BUST=${{ github.sha }}
-            BUILDKIT_INLINE_CACHE=1
           cache-from: |
-            type=gha,scope=pkd-mgmt-vcpkg-base
-            type=gha,scope=pkd-mgmt-vcpkg-deps
             type=gha,scope=pkd-mgmt-builder
           cache-to: |
-            type=gha,mode=max,scope=pkd-mgmt-vcpkg-base
-            type=gha,mode=max,scope=pkd-mgmt-vcpkg-deps
             type=gha,mode=max,scope=pkd-mgmt-builder
 
       - name: Compress Image
@@ -123,8 +190,12 @@ jobs:
   # PA Service
   # ---------------------------------------------------------------------------
   build-pa-service:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.pa-service == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
+    needs: [detect-changes, build-vcpkg-base]
+    if: >-
+      always() && needs.build-vcpkg-base.result != 'failure' &&
+      (needs.detect-changes.outputs.pa-service == 'true' ||
+       github.event.inputs.force_build_all == 'true' ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -140,6 +211,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and export PA Service
         uses: docker/build-push-action@v5
         with:
@@ -150,14 +228,13 @@ jobs:
           outputs: type=oci,dest=pkd-pa-arm64.tar
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
+            BASE_IMAGE=${{ env.GHCR_BASE_IMAGE }}
+            ENABLE_ORACLE=OFF
             CACHE_BUST=${{ github.sha }}
-            BUILDKIT_INLINE_CACHE=1
           cache-from: |
-            type=gha,scope=pa-svc-vcpkg-base
-            type=gha,scope=pa-svc-vcpkg-deps
+            type=gha,scope=pa-svc-builder
           cache-to: |
-            type=gha,mode=max,scope=pa-svc-vcpkg-base
-            type=gha,mode=max,scope=pa-svc-vcpkg-deps
+            type=gha,mode=max,scope=pa-svc-builder
 
       - name: Compress Image
         run: gzip pkd-pa-arm64.tar
@@ -170,11 +247,15 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
-  # PKD Relay Service (formerly Sync Service)
+  # PKD Relay Service
   # ---------------------------------------------------------------------------
   build-pkd-relay:
-    needs: detect-changes
-    if: needs.detect-changes.outputs.pkd-relay == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
+    needs: [detect-changes, build-vcpkg-base]
+    if: >-
+      always() && needs.build-vcpkg-base.result != 'failure' &&
+      (needs.detect-changes.outputs.pkd-relay == 'true' ||
+       github.event.inputs.force_build_all == 'true' ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false'))
     runs-on: ubuntu-latest
     timeout-minutes: 180
 
@@ -190,6 +271,13 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and export PKD Relay Service
         uses: docker/build-push-action@v5
         with:
@@ -200,14 +288,13 @@ jobs:
           outputs: type=oci,dest=pkd-relay-arm64.tar
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
+            BASE_IMAGE=${{ env.GHCR_BASE_IMAGE }}
+            ENABLE_ORACLE=OFF
             CACHE_BUST=${{ github.sha }}
-            BUILDKIT_INLINE_CACHE=1
           cache-from: |
-            type=gha,scope=pkd-relay-vcpkg-base
-            type=gha,scope=pkd-relay-vcpkg-deps
+            type=gha,scope=pkd-relay-builder
           cache-to: |
-            type=gha,mode=max,scope=pkd-relay-vcpkg-base
-            type=gha,mode=max,scope=pkd-relay-vcpkg-deps
+            type=gha,mode=max,scope=pkd-relay-builder
 
       - name: Compress Image
         run: gzip pkd-relay-arm64.tar
@@ -224,7 +311,10 @@ jobs:
   # ---------------------------------------------------------------------------
   build-frontend:
     needs: detect-changes
-    if: needs.detect-changes.outputs.frontend == 'true' || github.event.inputs.force_build_all == 'true' || (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
+    if: >-
+      needs.detect-changes.outputs.frontend == 'true' ||
+      github.event.inputs.force_build_all == 'true' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -263,12 +353,18 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
-  # Combine all artifacts (optional - runs after all builds complete)
+  # Combine all artifacts
   # ---------------------------------------------------------------------------
   combine-artifacts:
     runs-on: ubuntu-latest
     needs: [detect-changes, build-pkd-management, build-pa-service, build-pkd-relay, build-frontend]
-    if: always() && (needs.build-pkd-management.result == 'success' || needs.build-pa-service.result == 'success' || needs.build-pkd-relay.result == 'success' || needs.build-frontend.result == 'success')
+    if: >-
+      always() && (
+        needs.build-pkd-management.result == 'success' ||
+        needs.build-pa-service.result == 'success' ||
+        needs.build-pkd-relay.result == 'success' ||
+        needs.build-frontend.result == 'success'
+      )
 
     steps:
       - name: Download all artifacts
@@ -287,4 +383,3 @@ jobs:
           name: arm64-docker-images-all
           path: artifacts/**/*.tar.gz
           retention-days: 30
-# Force rebuild - Phase 1 Security Hardening v1.8.0

@@ -17,13 +17,23 @@ find_package(spdlog CONFIG REQUIRED)
 # Find jsoncpp (for Query Executor)
 find_package(jsoncpp CONFIG REQUIRED)
 
+# Oracle support (can be disabled for postgres-only builds, e.g., ARM64 luckfox)
+option(ENABLE_ORACLE "Enable Oracle database support" ON)
+
+# Conditionally include Oracle source files
+if(ENABLE_ORACLE)
+    set(ORACLE_SOURCES oracle_connection_pool.cpp oracle_query_executor.cpp)
+else()
+    set(ORACLE_SOURCES)
+    message(STATUS "Oracle database support DISABLED (postgres-only build)")
+endif()
+
 # Library target (compiled library, not header-only)
 add_library(icao-database STATIC
     db_connection_pool.cpp
     db_connection_pool_factory.cpp
-    oracle_connection_pool.cpp
+    ${ORACLE_SOURCES}
     postgresql_query_executor.cpp
-    oracle_query_executor.cpp
     query_executor_factory.cpp
 )
 
@@ -35,8 +45,7 @@ target_include_directories(icao-database PUBLIC
 )
 
 # Oracle SDK include path (PRIVATE to avoid conflicts with OpenLDAP)
-# Only oracle_connection_pool.cpp needs Oracle OCI headers
-if(DEFINED ENV{ORACLE_HOME})
+if(ENABLE_ORACLE AND DEFINED ENV{ORACLE_HOME})
     target_include_directories(icao-database PRIVATE
         $ENV{ORACLE_HOME}/sdk/include
     )
@@ -46,6 +55,7 @@ if(DEFINED ENV{ORACLE_HOME})
         $ENV{ORACLE_HOME}
     )
     target_link_libraries(icao-database PUBLIC clntsh)
+    target_compile_definitions(icao-database PUBLIC ENABLE_ORACLE=1)
 endif()
 
 # Link dependencies
@@ -70,16 +80,17 @@ install(TARGETS icao-database
     INCLUDES DESTINATION include
 )
 
-install(FILES
+set(DATABASE_HEADERS
     db_connection_interface.h
     db_connection_pool.h
     db_connection_pool_factory.h
-    oracle_connection_pool.h
     i_query_executor.h
     postgresql_query_executor.h
-    oracle_query_executor.h
-    DESTINATION include/icao/database
 )
+if(ENABLE_ORACLE)
+    list(APPEND DATABASE_HEADERS oracle_connection_pool.h oracle_query_executor.h)
+endif()
+install(FILES ${DATABASE_HEADERS} DESTINATION include/icao/database)
 
 install(EXPORT icao-database-targets
     FILE icao-database-targets.cmake

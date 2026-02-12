@@ -1,9 +1,11 @@
 #include "i_query_executor.h"
 #include "postgresql_query_executor.h"
-#include "oracle_query_executor.h"
 #include "db_connection_interface.h"
 #include "db_connection_pool.h"
+#ifdef ENABLE_ORACLE
+#include "oracle_query_executor.h"
 #include "oracle_connection_pool.h"
+#endif
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -36,6 +38,7 @@ std::unique_ptr<IQueryExecutor> createQueryExecutor(IDbConnectionPool* pool)
         }
         return std::make_unique<PostgreSQLQueryExecutor>(pgPool);
     }
+#ifdef ENABLE_ORACLE
     else if (dbType == "oracle") {
         // Downcast to Oracle pool
         auto oraclePool = dynamic_cast<OracleConnectionPool*>(pool);
@@ -44,6 +47,7 @@ std::unique_ptr<IQueryExecutor> createQueryExecutor(IDbConnectionPool* pool)
         }
         return std::make_unique<OracleQueryExecutor>(oraclePool);
     }
+#endif
     else {
         throw std::runtime_error("createQueryExecutor: Unsupported database type: " + dbType);
     }

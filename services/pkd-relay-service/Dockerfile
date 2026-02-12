@@ -5,18 +5,24 @@
 # =============================================================================
 
 # Stage 1: Application Build
-FROM icao-vcpkg-base:latest AS builder
+ARG BASE_IMAGE=icao-vcpkg-base:latest
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
+
+# Ensure Oracle directory exists (may be empty for postgres-only ARM64 builds)
+RUN mkdir -p /opt/oracle/instantclient_21_13
 
 COPY services/pkd-relay-service/CMakeLists.txt ./
 COPY services/pkd-relay-service/src/ ./src/
 # Copy shared libraries (required by CMakeLists.txt add_subdirectory)
 COPY shared/ ./shared/
 
+ARG ENABLE_ORACLE=ON
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
+    -DENABLE_ORACLE=${ENABLE_ORACLE} \
     && cmake --build build -j$(nproc)
 
 # Stage 2: Runtime
@@ -48,8 +54,9 @@ RUN useradd -m -s /bin/bash app
 RUN mkdir -p /app/logs /app/uploads /app/static /app/config /app/data/cert \
     && chown -R app:app /app
 
-# Copy Oracle Instant Client from builder
-COPY --from=builder /opt/oracle /opt/oracle
+# Copy Oracle Instant Client from builder (may be empty for postgres-only builds)
+RUN mkdir -p /opt/oracle/instantclient_21_13
+COPY --from=builder /opt/oracle/instantclient_21_13/ /opt/oracle/instantclient_21_13/
 
 # Set Oracle environment variables for runtime
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13

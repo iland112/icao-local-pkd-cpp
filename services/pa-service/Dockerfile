@@ -5,9 +5,13 @@
 # =============================================================================
 
 # Stage 1: Application Build
-FROM icao-vcpkg-base:latest AS builder
+ARG BASE_IMAGE=icao-vcpkg-base:latest
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
+
+# Ensure Oracle directory exists (may be empty for postgres-only ARM64 builds)
+RUN mkdir -p /opt/oracle/instantclient_21_13
 
 # Install image processing libraries for JPEG2000 → JPEG conversion (DG2 face images)
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -25,10 +29,12 @@ COPY services/pa-service/src/ ./src/
 COPY services/pa-service/tests/ ./tests/
 
 # Build main application
+ARG ENABLE_ORACLE=ON
 RUN cmake -B build -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
     -DBUILD_TESTS=OFF \
+    -DENABLE_ORACLE=${ENABLE_ORACLE} \
     && cmake --build build -j$(nproc)
 
 # Build and run tests (optional, controlled by build arg)
@@ -69,8 +75,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg62-turbo \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Oracle Instant Client from builder
-COPY --from=builder /opt/oracle/instantclient_21_13 /opt/oracle/instantclient_21_13
+# Copy Oracle Instant Client from builder (may be empty for postgres-only builds)
+RUN mkdir -p /opt/oracle/instantclient_21_13
+COPY --from=builder /opt/oracle/instantclient_21_13/ /opt/oracle/instantclient_21_13/
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
 ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
 ENV PATH=$ORACLE_HOME:$PATH

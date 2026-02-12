@@ -5,13 +5,18 @@
 # =============================================================================
 
 # Stage 1: Application Build
-FROM icao-vcpkg-base:latest AS builder
+ARG BASE_IMAGE=icao-vcpkg-base:latest
+FROM ${BASE_IMAGE} AS builder
 
 # ARG to force cache invalidation on every build
 ARG CACHE_BUST=unknown
-RUN echo "=== Cache Bust Token: $CACHE_BUST ==="
+ARG ENABLE_ORACLE=ON
+RUN echo "=== Cache Bust Token: $CACHE_BUST, Oracle: $ENABLE_ORACLE ==="
 
 WORKDIR /app
+
+# Ensure Oracle directory exists (may be empty for postgres-only ARM64 builds)
+RUN mkdir -p /opt/oracle/instantclient_21_13
 
 # Clean any potential cached artifacts
 RUN rm -rf build build_fresh bin lib CMakeCache.txt CMakeFiles
@@ -35,11 +40,13 @@ COPY services/pkd-management/tests/ ./tests/
 RUN find ./src -type f \( -name "*.cpp" -o -name "*.h" \) -exec touch {} \;
 
 # Build application
+ARG ENABLE_ORACLE=ON
 RUN mkdir -p build_fresh && \
     cmake -B build_fresh -S . \
     -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_VERBOSE_MAKEFILE=ON && \
+    -DCMAKE_VERBOSE_MAKEFILE=ON \
+    -DENABLE_ORACLE=${ENABLE_ORACLE} && \
     cmake --build build_fresh -j$(nproc) --verbose
 
 # Create versioned binary for cache invalidation
@@ -92,6 +99,8 @@ COPY --from=builder /app/build_fresh/bin/test_ldap_dn /app/test_ldap_dn
 COPY --from=builder /app/build_fresh/lib/libicao-common.so* /usr/local/lib/
 
 # Copy Oracle Instant Client libraries (runtime dependency)
+# Ensure directory exists in builder (may be empty if Oracle not installed)
+RUN mkdir -p /opt/oracle/instantclient_21_13
 COPY --from=builder /opt/oracle/instantclient_21_13/ /opt/oracle/instantclient_21_13/
 ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
 ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH

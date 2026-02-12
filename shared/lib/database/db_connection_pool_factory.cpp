@@ -5,7 +5,9 @@
 
 #include "db_connection_pool_factory.h"
 #include "db_connection_pool.h"
+#ifdef ENABLE_ORACLE
 #include "oracle_connection_pool.h"
+#endif
 #include <cstdlib>
 #include <algorithm>
 #include <sstream>
@@ -96,6 +98,7 @@ std::shared_ptr<IDbConnectionPool> DbConnectionPoolFactory::create(const DbPoolC
             config.acquireTimeoutSec
         );
     }
+#ifdef ENABLE_ORACLE
     else if (normalizedType == "oracle") {
         std::string connStr = config.buildOracleConnString();
         return std::make_shared<OracleConnectionPool>(
@@ -105,6 +108,7 @@ std::shared_ptr<IDbConnectionPool> DbConnectionPoolFactory::create(const DbPoolC
             config.acquireTimeoutSec
         );
     }
+#endif
     else {
         throw std::runtime_error("Unsupported database type: " + config.dbType);
     }
@@ -117,11 +121,19 @@ std::shared_ptr<IDbConnectionPool> DbConnectionPoolFactory::createFromEnv() {
 
 bool DbConnectionPoolFactory::isSupported(const std::string& dbType) {
     std::string normalized = normalizeDbType(dbType);
-    return normalized == "postgres" || normalized == "oracle";
+    if (normalized == "postgres") return true;
+#ifdef ENABLE_ORACLE
+    if (normalized == "oracle") return true;
+#endif
+    return false;
 }
 
 std::vector<std::string> DbConnectionPoolFactory::getSupportedTypes() {
-    return {"postgres", "postgresql", "pg", "oracle", "ora"};
+    std::vector<std::string> types = {"postgres", "postgresql", "pg"};
+#ifdef ENABLE_ORACLE
+    types.insert(types.end(), {"oracle", "ora"});
+#endif
+    return types;
 }
 
 std::string DbConnectionPoolFactory::normalizeDbType(const std::string& dbType) {
