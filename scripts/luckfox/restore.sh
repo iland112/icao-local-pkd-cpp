@@ -2,78 +2,79 @@
 # luckfox-restore.sh - Luckfox 데이터 복구 스크립트
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+if [ -f "$SCRIPT_DIR/docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/../../docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+else
+    echo "Error: docker-compose-luckfox.yaml not found"; exit 1
+fi
+cd "$PROJECT_DIR"
 
 BACKUP_FILE=$1
 
 if [ -z "$BACKUP_FILE" ]; then
-    echo "사용법: $0 <백업파일.tar.gz>"
+    echo "Usage: $0 <backup-file.tar.gz>"
     echo ""
-    echo "사용 가능한 백업:"
-    ls -lh backups/*.tar.gz 2>/dev/null || echo "  (백업 파일 없음)"
+    echo "Available backups:"
+    ls -lh backups/*.tar.gz 2>/dev/null || echo "  (no backup files found)"
     exit 1
 fi
 
 if [ ! -f "$BACKUP_FILE" ]; then
-    echo "❌ 백업 파일을 찾을 수 없습니다: $BACKUP_FILE"
+    echo "Error: Backup file not found: $BACKUP_FILE"
     exit 1
 fi
 
-echo "⚠️  경고: 현재 데이터가 백업 데이터로 덮어씌워집니다!"
+echo "WARNING: Current data will be overwritten with backup data!"
 echo ""
-read -p "계속하시겠습니까? (yes/no): " CONFIRM
+read -p "Continue? (yes/no): " CONFIRM
 
 if [ "$CONFIRM" != "yes" ]; then
-    echo "취소되었습니다."
+    echo "Cancelled."
     exit 0
 fi
 
 echo ""
-echo "📦 백업 파일 압축 해제 중..."
+echo "[1/4] Extracting backup..."
 TEMP_DIR=$(mktemp -d)
 tar -xzf "$BACKUP_FILE" -C "$TEMP_DIR"
 BACKUP_DIR=$(ls -d "$TEMP_DIR"/luckfox_* | head -1)
 
-# 1. 컨테이너 중지
-echo "🛑 컨테이너 중지 중..."
+# Stop containers
+echo "[2/4] Stopping containers..."
 docker compose -f docker-compose-luckfox.yaml stop
 
-# 2. PostgreSQL 복구
-echo "📥 PostgreSQL 데이터베이스 복구 중..."
+# PostgreSQL restore
+echo "[3/4] Restoring PostgreSQL..."
 if [ -f "$BACKUP_DIR/localpkd.sql" ]; then
     docker compose -f docker-compose-luckfox.yaml start postgres
     sleep 5
-    # Drop and recreate database for clean restore
     docker exec -i icao-pkd-postgres psql -U pkd -d postgres -c "DROP DATABASE IF EXISTS localpkd;" 2>/dev/null || true
     docker exec -i icao-pkd-postgres psql -U pkd -d postgres -c "CREATE DATABASE localpkd;" 2>/dev/null || true
     sleep 2
-    # Restore from backup
     docker exec -i icao-pkd-postgres psql -U pkd -d localpkd < "$BACKUP_DIR/localpkd.sql" 2>&1 | grep -v "^ERROR:" | grep -v "^DETAIL:" | grep -v "^CONTEXT:" || true
-    echo "   ✅ PostgreSQL 복구 완료"
+    echo "  PostgreSQL restored."
 else
-    echo "   ⚠️  PostgreSQL 백업 파일 없음"
+    echo "  No PostgreSQL dump in backup."
 fi
 
-# 3. 업로드 파일 복구
-echo "📥 업로드 파일 복구 중..."
+# Upload files restore
 if [ -d "$BACKUP_DIR/pkd-uploads" ]; then
     rm -rf ./.docker-data/pkd-uploads/*
     cp -r "$BACKUP_DIR/pkd-uploads/"* ./.docker-data/pkd-uploads/ 2>/dev/null || true
-    echo "   ✅ 업로드 파일 복구 완료"
-else
-    echo "   ⚠️  업로드 파일 백업 없음"
+    echo "  Upload files restored."
 fi
 
-# 4. 컨테이너 재시작
-echo "🔄 컨테이너 재시작 중..."
+# Restart all services
+echo "[4/4] Starting all services..."
 docker compose -f docker-compose-luckfox.yaml up -d
 
-# 5. 임시 디렉토리 정리
+# Cleanup
 rm -rf "$TEMP_DIR"
 
 echo ""
-echo "✅ 복구 완료!"
+echo "=== Restore Complete ==="
 echo ""
-echo "💡 시스템 상태 확인:"
-echo "   ./luckfox-health.sh"
+echo "Run health check: ./luckfox-health.sh"
 echo ""

@@ -4,13 +4,19 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+if [ -f "$SCRIPT_DIR/docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/../../docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+else
+    echo "Error: docker-compose-luckfox.yaml not found"; exit 1
+fi
+cd "$PROJECT_DIR"
 
-echo "🛑 ICAO PKD Docker 컨테이너 중지 (Luckfox)..."
+echo "=== ICAO PKD Docker Stop (Luckfox) ==="
 docker compose -f docker-compose-luckfox.yaml stop
 
 echo ""
-echo "✅ 컨테이너 중지 완료!"
-echo "   - 데이터는 보존됩니다."
-echo "   - 재시작: ./luckfox-start.sh"
+echo "Containers stopped. Data is preserved."
+echo "Restart: ./luckfox-start.sh"
 echo ""

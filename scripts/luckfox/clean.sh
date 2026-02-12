@@ -1,32 +1,59 @@
 #!/bin/bash
 # luckfox-clean.sh - Luckfox Docker 완전 초기화 스크립트
-# 주의: 모든 데이터가 삭제됩니다!
+# WARNING: Deletes ALL containers and data!
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+if [ -f "$SCRIPT_DIR/docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/../../docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+else
+    echo "Error: docker-compose-luckfox.yaml not found"; exit 1
+fi
+cd "$PROJECT_DIR"
 
-echo "⚠️  경고: 모든 컨테이너와 데이터를 삭제합니다!"
-echo ""
-read -p "계속하시겠습니까? (yes/no): " CONFIRM
+# --force flag skips confirmation (for scripted use)
+FORCE=false
+for arg in "$@"; do
+    if [ "$arg" = "--force" ] || [ "$arg" = "-f" ]; then
+        FORCE=true
+    fi
+done
 
-if [ "$CONFIRM" != "yes" ]; then
-    echo "취소되었습니다."
-    exit 0
+if [ "$FORCE" = false ]; then
+    echo "WARNING: This will delete ALL containers and data!"
+    echo ""
+    echo "  Data to be deleted:"
+    echo "    - PostgreSQL database (.docker-data/postgres)"
+    echo "    - Upload files (.docker-data/pkd-uploads)"
+    echo "    - Service logs (.docker-data/pkd-logs, pa-logs, sync-logs)"
+    echo ""
+    read -p "Continue? (yes/no): " CONFIRM
+    if [ "$CONFIRM" != "yes" ]; then
+        echo "Cancelled."
+        exit 0
+    fi
 fi
 
 echo ""
-echo "🗑️  컨테이너 중지 및 삭제..."
+echo "[1/3] Stopping and removing containers..."
 docker compose -f docker-compose-luckfox.yaml down
 
 echo ""
-echo "🗑️  데이터 디렉토리 삭제..."
-sudo rm -rf ./.docker-data/postgres/* 2>/dev/null || rm -rf ./.docker-data/postgres/* 2>/dev/null || echo "   - PostgreSQL 데이터 디렉토리 비어있거나 삭제 권한 필요"
-sudo rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || echo "   - 업로드 파일 디렉토리 비어있거나 삭제 권한 필요"
-echo "   - 데이터 정리 완료"
+echo "[2/3] Deleting data directories..."
+sudo rm -rf ./.docker-data/postgres/* 2>/dev/null || rm -rf ./.docker-data/postgres/* 2>/dev/null || true
+sudo rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || rm -rf ./.docker-data/pkd-uploads/* 2>/dev/null || true
+sudo rm -rf ./.docker-data/pkd-logs/* 2>/dev/null || rm -rf ./.docker-data/pkd-logs/* 2>/dev/null || true
+sudo rm -rf ./.docker-data/pa-logs/* 2>/dev/null || rm -rf ./.docker-data/pa-logs/* 2>/dev/null || true
+sudo rm -rf ./.docker-data/sync-logs/* 2>/dev/null || rm -rf ./.docker-data/sync-logs/* 2>/dev/null || true
+echo "  Data directories cleaned."
 
 echo ""
-echo "✅ 완전 초기화 완료!"
+echo "[3/3] Pruning unused Docker resources..."
+docker image prune -f 2>/dev/null || true
+echo "  Docker cleanup done."
+
 echo ""
-echo "💡 새로 시작하려면:"
-echo "   ./luckfox-start.sh"
+echo "=== Clean Complete ==="
+echo "To restart: ./luckfox-start.sh"
 echo ""

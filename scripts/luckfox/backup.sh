@@ -4,38 +4,48 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+if [ -f "$SCRIPT_DIR/docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/../../docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+else
+    echo "Error: docker-compose-luckfox.yaml not found"; exit 1
+fi
+cd "$PROJECT_DIR"
 
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_DIR="./backups/luckfox_${TIMESTAMP}"
 
-echo "💾 ICAO PKD 데이터 백업 (Luckfox)..."
+echo "=== ICAO PKD Backup (Luckfox) ==="
 echo ""
 
-# 백업 디렉토리 생성
 mkdir -p "$BACKUP_DIR"
 
-# 1. PostgreSQL 백업
-echo "📦 PostgreSQL 데이터베이스 백업 중..."
+# 1. PostgreSQL backup
+echo "[1/3] Backing up PostgreSQL..."
 docker exec icao-pkd-postgres pg_dump -U pkd localpkd > "$BACKUP_DIR/localpkd.sql"
-echo "   ✅ PostgreSQL 백업 완료"
+echo "  Done."
 
-# 2. 업로드 파일 백업
-echo "📦 업로드 파일 백업 중..."
-if [ -d "./.docker-data/pkd-uploads" ]; then
+# 2. Upload files backup
+echo "[2/3] Backing up upload files..."
+if [ -d "./.docker-data/pkd-uploads" ] && [ "$(ls -A ./.docker-data/pkd-uploads 2>/dev/null)" ]; then
     cp -r ./.docker-data/pkd-uploads "$BACKUP_DIR/"
-    echo "   ✅ 업로드 파일 백업 완료"
+    echo "  Done."
 else
-    echo "   ⚠️  업로드 파일 없음"
+    echo "  No upload files."
 fi
 
-# 3. Docker Compose 설정 백업
-echo "📦 설정 파일 백업 중..."
+# 3. Config backup
+echo "[3/3] Backing up config..."
 cp docker-compose-luckfox.yaml "$BACKUP_DIR/"
-echo "   ✅ 설정 파일 백업 완료"
+cp nginx/api-gateway-luckfox.conf "$BACKUP_DIR/" 2>/dev/null || true
+cp frontend/nginx-luckfox.conf "$BACKUP_DIR/" 2>/dev/null || true
+docker images --format '{{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}' | grep -E "icao-local|postgres|nginx" > "$BACKUP_DIR/images.txt" 2>/dev/null || true
+echo "  Done."
 
-# 4. 백업 압축
-echo "📦 백업 압축 중..."
+# Compress
+echo ""
+echo "Compressing..."
 cd backups
 tar -czf "luckfox_${TIMESTAMP}.tar.gz" "luckfox_${TIMESTAMP}"
 rm -rf "luckfox_${TIMESTAMP}"
@@ -44,10 +54,9 @@ cd ..
 BACKUP_SIZE=$(du -sh "backups/luckfox_${TIMESTAMP}.tar.gz" | cut -f1)
 
 echo ""
-echo "✅ 백업 완료!"
-echo "   - 파일: backups/luckfox_${TIMESTAMP}.tar.gz"
-echo "   - 크기: $BACKUP_SIZE"
+echo "=== Backup Complete ==="
+echo "  File: backups/luckfox_${TIMESTAMP}.tar.gz"
+echo "  Size: $BACKUP_SIZE"
 echo ""
-echo "💡 복구하려면:"
-echo "   ./luckfox-restore.sh backups/luckfox_${TIMESTAMP}.tar.gz"
+echo "Restore: ./luckfox-restore.sh backups/luckfox_${TIMESTAMP}.tar.gz"
 echo ""

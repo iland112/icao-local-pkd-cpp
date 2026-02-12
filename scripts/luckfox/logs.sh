@@ -2,21 +2,36 @@
 # luckfox-logs.sh - Luckfox Docker 컨테이너 로그 확인 스크립트
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+if [ -f "$SCRIPT_DIR/docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$SCRIPT_DIR"
+elif [ -f "$SCRIPT_DIR/../../docker-compose-luckfox.yaml" ]; then
+    PROJECT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+else
+    echo "Error: docker-compose-luckfox.yaml not found"; exit 1
+fi
+cd "$PROJECT_DIR"
 
 SERVICE=$1
 LINES=${2:-50}
 
+# Handle -f flag
+FOLLOW=""
+for arg in "$@"; do
+    if [ "$arg" = "-f" ]; then
+        FOLLOW="-f"
+    fi
+done
+
 if [ -z "$SERVICE" ]; then
-    echo "📋 모든 컨테이너 로그 (최근 ${LINES}줄)..."
+    echo "=== All container logs (last ${LINES} lines) ==="
     echo ""
-    docker compose -f docker-compose-luckfox.yaml logs --tail=$LINES
+    docker compose -f docker-compose-luckfox.yaml logs --tail=$LINES $FOLLOW
 else
-    echo "📋 '$SERVICE' 컨테이너 로그 (최근 ${LINES}줄)..."
+    echo "=== '$SERVICE' logs (last ${LINES} lines) ==="
     echo ""
-    docker compose -f docker-compose-luckfox.yaml logs --tail=$LINES $SERVICE
+    docker compose -f docker-compose-luckfox.yaml logs --tail=$LINES $FOLLOW $SERVICE
 fi
 
 echo ""
-echo "💡 실시간 로그: ./luckfox-logs.sh [서비스명] -f"
-echo "   사용 가능한 서비스: postgres, pkd-management, pa-service, sync-service, api-gateway, frontend"
+echo "Services: postgres, pkd-management, pa-service, pkd-relay, api-gateway, frontend, swagger-ui"
+echo "Follow:   $0 <service> -f"
