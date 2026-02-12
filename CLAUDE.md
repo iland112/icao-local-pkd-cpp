@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.8.0
+**Current Version**: v2.9.0
 **Last Updated**: 2026-02-12
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -127,8 +127,10 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Certificate validation (Trust Chain, CRL, Link Certificates)
 - LDAP integration (MMR cluster, Software Load Balancing)
 - Passive Authentication verification (ICAO 9303 Part 10 & 11)
+- DSC auto-registration from PA verification (source_type='PA_EXTRACTED')
 - DB-LDAP sync monitoring with auto-reconciliation
-- Certificate search & export (country/type/status filters)
+- Certificate search & export (country/type/status/source filters)
+- Certificate source tracking and dashboard statistics (bySource)
 - ICAO PKD version monitoring (auto-detection of new versions)
 - Trust chain visualization (frontend tree component)
 - Upload issues tracking (duplicate detection with tab-based UI)
@@ -464,6 +466,20 @@ scripts/
 ---
 
 ## Version History
+
+### v2.9.0 (2026-02-12) - DSC Auto-Registration + Certificate Source Filter & Dashboard
+- DSC auto-registration from PA verification: extracts DSC from SOD and stores in certificate table (source_type='PA_EXTRACTED')
+- Fingerprint-based duplicate check prevents re-registration of already-known DSCs
+- Full X.509 metadata extraction on auto-registration (signature_algorithm, public_key_algorithm, public_key_size, validation_status, is_self_signed)
+- SOD binary storage + SHA-256 hash computation for PA verification records
+- Certificate search: source filter (LDIF_PARSED, ML_PARSED, FILE_UPLOAD, PA_EXTRACTED, DL_PARSED)
+- DB-based certificate search when source filter applied (LDAP search preserved when no source filter)
+- DN component parsing for DB search results (supports both `/C=KR/O=Gov/CN=Name` and `CN=Name,O=Gov,C=KR` formats)
+- Validity statistics (valid/expired/notYetValid/unknown) in DB search response
+- Dashboard: "인증서 출처별 현황" card with horizontal bar chart (source_type statistics)
+- Upload statistics API: bySource field (GROUP BY source_type)
+- New service: DscAutoRegistrationService (pa-service, Oracle + PostgreSQL)
+- Oracle compatibility: all new queries support both PostgreSQL and Oracle
 
 ### v2.8.0 (2026-02-12) - PA Verification UX + DG2 JPEG2000 Face Image Support
 - JPEG2000 → JPEG server-side conversion for DG2 face images (OpenJPEG + libjpeg)

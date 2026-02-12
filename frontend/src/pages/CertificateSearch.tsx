@@ -64,6 +64,7 @@ interface SearchCriteria {
   country: string;
   certType: string;
   validity: string;
+  source: string;
   searchTerm: string;
   limit: number;
   offset: number;
@@ -83,6 +84,7 @@ const CertificateSearch: React.FC = () => {
     country: '',
     certType: '',
     validity: 'all',
+    source: '',
     searchTerm: '',
     limit: 50,
     offset: 0,
@@ -129,6 +131,7 @@ const CertificateSearch: React.FC = () => {
       if (criteria.country) params.append('country', criteria.country);
       if (criteria.certType) params.append('certType', criteria.certType);
       if (criteria.validity && criteria.validity !== 'all') params.append('validity', criteria.validity);
+      if (criteria.source) params.append('source', criteria.source);
       if (criteria.searchTerm) params.append('searchTerm', criteria.searchTerm);
       params.append('limit', criteria.limit.toString());
       params.append('offset', criteria.offset.toString());
@@ -161,7 +164,7 @@ const CertificateSearch: React.FC = () => {
   // Search when criteria changes
   useEffect(() => {
     searchCertificates();
-  }, [criteria.country, criteria.certType, criteria.validity, criteria.searchTerm, criteria.limit, criteria.offset]);
+  }, [criteria.country, criteria.certType, criteria.validity, criteria.source, criteria.searchTerm, criteria.limit, criteria.offset]);
 
   // Handle search button click
   const handleSearch = () => {
@@ -762,7 +765,7 @@ const CertificateSearch: React.FC = () => {
 
         {showFilters && (
           <div className="space-y-3">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
               {/* Country - wider column */}
               <div className="lg:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -830,6 +833,25 @@ const CertificateSearch: React.FC = () => {
                   <option value="VALID">유효</option>
                   <option value="EXPIRED">만료</option>
                   <option value="NOT_YET_VALID">유효 전</option>
+                </select>
+              </div>
+
+              {/* Source */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                  출처
+                </label>
+                <select
+                  value={criteria.source}
+                  onChange={(e) => setCriteria({ ...criteria, source: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">전체</option>
+                  <option value="LDIF_PARSED">LDIF 업로드</option>
+                  <option value="ML_PARSED">Master List</option>
+                  <option value="FILE_UPLOAD">파일 업로드</option>
+                  <option value="PA_EXTRACTED">PA 검증 추출</option>
+                  <option value="DL_PARSED">편차 목록</option>
                 </select>
               </div>
 

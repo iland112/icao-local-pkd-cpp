@@ -43,7 +43,7 @@ Json::Value PostgreSQLQueryExecutor::executeQuery(
     // Prepare parameter values for libpq
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
+        paramValues.push_back(param.empty() ? nullptr : param.c_str());
     }
 
     // Execute parameterized query
@@ -92,9 +92,10 @@ int PostgreSQLQueryExecutor::executeCommand(
     }
 
     // Prepare parameter values for libpq
+    // Empty strings are treated as NULL (consistent with Oracle behavior)
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
+        paramValues.push_back(param.empty() ? nullptr : param.c_str());
     }
 
     // Execute parameterized query
@@ -151,7 +152,7 @@ Json::Value PostgreSQLQueryExecutor::executeScalar(
     // Prepare parameter values for libpq
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
+        paramValues.push_back(param.empty() ? nullptr : param.c_str());
     }
 
     // Execute parameterized query
@@ -232,7 +233,7 @@ PGresult* PostgreSQLQueryExecutor::executeRawQuery(
     // Prepare parameter values for libpq
     std::vector<const char*> paramValues;
     for (const auto& param : params) {
-        paramValues.push_back(param.c_str());
+        paramValues.push_back(param.empty() ? nullptr : param.c_str());
     }
 
     // Execute parameterized query

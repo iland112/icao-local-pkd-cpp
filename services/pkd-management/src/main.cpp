@@ -6141,6 +6141,7 @@ paths:
                 std::string certTypeStr = req->getOptionalParameter<std::string>("certType").value_or("");
                 std::string validityStr = req->getOptionalParameter<std::string>("validity").value_or("all");
                 std::string searchTerm = req->getOptionalParameter<std::string>("searchTerm").value_or("");
+                std::string sourceFilter = req->getOptionalParameter<std::string>("source").value_or("");
                 int limit = req->getOptionalParameter<int>("limit").value_or(50);
                 int offset = req->getOptionalParameter<int>("offset").value_or(0);
 
@@ -6149,9 +6150,26 @@ paths:
                 if (limit < 1) limit = 50;
                 if (offset < 0) offset = 0;
 
-                spdlog::info("Certificate search: country={}, certType={}, validity={}, search={}, limit={}, offset={}",
-                            country, certTypeStr, validityStr, searchTerm, limit, offset);
+                spdlog::info("Certificate search: country={}, certType={}, validity={}, source={}, search={}, limit={}, offset={}",
+                            country, certTypeStr, validityStr, sourceFilter, searchTerm, limit, offset);
 
+                // When source filter is specified, use DB-based search
+                if (!sourceFilter.empty()) {
+                    repositories::CertificateSearchFilter filter;
+                    if (!country.empty()) filter.countryCode = country;
+                    if (!certTypeStr.empty()) filter.certificateType = certTypeStr;
+                    filter.sourceType = sourceFilter;
+                    if (!searchTerm.empty()) filter.searchTerm = searchTerm;
+                    filter.limit = limit;
+                    filter.offset = offset;
+
+                    Json::Value dbResult = ::certificateRepository->search(filter);
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(dbResult);
+                    callback(resp);
+                    return;
+                }
+
+                // Default: LDAP-based search (existing behavior)
                 // Build search criteria
                 domain::models::CertificateSearchCriteria criteria;
                 if (!country.empty()) criteria.country = country;
@@ -6176,7 +6194,7 @@ paths:
                     else if (validityStr == "NOT_YET_VALID") criteria.validity = domain::models::ValidityStatus::NOT_YET_VALID;
                 }
 
-                // Execute search
+                // Execute LDAP search
                 auto result = ::certificateService->searchCertificates(criteria);
 
                 // Build JSON response

@@ -17,6 +17,7 @@
 #include "../repositories/data_group_repository.h"
 #include <sod_parser.h>
 #include "certificate_validation_service.h"
+#include "dsc_auto_registration_service.h"
 #include <dg_parser.h>
 
 namespace services {
@@ -28,6 +29,7 @@ private:
     icao::SodParser* sodParser_;
     CertificateValidationService* certValidator_;
     icao::DgParser* dgParser_;
+    DscAutoRegistrationService* dscAutoRegService_;
 
 public:
     PaVerificationService(
@@ -35,7 +37,8 @@ public:
         repositories::DataGroupRepository* dgRepo,
         icao::SodParser* sodParser,
         CertificateValidationService* certValidator,
-        icao::DgParser* dgParser
+        icao::DgParser* dgParser,
+        DscAutoRegistrationService* dscAutoRegService = nullptr
     );
     ~PaVerificationService() = default;
 

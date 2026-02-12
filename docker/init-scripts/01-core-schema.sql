@@ -99,8 +99,15 @@ CREATE TABLE IF NOT EXISTS certificate (
     last_seen_upload_id UUID REFERENCES uploaded_file(id),
     last_seen_at TIMESTAMP,
 
+    -- Source tracking (v2.8.0)
+    source_type VARCHAR(50) DEFAULT 'FILE_UPLOAD',
+    source_context JSONB,
+    extracted_from VARCHAR(100),
+    registered_at TIMESTAMP DEFAULT NOW(),
+
     CONSTRAINT chk_certificate_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
-    CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'REVOKED', 'UNKNOWN'))
+    CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'REVOKED', 'UNKNOWN')),
+    CONSTRAINT chk_cert_source_type CHECK (source_type IN ('FILE_UPLOAD', 'PA_EXTRACTED', 'LDIF_PARSED', 'ML_PARSED', 'DL_PARSED', 'API_REGISTERED', 'SYSTEM_GENERATED'))
 );
 
 CREATE INDEX idx_certificate_upload_id ON certificate(upload_id);
@@ -114,6 +121,8 @@ CREATE INDEX idx_certificate_stored_in_ldap ON certificate(stored_in_ldap);
 CREATE INDEX idx_certificate_first_upload ON certificate(first_upload_id);
 CREATE INDEX idx_certificate_ldap_dn_v2 ON certificate(ldap_dn_v2);
 CREATE UNIQUE INDEX idx_certificate_unique ON certificate(certificate_type, fingerprint_sha256);
+CREATE INDEX idx_certificate_source_type ON certificate(source_type);
+CREATE INDEX idx_certificate_extracted_from ON certificate(extracted_from);
 
 -- =============================================================================
 -- CRL Tables

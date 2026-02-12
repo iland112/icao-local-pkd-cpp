@@ -98,13 +98,194 @@ CertificateRepository::CertificateRepository(common::IQueryExecutor* queryExecut
 
 Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
 {
-    spdlog::debug("[CertificateRepository] Searching certificates");
+    spdlog::debug("[CertificateRepository] Searching certificates (DB-based)");
 
-    // TODO: Implement certificate search with dynamic WHERE clause
-    spdlog::warn("[CertificateRepository] search - TODO: Implement");
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::vector<std::string> params;
+        int paramIdx = 1;
 
-    Json::Value response = Json::arrayValue;
-    return response;
+        // Build dynamic WHERE clause
+        std::ostringstream where;
+        if (filter.countryCode.has_value() && !filter.countryCode->empty()) {
+            where << " AND country_code = $" << paramIdx++;
+            params.push_back(*filter.countryCode);
+        }
+        if (filter.certificateType.has_value() && !filter.certificateType->empty()) {
+            where << " AND certificate_type = $" << paramIdx++;
+            params.push_back(*filter.certificateType);
+        }
+        if (filter.sourceType.has_value() && !filter.sourceType->empty()) {
+            where << " AND source_type = $" << paramIdx++;
+            params.push_back(*filter.sourceType);
+        }
+        if (filter.searchTerm.has_value() && !filter.searchTerm->empty()) {
+            std::string term = "%" + *filter.searchTerm + "%";
+            if (dbType == "oracle") {
+                where << " AND (UPPER(subject_dn) LIKE UPPER($" << paramIdx << ")"
+                       << " OR serial_number LIKE $" << paramIdx << ")";
+            } else {
+                where << " AND (subject_dn ILIKE $" << paramIdx
+                       << " OR serial_number ILIKE $" << paramIdx << ")";
+            }
+            paramIdx++;
+            params.push_back(term);
+        }
+
+        std::string whereStr = where.str();
+
+        // Count query
+        std::string countSql = "SELECT COUNT(*) FROM certificate WHERE 1=1" + whereStr;
+        Json::Value countResult = queryExecutor_->executeScalar(countSql, params);
+        int total = 0;
+        if (countResult.isInt()) total = countResult.asInt();
+        else if (countResult.isString()) { try { total = std::stoi(countResult.asString()); } catch (...) {} }
+
+        // Data query
+        std::ostringstream dataSql;
+        dataSql << "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
+                << "serial_number, fingerprint_sha256, not_before, not_after, "
+                << "validation_status, source_type, stored_in_ldap, "
+                << "is_self_signed, version, signature_algorithm, "
+                << "public_key_algorithm, public_key_size "
+                << "FROM certificate WHERE 1=1" << whereStr
+                << " ORDER BY created_at DESC";
+
+        if (dbType == "oracle") {
+            dataSql << " OFFSET " << filter.offset << " ROWS FETCH NEXT " << filter.limit << " ROWS ONLY";
+        } else {
+            dataSql << " LIMIT " << filter.limit << " OFFSET " << filter.offset;
+        }
+
+        Json::Value rows = queryExecutor_->executeQuery(dataSql.str(), params);
+
+        // Build response
+        Json::Value response;
+        response["success"] = true;
+        response["total"] = total;
+        response["limit"] = filter.limit;
+        response["offset"] = filter.offset;
+
+        Json::Value certificates(Json::arrayValue);
+        for (const auto& row : rows) {
+            Json::Value cert;
+            cert["dn"] = "";
+            cert["cn"] = row.get("subject_dn", "").asString();
+            cert["sn"] = row.get("serial_number", "").asString();
+            cert["country"] = row.get("country_code", "").asString();
+            cert["type"] = row.get("certificate_type", "").asString();
+            cert["subjectDn"] = row.get("subject_dn", "").asString();
+            cert["issuerDn"] = row.get("issuer_dn", "").asString();
+            cert["fingerprint"] = row.get("fingerprint_sha256", "").asString();
+            cert["validFrom"] = row.get("not_before", "").asString();
+            cert["validTo"] = row.get("not_after", "").asString();
+            cert["sourceType"] = row.get("source_type", "").asString();
+
+            // Parse DN components from subject_dn and issuer_dn
+            // Supports both formats: /C=KR/O=Gov/CN=Name and CN=Name,O=Gov,C=KR
+            auto parseDnComponents = [](const std::string& dn) -> Json::Value {
+                Json::Value components;
+                if (dn.empty()) return components;
+
+                char delim = '/';
+                std::string input = dn;
+                if (!dn.empty() && dn[0] == '/') {
+                    // Slash-separated: /C=KR/O=Government/OU=MOFA/CN=Name
+                    delim = '/';
+                    input = dn.substr(1); // skip leading /
+                } else {
+                    // Comma-separated: CN=Name,OU=bsi,O=bund,C=DE
+                    delim = ',';
+                }
+
+                std::istringstream ss(input);
+                std::string token;
+                while (std::getline(ss, token, delim)) {
+                    // Trim whitespace
+                    size_t start = token.find_first_not_of(" ");
+                    if (start == std::string::npos) continue;
+                    token = token.substr(start);
+
+                    auto eqPos = token.find('=');
+                    if (eqPos == std::string::npos) continue;
+                    std::string key = token.substr(0, eqPos);
+                    std::string val = token.substr(eqPos + 1);
+                    if (key == "CN") components["commonName"] = val;
+                    else if (key == "O") components["organization"] = val;
+                    else if (key == "OU") components["organizationalUnit"] = val;
+                    else if (key == "C") components["country"] = val;
+                    else if (key == "SERIALNUMBER" || key == "serialNumber") components["serialNumber"] = val;
+                }
+                return components;
+            };
+            cert["subjectDnComponents"] = parseDnComponents(row.get("subject_dn", "").asString());
+            cert["issuerDnComponents"] = parseDnComponents(row.get("issuer_dn", "").asString());
+
+            // Validation status → validity
+            std::string valStatus = row.get("validation_status", "UNKNOWN").asString();
+            if (valStatus == "VALID") cert["validity"] = "VALID";
+            else if (valStatus == "EXPIRED") cert["validity"] = "EXPIRED";
+            else cert["validity"] = "UNKNOWN";
+
+            // Boolean fields
+            std::string selfSigned = row.get("is_self_signed", "").asString();
+            cert["isSelfSigned"] = (selfSigned == "t" || selfSigned == "true" || selfSigned == "1");
+
+            // Metadata
+            if (!row.get("version", Json::nullValue).isNull()) {
+                std::string ver = row.get("version", "").asString();
+                try { cert["version"] = std::stoi(ver); } catch (...) { cert["version"] = 0; }
+            }
+            if (!row.get("signature_algorithm", Json::nullValue).isNull())
+                cert["signatureAlgorithm"] = row["signature_algorithm"].asString();
+            if (!row.get("public_key_algorithm", Json::nullValue).isNull())
+                cert["publicKeyAlgorithm"] = row["public_key_algorithm"].asString();
+            if (!row.get("public_key_size", Json::nullValue).isNull()) {
+                std::string pks = row.get("public_key_size", "").asString();
+                try { cert["publicKeySize"] = std::stoi(pks); } catch (...) {}
+            }
+
+            certificates.append(cert);
+        }
+        response["certificates"] = certificates;
+
+        // Validity statistics query (same WHERE clause)
+        std::string statsSql = "SELECT validation_status, COUNT(*) as cnt FROM certificate WHERE 1=1" + whereStr + " GROUP BY validation_status";
+        Json::Value statsRows = queryExecutor_->executeQuery(statsSql, params);
+
+        int valid = 0, expired = 0, notYetValid = 0, unknown = 0;
+        for (const auto& srow : statsRows) {
+            std::string vs = srow.get("validation_status", "").asString();
+            int cnt = 0;
+            auto cntVal = srow.get("cnt", 0);
+            if (cntVal.isInt()) cnt = cntVal.asInt();
+            else if (cntVal.isString()) { try { cnt = std::stoi(cntVal.asString()); } catch (...) {} }
+
+            if (vs == "VALID") valid = cnt;
+            else if (vs == "EXPIRED") expired = cnt;
+            else if (vs == "NOT_YET_VALID") notYetValid = cnt;
+            else unknown += cnt;
+        }
+
+        Json::Value stats;
+        stats["total"] = total;
+        stats["valid"] = valid;
+        stats["expired"] = expired;
+        stats["notYetValid"] = notYetValid;
+        stats["unknown"] = unknown;
+        response["stats"] = stats;
+
+        spdlog::info("[CertificateRepository] DB search returned {} / {} results",
+            rows.size(), total);
+        return response;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] search failed: {}", e.what());
+        Json::Value error;
+        error["success"] = false;
+        error["error"] = e.what();
+        return error;
+    }
 }
 
 Json::Value CertificateRepository::findByFingerprint(const std::string& fingerprint)

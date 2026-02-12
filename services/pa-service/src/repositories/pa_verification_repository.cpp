@@ -8,6 +8,7 @@
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
+#include <iomanip>
 #include <map>
 
 namespace repositories {
@@ -103,13 +104,24 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
         };
 
+        // Convert SOD binary to hex string for BYTEA storage
+        std::string sodBinaryHex;
+        if (!verification.sodBinary.empty()) {
+            std::ostringstream hexStream;
+            hexStream << "\\x";
+            for (auto b : verification.sodBinary) {
+                hexStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
+            }
+            sodBinaryHex = hexStream.str();
+        }
+
         std::vector<std::string> params = {
             generatedId,                                                     // $1: id
             verification.countryCode,                                        // $2
             verification.documentNumber,                                     // $3
             verification.verificationStatus,                                 // $4
             verification.sodHash,                                            // $5
-            "",                                                              // $6: sod_binary (TODO)
+            sodBinaryHex,                                                    // $6: sod_binary
             verification.dscSubject,                                         // $7
             verification.dscSerialNumber,                                    // $8
             verification.dscIssuer,                                          // $9

@@ -13,6 +13,8 @@
 #pragma once
 
 #include <string>
+#include <vector>
+#include <cstdint>
 #include <chrono>
 #include <optional>
 #include <json/json.h>
@@ -39,6 +41,7 @@ struct PaVerification {
 
     // SOD information
     std::string sodHash;  // SHA-256 hash of SOD
+    std::vector<uint8_t> sodBinary;  // Raw SOD binary data
 
     // DSC certificate information
     std::string dscSubject;

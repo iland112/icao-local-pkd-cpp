@@ -73,6 +73,7 @@
 #include <sod_parser.h>
 #include <dg_parser.h>
 #include "services/certificate_validation_service.h"
+#include "services/dsc_auto_registration_service.h"
 #include "services/pa_verification_service.h"
 
 namespace {
@@ -269,6 +270,7 @@ repositories::LdapCrlRepository* ldapCrlRepository = nullptr;
 icao::SodParser* sodParserService = nullptr;
 icao::DgParser* dataGroupParserService = nullptr;
 services::CertificateValidationService* certificateValidationService = nullptr;
+services::DscAutoRegistrationService* dscAutoRegistrationService = nullptr;
 services::PaVerificationService* paVerificationService = nullptr;
 
 // =============================================================================
@@ -1719,13 +1721,19 @@ void initializeServices() {
             ldapCrlRepository
         );
 
+        spdlog::debug("Creating DscAutoRegistrationService...");
+        dscAutoRegistrationService = new services::DscAutoRegistrationService(
+            queryExecutor.get()
+        );
+
         spdlog::debug("Creating PaVerificationService...");
         paVerificationService = new services::PaVerificationService(
             paVerificationRepository,
             dataGroupRepository,
             sodParserService,
             certificateValidationService,
-            dataGroupParserService
+            dataGroupParserService,
+            dscAutoRegistrationService
         );
 
         spdlog::info("✅ All services initialized successfully");
@@ -1744,6 +1752,7 @@ void cleanupServices() {
 
     // Delete in reverse order of initialization
     delete paVerificationService;
+    delete dscAutoRegistrationService;
     delete certificateValidationService;
     delete dataGroupParserService;
     delete sodParserService;
@@ -1753,6 +1762,7 @@ void cleanupServices() {
     delete paVerificationRepository;
 
     paVerificationService = nullptr;
+    dscAutoRegistrationService = nullptr;
     certificateValidationService = nullptr;
     dataGroupParserService = nullptr;
     sodParserService = nullptr;

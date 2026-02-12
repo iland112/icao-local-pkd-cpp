@@ -57,6 +57,8 @@ export function Dashboard() {
   const [countryData, setCountryData] = useState<CountryStats[]>([]);
   const [countryLoading, setCountryLoading] = useState(true);
   const [showCountryDialog, setShowCountryDialog] = useState(false);
+  const [sourceData, setSourceData] = useState<Record<string, number>>({});
+  const [sourceLoading, setSourceLoading] = useState(true);
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -80,6 +82,7 @@ export function Dashboard() {
     testDatabaseConnection();
     testLdapConnection();
     loadCountryData();
+    loadSourceData();
   }, []);
 
   const loadCountryData = async () => {
@@ -99,6 +102,21 @@ export function Dashboard() {
       console.error('Failed to load country statistics:', error);
     } finally {
       setCountryLoading(false);
+    }
+  };
+
+  const loadSourceData = async () => {
+    setSourceLoading(true);
+    try {
+      const response = await uploadApi.getStatistics();
+      const bySource = response.data?.bySource;
+      if (bySource && Object.keys(bySource).length > 0) {
+        setSourceData(bySource);
+      }
+    } catch (error) {
+      console.error('Failed to load source statistics:', error);
+    } finally {
+      setSourceLoading(false);
     }
   };
 
@@ -358,6 +376,81 @@ export function Dashboard() {
                 <Upload className="w-4 h-4" />
                 파일 업로드
               </Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Source Statistics */}
+      <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500">
+              <Database className="w-5 h-5 text-white" />
+            </div>
+            인증서 출처별 현황
+          </h3>
+        </div>
+        <div className="p-6">
+          {sourceLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
+            </div>
+          ) : Object.keys(sourceData).length > 0 ? (() => {
+            const sourceLabels: Record<string, { label: string; color: string }> = {
+              LDIF_PARSED: { label: 'LDIF 업로드', color: '#3B82F6' },
+              ML_PARSED: { label: 'Master List', color: '#8B5CF6' },
+              FILE_UPLOAD: { label: '파일 업로드', color: '#22C55E' },
+              PA_EXTRACTED: { label: 'PA 검증 추출', color: '#F59E0B' },
+              DL_PARSED: { label: '편차 목록', color: '#EF4444' },
+            };
+            const total = Object.values(sourceData).reduce((a, b) => a + b, 0);
+            const sorted = Object.entries(sourceData).sort(([, a], [, b]) => b - a);
+            const maxCount = sorted[0]?.[1] || 1;
+
+            return (
+              <div className="space-y-3">
+                {sorted.map(([sourceType, count]) => {
+                  const info = sourceLabels[sourceType] || { label: sourceType, color: '#6B7280' };
+                  const pct = ((count / total) * 100).toFixed(1);
+                  const barWidth = Math.max(8, (count / maxCount) * 100);
+
+                  return (
+                    <div key={sourceType} className="flex items-center gap-3">
+                      <span className="w-28 flex-shrink-0 text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
+                        {info.label}
+                      </span>
+                      <div className="flex-1 h-6 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+                        <div
+                          className="h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2"
+                          style={{ width: `${barWidth}%`, background: info.color }}
+                        >
+                          {barWidth > 20 && (
+                            <span className="text-xs font-bold text-white">{count.toLocaleString()}</span>
+                          )}
+                        </div>
+                      </div>
+                      {barWidth <= 20 && (
+                        <span className="w-16 flex-shrink-0 text-xs font-bold text-gray-600 dark:text-gray-300">
+                          {count.toLocaleString()}
+                        </span>
+                      )}
+                      <span className="w-14 flex-shrink-0 text-xs text-gray-500 dark:text-gray-400 text-right">
+                        {pct}%
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between text-sm">
+                  <span className="text-gray-500 dark:text-gray-400">전체</span>
+                  <span className="font-bold text-gray-700 dark:text-gray-300">{total.toLocaleString()}건</span>
+                </div>
+              </div>
+            );
+          })() : (
+            <div className="text-center py-8">
+              <Database className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">출처 데이터가 없습니다</p>
             </div>
           )}
         </div>

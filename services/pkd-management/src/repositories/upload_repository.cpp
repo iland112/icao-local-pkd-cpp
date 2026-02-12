@@ -578,6 +578,23 @@ Json::Value UploadRepository::getStatisticsSummary()
         response["cscaBreakdown"] = cscaBreakdown;
         response["validation"] = validation;
 
+        // Get certificate counts by source type
+        const char* sourceQuery =
+            "SELECT source_type, COUNT(*) as count "
+            "FROM certificate "
+            "WHERE source_type IS NOT NULL "
+            "GROUP BY source_type "
+            "ORDER BY count DESC";
+        Json::Value sourceResult = queryExecutor_->executeQuery(sourceQuery);
+        Json::Value bySource;
+        for (const auto& row : sourceResult) {
+            std::string sourceType = row.get("source_type", "").asString();
+            if (!sourceType.empty()) {
+                bySource[sourceType] = getInt(row, "count", 0);
+            }
+        }
+        response["bySource"] = bySource;
+
         spdlog::debug("[UploadRepository] Statistics: {} uploads ({} successful, {} failed), {} certificates, {} countries",
             totalUploads, successfulUploads, failedUploads, totalCsca + totalDsc + totalDscNc + totalMlsc, countriesCount);
 

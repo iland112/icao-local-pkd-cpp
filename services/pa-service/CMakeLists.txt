@@ -83,6 +83,7 @@ set(REPOSITORIES_SRC
 set(SERVICES_SRC
     # sod_parser_service.cpp and data_group_parser_service.cpp now provided by icao::icao9303 library
     src/services/certificate_validation_service.cpp
+    src/services/dsc_auto_registration_service.cpp
     src/services/pa_verification_service.cpp
 )
 

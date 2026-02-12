@@ -460,6 +460,8 @@ export interface UploadStatisticsOverview {
     selfSigned: number;
     linkCertificates: number;
   };
+  // Source tracking (v2.8.0)
+  bySource?: Record<string, number>;
   validation: ValidationStats;
 }
 

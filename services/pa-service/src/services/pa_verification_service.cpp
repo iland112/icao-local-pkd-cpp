@@ -6,6 +6,7 @@
 #include "pa_verification_service.h"
 #include <data_group.h>
 #include <spdlog/spdlog.h>
+#include <openssl/evp.h>
 #include <stdexcept>
 #include <chrono>
 #include <iomanip>
@@ -18,17 +19,20 @@ PaVerificationService::PaVerificationService(
     repositories::DataGroupRepository* dgRepo,
     icao::SodParser* sodParser,
     CertificateValidationService* certValidator,
-    icao::DgParser* dgParser)
+    icao::DgParser* dgParser,
+    DscAutoRegistrationService* dscAutoRegService)
     : paRepo_(paRepo),
       dgRepo_(dgRepo),
       sodParser_(sodParser),
       certValidator_(certValidator),
-      dgParser_(dgParser)
+      dgParser_(dgParser),
+      dscAutoRegService_(dscAutoRegService)
 {
     if (!paRepo_ || !sodParser_ || !certValidator_ || !dgParser_) {
         throw std::invalid_argument("Service dependencies cannot be null");
     }
-    spdlog::debug("PaVerificationService initialized (dgRepo={})", dgRepo_ ? "yes" : "no");
+    spdlog::debug("PaVerificationService initialized (dgRepo={}, dscAutoReg={})",
+        dgRepo_ ? "yes" : "no", dscAutoRegService_ ? "yes" : "no");
 }
 
 Json::Value PaVerificationService::verifyPassiveAuthentication(
@@ -111,8 +115,40 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
 
         verification.expirationStatus = certValidation.expirationStatus;
 
+        // Set SOD binary and compute hash
+        verification.sodBinary = sodData;
+        {
+            unsigned char digest[EVP_MAX_MD_SIZE];
+            unsigned int digestLen = 0;
+            EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+            EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+            EVP_DigestUpdate(ctx, sodData.data(), sodData.size());
+            EVP_DigestFinal_ex(ctx, digest, &digestLen);
+            EVP_MD_CTX_free(ctx);
+            std::ostringstream hashStream;
+            for (unsigned int i = 0; i < digestLen; i++) {
+                hashStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(digest[i]);
+            }
+            verification.sodHash = hashStream.str();
+        }
+
         // Save to database
         std::string verificationId = paRepo_->insert(verification);
+
+        // Step 5.5: Auto-register DSC in local PKD if not already present
+        DscRegistrationResult dscRegResult;
+        if (dscAutoRegService_ && sod.dscCertificate) {
+            try {
+                dscRegResult = dscAutoRegService_->registerDscFromSod(
+                    sod.dscCertificate,
+                    verification.countryCode,
+                    verificationId,
+                    verification.verificationStatus
+                );
+            } catch (const std::exception& e) {
+                spdlog::error("[PA] DSC auto-registration failed (non-fatal): {}", e.what());
+            }
+        }
 
         // Save data groups to database for later retrieval
         if (dgRepo_) {
@@ -159,6 +195,17 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         data["dataGroupValidation"]["totalGroups"] = totalDgs;
         data["dataGroupValidation"]["validGroups"] = validDgs;
         data["dataGroupValidation"]["invalidGroups"] = totalDgs - validDgs;
+
+        // DSC auto-registration result
+        if (dscRegResult.success) {
+            Json::Value dscAutoReg;
+            dscAutoReg["registered"] = true;
+            dscAutoReg["newlyRegistered"] = dscRegResult.newlyRegistered;
+            dscAutoReg["certificateId"] = dscRegResult.certificateId;
+            dscAutoReg["fingerprint"] = dscRegResult.fingerprint;
+            dscAutoReg["countryCode"] = dscRegResult.countryCode;
+            data["dscAutoRegistration"] = dscAutoReg;
+        }
 
         // Wrap in ApiResponse format
         response["success"] = true;
