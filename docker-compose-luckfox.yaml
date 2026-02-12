@@ -5,23 +5,9 @@
 #   192.168.100.10: OpenLDAP1 (:389) - Master Node
 #   192.168.100.11: OpenLDAP2 (:389) + Docker Apps - This Node
 #
-# LDAP Strategy (v2.0.1+):
-#   - Applications use direct connections to both LDAP servers
-#   - Application-level load balancing (no HAProxy)
-#
-# Network Isolation (Phase 4.3):
-#   - frontend network: External access (API Gateway, Frontend)
-#   - backend network: Internal only (PKD, PA, Sync services, PostgreSQL)
-#   - PostgreSQL and services not directly accessible from host
+# All services use network_mode: host (luckfox kernel lacks iptables DNAT)
+# DB_HOST=127.0.0.1 (localhost, not Docker service name)
 # =============================================================================
-
-# Network definitions (Phase 4.3 - Security Hardening)
-networks:
-  frontend:
-    driver: bridge
-  backend:
-    driver: bridge
-    internal: true  # No internet access for backend services
 
 services:
   # ---------------------------------------------------------------------------
@@ -30,11 +16,7 @@ services:
   api-gateway:
     image: nginx:alpine
     container_name: icao-pkd-api-gateway
-    networks:
-      - frontend
-      - backend
-    ports:
-      - "8080:8080"
+    network_mode: host
     volumes:
       - ./nginx/api-gateway-luckfox.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -49,10 +31,7 @@ services:
   frontend:
     image: icao-local-pkd-frontend:arm64
     container_name: icao-pkd-frontend
-    networks:
-      - frontend
-    ports:
-      - "80:80"
+    network_mode: host
     environment:
       - TZ=Asia/Seoul
     volumes:
@@ -67,31 +46,31 @@ services:
   pkd-management:
     image: icao-local-management:arm64
     container_name: icao-pkd-management
-    networks:
-      - backend
+    network_mode: host
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-management
       - SERVER_PORT=8081
-      # PostgreSQL (bridge network - use service name)
-      - DB_HOST=postgres
+      # PostgreSQL (host network - use localhost)
+      - DB_HOST=127.0.0.1
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      # LDAP - Direct connections to both servers (v2.0.1+)
-      - LDAP_READ_HOSTS=192.168.100.10:389,192.168.100.11:389
+      - DB_PASSWORD=pkd
+      # LDAP - Direct connections to both servers
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=core
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
-      # JWT Authentication (Phase 3)
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}          # From .env file (REQUIRED)
-      - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}        # Default: icao-pkd
-      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}  # Default: 3600 (1 hour)
-      - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
+      # JWT Authentication
+      - JWT_SECRET_KEY=5cb9e9868c2cd76bbb643be294171838dfce7aa80dc98fe132f5f1c6c3c4d91c
+      - JWT_ISSUER=icao-pkd
+      - JWT_EXPIRATION_SECONDS=3600
+      - AUTH_ENABLED=true
     depends_on:
       - postgres
     volumes:
@@ -106,23 +85,23 @@ services:
   pa-service:
     image: icao-local-pa:arm64
     container_name: icao-pkd-pa-service
-    networks:
-      - backend
+    network_mode: host
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pa-service
       - SERVER_PORT=8082
-      # PostgreSQL (bridge network - use service name)
-      - DB_HOST=postgres
+      # PostgreSQL (host network - use localhost)
+      - DB_HOST=127.0.0.1
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      # LDAP - Direct connections to both servers (v2.0.1+)
-      - LDAP_READ_HOSTS=192.168.100.10:389,192.168.100.11:389
+      - DB_PASSWORD=pkd
+      # LDAP
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=core
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - postgres
     volumes:
@@ -130,30 +109,30 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # PKD Relay Service (formerly Sync Service)
+  # PKD Relay Service
   # ---------------------------------------------------------------------------
   pkd-relay:
     image: icao-local-pkd-relay:arm64
     container_name: icao-pkd-relay
-    networks:
-      - backend
+    network_mode: host
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=pkd-relay
       - SERVER_PORT=8083
-      # PostgreSQL (bridge network - use service name)
-      - DB_HOST=postgres
+      # PostgreSQL (host network - use localhost)
+      - DB_HOST=127.0.0.1
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
-      # LDAP - Direct connections to both servers (v2.0.1+)
-      - LDAP_READ_HOSTS=192.168.100.10:389,192.168.100.11:389
+      - DB_PASSWORD=pkd
+      # LDAP
+      - LDAP_HOST=192.168.100.10
+      - LDAP_PORT=389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
-      - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=core
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - postgres
     volumes:
@@ -166,10 +145,7 @@ services:
   swagger-ui:
     image: swaggerapi/swagger-ui:latest
     container_name: icao-pkd-swagger
-    networks:
-      - frontend
-    ports:
-      - "8888:8888"
+    network_mode: host
     environment:
       - PORT=8888
       - BASE_URL=/api-docs
@@ -186,12 +162,10 @@ services:
   postgres:
     image: postgres:15
     container_name: icao-pkd-postgres
-    networks:
-      - backend
-    # No ports exposed - backend services only
+    network_mode: host
     environment:
       - POSTGRES_USER=pkd
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # From .env file (same as DB_PASSWORD)
+      - POSTGRES_PASSWORD=pkd
       - POSTGRES_DB=localpkd
       - TZ=Asia/Seoul
     volumes:
