@@ -658,4 +658,10 @@ export interface CertificatePreviewResult {
   dlVersion?: number;
   dlHashAlgorithm?: string;
   dlSignatureValid?: boolean;
+  // CMS-level metadata (for ASN.1 structure tree)
+  dlSigningTime?: string;
+  dlEContentType?: string;
+  dlCmsDigestAlgorithm?: string;
+  dlCmsSignatureAlgorithm?: string;
+  dlSignerDn?: string;
 }

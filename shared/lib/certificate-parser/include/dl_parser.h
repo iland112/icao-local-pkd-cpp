@@ -59,6 +59,12 @@ struct DlParseResult {
     std::string issuerCountry;              ///< Country code from signer cert
     std::optional<std::string> issuerOrg;   ///< Issuing organization
 
+    // CMS-level metadata
+    int cmsVersion = 0;                     ///< CMS SignedData version
+    std::string cmsDigestAlgorithm;         ///< CMS digest algorithm (e.g., "SHA-1")
+    std::string cmsSignatureAlgorithm;      ///< Signer signature algorithm
+    std::string eContentType;               ///< eContentType OID (should be 2.23.136.1.1.7)
+
     // Signer certificate
     X509* signerCertificate = nullptr;      ///< DL signer cert (ownership transferred)
     bool signatureVerified = false;         ///< Whether DL signature was verified
@@ -87,6 +93,10 @@ struct DlParseResult {
         , signingTime(std::move(other.signingTime))
         , issuerCountry(std::move(other.issuerCountry))
         , issuerOrg(std::move(other.issuerOrg))
+        , cmsVersion(other.cmsVersion)
+        , cmsDigestAlgorithm(std::move(other.cmsDigestAlgorithm))
+        , cmsSignatureAlgorithm(std::move(other.cmsSignatureAlgorithm))
+        , eContentType(std::move(other.eContentType))
         , signerCertificate(other.signerCertificate)
         , signatureVerified(other.signatureVerified)
         , deviations(std::move(other.deviations))
@@ -131,10 +141,18 @@ private:
     static std::string extractSigningTime(CMS_ContentInfo* cms);
     static bool verifyCmsSignature(CMS_ContentInfo* cms, X509* signerCert);
 
+    // eContent metadata extraction
+    struct ContentMetadata {
+        int version = 0;
+        std::string hashAlgorithm;
+    };
+    static ContentMetadata extractContentMetadata(CMS_ContentInfo* cms);
+
     // ASN.1 parsing helpers
     static std::string getCountryFromCert(X509* cert);
     static std::string getOrganizationFromCert(X509* cert);
     static std::string classifyDeviationOid(const std::string& oid);
+    static std::string oidToAlgorithmName(const std::string& oid);
     static std::string x509NameToString(X509_NAME* name);
 };
 

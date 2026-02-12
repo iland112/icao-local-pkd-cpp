@@ -117,6 +117,12 @@ public:
         int dlVersion = 0;
         std::string dlHashAlgorithm;
         bool dlSignatureValid = false;
+        // DL CMS-level metadata (for ASN.1 structure tree)
+        std::string dlSigningTime;
+        std::string dlEContentType;
+        std::string dlCmsDigestAlgorithm;
+        std::string dlCmsSignatureAlgorithm;
+        std::string dlSignerDn;
     };
 
     /**

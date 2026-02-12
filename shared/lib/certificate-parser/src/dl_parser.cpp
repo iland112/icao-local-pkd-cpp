@@ -134,6 +134,58 @@ DlParseResult DlParser::parse(const std::vector<uint8_t>& data) {
         }
     }
 
+    // Extract version and hashAlgorithm from eContent
+    auto metadata = extractContentMetadata(cms);
+    result.version = metadata.version;
+    result.hashAlgorithm = metadata.hashAlgorithm;
+
+    // Extract CMS-level metadata
+    {
+        // eContentType
+        const ASN1_OBJECT* ectype = CMS_get0_eContentType(cms);
+        if (ectype) {
+            char buf[128];
+            OBJ_obj2txt(buf, sizeof(buf), ectype, 1);  // numeric form
+            result.eContentType = std::string(buf);
+        }
+
+        // CMS digest algorithm(s) from SignerInfo
+        STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+        if (signerInfos && sk_CMS_SignerInfo_num(signerInfos) > 0) {
+            CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, 0);
+            if (si) {
+                // Digest algorithm
+                X509_ALGOR* digestAlg = nullptr;
+                X509_ALGOR* sigAlg = nullptr;
+                CMS_SignerInfo_get0_algs(si, nullptr, nullptr, &digestAlg, &sigAlg);
+                if (digestAlg) {
+                    const ASN1_OBJECT* digObj = nullptr;
+                    X509_ALGOR_get0(&digObj, nullptr, nullptr, digestAlg);
+                    if (digObj) {
+                        char buf[128];
+                        OBJ_obj2txt(buf, sizeof(buf), digObj, 1);
+                        result.cmsDigestAlgorithm = oidToAlgorithmName(std::string(buf));
+                    }
+                }
+                // Signature algorithm
+                if (sigAlg) {
+                    const ASN1_OBJECT* sigObj = nullptr;
+                    X509_ALGOR_get0(&sigObj, nullptr, nullptr, sigAlg);
+                    if (sigObj) {
+                        int nid = OBJ_obj2nid(sigObj);
+                        if (nid != NID_undef) {
+                            result.cmsSignatureAlgorithm = OBJ_nid2sn(nid);
+                        } else {
+                            char buf[128];
+                            OBJ_obj2txt(buf, sizeof(buf), sigObj, 1);
+                            result.cmsSignatureAlgorithm = std::string(buf);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Extract signing time from SignerInfo
     result.signingTime = extractSigningTime(cms);
 
@@ -289,6 +341,56 @@ bool DlParser::verifyCmsSignature(CMS_ContentInfo* cms, X509* signerCert) {
 
     X509_STORE_free(store);
     return ret == 1;
+}
+
+// ============================================================================
+// eContent metadata extraction (version + hashAlgorithm)
+// ============================================================================
+
+DlParser::ContentMetadata DlParser::extractContentMetadata(CMS_ContentInfo* cms) {
+    ContentMetadata meta;
+    if (!cms) return meta;
+
+    ASN1_OCTET_STRING** pContent = CMS_get0_content(cms);
+    if (!pContent || !*pContent) return meta;
+
+    const unsigned char* data = ASN1_STRING_get0_data(*pContent);
+    long dataLen = ASN1_STRING_length(*pContent);
+    if (!data || dataLen <= 0) return meta;
+
+    const unsigned char* p = data;
+    long remaining = dataLen;
+
+    // Outer SEQUENCE
+    int tag, tagClass;
+    long contentLen;
+    if (!readTlv(p, remaining, tag, tagClass, contentLen)) return meta;
+    if (tag != V_ASN1_SEQUENCE) return meta;
+    remaining = contentLen;
+
+    // version INTEGER
+    if (!readTlv(p, remaining, tag, tagClass, contentLen)) return meta;
+    if (tag != V_ASN1_INTEGER) return meta;
+    if (contentLen > 0) {
+        meta.version = static_cast<int>(p[0]);
+    }
+    p += contentLen;
+    remaining -= contentLen;
+
+    // hashAlgorithm AlgorithmIdentifier ::= SEQUENCE { algorithm OID, parameters ANY OPTIONAL }
+    const unsigned char* algoSeqStart = p;
+    if (!readTlv(p, remaining, tag, tagClass, contentLen)) return meta;
+    if (tag != V_ASN1_SEQUENCE) return meta;
+
+    long algoRemaining = contentLen;
+    // Read the OID inside
+    if (!readTlv(p, algoRemaining, tag, tagClass, contentLen)) return meta;
+    if (tag == V_ASN1_OBJECT && contentLen > 0) {
+        std::string oid = readOid(p, contentLen);
+        meta.hashAlgorithm = oidToAlgorithmName(oid);
+    }
+
+    return meta;
 }
 
 // ============================================================================
@@ -503,6 +605,18 @@ std::string DlParser::classifyDeviationOid(const std::string& oid) {
     if (oid.find("2.23.136.1.1.7.3") == 0) return "MRZ";
     if (oid.find("2.23.136.1.1.7.4") == 0) return "Chip";
     return "Unknown";
+}
+
+std::string DlParser::oidToAlgorithmName(const std::string& oid) {
+    // Common hash algorithm OIDs
+    if (oid == "1.3.14.3.2.26") return "SHA-1";
+    if (oid == "2.16.840.1.101.3.4.2.1") return "SHA-256";
+    if (oid == "2.16.840.1.101.3.4.2.2") return "SHA-384";
+    if (oid == "2.16.840.1.101.3.4.2.3") return "SHA-512";
+    if (oid == "2.16.840.1.101.3.4.2.4") return "SHA-224";
+    if (oid == "1.2.840.113549.2.5") return "MD5";
+    // Return OID itself if not recognized
+    return oid;
 }
 
 std::string DlParser::x509NameToString(X509_NAME* name) {

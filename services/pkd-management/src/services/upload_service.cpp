@@ -320,6 +320,13 @@ UploadService::CertificatePreviewResult UploadService::previewCertificate(
                 result.dlVersion = dlResult.version;
                 result.dlHashAlgorithm = dlResult.hashAlgorithm;
                 result.dlSignatureValid = dlResult.signatureVerified;
+                result.dlSigningTime = dlResult.signingTime;
+                result.dlEContentType = dlResult.eContentType;
+                result.dlCmsDigestAlgorithm = dlResult.cmsDigestAlgorithm;
+                result.dlCmsSignatureAlgorithm = dlResult.cmsSignatureAlgorithm;
+                if (dlResult.signerCertificate) {
+                    result.dlSignerDn = x509NameToString(X509_get_subject_name(dlResult.signerCertificate));
+                }
 
                 // Extract certificate previews
                 for (auto* cert : dlResult.certificates) {

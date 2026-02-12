@@ -5143,6 +5143,11 @@ void registerRoutes() {
                     response["dlVersion"] = result.dlVersion;
                     response["dlHashAlgorithm"] = result.dlHashAlgorithm;
                     response["dlSignatureValid"] = result.dlSignatureValid;
+                    response["dlSigningTime"] = result.dlSigningTime;
+                    response["dlEContentType"] = result.dlEContentType;
+                    response["dlCmsDigestAlgorithm"] = result.dlCmsDigestAlgorithm;
+                    response["dlCmsSignatureAlgorithm"] = result.dlCmsSignatureAlgorithm;
+                    response["dlSignerDn"] = result.dlSignerDn;
                 }
 
                 // CRL info

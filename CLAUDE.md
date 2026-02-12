@@ -468,8 +468,13 @@ scripts/
 - Supports PEM, DER, CER, P7B, DL (Deviation List), CRL file formats
 - Certificate detail tree view (TreeViewer) in preview with General/Details tabs
 - DL file support: deviation data parsing + preview (DlParser replacing DvlParser)
+- DL CMS metadata extraction: hashAlgorithm, digestAlgorithm, signatureAlgorithm, eContentType, signerDN
+- DL ASN.1 structure tree view in preview tab (CMS ContentInfo hierarchy)
 - CRL metadata preview (issuer, validity, revoked count)
 - Duplicate file detection via SHA-256 hash before save
+- Tab-based preview UI: Certificates | DL Structure | CRL (context-dependent tabs)
+- Compact UX redesign: inline file selection, status badges, InfoRow component
+- Removed unused search input from header navigation bar
 - FileUpload page narrowed to LDIF/Master List only
 - New repositories: CrlRepository, DeviationListRepository
 - Complete PGconn→QueryExecutor migration for Oracle compatibility
