@@ -11,8 +11,191 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <cstring>
+
+#ifdef HAS_OPENJPEG
+#include <openjpeg.h>
+#include <jpeglib.h>
+#endif
 
 namespace icao {
+
+// ==========================================================================
+// JPEG2000 → JPEG Conversion (when OpenJPEG + libjpeg available)
+// ==========================================================================
+
+#ifdef HAS_OPENJPEG
+
+// OpenJPEG memory stream helper
+struct MemStreamState {
+    const uint8_t* data;
+    OPJ_SIZE_T size;
+    OPJ_SIZE_T offset;
+};
+
+static OPJ_SIZE_T memStreamRead(void* buffer, OPJ_SIZE_T nbBytes, void* userData) {
+    auto* s = static_cast<MemStreamState*>(userData);
+    if (s->offset >= s->size) return static_cast<OPJ_SIZE_T>(-1);
+    OPJ_SIZE_T avail = s->size - s->offset;
+    OPJ_SIZE_T toRead = (nbBytes < avail) ? nbBytes : avail;
+    std::memcpy(buffer, s->data + s->offset, toRead);
+    s->offset += toRead;
+    return toRead;
+}
+
+static OPJ_OFF_T memStreamSkip(OPJ_OFF_T nbBytes, void* userData) {
+    auto* s = static_cast<MemStreamState*>(userData);
+    if (nbBytes < 0) {
+        OPJ_SIZE_T back = static_cast<OPJ_SIZE_T>(-nbBytes);
+        s->offset = (back > s->offset) ? 0 : s->offset - back;
+    } else {
+        s->offset += static_cast<OPJ_SIZE_T>(nbBytes);
+        if (s->offset > s->size) s->offset = s->size;
+    }
+    return static_cast<OPJ_OFF_T>(s->offset);
+}
+
+static OPJ_BOOL memStreamSeek(OPJ_OFF_T nbBytes, void* userData) {
+    auto* s = static_cast<MemStreamState*>(userData);
+    if (nbBytes < 0 || static_cast<OPJ_SIZE_T>(nbBytes) > s->size) return OPJ_FALSE;
+    s->offset = static_cast<OPJ_SIZE_T>(nbBytes);
+    return OPJ_TRUE;
+}
+
+/**
+ * @brief Convert JPEG2000 image data to JPEG format
+ * Browsers do not support JPEG2000 natively, so server-side conversion is needed.
+ * @param jp2Data Raw JPEG2000 data (JP2 container or J2K codestream)
+ * @return JPEG data, or empty vector on failure
+ */
+static std::vector<uint8_t> convertJp2ToJpeg(const std::vector<uint8_t>& jp2Data) {
+    // Detect codec type: JP2 container vs J2K codestream
+    OPJ_CODEC_FORMAT codecFormat = OPJ_CODEC_JP2;
+    if (jp2Data.size() >= 4 && jp2Data[0] == 0xFF && jp2Data[1] == 0x4F &&
+        jp2Data[2] == 0xFF && jp2Data[3] == 0x51) {
+        codecFormat = OPJ_CODEC_J2K;
+    }
+
+    opj_codec_t* codec = opj_create_decompress(codecFormat);
+    if (!codec) {
+        spdlog::error("[DG2] Failed to create JPEG2000 decoder");
+        return {};
+    }
+
+    opj_dparameters_t params;
+    opj_set_default_decoder_parameters(&params);
+    if (!opj_setup_decoder(codec, &params)) {
+        opj_destroy_codec(codec);
+        spdlog::error("[DG2] Failed to setup JPEG2000 decoder");
+        return {};
+    }
+
+    // Create memory stream
+    MemStreamState ms{jp2Data.data(), jp2Data.size(), 0};
+    opj_stream_t* stream = opj_stream_create(jp2Data.size(), OPJ_TRUE);
+    opj_stream_set_user_data(stream, &ms, nullptr);
+    opj_stream_set_user_data_length(stream, jp2Data.size());
+    opj_stream_set_read_function(stream, memStreamRead);
+    opj_stream_set_skip_function(stream, memStreamSkip);
+    opj_stream_set_seek_function(stream, memStreamSeek);
+
+    // Decode
+    opj_image_t* image = nullptr;
+    if (!opj_read_header(stream, codec, &image)) {
+        opj_stream_destroy(stream);
+        opj_destroy_codec(codec);
+        spdlog::error("[DG2] Failed to read JPEG2000 header");
+        return {};
+    }
+
+    if (!opj_decode(codec, stream, image)) {
+        opj_image_destroy(image);
+        opj_stream_destroy(stream);
+        opj_destroy_codec(codec);
+        spdlog::error("[DG2] Failed to decode JPEG2000 image");
+        return {};
+    }
+
+    opj_stream_destroy(stream);
+    opj_destroy_codec(codec);
+
+    int width = static_cast<int>(image->comps[0].w);
+    int height = static_cast<int>(image->comps[0].h);
+    int numComps = static_cast<int>(image->numcomps);
+
+    spdlog::debug("[DG2] JPEG2000 decoded: {}x{}, {} components, color_space={}",
+        width, height, numComps, static_cast<int>(image->color_space));
+
+    // Build RGB buffer
+    std::vector<uint8_t> rgbBuf(width * height * 3);
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            int idx = y * width + x;
+            int off = idx * 3;
+
+            if (numComps >= 3) {
+                int r = image->comps[0].data[idx];
+                int g = image->comps[1].data[idx];
+                int b = image->comps[2].data[idx];
+
+                // Adjust precision to 8 bits
+                int prec = static_cast<int>(image->comps[0].prec);
+                if (prec > 8) { r >>= (prec - 8); g >>= (prec - 8); b >>= (prec - 8); }
+                else if (prec < 8) { r <<= (8 - prec); g <<= (8 - prec); b <<= (8 - prec); }
+
+                rgbBuf[off]     = static_cast<uint8_t>(std::max(0, std::min(255, r)));
+                rgbBuf[off + 1] = static_cast<uint8_t>(std::max(0, std::min(255, g)));
+                rgbBuf[off + 2] = static_cast<uint8_t>(std::max(0, std::min(255, b)));
+            } else {
+                // Grayscale
+                int v = image->comps[0].data[idx];
+                int prec = static_cast<int>(image->comps[0].prec);
+                if (prec > 8) v >>= (prec - 8);
+                else if (prec < 8) v <<= (8 - prec);
+                uint8_t val = static_cast<uint8_t>(std::max(0, std::min(255, v)));
+                rgbBuf[off] = rgbBuf[off + 1] = rgbBuf[off + 2] = val;
+            }
+        }
+    }
+    opj_image_destroy(image);
+
+    // Encode as JPEG using libjpeg
+    struct jpeg_compress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_compress(&cinfo);
+
+    unsigned char* jpegBuf = nullptr;
+    unsigned long jpegSize = 0;
+    jpeg_mem_dest(&cinfo, &jpegBuf, &jpegSize);
+
+    cinfo.image_width = width;
+    cinfo.image_height = height;
+    cinfo.input_components = 3;
+    cinfo.in_color_space = JCS_RGB;
+    jpeg_set_defaults(&cinfo);
+    jpeg_set_quality(&cinfo, 90, TRUE);
+    jpeg_start_compress(&cinfo, TRUE);
+
+    JSAMPROW rowPtr[1];
+    while (cinfo.next_scanline < cinfo.image_height) {
+        rowPtr[0] = &rgbBuf[cinfo.next_scanline * width * 3];
+        jpeg_write_scanlines(&cinfo, rowPtr, 1);
+    }
+
+    jpeg_finish_compress(&cinfo);
+    jpeg_destroy_compress(&cinfo);
+
+    std::vector<uint8_t> result(jpegBuf, jpegBuf + jpegSize);
+    free(jpegBuf);
+
+    spdlog::info("[DG2] JPEG2000 → JPEG converted: {}x{}, {} bytes → {} bytes",
+        width, height, jp2Data.size(), result.size());
+
+    return result;
+}
+
+#endif // HAS_OPENJPEG
 
 // Helper function for Base64 encoding
 static std::string base64Encode(const std::vector<uint8_t>& data) {
@@ -164,16 +347,41 @@ Json::Value DgParser::parseDg2(const std::vector<uint8_t>& dg2Data) {
         return result;
     }
 
+    // For JPEG2000: convert to JPEG since browsers don't support JP2 natively
+    std::string mimeType;
+    std::vector<uint8_t> displayData;
+
+    if (imageFormat == "JPEG") {
+        mimeType = "image/jpeg";
+        displayData = imageData;
+    } else {
+#ifdef HAS_OPENJPEG
+        // Convert JPEG2000 → JPEG for browser compatibility
+        displayData = convertJp2ToJpeg(imageData);
+        if (!displayData.empty()) {
+            mimeType = "image/jpeg";
+            spdlog::info("DG2: JPEG2000 converted to JPEG for browser display");
+        } else {
+            spdlog::warn("DG2: JPEG2000 conversion failed, returning raw JP2 data");
+            mimeType = "image/jp2";
+            displayData = imageData;
+        }
+#else
+        spdlog::warn("DG2: JPEG2000 image detected but OpenJPEG not available for conversion");
+        mimeType = "image/jp2";
+        displayData = imageData;
+#endif
+    }
+
     // Convert image data to Base64 for data URL
-    std::string base64Image = base64Encode(imageData);
-    std::string mimeType = (imageFormat == "JPEG") ? "image/jpeg" : "image/jp2";
+    std::string base64Image = base64Encode(displayData);
     std::string imageDataUrl = "data:" + mimeType + ";base64," + base64Image;
 
     // Build faceImages array (ICAO Doc 9303 allows multiple face images)
     Json::Value faceImage;
     faceImage["imageDataUrl"] = imageDataUrl;
-    faceImage["imageFormat"] = imageFormat;
-    faceImage["imageSize"] = static_cast<int>(imageData.size());
+    faceImage["imageFormat"] = imageFormat;  // Original format (JPEG2000)
+    faceImage["imageSize"] = static_cast<int>(imageData.size());  // Original size
     faceImage["imageType"] = "ICAO Face";  // As per CBEFF format
 
     Json::Value faceImages = Json::arrayValue;

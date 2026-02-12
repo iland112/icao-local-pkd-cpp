@@ -41,38 +41,38 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-      <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex items-center justify-between px-4 py-1.5">
         {/* Left: Mobile menu button */}
         <div className="flex items-center gap-4">
           <button
             onClick={toggleMobile}
-            className="lg:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             aria-label="메뉴 열기"
           >
-            <Menu className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            <Menu className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
 
         </div>
 
         {/* Right: Actions */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             title={darkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
           >
             {darkMode ? (
-              <Sun className="w-5 h-5 text-yellow-500" />
+              <Sun className="w-4 h-4 text-yellow-500" />
             ) : (
-              <Moon className="w-5 h-5 text-gray-600" />
+              <Moon className="w-4 h-4 text-gray-600" />
             )}
           </button>
 
           {/* Notifications */}
-          <button className="relative p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+          <button className="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <Bell className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
           </button>
 
           {/* User Menu */}
@@ -80,18 +80,18 @@ export function Header() {
             <button
               type="button"
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-              className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
-              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
-                <User className="w-4 h-4 text-white" />
+              <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
+                <User className="w-3 h-3 text-white" />
               </div>
               <div className="hidden sm:flex flex-col items-start">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-200">
                   {user?.username || 'User'}
                 </span>
                 {user?.is_admin && (
-                  <span className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
-                    <Shield className="w-3 h-3" />
+                  <span className="flex items-center gap-0.5 text-[10px] text-blue-600 dark:text-blue-400 leading-none">
+                    <Shield className="w-2.5 h-2.5" />
                     Admin
                   </span>
                 )}

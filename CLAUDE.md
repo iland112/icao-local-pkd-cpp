@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.7.1
+**Current Version**: v2.8.0
 **Last Updated**: 2026-02-12
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -464,6 +464,18 @@ scripts/
 ---
 
 ## Version History
+
+### v2.8.0 (2026-02-12) - PA Verification UX + DG2 JPEG2000 Face Image Support
+- JPEG2000 → JPEG server-side conversion for DG2 face images (OpenJPEG + libjpeg)
+- Browsers cannot render JPEG2000 natively; pa-service now auto-converts to JPEG
+- Optional build-time dependency: `HAS_OPENJPEG` macro (enabled when libopenjp2-dev + libjpeg-dev present)
+- PA verification step cards show failure/success reasons (Trust Chain, SOD Signature, DG Hash, CRL)
+- Result summary card moved to top with failure reason breakdown for INVALID status
+- Fixed "Invalid Date" in result card: added `verificationTimestamp`, `processingDurationMs`, `issuingCountry`, `documentNumber` to verify response
+- PA History modal redesigned: compact layout (max-w-4xl), sticky header/footer, inline metadata
+- Oracle compatibility: LIMIT→FETCH FIRST, NOW()→SYSTIMESTAMP in pa_verification_repository
+- Data group repository: `\\x` prefix for BLOB binding (Oracle compatibility)
+- Header bar height reduced (py-3→py-1.5, smaller icons/avatar)
 
 ### v2.7.1 (2026-02-12) - Monitoring Service DB-Free + Oracle Compatibility Fixes
 - Monitoring service: removed PostgreSQL (libpq) dependency entirely, now DB-independent

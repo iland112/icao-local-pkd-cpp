@@ -123,7 +123,7 @@ export function PAVerify() {
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState<PAVerificationResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [, setSuccessMessage] = useState<string | null>(null);
 
   // Step-based verification progress
   const [steps, setSteps] = useState<VerificationStep[]>(initialSteps);
@@ -209,6 +209,10 @@ export function PAVerify() {
           ...newSteps[2],
           status: 'error',
           message: '✗ CSCA 인증서를 찾을 수 없음',
+          details: {
+            error: response.certificateChainValidation?.validationErrors,
+            dscSubject: response.certificateChainValidation?.dscSubject,
+          },
           expanded: true,
         };
       }
@@ -244,11 +248,18 @@ export function PAVerify() {
           expanded: true,
         };
       } else {
+        const chainValidation = response.certificateChainValidation;
         newSteps[3] = {
           ...newSteps[3],
           status: 'error',
           message: '✗ Trust Chain 검증 실패',
-          details: { error: response.certificateChainValidation?.validationErrors },
+          details: {
+            error: chainValidation?.validationErrors,
+            dscSubject: chainValidation?.dscSubject,
+            cscaSubject: chainValidation?.cscaSubject,
+            notBefore: chainValidation?.notBefore,
+            notAfter: chainValidation?.notAfter,
+          },
           expanded: true,
         };
       }
@@ -259,6 +270,10 @@ export function PAVerify() {
           ...newSteps[4],
           status: 'success',
           message: '✓ SOD 서명 검증 성공',
+          details: {
+            signatureAlgorithm: response.sodSignatureValidation.signatureAlgorithm,
+            hashAlgorithm: response.sodSignatureValidation.hashAlgorithm,
+          },
           expanded: true,
         };
       } else {
@@ -266,7 +281,11 @@ export function PAVerify() {
           ...newSteps[4],
           status: 'error',
           message: '✗ SOD 서명 검증 실패',
-          details: { error: response.sodSignatureValidation?.validationErrors },
+          details: {
+            error: response.sodSignatureValidation?.validationErrors,
+            signatureAlgorithm: response.sodSignatureValidation?.signatureAlgorithm,
+            hashAlgorithm: response.sodSignatureValidation?.hashAlgorithm,
+          },
           expanded: true,
         };
       }
@@ -313,6 +332,7 @@ export function PAVerify() {
             message: '✗ 인증서가 폐기됨',
             details: {
               description: response.certificateChainValidation.crlStatusDescription,
+              detailedDescription: response.certificateChainValidation.crlStatusDetailedDescription,
             },
             expanded: true,
           };
@@ -323,6 +343,10 @@ export function PAVerify() {
           ...newSteps[6],
           status: 'warning',
           message: response.certificateChainValidation?.crlMessage || '⚠ CRL을 찾을 수 없음',
+          details: {
+            description: response.certificateChainValidation?.crlStatusDescription,
+            detailedDescription: response.certificateChainValidation?.crlStatusDetailedDescription,
+          },
           expanded: true,
         };
       }
@@ -859,10 +883,102 @@ export function PAVerify() {
             </div>
           )}
 
-          {successMessage && result?.status === 'VALID' && (
-            <div className="p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center gap-2 text-green-700 dark:text-green-400">
-              <CheckCircle className="w-5 h-5" />
-              <span className="text-sm">{successMessage}</span>
+          {/* Overall Result Summary (top position) */}
+          {result && (
+            <div className={cn(
+              'rounded-2xl p-4',
+              result.status === 'VALID'
+                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+                : result.status === 'INVALID'
+                ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'
+            )}>
+              <div className="flex items-center gap-3">
+                {result.status === 'VALID' ? (
+                  <Award className="w-10 h-10" />
+                ) : result.status === 'INVALID' ? (
+                  <XCircle className="w-10 h-10" />
+                ) : (
+                  <AlertTriangle className="w-10 h-10" />
+                )}
+                <div className="flex-grow">
+                  <h2 className="text-lg font-bold">
+                    {result.status === 'VALID'
+                      ? '검증 성공'
+                      : result.status === 'INVALID'
+                      ? '검증 실패'
+                      : '검증 오류'}
+                  </h2>
+                  <div className="flex items-center gap-4 mt-0.5 text-sm opacity-90">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-3.5 h-3.5" />
+                      {result.processingDurationMs}ms
+                    </span>
+                    {result.issuingCountry && (
+                      <span className="flex items-center gap-1">
+                        <Globe className="w-3.5 h-3.5" />
+                        {result.issuingCountry}
+                      </span>
+                    )}
+                    {result.documentNumber && (
+                      <span className="flex items-center gap-1">
+                        <IdCard className="w-3.5 h-3.5" />
+                        {result.documentNumber}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Link
+                  to={`/pa/history?id=${result.verificationId}`}
+                  className="flex items-center gap-1 text-xs opacity-80 hover:opacity-100 underline shrink-0"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  상세
+                </Link>
+              </div>
+
+              {/* Failure reasons */}
+              {result.status === 'INVALID' && (
+                <div className="mt-3 pt-3 border-t border-white/20 space-y-1.5">
+                  <div className="text-xs font-semibold opacity-90">실패 원인:</div>
+                  {!result.certificateChainValidation?.valid && (
+                    <div className="flex items-center gap-2 text-sm opacity-90">
+                      <XCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Trust Chain 검증 실패{result.certificateChainValidation?.validationErrors ? ` — ${result.certificateChainValidation.validationErrors}` : ''}</span>
+                    </div>
+                  )}
+                  {!result.sodSignatureValidation?.valid && (
+                    <div className="flex items-center gap-2 text-sm opacity-90">
+                      <XCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>SOD 서명 검증 실패{result.sodSignatureValidation?.validationErrors ? ` — ${result.sodSignatureValidation.validationErrors}` : ''}</span>
+                    </div>
+                  )}
+                  {result.dataGroupValidation && result.dataGroupValidation.invalidGroups > 0 && (
+                    <div className="flex items-center gap-2 text-sm opacity-90">
+                      <XCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>Data Group 해시 불일치 ({result.dataGroupValidation.invalidGroups}/{result.dataGroupValidation.totalGroups})</span>
+                    </div>
+                  )}
+                  {result.certificateChainValidation?.revoked && (
+                    <div className="flex items-center gap-2 text-sm opacity-90">
+                      <XCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>인증서 폐기됨 (CRL)</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Verification ID & Timestamp */}
+              <div className="mt-3 pt-2 border-t border-white/20 text-xs flex flex-wrap gap-4 opacity-75">
+                <div>
+                  <span>검증 ID: </span>
+                  <span className="font-mono">{result.verificationId}</span>
+                </div>
+                <div>
+                  <span>검증 시각: </span>
+                  <span>{new Date(result.verificationTimestamp).toLocaleString('ko-KR')}</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -964,7 +1080,7 @@ export function PAVerify() {
                       )}
 
                       {/* Step 3: CSCA 조회 상세 정보 */}
-                      {step.id === 3 && step.details && (
+                      {step.id === 3 && step.details && step.status === 'success' && (
                         <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                           <div className="flex items-start gap-2">
                             <span className="text-gray-500 shrink-0">CSCA DN:</span>
@@ -974,9 +1090,26 @@ export function PAVerify() {
                           </div>
                         </div>
                       )}
+                      {step.id === 3 && step.status === 'error' && step.details && (
+                        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs space-y-1.5">
+                          {step.details.dscSubject && (
+                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                              <span className="text-gray-500 shrink-0">DSC 발급자:</span>
+                              <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                                {step.details.dscSubject}
+                              </code>
+                            </div>
+                          )}
+                          {step.details.error && (
+                            <div className="text-red-600 dark:text-red-400">
+                              <span className="font-semibold">원인:</span> {String(step.details.error)}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
-                      {/* Step 4: Trust Chain 검증 상세 정보 */}
-                      {step.id === 4 && step.details && !step.details.error && (
+                      {/* Step 4: Trust Chain 검증 상세 정보 (성공) */}
+                      {step.id === 4 && step.details && step.status !== 'error' && (
                         <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                           <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Trust Chain 경로:</div>
                           <div className="flex flex-col items-center gap-1">
@@ -1052,19 +1185,112 @@ export function PAVerify() {
                           </div>
                         </div>
                       )}
-                      {step.id === 4 && step.details?.error && (
-                        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs">
-                          <div className="text-red-600 dark:text-red-400">
-                            <span className="font-semibold">오류:</span> {String(step.details.error)}
+                      {/* Step 4: Trust Chain 검증 상세 정보 (실패) */}
+                      {step.id === 4 && step.status === 'error' && step.details && (
+                        <div className="mt-2 space-y-2">
+                          {/* 검증 대상 인증서 정보 */}
+                          {(step.details.dscSubject || step.details.cscaSubject) && (
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-1.5">
+                              <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">검증 대상 인증서:</div>
+                              {step.details.dscSubject && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-gray-500 shrink-0 w-12">DSC:</span>
+                                  <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                                    {step.details.dscSubject}
+                                  </code>
+                                </div>
+                              )}
+                              {step.details.cscaSubject && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-gray-500 shrink-0 w-12">CSCA:</span>
+                                  <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                                    {step.details.cscaSubject}
+                                  </code>
+                                </div>
+                              )}
+                              {step.details.notBefore && step.details.notAfter && (
+                                <div className="flex items-start gap-2">
+                                  <span className="text-gray-500 shrink-0 w-12">유효기간:</span>
+                                  <span className="text-gray-600 dark:text-gray-400">
+                                    {step.details.notBefore} ~ {step.details.notAfter}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {/* 실패 원인 */}
+                          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs">
+                            <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                              <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-semibold">실패 원인: </span>
+                                {step.details.error
+                                  ? String(step.details.error)
+                                  : 'DSC 인증서가 CSCA에 의해 서명되지 않았거나 서명 검증에 실패했습니다.'}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
 
-                      {/* Step 5: SOD 서명 검증 상세 정보 (실패 시) */}
-                      {step.id === 5 && step.details?.error && (
-                        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs">
-                          <div className="text-red-600 dark:text-red-400">
-                            <span className="font-semibold">오류:</span> {String(step.details.error)}
+                      {/* Step 5: SOD 서명 검증 상세 정보 (성공) */}
+                      {step.id === 5 && step.status === 'success' && step.details && (
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
+                          <div className="grid grid-cols-2 gap-2">
+                            {step.details.signatureAlgorithm && (
+                              <div>
+                                <span className="text-gray-500">서명 알고리즘:</span>
+                                <code className="ml-1 font-mono bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
+                                  {String(step.details.signatureAlgorithm)}
+                                </code>
+                              </div>
+                            )}
+                            {step.details.hashAlgorithm && (
+                              <div>
+                                <span className="text-gray-500">해시 알고리즘:</span>
+                                <code className="ml-1 font-mono bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
+                                  {String(step.details.hashAlgorithm)}
+                                </code>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {/* Step 5: SOD 서명 검증 상세 정보 (실패) */}
+                      {step.id === 5 && step.status === 'error' && (
+                        <div className="mt-2 space-y-2">
+                          {step.details && (step.details.signatureAlgorithm || step.details.hashAlgorithm) && (
+                            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
+                              <div className="grid grid-cols-2 gap-2">
+                                {step.details.signatureAlgorithm && (
+                                  <div>
+                                    <span className="text-gray-500">서명 알고리즘:</span>
+                                    <code className="ml-1 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
+                                      {String(step.details.signatureAlgorithm)}
+                                    </code>
+                                  </div>
+                                )}
+                                {step.details.hashAlgorithm && (
+                                  <div>
+                                    <span className="text-gray-500">해시 알고리즘:</span>
+                                    <code className="ml-1 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
+                                      {String(step.details.hashAlgorithm)}
+                                    </code>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs">
+                            <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                              <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-semibold">실패 원인: </span>
+                                {step.details?.error
+                                  ? String(step.details.error)
+                                  : 'SOD의 서명이 DSC 공개키로 검증되지 않았습니다.'}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1297,69 +1523,6 @@ export function PAVerify() {
             </div>
           </div>
 
-          {/* Overall Result Summary */}
-          {result && (
-            <div className={cn(
-              'rounded-2xl p-5',
-              result.status === 'VALID'
-                ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-                : result.status === 'INVALID'
-                ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
-                : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'
-            )}>
-              <div className="flex items-center gap-4">
-                {result.status === 'VALID' ? (
-                  <Award className="w-12 h-12" />
-                ) : result.status === 'INVALID' ? (
-                  <XCircle className="w-12 h-12" />
-                ) : (
-                  <AlertTriangle className="w-12 h-12" />
-                )}
-                <div className="flex-grow">
-                  <h2 className="text-xl font-bold">
-                    {result.status === 'VALID'
-                      ? '검증 성공'
-                      : result.status === 'INVALID'
-                      ? '검증 실패'
-                      : '검증 오류'}
-                  </h2>
-                  <div className="flex items-center gap-4 mt-1 text-sm opacity-90">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {result.processingDurationMs}ms
-                    </span>
-                    {result.issuingCountry && (
-                      <span className="flex items-center gap-1">
-                        <Globe className="w-4 h-4" />
-                        {result.issuingCountry}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Verification ID & Timestamp */}
-              <div className="mt-4 pt-3 border-t border-white/20 text-sm flex flex-wrap gap-4">
-                <div>
-                  <span className="opacity-75">검증 ID</span>
-                  <div className="font-mono text-xs">{result.verificationId}</div>
-                </div>
-                <div>
-                  <span className="opacity-75">검증 시각</span>
-                  <div className="text-xs">{new Date(result.verificationTimestamp).toLocaleString('ko-KR')}</div>
-                </div>
-              </div>
-
-              {/* Detail Link */}
-              <Link
-                to={`/pa/history?id=${result.verificationId}`}
-                className="mt-3 inline-flex items-center gap-1 text-sm opacity-90 hover:opacity-100 underline"
-              >
-                <ExternalLink className="w-4 h-4" />
-                상세 보기
-              </Link>
-            </div>
-          )}
         </div>
       </div>
     </div>

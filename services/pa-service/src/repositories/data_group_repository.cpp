@@ -154,13 +154,12 @@ std::string DataGroupRepository::insert(
         params.push_back(boolStr(dg.hashValid));
 
         // Handle binary data (empty if not present)
+        // \\x prefix is required for both PostgreSQL (bytea hex) and Oracle (BLOB detection)
         std::string binaryData;
         if (dg.rawData.has_value() && !dg.rawData.value().empty()) {
             const auto& data = dg.rawData.value();
             std::ostringstream oss;
-            if (dbType != "oracle") {
-                oss << "\\x";  // PostgreSQL hex format
-            }
+            oss << "\\x";  // Hex prefix: PostgreSQL bytea format + Oracle BLOB detection trigger
             for (uint8_t byte : data) {
                 oss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(byte);
             }

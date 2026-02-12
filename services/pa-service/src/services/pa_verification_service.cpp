@@ -7,6 +7,9 @@
 #include <data_group.h>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <chrono>
+#include <iomanip>
+#include <sstream>
 
 namespace services {
 
@@ -36,6 +39,7 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
 {
     spdlog::info("Starting PA verification for document: {}, country: {}", documentNumber, countryCode);
 
+    auto startTime = std::chrono::steady_clock::now();
     Json::Value response;
 
     try {
@@ -126,17 +130,30 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
             spdlog::info("Saved {} data groups for verification {}", dataGroups.size(), verificationId);
         }
 
+        // Calculate processing time
+        auto endTime = std::chrono::steady_clock::now();
+        auto durationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+
+        // Generate ISO 8601 timestamp
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        std::ostringstream tsStream;
+        tsStream << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+
         // Build response data
         Json::Value data;
         data["verificationId"] = verificationId;
         data["status"] = verification.verificationStatus;
+        data["verificationTimestamp"] = tsStream.str();
+        data["processingDurationMs"] = static_cast<Json::Int64>(durationMs);
+        data["issuingCountry"] = verification.countryCode;
+        data["documentNumber"] = documentNumber;
         data["certificateChainValidation"] = certValidation.toJson();
         data["sodSignatureValidation"] = Json::Value();
         data["sodSignatureValidation"]["valid"] = sodSignatureValid;
         data["sodSignatureValidation"]["algorithm"] = sod.signatureAlgorithm;
         data["sodSignatureValidation"]["hashAlgorithm"] = sod.hashAlgorithm;
         data["sodSignatureValidation"]["signatureAlgorithm"] = sod.signatureAlgorithm;
-        // Fix: dataGroups should be an object with results array and metadata
         data["dataGroupValidation"] = Json::Value();
         data["dataGroupValidation"]["details"] = dgResults;
         data["dataGroupValidation"]["totalGroups"] = totalDgs;

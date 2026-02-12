@@ -217,8 +217,13 @@ Json::Value PaVerificationRepository::findAll(
             dataQuery << " WHERE " << whereClause;
         }
 
-        dataQuery << " ORDER BY request_timestamp DESC"
-                  << " LIMIT " << limit << " OFFSET " << offset;
+        std::string dbType = queryExecutor_->getDatabaseType();
+        dataQuery << " ORDER BY request_timestamp DESC";
+        if (dbType == "oracle") {
+            dataQuery << " OFFSET " << offset << " ROWS FETCH NEXT " << limit << " ROWS ONLY";
+        } else {
+            dataQuery << " LIMIT " << limit << " OFFSET " << offset;
+        }
 
         Json::Value dataResult = queryExecutor_->executeQuery(dataQuery.str(), params);
 
@@ -275,12 +280,16 @@ Json::Value PaVerificationRepository::getStatistics() {
         stats["byStatus"] = statusCounts;
 
         // Count by country
-        const char* countryQuery =
+        std::string countryQuery =
             "SELECT issuing_country, COUNT(*) as count "
             "FROM pa_verification "
             "GROUP BY issuing_country "
-            "ORDER BY count DESC "
-            "LIMIT 10";
+            "ORDER BY count DESC ";
+        if (queryExecutor_->getDatabaseType() == "oracle") {
+            countryQuery += "FETCH FIRST 10 ROWS ONLY";
+        } else {
+            countryQuery += "LIMIT 10";
+        }
         Json::Value countryResult = queryExecutor_->executeQuery(countryQuery);
 
         Json::Value countryCounts = Json::arrayValue;
@@ -346,10 +355,12 @@ bool PaVerificationRepository::updateStatus(const std::string& id, const std::st
     spdlog::debug("[PaVerificationRepository] Updating PA verification status: ID={}, status={}", id, status);
 
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
             "UPDATE pa_verification "
-            "SET verification_status = $1, completed_timestamp = NOW() "
-            "WHERE id = $2";
+            "SET verification_status = $1, completed_timestamp = " +
+            std::string(dbType == "oracle" ? "SYSTIMESTAMP" : "NOW()") +
+            " WHERE id = $2";
 
         std::vector<std::string> params = {status, id};
         int affectedRows = queryExecutor_->executeCommand(query, params);

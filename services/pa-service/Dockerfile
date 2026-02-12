@@ -9,6 +9,12 @@ FROM icao-vcpkg-base:latest AS builder
 
 WORKDIR /app
 
+# Install image processing libraries for JPEG2000 → JPEG conversion (DG2 face images)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libopenjp2-7-dev \
+    libjpeg62-turbo-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY services/pa-service/CMakeLists.txt ./
 
 # Copy shared library (common-lib)
@@ -59,6 +65,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ldap-utils \
     libaio1 \
+    libopenjp2-7 \
+    libjpeg62-turbo \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy Oracle Instant Client from builder

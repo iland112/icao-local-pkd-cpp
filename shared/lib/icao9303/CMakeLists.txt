@@ -25,6 +25,21 @@ target_include_directories(${LIB_NAME} PUBLIC
 find_package(OpenSSL REQUIRED)
 find_package(spdlog REQUIRED)
 
+# Optional: JPEG2000 → JPEG conversion (for DG2 face images)
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(OPENJP2 QUIET libopenjp2)
+    pkg_check_modules(LIBJPEG QUIET libjpeg)
+endif()
+
+if(OPENJP2_FOUND AND LIBJPEG_FOUND)
+    target_compile_definitions(${LIB_NAME} PRIVATE HAS_OPENJPEG)
+    target_include_directories(${LIB_NAME} PRIVATE ${OPENJP2_INCLUDE_DIRS} ${LIBJPEG_INCLUDE_DIRS})
+    message(STATUS "  - JPEG2000 conversion: ENABLED (OpenJPEG + libjpeg)")
+else()
+    message(STATUS "  - JPEG2000 conversion: DISABLED (install libopenjp2-dev libjpeg-dev to enable)")
+endif()
+
 # Link libraries
 target_link_libraries(${LIB_NAME} PUBLIC
     OpenSSL::SSL
@@ -32,6 +47,10 @@ target_link_libraries(${LIB_NAME} PUBLIC
     spdlog::spdlog
     # Note: jsoncpp is linked by parent service (pa-service, pkd-management)
 )
+
+if(OPENJP2_FOUND AND LIBJPEG_FOUND)
+    target_link_libraries(${LIB_NAME} PRIVATE ${OPENJP2_LIBRARIES} ${LIBJPEG_LIBRARIES})
+endif()
 
 # Compiler features
 target_compile_features(${LIB_NAME} PUBLIC cxx_std_17)
