@@ -1,8 +1,34 @@
 #include "validation_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <random>
+#include <sstream>
+#include <iomanip>
 
 namespace repositories {
+
+// Thread-local UUID generator
+static std::string generateUuid() {
+    static thread_local std::random_device rd;
+    static thread_local std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<uint64_t> dist;
+
+    uint64_t ab = dist(gen);
+    uint64_t cd = dist(gen);
+
+    // Set version 4 and variant bits
+    ab = (ab & 0xFFFFFFFFFFFF0FFFULL) | 0x0000000000004000ULL;
+    cd = (cd & 0x3FFFFFFFFFFFFFFFULL) | 0x8000000000000000ULL;
+
+    std::stringstream ss;
+    ss << std::hex << std::setfill('0');
+    ss << std::setw(8) << (ab >> 32) << "-";
+    ss << std::setw(4) << ((ab >> 16) & 0xFFFF) << "-";
+    ss << std::setw(4) << (ab & 0xFFFF) << "-";
+    ss << std::setw(4) << (cd >> 48) << "-";
+    ss << std::setw(12) << (cd & 0x0000FFFFFFFFFFFFULL);
+    return ss.str();
+}
 
 ValidationRepository::ValidationRepository(common::IQueryExecutor* queryExecutor)
     : queryExecutor_(queryExecutor)
@@ -58,35 +84,45 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
         std::vector<std::string> params;
 
         if (dbType == "oracle") {
-            // Oracle schema: validity_period_ok (inverted is_expired),
-            //   revocation_status (VARCHAR2), validation_message (not error_message)
-            std::string validityPeriodOkStr = boolStr(!result.isExpired);
+            // Oracle schema: NOT NULL columns: id, certificate_type, subject_dn, issuer_dn, validation_status
+            std::string validityPeriodValidStr = boolStr(!result.isExpired);
             std::string revocationStatus = result.crlCheckStatus;
+            std::string id = generateUuid();
 
             query =
                 "INSERT INTO validation_result ("
-                "upload_id, fingerprint_sha256, certificate_type, "
-                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
-                "signature_verified, validity_period_ok, crl_checked, revocation_status, "
-                "validation_status, validation_message"
+                "id, upload_id, certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20"
                 ")";
 
             params = {
+                id,
                 result.uploadId,
                 fingerprintValue,
                 result.certificateType,
+                result.countryCode,
+                result.subjectDn.empty() ? "N/A" : result.subjectDn,
+                result.issuerDn.empty() ? "N/A" : result.issuerDn,
+                result.serialNumber,
                 trustChainValidStr,
-                trustChainPathJson,
+                result.trustChainPath.empty() ? "" : result.trustChainPath,
                 result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn,
                 cscaFoundStr,
                 signatureVerifiedStr,
-                validityPeriodOkStr,
+                result.signatureAlgorithm,
+                validityPeriodValidStr,
+                result.notBefore,
+                result.notAfter,
                 crlCheckedStr,
                 revocationStatus,
-                result.validationStatus,
-                result.errorMessage.empty() ? "" : result.errorMessage
+                result.validationStatus
             };
         } else {
             // PostgreSQL schema: is_expired, crl_revoked, error_message
@@ -179,21 +215,40 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
     spdlog::debug("[ValidationRepository] Finding by fingerprint: {}...", fingerprint.substr(0, 16));
 
     try {
-        // Query validation_result with JOIN to certificate on certificate_id
-        // Filter by certificate.fingerprint_sha256
-        const char* query =
-            "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
-            "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
-            "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
-            "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
-            "       vr.signature_valid, vr.signature_algorithm, "
-            "       vr.validity_period_valid, vr.not_before, vr.not_after, "
-            "       vr.revocation_status, vr.crl_checked, "
-            "       vr.validation_timestamp, c.fingerprint_sha256 "
-            "FROM validation_result vr "
-            "LEFT JOIN certificate c ON vr.certificate_id = c.id "
-            "WHERE c.fingerprint_sha256 = $1 "
-            "LIMIT 1";
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        std::string query;
+        if (dbType == "oracle") {
+            // Oracle: certificate_id stores fingerprint directly, no JOIN needed
+            query =
+                "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                "       vr.csca_found, vr.csca_subject_dn, "
+                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.validity_period_valid, vr.not_before, vr.not_after, "
+                "       vr.revocation_status, vr.crl_checked, "
+                "       vr.validation_timestamp, "
+                "       vr.certificate_id AS fingerprint_sha256 "
+                "FROM validation_result vr "
+                "WHERE vr.certificate_id = $1 "
+                "OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY";
+        } else {
+            // PostgreSQL: JOIN with certificate table
+            query =
+                "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
+                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.validity_period_valid, vr.not_before, vr.not_after, "
+                "       vr.revocation_status, vr.crl_checked, "
+                "       vr.validation_timestamp, c.fingerprint_sha256 "
+                "FROM validation_result vr "
+                "LEFT JOIN certificate c ON vr.certificate_id = c.id "
+                "WHERE c.fingerprint_sha256 = $1 "
+                "LIMIT 1";
+        }
 
         std::vector<std::string> params = {fingerprint};
         Json::Value queryResult = queryExecutor_->executeQuery(query, params);
@@ -360,30 +415,64 @@ Json::Value ValidationRepository::findByUploadId(
         // Get total count
         std::string countQuery = "SELECT COUNT(*) FROM validation_result vr " + whereClause;
         Json::Value countResult = queryExecutor_->executeScalar(countQuery, paramValues);
-        int total = countResult.asInt();
+        int total = 0;
+        if (countResult.isInt()) total = countResult.asInt();
+        else if (countResult.isString()) { try { total = std::stoi(countResult.asString()); } catch(...) {} }
 
-        // Fetch validation results with JOIN to certificate for fingerprint
-        std::string dataQuery =
-            "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
-            "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
-            "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
-            "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
-            "       vr.signature_valid, vr.signature_algorithm, "
-            "       vr.validity_period_valid, vr.is_expired, vr.is_not_yet_valid, "
-            "       vr.not_before, vr.not_after, "
-            "       vr.revocation_status, vr.crl_checked, "
-            "       vr.validation_timestamp, c.fingerprint_sha256 "
-            "FROM validation_result vr "
-            "LEFT JOIN certificate c ON vr.certificate_id = c.id "
-            + whereClause +
-            " ORDER BY vr.validation_status, vr.validation_timestamp DESC "
-            " LIMIT $" + std::to_string(paramIdx) +
-            " OFFSET $" + std::to_string(paramIdx + 1);
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Fetch validation results
+        std::string dataQuery;
+        if (dbType == "oracle") {
+            // Oracle: no trust_chain_path/is_expired/is_not_yet_valid columns
+            // certificate_id stores fingerprint directly, use OFFSET FETCH
+            dataQuery =
+                "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                "       vr.csca_found, vr.csca_subject_dn, "
+                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.validity_period_valid, "
+                "       vr.not_before, vr.not_after, "
+                "       vr.revocation_status, vr.crl_checked, "
+                "       vr.validation_timestamp, "
+                "       vr.certificate_id AS fingerprint_sha256 "
+                "FROM validation_result vr "
+                + whereClause +
+                " ORDER BY vr.validation_status, vr.validation_timestamp DESC "
+                " OFFSET $" + std::to_string(paramIdx) +
+                " ROWS FETCH NEXT $" + std::to_string(paramIdx + 1) + " ROWS ONLY";
+        } else {
+            // PostgreSQL: full columns, LIMIT/OFFSET
+            dataQuery =
+                "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
+                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.validity_period_valid, vr.is_expired, vr.is_not_yet_valid, "
+                "       vr.not_before, vr.not_after, "
+                "       vr.revocation_status, vr.crl_checked, "
+                "       vr.validation_timestamp, c.fingerprint_sha256 "
+                "FROM validation_result vr "
+                "LEFT JOIN certificate c ON vr.certificate_id = c.id "
+                + whereClause +
+                " ORDER BY vr.validation_status, vr.validation_timestamp DESC "
+                " LIMIT $" + std::to_string(paramIdx) +
+                " OFFSET $" + std::to_string(paramIdx + 1);
+        }
 
         // Add limit and offset to params
+        // Oracle: OFFSET $n ROWS FETCH NEXT $n+1 ROWS ONLY (offset first, then limit)
+        // PostgreSQL: LIMIT $n OFFSET $n+1 (limit first, then offset)
         std::vector<std::string> dataParams = paramValues;
-        dataParams.push_back(std::to_string(limit));
-        dataParams.push_back(std::to_string(offset));
+        if (dbType == "oracle") {
+            dataParams.push_back(std::to_string(offset));
+            dataParams.push_back(std::to_string(limit));
+        } else {
+            dataParams.push_back(std::to_string(limit));
+            dataParams.push_back(std::to_string(offset));
+        }
 
         Json::Value queryResult = queryExecutor_->executeQuery(dataQuery, dataParams);
 
@@ -549,7 +638,9 @@ int ValidationRepository::countByStatus(const std::string& status)
         std::vector<std::string> params = {status};
 
         Json::Value result = queryExecutor_->executeScalar(query, params);
-        return result.asInt();
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) { try { return std::stoi(result.asString()); } catch(...) { return 0; } }
+        return 0;
 
     } catch (const std::exception& e) {
         spdlog::error("[ValidationRepository] Count by status failed: {}", e.what());
@@ -564,16 +655,28 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
     Json::Value stats;
 
     try {
-        // Single query to get all statistics
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Helper to safely get int from Oracle (returns strings) or PostgreSQL
+        auto safeInt = [](const Json::Value& val) -> int {
+            if (val.isInt()) return val.asInt();
+            if (val.isString()) { try { return std::stoi(val.asString()); } catch(...) { return 0; } }
+            return 0;
+        };
+
+        // Oracle uses NUMBER(1) for booleans (1/0), PostgreSQL uses TRUE/FALSE
+        std::string trueCheck = (dbType == "oracle") ? "= 1" : "= TRUE";
+        std::string falseCheck = (dbType == "oracle") ? "= 0" : "= FALSE";
+
+        std::string query =
             "SELECT "
             "  COUNT(*) as total_count, "
             "  SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END) as valid_count, "
             "  SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END) as invalid_count, "
             "  SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END) as pending_count, "
             "  SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END) as error_count, "
-            "  SUM(CASE WHEN trust_chain_valid = TRUE THEN 1 ELSE 0 END) as trust_chain_valid_count, "
-            "  SUM(CASE WHEN trust_chain_valid = FALSE THEN 1 ELSE 0 END) as trust_chain_invalid_count "
+            "  SUM(CASE WHEN trust_chain_valid " + trueCheck + " THEN 1 ELSE 0 END) as trust_chain_valid_count, "
+            "  SUM(CASE WHEN trust_chain_valid " + falseCheck + " THEN 1 ELSE 0 END) as trust_chain_invalid_count "
             "FROM validation_result "
             "WHERE upload_id = $1";
 
@@ -581,13 +684,13 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
         Json::Value result = queryExecutor_->executeQuery(query, params);
 
         if (!result.empty()) {
-            int totalCount = result[0].get("total_count", 0).asInt();
-            int validCount = result[0].get("valid_count", 0).asInt();
-            int invalidCount = result[0].get("invalid_count", 0).asInt();
-            int pendingCount = result[0].get("pending_count", 0).asInt();
-            int errorCount = result[0].get("error_count", 0).asInt();
-            int trustChainValidCount = result[0].get("trust_chain_valid_count", 0).asInt();
-            int trustChainInvalidCount = result[0].get("trust_chain_invalid_count", 0).asInt();
+            int totalCount = safeInt(result[0].get("total_count", 0));
+            int validCount = safeInt(result[0].get("valid_count", 0));
+            int invalidCount = safeInt(result[0].get("invalid_count", 0));
+            int pendingCount = safeInt(result[0].get("pending_count", 0));
+            int errorCount = safeInt(result[0].get("error_count", 0));
+            int trustChainValidCount = safeInt(result[0].get("trust_chain_valid_count", 0));
+            int trustChainInvalidCount = safeInt(result[0].get("trust_chain_invalid_count", 0));
 
             // Calculate trust chain success rate
             double trustChainSuccessRate = 0.0;

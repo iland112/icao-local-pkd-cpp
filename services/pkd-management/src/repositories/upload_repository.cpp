@@ -386,7 +386,9 @@ int UploadRepository::countAll()
         const char* query = "SELECT COUNT(*) FROM uploaded_file";
 
         Json::Value result = queryExecutor_->executeScalar(query);
-        return result.asInt();
+        if (result.isInt()) return result.asInt();
+        if (result.isString()) return std::stoi(result.asString());
+        return 0;
 
     } catch (const std::exception& e) {
         spdlog::error("[UploadRepository] Count all failed: {}", e.what());
@@ -487,7 +489,7 @@ Json::Value UploadRepository::getStatisticsSummary()
                 "COALESCE(SUM(CASE WHEN trust_chain_valid = 1 THEN 1 ELSE 0 END), 0) as trust_chain_valid_count, "
                 "COALESCE(SUM(CASE WHEN trust_chain_valid = 0 THEN 1 ELSE 0 END), 0) as trust_chain_invalid_count, "
                 "COALESCE(SUM(CASE WHEN csca_found = 0 THEN 1 ELSE 0 END), 0) as csca_not_found_count, "
-                "COALESCE(SUM(CASE WHEN validity_period_ok = 0 THEN 1 ELSE 0 END), 0) as expired_count, "
+                "COALESCE(SUM(CASE WHEN validity_period_valid = 0 THEN 1 ELSE 0 END), 0) as expired_count, "
                 "COALESCE(SUM(CASE WHEN revocation_status = 'REVOKED' THEN 1 ELSE 0 END), 0) as revoked_count "
                 "FROM validation_result";
         } else {
@@ -653,24 +655,30 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
 
     try {
         // Get detailed certificate counts by country and type
-        // Oracle CRL table uses 'issuing_country', PostgreSQL uses 'country_code'
         std::string dbType = queryExecutor_->getDatabaseType();
-        std::string crlCountryCol = (dbType == "oracle") ? "issuing_country" : "country_code";
 
         // Oracle treats '' as NULL, so only use IS NOT NULL for Oracle
         std::string detailedCountryFilter = (dbType == "oracle")
             ? "WHERE c.country_code IS NOT NULL "
             : "WHERE c.country_code IS NOT NULL AND c.country_code != '' ";
 
+        // Oracle CLOB columns cannot use = directly; use DBMS_LOB.COMPARE or TO_CHAR
+        std::string selfSignedCond = (dbType == "oracle")
+            ? "DBMS_LOB.COMPARE(c.subject_dn, c.issuer_dn) = 0"
+            : "c.subject_dn = c.issuer_dn";
+        std::string linkCertCond = (dbType == "oracle")
+            ? "DBMS_LOB.COMPARE(c.subject_dn, c.issuer_dn) != 0"
+            : "c.subject_dn != c.issuer_dn";
+
         std::ostringstream query;
         query << "SELECT "
               << "c.country_code, "
               << "SUM(CASE WHEN c.certificate_type = 'MLSC' THEN 1 ELSE 0 END) as mlsc_count, "
-              << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn = c.issuer_dn THEN 1 ELSE 0 END) as csca_self_signed_count, "
-              << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND c.subject_dn != c.issuer_dn THEN 1 ELSE 0 END) as csca_link_cert_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND " << selfSignedCond << " THEN 1 ELSE 0 END) as csca_self_signed_count, "
+              << "SUM(CASE WHEN c.certificate_type = 'CSCA' AND " << linkCertCond << " THEN 1 ELSE 0 END) as csca_link_cert_count, "
               << "SUM(CASE WHEN c.certificate_type = 'DSC' THEN 1 ELSE 0 END) as dsc_count, "
               << "SUM(CASE WHEN c.certificate_type = 'DSC_NC' THEN 1 ELSE 0 END) as dsc_nc_count, "
-              << "COALESCE((SELECT COUNT(*) FROM crl WHERE " << crlCountryCol << " = c.country_code), 0) as crl_count, "
+              << "COALESCE((SELECT COUNT(*) FROM crl WHERE country_code = c.country_code), 0) as crl_count, "
               << "COUNT(*) as total_certificates "
               << "FROM certificate c "
               << detailedCountryFilter
@@ -678,7 +686,11 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
               << "ORDER BY total_certificates DESC ";
 
         if (limit > 0) {
-            query << "LIMIT " << limit;
+            if (dbType == "oracle") {
+                query << "FETCH FIRST " << limit << " ROWS ONLY";
+            } else {
+                query << "LIMIT " << limit;
+            }
         }
 
         Json::Value result = queryExecutor_->executeQuery(query.str());

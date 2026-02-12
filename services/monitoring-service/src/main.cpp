@@ -1,11 +1,12 @@
 // =============================================================================
 // ICAO Local PKD - Monitoring Service
 // =============================================================================
-// Version: 1.0.0
-// Description: System resource and service health monitoring
+// Version: 1.1.0
+// Description: System resource and service health monitoring (DB-independent)
 // =============================================================================
 // Changelog:
 //   v1.0.0 (2026-01-13): Initial release
+//   v1.1.0 (2026-02-12): Remove PostgreSQL dependency for Oracle compatibility
 // =============================================================================
 
 #include <drogon/drogon.h>
@@ -13,7 +14,6 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 #include <json/json.h>
-#include <libpq-fe.h>
 #include <curl/curl.h>
 
 #include <string>
@@ -39,42 +39,26 @@ struct Config {
     // Server
     int serverPort = 8084;
 
-    // Database
-    std::string dbHost = "postgres";
-    int dbPort = 5432;
-    std::string dbName = "pkd";
-    std::string dbUser = "pkd";
-    std::string dbPassword = "pkd123";
-
     // Monitoring settings
     int systemMetricsInterval = 5;     // seconds
     int serviceHealthInterval = 30;    // seconds
-    int logAnalysisInterval = 60;      // seconds
-    int metricsRetentionDays = 7;
 
     // Service endpoints
     std::map<std::string, std::string> serviceEndpoints = {
         {"pkd-management", "http://pkd-management:8081/api/health"},
         {"pa-service", "http://pa-service:8082/api/pa/health"},
-        {"sync-service", "http://sync-service:8083/api/sync/health"},
+        {"pkd-relay", "http://pkd-relay:8083/api/sync/health"},
     };
 
     void loadFromEnv() {
         if (auto e = std::getenv("SERVER_PORT")) serverPort = std::stoi(e);
-        if (auto e = std::getenv("DB_HOST")) dbHost = e;
-        if (auto e = std::getenv("DB_PORT")) dbPort = std::stoi(e);
-        if (auto e = std::getenv("DB_NAME")) dbName = e;
-        if (auto e = std::getenv("DB_USER")) dbUser = e;
-        if (auto e = std::getenv("DB_PASSWORD")) dbPassword = e;
         if (auto e = std::getenv("SYSTEM_METRICS_INTERVAL")) systemMetricsInterval = std::stoi(e);
         if (auto e = std::getenv("SERVICE_HEALTH_INTERVAL")) serviceHealthInterval = std::stoi(e);
-        if (auto e = std::getenv("LOG_ANALYSIS_INTERVAL")) logAnalysisInterval = std::stoi(e);
-        if (auto e = std::getenv("METRICS_RETENTION_DAYS")) metricsRetentionDays = std::stoi(e);
 
         // Load service endpoints
         if (auto e = std::getenv("SERVICE_PKD_MANAGEMENT")) serviceEndpoints["pkd-management"] = e;
         if (auto e = std::getenv("SERVICE_PA_SERVICE")) serviceEndpoints["pa-service"] = e;
-        if (auto e = std::getenv("SERVICE_SYNC_SERVICE")) serviceEndpoints["sync-service"] = e;
+        if (auto e = std::getenv("SERVICE_SYNC_SERVICE")) serviceEndpoints["pkd-relay"] = e;
     }
 };
 
@@ -135,43 +119,6 @@ struct ServiceHealth {
     int responseTimeMs;
     std::string errorMessage;
     std::chrono::system_clock::time_point checkedAt;
-};
-
-// =============================================================================
-// PostgreSQL Connection
-// =============================================================================
-class PgConnection {
-public:
-    PgConnection() : conn_(nullptr) {}
-    ~PgConnection() { disconnect(); }
-
-    bool connect() {
-        std::string connStr = "host=" + g_config.dbHost +
-                              " port=" + std::to_string(g_config.dbPort) +
-                              " dbname=" + g_config.dbName +
-                              " user=" + g_config.dbUser +
-                              " password=" + g_config.dbPassword;
-
-        conn_ = PQconnectdb(connStr.c_str());
-        if (PQstatus(conn_) != CONNECTION_OK) {
-            spdlog::error("Database connection failed: {}", PQerrorMessage(conn_));
-            return false;
-        }
-        return true;
-    }
-
-    void disconnect() {
-        if (conn_) {
-            PQfinish(conn_);
-            conn_ = nullptr;
-        }
-    }
-
-    PGconn* get() { return conn_; }
-    bool isConnected() const { return conn_ && PQstatus(conn_) == CONNECTION_OK; }
-
-private:
-    PGconn* conn_;
 };
 
 // =============================================================================
@@ -412,112 +359,14 @@ private:
 };
 
 // =============================================================================
-// Database Operations
-// =============================================================================
-bool saveSystemMetrics(const SystemMetrics& metrics) {
-    PgConnection conn;
-    if (!conn.connect()) {
-        spdlog::error("Failed to connect to database for saving metrics");
-        return false;
-    }
-
-    const char* query = R"(
-        INSERT INTO system_metrics (
-            cpu_usage_percent, cpu_load_1min, cpu_load_5min, cpu_load_15min,
-            memory_total_mb, memory_used_mb, memory_free_mb, memory_usage_percent,
-            disk_total_gb, disk_used_gb, disk_free_gb, disk_usage_percent,
-            net_bytes_sent, net_bytes_recv, net_packets_sent, net_packets_recv
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
-    )";
-
-    std::string cpuUsage = std::to_string(metrics.cpu.usagePercent);
-    std::string cpuLoad1 = std::to_string(metrics.cpu.load1min);
-    std::string cpuLoad5 = std::to_string(metrics.cpu.load5min);
-    std::string cpuLoad15 = std::to_string(metrics.cpu.load15min);
-
-    std::string memTotal = std::to_string(metrics.memory.totalMb);
-    std::string memUsed = std::to_string(metrics.memory.usedMb);
-    std::string memFree = std::to_string(metrics.memory.freeMb);
-    std::string memUsage = std::to_string(metrics.memory.usagePercent);
-
-    std::string diskTotal = std::to_string(metrics.disk.totalGb);
-    std::string diskUsed = std::to_string(metrics.disk.usedGb);
-    std::string diskFree = std::to_string(metrics.disk.freeGb);
-    std::string diskUsage = std::to_string(metrics.disk.usagePercent);
-
-    std::string netSent = std::to_string(metrics.network.bytesSent);
-    std::string netRecv = std::to_string(metrics.network.bytesRecv);
-    std::string netPktSent = std::to_string(metrics.network.packetsSent);
-    std::string netPktRecv = std::to_string(metrics.network.packetsRecv);
-
-    const char* paramValues[16] = {
-        cpuUsage.c_str(), cpuLoad1.c_str(), cpuLoad5.c_str(), cpuLoad15.c_str(),
-        memTotal.c_str(), memUsed.c_str(), memFree.c_str(), memUsage.c_str(),
-        diskTotal.c_str(), diskUsed.c_str(), diskFree.c_str(), diskUsage.c_str(),
-        netSent.c_str(), netRecv.c_str(), netPktSent.c_str(), netPktRecv.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn.get(), query, 16, nullptr, paramValues, nullptr, nullptr, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-
-    if (!success) {
-        spdlog::error("Failed to save system metrics: {}", PQerrorMessage(conn.get()));
-    }
-
-    PQclear(res);
-    return success;
-}
-
-bool saveServiceHealth(const ServiceHealth& health) {
-    PgConnection conn;
-    if (!conn.connect()) {
-        spdlog::error("Failed to connect to database for saving service health");
-        return false;
-    }
-
-    const char* query = R"(
-        INSERT INTO service_health (service_name, status, response_time_ms, error_message)
-        VALUES ($1, $2, $3, $4)
-    )";
-
-    std::string statusStr;
-    switch (health.status) {
-        case ServiceStatus::UP:
-            statusStr = "UP";
-            break;
-        case ServiceStatus::DEGRADED:
-            statusStr = "DEGRADED";
-            break;
-        case ServiceStatus::DOWN:
-            statusStr = "DOWN";
-            break;
-        default:
-            statusStr = "UNKNOWN";
-    }
-
-    std::string responseTime = std::to_string(health.responseTimeMs);
-
-    const char* paramValues[4] = {
-        health.serviceName.c_str(),
-        statusStr.c_str(),
-        responseTime.c_str(),
-        health.errorMessage.empty() ? nullptr : health.errorMessage.c_str()
-    };
-
-    PGresult* res = PQexecParams(conn.get(), query, 4, nullptr, paramValues, nullptr, nullptr, 0);
-    bool success = (PQresultStatus(res) == PGRES_COMMAND_OK);
-
-    if (!success) {
-        spdlog::error("Failed to save service health: {}", PQerrorMessage(conn.get()));
-    }
-
-    PQclear(res);
-    return success;
-}
-
-// =============================================================================
 // Service Health Checker
 // =============================================================================
+
+// No-op write callback to discard curl response body
+static size_t discardWriteCallback(void* /*contents*/, size_t size, size_t nmemb, void* /*userp*/) {
+    return size * nmemb;
+}
+
 class ServiceHealthChecker {
 public:
     ServiceHealthChecker() = default;
@@ -539,7 +388,7 @@ public:
 
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, nullptr);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, discardWriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, nullptr);
 
         CURLcode res = curl_easy_perform(curl);
@@ -566,141 +415,6 @@ public:
 };
 
 // =============================================================================
-// Background Monitoring Manager
-// =============================================================================
-class MonitoringManager {
-public:
-    MonitoringManager() : running_(false) {}
-
-    void start() {
-        running_ = true;
-
-        // System metrics collection thread
-        metricsThread_ = std::thread([this]() {
-            spdlog::info("System metrics collection thread started (interval: {}s)", g_config.systemMetricsInterval);
-
-            while (running_) {
-                try {
-                    SystemMetrics metrics = collector_.collect();
-                    saveSystemMetrics(metrics);
-
-                    spdlog::debug("System metrics collected - CPU: {:.1f}%, MEM: {:.1f}%, DISK: {:.1f}%",
-                                 metrics.cpu.usagePercent, metrics.memory.usagePercent, metrics.disk.usagePercent);
-                } catch (const std::exception& e) {
-                    spdlog::error("System metrics collection failed: {}", e.what());
-                }
-
-                std::this_thread::sleep_for(std::chrono::seconds(g_config.systemMetricsInterval));
-            }
-
-            spdlog::info("System metrics collection thread stopped");
-        });
-
-        // Service health check thread
-        healthThread_ = std::thread([this]() {
-            spdlog::info("Service health check thread started (interval: {}s)", g_config.serviceHealthInterval);
-
-            while (running_) {
-                try {
-                    for (const auto& [name, url] : g_config.serviceEndpoints) {
-                        ServiceHealth health = checker_.checkService(name, url);
-                        saveServiceHealth(health);
-
-                        if (health.status != ServiceStatus::UP) {
-                            spdlog::warn("Service {} is {}: {}", name,
-                                       health.status == ServiceStatus::DOWN ? "DOWN" : "DEGRADED",
-                                       health.errorMessage);
-                        }
-                    }
-                } catch (const std::exception& e) {
-                    spdlog::error("Service health check failed: {}", e.what());
-                }
-
-                std::this_thread::sleep_for(std::chrono::seconds(g_config.serviceHealthInterval));
-            }
-
-            spdlog::info("Service health check thread stopped");
-        });
-
-        // Cleanup thread (runs daily)
-        cleanupThread_ = std::thread([this]() {
-            spdlog::info("Database cleanup thread started");
-
-            while (running_) {
-                // Run cleanup at midnight
-                auto now = std::chrono::system_clock::now();
-                auto nowTime = std::chrono::system_clock::to_time_t(now);
-                std::tm* localTm = std::localtime(&nowTime);
-
-                // Calculate seconds until midnight
-                std::tm midnightTm = *localTm;
-                midnightTm.tm_hour = 0;
-                midnightTm.tm_min = 0;
-                midnightTm.tm_sec = 0;
-                midnightTm.tm_mday += 1;  // Next day
-
-                std::time_t midnightTime = std::mktime(&midnightTm);
-                int waitSeconds = static_cast<int>(midnightTime - nowTime);
-
-                spdlog::info("Next database cleanup in {} hours", waitSeconds / 3600);
-
-                // Wait until midnight or until stopped
-                for (int i = 0; i < waitSeconds && running_; i++) {
-                    std::this_thread::sleep_for(std::chrono::seconds(1));
-                }
-
-                if (!running_) break;
-
-                // Run cleanup
-                try {
-                    PgConnection conn;
-                    if (conn.connect()) {
-                        PGresult* res = PQexec(conn.get(), "SELECT cleanup_old_metrics()");
-                        if (PQresultStatus(res) == PGRES_TUPLES_OK) {
-                            spdlog::info("Database cleanup completed successfully");
-                        } else {
-                            spdlog::error("Database cleanup failed: {}", PQerrorMessage(conn.get()));
-                        }
-                        PQclear(res);
-                    }
-                } catch (const std::exception& e) {
-                    spdlog::error("Database cleanup exception: {}", e.what());
-                }
-            }
-
-            spdlog::info("Database cleanup thread stopped");
-        });
-    }
-
-    void stop() {
-        spdlog::info("Stopping monitoring threads...");
-        running_ = false;
-
-        if (metricsThread_.joinable()) {
-            metricsThread_.join();
-        }
-        if (healthThread_.joinable()) {
-            healthThread_.join();
-        }
-        if (cleanupThread_.joinable()) {
-            cleanupThread_.join();
-        }
-
-        spdlog::info("All monitoring threads stopped");
-    }
-
-private:
-    std::atomic<bool> running_;
-    std::thread metricsThread_;
-    std::thread healthThread_;
-    std::thread cleanupThread_;
-    SystemMetricsCollector collector_;
-    ServiceHealthChecker checker_;
-};
-
-MonitoringManager g_monitor;
-
-// =============================================================================
 // HTTP Handlers
 // =============================================================================
 
@@ -709,17 +423,8 @@ void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePt
     Json::Value response;
     response["status"] = "UP";
     response["service"] = "monitoring-service";
-    response["version"] = "1.0.0";
+    response["version"] = "1.1.0";
     response["timestamp"] = trantor::Date::now().toFormattedString(false);
-
-    // Check DB connection
-    PgConnection conn;
-    if (conn.connect()) {
-        response["database"] = "UP";
-    } else {
-        response["database"] = "DOWN";
-        response["status"] = "DEGRADED";
-    }
 
     auto resp = HttpResponse::newHttpJsonResponse(response);
     callback(resp);
@@ -865,12 +570,10 @@ int main() {
     setupLogging();
 
     spdlog::info("===========================================");
-    spdlog::info("  ICAO Local PKD - Monitoring Service v1.0.0");
+    spdlog::info("  ICAO Local PKD - Monitoring Service v1.1.0");
     spdlog::info("===========================================");
     spdlog::info("Server port: {}", g_config.serverPort);
-    spdlog::info("Database: {}:{}/{}", g_config.dbHost, g_config.dbPort, g_config.dbName);
-    spdlog::info("System metrics interval: {}s", g_config.systemMetricsInterval);
-    spdlog::info("Service health interval: {}s", g_config.serviceHealthInterval);
+    spdlog::info("Mode: On-demand metrics (no database dependency)");
 
     // Register HTTP handlers
     app().registerHandler("/api/monitoring/health",
@@ -887,12 +590,11 @@ int main() {
         resp->addHeader("Access-Control-Allow-Headers", "Content-Type");
     });
 
-    // Start server (background monitoring disabled - metrics collected on-demand via API endpoints)
+    // Start server
     spdlog::info("Starting HTTP server on port {}...", g_config.serverPort);
-    spdlog::warn("Background monitoring threads disabled - metrics collected on-demand");
 
     app().addListener("0.0.0.0", g_config.serverPort)
-        .setThreadNum(4)  // Increased from 2 to handle concurrent requests
+        .setThreadNum(4)
         .run();
 
     spdlog::info("Server stopped");

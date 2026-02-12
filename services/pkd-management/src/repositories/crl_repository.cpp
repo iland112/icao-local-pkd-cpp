@@ -27,19 +27,8 @@ std::string CrlRepository::save(const std::string& uploadId,
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
 
-        // Generate UUID
-        std::string crlId;
-        if (dbType == "oracle") {
-            auto uuidResult = queryExecutor_->executeQuery(
-                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
-            if (uuidResult.empty()) {
-                spdlog::error("[CrlRepository] Failed to generate UUID from Oracle");
-                return "";
-            }
-            crlId = uuidResult[0]["id"].asString();
-        } else {
-            crlId = generateUuid();
-        }
+        // Generate UUID (C++ for all DB types)
+        std::string crlId = generateUuid();
 
         // Convert binary CRL to hex string (\\x prefix for BLOB detection)
         std::ostringstream hexStream;
@@ -55,14 +44,15 @@ std::string CrlRepository::save(const std::string& uploadId,
         std::vector<std::string> params;
 
         if (dbType == "oracle") {
-            // Oracle schema: issuing_country, no fingerprint_sha256, no validation_status
+            // Oracle schema columns: country_code, crl_binary, fingerprint_sha256
             query =
-                "INSERT INTO crl (id, upload_id, issuing_country, issuer_dn, "
-                "this_update, next_update, crl_number, crl_data) VALUES ("
+                "INSERT INTO crl (id, upload_id, country_code, issuer_dn, "
+                "this_update, next_update, crl_number, fingerprint_sha256, "
+                "crl_binary) VALUES ("
                 "$1, $2, $3, $4, "
                 "TO_TIMESTAMP($5, 'YYYY-MM-DD HH24:MI:SS'), "
                 "CASE WHEN $6 IS NULL OR $6 = '' THEN NULL ELSE TO_TIMESTAMP($6, 'YYYY-MM-DD HH24:MI:SS') END, "
-                "$7, $8)";
+                "$7, $8, $9)";
 
             // Strip timezone suffix (+00) from date strings for Oracle TO_TIMESTAMP
             auto stripTz = [](const std::string& ts) -> std::string {
@@ -74,7 +64,7 @@ std::string CrlRepository::save(const std::string& uploadId,
                 crlId, uploadId, countryCode, issuerDn,
                 stripTz(thisUpdate),
                 nextUpdate.empty() ? "" : stripTz(nextUpdate),
-                crlNumber, crlDataHex
+                crlNumber, fingerprint, crlDataHex
             };
         } else {
             // PostgreSQL schema: country_code, fingerprint_sha256, crl_binary, validation_status

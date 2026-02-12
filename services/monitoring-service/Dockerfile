@@ -25,8 +25,8 @@ FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libssl3 \
     zlib1g \
-    libpq5 \
     libcurl4 \
+    curl \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 

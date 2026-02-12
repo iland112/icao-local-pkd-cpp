@@ -42,7 +42,8 @@ services:
         condition: service_healthy
       pkd-relay:
         condition: service_healthy
-      # monitoring-service: moved to profiles: [postgres] (not available in oracle mode)
+      monitoring-service:
+        condition: service_healthy
     networks:
       - pkd-network
     restart: unless-stopped
@@ -251,34 +252,25 @@ services:
 
   # ---------------------------------------------------------------------------
   # Monitoring Service (System Metrics + Service Health Monitoring)
-  # NOTE: Currently PostgreSQL-only. Not available in Oracle mode.
+  # DB-independent: collects metrics from /proc and checks service health via HTTP
   # ---------------------------------------------------------------------------
   monitoring-service:
     build:
       context: ..
       dockerfile: services/monitoring-service/Dockerfile
     container_name: icao-local-pkd-monitoring
-    profiles:
-      - postgres  # Only starts in PostgreSQL mode (monitoring-service only supports postgres)
     # ports:
     #   - "8084:8084"  # Direct access (use API Gateway instead)
     environment:
       - TZ=Asia/Seoul
       - SERVICE_NAME=monitoring-service
       - SERVER_PORT=8084
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=localpkd
-      - DB_USER=pkd
-      - DB_PASSWORD=${DB_PASSWORD}              # From .env file
       - SYSTEM_METRICS_INTERVAL=5
       - SERVICE_HEALTH_INTERVAL=30
       - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
       - SERVICE_PA_SERVICE=http://pa-service:8082/api/health
       - SERVICE_SYNC_SERVICE=http://pkd-relay:8083/api/sync/health
     depends_on:
-      postgres:
-        condition: service_healthy
       pkd-management:
         condition: service_healthy
       pa-service:
@@ -290,12 +282,12 @@ services:
     networks:
       - pkd-network
     restart: unless-stopped
-    # healthcheck:
-    #   test: ["CMD", "curl", "-f", "http://localhost:8084/api/monitoring/health"]
-    #   interval: 30s
-    #   timeout: 10s
-    #   retries: 3
-    #   start_period: 15s
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/api/monitoring/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   # ---------------------------------------------------------------------------
   # Legacy App (Backwards compatibility - uses existing Dockerfile)

@@ -296,7 +296,7 @@ CREATE INDEX idx_de_category ON deviation_entry(defect_category);
 -- Detailed validation results for trust chain verification
 CREATE TABLE validation_result (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
-    certificate_id VARCHAR2(36),
+    certificate_id VARCHAR2(128),  -- Stores fingerprint_sha256 (64 chars), not certificate UUID
     upload_id VARCHAR2(36),
     certificate_type VARCHAR2(10) NOT NULL,
     country_code VARCHAR2(3),
@@ -333,7 +333,7 @@ CREATE TABLE validation_result (
 
     validation_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
 
-    CONSTRAINT fk_validation_cert FOREIGN KEY (certificate_id) REFERENCES certificate(id) ON DELETE CASCADE,
+    -- Note: certificate_id stores fingerprint, not FK to certificate.id
     CONSTRAINT fk_validation_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
     CONSTRAINT uk_validation_cert_upload UNIQUE(certificate_id, upload_id)
 );

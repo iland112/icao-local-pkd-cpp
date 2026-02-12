@@ -120,7 +120,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-auto">
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
@@ -140,35 +140,34 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
               데이터가 없습니다.
             </div>
           ) : (
-            <div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-100 dark:bg-gray-700">
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
                       #
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-16">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-16">
                       국가
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-purple-600 dark:text-purple-300 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-purple-600 dark:text-purple-300 border-b-2 border-gray-300 dark:border-gray-600">
                       MLSC
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-blue-600 dark:text-blue-300 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-blue-600 dark:text-blue-300 border-b-2 border-gray-300 dark:border-gray-600">
                       CSCA(SS)
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-cyan-600 dark:text-cyan-300 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-cyan-600 dark:text-cyan-300 border-b-2 border-gray-300 dark:border-gray-600">
                       CSCA(LC)
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-green-600 dark:text-green-300 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-green-600 dark:text-green-300 border-b-2 border-gray-300 dark:border-gray-600">
                       DSC
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-amber-600 dark:text-amber-300 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-amber-600 dark:text-amber-300 border-b-2 border-gray-300 dark:border-gray-600">
                       DSC_NC
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-red-600 dark:text-red-300 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-red-600 dark:text-red-300 border-b-2 border-gray-300 dark:border-gray-600">
                       CRL
                     </th>
-                    <th className="sticky top-0 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
+                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
                       총계
                     </th>
                   </tr>
@@ -272,7 +271,6 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                   </tr>
                 </tfoot>
               </table>
-            </div>
           )}
         </div>
 

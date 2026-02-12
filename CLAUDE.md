@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.7.0
+**Current Version**: v2.7.1
 **Last Updated**: 2026-02-12
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -28,6 +28,7 @@ This project **MUST support multiple database systems** including PostgreSQL, Or
 | PKD Management | :8081 |
 | PA Service | :8082 |
 | PKD Relay | :8083 |
+| Monitoring Service | :8084 |
 | API Gateway | http://localhost:8080/api |
 | Frontend | http://localhost:3000 |
 
@@ -68,7 +69,10 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
                                                         |     Passive Authentication (ICAO 9303)
                                                         |
                                                         +-- PKD Relay (:8083)
-                                                              DB-LDAP Sync, Reconciliation
+                                                        |     DB-LDAP Sync, Reconciliation
+                                                        |
+                                                        +-- Monitoring Service (:8084)
+                                                              System Metrics, Service Health (DB-independent)
 ```
 
 ### Design Patterns
@@ -460,6 +464,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.7.1 (2026-02-12) - Monitoring Service DB-Free + Oracle Compatibility Fixes
+- Monitoring service: removed PostgreSQL (libpq) dependency entirely, now DB-independent
+- Monitoring service works in both PostgreSQL and Oracle modes (removed `profiles: [postgres]`)
+- Fixed curl write callback crash in Drogon handler threads (added `discardWriteCallback`)
+- Fixed country statistics Oracle compatibility: `issuing_country` → `country_code`, `LIMIT` → `FETCH FIRST`, CLOB comparison via `DBMS_LOB.COMPARE`
+- Fixed CRL repository Oracle schema: added `fingerprint_sha256`, `crl_binary` columns, C++ UUID generation
+- Fixed validation repository Oracle schema: `certificate_id` VARCHAR2(128) for fingerprints, expanded column mapping
+- Oracle init schema: removed invalid FK constraint on `validation_result.certificate_id` (stores fingerprint, not UUID)
+- Sticky table header in country statistics dialog (frontend)
 
 ### v2.7.0 (2026-02-12) - Individual Certificate Upload + Preview-before-Save
 - Separated individual certificate upload to dedicated page (`/upload/certificate`)
