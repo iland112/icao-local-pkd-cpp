@@ -94,7 +94,7 @@ jobs:
           context: .
           file: services/pkd-management/Dockerfile
           platforms: linux/arm64
-          tags: icao-local-pkd-management:arm64
+          tags: icao-local-management:arm64
           outputs: type=oci,dest=pkd-management-arm64.tar
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |
@@ -146,7 +146,7 @@ jobs:
           context: .
           file: services/pa-service/Dockerfile
           platforms: linux/arm64
-          tags: icao-local-pkd-pa:arm64
+          tags: icao-local-pa:arm64
           outputs: type=oci,dest=pkd-pa-arm64.tar
           no-cache: ${{ github.event.inputs.no_cache == 'true' }}
           build-args: |

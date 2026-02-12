@@ -47,7 +47,7 @@ services:
   # Frontend (React.js)
   # ---------------------------------------------------------------------------
   frontend:
-    image: icao-local-pkd-frontend:arm64-fixed
+    image: icao-local-pkd-frontend:arm64
     container_name: icao-pkd-frontend
     networks:
       - frontend
@@ -104,7 +104,7 @@ services:
   # PA Service (Passive Authentication)
   # ---------------------------------------------------------------------------
   pa-service:
-    image: icao-local-pa:arm64-v3
+    image: icao-local-pa:arm64
     container_name: icao-pkd-pa-service
     networks:
       - backend

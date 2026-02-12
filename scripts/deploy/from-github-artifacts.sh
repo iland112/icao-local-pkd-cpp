@@ -34,8 +34,8 @@ echo ""
 
 # Service selection
 SERVICE=${1:-all}
-if [[ "$SERVICE" != "all" && "$SERVICE" != "pkd-management" && "$SERVICE" != "pa-service" && "$SERVICE" != "sync-service" && "$SERVICE" != "frontend" ]]; then
-    echo -e "${RED}Usage: $0 [all|pkd-management|pa-service|sync-service|frontend]${NC}"
+if [[ "$SERVICE" != "all" && "$SERVICE" != "pkd-management" && "$SERVICE" != "pa-service" && "$SERVICE" != "pkd-relay" && "$SERVICE" != "frontend" ]]; then
+    echo -e "${RED}Usage: $0 [all|pkd-management|pa-service|pkd-relay|frontend]${NC}"
     exit 1
 fi
 
@@ -210,15 +210,15 @@ if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pkd-management" ]; then
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pa-service" ]; then
-    deploy_service "pa-service" "icao-local-pa:arm64-v3" "pkd-pa-arm64.tar.gz"
+    deploy_service "pa-service" "icao-local-pa:arm64" "pkd-pa-arm64.tar.gz"
 fi
 
-if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "sync-service" ]; then
-    deploy_service "sync-service" "icao-local-pkd-relay:arm64" "pkd-relay-arm64.tar.gz"
+if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pkd-relay" ]; then
+    deploy_service "pkd-relay" "icao-local-pkd-relay:arm64" "pkd-relay-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "frontend" ]; then
-    deploy_service "frontend" "icao-local-pkd-frontend:arm64-fixed" "pkd-frontend-arm64.tar.gz"
+    deploy_service "frontend" "icao-local-pkd-frontend:arm64" "pkd-frontend-arm64.tar.gz"
 fi
 
 echo -e "${GREEN}========================================${NC}"
