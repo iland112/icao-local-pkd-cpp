@@ -70,7 +70,7 @@ export default function IcaoStatus() {
 
   const fetchVersionStatus = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/icao/status');
+      const response = await fetch('/api/icao/status');
       const data: StatusApiResponse = await response.json();
 
       if (data.success) {
@@ -83,7 +83,7 @@ export default function IcaoStatus() {
 
   const fetchVersionHistory = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/icao/history?limit=10');
+      const response = await fetch('/api/icao/history?limit=10');
       const data: ApiResponse = await response.json();
 
       if (data.success) {
@@ -99,7 +99,7 @@ export default function IcaoStatus() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8080/api/icao/check-updates');
+      const response = await fetch('/api/icao/check-updates');
 
       if (response.ok) {
         // Wait a moment for async processing
