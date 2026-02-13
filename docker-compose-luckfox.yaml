@@ -140,6 +140,28 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
+  # Monitoring Service (DB-independent)
+  # ---------------------------------------------------------------------------
+  monitoring-service:
+    image: icao-local-monitoring:arm64
+    container_name: icao-pkd-monitoring
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=monitoring-service
+      - SERVER_PORT=8084
+      - SERVICE_PKD_MANAGEMENT=http://127.0.0.1:8081/api/health
+      - SERVICE_PA_SERVICE=http://127.0.0.1:8082/api/pa/health
+      - SERVICE_SYNC_SERVICE=http://127.0.0.1:8083/api/sync/health
+    depends_on:
+      - pkd-management
+      - pa-service
+      - pkd-relay
+    volumes:
+      - ./.docker-data/monitoring-logs:/app/logs
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
   # Swagger UI (API Documentation)
   # ---------------------------------------------------------------------------
   swagger-ui:

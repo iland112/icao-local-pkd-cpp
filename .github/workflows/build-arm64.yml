@@ -42,6 +42,7 @@ jobs:
       pkd-management: ${{ steps.filter.outputs.pkd-management }}
       pa-service: ${{ steps.filter.outputs.pa-service }}
       pkd-relay: ${{ steps.filter.outputs.pkd-relay }}
+      monitoring-service: ${{ steps.filter.outputs.monitoring-service }}
       frontend: ${{ steps.filter.outputs.frontend }}
       vcpkg-base: ${{ steps.filter.outputs.vcpkg-base }}
     steps:
@@ -72,6 +73,9 @@ jobs:
               - 'services/pkd-relay-service/**'
               - 'shared/**'
               - '.github/workflows/build-arm64.yml'
+            monitoring-service:
+              - 'services/monitoring-service/**'
+              - '.github/workflows/build-arm64.yml'
             frontend:
               - 'frontend/**'
               - 'nginx/**'
@@ -87,6 +91,7 @@ jobs:
       needs.detect-changes.outputs.pkd-management == 'true' ||
       needs.detect-changes.outputs.pa-service == 'true' ||
       needs.detect-changes.outputs.pkd-relay == 'true' ||
+      needs.detect-changes.outputs.monitoring-service == 'true' ||
       github.event.inputs.force_build_all == 'true' ||
       (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
     runs-on: ubuntu-latest
@@ -307,6 +312,64 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
+  # Monitoring Service
+  # ---------------------------------------------------------------------------
+  build-monitoring-service:
+    needs: [detect-changes, build-vcpkg-base]
+    if: >-
+      always() && needs.build-vcpkg-base.result != 'failure' &&
+      (needs.detect-changes.outputs.monitoring-service == 'true' ||
+       github.event.inputs.force_build_all == 'true' ||
+       (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and export Monitoring Service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/monitoring-service/Dockerfile
+          platforms: linux/arm64
+          tags: icao-local-monitoring:arm64
+          outputs: type=oci,dest=monitoring-service-arm64.tar
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
+          build-args: |
+            BASE_IMAGE=${{ env.GHCR_BASE_IMAGE }}
+          cache-from: |
+            type=gha,scope=monitoring-svc-builder
+          cache-to: |
+            type=gha,mode=max,scope=monitoring-svc-builder
+
+      - name: Compress Image
+        run: gzip monitoring-service-arm64.tar
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: monitoring-service-arm64
+          path: monitoring-service-arm64.tar.gz
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
   # Frontend
   # ---------------------------------------------------------------------------
   build-frontend:
@@ -357,12 +420,13 @@ jobs:
   # ---------------------------------------------------------------------------
   combine-artifacts:
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-pkd-management, build-pa-service, build-pkd-relay, build-frontend]
+    needs: [detect-changes, build-pkd-management, build-pa-service, build-pkd-relay, build-monitoring-service, build-frontend]
     if: >-
       always() && (
         needs.build-pkd-management.result == 'success' ||
         needs.build-pa-service.result == 'success' ||
         needs.build-pkd-relay.result == 'success' ||
+        needs.build-monitoring-service.result == 'success' ||
         needs.build-frontend.result == 'success'
       )
 

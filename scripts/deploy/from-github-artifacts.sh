@@ -34,8 +34,8 @@ echo ""
 
 # Service selection
 SERVICE=${1:-all}
-if [[ "$SERVICE" != "all" && "$SERVICE" != "pkd-management" && "$SERVICE" != "pa-service" && "$SERVICE" != "pkd-relay" && "$SERVICE" != "frontend" ]]; then
-    echo -e "${RED}Usage: $0 [all|pkd-management|pa-service|pkd-relay|frontend]${NC}"
+if [[ "$SERVICE" != "all" && "$SERVICE" != "pkd-management" && "$SERVICE" != "pa-service" && "$SERVICE" != "pkd-relay" && "$SERVICE" != "monitoring-service" && "$SERVICE" != "frontend" ]]; then
+    echo -e "${RED}Usage: $0 [all|pkd-management|pa-service|pkd-relay|monitoring-service|frontend]${NC}"
     exit 1
 fi
 
@@ -215,6 +215,10 @@ fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "pkd-relay" ]; then
     deploy_service "pkd-relay" "icao-local-pkd-relay:arm64" "pkd-relay-arm64.tar.gz"
+fi
+
+if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "monitoring-service" ]; then
+    deploy_service "monitoring-service" "icao-local-monitoring:arm64" "monitoring-service-arm64.tar.gz"
 fi
 
 if [ "$SERVICE" == "all" ] || [ "$SERVICE" == "frontend" ]; then

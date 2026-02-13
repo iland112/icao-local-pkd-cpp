@@ -4,7 +4,8 @@
 # =============================================================================
 
 # Stage 1: Application Build
-FROM icao-vcpkg-base:latest AS builder
+ARG BASE_IMAGE=icao-vcpkg-base:latest
+FROM ${BASE_IMAGE} AS builder
 
 WORKDIR /app
 
