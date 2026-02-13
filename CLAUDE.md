@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.9.0
-**Last Updated**: 2026-02-12
+**Current Version**: v2.9.1
+**Last Updated**: 2026-02-13
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -466,6 +466,18 @@ scripts/
 ---
 
 ## Version History
+
+### v2.9.1 (2026-02-13) - ARM64 CI/CD Pipeline + Luckfox Full Deployment
+- GitHub Actions ARM64 CI/CD: vcpkg-base → GHCR → service builds → OCI artifacts
+- Change detection (dorny/paths-filter) for selective builds per service
+- Monitoring service added to ARM64 pipeline and luckfox deployment
+- Monitoring service Dockerfile: `ARG BASE_IMAGE` for GHCR vcpkg-base support
+- Luckfox management scripts updated (start/stop/restart/health/logs/clean/backup/restore)
+- Script project root auto-detection (works from repo `scripts/luckfox/` and luckfox root)
+- API gateway luckfox config: added /api/auth, /api/audit, /api/icao, /api/monitoring routes
+- Fixed PA health endpoint in monitoring config (`/api/health` not `/api/pa/health`)
+- Deploy script (`from-github-artifacts.sh`): OCI→Docker conversion via skopeo, monitoring-service support
+- All 8 containers verified on luckfox: API Gateway, Frontend, PKD Management, PA Service, PKD Relay, Monitoring, Swagger UI, PostgreSQL
 
 ### v2.9.0 (2026-02-12) - DSC Auto-Registration + Certificate Source Filter & Dashboard
 - DSC auto-registration from PA verification: extracts DSC from SOD and stores in certificate table (source_type='PA_EXTRACTED')
