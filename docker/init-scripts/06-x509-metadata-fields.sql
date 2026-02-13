@@ -92,15 +92,15 @@ COMMENT ON COLUMN certificate.path_len_constraint IS 'Max certification path dep
 
 -- Subject Key Identifier (SKI)
 ALTER TABLE certificate
-ADD COLUMN IF NOT EXISTS subject_key_identifier VARCHAR(40);
+ADD COLUMN IF NOT EXISTS subject_key_identifier VARCHAR(128);
 
-COMMENT ON COLUMN certificate.subject_key_identifier IS 'Subject Key Identifier - SHA-1 hash of public key (hex string)';
+COMMENT ON COLUMN certificate.subject_key_identifier IS 'Subject Key Identifier - hash of public key (hex string, SHA-1=40 or SHA-256=64 chars)';
 
 -- Authority Key Identifier (AKI)
 ALTER TABLE certificate
-ADD COLUMN IF NOT EXISTS authority_key_identifier VARCHAR(40);
+ADD COLUMN IF NOT EXISTS authority_key_identifier VARCHAR(128);
 
-COMMENT ON COLUMN certificate.authority_key_identifier IS 'Authority Key Identifier - matches issuer SKI (hex string)';
+COMMENT ON COLUMN certificate.authority_key_identifier IS 'Authority Key Identifier - matches issuer SKI (hex string, SHA-1=40 or SHA-256=64 chars)';
 
 -- =============================================================================
 -- 6. X.509 v3 Extensions - CRL & Revocation (2 fields)

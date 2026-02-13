@@ -75,6 +75,7 @@
 #include "services/certificate_validation_service.h"
 #include "services/dsc_auto_registration_service.h"
 #include "services/pa_verification_service.h"
+#include "common/country_code_utils.h"  // v2.9.1: ISO alpha-3 to alpha-2 conversion
 
 namespace {
 
@@ -1924,6 +1925,14 @@ void registerRoutes() {
 
                 // Get optional fields
                 std::string countryCode = (*jsonBody).get("issuingCountry", "").asString();
+                // v2.9.1: Normalize alpha-3 country codes (e.g., KOR→KR) for LDAP compatibility
+                if (!countryCode.empty()) {
+                    std::string normalized = common::normalizeCountryCodeToAlpha2(countryCode);
+                    if (normalized != countryCode) {
+                        spdlog::info("Country code normalized: {} -> {}", countryCode, normalized);
+                    }
+                    countryCode = normalized;
+                }
                 std::string documentNumber = (*jsonBody).get("documentNumber", "").asString();
 
                 // Extract documentNumber from DG1 if not provided
