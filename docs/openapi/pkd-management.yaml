@@ -3,52 +3,52 @@ info:
   title: PKD Management Service API
   description: |
     ICAO Local PKD Management Service API.
-    Handles certificate upload, validation, and LDAP synchronization.
+    Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
-    - **v1.7.0** (2026-01-20): ICAO Auto Sync - Version comparison API and improved frontend UX
-    - **v1.6.2** (2026-01-15): Countries API performance optimization (LDAP → PostgreSQL, 99.9% faster)
-    - **v1.6.1** (2026-01-15): Certificate export crash fix (temporary file approach)
-    - **v1.6.0** (2026-01-15): Certificate search/export feature, countries list API
-    - **v1.5.11** (2026-01-14): MANUAL mode localStorage bug fix
+    - **v2.9.1** (2026-02-13): Certificate source filter, bySource statistics, DB-based search
+    - **v2.7.0** (2026-02-12): Individual certificate upload with preview-before-save
+    - **v2.5.0** (2026-02-06): Oracle + PostgreSQL multi-DBMS support
+    - **v1.9.0** (2026-01-30): JWT authentication + RBAC
+    - **v1.7.0** (2026-01-20): ICAO Auto Sync - Version comparison API
+    - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-    - **v1.2.0** (2026-01-09): File duplicate detection (SHA-256)
-  version: 1.7.0
+  version: 2.9.1
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
 
 servers:
   - url: http://localhost:8081
-    description: Development server
-  - url: http://pkd-management:8081
-    description: Docker internal
+    description: Development server (direct)
+  - url: http://localhost:8080
+    description: API Gateway
 
 tags:
   - name: Health
     description: Health check endpoints
   - name: Upload
-    description: Certificate upload operations
-  - name: Validation
-    description: Certificate validation operations
+    description: Certificate upload operations (LDIF, Master List, Individual)
   - name: Certificates
     description: Certificate search and export operations
-  - name: ICAO Auto Sync
+  - name: Auth
+    description: Authentication and user management
+  - name: Audit
+    description: Operation audit logging
+  - name: ICAO
     description: ICAO PKD version monitoring and comparison
-  - name: PA
-    description: Passive Authentication operations
   - name: Progress
-    description: Upload progress tracking
-  - name: LDAP
-    description: LDAP operations
+    description: Upload progress tracking (SSE)
 
 paths:
+  # ============================================
+  # Health Endpoints
+  # ============================================
   /api/health:
     get:
       tags: [Health]
       summary: Application health check
-      description: Returns the overall health status of the service
       operationId: getHealth
       responses:
         '200':
@@ -62,7 +62,6 @@ paths:
     get:
       tags: [Health]
       summary: Database health check
-      description: Returns PostgreSQL connection status
       operationId: getDatabaseHealth
       responses:
         '200':
@@ -76,7 +75,6 @@ paths:
     get:
       tags: [Health]
       summary: LDAP health check
-      description: Returns OpenLDAP connection status
       operationId: getLdapHealth
       responses:
         '200':
@@ -86,22 +84,20 @@ paths:
               schema:
                 $ref: '#/components/schemas/LdapHealthResponse'
 
+  # ============================================
+  # Upload Endpoints
+  # ============================================
   /api/upload/ldif:
     post:
       tags: [Upload]
       summary: Upload LDIF file
       description: |
         Upload and process an LDIF file containing certificates.
-
-        **Processing Modes**:
-        - **AUTO** (default): Automatic 1-step processing (parse + validate + LDAP upload)
-        - **MANUAL**: 3-step manual processing
-          1. Parse and save to temp file
-          2. Validate and save to DB
-          3. Upload to LDAP
-
-        **Duplicate Detection**: Files are checked against SHA-256 hash before upload.
+        Supports AUTO (1-step) and MANUAL (3-step) processing modes.
+        Duplicate detection via SHA-256 file hash.
       operationId: uploadLdif
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -112,17 +108,11 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: LDIF file to upload
                 processing_mode:
                   type: string
                   enum: [AUTO, MANUAL]
                   default: AUTO
-                  description: |
-                    Processing mode for the upload:
-                    - AUTO: Automatic full processing
-                    - MANUAL: Manual 3-step processing
-              required:
-                - file
+              required: [file]
       responses:
         '200':
           description: Upload successful
@@ -130,12 +120,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UploadResponse'
-        '400':
-          description: Invalid file or upload error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Duplicate file detected
           content:
@@ -147,19 +131,10 @@ paths:
     post:
       tags: [Upload]
       summary: Upload Master List file
-      description: |
-        Upload and process an ICAO Master List file (CMS signed).
-
-        **Processing Modes**:
-        - **AUTO** (default): Automatic 1-step processing (parse + validate + LDAP upload)
-        - **MANUAL**: 3-step manual processing
-          1. Parse and save to temp file
-          2. Validate and save to DB
-          3. Upload to LDAP
-
-        **Note**: Master Lists contain only CSCA certificates per ICAO Doc 9303.
-        **Duplicate Detection**: Files are checked against SHA-256 hash before upload.
+      description: Upload and process an ICAO Master List file (CMS signed). Contains CSCA certificates.
       operationId: uploadMasterList
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -170,17 +145,11 @@ paths:
                 file:
                   type: string
                   format: binary
-                  description: Master List file (.ml) to upload
                 processing_mode:
                   type: string
                   enum: [AUTO, MANUAL]
                   default: AUTO
-                  description: |
-                    Processing mode for the upload:
-                    - AUTO: Automatic full processing
-                    - MANUAL: Manual 3-step processing
-              required:
-                - file
+              required: [file]
       responses:
         '200':
           description: Upload successful
@@ -188,24 +157,80 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UploadResponse'
-        '400':
-          description: Invalid file or upload error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Duplicate file detected
+
+  /api/upload/certificate:
+    post:
+      tags: [Upload]
+      summary: Upload individual certificate
+      description: |
+        Upload a single certificate file (PEM, DER, CER, P7B, DL, CRL).
+        Saves to database and LDAP. Use `/api/upload/certificate/preview` first to preview.
+      operationId: uploadCertificate
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Upload successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DuplicateFileResponse'
+                $ref: '#/components/schemas/UploadResponse'
+
+  /api/upload/certificate/preview:
+    post:
+      tags: [Upload]
+      summary: Preview certificate (parse only)
+      description: |
+        Parse and preview a certificate file without saving.
+        Returns certificate details, metadata, and validation info.
+        Supports PEM, DER, CER, P7B, DL (Deviation List), CRL formats.
+      operationId: previewCertificate
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+              required: [file]
+      responses:
+        '200':
+          description: Certificate preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  certificates:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CertificatePreview'
 
   /api/upload/statistics:
     get:
       tags: [Upload]
       summary: Get upload statistics
-      description: Returns statistics about uploaded certificates
+      description: |
+        Returns certificate counts by type, validation status, and source.
+        Includes `bySource` field with certificate counts per source_type.
       operationId: getUploadStatistics
       responses:
         '200':
@@ -219,7 +244,6 @@ paths:
     get:
       tags: [Upload]
       summary: Get upload history
-      description: Returns history of file uploads
       operationId: getUploadHistory
       parameters:
         - name: limit
@@ -227,13 +251,11 @@ paths:
           schema:
             type: integer
             default: 50
-          description: Maximum number of records to return
         - name: offset
           in: query
           schema:
             type: integer
             default: 0
-          description: Number of records to skip
       responses:
         '200':
           description: Upload history list
@@ -242,64 +264,198 @@ paths:
               schema:
                 $ref: '#/components/schemas/UploadHistoryResponse'
 
+  /api/upload/detail/{uploadId}:
+    get:
+      tags: [Upload]
+      summary: Get upload detail
+      operationId: getUploadDetail
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Upload detail
+        '404':
+          description: Upload not found
+
+  /api/upload/{uploadId}:
+    delete:
+      tags: [Upload]
+      summary: Delete failed upload
+      description: Only FAILED or PENDING uploads can be deleted. Cleans up certificates, CRLs, and temp files.
+      operationId: deleteUpload
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Upload deleted
+        '400':
+          description: Cannot delete (not FAILED/PENDING)
+        '404':
+          description: Upload not found
+
+  /api/upload/{uploadId}/validations:
+    get:
+      tags: [Upload]
+      summary: Get trust chain validation results
+      operationId: getUploadValidations
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Validation results
+
+  /api/upload/{uploadId}/validation-statistics:
+    get:
+      tags: [Upload]
+      summary: Get validation statistics for upload
+      operationId: getUploadValidationStatistics
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Validation statistics
+
+  /api/upload/{uploadId}/issues:
+    get:
+      tags: [Upload]
+      summary: Get duplicate certificates detected
+      operationId: getUploadIssues
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Issue list
+
+  /api/upload/{uploadId}/ldif-structure:
+    get:
+      tags: [Upload]
+      summary: Get LDIF/ASN.1 structure
+      description: Returns the parsed structure of an LDIF file as a tree.
+      operationId: getLdifStructure
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: LDIF structure tree
+
+  /api/upload/{uploadId}/masterlist-structure:
+    get:
+      tags: [Upload]
+      summary: Get Master List structure
+      description: Returns parsed ASN.1 structure of a Master List file.
+      operationId: getMasterListStructure
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Master List structure tree
+
   /api/upload/countries:
     get:
       tags: [Upload]
-      summary: Get country statistics
-      description: Returns certificate counts by country
+      summary: Get country statistics (dashboard)
       operationId: getCountryStatistics
       responses:
         '200':
           description: Country statistics
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CountryStatisticsResponse'
 
-  /api/validation/revalidate:
-    post:
-      tags: [Validation]
-      summary: Re-validate certificates
-      description: Trigger re-validation of DSC trust chains
-      operationId: revalidateCertificates
+  /api/upload/countries/detailed:
+    get:
+      tags: [Upload]
+      summary: Get detailed country breakdown
+      operationId: getDetailedCountryStatistics
       responses:
         '200':
-          description: Revalidation started
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RevalidateResponse'
+          description: Detailed country breakdown with certificate types
 
+  /api/upload/changes:
+    get:
+      tags: [Upload]
+      summary: Get recent upload changes
+      operationId: getUploadChanges
+      responses:
+        '200':
+          description: Recent changes
+
+  # ============================================
+  # Certificate Search & Export
+  # ============================================
   /api/certificates/search:
     get:
       tags: [Certificates]
       summary: Search certificates
       description: |
-        Search certificates in LDAP by country and type (v1.6.0+).
-
-        **Data Source**: 100% LDAP-based (real-time search)
-
-        **Performance**: Authenticated bind with auto-reconnect
-
-        Returns list of certificate DNs matching the search criteria.
+        Search certificates by country, type, status, and source.
+        When `source` is specified, uses DB-based search.
+        When `source` is not specified, uses LDAP-based search.
       operationId: searchCertificates
       parameters:
         - name: country
           in: query
-          required: true
           schema:
             type: string
             minLength: 2
             maxLength: 2
-          description: ISO 3166-1 alpha-2 country code (e.g., KR, US)
+          description: ISO 3166-1 alpha-2 country code
         - name: certType
           in: query
-          required: false
           schema:
             type: string
             enum: [CSCA, DSC, DSC_NC, CRL, ML, ALL]
             default: ALL
-          description: Certificate type filter
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [LDIF_PARSED, ML_PARSED, FILE_UPLOAD, PA_EXTRACTED, DL_PARSED]
+          description: Certificate source type filter (triggers DB search)
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: Search results
@@ -307,23 +463,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CertificateSearchResponse'
-        '400':
-          description: Invalid parameters
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
   /api/certificates/countries:
     get:
       tags: [Certificates]
-      summary: Get list of countries
-      description: |
-        Get list of all countries with registered certificates (v1.6.0+).
-
-        **Performance**: PostgreSQL DISTINCT query (40ms avg, 99.9% faster than LDAP)
-
-        **v1.6.2 Optimization**: Switched from LDAP scan to PostgreSQL for 1,975x speedup
+      summary: Get country list
       operationId: getCountries
       responses:
         '200':
@@ -337,7 +481,6 @@ paths:
     get:
       tags: [Certificates]
       summary: Get certificate details
-      description: Get detailed information for a specific certificate by DN (v1.6.0+)
       operationId: getCertificateDetail
       parameters:
         - name: dn
@@ -345,31 +488,33 @@ paths:
           required: true
           schema:
             type: string
-          description: Distinguished Name of the certificate
+          description: Distinguished Name
       responses:
         '200':
           description: Certificate details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CertificateDetailResponse'
         '404':
-          description: Certificate not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          description: Not found
+
+  /api/certificates/validation:
+    get:
+      tags: [Certificates]
+      summary: Get validation result by fingerprint
+      operationId: getCertificateValidation
+      parameters:
+        - name: fingerprint
+          in: query
+          required: true
+          schema:
+            type: string
+          description: SHA-256 fingerprint
+      responses:
+        '200':
+          description: Validation result
 
   /api/certificates/export/file:
     get:
       tags: [Certificates]
-      summary: Export single certificate
-      description: |
-        Export a single certificate file in DER or PEM format (v1.6.0+).
-
-        **Formats**:
-        - DER: Binary format (application/x-x509-ca-cert)
-        - PEM: Base64 encoded with headers (application/x-pem-file)
+      summary: Export single certificate (DER/PEM)
       operationId: exportCertificateFile
       parameters:
         - name: dn
@@ -377,15 +522,12 @@ paths:
           required: true
           schema:
             type: string
-          description: Distinguished Name of the certificate
         - name: format
           in: query
-          required: false
           schema:
             type: string
             enum: [DER, PEM]
             default: DER
-          description: Export format
       responses:
         '200':
           description: Certificate file
@@ -394,33 +536,11 @@ paths:
               schema:
                 type: string
                 format: binary
-            application/x-pem-file:
-              schema:
-                type: string
-        '404':
-          description: Certificate not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
   /api/certificates/export/country:
     get:
       tags: [Certificates]
-      summary: Export country certificates
-      description: |
-        Export all certificates for a country as a ZIP archive (v1.6.0+).
-
-        **ZIP Contents**:
-        - CSCA: {COUNTRY}_CSCA_{SERIAL}.crt
-        - DSC: {COUNTRY}_DSC_{SERIAL}.crt
-        - DSC_NC: {COUNTRY}_DSC_NC_{SERIAL}.crt
-        - CRL: cn_{SHA256_HASH}.der
-        - ML: {COUNTRY}_ML_{SERIAL}.crt
-
-        **Format**: DER or PEM based on format parameter
-
-        **v1.6.1**: Fixed ZIP creation crash with temporary file approach
+      summary: Export country certificates as ZIP
       operationId: exportCountryCertificates
       parameters:
         - name: country
@@ -428,25 +548,18 @@ paths:
           required: true
           schema:
             type: string
-            minLength: 2
-            maxLength: 2
-          description: ISO 3166-1 alpha-2 country code
         - name: certType
           in: query
-          required: false
           schema:
             type: string
             enum: [CSCA, DSC, DSC_NC, CRL, ML, ALL]
             default: ALL
-          description: Certificate type filter
         - name: format
           in: query
-          required: false
           schema:
             type: string
             enum: [DER, PEM]
             default: DER
-          description: Export format
       responses:
         '200':
           description: ZIP archive
@@ -455,300 +568,215 @@ paths:
               schema:
                 type: string
                 format: binary
-        '404':
-          description: No certificates found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
 
-  /api/upload/{uploadId}:
-    delete:
-      tags: [Upload]
-      summary: Delete failed upload
-      description: |
-        Delete a failed or pending upload and clean up associated data (v1.4.8+).
-
-        **Cleanup actions**:
-        - Delete certificates from DB
-        - Delete CRL records
-        - Delete master list records
-        - Delete upload record
-        - Delete temporary JSON file
-
-        **Note**: Only FAILED or PENDING uploads can be deleted
-      operationId: deleteFailedUpload
-      parameters:
-        - name: uploadId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-          description: Upload ID to delete
-      responses:
-        '200':
-          description: Upload deleted successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DeleteUploadResponse'
-        '400':
-          description: Cannot delete upload (not in FAILED/PENDING status)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Upload not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/icao/check-updates:
+  # ============================================
+  # Authentication & User Management
+  # ============================================
+  /api/auth/login:
     post:
-      tags: [ICAO Auto Sync]
-      summary: Check for ICAO PKD updates
-      description: |
-        Manually trigger a check for new ICAO PKD versions (v1.7.0+).
-
-        **Workflow**:
-        1. Fetch ICAO portal HTML
-        2. Parse version numbers (DSC/CRL, Master List, DSC_NC)
-        3. Compare with local database
-        4. Save new versions with status DETECTED
-        5. Send email notification (if configured)
-
-        **Note**: This operation is asynchronous. Use `/api/icao/status` and `/api/icao/history` to check results.
-      operationId: checkIcaoUpdates
-      responses:
-        '200':
-          description: Check initiated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Version check completed"
-                  new_version_count:
-                    type: integer
-                    example: 2
-                  new_versions:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/IcaoVersion'
-        '500':
-          description: Check failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/icao/status:
-    get:
-      tags: [ICAO Auto Sync]
-      summary: Get version comparison status
-      description: |
-        Compare detected ICAO PKD versions with uploaded versions (v1.7.0+).
-
-        **Returns**:
-        - Detected version (latest from ICAO portal)
-        - Uploaded version (latest completed upload)
-        - Version difference
-        - Update status (UPDATE_NEEDED, UP_TO_DATE, NOT_UPLOADED)
-
-        **Collections**:
-        - DSC_CRL: Document Signer Certificates and CRLs
-        - DSC_NC: Non-Conformant DSC
-        - MASTERLIST: CSCA Master List
-      operationId: getIcaoStatus
-      responses:
-        '200':
-          description: Version comparison status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  count:
-                    type: integer
-                    example: 3
-                  status:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        collection_type:
-                          type: string
-                          enum: [DSC_CRL, DSC_NC, MASTERLIST]
-                          example: "DSC_CRL"
-                        detected_version:
-                          type: integer
-                          example: 9668
-                        uploaded_version:
-                          type: integer
-                          example: 9514
-                        upload_timestamp:
-                          type: string
-                          format: date-time
-                          example: "2026-01-20 10:30:00"
-                        version_diff:
-                          type: integer
-                          example: 154
-                        needs_update:
-                          type: boolean
-                          example: true
-                        status:
-                          type: string
-                          enum: [UPDATE_NEEDED, UP_TO_DATE, NOT_UPLOADED]
-                          example: "UPDATE_NEEDED"
-                        status_message:
-                          type: string
-                          example: "New version available (+154 versions behind)"
-        '500':
-          description: Query failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/icao/latest:
-    get:
-      tags: [ICAO Auto Sync]
-      summary: Get latest detected versions
-      description: |
-        Get the latest detected version for each collection type (v1.7.0+).
-
-        **Note**: This shows what was detected from ICAO portal, not what is uploaded.
-        Use `/api/icao/status` for comparison.
-      operationId: getIcaoLatest
-      responses:
-        '200':
-          description: Latest versions
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  count:
-                    type: integer
-                    example: 3
-                  versions:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/IcaoVersion'
-        '500':
-          description: Query failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/icao/history:
-    get:
-      tags: [ICAO Auto Sync]
-      summary: Get version detection history
-      description: |
-        Get version detection history, ordered by detected_at DESC (v1.7.0+).
-
-        **Pagination**: Use limit parameter to control number of results.
-      operationId: getIcaoHistory
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 10
-          description: Maximum number of results to return
-      responses:
-        '200':
-          description: Version history
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  limit:
-                    type: integer
-                    example: 10
-                  count:
-                    type: integer
-                    example: 10
-                  versions:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/IcaoVersion'
-        '500':
-          description: Query failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/pa/verify:
-    post:
-      tags: [PA]
-      summary: Verify Passive Authentication
-      description: Perform ICAO 9303 Passive Authentication verification
-      operationId: verifyPA
+      tags: [Auth]
+      summary: User login
+      operationId: login
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PAVerifyRequest'
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+              required: [username, password]
       responses:
         '200':
-          description: Verification result
+          description: Login successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PAVerifyResponse'
-        '400':
-          description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
+                  user:
+                    $ref: '#/components/schemas/UserInfo'
 
-  /api/pa/statistics:
-    get:
-      tags: [PA]
-      summary: Get PA statistics
-      description: Returns Passive Authentication verification statistics
-      operationId: getPAStatistics
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: User logout
+      operationId: logout
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: PA statistics
+          description: Logout successful
+
+  /api/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh JWT token
+      operationId: refreshToken
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: New token
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PAStatisticsResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  token:
+                    type: string
 
-  /api/pa/history:
+  /api/auth/me:
     get:
-      tags: [PA]
-      summary: Get PA verification history
-      description: Returns history of PA verifications
-      operationId: getPAHistory
+      tags: [Auth]
+      summary: Get current user info
+      operationId: getCurrentUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfo'
+
+  /api/auth/users:
+    get:
+      tags: [Auth]
+      summary: List all users (admin only)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User list
+    post:
+      tags: [Auth]
+      summary: Create user (admin only)
+      operationId: createUser
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, user]
+              required: [username, password, role]
+      responses:
+        '201':
+          description: User created
+
+  /api/auth/users/{userId}:
+    get:
+      tags: [Auth]
+      summary: Get user by ID (admin only)
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User info
+    put:
+      tags: [Auth]
+      summary: Update user (admin only)
+      operationId: updateUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role:
+                  type: string
+                active:
+                  type: boolean
+      responses:
+        '200':
+          description: User updated
+    delete:
+      tags: [Auth]
+      summary: Delete user (admin only)
+      operationId: deleteUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User deleted
+
+  /api/auth/users/{userId}/password:
+    put:
+      tags: [Auth]
+      summary: Change user password (admin only)
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                newPassword:
+                  type: string
+              required: [newPassword]
+      responses:
+        '200':
+          description: Password changed
+
+  /api/auth/audit-log:
+    get:
+      tags: [Auth]
+      summary: Get auth audit logs (admin only)
+      operationId: getAuthAuditLog
+      security:
+        - bearerAuth: []
       parameters:
         - name: limit
           in: query
@@ -762,31 +790,123 @@ paths:
             default: 0
       responses:
         '200':
-          description: PA history list
+          description: Auth audit log entries
+
+  /api/auth/audit-log/stats:
+    get:
+      tags: [Auth]
+      summary: Get auth audit statistics (admin only)
+      operationId: getAuthAuditStats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Auth audit statistics
+
+  # ============================================
+  # Operation Audit
+  # ============================================
+  /api/audit/operations:
+    get:
+      tags: [Audit]
+      summary: Get operation audit logs
+      operationId: getOperationAuditLogs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Operation audit log entries
+
+  /api/audit/operations/stats:
+    get:
+      tags: [Audit]
+      summary: Get operation audit statistics
+      operationId: getOperationAuditStats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Operation statistics
+
+  # ============================================
+  # ICAO Version Monitoring
+  # ============================================
+  /api/icao/check-updates:
+    get:
+      tags: [ICAO]
+      summary: Check for ICAO PKD updates
+      description: Trigger a check for new ICAO PKD versions from the ICAO portal.
+      operationId: checkIcaoUpdates
+      responses:
+        '200':
+          description: Check completed
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PAHistoryResponse'
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  new_version_count:
+                    type: integer
+                  new_versions:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IcaoVersion'
 
+  /api/icao/status:
+    get:
+      tags: [ICAO]
+      summary: Get version comparison status
+      description: Compare detected ICAO PKD versions with uploaded versions.
+      operationId: getIcaoStatus
+      responses:
+        '200':
+          description: Version comparison
+
+  /api/icao/latest:
+    get:
+      tags: [ICAO]
+      summary: Get latest detected versions
+      operationId: getIcaoLatest
+      responses:
+        '200':
+          description: Latest versions
+
+  /api/icao/history:
+    get:
+      tags: [ICAO]
+      summary: Get version detection history
+      operationId: getIcaoHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: Version history
+
+  # ============================================
+  # Progress Tracking (SSE)
+  # ============================================
   /api/progress/stream/{uploadId}:
     get:
       tags: [Progress]
       summary: SSE progress stream
-      description: |
-        Server-Sent Events stream for upload progress.
-
-        **Event Format**:
-        ```
-        event: progress
-        data: {"stage":"PROCESSING","percentage":50,"message":"처리 중: CSCA 100/500, DSC 200/1000, CRL 10/50"}
-
-        event: completed
-        data: {"stage":"COMPLETED","percentage":100,"message":"처리 완료: CSCA 500개, DSC 1000개 (검증: 800 성공, 200 실패)"}
-        ```
-
-        **Stages**: UPLOADING, PARSING, PROCESSING, DB_SAVING, LDAP_UPLOADING, COMPLETED, FAILED
-
-        **New in v1.5.10**: Detailed progress with X/Total format and completion signals
+      description: Server-Sent Events stream for upload progress.
       operationId: getProgressStream
       parameters:
         - name: uploadId
@@ -795,7 +915,6 @@ paths:
           schema:
             type: string
             format: uuid
-          description: Upload ID to track
       responses:
         '200':
           description: SSE stream
@@ -803,18 +922,11 @@ paths:
             text/event-stream:
               schema:
                 type: string
-              example: |
-                event: progress
-                data: {"stage":"PROCESSING","percentage":30,"message":"처리 중: CSCA 50/500, DSC 100/1000"}
-
-                event: completed
-                data: {"stage":"COMPLETED","percentage":100,"message":"처리 완료"}
 
   /api/progress/status/{uploadId}:
     get:
       tags: [Progress]
       summary: Get progress status
-      description: Returns current progress status for an upload
       operationId: getProgressStatus
       parameters:
         - name: uploadId
@@ -825,40 +937,42 @@ paths:
       responses:
         '200':
           description: Progress status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProgressStatusResponse'
 
-  /api/ldap/health:
-    get:
-      tags: [LDAP]
-      summary: LDAP health check
-      description: Returns detailed LDAP connection status
-      operationId: getLdapDetailedHealth
+  # ============================================
+  # Validation
+  # ============================================
+  /api/validation/revalidate:
+    post:
+      tags: [Certificates]
+      summary: Re-validate DSC trust chains
+      operationId: revalidateCertificates
+      security:
+        - bearerAuth: []
       responses:
         '200':
-          description: LDAP health status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LdapHealthResponse'
+          description: Revalidation started
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from /api/auth/login
+
   schemas:
     HealthResponse:
       type: object
       properties:
         status:
           type: string
-          enum: [healthy, unhealthy]
+          example: UP
         service:
           type: string
         version:
           type: string
         timestamp:
           type: string
-          format: date-time
 
     DatabaseHealthResponse:
       type: object
@@ -874,7 +988,6 @@ components:
           type: string
         responseTime:
           type: integer
-          description: Response time in milliseconds
 
     LdapHealthResponse:
       type: object
@@ -888,8 +1001,6 @@ components:
           type: integer
         baseDn:
           type: string
-        responseTime:
-          type: integer
 
     UploadResponse:
       type: object
@@ -898,23 +1009,13 @@ components:
           type: boolean
         uploadId:
           type: string
+          format: uuid
         filename:
           type: string
         message:
           type: string
         certificatesProcessed:
           type: integer
-
-    ErrorResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: false
-        error:
-          type: string
-        message:
-          type: string
 
     DuplicateFileResponse:
       type: object
@@ -924,32 +1025,40 @@ components:
           default: false
         error:
           type: string
-          example: "DUPLICATE_FILE"
-        message:
-          type: string
-          example: "File already uploaded"
+          example: DUPLICATE_FILE
         existingUpload:
           type: object
           properties:
             uploadId:
               type: string
               format: uuid
-              description: UUID of the existing upload
             filename:
               type: string
-              description: Original filename of the existing upload
             uploadTimestamp:
               type: string
-              format: date-time
-              description: When the file was first uploaded
             status:
               type: string
-              enum: [PENDING, PROCESSING, COMPLETED, FAILED]
-              description: Current processing status
-            processingMode:
-              type: string
-              enum: [AUTO, MANUAL]
-              description: Processing mode used
+
+    CertificatePreview:
+      type: object
+      properties:
+        subject:
+          type: string
+        issuer:
+          type: string
+        serialNumber:
+          type: string
+        notBefore:
+          type: string
+        notAfter:
+          type: string
+        certificateType:
+          type: string
+          enum: [CSCA, DSC, MLSC, CRL]
+        countryCode:
+          type: string
+        fingerprintSha256:
+          type: string
 
     UploadStatisticsResponse:
       type: object
@@ -970,6 +1079,15 @@ components:
           type: integer
         trustChainInvalid:
           type: integer
+        bySource:
+          type: object
+          description: Certificate count by source_type
+          additionalProperties:
+            type: integer
+          example:
+            LDIF_PARSED: 30675
+            ML_PARSED: 536
+            PA_EXTRACTED: 1
 
     UploadHistoryResponse:
       type: object
@@ -979,171 +1097,24 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/UploadHistoryItem'
-
-    UploadHistoryItem:
-      type: object
-      properties:
-        id:
-          type: integer
-        filename:
-          type: string
-        fileType:
-          type: string
-        uploadDate:
-          type: string
-          format: date-time
-        status:
-          type: string
-        certificatesProcessed:
-          type: integer
-
-    CountryStatisticsResponse:
-      type: object
-      properties:
-        countries:
-          type: array
-          items:
-            $ref: '#/components/schemas/CountryStats'
-
-    CountryStats:
-      type: object
-      properties:
-        countryCode:
-          type: string
-        csca:
-          type: integer
-        dsc:
-          type: integer
-        crl:
-          type: integer
-
-    RevalidateResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-        validatedCount:
-          type: integer
-
-    PAVerifyRequest:
-      type: object
-      required:
-        - sod
-        - dataGroups
-      properties:
-        sod:
-          type: string
-          description: Base64 encoded SOD (Security Object Document)
-        dataGroups:
-          type: object
-          additionalProperties:
-            type: string
-          description: Map of DG number to Base64 encoded data
-        mrzData:
-          type: string
-          description: Optional MRZ data for additional validation
-
-    PAVerifyResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        verificationId:
-          type: string
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/PAVerificationStep'
-        documentInfo:
-          $ref: '#/components/schemas/DocumentInfo'
-
-    PAVerificationStep:
-      type: object
-      properties:
-        step:
-          type: integer
-        name:
-          type: string
-        status:
-          type: string
-          enum: [passed, failed, skipped]
-        message:
-          type: string
-
-    DocumentInfo:
-      type: object
-      properties:
-        documentType:
-          type: string
-        issuingCountry:
-          type: string
-        documentNumber:
-          type: string
-        expiryDate:
-          type: string
-
-    PAStatisticsResponse:
-      type: object
-      properties:
-        totalVerifications:
-          type: integer
-        successCount:
-          type: integer
-        failureCount:
-          type: integer
-        byCountry:
-          type: object
-          additionalProperties:
-            type: integer
-
-    PAHistoryResponse:
-      type: object
-      properties:
-        total:
-          type: integer
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/PAHistoryItem'
-
-    PAHistoryItem:
-      type: object
-      properties:
-        id:
-          type: string
-        verificationDate:
-          type: string
-          format: date-time
-        issuingCountry:
-          type: string
-        documentType:
-          type: string
-        result:
-          type: string
-          enum: [success, failure]
-
-    ProgressStatusResponse:
-      type: object
-      properties:
-        uploadId:
-          type: string
-        stage:
-          type: string
-        progress:
-          type: integer
-          minimum: 0
-          maximum: 100
-        message:
-          type: string
-        isComplete:
-          type: boolean
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              filename:
+                type: string
+              fileType:
+                type: string
+              uploadDate:
+                type: string
+              status:
+                type: string
+              certificatesProcessed:
+                type: integer
 
     CertificateSearchResponse:
       type: object
-      description: Certificate search results (v1.6.0+)
       properties:
         success:
           type: boolean
@@ -1160,17 +1131,27 @@ components:
             properties:
               dn:
                 type: string
-                description: Distinguished Name
               cn:
                 type: string
-                description: Common Name
               serialNumber:
                 type: string
-                description: Certificate serial number
+              subjectDn:
+                type: string
+              issuerDn:
+                type: string
+              countryCode:
+                type: string
+              certificateType:
+                type: string
+              sourceType:
+                type: string
+              notBefore:
+                type: string
+              notAfter:
+                type: string
 
     CountriesResponse:
       type: object
-      description: List of countries with certificates (v1.6.0+)
       properties:
         success:
           type: boolean
@@ -1180,119 +1161,36 @@ components:
           type: array
           items:
             type: string
-            description: ISO 3166-1 alpha-2 country code
-          example: ["KR", "US", "JP", "CN"]
+          example: ["KR", "US", "JP"]
 
-    CertificateDetailResponse:
+    UserInfo:
       type: object
-      description: Detailed certificate information (v1.6.0+)
       properties:
-        success:
-          type: boolean
-        dn:
+        id:
           type: string
-        certificate:
-          type: object
-          properties:
-            subject:
-              type: string
-            issuer:
-              type: string
-            serialNumber:
-              type: string
-            notBefore:
-              type: string
-              format: date-time
-            notAfter:
-              type: string
-              format: date-time
-            countryCode:
-              type: string
-            certificateType:
-              type: string
-              enum: [CSCA, DSC, DSC_NC, CRL, ML]
-            size:
-              type: integer
-              description: Certificate size in bytes
-
-    DeleteUploadResponse:
-      type: object
-      description: Result of upload deletion (v1.4.8+)
-      properties:
-        success:
-          type: boolean
-        message:
+        username:
           type: string
-        deletedRecords:
-          type: object
-          properties:
-            certificates:
-              type: integer
-            crls:
-              type: integer
-            masterLists:
-              type: integer
-            uploadRecord:
-              type: integer
-            tempFiles:
-              type: integer
+        role:
+          type: string
+          enum: [admin, user]
+        active:
+          type: boolean
 
     IcaoVersion:
       type: object
-      description: ICAO PKD version information (v1.7.0+)
       properties:
         id:
           type: integer
-          description: Unique identifier
         collection_type:
           type: string
           enum: [DSC_CRL, DSC_NC, MASTERLIST]
-          description: Collection type
         file_name:
           type: string
-          description: LDIF filename (e.g., icaopkd-001-complete-009668.ldif)
         file_version:
           type: integer
-          description: Version number extracted from filename
         status:
           type: string
           enum: [DETECTED, NOTIFIED, DOWNLOADED, IMPORTED, FAILED]
-          description: Version status
-        status_description:
-          type: string
-          description: Human-readable status description
         detected_at:
           type: string
           format: date-time
-          description: When the version was detected
-        downloaded_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: When the file was downloaded (null if not downloaded)
-        imported_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: When the file was imported (null if not imported)
-        notification_sent:
-          type: boolean
-          description: Whether notification was sent
-        notification_sent_at:
-          type: string
-          format: date-time
-          nullable: true
-          description: When notification was sent
-        import_upload_id:
-          type: string
-          format: uuid
-          nullable: true
-          description: Upload ID if imported
-        certificate_count:
-          type: integer
-          nullable: true
-          description: Number of certificates imported
-        error_message:
-          type: string
-          nullable: true
-          description: Error message if status is FAILED

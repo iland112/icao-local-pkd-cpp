@@ -1,0 +1,312 @@
+openapi: 3.0.3
+info:
+  title: PKD Relay Service API
+  description: |
+    DB-LDAP Synchronization and Certificate Re-validation Service API.
+    Monitors synchronization between PostgreSQL/Oracle and OpenLDAP,
+    performs auto-reconciliation, and certificate expiration re-validation.
+
+    ## Changelog
+    - **v2.0.0** (2026-02-06): Oracle + PostgreSQL multi-DBMS support, UUID primary keys
+    - **v1.6.0** (2026-01-14): Auto Reconcile feature complete (Phase 1-6)
+    - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
+    - **v1.1.0** (2026-01-06): Daily scheduler, certificate re-validation
+    - **v1.0.0** (2026-01-03): Initial release
+  version: 2.0.0
+  contact:
+    name: SmartCore Inc.
+    email: support@smartcoreinc.com
+
+servers:
+  - url: http://localhost:8083
+    description: Development server (direct)
+  - url: http://localhost:8080
+    description: API Gateway (prefix /api/sync)
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Sync
+    description: DB-LDAP synchronization status and control
+  - name: Reconcile
+    description: Auto reconciliation (missing LDAP entries)
+  - name: Revalidation
+    description: Certificate trust chain re-validation
+  - name: Config
+    description: Service configuration
+
+paths:
+  # ============================================
+  # Health
+  # ============================================
+  /api/sync/health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  # ============================================
+  # Sync Status
+  # ============================================
+  /api/sync/status:
+    get:
+      tags: [Sync]
+      summary: Get DB-LDAP sync status
+      description: Returns current sync status with DB and LDAP counts by certificate type.
+      operationId: getSyncStatus
+      responses:
+        '200':
+          description: Sync status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatusResponse'
+
+  /api/sync/history:
+    get:
+      tags: [Sync]
+      summary: Get sync history
+      operationId: getSyncHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Sync history
+
+  /api/sync/check:
+    post:
+      tags: [Sync]
+      summary: Trigger manual sync check
+      description: Immediately check for discrepancies between DB and LDAP.
+      operationId: triggerSyncCheck
+      responses:
+        '200':
+          description: Check result
+
+  /api/sync/discrepancies:
+    get:
+      tags: [Sync]
+      summary: Get current discrepancies
+      description: Returns list of entities that are in DB but not in LDAP.
+      operationId: getDiscrepancies
+      responses:
+        '200':
+          description: Discrepancy list
+
+  # ============================================
+  # Reconciliation
+  # ============================================
+  /api/sync/reconcile:
+    post:
+      tags: [Reconcile]
+      summary: Trigger reconciliation
+      description: |
+        Add missing entities to LDAP (stored_in_ldap=FALSE → LDAP add → TRUE).
+        Scope: CSCA, DSC, CRL (DSC_NC excluded - ICAO deprecated nc-data in 2021).
+        Supports dryRun mode.
+      operationId: triggerReconciliation
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun:
+                  type: boolean
+                  default: false
+                  description: Preview only, do not modify LDAP
+      responses:
+        '200':
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationResult'
+
+  /api/sync/reconcile/history:
+    get:
+      tags: [Reconcile]
+      summary: Get reconciliation history
+      operationId: getReconcileHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Reconciliation history
+
+  /api/sync/reconcile/{id}:
+    get:
+      tags: [Reconcile]
+      summary: Get reconciliation detail
+      operationId: getReconcileDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Reconciliation detail with individual logs
+        '404':
+          description: Not found
+
+  # ============================================
+  # Revalidation
+  # ============================================
+  /api/sync/revalidate:
+    post:
+      tags: [Revalidation]
+      summary: Trigger certificate re-validation
+      description: Re-validate DSC trust chains against CSCA certificates.
+      operationId: triggerRevalidation
+      responses:
+        '200':
+          description: Revalidation result
+
+  /api/sync/revalidation-history:
+    get:
+      tags: [Revalidation]
+      summary: Get revalidation history
+      operationId: getRevalidationHistory
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Revalidation history
+
+  # ============================================
+  # Configuration & Scheduler
+  # ============================================
+  /api/sync/config:
+    get:
+      tags: [Config]
+      summary: Get service configuration
+      operationId: getConfig
+      responses:
+        '200':
+          description: Current configuration
+    put:
+      tags: [Config]
+      summary: Update service configuration
+      operationId: updateConfig
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Configuration updated
+
+  /api/sync/trigger-daily:
+    post:
+      tags: [Config]
+      summary: Trigger daily scheduler
+      description: Manually trigger the daily sync + revalidation job.
+      operationId: triggerDaily
+      responses:
+        '200':
+          description: Daily job triggered
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: UP
+        service:
+          type: string
+          example: pkd-relay
+        version:
+          type: string
+        timestamp:
+          type: string
+
+    SyncStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [IN_SYNC, OUT_OF_SYNC, UNKNOWN]
+        databaseCount:
+          type: integer
+        ldapCount:
+          type: integer
+        lastChecked:
+          type: string
+          format: date-time
+        byType:
+          type: object
+          properties:
+            CSCA:
+              type: object
+              properties:
+                db:
+                  type: integer
+                ldap:
+                  type: integer
+            DSC:
+              type: object
+              properties:
+                db:
+                  type: integer
+                ldap:
+                  type: integer
+            CRL:
+              type: object
+              properties:
+                db:
+                  type: integer
+                ldap:
+                  type: integer
+
+    ReconciliationResult:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summaryId:
+          type: string
+          format: uuid
+        dryRun:
+          type: boolean
+        totalMissing:
+          type: integer
+        totalAdded:
+          type: integer
+        totalFailed:
+          type: integer
+        byType:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              missing:
+                type: integer
+              added:
+                type: integer
+              failed:
+                type: integer

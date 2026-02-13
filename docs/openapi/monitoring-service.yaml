@@ -1,0 +1,175 @@
+openapi: 3.0.3
+info:
+  title: Monitoring Service API
+  description: |
+    System resource monitoring and service health check API.
+    DB-independent service that monitors CPU, memory, disk, network,
+    and checks health of other backend services.
+
+    ## Changelog
+    - **v1.1.0** (2026-02-12): Removed PostgreSQL dependency (DB-independent)
+    - **v1.0.0** (2026-01-13): Initial release
+  version: 1.1.0
+  contact:
+    name: SmartCore Inc.
+    email: support@smartcoreinc.com
+
+servers:
+  - url: http://localhost:8084
+    description: Development server (direct)
+  - url: http://localhost:8080
+    description: API Gateway (prefix /api/monitoring)
+
+tags:
+  - name: Health
+    description: Service health check
+  - name: System
+    description: System resource metrics
+  - name: Services
+    description: Backend service health monitoring
+
+paths:
+  /api/monitoring/health:
+    get:
+      tags: [Health]
+      summary: Service health check
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/monitoring/system/overview:
+    get:
+      tags: [System]
+      summary: Get system resource overview
+      description: |
+        Returns current CPU, memory, disk, and network metrics.
+        Reads from /proc filesystem (Linux).
+      operationId: getSystemOverview
+      responses:
+        '200':
+          description: System metrics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemOverview'
+
+  /api/monitoring/services:
+    get:
+      tags: [Services]
+      summary: Get backend service health
+      description: |
+        Checks health of all backend services via HTTP requests.
+        Configurable via environment variables:
+        - SERVICE_PKD_MANAGEMENT (default: http://pkd-management:8081/api/health)
+        - SERVICE_PA_SERVICE (default: http://pa-service:8082/api/health)
+        - SERVICE_SYNC_SERVICE (default: http://pkd-relay:8083/api/sync/health)
+      operationId: getServicesHealth
+      responses:
+        '200':
+          description: Service health status array
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ServiceHealth'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: UP
+        service:
+          type: string
+          example: monitoring-service
+        version:
+          type: string
+          example: 1.1.0
+        timestamp:
+          type: string
+
+    SystemOverview:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        cpu:
+          type: object
+          properties:
+            usagePercent:
+              type: number
+              format: float
+            load1min:
+              type: number
+              format: float
+            load5min:
+              type: number
+              format: float
+            load15min:
+              type: number
+              format: float
+        memory:
+          type: object
+          properties:
+            totalMb:
+              type: integer
+            usedMb:
+              type: integer
+            freeMb:
+              type: integer
+            usagePercent:
+              type: number
+              format: float
+        disk:
+          type: object
+          properties:
+            totalGb:
+              type: integer
+            usedGb:
+              type: integer
+            freeGb:
+              type: integer
+            usagePercent:
+              type: number
+              format: float
+        network:
+          type: object
+          properties:
+            bytesSent:
+              type: integer
+              format: int64
+            bytesRecv:
+              type: integer
+              format: int64
+            packetsSent:
+              type: integer
+              format: int64
+            packetsRecv:
+              type: integer
+              format: int64
+
+    ServiceHealth:
+      type: object
+      properties:
+        serviceName:
+          type: string
+          example: pkd-management
+        status:
+          type: string
+          enum: [UP, DEGRADED, DOWN, UNKNOWN]
+        responseTimeMs:
+          type: integer
+        errorMessage:
+          type: string
+        checkedAt:
+          type: string
+          format: date-time

@@ -6,29 +6,33 @@ info:
     Dedicated service for ICAO 9303 Passive Authentication verification.
 
     ## Changelog
-    - **v1.2.0** (2026-01-06): Added certificate expiration fields (dscExpired, cscaExpired, validAtSigningTime, expirationStatus, expirationMessage)
+    - **v2.1.1** (2026-02-12): DSC auto-registration from PA verify, DG2 JPEG2000→JPEG conversion
+    - **v1.2.0** (2026-01-06): Certificate expiration fields
     - **v1.1.0** (2026-01-03): API Gateway integration
     - **v1.0.0** (2025-12-30): Initial release
-  version: 1.2.0
+  version: 2.1.1
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
 
 servers:
   - url: http://localhost:8082
-    description: Development server
-  - url: http://pa-service:8082
-    description: Docker internal
+    description: Development server (direct)
+  - url: http://localhost:8080
+    description: API Gateway (prefix /api/pa)
 
 tags:
   - name: Health
     description: Health check endpoints
   - name: PA
-    description: Passive Authentication operations
+    description: Passive Authentication verification
   - name: Parser
-    description: Document parsing utilities
+    description: Document parsing utilities (SOD, DG1, DG2, MRZ)
 
 paths:
+  # ============================================
+  # Health Endpoints
+  # ============================================
   /api/health:
     get:
       tags: [Health]
@@ -50,10 +54,6 @@ paths:
       responses:
         '200':
           description: Database connection status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DatabaseHealthResponse'
 
   /api/health/ldap:
     get:
@@ -63,27 +63,25 @@ paths:
       responses:
         '200':
           description: LDAP connection status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/LdapHealthResponse'
 
+  # ============================================
+  # PA Verification
+  # ============================================
   /api/pa/verify:
     post:
       tags: [PA]
       summary: Verify Passive Authentication
       description: |
-        Perform complete ICAO 9303 Passive Authentication verification.
+        Perform ICAO 9303 Passive Authentication verification (8-step process).
 
-        Verification steps:
-        1. Parse SOD (Security Object Document)
-        2. Extract Document Signing Certificate (DSC)
-        3. Verify SOD signature
-        4. Validate DSC trust chain (DSC -> CSCA)
-        5. Check certificate validity period
-        6. Verify Data Group hashes
-        7. Parse MRZ data (if DG1 provided)
-        8. Extract face image (if DG2 provided)
+        **Steps**: SOD Parse → DSC Extract → DSC Trust Chain → CSCA Lookup →
+        SOD Signature → DG Hash → CRL Check → Result
+
+        **DSC Auto-Registration**: If the DSC is not in the local PKD, it is automatically
+        registered with source_type='PA_EXTRACTED'.
+
+        **Response includes**: verification steps, document info, face image (JPEG),
+        verification timestamp, processing duration.
       operationId: verifyPA
       requestBody:
         required: true
@@ -100,23 +98,6 @@ paths:
                 $ref: '#/components/schemas/PAVerifyResponse'
         '400':
           description: Invalid request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/pa/statistics:
-    get:
-      tags: [PA]
-      summary: Get PA statistics
-      operationId: getPAStatistics
-      responses:
-        '200':
-          description: PA verification statistics
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PAStatisticsResponse'
 
   /api/pa/history:
     get:
@@ -134,17 +115,6 @@ paths:
           schema:
             type: integer
             default: 0
-        - name: country
-          in: query
-          schema:
-            type: string
-          description: Filter by issuing country code
-        - name: result
-          in: query
-          schema:
-            type: string
-            enum: [success, failure]
-          description: Filter by verification result
       responses:
         '200':
           description: PA history list
@@ -156,33 +126,26 @@ paths:
   /api/pa/{id}:
     get:
       tags: [PA]
-      summary: Get PA verification details
-      operationId: getPADetails
+      summary: Get verification detail
+      operationId: getPADetail
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: string
-          description: Verification ID
+            format: uuid
       responses:
         '200':
-          description: Verification details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PADetailResponse'
+          description: Verification detail
         '404':
-          description: Verification not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          description: Not found
 
   /api/pa/{id}/datagroups:
     get:
       tags: [PA]
-      summary: Get data groups for a verification
+      summary: Get DataGroups detail
+      description: Returns parsed DataGroup information including DG2 face image (JPEG).
       operationId: getPADataGroups
       parameters:
         - name: id
@@ -190,19 +153,55 @@ paths:
           required: true
           schema:
             type: string
+            format: uuid
       responses:
         '200':
-          description: Data groups information
+          description: DataGroups detail with face image
+        '404':
+          description: Not found
+
+  /api/pa/statistics:
+    get:
+      tags: [PA]
+      summary: Get PA statistics
+      operationId: getPAStatistics
+      responses:
+        '200':
+          description: PA statistics
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DataGroupsResponse'
+                $ref: '#/components/schemas/PAStatisticsResponse'
+
+  # ============================================
+  # Document Parsing Utilities
+  # ============================================
+  /api/pa/parse-sod:
+    post:
+      tags: [Parser]
+      summary: Parse SOD (Security Object Document)
+      description: Parse an ICAO 9303 SOD and extract metadata, hash algorithm, DG hashes.
+      operationId: parseSOD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sod:
+                  type: string
+                  description: Base64 encoded SOD
+              required: [sod]
+      responses:
+        '200':
+          description: Parsed SOD data
 
   /api/pa/parse-dg1:
     post:
       tags: [Parser]
-      summary: Parse DG1 (MRZ) data
-      description: Parse Machine Readable Zone data from DG1
+      summary: Parse DG1 (MRZ data)
+      description: Parse DG1 DataGroup and extract MRZ fields.
       operationId: parseDG1
       requestBody:
         required: true
@@ -213,22 +212,19 @@ paths:
               properties:
                 dg1:
                   type: string
-                  description: Base64 encoded DG1 data
-              required:
-                - dg1
+                  description: Base64 encoded DG1
+              required: [dg1]
       responses:
         '200':
           description: Parsed MRZ data
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MRZDataResponse'
 
   /api/pa/parse-dg2:
     post:
       tags: [Parser]
-      summary: Parse DG2 (Face Image) data
-      description: Extract face image from DG2
+      summary: Parse DG2 (Face image)
+      description: |
+        Parse DG2 DataGroup and extract face image.
+        JPEG2000 images are automatically converted to JPEG for browser compatibility.
       operationId: parseDG2
       requestBody:
         required: true
@@ -239,22 +235,17 @@ paths:
               properties:
                 dg2:
                   type: string
-                  description: Base64 encoded DG2 data
-              required:
-                - dg2
+                  description: Base64 encoded DG2
+              required: [dg2]
       responses:
         '200':
-          description: Extracted face image
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/FaceImageResponse'
+          description: Face image data (JPEG base64)
 
   /api/pa/parse-mrz-text:
     post:
       tags: [Parser]
       summary: Parse MRZ text
-      description: Parse raw MRZ text string
+      description: Parse raw MRZ text and extract fields (document type, name, nationality, etc.)
       operationId: parseMRZText
       requestBody:
         required: true
@@ -266,54 +257,10 @@ paths:
                 mrz:
                   type: string
                   description: Raw MRZ text (2 or 3 lines)
-              required:
-                - mrz
+              required: [mrz]
       responses:
         '200':
-          description: Parsed MRZ data
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MRZDataResponse'
-
-  /api/pa/parse-sod:
-    post:
-      tags: [Parser]
-      summary: Parse SOD (Security Object)
-      description: |
-        Extract metadata from SOD (Security Object Document) including:
-        - Hash algorithm used
-        - Signature algorithm used
-        - DSC (Document Signing Certificate) information
-        - Contained Data Group list with their hash values
-      operationId: parseSOD
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                sod:
-                  type: string
-                  description: Base64 encoded SOD data
-                sodBase64:
-                  type: string
-                  description: Alternative field name for Base64 encoded SOD data
-              required: []
-      responses:
-        '200':
-          description: Parsed SOD metadata
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SODParseResponse'
-        '400':
-          description: Invalid SOD data
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+          description: Parsed MRZ fields
 
 components:
   schemas:
@@ -322,55 +269,19 @@ components:
       properties:
         status:
           type: string
-          enum: [healthy, unhealthy]
+          example: UP
         service:
           type: string
+          example: pa-service
         version:
           type: string
+          example: 2.1.1
         timestamp:
-          type: string
-          format: date-time
-
-    DatabaseHealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [connected, disconnected]
-        host:
-          type: string
-        port:
-          type: integer
-        responseTime:
-          type: integer
-
-    LdapHealthResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [connected, disconnected]
-        host:
-          type: string
-        port:
-          type: integer
-
-    ErrorResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          default: false
-        error:
-          type: string
-        message:
           type: string
 
     PAVerifyRequest:
       type: object
-      required:
-        - sod
-        - dataGroups
+      required: [sod, dataGroups]
       properties:
         sod:
           type: string
@@ -379,12 +290,10 @@ components:
           type: object
           additionalProperties:
             type: string
-          description: |
-            Map of Data Group number to Base64 encoded data.
-            Example: {"1": "base64...", "2": "base64..."}
+          description: Map of DG number to Base64 encoded data (e.g., {"1":"...", "2":"..."})
         mrzData:
           type: string
-          description: Optional raw MRZ text for cross-validation
+          description: Optional MRZ data for additional validation
 
     PAVerifyResponse:
       type: object
@@ -393,356 +302,89 @@ components:
           type: boolean
         verificationId:
           type: string
-        overallResult:
+          format: uuid
+        status:
           type: string
-          enum: [PASSED, FAILED]
+          enum: [VALID, INVALID]
+        verificationTimestamp:
+          type: string
+          format: date-time
+        processingDurationMs:
+          type: integer
+        issuingCountry:
+          type: string
+        documentNumber:
+          type: string
         steps:
           type: array
           items:
-            $ref: '#/components/schemas/VerificationStep'
-        documentInfo:
-          $ref: '#/components/schemas/DocumentInfo'
-        certificateInfo:
-          $ref: '#/components/schemas/CertificateInfo'
+            $ref: '#/components/schemas/PAVerificationStep'
         faceImage:
           type: string
-          description: Base64 encoded face image (if DG2 provided)
+          description: Base64 JPEG face image (converted from JPEG2000 if needed)
 
-    VerificationStep:
+    PAVerificationStep:
       type: object
       properties:
-        stepNumber:
+        step:
           type: integer
-        stepName:
+        name:
           type: string
-        stepNameKo:
-          type: string
-          description: Korean translation of step name
         status:
           type: string
-          enum: [PASSED, FAILED, SKIPPED, NOT_APPLICABLE]
+          enum: [passed, failed, skipped]
         message:
           type: string
-        details:
-          type: object
-          additionalProperties: true
-
-    DocumentInfo:
-      type: object
-      properties:
-        documentType:
+        failureReason:
           type: string
-          description: Document type (P=Passport, ID=ID Card, etc.)
-        issuingCountry:
-          type: string
-          description: 3-letter country code
-        documentNumber:
-          type: string
-        surname:
-          type: string
-        givenNames:
-          type: string
-        nationality:
-          type: string
-        dateOfBirth:
-          type: string
-          format: date
-        sex:
-          type: string
-          enum: [M, F, X]
-        expiryDate:
-          type: string
-          format: date
-
-    CertificateInfo:
-      type: object
-      properties:
-        dscSubject:
-          type: string
-        dscIssuer:
-          type: string
-        dscSerialNumber:
-          type: string
-        dscValidFrom:
-          type: string
-          format: date-time
-        dscValidTo:
-          type: string
-          format: date-time
-        cscaSubject:
-          type: string
-        cscaSerialNumber:
-          type: string
-        trustChainValid:
-          type: boolean
-        dscExpired:
-          type: boolean
-          description: Whether the DSC certificate is currently expired (v1.2.0+)
-        cscaExpired:
-          type: boolean
-          description: Whether the CSCA certificate is currently expired (v1.2.0+)
-        validAtSigningTime:
-          type: boolean
-          description: Whether certificates were valid at passport signing time (v1.2.0+)
-        expirationStatus:
-          type: string
-          enum: [VALID, WARNING, EXPIRED]
-          description: |
-            Certificate expiration status (v1.2.0+):
-            - VALID: All certificates are currently valid
-            - WARNING: Expired now but was valid at signing time
-            - EXPIRED: Was already expired at signing time
-        expirationMessage:
-          type: string
-          description: Human-readable expiration status message (v1.2.0+)
 
     PAStatisticsResponse:
       type: object
       properties:
         totalVerifications:
           type: integer
-        successCount:
-          type: integer
-        failureCount:
-          type: integer
         successRate:
           type: number
           format: float
-        todayCount:
-          type: integer
         byCountry:
           type: array
           items:
-            $ref: '#/components/schemas/CountryVerificationStats'
-        byDate:
-          type: array
-          items:
-            $ref: '#/components/schemas/DailyStats'
-
-    CountryVerificationStats:
-      type: object
-      properties:
-        countryCode:
-          type: string
-        totalCount:
-          type: integer
-        successCount:
-          type: integer
-        failureCount:
-          type: integer
-
-    DailyStats:
-      type: object
-      properties:
-        date:
-          type: string
-          format: date
-        totalCount:
-          type: integer
-        successCount:
-          type: integer
-        failureCount:
-          type: integer
+            type: object
+            properties:
+              country:
+                type: string
+              count:
+                type: integer
+        byStatus:
+          type: object
+          properties:
+            VALID:
+              type: integer
+            INVALID:
+              type: integer
 
     PAHistoryResponse:
       type: object
       properties:
         total:
           type: integer
-        limit:
-          type: integer
-        offset:
-          type: integer
         items:
           type: array
           items:
-            $ref: '#/components/schemas/PAHistoryItem'
-
-    PAHistoryItem:
-      type: object
-      properties:
-        id:
-          type: string
-        verificationTimestamp:
-          type: string
-          format: date-time
-        issuingCountry:
-          type: string
-        documentType:
-          type: string
-        documentNumber:
-          type: string
-        holderName:
-          type: string
-        result:
-          type: string
-          enum: [PASSED, FAILED]
-        failureReason:
-          type: string
-
-    PADetailResponse:
-      type: object
-      properties:
-        id:
-          type: string
-        verificationTimestamp:
-          type: string
-          format: date-time
-        result:
-          type: string
-        documentInfo:
-          $ref: '#/components/schemas/DocumentInfo'
-        certificateInfo:
-          $ref: '#/components/schemas/CertificateInfo'
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/VerificationStep'
-
-    DataGroupsResponse:
-      type: object
-      properties:
-        verificationId:
-          type: string
-        dataGroups:
-          type: array
-          items:
-            $ref: '#/components/schemas/DataGroupInfo'
-
-    DataGroupInfo:
-      type: object
-      properties:
-        dgNumber:
-          type: integer
-        present:
-          type: boolean
-        hashValid:
-          type: boolean
-        size:
-          type: integer
-
-    MRZDataResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        documentType:
-          type: string
-        issuingCountry:
-          type: string
-        surname:
-          type: string
-        givenNames:
-          type: string
-        documentNumber:
-          type: string
-        nationality:
-          type: string
-        dateOfBirth:
-          type: string
-        sex:
-          type: string
-        expiryDate:
-          type: string
-        optionalData:
-          type: string
-        checksumValid:
-          type: boolean
-
-    FaceImageResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        imageFormat:
-          type: string
-          enum: [JPEG, JPEG2000, PNG]
-        width:
-          type: integer
-        height:
-          type: integer
-        imageData:
-          type: string
-          description: Base64 encoded image data
-
-    SODParseResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        sodSize:
-          type: integer
-          description: Size of the SOD in bytes
-        hashAlgorithm:
-          type: string
-          description: Hash algorithm used (e.g., SHA-256, SHA-384)
-        hashAlgorithmOid:
-          type: string
-          description: OID of the hash algorithm
-        signatureAlgorithm:
-          type: string
-          description: Signature algorithm used (e.g., SHA256withRSA)
-        hasIcaoWrapper:
-          type: boolean
-          description: Whether the SOD has ICAO Tag 0x77 wrapper
-        hasDg14:
-          type: boolean
-          description: Whether DG14 (Active Authentication) is present
-        hasDg15:
-          type: boolean
-          description: Whether DG15 (Extended Access Control) is present
-        dataGroupCount:
-          type: integer
-          description: Number of data groups in the SOD
-        dscCertificate:
-          $ref: '#/components/schemas/DSCCertificateInfo'
-        containedDataGroups:
-          type: array
-          items:
-            $ref: '#/components/schemas/SODDataGroupInfo'
-        warning:
-          type: string
-          description: Warning message if any issues encountered
-        error:
-          type: string
-          description: Error message if parsing failed
-
-    DSCCertificateInfo:
-      type: object
-      description: Document Signing Certificate information extracted from SOD
-      properties:
-        subjectDn:
-          type: string
-          description: Subject Distinguished Name
-        issuerDn:
-          type: string
-          description: Issuer Distinguished Name (CSCA)
-        serialNumber:
-          type: string
-          description: Certificate serial number in hex format
-        notBefore:
-          type: string
-          description: Certificate validity start date
-        notAfter:
-          type: string
-          description: Certificate validity end date
-        countryCode:
-          type: string
-          description: 2-letter country code from issuer
-
-    SODDataGroupInfo:
-      type: object
-      description: Data group information from SOD
-      properties:
-        dgNumber:
-          type: integer
-          description: Data group number (1-16)
-        dgName:
-          type: string
-          description: Data group name (e.g., DG1, DG2)
-        hashValue:
-          type: string
-          description: Expected hash value in hex format
-        hashLength:
-          type: integer
-          description: Length of the hash in bytes
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              verifiedAt:
+                type: string
+                format: date-time
+              issuingCountry:
+                type: string
+              documentType:
+                type: string
+              status:
+                type: string
+                enum: [VALID, INVALID]
+              processingDurationMs:
+                type: integer

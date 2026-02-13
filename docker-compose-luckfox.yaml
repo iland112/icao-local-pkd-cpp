@@ -171,8 +171,8 @@ services:
     environment:
       - PORT=8888
       - BASE_URL=/api-docs
-      - URLS=[{"url":"api/docs/pkd-management.yaml","name":"PKD Management API v1.5.10"},{"url":"api/docs/pa-service.yaml","name":"PA Service API v1.2.0"},{"url":"api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.0.0"}]
-      - URLS_PRIMARY_NAME=PKD Management API v1.5.10
+      - URLS=[{"url":"api/docs/pkd-management.yaml","name":"PKD Management API v2.9.1"},{"url":"api/docs/pa-service.yaml","name":"PA Service API v2.1.1"},{"url":"api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.0.0"},{"url":"api/docs/monitoring-service.yaml","name":"Monitoring Service API v1.1.0"}]
+      - URLS_PRIMARY_NAME=PKD Management API v2.9.1
       - TZ=Asia/Seoul
     volumes:
       - ./docs/openapi:/usr/share/nginx/html/api/docs:ro
