@@ -8,6 +8,7 @@
 #include <openssl/bio.h>
 #include <openssl/pem.h>
 #include <openssl/x509.h>
+#include <ldap.h>
 #include <zip.h>
 #include <sstream>
 #include <iomanip>
@@ -527,7 +528,8 @@ ExportResult exportAllCertificatesFromDb(
     repositories::CertificateRepository* certRepo,
     repositories::CrlRepository* crlRepo,
     common::IQueryExecutor* queryExecutor,
-    ExportFormat format
+    ExportFormat format,
+    common::LdapConnectionPool* ldapPool
 ) {
     ExportResult result;
     result.success = false;
@@ -578,6 +580,8 @@ ExportResult exportAllCertificatesFromDb(
                 if (derData.empty()) continue;
 
                 // Determine folder path based on cert type
+                // CSCA with is_self_signed=false → link certificate (o=lc in LDAP)
+                bool isSelfSigned = row.get("is_self_signed", true).asBool();
                 std::string folder;
                 if (certType == "DSC_NC") {
                     folder = "nc-data/" + country + "/dsc/";
@@ -585,6 +589,7 @@ ExportResult exportAllCertificatesFromDb(
                     std::string typeFolder = "csca";
                     if (certType == "DSC") typeFolder = "dsc";
                     else if (certType == "MLSC") typeFolder = "mlsc";
+                    else if (certType == "CSCA" && !isSelfSigned) typeFolder = "lc";
                     else if (certType == "CSCA") typeFolder = "csca";
                     folder = "data/" + country + "/" + typeFolder + "/";
                 }
@@ -642,40 +647,103 @@ ExportResult exportAllCertificatesFromDb(
 
         spdlog::info("Export: {} CRLs added to ZIP", crlCount);
 
-        // ---- 3. Master Lists ----
-        std::string dbType = queryExecutor->getDatabaseType();
-        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
-        std::string mlQuery =
-            "SELECT signer_country, ml_binary, fingerprint_sha256 "
-            "FROM master_list WHERE stored_in_ldap = " + storedFlag + " "
-            "ORDER BY signer_country";
-
-        Json::Value mls = queryExecutor->executeQuery(mlQuery);
+        // ---- 3. Master Lists (from LDAP directly) ----
+        // master_list DB table is empty; ML data lives only in LDAP
+        // DN pattern: cn={fingerprint},o=ml,c={CC},dc=data,...
         int mlCount = 0;
-        spdlog::info("Export: {} Master Lists to process", mls.size());
 
-        for (const auto& row : mls) {
+        if (ldapPool) {
             try {
-                std::string country = row.get("signer_country", "").asString();
-                std::string mlDataHex = row.get("ml_binary", "").asString();
-                std::string fingerprint = row.get("fingerprint_sha256", "").asString();
+                auto conn = ldapPool->acquire();
+                if (conn.isValid()) {
+                    std::string baseDn = "dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
+                    std::string filter = "(objectClass=pkdMasterList)";
+                    const char* attrs[] = {"pkdMasterListContent", nullptr};
 
-                if (mlDataHex.empty() || country.empty()) continue;
+                    LDAPMessage* result = nullptr;
+                    int rc = ldap_search_ext_s(
+                        conn.get(),
+                        baseDn.c_str(),
+                        LDAP_SCOPE_SUBTREE,
+                        filter.c_str(),
+                        const_cast<char**>(attrs),
+                        0, nullptr, nullptr, nullptr, 0,
+                        &result
+                    );
 
-                std::vector<uint8_t> binaryData = hexToBytes(mlDataHex);
-                if (binaryData.empty()) continue;
+                    if (rc == LDAP_SUCCESS && result) {
+                        int mlTotal = ldap_count_entries(conn.get(), result);
+                        spdlog::info("Export: {} Master Lists found in LDAP", mlTotal);
 
-                std::string fp8 = fingerprint.substr(0, 8);
-                // Master Lists are always CMS SignedData binary - no PEM conversion
-                std::string filePath = "data/" + country + "/ml/" + country + "_ml_" + fp8 + ".cms";
+                        for (LDAPMessage* entry = ldap_first_entry(conn.get(), result);
+                             entry != nullptr;
+                             entry = ldap_next_entry(conn.get(), entry))
+                        {
+                            try {
+                                // Extract DN to get country and fingerprint
+                                char* dnRaw = ldap_get_dn(conn.get(), entry);
+                                if (!dnRaw) continue;
+                                std::string dn(dnRaw);
+                                ldap_memfree(dnRaw);
 
-                if (addToZip(archive, filePath, binaryData)) {
-                    mlCount++;
-                    addedCount++;
+                                // Parse country from DN: ...c=XX,...
+                                std::string country;
+                                auto cPos = dn.find("c=");
+                                if (cPos != std::string::npos) {
+                                    auto cEnd = dn.find(',', cPos);
+                                    country = dn.substr(cPos + 2, cEnd - cPos - 2);
+                                }
+                                if (country.empty()) continue;
+
+                                // Parse fingerprint from DN: cn=XXXX,...
+                                std::string fingerprint;
+                                if (dn.substr(0, 3) == "cn=") {
+                                    auto cnEnd = dn.find(',');
+                                    fingerprint = dn.substr(3, cnEnd - 3);
+                                }
+                                std::string fp8 = fingerprint.length() >= 8 ? fingerprint.substr(0, 8) : fingerprint;
+
+                                // Extract binary ML content
+                                struct berval** values = ldap_get_values_len(
+                                    conn.get(), entry, "pkdMasterListContent");
+                                if (!values || !values[0]) {
+                                    if (values) ldap_value_free_len(values);
+                                    continue;
+                                }
+
+                                std::vector<uint8_t> binaryData(
+                                    reinterpret_cast<const uint8_t*>(values[0]->bv_val),
+                                    reinterpret_cast<const uint8_t*>(values[0]->bv_val) + values[0]->bv_len
+                                );
+                                ldap_value_free_len(values);
+
+                                if (binaryData.empty()) continue;
+
+                                // Master Lists are CMS SignedData - always original binary
+                                std::string filePath = "data/" + country + "/ml/" + country + "_ml_" + fp8 + ".cms";
+
+                                if (addToZip(archive, filePath, binaryData)) {
+                                    mlCount++;
+                                    addedCount++;
+                                }
+                            } catch (const std::exception& e) {
+                                spdlog::warn("Export: skipping ML entry: {}", e.what());
+                            }
+                        }
+                        ldap_msgfree(result);
+                    } else {
+                        spdlog::warn("Export: LDAP ML search failed: {}",
+                                     rc != LDAP_SUCCESS ? ldap_err2string(rc) : "no result");
+                        if (result) ldap_msgfree(result);
+                    }
+                } else {
+                    spdlog::warn("Export: Failed to acquire LDAP connection for ML retrieval");
                 }
             } catch (const std::exception& e) {
-                spdlog::warn("Export: skipping ML: {}", e.what());
+                spdlog::warn("Export: ML LDAP retrieval failed: {}", e.what());
             }
+        } else {
+            spdlog::info("Export: No LDAP pool provided, skipping Master Lists");
         }
 
         spdlog::info("Export: {} Master Lists added to ZIP", mlCount);

@@ -164,22 +164,25 @@ private:
 /**
  * @brief Export all LDAP-stored data as DIT-structured ZIP archive
  *
- * Queries DB for all stored_in_ldap=TRUE certificates, CRLs, and Master Lists.
+ * Queries DB for all stored_in_ldap=TRUE certificates and CRLs.
+ * Queries LDAP directly for Master Lists (o=ml entries).
  * Creates ZIP with LDAP DIT folder structure:
- *   data/{country}/{csca|dsc|mlsc|crl|ml}/
+ *   data/{country}/{csca|lc|dsc|mlsc|crl|ml}/
  *   nc-data/{country}/dsc/
  *
  * @param certRepo Certificate repository (DB)
  * @param crlRepo CRL repository (DB)
- * @param queryExecutor Query executor for ML query
+ * @param queryExecutor Query executor (unused, kept for compatibility)
  * @param format PEM or DER
+ * @param ldapPool LDAP connection pool for ML retrieval (optional, nullptr to skip MLs)
  * @return ExportResult with ZIP binary
  */
 ExportResult exportAllCertificatesFromDb(
     repositories::CertificateRepository* certRepo,
     repositories::CrlRepository* crlRepo,
     common::IQueryExecutor* queryExecutor,
-    ExportFormat format
+    ExportFormat format,
+    common::LdapConnectionPool* ldapPool = nullptr
 );
 
 } // namespace services

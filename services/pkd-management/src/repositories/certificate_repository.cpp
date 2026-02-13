@@ -1390,7 +1390,7 @@ Json::Value CertificateRepository::findAllForExport() {
 
     std::string query =
         "SELECT certificate_type, country_code, subject_dn, serial_number, "
-        "fingerprint_sha256, certificate_data "
+        "fingerprint_sha256, certificate_data, is_self_signed "
         "FROM certificate WHERE stored_in_ldap = " + storedFlag + " "
         "ORDER BY country_code, certificate_type";
 

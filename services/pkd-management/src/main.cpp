@@ -6654,7 +6654,8 @@ paths:
                     ::certificateRepository.get(),
                     ::crlRepository.get(),
                     ::queryExecutor.get(),
-                    exportFormat
+                    exportFormat,
+                    ::ldapPool.get()
                 );
 
                 if (!exportResult.success) {
