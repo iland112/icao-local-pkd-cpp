@@ -21,6 +21,7 @@ import {
   Info,
   ArrowUp,
   ArrowDown,
+  PackageOpen,
 } from 'lucide-react';
 import {
   LineChart,
@@ -137,6 +138,24 @@ export function UploadDashboard() {
         <>
           {/* Overview Stats - Large Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            {/* Countries */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-cyan-500">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">등록 국가</p>
+                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
+                    {(stats?.countriesCount ?? 0).toLocaleString()}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    ICAO 회원국
+                  </p>
+                </div>
+                <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
+                  <Globe className="w-8 h-8 text-cyan-500" />
+                </div>
+              </div>
+            </div>
+
             {/* Total Certificates */}
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
               <div className="flex items-center justify-between">
@@ -193,24 +212,6 @@ export function UploadDashboard() {
                 </div>
                 <div className="p-3 rounded-xl bg-violet-50 dark:bg-violet-900/30">
                   <Award className="w-8 h-8 text-violet-500" />
-                </div>
-              </div>
-            </div>
-
-            {/* Countries */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-cyan-500">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">등록 국가</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
-                    {(stats?.countriesCount ?? 0).toLocaleString()}
-                  </p>
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    ICAO 회원국
-                  </p>
-                </div>
-                <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
-                  <Globe className="w-8 h-8 text-cyan-500" />
                 </div>
               </div>
             </div>
@@ -272,115 +273,179 @@ export function UploadDashboard() {
             </div>
           )}
 
-          {/* Certificate Breakdown */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-6">
-            <div className="flex items-center gap-2 mb-5">
-              <Shield className="w-5 h-5 text-violet-500" />
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 유형별 현황</h3>
+          {/* Certificate Breakdown + Source Statistics - 2 column layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            {/* Certificate Type Breakdown - 2/3 width */}
+            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+              <div className="flex items-center gap-2 mb-5">
+                <Shield className="w-5 h-5 text-violet-500" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 유형별 현황</h3>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                {/* CSCA */}
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30 p-4 border border-green-200 dark:border-green-800">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      <span className="text-sm font-semibold text-green-700 dark:text-green-300">CSCA</span>
+                    </div>
+                    <span className="text-xs text-green-600 dark:text-green-400">{cscaPercent}%</span>
+                  </div>
+                  <p className="text-2xl font-bold text-green-800 dark:text-green-200 mb-3">{(stats?.cscaCount ?? 0).toLocaleString()}</p>
+                  <div className="mb-2">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-green-700 dark:text-green-300">Self-signed</span>
+                      <span className="font-medium text-green-800 dark:text-green-200">
+                        {(stats?.cscaBreakdown?.selfSigned ?? 0).toLocaleString()}
+                        {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.selfSigned / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-green-200 dark:bg-green-900/40 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-600 dark:bg-green-500 rounded-full transition-all duration-500"
+                        style={{ width: stats?.cscaBreakdown?.total ? `${(stats.cscaBreakdown.selfSigned / stats.cscaBreakdown.total) * 100}%` : '0%' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-1">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-green-700 dark:text-green-300">Link Cert</span>
+                      <span className="font-medium text-green-800 dark:text-green-200">
+                        {(stats?.cscaBreakdown?.linkCertificates ?? 0).toLocaleString()}
+                        {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
+                      </span>
+                    </div>
+                    <div className="h-1.5 bg-green-200 dark:bg-green-900/40 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
+                        style={{ width: stats?.cscaBreakdown?.total ? `${(stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100}%` : '0%' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="absolute -right-2 -bottom-2 opacity-10">
+                    <Shield className="w-16 h-16 text-green-600" />
+                  </div>
+                </div>
+
+                {/* MLSC */}
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-900/30 p-4 border border-indigo-200 dark:border-indigo-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                    <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">MLSC</span>
+                  </div>
+                  <p className="text-2xl font-bold text-indigo-800 dark:text-indigo-200">{(stats?.mlscCount ?? 0).toLocaleString()}</p>
+                  <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">ML Signer</p>
+                  <div className="absolute -right-2 -bottom-2 opacity-10">
+                    <FileText className="w-16 h-16 text-indigo-600" />
+                  </div>
+                </div>
+
+                {/* DSC */}
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-50 to-purple-100 dark:from-violet-900/20 dark:to-purple-900/30 p-4 border border-violet-200 dark:border-violet-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Key className="w-5 h-5 text-violet-600 dark:text-violet-400" />
+                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">DSC</span>
+                  </div>
+                  <p className="text-2xl font-bold text-violet-800 dark:text-violet-200">{(stats?.dscCount ?? 0).toLocaleString()}</p>
+                  <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">{dscPercent}%</p>
+                  <div className="absolute -right-2 -bottom-2 opacity-10">
+                    <Key className="w-16 h-16 text-violet-600" />
+                  </div>
+                </div>
+
+                {/* DSC_NC */}
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-orange-100 dark:from-amber-900/20 dark:to-orange-900/30 p-4 border border-amber-200 dark:border-amber-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">DSC_NC</span>
+                  </div>
+                  <p className="text-2xl font-bold text-amber-800 dark:text-amber-200">{(stats?.dscNcCount ?? 0).toLocaleString()}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dscNcPercent}%</p>
+                  <div className="absolute -right-2 -bottom-2 opacity-10">
+                    <AlertTriangle className="w-16 h-16 text-amber-600" />
+                  </div>
+                </div>
+
+                {/* CRL */}
+                <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-red-100 dark:from-orange-900/20 dark:to-red-900/30 p-4 border border-orange-200 dark:border-orange-800">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FileText className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                    <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">CRL</span>
+                  </div>
+                  <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats?.crlCount ?? 0).toLocaleString()}</p>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">폐지 목록</p>
+                  <div className="absolute -right-2 -bottom-2 opacity-10">
+                    <FileText className="w-16 h-16 text-orange-600" />
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {/* CSCA (v2.0.9: with breakdown) */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-900/20 dark:to-emerald-900/30 p-4 border border-green-200 dark:border-green-800">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-semibold text-green-700 dark:text-green-300">CSCA</span>
-                  </div>
-                  <span className="text-xs text-green-600 dark:text-green-400">{cscaPercent}%</span>
-                </div>
-                <p className="text-2xl font-bold text-green-800 dark:text-green-200 mb-3">{(stats?.cscaCount ?? 0).toLocaleString()}</p>
 
-                {/* Self-signed CSCA */}
-                <div className="mb-2">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-green-700 dark:text-green-300">Self-signed</span>
-                    <span className="font-medium text-green-800 dark:text-green-200">
-                      {(stats?.cscaBreakdown?.selfSigned ?? 0).toLocaleString()}
-                      {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.selfSigned / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-green-200 dark:bg-green-900/40 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-600 dark:bg-green-500 rounded-full transition-all duration-500"
-                      style={{ width: stats?.cscaBreakdown?.total ? `${(stats.cscaBreakdown.selfSigned / stats.cscaBreakdown.total) * 100}%` : '0%' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Link Certificates */}
-                <div className="mb-1">
-                  <div className="flex justify-between text-xs mb-1">
-                    <span className="text-green-700 dark:text-green-300">Link Certificates</span>
-                    <span className="font-medium text-green-800 dark:text-green-200">
-                      {(stats?.cscaBreakdown?.linkCertificates ?? 0).toLocaleString()}
-                      {stats?.cscaBreakdown?.total ? ` (${((stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100).toFixed(0)}%)` : ''}
-                    </span>
-                  </div>
-                  <div className="h-1.5 bg-green-200 dark:bg-green-900/40 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-emerald-500 dark:bg-emerald-400 rounded-full transition-all duration-500"
-                      style={{ width: stats?.cscaBreakdown?.total ? `${(stats.cscaBreakdown.linkCertificates / stats.cscaBreakdown.total) * 100}%` : '0%' }}
-                    />
-                  </div>
-                </div>
-
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <Shield className="w-16 h-16 text-green-600" />
-                </div>
+            {/* Source Statistics - 1/3 width */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+              <div className="flex items-center gap-2 mb-5">
+                <PackageOpen className="w-5 h-5 text-amber-500" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">출처별 현황</h3>
               </div>
+              {(() => {
+                const bySource = stats?.bySource;
+                if (!bySource || Object.keys(bySource).length === 0) {
+                  return (
+                    <div className="flex flex-col items-center justify-center py-8 text-gray-400 dark:text-gray-500">
+                      <PackageOpen className="w-10 h-10 mb-2" />
+                      <p className="text-sm">출처 데이터 없음</p>
+                    </div>
+                  );
+                }
+                const sourceLabels: Record<string, { label: string; color: string; bg: string }> = {
+                  LDIF_PARSED: { label: 'LDIF 업로드', color: '#3B82F6', bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
+                  ML_PARSED: { label: 'Master List', color: '#8B5CF6', bg: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
+                  FILE_UPLOAD: { label: '파일 업로드', color: '#22C55E', bg: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' },
+                  PA_EXTRACTED: { label: 'PA 검증 추출', color: '#F59E0B', bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
+                  DL_PARSED: { label: '편차 목록', color: '#EF4444', bg: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
+                };
+                const total = Object.values(bySource).reduce((a, b) => a + b, 0);
+                const sorted = Object.entries(bySource).sort(([, a], [, b]) => b - a);
+                const maxCount = sorted[0]?.[1] || 1;
 
-              {/* MLSC (Master List Signer Certificate) */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-900/30 p-4 border border-indigo-200 dark:border-indigo-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">MLSC</span>
-                </div>
-                <p className="text-2xl font-bold text-indigo-800 dark:text-indigo-200">{(stats?.mlscCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-indigo-600 dark:text-indigo-400 mt-1">ML Signer</p>
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <FileText className="w-16 h-16 text-indigo-600" />
-                </div>
-              </div>
+                return (
+                  <div className="space-y-2.5">
+                    {sorted.map(([sourceType, count]) => {
+                      const info = sourceLabels[sourceType] || { label: sourceType, color: '#6B7280', bg: 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600' };
+                      const pct = ((count / total) * 100).toFixed(1);
+                      const barWidth = Math.max(6, (count / maxCount) * 100);
 
-              {/* DSC */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-violet-50 to-purple-100 dark:from-violet-900/20 dark:to-purple-900/30 p-4 border border-violet-200 dark:border-violet-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <Key className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                  <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">DSC</span>
-                </div>
-                <p className="text-2xl font-bold text-violet-800 dark:text-violet-200">{(stats?.dscCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-violet-600 dark:text-violet-400 mt-1">{dscPercent}%</p>
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <Key className="w-16 h-16 text-violet-600" />
-                </div>
-              </div>
-
-              {/* DSC_NC */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-amber-50 to-orange-100 dark:from-amber-900/20 dark:to-orange-900/30 p-4 border border-amber-200 dark:border-amber-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                  <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">DSC_NC</span>
-                </div>
-                <p className="text-2xl font-bold text-amber-800 dark:text-amber-200">{(stats?.dscNcCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{dscNcPercent}%</p>
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <AlertTriangle className="w-16 h-16 text-amber-600" />
-                </div>
-              </div>
-
-              {/* CRL */}
-              <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-orange-50 to-red-100 dark:from-orange-900/20 dark:to-red-900/30 p-4 border border-orange-200 dark:border-orange-800">
-                <div className="flex items-center gap-2 mb-2">
-                  <FileText className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                  <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">CRL</span>
-                </div>
-                <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats?.crlCount ?? 0).toLocaleString()}</p>
-                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">폐지 목록</p>
-                <div className="absolute -right-2 -bottom-2 opacity-10">
-                  <FileText className="w-16 h-16 text-orange-600" />
-                </div>
-              </div>
-
+                      return (
+                        <div key={sourceType} className={cn('rounded-lg border p-2.5', info.bg)}>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                              {info.label}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-gray-800 dark:text-gray-200">
+                                {count.toLocaleString()}
+                              </span>
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 w-10 text-right">
+                                {pct}%
+                              </span>
+                            </div>
+                          </div>
+                          <div className="h-2 rounded-full overflow-hidden bg-white/60 dark:bg-gray-700/60">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{ width: `${barWidth}%`, background: info.color }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div className="pt-2 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">전체 인증서</span>
+                      <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{total.toLocaleString()}건</span>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
