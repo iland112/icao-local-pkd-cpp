@@ -379,4 +379,363 @@ std::string CertificateService::getFileExtension(
     }
 }
 
+// ============================================================
+// Free Function: Export All LDAP-Stored Data as DIT ZIP
+// ============================================================
+
+namespace {
+
+// Sanitize string for filesystem-safe filename
+std::string sanitizeForFilename(const std::string& input) {
+    std::string result;
+    result.reserve(input.size());
+    for (char c : input) {
+        if (std::isalnum(static_cast<unsigned char>(c)) || c == '-' || c == '_' || c == '.') {
+            result += c;
+        } else if (c == ' ' || c == '/' || c == '\\' || c == ',' || c == '=') {
+            result += '_';
+        }
+    }
+    // Truncate to reasonable length
+    if (result.size() > 60) result.resize(60);
+    return result;
+}
+
+// Extract CN from subject DN (supports both /C=xx/CN=name and CN=name,C=xx formats)
+std::string extractCnFromDn(const std::string& dn) {
+    // Try /CN= format first
+    size_t pos = dn.find("/CN=");
+    if (pos != std::string::npos) {
+        pos += 4;
+        size_t end = dn.find('/', pos);
+        return (end != std::string::npos) ? dn.substr(pos, end - pos) : dn.substr(pos);
+    }
+    // Try CN= at beginning or after comma
+    pos = dn.find("CN=");
+    if (pos != std::string::npos) {
+        pos += 3;
+        size_t end = dn.find(',', pos);
+        return (end != std::string::npos) ? dn.substr(pos, end - pos) : dn.substr(pos);
+    }
+    return "";
+}
+
+// Decode hex string to bytes
+std::vector<uint8_t> decodeHexString(const std::string& hexStr) {
+    std::vector<uint8_t> bytes;
+    bytes.reserve(hexStr.size() / 2);
+    for (size_t i = 0; i + 1 < hexStr.size(); i += 2) {
+        char h[3] = {hexStr[i], hexStr[i + 1], 0};
+        bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+    }
+    return bytes;
+}
+
+// Parse hex-encoded bytea to DER binary
+// Handles double-encoded data: BYTEA contains text "\\x3082..." stored as bytes
+// PostgreSQL returns: \x5c7833303832... (hex of the text bytes)
+std::vector<uint8_t> hexToBytes(const std::string& hex) {
+    std::string cleanHex = hex;
+
+    // Strip \x prefix from PostgreSQL hex format
+    if (cleanHex.size() >= 2 && cleanHex[0] == '\\' && cleanHex[1] == 'x') {
+        cleanHex = cleanHex.substr(2);
+    }
+
+    // First decode: hex string → bytes
+    std::vector<uint8_t> firstPass = decodeHexString(cleanHex);
+
+    // Check if result is still hex-encoded text (starts with \x or 0x30)
+    if (firstPass.size() >= 2 && firstPass[0] == '\\' && firstPass[1] == 'x') {
+        // Double-encoded: the bytes are ASCII text "\\x3082..."
+        // Convert bytes back to string, strip \\x prefix, decode again
+        std::string innerHex(firstPass.begin() + 2, firstPass.end());
+        return decodeHexString(innerHex);
+    }
+
+    // Check if first byte is a valid ASN.1 tag (0x30 = SEQUENCE)
+    if (!firstPass.empty() && firstPass[0] == 0x30) {
+        return firstPass; // Already proper DER binary
+    }
+
+    return firstPass;
+}
+
+// Convert DER cert to PEM
+std::vector<uint8_t> derCertToPem(const std::vector<uint8_t>& derData) {
+    const unsigned char* data = derData.data();
+    X509* x509 = d2i_X509(nullptr, &data, derData.size());
+    if (!x509) return derData; // Fallback: return DER as-is
+
+    BIO* bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_X509(bio, x509);
+    X509_free(x509);
+
+    BUF_MEM* mem = nullptr;
+    BIO_get_mem_ptr(bio, &mem);
+    std::vector<uint8_t> pem(
+        reinterpret_cast<const uint8_t*>(mem->data),
+        reinterpret_cast<const uint8_t*>(mem->data) + mem->length
+    );
+    BIO_free(bio);
+    return pem;
+}
+
+// Convert DER CRL to PEM
+std::vector<uint8_t> derCrlToPem(const std::vector<uint8_t>& derData) {
+    const unsigned char* data = derData.data();
+    X509_CRL* crl = d2i_X509_CRL(nullptr, &data, derData.size());
+    if (!crl) return derData;
+
+    BIO* bio = BIO_new(BIO_s_mem());
+    PEM_write_bio_X509_CRL(bio, crl);
+    X509_CRL_free(crl);
+
+    BUF_MEM* mem = nullptr;
+    BIO_get_mem_ptr(bio, &mem);
+    std::vector<uint8_t> pem(
+        reinterpret_cast<const uint8_t*>(mem->data),
+        reinterpret_cast<const uint8_t*>(mem->data) + mem->length
+    );
+    BIO_free(bio);
+    return pem;
+}
+
+// Add binary data to ZIP archive
+bool addToZip(zip_t* archive, const std::string& path, const std::vector<uint8_t>& data) {
+    void* buf = malloc(data.size());
+    if (!buf) return false;
+    memcpy(buf, data.data(), data.size());
+
+    zip_source_t* src = zip_source_buffer(archive, buf, data.size(), 1);
+    if (!src) {
+        free(buf);
+        return false;
+    }
+
+    zip_int64_t idx = zip_file_add(archive, path.c_str(), src, ZIP_FL_OVERWRITE | ZIP_FL_ENC_UTF_8);
+    if (idx < 0) {
+        zip_source_free(src);
+        return false;
+    }
+    return true;
+}
+
+} // anonymous namespace
+
+ExportResult exportAllCertificatesFromDb(
+    repositories::CertificateRepository* certRepo,
+    repositories::CrlRepository* crlRepo,
+    common::IQueryExecutor* queryExecutor,
+    ExportFormat format
+) {
+    ExportResult result;
+    result.success = false;
+
+    if (!certRepo || !crlRepo || !queryExecutor) {
+        result.errorMessage = "Missing repository dependencies";
+        return result;
+    }
+
+    spdlog::info("Starting full PKD export (format={})", format == ExportFormat::PEM ? "PEM" : "DER");
+
+    try {
+        // Create temporary ZIP file
+        char tmpFilename[] = "/tmp/icao-pkd-export-XXXXXX";
+        int tmpFd = mkstemp(tmpFilename);
+        if (tmpFd == -1) {
+            result.errorMessage = "Failed to create temporary file";
+            return result;
+        }
+        close(tmpFd);
+
+        int error = 0;
+        zip_t* archive = zip_open(tmpFilename, ZIP_CREATE | ZIP_TRUNCATE, &error);
+        if (!archive) {
+            unlink(tmpFilename);
+            result.errorMessage = "Failed to create ZIP archive";
+            return result;
+        }
+
+        int addedCount = 0;
+
+        // ---- 1. Certificates (CSCA, DSC, MLSC, DSC_NC) ----
+        Json::Value certs = certRepo->findAllForExport();
+        spdlog::info("Export: {} certificates to process", certs.size());
+
+        for (const auto& row : certs) {
+            try {
+                std::string certType = row.get("certificate_type", "").asString();
+                std::string country = row.get("country_code", "").asString();
+                std::string subjectDn = row.get("subject_dn", "").asString();
+                std::string fingerprint = row.get("fingerprint_sha256", "").asString();
+                std::string certDataHex = row.get("certificate_data", "").asString();
+
+                if (certDataHex.empty() || country.empty()) continue;
+
+                // Parse hex to binary
+                std::vector<uint8_t> derData = hexToBytes(certDataHex);
+                if (derData.empty()) continue;
+
+                // Determine folder path based on cert type
+                std::string folder;
+                if (certType == "DSC_NC") {
+                    folder = "nc-data/" + country + "/dsc/";
+                } else {
+                    std::string typeFolder = "csca";
+                    if (certType == "DSC") typeFolder = "dsc";
+                    else if (certType == "MLSC") typeFolder = "mlsc";
+                    else if (certType == "CSCA") typeFolder = "csca";
+                    folder = "data/" + country + "/" + typeFolder + "/";
+                }
+
+                // Generate filename: CN_fingerprint8.ext
+                std::string cn = extractCnFromDn(subjectDn);
+                std::string safeName = cn.empty() ? certType : sanitizeForFilename(cn);
+                std::string fp8 = fingerprint.substr(0, 8);
+                std::string ext = (format == ExportFormat::PEM) ? ".pem" : ".der";
+                std::string filePath = folder + safeName + "_" + fp8 + ext;
+
+                // Convert to PEM if requested
+                std::vector<uint8_t> fileData = (format == ExportFormat::PEM) ? derCertToPem(derData) : derData;
+
+                if (addToZip(archive, filePath, fileData)) {
+                    addedCount++;
+                }
+            } catch (const std::exception& e) {
+                spdlog::warn("Export: skipping cert: {}", e.what());
+            }
+        }
+
+        spdlog::info("Export: {} certificates added to ZIP", addedCount);
+
+        // ---- 2. CRLs ----
+        Json::Value crls = crlRepo->findAllForExport();
+        int crlCount = 0;
+        spdlog::info("Export: {} CRLs to process", crls.size());
+
+        for (const auto& row : crls) {
+            try {
+                std::string country = row.get("country_code", "").asString();
+                std::string crlDataHex = row.get("crl_binary", "").asString();
+                std::string fingerprint = row.get("fingerprint_sha256", "").asString();
+
+                if (crlDataHex.empty() || country.empty()) continue;
+
+                std::vector<uint8_t> derData = hexToBytes(crlDataHex);
+                if (derData.empty()) continue;
+
+                std::string fp8 = fingerprint.substr(0, 8);
+                std::string ext = (format == ExportFormat::PEM) ? ".pem" : ".crl";
+                std::string filePath = "data/" + country + "/crl/" + country + "_crl_" + fp8 + ext;
+
+                std::vector<uint8_t> fileData = (format == ExportFormat::PEM) ? derCrlToPem(derData) : derData;
+
+                if (addToZip(archive, filePath, fileData)) {
+                    crlCount++;
+                    addedCount++;
+                }
+            } catch (const std::exception& e) {
+                spdlog::warn("Export: skipping CRL: {}", e.what());
+            }
+        }
+
+        spdlog::info("Export: {} CRLs added to ZIP", crlCount);
+
+        // ---- 3. Master Lists ----
+        std::string dbType = queryExecutor->getDatabaseType();
+        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+        std::string mlQuery =
+            "SELECT signer_country, ml_binary, fingerprint_sha256 "
+            "FROM master_list WHERE stored_in_ldap = " + storedFlag + " "
+            "ORDER BY signer_country";
+
+        Json::Value mls = queryExecutor->executeQuery(mlQuery);
+        int mlCount = 0;
+        spdlog::info("Export: {} Master Lists to process", mls.size());
+
+        for (const auto& row : mls) {
+            try {
+                std::string country = row.get("signer_country", "").asString();
+                std::string mlDataHex = row.get("ml_binary", "").asString();
+                std::string fingerprint = row.get("fingerprint_sha256", "").asString();
+
+                if (mlDataHex.empty() || country.empty()) continue;
+
+                std::vector<uint8_t> binaryData = hexToBytes(mlDataHex);
+                if (binaryData.empty()) continue;
+
+                std::string fp8 = fingerprint.substr(0, 8);
+                // Master Lists are always CMS SignedData binary - no PEM conversion
+                std::string filePath = "data/" + country + "/ml/" + country + "_ml_" + fp8 + ".cms";
+
+                if (addToZip(archive, filePath, binaryData)) {
+                    mlCount++;
+                    addedCount++;
+                }
+            } catch (const std::exception& e) {
+                spdlog::warn("Export: skipping ML: {}", e.what());
+            }
+        }
+
+        spdlog::info("Export: {} Master Lists added to ZIP", mlCount);
+
+        // ---- Finalize ZIP ----
+        if (addedCount == 0) {
+            zip_discard(archive);
+            unlink(tmpFilename);
+            result.errorMessage = "No data found for export";
+            return result;
+        }
+
+        if (zip_close(archive) != 0) {
+            zip_discard(archive);
+            unlink(tmpFilename);
+            result.errorMessage = "Failed to finalize ZIP archive";
+            return result;
+        }
+
+        // Read ZIP into memory
+        FILE* f = fopen(tmpFilename, "rb");
+        if (!f) {
+            unlink(tmpFilename);
+            result.errorMessage = "Failed to read ZIP file";
+            return result;
+        }
+
+        fseek(f, 0, SEEK_END);
+        long fileSize = ftell(f);
+        fseek(f, 0, SEEK_SET);
+
+        result.data.resize(fileSize);
+        size_t bytesRead = fread(result.data.data(), 1, fileSize, f);
+        fclose(f);
+        unlink(tmpFilename);
+
+        if (bytesRead != static_cast<size_t>(fileSize)) {
+            result.errorMessage = "Failed to read complete ZIP data";
+            return result;
+        }
+
+        // Generate filename with timestamp
+        auto now = std::time(nullptr);
+        auto* tm = std::localtime(&now);
+        std::ostringstream ts;
+        ts << std::put_time(tm, "%Y%m%d-%H%M%S");
+
+        result.filename = "ICAO-PKD-Export-" + ts.str() + ".zip";
+        result.contentType = "application/zip";
+        result.success = true;
+
+        spdlog::info("Full PKD export completed: {} files ({} certs, {} CRLs, {} MLs), ZIP size: {} bytes",
+                     addedCount, addedCount - crlCount - mlCount, crlCount, mlCount, result.data.size());
+
+    } catch (const std::exception& e) {
+        result.errorMessage = e.what();
+        spdlog::error("Full PKD export failed: {}", e.what());
+    }
+
+    return result;
+}
+
 } // namespace services

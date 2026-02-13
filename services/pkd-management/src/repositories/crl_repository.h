@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <json/json.h>
 #include "i_query_executor.h"
 
 /**
@@ -48,6 +49,12 @@ public:
      * @brief Update CRL LDAP status after successful LDAP storage
      */
     void updateLdapStatus(const std::string& crlId, const std::string& ldapDn);
+
+    /**
+     * @brief Find all CRLs stored in LDAP for bulk export
+     * @return JSON array with country_code, issuer_dn, crl_binary (hex), fingerprint_sha256
+     */
+    Json::Value findAllForExport();
 
 private:
     common::IQueryExecutor* queryExecutor_;

@@ -10,6 +10,9 @@
 
 #include "../domain/models/certificate.h"
 #include "../repositories/ldap_certificate_repository.h"
+#include "../repositories/certificate_repository.h"
+#include "../repositories/crl_repository.h"
+#include "i_query_executor.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -157,5 +160,26 @@ private:
         domain::models::CertificateType certType
     );
 };
+
+/**
+ * @brief Export all LDAP-stored data as DIT-structured ZIP archive
+ *
+ * Queries DB for all stored_in_ldap=TRUE certificates, CRLs, and Master Lists.
+ * Creates ZIP with LDAP DIT folder structure:
+ *   data/{country}/{csca|dsc|mlsc|crl|ml}/
+ *   nc-data/{country}/dsc/
+ *
+ * @param certRepo Certificate repository (DB)
+ * @param crlRepo CRL repository (DB)
+ * @param queryExecutor Query executor for ML query
+ * @param format PEM or DER
+ * @return ExportResult with ZIP binary
+ */
+ExportResult exportAllCertificatesFromDb(
+    repositories::CertificateRepository* certRepo,
+    repositories::CrlRepository* crlRepo,
+    common::IQueryExecutor* queryExecutor,
+    ExportFormat format
+);
 
 } // namespace services

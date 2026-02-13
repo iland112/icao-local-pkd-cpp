@@ -175,6 +175,18 @@ export const certificateApi = {
       params: { country, format },
       responseType: 'blob',
     }),
+
+  /**
+   * Export all LDAP-stored certificates, CRLs, and Master Lists as DIT-structured ZIP
+   * @param format - PEM or DER
+   * @returns ZIP archive with LDAP DIT folder structure
+   */
+  exportAll: (format: 'PEM' | 'DER' = 'PEM') =>
+    pkdApi.get('/certificates/export/all', {
+      params: { format },
+      responseType: 'blob',
+      timeout: 300000, // 5 min timeout for large export
+    }),
 };
 
 // =============================================================================

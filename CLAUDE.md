@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.9.1
+**Current Version**: v2.9.2
 **Last Updated**: 2026-02-13
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -129,7 +129,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Passive Authentication verification (ICAO 9303 Part 10 & 11)
 - DSC auto-registration from PA verification (source_type='PA_EXTRACTED')
 - DB-LDAP sync monitoring with auto-reconciliation
-- Certificate search & export (country/type/status/source filters)
+- Certificate search & export (country/type/status/source filters, full DIT-structured ZIP)
 - Certificate source tracking and dashboard statistics (bySource)
 - ICAO PKD version monitoring (auto-detection of new versions)
 - Trust chain visualization (frontend tree component)
@@ -184,6 +184,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/certificates/search` - Certificate search (filters: country, type, status)
 - `GET /api/certificates/validation` - Validation result by fingerprint
 - `GET /api/certificates/export/{format}` - Certificate export
+- `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
 **ICAO Monitoring**:
 - `GET /api/icao/status` - ICAO version status comparison
@@ -466,6 +467,18 @@ scripts/
 ---
 
 ## Version History
+
+### v2.9.2 (2026-02-13) - Full Certificate Export + PA CRL Expiration Check
+- Full certificate export: all LDAP-stored certificates, CRLs, and Master Lists as DIT-structured ZIP
+- ZIP folder structure mirrors LDAP DIT: `data/{country}/{csca|dsc|mlsc|crl|ml}/`, `nc-data/{country}/dsc/`
+- DB-based bulk export (stored_in_ldap=TRUE) for ~31K certificates + 69 CRLs + 27 MLs
+- PEM and DER format support; Master Lists always exported as original CMS binary (.cms)
+- Double-encoded BYTEA handling for PostgreSQL hex data
+- New endpoint: `GET /api/certificates/export/all?format=pem|der`
+- Frontend: "전체 내보내기 PEM/DER" buttons on Certificate Search page
+- PA Service: CRL expiration check before revocation check (CRL_EXPIRED status)
+- PA Service: `crlThisUpdate`, `crlNextUpdate` fields added to certificateChainValidation response
+- Oracle compatibility: all new queries support both PostgreSQL and Oracle
 
 ### v2.9.1 (2026-02-13) - ARM64 CI/CD Pipeline + Luckfox Full Deployment
 - GitHub Actions ARM64 CI/CD: vcpkg-base → GHCR → service builds → OCI artifacts

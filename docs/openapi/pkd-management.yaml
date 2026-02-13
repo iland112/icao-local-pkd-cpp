@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.9.2** (2026-02-13): Full certificate export (DIT-structured ZIP with all LDAP-stored certs, CRLs, MLs)
     - **v2.9.1** (2026-02-13): Certificate source filter, bySource statistics, DB-based search
     - **v2.7.0** (2026-02-12): Individual certificate upload with preview-before-save
     - **v2.5.0** (2026-02-06): Oracle + PostgreSQL multi-DBMS support
@@ -14,7 +15,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.9.1
+  version: 2.9.2
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -568,6 +569,67 @@ paths:
               schema:
                 type: string
                 format: binary
+
+  /api/certificates/export/all:
+    get:
+      tags: [Certificates]
+      summary: Export all LDAP-stored data as DIT-structured ZIP
+      description: |
+        Export all certificates, CRLs, and Master Lists stored in LDAP as a ZIP archive
+        with LDAP DIT (Directory Information Tree) folder structure.
+
+        **ZIP structure**:
+        ```
+        data/{country}/{csca|dsc|mlsc|crl|ml}/  - Standard certificates
+        nc-data/{country}/dsc/                   - Non-conformant DSC
+        ```
+
+        **Data sources** (DB-based, `stored_in_ldap=TRUE`):
+        - Certificates: CSCA, DSC, MLSC, DSC_NC (~31K files)
+        - CRLs (~69 files)
+        - Master Lists (~27 files, always original CMS binary as .cms)
+
+        **File naming**: `{CN_sanitized}_{fingerprint8}.{ext}`
+        - Certificates: `.pem` or `.der` (user selection)
+        - CRLs: `.pem` or `.crl` (DER)
+        - Master Lists: `.cms` (always original CMS SignedData binary)
+
+        **Performance**: Uses DB bulk query instead of individual LDAP lookups.
+        Typical response: 45-50MB ZIP, ~31K files, 5-30 seconds.
+      operationId: exportAllCertificates
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [PEM, DER]
+            default: PEM
+          description: Certificate format (PEM or DER). Master Lists are always original binary.
+      responses:
+        '200':
+          description: ZIP archive with DIT folder structure
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: "attachment; filename=ICAO-PKD-Export-{YYYYMMDD-HHmmss}.zip"
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '500':
+          description: Export failed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
 
   # ============================================
   # Authentication & User Management

@@ -6,11 +6,12 @@ info:
     Dedicated service for ICAO 9303 Passive Authentication verification.
 
     ## Changelog
+    - **v2.1.2** (2026-02-13): CRL expiration check, crlThisUpdate/crlNextUpdate fields, CRL_EXPIRED status
     - **v2.1.1** (2026-02-12): DSC auto-registration from PA verify, DG2 JPEG2000→JPEG conversion
     - **v1.2.0** (2026-01-06): Certificate expiration fields
     - **v1.1.0** (2026-01-03): API Gateway integration
     - **v1.0.0** (2025-12-30): Initial release
-  version: 2.1.1
+  version: 2.1.2
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -75,7 +76,7 @@ paths:
         Perform ICAO 9303 Passive Authentication verification (8-step process).
 
         **Steps**: SOD Parse → DSC Extract → DSC Trust Chain → CSCA Lookup →
-        SOD Signature → DG Hash → CRL Check → Result
+        SOD Signature → DG Hash → CRL Check (expiration + revocation) → Result
 
         **DSC Auto-Registration**: If the DSC is not in the local PKD, it is automatically
         registered with source_type='PA_EXTRACTED'.
@@ -275,7 +276,7 @@ components:
           example: pa-service
         version:
           type: string
-          example: 2.1.1
+          example: 2.1.2
         timestamp:
           type: string
 
@@ -300,28 +301,132 @@ components:
       properties:
         success:
           type: boolean
-        verificationId:
+        data:
+          type: object
+          properties:
+            verificationId:
+              type: string
+              format: uuid
+            status:
+              type: string
+              enum: [VALID, INVALID]
+            verificationTimestamp:
+              type: string
+              format: date-time
+            processingDurationMs:
+              type: integer
+            issuingCountry:
+              type: string
+            documentNumber:
+              type: string
+            certificateChainValidation:
+              $ref: '#/components/schemas/CertificateChainValidation'
+            sodSignatureValidation:
+              type: object
+              properties:
+                valid:
+                  type: boolean
+                hashAlgorithm:
+                  type: string
+                signatureAlgorithm:
+                  type: string
+                algorithm:
+                  type: string
+            dataGroupValidation:
+              type: object
+              properties:
+                totalGroups:
+                  type: integer
+                validGroups:
+                  type: integer
+                invalidGroups:
+                  type: integer
+                details:
+                  type: object
+                  additionalProperties:
+                    type: object
+                    properties:
+                      valid:
+                        type: boolean
+                      expectedHash:
+                        type: string
+                      actualHash:
+                        type: string
+            dscAutoRegistration:
+              $ref: '#/components/schemas/DscAutoRegistration'
+
+    CertificateChainValidation:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Trust chain verification result
+        message:
+          type: string
+          description: Error message (on failure)
+        dscSubject:
+          type: string
+          description: DSC certificate Subject DN
+        dscSerialNumber:
+          type: string
+          description: DSC certificate serial number
+        cscaSubject:
+          type: string
+          description: CSCA certificate Subject DN
+        cscaFingerprint:
+          type: string
+          description: CSCA certificate SHA-256 fingerprint
+        countryCode:
+          type: string
+          description: Country code extracted from DSC
+        notBefore:
+          type: string
+          description: DSC certificate validity start (ISO 8601)
+        notAfter:
+          type: string
+          description: DSC certificate validity end (ISO 8601)
+        crlStatus:
+          type: string
+          enum: [NOT_REVOKED, REVOKED, CRL_EXPIRED, UNKNOWN]
+          description: "CRL status: NOT_REVOKED, REVOKED, CRL_EXPIRED (nextUpdate passed), UNKNOWN"
+        crlThisUpdate:
+          type: string
+          description: CRL issue date (ISO 8601, e.g. 2026-02-01T00:00:00)
+        crlNextUpdate:
+          type: string
+          description: CRL next update date (ISO 8601, e.g. 2026-03-01T00:00:00)
+        dscExpired:
+          type: boolean
+          description: Whether DSC certificate is expired
+        cscaExpired:
+          type: boolean
+          description: Whether CSCA certificate is expired
+        validAtSigningTime:
+          type: boolean
+          description: Whether certificate was valid at passport signing time (ICAO 9303 Point-in-Time)
+        expirationStatus:
+          type: string
+          enum: [VALID, WARNING, EXPIRED]
+        expirationMessage:
+          type: string
+
+    DscAutoRegistration:
+      type: object
+      description: DSC auto-registration result (included only when registration attempted)
+      properties:
+        registered:
+          type: boolean
+        newlyRegistered:
+          type: boolean
+          description: "true: newly registered, false: already existed"
+        certificateId:
           type: string
           format: uuid
-        status:
+        fingerprint:
           type: string
-          enum: [VALID, INVALID]
-        verificationTimestamp:
+          description: DSC SHA-256 fingerprint (hex, 64 chars)
+        countryCode:
           type: string
-          format: date-time
-        processingDurationMs:
-          type: integer
-        issuingCountry:
-          type: string
-        documentNumber:
-          type: string
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/PAVerificationStep'
-        faceImage:
-          type: string
-          description: Base64 JPEG face image (converted from JPEG2000 if needed)
 
     PAVerificationStep:
       type: object

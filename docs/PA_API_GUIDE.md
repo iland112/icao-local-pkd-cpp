@@ -1,6 +1,6 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.1
+**Version**: 2.1.2
 **Last Updated**: 2026-02-13
 **API Gateway Port**: 8080
 
@@ -60,7 +60,7 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 | 4 | CSCA Lookup | LDAP에서 CSCA 인증서 검색 (Link Certificate 포함) |
 | 5 | SOD Signature | SOD 서명 유효성 검증 |
 | 6 | DG Hash | Data Group 해시값 검증 (SOD 내 기대값과 비교) |
-| 7 | CRL Check | DSC 인증서 폐지 여부 확인 |
+| 7 | CRL Check | CRL 유효기간 확인 + DSC 인증서 폐지 여부 확인 |
 | 8 | DSC Auto-Registration | 신규 DSC를 Local PKD에 자동 등록 (`source_type='PA_EXTRACTED'`) |
 
 ### Request
@@ -110,6 +110,8 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
       "notBefore": "2024-01-01T00:00:00Z",
       "notAfter": "2029-12-31T23:59:59Z",
       "crlStatus": "NOT_REVOKED",
+      "crlThisUpdate": "2026-02-01T00:00:00",
+      "crlNextUpdate": "2026-03-01T00:00:00",
       "dscExpired": false,
       "cscaExpired": false,
       "validAtSigningTime": true,
@@ -208,7 +210,9 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 | countryCode | string | DSC에서 추출한 국가 코드 |
 | notBefore | string | DSC 인증서 유효 시작일 |
 | notAfter | string | DSC 인증서 유효 종료일 |
-| crlStatus | string | CRL 상태: `NOT_REVOKED`, `REVOKED`, `UNKNOWN` |
+| crlStatus | string | CRL 상태: `NOT_REVOKED`, `REVOKED`, `CRL_EXPIRED`, `UNKNOWN` |
+| crlThisUpdate | string | CRL 발행일 (ISO 8601, 예: `2026-02-01T00:00:00`) |
+| crlNextUpdate | string | CRL 다음 업데이트 예정일 (ISO 8601, 예: `2026-03-01T00:00:00`) |
 | dscExpired | boolean | DSC 인증서 만료 여부 |
 | cscaExpired | boolean | CSCA 인증서 만료 여부 |
 | validAtSigningTime | boolean | 여권 서명 당시 인증서 유효 여부 (Point-in-Time Validation) |
@@ -818,6 +822,7 @@ curl http://localhost:8080/api/health | jq .
 | SOD_SIGNATURE_INVALID | HIGH | SOD 서명 검증 실패 |
 | DG_HASH_MISMATCH | HIGH | Data Group 해시 불일치 |
 | CERTIFICATE_EXPIRED | MEDIUM | 인증서 유효기간 만료 (현재 시점) |
+| CRL_EXPIRED | MEDIUM | CRL 유효기간 만료 (nextUpdate 경과) |
 | CERTIFICATE_REVOKED | HIGH | 인증서 CRL에 의해 폐지됨 |
 
 ---
@@ -825,7 +830,7 @@ curl http://localhost:8080/api/health | jq .
 ## OpenAPI Specification
 
 전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:
-- **Swagger UI**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.1`
+- **Swagger UI**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.2`
 - **OpenAPI YAML**: `http://<server-host>:8080/api/docs/pa-service.yaml`
 
 ---
@@ -857,6 +862,14 @@ curl http://localhost:8080/api/health | jq .
 ---
 
 ## Changelog
+
+### v2.1.2 (2026-02-13)
+
+**CRL 유효기간 검증 추가**:
+- CRL Check 단계에서 CRL `nextUpdate` 기준 만료 여부 확인
+- CRL 만료 시 `crlStatus: "CRL_EXPIRED"` 반환 (폐지 목록 확인 불가)
+- `crlThisUpdate`, `crlNextUpdate` 필드 추가 (CRL 발행일/다음 업데이트 예정일)
+- CRL 미만료 시에만 인증서 폐지 여부 확인 수행
 
 ### v2.1.1 (2026-02-12)
 

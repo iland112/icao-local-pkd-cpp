@@ -317,6 +317,17 @@ public:
     Json::Value getDistinctCountries();
 
     /**
+     * @brief Find all certificates stored in LDAP for bulk export
+     *
+     * Returns certificate_type, country_code, subject_dn, serial_number,
+     * fingerprint_sha256, and certificate_data (hex-encoded) for all
+     * certificates with stored_in_ldap = TRUE.
+     *
+     * @return JSON array of certificate rows
+     */
+    Json::Value findAllForExport();
+
+    /**
      * @brief Search link certificates with filters
      * @return JSON object with search results
      */

@@ -153,6 +153,8 @@ struct CertificateChainValidationResult {
     std::string crlStatusDetailedDescription;
     std::string crlStatusSeverity;
     std::string crlMessage;
+    std::string crlThisUpdate;     // CRL thisUpdate (발행일)
+    std::string crlNextUpdate;     // CRL nextUpdate (다음 갱신일)
     std::string validationErrors;
 };
 
@@ -1305,37 +1307,72 @@ CertificateChainValidationResult validateCertificateChain(
     if (crl) {
         result.crlChecked = true;
 
-        // Check if DSC is in CRL
-        X509_REVOKED* revoked = nullptr;
-        int crlResult = X509_CRL_get0_by_cert(crl, &revoked, dscCert);
-
-        if (crlResult == 1 && revoked) {
-            result.revoked = true;
-            result.valid = false;
-            result.crlStatus = CrlStatus::REVOKED;
-            result.crlStatusDescription = "Certificate is revoked";
-            result.crlStatusDetailedDescription = "인증서가 폐기됨";
-            result.crlStatusSeverity = "FAILURE";
-
-            // Get revocation date
-            const ASN1_TIME* revTime = X509_REVOKED_get0_revocationDate(revoked);
-            if (revTime) {
-                struct tm t;
-                ASN1_TIME_to_tm(revTime, &t);
+        // Extract CRL thisUpdate / nextUpdate dates
+        auto asn1TimeToString = [](const ASN1_TIME* t) -> std::string {
+            if (!t) return "";
+            struct tm tm_val;
+            if (ASN1_TIME_to_tm(t, &tm_val) == 1) {
                 char buf[32];
-                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &t);
-                result.crlMessage = std::string("Certificate revoked on ") + buf;
+                strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_val);
+                return std::string(buf);
             }
+            return "";
+        };
 
-            spdlog::warn("DSC certificate is REVOKED");
-        } else {
+        const ASN1_TIME* thisUpdate = X509_CRL_get0_lastUpdate(crl);
+        const ASN1_TIME* nextUpdate = X509_CRL_get0_nextUpdate(crl);
+        result.crlThisUpdate = asn1TimeToString(thisUpdate);
+        result.crlNextUpdate = asn1TimeToString(nextUpdate);
+
+        spdlog::info("CRL dates - thisUpdate: {}, nextUpdate: {}", result.crlThisUpdate, result.crlNextUpdate);
+
+        // Check CRL expiration (nextUpdate < now)
+        bool crlExpired = false;
+        if (nextUpdate) {
+            time_t now = time(nullptr);
+            if (X509_cmp_time(nextUpdate, &now) < 0) {
+                crlExpired = true;
+            }
+        }
+
+        if (crlExpired) {
             result.revoked = false;
-            result.crlStatus = CrlStatus::VALID;
-            result.crlStatusDescription = "Certificate is not revoked";
-            result.crlStatusDetailedDescription = "CRL 확인 완료 - DSC 인증서가 폐기되지 않음";
-            result.crlStatusSeverity = "SUCCESS";
-            result.crlMessage = "CRL 확인 완료 - DSC 인증서가 폐기되지 않음";
-            spdlog::info("CRL check passed: DSC not revoked");
+            result.crlStatus = CrlStatus::CRL_EXPIRED;
+            result.crlStatusDescription = "CRL has expired";
+            result.crlStatusDetailedDescription = "CRL의 nextUpdate(" + result.crlNextUpdate + ")가 현재 시간보다 이전임. "
+                "만료된 CRL로는 폐기 상태를 신뢰할 수 없습니다. ICAO Doc 9303 Part 11에 따라 경고 처리합니다.";
+            result.crlStatusSeverity = "WARNING";
+            result.crlMessage = "CRL 만료됨 (nextUpdate: " + result.crlNextUpdate + ")";
+            spdlog::warn("CRL expired for country {} (nextUpdate: {})", countryCode, result.crlNextUpdate);
+        } else {
+            // Check if DSC is in CRL
+            X509_REVOKED* revoked = nullptr;
+            int crlResult = X509_CRL_get0_by_cert(crl, &revoked, dscCert);
+
+            if (crlResult == 1 && revoked) {
+                result.revoked = true;
+                result.valid = false;
+                result.crlStatus = CrlStatus::REVOKED;
+                result.crlStatusDescription = "Certificate is revoked";
+                result.crlStatusDetailedDescription = "인증서가 폐기됨";
+                result.crlStatusSeverity = "FAILURE";
+
+                // Get revocation date
+                const ASN1_TIME* revTime = X509_REVOKED_get0_revocationDate(revoked);
+                if (revTime) {
+                    result.crlMessage = std::string("Certificate revoked on ") + asn1TimeToString(revTime);
+                }
+
+                spdlog::warn("DSC certificate is REVOKED");
+            } else {
+                result.revoked = false;
+                result.crlStatus = CrlStatus::VALID;
+                result.crlStatusDescription = "Certificate is not revoked";
+                result.crlStatusDetailedDescription = "CRL 확인 완료 - DSC 인증서가 폐기되지 않음";
+                result.crlStatusSeverity = "SUCCESS";
+                result.crlMessage = "CRL 확인 완료 - DSC 인증서가 폐기되지 않음";
+                spdlog::info("CRL check passed: DSC not revoked");
+            }
         }
 
         X509_CRL_free(crl);
@@ -1602,6 +1639,12 @@ Json::Value buildCertificateChainValidationJson(const CertificateChainValidation
     json["crlStatusDetailedDescription"] = result.crlStatusDetailedDescription;
     json["crlStatusSeverity"] = result.crlStatusSeverity;
     json["crlMessage"] = result.crlMessage;
+    if (!result.crlThisUpdate.empty()) {
+        json["crlThisUpdate"] = result.crlThisUpdate;
+    }
+    if (!result.crlNextUpdate.empty()) {
+        json["crlNextUpdate"] = result.crlNextUpdate;
+    }
     if (!result.validationErrors.empty()) {
         json["validationErrors"] = result.validationErrors;
     }

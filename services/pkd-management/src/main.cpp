@@ -6637,6 +6637,82 @@ paths:
         {drogon::Get}
     );
 
+    // GET /api/certificates/export/all - Export all LDAP-stored data as DIT-structured ZIP
+    app.registerHandler(
+        "/api/certificates/export/all",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                std::string format = req->getOptionalParameter<std::string>("format").value_or("pem");
+
+                spdlog::info("Full PKD export requested: format={}", format);
+
+                services::ExportFormat exportFormat = (format == "der") ?
+                    services::ExportFormat::DER : services::ExportFormat::PEM;
+
+                auto exportResult = services::exportAllCertificatesFromDb(
+                    ::certificateRepository.get(),
+                    ::crlRepository.get(),
+                    ::queryExecutor.get(),
+                    exportFormat
+                );
+
+                if (!exportResult.success) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = exportResult.errorMessage;
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k500InternalServerError);
+                    callback(resp);
+                    return;
+                }
+
+                // Return ZIP binary
+                auto resp = drogon::HttpResponse::newHttpResponse();
+                resp->setStatusCode(drogon::k200OK);
+                resp->setContentTypeString("application/zip");
+                resp->addHeader("Content-Disposition",
+                    "attachment; filename=\"" + exportResult.filename + "\"");
+                resp->setBody(std::string(
+                    reinterpret_cast<const char*>(exportResult.data.data()),
+                    exportResult.data.size()));
+                callback(resp);
+
+                // Audit log
+                {
+                    AuditLogEntry auditEntry;
+                    auto [userId, username] = extractUserFromRequest(req);
+                    auditEntry.userId = userId;
+                    auditEntry.username = username;
+                    auditEntry.operationType = OperationType::CERT_EXPORT;
+                    auditEntry.operationSubtype = "ALL_ZIP";
+                    auditEntry.resourceType = "CERTIFICATE_COLLECTION";
+                    auditEntry.ipAddress = extractIpAddress(req);
+                    auditEntry.userAgent = req->getHeader("User-Agent");
+                    auditEntry.requestMethod = "GET";
+                    auditEntry.requestPath = "/api/certificates/export/all";
+                    auditEntry.success = true;
+                    Json::Value metadata;
+                    metadata["format"] = format;
+                    metadata["fileName"] = exportResult.filename;
+                    metadata["fileSize"] = static_cast<Json::Int64>(exportResult.data.size());
+                    auditEntry.metadata = metadata;
+                    logOperation(::queryExecutor.get(), auditEntry);
+                }
+
+            } catch (const std::exception& e) {
+                spdlog::error("Full PKD export error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // GET /api/certificates/countries - Get list of available countries
     app.registerHandler(
         "/api/certificates/countries",

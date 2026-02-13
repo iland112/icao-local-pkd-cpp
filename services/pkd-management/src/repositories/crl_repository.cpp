@@ -167,4 +167,20 @@ std::string CrlRepository::generateUuid() {
     return ss.str();
 }
 
+// ============================================================================
+// Bulk Export (All LDAP-stored CRLs)
+// ============================================================================
+
+Json::Value CrlRepository::findAllForExport() {
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+
+    std::string query =
+        "SELECT country_code, issuer_dn, crl_binary, fingerprint_sha256 "
+        "FROM crl WHERE stored_in_ldap = " + storedFlag + " "
+        "ORDER BY country_code";
+
+    return queryExecutor_->executeQuery(query);
+}
+
 } // namespace repositories

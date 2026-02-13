@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, Shield, HelpCircle } from 'lucide-react';
+import { Search, Download, Filter, ChevronDown, ChevronUp, FileText, X, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, Shield, HelpCircle, Archive, Loader2 } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { getCountryDisplayName } from '@/utils/countryNames';
 import { cn } from '@/utils/cn';
@@ -256,6 +256,37 @@ const CertificateSearch: React.FC = () => {
       }
     } catch (err) {
       alert('Export failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  };
+
+  // Export all LDAP-stored data (DIT ZIP)
+  const [exportAllLoading, setExportAllLoading] = useState(false);
+  const exportAll = async (format: 'pem' | 'der') => {
+    try {
+      setExportAllLoading(true);
+      const response = await fetch(`/api/certificates/export/all?format=${format}`);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const contentDisposition = response.headers.get('Content-Disposition');
+        const filename = contentDisposition?.match(/filename="(.+)"/)?.[1] || `ICAO-PKD-Export.zip`;
+
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        const errorData = await response.json().catch(() => null);
+        alert('Export failed: ' + (errorData?.error || response.statusText));
+      }
+    } catch (err) {
+      alert('Export failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setExportAllLoading(false);
     }
   };
 
@@ -920,6 +951,24 @@ const CertificateSearch: React.FC = () => {
                   </button>
                 </>
               )}
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={() => exportAll('pem')}
+                  disabled={exportAllLoading}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
+                >
+                  {exportAllLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  전체 내보내기 PEM
+                </button>
+                <button
+                  onClick={() => exportAll('der')}
+                  disabled={exportAllLoading}
+                  className="px-4 py-2 bg-indigo-700 text-white rounded-lg hover:bg-indigo-800 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 text-sm font-medium transition-colors"
+                >
+                  {exportAllLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4" />}
+                  전체 내보내기 DER
+                </button>
+              </div>
             </div>
           </div>
         )}

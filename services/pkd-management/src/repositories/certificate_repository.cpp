@@ -1380,4 +1380,21 @@ Json::Value CertificateRepository::findLinkCertificateById(const std::string& id
     return rows[0];
 }
 
+// ============================================================================
+// Bulk Export (All LDAP-stored certificates)
+// ============================================================================
+
+Json::Value CertificateRepository::findAllForExport() {
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+
+    std::string query =
+        "SELECT certificate_type, country_code, subject_dn, serial_number, "
+        "fingerprint_sha256, certificate_data "
+        "FROM certificate WHERE stored_in_ldap = " + storedFlag + " "
+        "ORDER BY country_code, certificate_type";
+
+    return queryExecutor_->executeQuery(query);
+}
+
 } // namespace repositories
