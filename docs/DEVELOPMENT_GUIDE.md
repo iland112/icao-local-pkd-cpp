@@ -1,7 +1,7 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.4.3
-**Last Updated**: 2026-02-04
+**Version**: 2.9.0
+**Last Updated**: 2026-02-13
 
 ---
 
@@ -17,6 +17,13 @@ DB_NAME=localpkd
 DB_USER=pkd
 DB_PASSWORD=<from .env file>
 
+# Oracle
+ORACLE_HOST=oracle
+ORACLE_PORT=1521
+ORACLE_SERVICE_NAME=XEPDB1
+ORACLE_USER=pkd_user
+ORACLE_PASSWORD=<from .env file>
+
 # LDAP
 LDAP_HOST=openldap1:389 (or openldap2:389)
 LDAP_ADMIN_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
@@ -25,100 +32,132 @@ LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ```
 
-### Helper Scripts
+### Service Ports
 
-All helper scripts are located in `scripts/` directory:
+| Service | Port | Description |
+|---------|------|-------------|
+| PKD Management | 8081 | Upload, Certificate Search, ICAO Sync, Auth |
+| PA Service | 8082 | Passive Authentication (ICAO 9303) |
+| PKD Relay | 8083 | DB-LDAP Sync, Reconciliation |
+| Monitoring Service | 8084 | System Metrics, Service Health |
+| API Gateway | 8080 | nginx reverse proxy (`/api` prefix) |
+| Frontend | 3000 | React 19 SPA |
+| API Docs | 8090 | Swagger UI |
+
+### Daily Commands
 
 ```bash
-# Rebuild PKD Relay Service
-./scripts/rebuild-pkd-relay.sh              # Normal build (uses cache)
-./scripts/rebuild-pkd-relay.sh --no-cache   # Force fresh build
+# Start/Stop system
+./docker-start.sh
+./docker-stop.sh
+./docker-health.sh
 
-# LDAP Operations
-source scripts/ldap-helpers.sh              # Load LDAP helper functions
-ldap_info                                   # Show connection info
-ldap_count_all                              # Count all certificates
-ldap_count_certs CRL                        # Count CRLs
-ldap_search_country KR                      # Search by country
-ldap_delete_all_crls                        # Delete all CRLs (testing)
+# Clean init (DB + LDAP reset)
+./docker-clean-and-init.sh
 
-# Database Operations
-source scripts/db-helpers.sh                # Load DB helper functions
-db_info                                     # Show connection info
-db_count_certs                              # Count certificates by type
-db_count_crls                               # Count CRLs
-db_reset_crl_flags                          # Reset CRL stored_in_ldap flags
-db_reconciliation_summary 10                # Show last 10 reconciliations
-db_latest_reconciliation_logs               # Show latest reconciliation logs
-db_sync_status 10                           # Show sync status history
+# Rebuild individual services
+./scripts/build/rebuild-pkd-relay.sh [--no-cache]
+./scripts/build/rebuild-frontend.sh
+
+# Helper functions
+source scripts/helpers/ldap-helpers.sh && ldap_count_all
+source scripts/helpers/db-helpers.sh && db_count_certs
 ```
 
 ---
 
 ## Architecture Overview
 
-### Connection Pool Architecture (v2.4.3)
-
-**All 3 backend services now use shared connection pools**:
+### System Architecture (v2.9.0)
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│              ICAO Local PKD - v2.4.3                        │
-│          Connection Pool Architecture                        │
-└─────────────────────────────────────────────────────────────┘
-
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ PA Service   │  │ PKD Mgmt     │  │ PKD Relay    │
-│ (8082)       │  │ (8081)       │  │ (8083)       │
-└──────┬───────┘  └──────┬───────┘  └──────┬───────┘
-       │                 │                 │
-       └─────────────────┴─────────────────┘
-                         │
-         ┌───────────────┴───────────────┐
-         │   Shared Libraries (v2.4.3)   │
-         ├───────────────────────────────┤
-         │  • icao::ldap  (LDAP Pool)    │
-         │  • icao::database (DB Pool)   │
-         │  • icao::config               │
-         │  • icao::exception            │
-         │  • icao::logging              │
-         │  • icao::icao9303             │
-         └───────────────┬───────────────┘
-                         │
-         ┌───────────────┴───────────────┐
-         │                               │
-    ┌────▼─────┐                  ┌─────▼────┐
-    │ OpenLDAP │                  │ Postgres │
-    │ Cluster  │                  │ 15       │
-    │ (MMR)    │                  │          │
-    └──────────┘                  └──────────┘
+Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LDAP
+                                                        |
+                                                        +-- PKD Management (:8081)
+                                                        |     Upload, Certificate Search, Auth, Audit
+                                                        |
+                                                        +-- PA Service (:8082)
+                                                        |     Passive Authentication, DG2 Face Image
+                                                        |
+                                                        +-- PKD Relay (:8083)
+                                                        |     DB-LDAP Sync, Reconciliation
+                                                        |
+                                                        +-- Monitoring Service (:8084)
+                                                              System Metrics (DB-independent)
 ```
 
-**Benefits**:
-- ✅ **50x LDAP Performance**: Connection reuse vs. new connection per request
-- ✅ **Thread Safety**: Automatic connection management with RAII pattern
-- ✅ **Resource Efficiency**: Configurable min/max connections per service
-- ✅ **Automatic Retry**: Built-in connection validation and recovery
-- ✅ **Consistent API**: Same pattern across all services
+### Shared Libraries (`shared/lib/`)
 
-**Connection Pool Configuration**:
+| Library | Purpose |
+|---------|---------|
+| `icao::database` | DB connection pool, Query Executor (PostgreSQL + Oracle) |
+| `icao::ldap` | Thread-safe LDAP connection pool (min=2, max=10) |
+| `icao::audit` | Unified audit logging (operation_audit_log) |
+| `icao::config` | Configuration management |
+| `icao::exception` | Custom exception types |
+| `icao::logging` | Structured logging (spdlog) |
+| `icao::certificate-parser` | X.509 certificate parsing (22 fields) |
+| `icao::icao9303` | ICAO 9303 SOD/DG parsers |
+
+### Connection Pool Configuration
 
 | Service | LDAP Pool | DB Pool | Notes |
 |---------|-----------|---------|-------|
-| pa-service | 2-10 | 5-20 | Verification-heavy |
-| pkd-management | 3-15 | 5-20 | Upload/search operations |
-| pkd-relay | 2-10 | 5-20 | Sync/reconciliation |
+| PA Service | 2-10 | 5-20 | Verification-heavy |
+| PKD Management | 3-15 | 5-20 | Upload/search operations |
+| PKD Relay | 2-10 | 5-20 | Sync/reconciliation |
+| Monitoring | N/A | N/A | DB-independent (HTTP only) |
 
-**RAII Pattern Example**:
+### Design Patterns
+
+| Pattern | Usage |
+|---------|-------|
+| **Repository Pattern** | 100% SQL abstraction - zero SQL in controllers |
+| **Query Executor Pattern** | Database-agnostic queries via `IQueryExecutor` |
+| **Factory Pattern** | Runtime database selection via `DB_TYPE` |
+| **Strategy Pattern** | Processing strategies (AUTO/MANUAL upload modes) |
+| **RAII** | Connection pooling (DB and LDAP) |
+
+---
+
+## Multi-DBMS Support
+
+### Switching Databases
+
+```bash
+# Edit .env: DB_TYPE=postgres or DB_TYPE=oracle
+# Then restart services:
+docker compose -f docker/docker-compose.yaml restart pkd-management pa-service pkd-relay
+```
+
+### Oracle Compatibility Notes
+
+| Issue | PostgreSQL | Oracle | Solution |
+|-------|-----------|--------|----------|
+| Column names | lowercase | UPPERCASE | Auto-lowercase in OracleQueryExecutor |
+| Booleans | TRUE/FALSE | 1/0 | Database-aware formatting |
+| Pagination | LIMIT/OFFSET | OFFSET ROWS FETCH NEXT | Database-specific SQL |
+| Case search | ILIKE | UPPER() LIKE UPPER() | Conditional SQL |
+| JSONB cast | `$1::jsonb` | `$1` (no cast) | Remove cast for Oracle |
+| Empty string | '' (empty) | NULL | IS NOT NULL filter |
+| Timestamps | NOW() | SYSTIMESTAMP | Database-specific function |
+
+### RAII Pattern Example
+
 ```cpp
-// Acquire connection from pool (auto-release on scope exit)
+// Database - Query Executor
+auto& executor = DatabaseConnectionPool::getExecutor();
+auto result = executor.executeQuery(
+    "SELECT * FROM certificate WHERE country_code = $1",
+    {"KR"}
+);
+
+// LDAP - Connection Pool
 auto conn = ldapPool_->acquire();
 if (!conn.isValid()) {
     throw std::runtime_error("Failed to acquire LDAP connection");
 }
-
 LDAP* ld = conn.get();
-// Use connection...
 // Connection automatically released when 'conn' goes out of scope
 ```
 
@@ -128,70 +167,111 @@ LDAP* ld = conn.get();
 
 ### 1. Code Modification
 
-```bash
-# Edit source files
-vim services/pkd-relay-service/src/relay/sync/reconciliation_engine.cpp
+Source code locations:
 
-# Always update version in main.cpp for cache busting
-vim services/pkd-relay-service/src/main.cpp
-# Update: spdlog::info("... v2.0.X ...")
-```
+| Service | Source Path |
+|---------|------------|
+| PKD Management | `services/pkd-management/src/` |
+| PA Service | `services/pa-service/src/` |
+| PKD Relay | `services/pkd-relay-service/src/` |
+| Monitoring | `services/monitoring-service/src/` |
+| Shared Libraries | `shared/lib/` |
+| Frontend | `frontend/src/` |
 
 ### 2. Build and Deploy
 
-**Option A: Quick rebuild (recommended for testing)**
+**Option A: Quick rebuild (recommended)**
 ```bash
-./scripts/rebuild-pkd-relay.sh
+# Rebuild specific service
+./scripts/build/rebuild-pkd-relay.sh
+./scripts/build/rebuild-frontend.sh
+
+# Or via docker compose
+docker compose -f docker/docker-compose.yaml build pkd-management
+docker compose -f docker/docker-compose.yaml up -d pkd-management
 ```
 
-**Option B: Force fresh build (when cache issues suspected)**
+**Option B: Force fresh build (dependency changes, Dockerfile changes)**
 ```bash
-./scripts/rebuild-pkd-relay.sh --no-cache
+./scripts/build/rebuild-pkd-relay.sh --no-cache
 ```
 
-**Manual build (for debugging)**
-```bash
-# Build image
-docker build -t icao-pkd-relay:v2.0.5 -f services/pkd-relay-service/Dockerfile .
-
-# Stop current container
-docker-compose -f docker/docker-compose.yaml stop pkd-relay
-
-# Remove current container
-docker-compose -f docker/docker-compose.yaml rm -f pkd-relay
-
-# Start new container
-docker-compose -f docker/docker-compose.yaml up -d pkd-relay
-
-# Check logs
-docker logs icao-local-pkd-relay --tail 50
-```
+**When to use `--no-cache`:**
+- CMakeLists.txt or vcpkg.json changes
+- New library additions
+- Dockerfile modifications
+- Version mismatch between source and binary
 
 ### 3. Testing
 
 ```bash
 # Source helper scripts
-source scripts/ldap-helpers.sh
-source scripts/db-helpers.sh
+source scripts/helpers/ldap-helpers.sh
+source scripts/helpers/db-helpers.sh
 
-# Check service health
+# Check all service health
+./docker-health.sh
+
+# Or individually
+curl http://localhost:8080/api/health | jq .
+curl http://localhost:8080/api/pa/health | jq .
 curl http://localhost:8080/api/sync/health | jq .
 
-# Check sync status
-curl http://localhost:8080/api/sync/status | jq .
+# Data verification
+ldap_count_all          # Count all LDAP entries
+db_count_certs          # Count DB certificates
 
-# Prepare test data (reset CRL flags)
-db_reset_crl_flags
-
-# Trigger reconciliation
+# Test reconciliation
 curl -X POST http://localhost:8080/api/sync/reconcile \
   -H "Content-Type: application/json" \
   -d '{"dryRun": false}' | jq .
 
-# Verify results
-ldap_count_all                              # Check LDAP counts
-db_count_crls                               # Check DB counts
-db_latest_reconciliation_logs               # Check reconciliation logs
+# Test PA verification
+curl -X POST http://localhost:8080/api/pa/verify \
+  -H "Content-Type: application/json" \
+  -d '{"sod":"<base64>","dataGroups":{"1":"<base64>","2":"<base64>"}}' | jq .
+```
+
+---
+
+## Helper Scripts
+
+### Directory Structure
+
+```
+scripts/
++-- docker/          # Docker management (start, stop, restart, health, logs, backup)
++-- luckfox/         # ARM64 deployment (same structure as docker/)
++-- build/           # Build scripts (build, rebuild-*, check-freshness, verify-*)
++-- helpers/         # Utility functions (db-helpers.sh, ldap-helpers.sh)
++-- maintenance/     # Data management (reset-all-data, reset-ldap, dn-migration)
++-- monitoring/      # System monitoring (icao-version-check)
++-- deploy/          # Deployment (from-github-artifacts)
++-- dev/             # Development scripts (start/stop/rebuild/logs dev services)
+```
+
+### LDAP Helpers
+
+```bash
+source scripts/helpers/ldap-helpers.sh
+ldap_info                   # Show connection info
+ldap_count_all              # Count all certificates
+ldap_count_certs CRL        # Count CRLs
+ldap_search_country KR      # Search by country
+ldap_delete_all_crls        # Delete all CRLs (testing)
+```
+
+### Database Helpers
+
+```bash
+source scripts/helpers/db-helpers.sh
+db_info                     # Show connection info
+db_count_certs              # Count certificates by type
+db_count_crls               # Count CRLs
+db_reset_crl_flags          # Reset CRL stored_in_ldap flags
+db_reconciliation_summary 10    # Show last 10 reconciliations
+db_latest_reconciliation_logs   # Show latest reconciliation logs
+db_sync_status 10           # Show sync status history
 ```
 
 ---
@@ -199,8 +279,6 @@ db_latest_reconciliation_logs               # Check reconciliation logs
 ## Common LDAP Operations
 
 ### Correct LDAP Search Commands
-
-**Always use these exact parameters:**
 
 ```bash
 # Count CRLs
@@ -220,97 +298,45 @@ docker exec icao-local-pkd-openldap1 \
   -b "dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
   "(objectClass=pkdDownload)" dn 2>&1 | \
   grep "^dn:" | wc -l
-
-# Search by country
-docker exec icao-local-pkd-openldap1 \
-  ldapsearch -x \
-  -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
-  -w "ldap_test_password_123" \
-  -LLL \
-  -b "c=KR,dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com" \
-  "(objectClass=pkdDownload)" dn
 ```
 
-**Common Mistakes to Avoid:**
-
-- ❌ Wrong password: `admin` → ✅ Correct: `ldap_test_password_123`
-- ❌ Wrong base DN: `dc=pkd,...` → ✅ Correct: `dc=download,dc=pkd,...`
-- ❌ Wrong filter: `(cn=*)` → ✅ Correct: `(objectClass=cRLDistributionPoint)`
-- ❌ Missing `-x` flag → ✅ Always use `-x` for simple authentication
+**Common Mistakes:**
+- Wrong password: `admin` -> Correct: `ldap_test_password_123`
+- Wrong base DN: `dc=pkd,...` -> Correct: `dc=download,dc=pkd,...`
+- Wrong filter: `(cn=*)` -> Correct: `(objectClass=cRLDistributionPoint)`
+- Missing `-x` flag -> Always use `-x` for simple authentication
 
 ---
 
 ## Common Database Operations
 
-### Correct PostgreSQL Commands
+### PostgreSQL Commands
 
 ```bash
-# Count CRLs
+# Count certificates
 docker exec icao-local-pkd-postgres \
   psql -U pkd -d localpkd \
-  -c "SELECT COUNT(*), stored_in_ldap FROM crl GROUP BY stored_in_ldap;"
+  -c "SELECT certificate_type, COUNT(*) FROM certificate GROUP BY certificate_type;"
 
-# Reset CRL flags
+# Check reconciliation history
 docker exec icao-local-pkd-postgres \
   psql -U pkd -d localpkd \
-  -c "UPDATE crl SET stored_in_ldap = FALSE;
-      SELECT COUNT(*) FROM crl WHERE stored_in_ldap = FALSE;"
-
-# Check reconciliation summary
-docker exec icao-local-pkd-postgres \
-  psql -U pkd -d localpkd \
-  -c "SELECT id, started_at, status, crl_added, total_processed
-      FROM reconciliation_summary
-      ORDER BY started_at DESC LIMIT 5;"
-
-# Check reconciliation logs
-docker exec icao-local-pkd-postgres \
-  psql -U pkd -d localpkd \
-  -c "SELECT cert_type, cert_fingerprint, status, operation
-      FROM reconciliation_log
-      WHERE reconciliation_id = (SELECT MAX(id) FROM reconciliation_summary)
-      LIMIT 10;"
+  -c "SELECT id, started_at, status, total_processed
+      FROM reconciliation_summary ORDER BY started_at DESC LIMIT 5;"
 ```
 
-**Common Mistakes to Avoid:**
-
-- ❌ Wrong DB name: `pkd` → ✅ Correct: `localpkd`
-- ❌ Missing quotes in SQL → ✅ Always wrap SQL in quotes
-- ❌ Forgetting to check reconciliation_id → ✅ Use MAX(id) for latest
-
----
-
-## Docker Build Best Practices
-
-### Cache Strategy
-
-**When to use cache (default):**
-- Minor code changes
-- Dependency versions unchanged
-- Quick iteration during development
-
-**When to use --no-cache:**
-- Dependency updates (vcpkg.json changed)
-- Build errors that might be cache-related
-- Version mismatch between source and binary
-- After major refactoring
-
-### Build Verification
-
-Always verify the build version after rebuild:
+### Oracle Commands
 
 ```bash
-# Check version in logs
-docker logs icao-local-pkd-relay --tail 5 | grep "v2.0"
-
-# Expected output:
-# [info] ICAO Local PKD - PKD Relay Service v2.0.5
+# Count certificates
+docker exec icao-local-pkd-oracle bash -c \
+  "echo \"SELECT certificate_type, COUNT(*) FROM certificate GROUP BY certificate_type;\" \
+  | sqlplus -s pkd_user/\${ORACLE_PASSWORD}@//localhost:1521/XEPDB1"
 ```
 
-If version doesn't match source code:
-1. Use `--no-cache` flag
-2. Check if version string was updated in main.cpp
-3. Verify docker image tag matches
+**Common Mistakes:**
+- Wrong DB name: `pkd` -> Correct: `localpkd`
+- Oracle: remember `UPPERCASE` column names in result sets
 
 ---
 
@@ -318,113 +344,55 @@ If version doesn't match source code:
 
 ### Build Issues
 
-**Symptom**: Binary version doesn't match source code version
-
-**Solution**:
+**Binary version mismatch:**
 ```bash
-# Force rebuild without cache
-./scripts/rebuild-pkd-relay.sh --no-cache
-
-# Verify version
+./scripts/build/rebuild-pkd-relay.sh --no-cache
 docker logs icao-local-pkd-relay --tail 5 | grep version
-```
-
-**Symptom**: Build hangs or takes too long
-
-**Solution**:
-```bash
-# Kill background builds
-docker ps -a | grep build
-docker kill <build-container-id>
-
-# Clean build artifacts
-docker system prune -f
-
-# Retry with normal build
-./scripts/rebuild-pkd-relay.sh
 ```
 
 ### LDAP Connection Issues
 
-**Symptom**: `ldap_bind: Invalid credentials (49)`
-
-**Solution**:
+**`ldap_bind: Invalid credentials (49)`:**
 ```bash
 # Use correct password
 LDAP_PASSWORD="ldap_test_password_123"  # NOT "admin"
-
-# Or use helper script
-source scripts/ldap-helpers.sh
-ldap_count_all
+source scripts/helpers/ldap-helpers.sh && ldap_count_all
 ```
 
-**Symptom**: `No such object (32)`
-
-**Solution**:
+**`No such object (32)`:**
 ```bash
-# Check base DN is correct
-BASE_DN="dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com"
-
-# Verify DN hierarchy exists
+# Check DN hierarchy exists
 docker exec icao-local-pkd-openldap1 \
   ldapsearch -x -D "cn=admin,dc=ldap,dc=smartcoreinc,dc=com" \
   -w "ldap_test_password_123" \
-  -b "dc=ldap,dc=smartcoreinc,dc=com" \
-  "(objectClass=*)" dn | grep "^dn:"
+  -b "dc=ldap,dc=smartcoreinc,dc=com" "(objectClass=*)" dn | grep "^dn:"
 ```
 
-### Database Issues
+### Oracle Issues
 
-**Symptom**: `relation does not exist`
+**"Value is not convertible to Int":**
+- Oracle returns all values as strings. Use `getInt()` helper.
 
-**Solution**:
-```bash
-# Check table exists
-db_query "\dt"
+**Empty string = NULL:**
+- `WHERE column != ''` fails on Oracle. Use `WHERE column IS NOT NULL`.
 
-# Check in correct database
-docker exec icao-local-pkd-postgres psql -U pkd -l
-# Should show: localpkd (not pkd)
-```
+### 502 Bad Gateway after container restart
 
-**Symptom**: Reconciliation logs not appearing
+nginx uses `resolver 127.0.0.11 valid=10s` with per-request DNS resolution. Usually resolves within 10 seconds.
 
-**Solution**:
-```bash
-# Check table schema
-db_query "\d reconciliation_log"
+### Sync Dashboard Timeout
 
-# Should have: cert_fingerprint VARCHAR(64)
-# NOT: cert_id INTEGER
-
-# If schema wrong, apply migration:
-db_query "ALTER TABLE reconciliation_log ADD COLUMN cert_fingerprint VARCHAR(64);"
-db_query "ALTER TABLE reconciliation_log DROP COLUMN cert_id;"
-```
+Thread-safe connection pool (RAII pattern) prevents this. If it occurs, restart the pkd-relay service.
 
 ---
 
-## Version History
+## Production Data Summary
 
-### v2.0.5 (2026-01-25)
-- CRL reconciliation support
-- reconciliation_log UUID fix (cert_id → cert_fingerprint)
-- Helper scripts for consistent development
-
-### v2.0.4 (2026-01-25)
-- Auto parent DN creation in LDAP
-
-### v2.0.3 (2026-01-24)
-- Fingerprint-based DN format
-
-### v2.0.0 (2026-01-21)
-- Service separation (PKD Relay Service)
-
----
-
-## Contact
-
-For questions or issues:
-- Check logs: `docker logs icao-local-pkd-relay --tail 100`
-- Check helpers: `source scripts/ldap-helpers.sh && ldap_info`
-- Check database: `source scripts/db-helpers.sh && db_info`
+| Certificate Type | Count | LDAP | Coverage |
+|------------------|-------|------|----------|
+| CSCA | 845 | 845 | 100% |
+| MLSC | 27 | 27 | 100% |
+| DSC | 29,838 | 29,838 | 100% |
+| DSC_NC | 502 | 502 | 100% |
+| CRL | 69 | 69 | 100% |
+| **Total** | **31,212** | **31,212** | **100%** |

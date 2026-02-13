@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 1.2.0
-**Last Updated**: 2026-01-06
+**Version**: 2.1.1
+**Last Updated**: 2026-02-13
 **API Gateway Port**: 8080
 
 ---
@@ -21,19 +21,49 @@ http://<server-host>:8080/api/pa
 
 ### 인증
 
-현재 버전에서는 별도의 인증이 필요하지 않습니다. 향후 버전에서 API Key 또는 OAuth 인증이 추가될 수 있습니다.
+PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. 전자여권 판독기 등 외부 클라이언트에서 별도 인증 없이 호출할 수 있습니다.
 
 ---
 
-## API Endpoints
+## API Endpoints Summary
 
-### 1. PA 검증 (Passive Authentication)
+| # | Method | Path | Description |
+|---|--------|------|-------------|
+| 1 | `POST` | `/api/pa/verify` | PA 검증 (8단계 프로세스) |
+| 2 | `POST` | `/api/pa/parse-sod` | SOD 메타데이터 파싱 |
+| 3 | `POST` | `/api/pa/parse-dg1` | DG1 → MRZ 파싱 |
+| 4 | `POST` | `/api/pa/parse-dg2` | DG2 → 얼굴 이미지 추출 |
+| 5 | `POST` | `/api/pa/parse-mrz-text` | MRZ 텍스트 파싱 |
+| 6 | `GET` | `/api/pa/history` | 검증 이력 조회 |
+| 7 | `GET` | `/api/pa/{id}` | 검증 상세 조회 |
+| 8 | `GET` | `/api/pa/{id}/datagroups` | Data Groups 상세 조회 |
+| 9 | `GET` | `/api/pa/statistics` | 검증 통계 |
+| 10 | `GET` | `/api/health` | 서비스 헬스 체크 |
+| 11 | `GET` | `/api/health/database` | DB 연결 상태 |
+| 12 | `GET` | `/api/health/ldap` | LDAP 연결 상태 |
 
-전자여권의 SOD와 Data Groups를 검증합니다.
+---
+
+## 1. PA 검증 (Passive Authentication)
+
+전자여권의 SOD와 Data Groups를 검증합니다. **8단계 검증 프로세스**를 수행하며, 검증 중 발견된 DSC(Document Signer Certificate)를 자동으로 Local PKD에 등록합니다.
 
 **Endpoint**: `POST /api/pa/verify`
 
-#### Request
+### 검증 프로세스 (8단계)
+
+| Step | Name | Description |
+|------|------|-------------|
+| 1 | SOD Parse | SOD에서 CMS 구조, 해시 알고리즘, DG 해시 추출 |
+| 2 | DSC Extract | SOD의 SignedData에서 DSC 인증서 추출 |
+| 3 | Trust Chain | DSC → CSCA 신뢰 체인 검증 (공개키 서명 검증) |
+| 4 | CSCA Lookup | LDAP에서 CSCA 인증서 검색 (Link Certificate 포함) |
+| 5 | SOD Signature | SOD 서명 유효성 검증 |
+| 6 | DG Hash | Data Group 해시값 검증 (SOD 내 기대값과 비교) |
+| 7 | CRL Check | DSC 인증서 폐지 여부 확인 |
+| 8 | DSC Auto-Registration | 신규 DSC를 Local PKD에 자동 등록 (`source_type='PA_EXTRACTED'`) |
+
+### Request
 
 ```json
 {
@@ -43,130 +73,130 @@ http://<server-host>:8080/api/pa
     "2": "<Base64 encoded DG2>",
     "14": "<Base64 encoded DG14 (optional)>"
   },
-  "issuingCountry": "KOR",
-  "documentNumber": "M12345678",
-  "requestedBy": "external-client-id"
+  "issuingCountry": "KR",
+  "documentNumber": "M12345678"
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| sod | string | ✅ | Base64 인코딩된 SOD (Security Object Document) |
-| dataGroups | object | ✅ | DG 번호를 키로, Base64 인코딩된 데이터를 값으로 하는 객체 |
-| issuingCountry | string | ❌ | 3자리 국가 코드 (SOD에서 자동 추출) |
-| documentNumber | string | ❌ | 여권 번호 (DG1에서 자동 추출) |
-| requestedBy | string | ❌ | 요청자 식별자 (로깅 목적) |
+| sod | string | **필수** | Base64 인코딩된 SOD (Security Object Document) |
+| dataGroups | object | **필수** | DG 번호를 키로, Base64 인코딩된 데이터를 값으로 하는 객체 |
+| issuingCountry | string | 선택 | 국가 코드 (SOD DSC에서 자동 추출 가능) |
+| documentNumber | string | 선택 | 여권 번호 (DG1 MRZ에서 자동 추출 가능) |
 
-#### Response (Success)
+> **dataGroups 형식**: 키는 `"1"`, `"2"`, `"14"` (숫자 문자열) 또는 `"DG1"`, `"DG2"`, `"DG14"` 형식 모두 지원됩니다. 배열 형식 `[{"number":"DG1","data":"..."}]`도 지원됩니다.
+
+### Response (Success - VALID)
 
 ```json
 {
-  "status": "VALID",
-  "verificationId": "550e8400-e29b-41d4-a716-446655440000",
-  "processingDurationMs": 245,
-  "issuingCountry": "KOR",
-  "documentNumber": "M12345678",
-
-  "certificateChainValidation": {
-    "valid": true,
-    "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Document Signer KR 01",
-    "dscSerialNumber": "1A2B3C4D5E6F",
-    "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
-    "cscaFingerprint": "SHA256:ABCD1234...",
-    "notBefore": "2024-01-01T00:00:00Z",
-    "notAfter": "2029-12-31T23:59:59Z",
-    "crlStatus": "NOT_REVOKED",
-    "dscExpired": false,
-    "cscaExpired": false,
-    "validAtSigningTime": true,
-    "expirationStatus": "VALID",
-    "expirationMessage": ""
-  },
-
-  "sodSignatureValidation": {
-    "valid": true,
-    "hashAlgorithm": "SHA-256",
-    "signatureAlgorithm": "SHA256withRSA"
-  },
-
-  "dataGroupValidation": {
-    "valid": true,
-    "totalGroups": 3,
-    "validGroups": 3,
-    "invalidGroups": 0,
-    "details": {
-      "DG1": { "valid": true, "expectedHash": "abc123...", "actualHash": "abc123..." },
-      "DG2": { "valid": true, "expectedHash": "def456...", "actualHash": "def456..." },
-      "DG14": { "valid": true, "expectedHash": "ghi789...", "actualHash": "ghi789..." }
-    }
-  },
-
-  "mrzData": {
-    "documentType": "P",
-    "issuingCountry": "KOR",
-    "surname": "KIM",
-    "givenNames": "MINHO",
+  "success": true,
+  "data": {
+    "verificationId": "550e8400-e29b-41d4-a716-446655440000",
+    "status": "VALID",
+    "verificationTimestamp": "2026-02-13T10:30:00",
+    "processingDurationMs": 245,
+    "issuingCountry": "KR",
     "documentNumber": "M12345678",
-    "nationality": "KOR",
-    "dateOfBirth": "1990-05-15",
-    "sex": "M",
-    "dateOfExpiry": "2030-05-14"
-  },
 
-  "faceImage": {
-    "format": "JPEG",
-    "width": 480,
-    "height": 640,
-    "dataUrl": "data:image/jpeg;base64,/9j/4AAQ..."
-  },
+    "certificateChainValidation": {
+      "valid": true,
+      "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Document Signer KR 01",
+      "dscSerialNumber": "1A2B3C4D5E6F",
+      "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=Country Signing CA KR",
+      "cscaFingerprint": "SHA256:ABCD1234...",
+      "countryCode": "KR",
+      "notBefore": "2024-01-01T00:00:00Z",
+      "notAfter": "2029-12-31T23:59:59Z",
+      "crlStatus": "NOT_REVOKED",
+      "dscExpired": false,
+      "cscaExpired": false,
+      "validAtSigningTime": true,
+      "expirationStatus": "VALID",
+      "expirationMessage": ""
+    },
 
-  "errors": []
+    "sodSignatureValidation": {
+      "valid": true,
+      "hashAlgorithm": "SHA-256",
+      "signatureAlgorithm": "SHA256withRSA",
+      "algorithm": "SHA256withRSA"
+    },
+
+    "dataGroupValidation": {
+      "totalGroups": 2,
+      "validGroups": 2,
+      "invalidGroups": 0,
+      "details": {
+        "DG1": { "valid": true, "expectedHash": "abc123...", "actualHash": "abc123..." },
+        "DG2": { "valid": true, "expectedHash": "def456...", "actualHash": "def456..." }
+      }
+    },
+
+    "dscAutoRegistration": {
+      "registered": true,
+      "newlyRegistered": false,
+      "certificateId": "660e8400-e29b-41d4-a716-446655440099",
+      "fingerprint": "a1b2c3d4e5f6...(SHA256 hex 64 chars)",
+      "countryCode": "KR"
+    }
+  }
 }
 ```
 
-#### Response (Failure)
+### Response (Failure - INVALID)
 
 ```json
 {
-  "status": "INVALID",
-  "verificationId": "550e8400-e29b-41d4-a716-446655440001",
-  "processingDurationMs": 156,
-  "issuingCountry": "KOR",
+  "success": true,
+  "data": {
+    "verificationId": "550e8400-e29b-41d4-a716-446655440001",
+    "status": "INVALID",
+    "verificationTimestamp": "2026-02-13T10:31:00",
+    "processingDurationMs": 156,
+    "issuingCountry": "KR",
+    "documentNumber": "M12345678",
 
-  "certificateChainValidation": {
-    "valid": false,
-    "message": "CSCA certificate not found for issuer",
-    "dscExpired": false,
-    "cscaExpired": false,
-    "validAtSigningTime": false,
-    "expirationStatus": "VALID",
-    "expirationMessage": ""
-  },
+    "certificateChainValidation": {
+      "valid": false,
+      "message": "CSCA certificate not found for issuer",
+      "dscExpired": false,
+      "cscaExpired": false,
+      "validAtSigningTime": false,
+      "expirationStatus": "VALID",
+      "expirationMessage": ""
+    },
 
-  "sodSignatureValidation": {
-    "valid": true,
-    "hashAlgorithm": "SHA-256",
-    "signatureAlgorithm": "SHA256withRSA"
-  },
+    "sodSignatureValidation": {
+      "valid": true,
+      "hashAlgorithm": "SHA-256",
+      "signatureAlgorithm": "SHA256withRSA"
+    },
 
-  "dataGroupValidation": {
-    "valid": true,
-    "totalGroups": 2,
-    "validGroups": 2,
-    "invalidGroups": 0
-  },
-
-  "errors": [
-    {
-      "code": "CSCA_NOT_FOUND",
-      "message": "CSCA certificate not found for issuing country KOR",
-      "severity": "CRITICAL"
+    "dataGroupValidation": {
+      "totalGroups": 2,
+      "validGroups": 2,
+      "invalidGroups": 0,
+      "details": {
+        "DG1": { "valid": true, "expectedHash": "abc123...", "actualHash": "abc123..." },
+        "DG2": { "valid": true, "expectedHash": "def456...", "actualHash": "def456..." }
+      }
     }
-  ]
+  }
 }
 ```
 
-#### Certificate Chain Validation Fields
+### Response (Error - SOD 파싱 실패 등)
+
+```json
+{
+  "success": false,
+  "error": "SOD parsing failed: Invalid CMS structure"
+}
+```
+
+### Certificate Chain Validation Fields
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -175,41 +205,39 @@ http://<server-host>:8080/api/pa
 | dscSerialNumber | string | DSC 인증서 시리얼 번호 |
 | cscaSubject | string | CSCA 인증서 Subject DN |
 | cscaFingerprint | string | CSCA 인증서 SHA256 지문 |
+| countryCode | string | DSC에서 추출한 국가 코드 |
 | notBefore | string | DSC 인증서 유효 시작일 |
 | notAfter | string | DSC 인증서 유효 종료일 |
-| crlStatus | string | CRL 상태 (NOT_REVOKED, REVOKED, UNKNOWN) |
-| **dscExpired** | boolean | DSC 인증서 만료 여부 (v1.2.0+) |
-| **cscaExpired** | boolean | CSCA 인증서 만료 여부 (v1.2.0+) |
-| **validAtSigningTime** | boolean | 여권 서명 당시 인증서 유효 여부 (v1.2.0+) |
-| **expirationStatus** | string | 만료 상태: VALID, WARNING, EXPIRED (v1.2.0+) |
-| **expirationMessage** | string | 만료 상태 설명 메시지 (v1.2.0+) |
+| crlStatus | string | CRL 상태: `NOT_REVOKED`, `REVOKED`, `UNKNOWN` |
+| dscExpired | boolean | DSC 인증서 만료 여부 |
+| cscaExpired | boolean | CSCA 인증서 만료 여부 |
+| validAtSigningTime | boolean | 여권 서명 당시 인증서 유효 여부 (Point-in-Time Validation) |
+| expirationStatus | string | 만료 상태: `VALID`, `WARNING`, `EXPIRED` |
+| expirationMessage | string | 만료 상태 설명 메시지 |
 
-> **Note (v1.2.0)**: ICAO 9303 표준에 따라 Point-in-Time Validation을 지원합니다. 인증서가 현재 만료되었더라도, 여권 서명 당시에 유효했다면 `validAtSigningTime`이 `true`로 설정됩니다. 이 경우 `expirationStatus`는 `EXPIRED`이지만 검증은 성공(`valid: true`)할 수 있습니다.
+### DSC Auto-Registration Fields (v2.1.0+)
 
-#### Error Codes
+| Field | Type | Description |
+|-------|------|-------------|
+| registered | boolean | DSC 등록 성공 여부 |
+| newlyRegistered | boolean | `true`: 신규 등록, `false`: 이미 존재 |
+| certificateId | string (UUID) | DB 인증서 레코드 ID |
+| fingerprint | string | DSC SHA-256 지문 (hex, 64자) |
+| countryCode | string | DSC 국가 코드 |
 
-| Code | Severity | Description |
-|------|----------|-------------|
-| INVALID_REQUEST | CRITICAL | 잘못된 요청 형식 |
-| MISSING_SOD | CRITICAL | SOD 데이터 누락 |
-| INVALID_SOD | CRITICAL | SOD 파싱 실패 |
-| DSC_EXTRACTION_FAILED | CRITICAL | DSC 인증서 추출 실패 |
-| CSCA_NOT_FOUND | CRITICAL | CSCA 인증서를 찾을 수 없음 |
-| TRUST_CHAIN_INVALID | HIGH | 인증서 신뢰 체인 검증 실패 |
-| SOD_SIGNATURE_INVALID | HIGH | SOD 서명 검증 실패 |
-| DG_HASH_MISMATCH | HIGH | Data Group 해시 불일치 |
-| CERTIFICATE_EXPIRED | MEDIUM | 인증서 유효기간 만료 (현재 시점) |
-| CERTIFICATE_REVOKED | HIGH | 인증서 폐지됨 |
+> **Note**: `dscAutoRegistration` 필드는 DSC 자동 등록이 성공한 경우에만 포함됩니다. 자동 등록은 PA 검증 결과에 영향을 주지 않습니다 (검증이 INVALID여도 DSC 등록은 시도됩니다).
+
+> **Point-in-Time Validation (v1.2.0+)**: ICAO 9303 표준에 따라, 인증서가 현재 만료되었더라도 여권 서명 당시에 유효했다면 `validAtSigningTime`이 `true`로 설정됩니다. 이 경우 `expirationStatus`는 `EXPIRED`이지만 검증은 성공(`valid: true`)할 수 있습니다.
 
 ---
 
-### 2. SOD 파싱
+## 2. SOD 파싱
 
-SOD 메타데이터를 추출합니다.
+SOD 메타데이터를 추출합니다 (검증 없이 파싱만 수행).
 
 **Endpoint**: `POST /api/pa/parse-sod`
 
-#### Request
+### Request
 
 ```json
 {
@@ -217,7 +245,7 @@ SOD 메타데이터를 추출합니다.
 }
 ```
 
-#### Response
+### Response
 
 ```json
 {
@@ -253,13 +281,13 @@ SOD 메타데이터를 추출합니다.
 
 ---
 
-### 3. DG1 파싱 (MRZ)
+## 3. DG1 파싱 (MRZ)
 
 DG1에서 MRZ 정보를 추출합니다.
 
 **Endpoint**: `POST /api/pa/parse-dg1`
 
-#### Request
+### Request
 
 ```json
 {
@@ -267,15 +295,9 @@ DG1에서 MRZ 정보를 추출합니다.
 }
 ```
 
-또는
+> `"dg1Base64"` 키도 지원됩니다.
 
-```json
-{
-  "dg1Base64": "<Base64 encoded DG1>"
-}
-```
-
-#### Response
+### Response
 
 ```json
 {
@@ -302,13 +324,13 @@ DG1에서 MRZ 정보를 추출합니다.
 
 ---
 
-### 4. DG2 파싱 (얼굴 이미지)
+## 4. DG2 파싱 (얼굴 이미지)
 
 DG2에서 얼굴 이미지를 추출합니다.
 
 **Endpoint**: `POST /api/pa/parse-dg2`
 
-#### Request
+### Request
 
 ```json
 {
@@ -316,7 +338,7 @@ DG2에서 얼굴 이미지를 추출합니다.
 }
 ```
 
-#### Response
+### Response
 
 ```json
 {
@@ -330,6 +352,7 @@ DG2에서 얼굴 이미지를 추출합니다.
     {
       "index": 1,
       "imageFormat": "JPEG",
+      "originalFormat": "JPEG2000",
       "imageSize": 12500,
       "imageOffset": 245,
       "width": 480,
@@ -340,91 +363,111 @@ DG2에서 얼굴 이미지를 추출합니다.
 }
 ```
 
+> **JPEG2000 자동 변환 (v2.1.0+)**: 브라우저에서 JPEG2000을 렌더링할 수 없으므로, DG2에 포함된 JPEG2000 이미지는 서버에서 자동으로 JPEG로 변환됩니다. `imageFormat`은 항상 `"JPEG"`이며, 원본이 JPEG2000인 경우 `originalFormat`에 `"JPEG2000"`이 표시됩니다.
+
 ---
 
-### 5. MRZ 텍스트 파싱
+## 5. MRZ 텍스트 파싱
 
 OCR로 읽은 MRZ 텍스트를 파싱합니다.
 
 **Endpoint**: `POST /api/pa/parse-mrz-text`
 
-#### Request
+### Request
 
 ```json
 {
-  "mrzText": "P<KORKIM<<MINHO<<<<<<<<<<<<<<<<<<<<<<<<<<<<M123456784KOR9005151M3005148<<<<<<<<<<<<<<02"
+  "mrz": "P<KORKIM<<MINHO<<<<<<<<<<<<<<<<<<<<<<<<<<<<M123456784KOR9005151M3005148<<<<<<<<<<<<<<02"
 }
 ```
 
-#### Response
+> `"mrzText"` 키도 지원됩니다.
 
-MRZ 파싱 결과 (DG1 파싱과 동일한 형식)
+### Response
+
+DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
-### 6. 검증 이력 조회
+## 6. 검증 이력 조회
 
 **Endpoint**: `GET /api/pa/history`
 
-#### Query Parameters
+### Query Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | page | integer | 0 | 페이지 번호 (0부터 시작) |
 | size | integer | 20 | 페이지 크기 |
-| status | string | - | 상태 필터 (VALID, INVALID, ERROR) |
+| status | string | - | 상태 필터 (`VALID`, `INVALID`) |
 | issuingCountry | string | - | 국가 코드 필터 |
 
-#### Response
+### Response
 
 ```json
 {
-  "content": [
+  "total": 150,
+  "items": [
     {
-      "verificationId": "550e8400-e29b-41d4-a716-446655440000",
-      "issuingCountry": "KOR",
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "verifiedAt": "2026-02-13T10:30:00",
+      "issuingCountry": "KR",
+      "documentType": "P",
       "documentNumber": "M12345678",
       "status": "VALID",
-      "verificationTimestamp": "2026-01-03T10:30:00",
       "processingDurationMs": 245,
-      "certificateChainValidation": {
-        "valid": true,
-        "dscExpired": false,
-        "cscaExpired": false,
-        "validAtSigningTime": true,
-        "expirationStatus": "VALID",
-        "expirationMessage": ""
-      },
-      "sodSignatureValidation": { "valid": true },
-      "dataGroupValidation": { "valid": true }
+      "certificateChainValid": true,
+      "sodSignatureValid": true,
+      "dataGroupsValid": true,
+      "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=DSC KR 01",
+      "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=CSCA KR",
+      "crlStatus": "NOT_REVOKED"
     }
-  ],
-  "page": 0,
-  "size": 20,
-  "totalElements": 150,
-  "totalPages": 8,
-  "first": true,
-  "last": false
+  ]
 }
 ```
 
 ---
 
-### 7. 검증 상세 조회
+## 7. 검증 상세 조회
 
 **Endpoint**: `GET /api/pa/{verificationId}`
 
-#### Response
+### Response
 
-전체 검증 결과 (PA 검증 응답과 동일한 형식)
+검증 레코드의 전체 정보를 반환합니다 (DB에 저장된 모든 필드 포함).
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "documentNumber": "M12345678",
+  "issuingCountry": "KR",
+  "verificationStatus": "VALID",
+  "dscSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=DSC KR 01",
+  "dscSerialNumber": "1A2B3C4D5E6F",
+  "dscExpired": false,
+  "cscaSubject": "/C=KR/O=Ministry of Foreign Affairs/CN=CSCA KR",
+  "cscaSerialNumber": "AABB1122",
+  "cscaExpired": false,
+  "certificateChainValid": true,
+  "sodSignatureValid": true,
+  "dataGroupsValid": true,
+  "crlChecked": true,
+  "revoked": false,
+  "crlStatus": "NOT_REVOKED",
+  "expirationStatus": "VALID",
+  "sodHash": "a1b2c3d4...",
+  "createdAt": "2026-02-13T10:30:00"
+}
+```
 
 ---
 
-### 8. Data Groups 조회
+## 8. Data Groups 상세 조회
 
 **Endpoint**: `GET /api/pa/{verificationId}/datagroups`
 
-#### Response
+### Response
 
 ```json
 {
@@ -458,84 +501,76 @@ MRZ 파싱 결과 (DG1 파싱과 동일한 형식)
 }
 ```
 
+> **Note**: DG2 얼굴 이미지는 JPEG2000인 경우 자동으로 JPEG로 변환되어 반환됩니다.
+
 ---
 
-### 9. 통계 조회
+## 9. 검증 통계
 
 **Endpoint**: `GET /api/pa/statistics`
 
-#### Response
+### Response
 
 ```json
 {
   "totalVerifications": 1500,
-  "validCount": 1350,
-  "invalidCount": 120,
-  "errorCount": 30,
-  "averageProcessingTimeMs": 189,
-  "countriesVerified": 45
+  "successRate": 90.0,
+  "byCountry": [
+    { "country": "KR", "count": 500 },
+    { "country": "JP", "count": 300 },
+    { "country": "US", "count": 200 }
+  ],
+  "byStatus": {
+    "VALID": 1350,
+    "INVALID": 150
+  }
 }
 ```
 
 ---
 
-### 10. 헬스 체크
+## 10. 헬스 체크
+
+### 서비스 상태
 
 **Endpoint**: `GET /api/health`
-
-#### Response
 
 ```json
 {
   "service": "pa-service",
   "status": "UP",
-  "version": "2.0.0",
-  "timestamp": "2026-01-03T10:30:00Z"
+  "version": "2.1.1",
+  "timestamp": "2026-02-13T10:30:00Z"
+}
+```
+
+### 데이터베이스 상태
+
+**Endpoint**: `GET /api/health/database`
+
+```json
+{
+  "status": "UP",
+  "database": "PostgreSQL 15.x",
+  "responseTimeMs": 5
+}
+```
+
+### LDAP 상태
+
+**Endpoint**: `GET /api/health/ldap`
+
+```json
+{
+  "status": "UP",
+  "host": "openldap1:389",
+  "responseTimeMs": 3
 }
 ```
 
 ---
 
 ## Integration Examples
-
-### Java (Spring RestTemplate)
-
-```java
-import org.springframework.web.client.RestTemplate;
-import org.springframework.http.*;
-
-public class PAServiceClient {
-    private final RestTemplate restTemplate = new RestTemplate();
-    private final String baseUrl = "http://localhost:8080/api";  // API Gateway
-
-    public PAVerifyResponse verify(byte[] sod, Map<Integer, byte[]> dataGroups) {
-        // Build request
-        Map<String, Object> request = new HashMap<>();
-        request.put("sod", Base64.getEncoder().encodeToString(sod));
-
-        Map<String, String> dgMap = new HashMap<>();
-        dataGroups.forEach((num, data) ->
-            dgMap.put(String.valueOf(num), Base64.getEncoder().encodeToString(data))
-        );
-        request.put("dataGroups", dgMap);
-
-        // Send request
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
-
-        ResponseEntity<PAVerifyResponse> response = restTemplate.exchange(
-            baseUrl + "/pa/verify",
-            HttpMethod.POST,
-            entity,
-            PAVerifyResponse.class
-        );
-
-        return response.getBody();
-    }
-}
-```
 
 ### Python (requests)
 
@@ -544,16 +579,18 @@ import requests
 import base64
 
 class PAServiceClient:
-    def __init__(self, base_url="http://localhost:8080/api"):  # API Gateway
+    def __init__(self, base_url="http://localhost:8080/api"):
         self.base_url = base_url
 
     def verify(self, sod: bytes, data_groups: dict) -> dict:
         """
-        Perform PA verification
+        Perform PA verification.
 
         Args:
             sod: Raw SOD bytes
-            data_groups: Dict mapping DG number to raw bytes
+            data_groups: Dict mapping DG number (int) to raw bytes
+        Returns:
+            dict: {"success": true, "data": {"status": "VALID"|"INVALID", ...}}
         """
         request = {
             "sod": base64.b64encode(sod).decode('utf-8'),
@@ -573,7 +610,7 @@ class PAServiceClient:
         return response.json()
 
     def parse_sod(self, sod: bytes) -> dict:
-        """Parse SOD metadata"""
+        """Parse SOD metadata."""
         response = requests.post(
             f"{self.base_url}/pa/parse-sod",
             json={"sod": base64.b64encode(sod).decode('utf-8')}
@@ -581,7 +618,7 @@ class PAServiceClient:
         return response.json()
 
     def parse_dg1(self, dg1: bytes) -> dict:
-        """Parse MRZ from DG1"""
+        """Parse MRZ from DG1."""
         response = requests.post(
             f"{self.base_url}/pa/parse-dg1",
             json={"dg1": base64.b64encode(dg1).decode('utf-8')}
@@ -589,11 +626,26 @@ class PAServiceClient:
         return response.json()
 
     def parse_dg2(self, dg2: bytes) -> dict:
-        """Extract face image from DG2"""
+        """Extract face image from DG2 (JPEG2000 auto-converted to JPEG)."""
         response = requests.post(
             f"{self.base_url}/pa/parse-dg2",
             json={"dg2": base64.b64encode(dg2).decode('utf-8')}
         )
+        return response.json()
+
+    def get_history(self, page=0, size=20, status=None, country=None) -> dict:
+        """Get verification history."""
+        params = {"page": page, "size": size}
+        if status:
+            params["status"] = status
+        if country:
+            params["issuingCountry"] = country
+        response = requests.get(f"{self.base_url}/pa/history", params=params)
+        return response.json()
+
+    def get_statistics(self) -> dict:
+        """Get verification statistics."""
+        response = requests.get(f"{self.base_url}/pa/statistics")
         return response.json()
 
 
@@ -609,13 +661,57 @@ if __name__ == "__main__":
     # Verify
     result = client.verify(sod, {1: dg1, 2: dg2})
 
-    if result["status"] == "VALID":
+    if result["success"] and result["data"]["status"] == "VALID":
         print("Passport verification successful!")
-        print(f"Holder: {result['mrzData']['fullName']}")
+        data = result["data"]
+        print(f"Country: {data['issuingCountry']}")
+        print(f"Document: {data['documentNumber']}")
+
+        # Check DSC auto-registration
+        if "dscAutoRegistration" in data:
+            reg = data["dscAutoRegistration"]
+            if reg["newlyRegistered"]:
+                print(f"New DSC registered: {reg['fingerprint'][:16]}...")
     else:
         print("Verification failed!")
-        for error in result["errors"]:
-            print(f"  - {error['code']}: {error['message']}")
+        print(f"Error: {result.get('error', 'INVALID status')}")
+```
+
+### Java (Spring RestTemplate)
+
+```java
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.*;
+
+public class PAServiceClient {
+    private final RestTemplate restTemplate = new RestTemplate();
+    private final String baseUrl = "http://localhost:8080/api";
+
+    public Map<String, Object> verify(byte[] sod, Map<Integer, byte[]> dataGroups) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("sod", Base64.getEncoder().encodeToString(sod));
+
+        Map<String, String> dgMap = new HashMap<>();
+        dataGroups.forEach((num, data) ->
+            dgMap.put(String.valueOf(num), Base64.getEncoder().encodeToString(data))
+        );
+        request.put("dataGroups", dgMap);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+            baseUrl + "/pa/verify",
+            HttpMethod.POST,
+            entity,
+            Map.class
+        );
+
+        return response.getBody();
+    }
+}
 ```
 
 ### C# (.NET)
@@ -628,13 +724,13 @@ public class PAServiceClient
     private readonly HttpClient _client;
     private readonly string _baseUrl;
 
-    public PAServiceClient(string baseUrl = "http://localhost:8080/api")  // API Gateway
+    public PAServiceClient(string baseUrl = "http://localhost:8080/api")
     {
         _client = new HttpClient();
         _baseUrl = baseUrl;
     }
 
-    public async Task<PAVerifyResponse> VerifyAsync(
+    public async Task<JsonElement> VerifyAsync(
         byte[] sod,
         Dictionary<int, byte[]> dataGroups)
     {
@@ -653,38 +749,84 @@ public class PAServiceClient
         );
 
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<PAVerifyResponse>();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 }
+```
+
+### curl
+
+```bash
+# PA Verify
+curl -X POST http://localhost:8080/api/pa/verify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sod": "'$(base64 -w0 sod.bin)'",
+    "dataGroups": {
+      "1": "'$(base64 -w0 dg1.bin)'",
+      "2": "'$(base64 -w0 dg2.bin)'"
+    }
+  }' | jq .
+
+# Parse SOD only
+curl -X POST http://localhost:8080/api/pa/parse-sod \
+  -H "Content-Type: application/json" \
+  -d '{"sod": "'$(base64 -w0 sod.bin)'"}' | jq .
+
+# Get verification history
+curl http://localhost:8080/api/pa/history?page=0&size=10 | jq .
+
+# Get statistics
+curl http://localhost:8080/api/pa/statistics | jq .
+
+# Health check
+curl http://localhost:8080/api/health | jq .
 ```
 
 ---
 
 ## Data Group Reference
 
-| DG | Name | Content | Required |
-|----|------|---------|----------|
-| DG1 | MRZ | Machine Readable Zone | ✅ |
-| DG2 | Face | Facial biometric image | ✅ |
-| DG3 | Finger | Fingerprint biometrics | ❌ |
-| DG4 | Iris | Iris biometrics | ❌ |
-| DG5-10 | Optional | Additional data | ❌ |
-| DG11 | Personal Details | Additional personal info | ❌ |
-| DG12 | Document Details | Additional document info | ❌ |
-| DG13 | Optional Details | Reserved | ❌ |
-| DG14 | Security Options | Active Auth public key | ❌ |
-| DG15 | AA Public Key | Active Authentication | ❌ |
-| DG16 | Persons to Notify | Emergency contacts | ❌ |
+| DG | Name | Content | Required for PA |
+|----|------|---------|-----------------|
+| DG1 | MRZ | Machine Readable Zone | **권장** |
+| DG2 | Face | Facial biometric image (JPEG/JPEG2000) | **권장** |
+| DG3 | Finger | Fingerprint biometrics | 선택 |
+| DG4 | Iris | Iris biometrics | 선택 |
+| DG5-10 | Optional | Additional data | 선택 |
+| DG11 | Personal Details | Additional personal info | 선택 |
+| DG12 | Document Details | Additional document info | 선택 |
+| DG13 | Optional Details | Reserved | 선택 |
+| DG14 | Security Options | Active Auth / PACE info | 선택 |
+| DG15 | AA Public Key | Active Authentication | 선택 |
+| DG16 | Persons to Notify | Emergency contacts | 선택 |
+
+> PA 검증에 필요한 최소 데이터는 **SOD + 1개 이상의 DG**입니다. DG1(MRZ)과 DG2(얼굴 이미지)를 포함하면 여권 정보와 얼굴 이미지를 함께 확인할 수 있습니다.
+
+---
+
+## Error Codes
+
+| Code | Severity | Description |
+|------|----------|-------------|
+| INVALID_REQUEST | CRITICAL | 잘못된 요청 형식 |
+| MISSING_SOD | CRITICAL | SOD 데이터 누락 |
+| INVALID_SOD | CRITICAL | SOD 파싱 실패 (CMS 구조 오류) |
+| DSC_EXTRACTION_FAILED | CRITICAL | SOD에서 DSC 인증서 추출 실패 |
+| CSCA_NOT_FOUND | CRITICAL | LDAP에서 CSCA 인증서를 찾을 수 없음 |
+| TRUST_CHAIN_INVALID | HIGH | DSC → CSCA 신뢰 체인 검증 실패 |
+| SOD_SIGNATURE_INVALID | HIGH | SOD 서명 검증 실패 |
+| DG_HASH_MISMATCH | HIGH | Data Group 해시 불일치 |
+| CERTIFICATE_EXPIRED | MEDIUM | 인증서 유효기간 만료 (현재 시점) |
+| CERTIFICATE_REVOKED | HIGH | 인증서 CRL에 의해 폐지됨 |
 
 ---
 
 ## OpenAPI Specification
 
-전체 OpenAPI 3.0 스펙은 다음에서 확인할 수 있습니다:
-- Swagger UI: `http://localhost:8080/api/pa/docs`
-- OpenAPI YAML: `http://localhost:8080/api/pa/openapi.yaml`
-
-> **Note**: API Gateway를 통해 접근합니다.
+전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:
+- **Swagger UI**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.1`
+- **OpenAPI YAML**: `http://<server-host>:8080/api/docs/pa-service.yaml`
 
 ---
 
@@ -694,37 +836,53 @@ public class PAServiceClient
 
 **1. CSCA_NOT_FOUND**
 - 원인: 해당 국가의 CSCA 인증서가 Local PKD에 등록되지 않음
-- 해결: PKD Management 서비스에서 해당 국가의 Master List 업로드
+- 해결: PKD Management 서비스에서 해당 국가의 Master List 또는 LDIF 업로드
 
 **2. TRUST_CHAIN_INVALID**
 - 원인: DSC → CSCA 신뢰 체인 검증 실패
-- 해결: CSCA 인증서 유효성 확인, CRL 업데이트
+- 해결: CSCA 인증서 유효성 확인, Link Certificate 여부 확인, CRL 업데이트
 
 **3. DG_HASH_MISMATCH**
 - 원인: Data Group 데이터가 SOD의 해시값과 불일치
-- 해결: 여권 판독 시 데이터 무결성 확인
+- 해결: 여권 판독 시 데이터 무결성 확인 (NFC 통신 오류 가능성)
 
 **4. Invalid Base64 encoding**
 - 원인: 잘못된 Base64 인코딩
-- 해결: 표준 Base64 인코딩 확인 (URL-safe가 아닌 standard Base64)
+- 해결: Standard Base64 인코딩 사용 (URL-safe Base64가 아닌 RFC 4648 표준)
+
+**5. JPEG2000 이미지가 표시되지 않음**
+- 원인: DG2 파싱 시 JPEG2000 → JPEG 변환 미지원 빌드
+- 해결: pa-service가 OpenJPEG(`libopenjp2-dev`) + libjpeg(`libjpeg-dev`)와 함께 빌드되었는지 확인
 
 ---
 
 ## Changelog
 
+### v2.1.1 (2026-02-12)
+
+**DSC Auto-Registration from PA Verification**:
+- PA 검증 시 SOD에서 추출한 DSC를 자동으로 Local PKD의 certificate 테이블에 등록
+- `source_type='PA_EXTRACTED'` 로 등록 출처 추적
+- SHA-256 fingerprint 기반 중복 검사 (이미 등록된 DSC 재등록 방지)
+- X.509 메타데이터 전체 추출 (signature_algorithm, public_key_algorithm, public_key_size, is_self_signed 등)
+- 응답에 `dscAutoRegistration` 필드 추가
+- `stored_in_ldap=false`로 등록되며, PKD Relay reconciliation을 통해 LDAP에 동기화
+
+**DG2 JPEG2000 → JPEG 자동 변환**:
+- 브라우저에서 JPEG2000을 렌더링할 수 없으므로 서버에서 자동 변환
+- OpenJPEG + libjpeg 사용 (빌드 시 `HAS_OPENJPEG` 매크로로 조건부 활성화)
+- 원본 형식은 `originalFormat` 필드에 보존
+
+**기타 개선**:
+- 검증 결과에 `verificationTimestamp`, `processingDurationMs` 필드 추가
+- SOD 바이너리 저장 및 SHA-256 해시 계산
+- Oracle 호환성: `LIMIT` → `FETCH FIRST`, `NOW()` → `SYSTIMESTAMP`
+
 ### v1.2.0 (2026-01-06)
 
 **Certificate Expiration Handling**:
-- `certificateChainValidation` 응답에 인증서 만료 필드 추가:
-  - `dscExpired`: DSC 인증서 만료 여부
-  - `cscaExpired`: CSCA 인증서 만료 여부
-  - `validAtSigningTime`: 서명 당시 인증서 유효 여부 (Point-in-Time Validation)
-  - `expirationStatus`: 만료 상태 (`VALID`, `WARNING`, `EXPIRED`)
-  - `expirationMessage`: 만료 상태 설명 메시지
-
-- ICAO 9303 Point-in-Time Validation 지원:
-  - 인증서가 현재 만료되었더라도 여권 서명 당시 유효했다면 검증 성공 가능
-  - `validAtSigningTime: true`로 서명 당시 유효성 표시
+- `certificateChainValidation` 응답에 인증서 만료 필드 추가
+- ICAO 9303 Point-in-Time Validation 지원
 
 ### v1.1.0 (2026-01-03)
 

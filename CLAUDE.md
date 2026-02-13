@@ -622,27 +622,30 @@ scripts/
 
 ## Documentation Index
 
-### Architecture & Design
-- [DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) - Complete development guide
-- [REPOSITORY_PATTERN_IMPLEMENTATION_SUMMARY.md](docs/REPOSITORY_PATTERN_IMPLEMENTATION_SUMMARY.md) - Architecture overview
-- [MASTER_LIST_PROCESSING_GUIDE.md](docs/MASTER_LIST_PROCESSING_GUIDE.md) - Master List format & processing
+### Guides
+- [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md) - Development guide (credentials, workflow, troubleshooting)
+- [docs/PA_API_GUIDE.md](docs/PA_API_GUIDE.md) - PA Service API guide (v2.1.1)
+- [docs/CERTIFICATE_SEARCH_QUICKSTART.md](docs/CERTIFICATE_SEARCH_QUICKSTART.md) - Certificate search guide
+- [docs/LDAP_QUERY_GUIDE.md](docs/LDAP_QUERY_GUIDE.md) - LDAP operations guide
 
-### Oracle Migration
-- [ORACLE_AUTHENTICATION_COMPLETION.md](docs/ORACLE_AUTHENTICATION_COMPLETION.md) - Oracle auth implementation
-- [PHASE_4.6_PERFORMANCE_COMPARISON_COMPLETION.md](docs/PHASE_4.6_PERFORMANCE_COMPARISON_COMPLETION.md) - PostgreSQL vs Oracle benchmarks
+### Architecture
+- [docs/SOFTWARE_ARCHITECTURE.md](docs/SOFTWARE_ARCHITECTURE.md) - System architecture
+- [docs/ARCHITECTURE_DESIGN_PRINCIPLES.md](docs/ARCHITECTURE_DESIGN_PRINCIPLES.md) - Design principles
+- [docs/MASTER_LIST_PROCESSING_GUIDE.md](docs/MASTER_LIST_PROCESSING_GUIDE.md) - Master List format & processing
 
-### Service Refactoring
-- [PA_SERVICE_REFACTORING_PROGRESS.md](docs/PA_SERVICE_REFACTORING_PROGRESS.md) - PA Service architecture
-- [PKD_RELAY_REPOSITORY_PATTERN_COMPLETION.md](docs/PKD_RELAY_REPOSITORY_PATTERN_COMPLETION.md) - PKD Relay refactoring
+### Deployment & Build
+- [docs/DEPLOYMENT_PROCESS.md](docs/DEPLOYMENT_PROCESS.md) - CI/CD pipeline
+- [docs/LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md) - ARM64 deployment guide
+- [docs/BUILD_SOP.md](docs/BUILD_SOP.md) - Build verification procedures
+- [docs/DOCKER_BUILD_CACHE.md](docs/DOCKER_BUILD_CACHE.md) - Build cache troubleshooting
 
-### Phase Reports
-- [PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md](docs/PHASE_3_API_ROUTE_INTEGRATION_COMPLETION.md) - API migration
-- [PHASE_5.2_PKD_RELAY_UUID_MIGRATION_COMPLETION.md](docs/PHASE_5.2_PKD_RELAY_UUID_MIGRATION_COMPLETION.md) - UUID migration
-- [PHASE_5.2_PKD_RELAY_ORACLE_COMPLETION.md](docs/PHASE_5.2_PKD_RELAY_ORACLE_COMPLETION.md) - Oracle support
+### API Specifications
+- [docs/openapi/pkd-management.yaml](docs/openapi/pkd-management.yaml) - PKD Management OpenAPI
+- [docs/openapi/pa-service.yaml](docs/openapi/pa-service.yaml) - PA Service OpenAPI
+- [docs/openapi/pkd-relay.yaml](docs/openapi/pkd-relay.yaml) - PKD Relay OpenAPI
 
-### Deployment
-- [LUCKFOX_DEPLOYMENT.md](docs/LUCKFOX_DEPLOYMENT.md) - ARM64 deployment guide
-- [DOCKER_BUILD_CACHE.md](docs/DOCKER_BUILD_CACHE.md) - Build cache troubleshooting
+### Archive
+- [docs/archive/](docs/archive/) - 100+ historical phase/completion/plan documents
 
 ---
 
