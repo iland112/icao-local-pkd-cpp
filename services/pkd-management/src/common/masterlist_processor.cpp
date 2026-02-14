@@ -21,6 +21,7 @@ struct CertificateMetadata {
     std::string notBefore;
     std::string notAfter;
     std::vector<uint8_t> derData;
+    bool isSelfSigned;              // X509_NAME_cmp() based (case-insensitive, RFC 5280)
 };
 
 static CertificateMetadata extractCertificateMetadata(X509* cert) {
@@ -35,6 +36,10 @@ static CertificateMetadata extractCertificateMetadata(X509* cert) {
     char issuerBuf[512];
     X509_NAME_oneline(X509_get_issuer_name(cert), issuerBuf, sizeof(issuerBuf));
     meta.issuerDn = issuerBuf;
+
+    // RFC 5280: DN comparison is case-insensitive (use X509_NAME_cmp, not string compare)
+    meta.isSelfSigned = (X509_NAME_cmp(X509_get_subject_name(cert),
+                                        X509_get_issuer_name(cert)) == 0);
 
     // Extract Serial Number (hex)
     ASN1_INTEGER* serial = X509_get_serialNumber(cert);
@@ -375,8 +380,8 @@ bool parseMasterListEntryV2(
                 }
             }
 
-            // Determine if link certificate
-            bool isLinkCertificate = (meta.subjectDn != meta.issuerDn);
+            // Determine if link certificate (RFC 5280: case-insensitive DN comparison)
+            bool isLinkCertificate = !meta.isSelfSigned;
             std::string certType = "CSCA";
             std::string ldapCertType = isLinkCertificate ? "LC" : "CSCA";
 
@@ -752,8 +757,8 @@ bool processMasterListFile(
                 }
             }
 
-            // Determine if link certificate
-            bool isLinkCertificate = (meta.subjectDn != meta.issuerDn);
+            // Determine if link certificate (RFC 5280: case-insensitive DN comparison)
+            bool isLinkCertificate = !meta.isSelfSigned;
             std::string certType = "CSCA";
             std::string ldapCertType = isLinkCertificate ? "LC" : "CSCA";
 

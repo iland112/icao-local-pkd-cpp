@@ -75,7 +75,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
         // Phase 6.4: Use database-specific boolean literal for stored_in_ldap filter
         std::string query =
             "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
-            "fingerprint_sha256, certificate_data "
+            "fingerprint_sha256, certificate_data, is_self_signed "
             "FROM certificate "
             "WHERE certificate_type = $1 AND stored_in_ldap = " + boolLiteral(false) + " "
             "ORDER BY id "
@@ -125,10 +125,20 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
             cert.issuer = row["issuer_dn"].asString();
             cert.fingerprint = row["fingerprint_sha256"].asString();
 
-            // v2.2.2 FIX: Detect link certificates (subject != issuer)
-            if (cert.certType == "CSCA" && cert.subject != cert.issuer) {
-                cert.certType = "LC";
-                spdlog::debug("Detected link certificate: {} (subject != issuer)", cert.id);
+            // v2.2.2 FIX: Detect link certificates using DB is_self_signed field
+            // (set by X509_NAME_cmp which is case-insensitive per RFC 5280)
+            if (cert.certType == "CSCA") {
+                bool isSelfSigned = row.get("is_self_signed", true).asBool();
+                // Oracle returns "1"/"0" as string
+                if (row["is_self_signed"].isString()) {
+                    isSelfSigned = (row["is_self_signed"].asString() == "1" ||
+                                    row["is_self_signed"].asString() == "true" ||
+                                    row["is_self_signed"].asString() == "TRUE");
+                }
+                if (!isSelfSigned) {
+                    cert.certType = "LC";
+                    spdlog::debug("Detected link certificate: {} (is_self_signed=false)", cert.id);
+                }
             }
 
             // Build DN with fingerprint

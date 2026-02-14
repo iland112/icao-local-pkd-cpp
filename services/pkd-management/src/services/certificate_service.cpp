@@ -581,7 +581,15 @@ ExportResult exportAllCertificatesFromDb(
 
                 // Determine folder path based on cert type
                 // CSCA with is_self_signed=false → link certificate (o=lc in LDAP)
-                bool isSelfSigned = row.get("is_self_signed", true).asBool();
+                bool isSelfSigned = true;
+                if (row["is_self_signed"].isString()) {
+                    // Oracle returns NUMBER(1) as string "1"/"0"
+                    isSelfSigned = (row["is_self_signed"].asString() == "1" ||
+                                    row["is_self_signed"].asString() == "true" ||
+                                    row["is_self_signed"].asString() == "TRUE");
+                } else {
+                    isSelfSigned = row.get("is_self_signed", true).asBool();
+                }
                 std::string folder;
                 if (certType == "DSC_NC") {
                     folder = "nc-data/" + country + "/dsc/";
