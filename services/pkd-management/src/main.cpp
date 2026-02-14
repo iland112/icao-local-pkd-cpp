@@ -7702,7 +7702,7 @@ int main(int argc, char* argv[]) {
         // Initialize Repositories with Query Executor (v2.5.0 Phase 3: Database-agnostic)
         uploadRepository = std::make_shared<repositories::UploadRepository>(queryExecutor.get());
         certificateRepository = std::make_shared<repositories::CertificateRepository>(queryExecutor.get());
-        validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get());
+        validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get(), ldapPool, appConfig.ldapBaseDn);
         auditRepository = std::make_shared<repositories::AuditRepository>(queryExecutor.get());
         statisticsRepository = std::make_shared<repositories::StatisticsRepository>(queryExecutor.get());
         userRepository = std::make_shared<repositories::UserRepository>(queryExecutor.get());

@@ -2,10 +2,12 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 #include <json/json.h>
 #include "i_query_executor.h"
 #include "../domain/models/validation_result.h"
 #include "../domain/models/validation_statistics.h"
+#include <ldap_connection_pool.h>
 
 /**
  * @file validation_repository.h
@@ -24,9 +26,13 @@ public:
     /**
      * @brief Constructor
      * @param queryExecutor Query executor (PostgreSQL or Oracle, non-owning pointer)
+     * @param ldapPool LDAP connection pool for conformance data lookup (optional)
+     * @param ldapBaseDn LDAP base DN (e.g., "dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com")
      * @throws std::invalid_argument if queryExecutor is nullptr
      */
-    explicit ValidationRepository(common::IQueryExecutor* queryExecutor);
+    explicit ValidationRepository(common::IQueryExecutor* queryExecutor,
+                                  std::shared_ptr<common::LdapConnectionPool> ldapPool = nullptr,
+                                  const std::string& ldapBaseDn = "");
     ~ValidationRepository() = default;
 
     /**
@@ -143,6 +149,17 @@ public:
 
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
+    std::shared_ptr<common::LdapConnectionPool> ldapPool_;  // LDAP pool for conformance lookup
+    std::string ldapBaseDn_;  // LDAP base DN
+
+    /**
+     * @brief Enrich DSC_NC result with conformance data from LDAP
+     * @param result JSON result to enrich (modified in-place)
+     *
+     * Queries LDAP for pkdConformanceCode, pkdConformanceText, pkdVersion
+     * when certificateType is "DSC_NC". Graceful degradation on failure.
+     */
+    void enrichWithConformanceData(Json::Value& result);
 };
 
 } // namespace repositories

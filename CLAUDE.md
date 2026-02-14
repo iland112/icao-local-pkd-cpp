@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.10.2
+**Current Version**: v2.10.3
 **Last Updated**: 2026-02-14
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -475,6 +475,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.10.3 (2026-02-14) - DSC Non-Conformant (nc-data) Support + DSC_NC Documentation
+- PA Service: DSC conformance check via LDAP `dc=nc-data` during PA Verify (`checkDscConformance()`)
+- PA Service: `findDscBySubjectDn()` nc-data fallback search (`dc=data` → `dc=nc-data`)
+- PA Service: `buildNcDataSearchBaseDn()`, `DscConformanceInfo` struct added
+- PA Verify response: `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` fields in `certificateChainValidation`
+- PKD Management: PA Lookup conformance data enrichment for DSC_NC (`enrichWithConformanceData()`)
+- PKD Management: LDAP pool dependency added to ValidationRepository for nc-data auxiliary lookup
+- Frontend: PA Verify result NC warning banner and conformance details display
+- Frontend: `CertificateChainValidationDto` conformance fields added
+- Documentation: `docs/DSC_NC_HANDLING.md` - ICAO PKD DSC_NC handling guide (architecture, design decisions, operational data)
+- PA API Guide updated to v2.1.4 with conformance field documentation
+- OpenAPI specs updated (PA Service + PKD Management)
 
 ### v2.10.2 (2026-02-14) - Lightweight PA Lookup API + PA Trust Chain Multi-CSCA Fix
 - Lightweight PA lookup: `POST /api/certificates/pa-lookup` for DSC subject DN or fingerprint-based trust chain query

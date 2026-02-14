@@ -4,6 +4,7 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <ldap.h>
 
 namespace repositories {
 
@@ -30,13 +31,16 @@ static std::string generateUuid() {
     return ss.str();
 }
 
-ValidationRepository::ValidationRepository(common::IQueryExecutor* queryExecutor)
-    : queryExecutor_(queryExecutor)
+ValidationRepository::ValidationRepository(common::IQueryExecutor* queryExecutor,
+                                             std::shared_ptr<common::LdapConnectionPool> ldapPool,
+                                             const std::string& ldapBaseDn)
+    : queryExecutor_(queryExecutor), ldapPool_(ldapPool), ldapBaseDn_(ldapBaseDn)
 {
     if (!queryExecutor_) {
         throw std::invalid_argument("ValidationRepository: queryExecutor cannot be nullptr");
     }
-    spdlog::debug("[ValidationRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
+    spdlog::debug("[ValidationRepository] Initialized (DB type: {}, LDAP: {})",
+                  queryExecutor_->getDatabaseType(), ldapPool_ ? "enabled" : "disabled");
 }
 
 bool ValidationRepository::save(const domain::models::ValidationResult& result)
@@ -423,6 +427,9 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
         result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
         result["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
 
+        // Enrich DSC_NC with conformance data from LDAP
+        enrichWithConformanceData(result);
+
         spdlog::debug("[ValidationRepository] Found validation result for fingerprint: {}...",
             fingerprint.substr(0, 16));
 
@@ -603,6 +610,9 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
 
         result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
         result["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
+
+        // Enrich DSC_NC with conformance data from LDAP
+        enrichWithConformanceData(result);
 
         spdlog::debug("[ValidationRepository] Found validation result for subject DN: {}...",
             subjectDn.substr(0, 60));
@@ -1083,6 +1093,110 @@ Json::Value ValidationRepository::getReasonBreakdown()
     }
 
     return response;
+}
+
+void ValidationRepository::enrichWithConformanceData(Json::Value& result)
+{
+    // Only enrich DSC_NC certificates
+    std::string certType = result.get("certificateType", "").asString();
+    if (certType != "DSC_NC") {
+        return;
+    }
+
+    // Requires LDAP pool and base DN
+    if (!ldapPool_ || ldapBaseDn_.empty()) {
+        spdlog::debug("[ValidationRepository] LDAP pool not available, skipping conformance enrichment");
+        return;
+    }
+
+    std::string fingerprint = result.get("fingerprint", "").asString();
+    std::string countryCode = result.get("countryCode", "").asString();
+
+    if (fingerprint.empty() || countryCode.empty()) {
+        spdlog::warn("[ValidationRepository] Cannot enrich: fingerprint or countryCode empty");
+        return;
+    }
+
+    try {
+        // Acquire LDAP connection from pool
+        auto conn = ldapPool_->acquire();
+        if (!conn.isValid()) {
+            spdlog::warn("[ValidationRepository] Failed to acquire LDAP connection for conformance lookup");
+            return;
+        }
+
+        LDAP* ld = conn.get();
+
+        // Build DN for DSC_NC entry: cn={fingerprint},o=dsc,c={country},dc=nc-data,{ldapBaseDn}
+        std::string entryDn = "cn=" + fingerprint + ",o=dsc,c=" + countryCode +
+                              ",dc=nc-data," + ldapBaseDn_;
+
+        spdlog::debug("[ValidationRepository] LDAP conformance lookup DN: {}", entryDn);
+
+        // Search for the specific entry
+        const char* attrs[] = {"pkdConformanceCode", "pkdConformanceText", "pkdVersion", nullptr};
+        LDAPMessage* searchResult = nullptr;
+
+        struct timeval timeout;
+        timeout.tv_sec = 5;
+        timeout.tv_usec = 0;
+
+        int rc = ldap_search_ext_s(ld, entryDn.c_str(), LDAP_SCOPE_BASE,
+                                    "(objectClass=*)", const_cast<char**>(attrs),
+                                    0, nullptr, nullptr, &timeout, 1, &searchResult);
+
+        if (rc != LDAP_SUCCESS) {
+            spdlog::warn("[ValidationRepository] LDAP conformance lookup failed (rc={}): {}",
+                         rc, ldap_err2string(rc));
+            if (searchResult) ldap_msgfree(searchResult);
+            return;
+        }
+
+        LDAPMessage* entry = ldap_first_entry(ld, searchResult);
+        if (!entry) {
+            spdlog::warn("[ValidationRepository] No LDAP entry found for DSC_NC: {}", entryDn);
+            ldap_msgfree(searchResult);
+            return;
+        }
+
+        // Read attributes
+        auto readAttr = [&](const char* attrName) -> std::string {
+            struct berval** vals = ldap_get_values_len(ld, entry, attrName);
+            if (!vals) return "";
+            std::string value;
+            if (vals[0] && vals[0]->bv_val && vals[0]->bv_len > 0) {
+                value.assign(vals[0]->bv_val, vals[0]->bv_len);
+            }
+            ldap_value_free_len(vals);
+            return value;
+        };
+
+        std::string conformanceCode = readAttr("pkdConformanceCode");
+        std::string conformanceText = readAttr("pkdConformanceText");
+        std::string pkdVersion = readAttr("pkdVersion");
+
+        ldap_msgfree(searchResult);
+
+        // Add to result if found
+        if (!conformanceCode.empty()) {
+            result["pkdConformanceCode"] = conformanceCode;
+        }
+        if (!conformanceText.empty()) {
+            result["pkdConformanceText"] = conformanceText;
+        }
+        if (!pkdVersion.empty()) {
+            result["pkdVersion"] = pkdVersion;
+        }
+
+        spdlog::info("[ValidationRepository] DSC_NC conformance enriched - Code:{}, Text:{}, Version:{}",
+                     conformanceCode.empty() ? "N/A" : conformanceCode,
+                     conformanceText.empty() ? "N/A" : conformanceText.substr(0, 50),
+                     pkdVersion.empty() ? "N/A" : pkdVersion);
+
+    } catch (const std::exception& e) {
+        spdlog::warn("[ValidationRepository] Conformance enrichment failed (graceful): {}", e.what());
+        // Graceful degradation: return result without conformance data
+    }
 }
 
 } // namespace repositories

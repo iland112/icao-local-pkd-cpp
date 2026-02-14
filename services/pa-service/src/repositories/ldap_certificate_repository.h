@@ -22,13 +22,24 @@
 namespace repositories {
 
 /**
+ * @brief DSC conformance check result (ICAO PKD nc-data lookup)
+ */
+struct DscConformanceInfo {
+    bool isNonConformant = false;
+    std::string conformanceCode;
+    std::string conformanceText;
+    std::string pkdVersion;
+};
+
+/**
  * @brief LDAP Certificate Repository
  *
  * Responsibilities:
  * - CSCA certificate retrieval from LDAP
- * - DSC certificate retrieval from LDAP
+ * - DSC certificate retrieval from LDAP (dc=data + dc=nc-data fallback)
  * - Link certificate support
  * - X509 certificate parsing from LDAP berval
+ * - DSC conformance status check via nc-data LDAP lookup
  */
 class LdapCertificateRepository {
 private:
@@ -85,12 +96,26 @@ public:
     // ==========================================================================
 
     /**
-     * @brief Find DSC certificate by subject DN
+     * @brief Find DSC certificate by subject DN (dc=data first, dc=nc-data fallback)
      * @param subjectDn Subject DN
      * @param countryCode Country code
+     * @param isNonConformant Output: set to true if found in dc=nc-data (optional)
      * @return X509* certificate or nullptr (caller must X509_free)
      */
-    X509* findDscBySubjectDn(const std::string& subjectDn, const std::string& countryCode);
+    X509* findDscBySubjectDn(const std::string& subjectDn, const std::string& countryCode,
+                             bool* isNonConformant = nullptr);
+
+    /**
+     * @brief Check if a DSC certificate is non-conformant (exists in dc=nc-data)
+     * @param dscCert X509 certificate to check
+     * @param countryCode Country code
+     * @return DscConformanceInfo with conformance status and ICAO PKD attributes
+     *
+     * Computes SHA-256 fingerprint from the certificate, then searches
+     * dc=nc-data LDAP branch for pkdConformanceCode/Text/Version attributes.
+     * Graceful degradation: returns default (conformant) on any failure.
+     */
+    DscConformanceInfo checkDscConformance(X509* dscCert, const std::string& countryCode);
 
     // ==========================================================================
     // Helper Methods
@@ -110,12 +135,20 @@ public:
     );
 
     /**
-     * @brief Build LDAP base DN for search
+     * @brief Build LDAP base DN for search (dc=data branch)
      * @param type Certificate type ("csca", "dsc", "mlsc")
      * @param countryCode Country code
      * @return LDAP base DN string
      */
     std::string buildSearchBaseDn(const std::string& type, const std::string& countryCode);
+
+    /**
+     * @brief Build LDAP base DN for nc-data search (dc=nc-data branch)
+     * @param type Certificate type ("dsc")
+     * @param countryCode Country code
+     * @return LDAP base DN string for non-conformant certificates
+     */
+    std::string buildNcDataSearchBaseDn(const std::string& type, const std::string& countryCode);
 
     /**
      * @brief Escape LDAP filter value to prevent injection (RFC 4515)

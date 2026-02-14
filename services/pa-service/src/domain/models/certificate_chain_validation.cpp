@@ -58,6 +58,13 @@ Json::Value CertificateChainValidation::toJson() const {
     json["signatureVerified"] = signatureVerified;
     if (signatureAlgorithm) json["signatureAlgorithm"] = *signatureAlgorithm;
 
+    // DSC conformance status (only include if non-conformant)
+    if (dscNonConformant) {
+        json["dscNonConformant"] = true;
+        json["pkdConformanceCode"] = pkdConformanceCode;
+        json["pkdConformanceText"] = pkdConformanceText;
+    }
+
     // Additional status flags
     json["fullyValid"] = isFullyValid();
 

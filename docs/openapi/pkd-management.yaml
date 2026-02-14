@@ -1366,6 +1366,15 @@ components:
             validatedAt:
               type: string
               format: date-time
+            pkdConformanceCode:
+              type: string
+              description: "ICAO PKD non-conformance code (DSC_NC only, e.g., 'NC003')"
+            pkdConformanceText:
+              type: string
+              description: "ICAO PKD non-conformance description (DSC_NC only)"
+            pkdVersion:
+              type: string
+              description: "ICAO PKD version when non-conformance was classified (DSC_NC only)"
       example:
         success: true
         validation:

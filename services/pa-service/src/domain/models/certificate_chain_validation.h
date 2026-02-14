@@ -104,6 +104,11 @@ struct CertificateChainValidation {
     bool signatureVerified = false;
     std::optional<std::string> signatureAlgorithm;
 
+    // DSC conformance status (ICAO PKD nc-data check)
+    bool dscNonConformant = false;
+    std::string pkdConformanceCode;
+    std::string pkdConformanceText;
+
     /**
      * @brief Convert to JSON for API response
      * @return Json::Value representation

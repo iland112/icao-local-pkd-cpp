@@ -331,7 +331,13 @@ export interface CertificateChainValidationDto {
   crlStatusDetailedDescription: string;
   crlStatusSeverity: string;
   crlMessage: string;
+  crlThisUpdate?: string;
+  crlNextUpdate?: string;
   validationErrors?: string;
+  // DSC conformance status (ICAO PKD nc-data)
+  dscNonConformant?: boolean;
+  pkdConformanceCode?: string;
+  pkdConformanceText?: string;
 }
 
 export interface SodSignatureValidationDto {

@@ -224,6 +224,12 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         result.trustChainPath = "DSC → " + result.cscaSubject.substr(0, 50);
         result.trustChainDepth = 2;
 
+        // Check DSC conformance status (nc-data LDAP lookup)
+        auto conformanceInfo = certRepo_->checkDscConformance(dscCert, effectiveCountry);
+        result.dscNonConformant = conformanceInfo.isNonConformant;
+        result.pkdConformanceCode = conformanceInfo.conformanceCode;
+        result.pkdConformanceText = conformanceInfo.conformanceText;
+
         // Free all CSCA candidates (including the selected one)
         for (X509* c : allCscas) X509_free(c);
 

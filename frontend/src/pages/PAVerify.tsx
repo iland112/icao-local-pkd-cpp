@@ -133,6 +133,9 @@ interface QuickLookupResult {
     crlChecked?: boolean;
     fingerprint?: string;
     validatedAt?: string;
+    pkdConformanceCode?: string;
+    pkdConformanceText?: string;
+    pkdVersion?: string;
   } | null;
   error?: string;
 }
@@ -259,6 +262,9 @@ export function PAVerify() {
             validAtSigningTime: chainValidation.validAtSigningTime,
             expirationStatus: chainValidation.expirationStatus,
             expirationMessage: chainValidation.expirationMessage,
+            dscNonConformant: chainValidation.dscNonConformant,
+            pkdConformanceCode: chainValidation.pkdConformanceCode,
+            pkdConformanceText: chainValidation.pkdConformanceText,
           },
           expanded: true,
         };
@@ -274,6 +280,9 @@ export function PAVerify() {
             cscaSubject: chainValidation?.cscaSubject,
             notBefore: chainValidation?.notBefore,
             notAfter: chainValidation?.notAfter,
+            dscNonConformant: chainValidation?.dscNonConformant,
+            pkdConformanceCode: chainValidation?.pkdConformanceCode,
+            pkdConformanceText: chainValidation?.pkdConformanceText,
           },
           expanded: true,
         };
@@ -1057,6 +1066,40 @@ export function PAVerify() {
                   </div>
                 </div>
 
+                {/* Non-Conformant Reason (DSC_NC only) */}
+                {quickLookupResult.validation.certificateType === 'DSC_NC' && (
+                  <div className="p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-xs">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <AlertTriangle className="w-4 h-4 text-orange-500" />
+                      <span className="font-semibold text-orange-700 dark:text-orange-300">Non-Conformant (비준수)</span>
+                    </div>
+                    {quickLookupResult.validation.pkdConformanceCode && (
+                      <div className="ml-6 mb-1">
+                        <span className="text-gray-500">코드: </span>
+                        <code className="font-mono bg-orange-100 dark:bg-orange-800/40 px-1.5 py-0.5 rounded text-orange-700 dark:text-orange-300">
+                          {quickLookupResult.validation.pkdConformanceCode}
+                        </code>
+                      </div>
+                    )}
+                    {quickLookupResult.validation.pkdConformanceText && (
+                      <div className="ml-6 mb-1 text-gray-600 dark:text-gray-400">
+                        <span className="text-gray-500">사유: </span>
+                        {quickLookupResult.validation.pkdConformanceText}
+                      </div>
+                    )}
+                    {quickLookupResult.validation.pkdVersion && (
+                      <div className="ml-6 text-gray-500">
+                        PKD Version: {quickLookupResult.validation.pkdVersion}
+                      </div>
+                    )}
+                    {!quickLookupResult.validation.pkdConformanceCode && !quickLookupResult.validation.pkdConformanceText && (
+                      <div className="ml-6 text-gray-500">
+                        ICAO PKD에서 Non-Conformant로 분류된 인증서입니다.
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Certificate Info */}
                 <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-xs space-y-1.5">
                   <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">인증서 정보</div>
@@ -1363,6 +1406,22 @@ export function PAVerify() {
                 </div>
               )}
 
+              {/* Non-Conformant DSC warning (shown regardless of VALID/INVALID) */}
+              {result.certificateChainValidation?.dscNonConformant && (
+                <div className="mt-3 pt-3 border-t border-white/20">
+                  <div className="flex items-center gap-2 text-sm">
+                    <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0" />
+                    <span className="font-semibold text-amber-200">Non-Conformant DSC</span>
+                  </div>
+                  <p className="mt-1 text-xs opacity-80">
+                    {result.certificateChainValidation.pkdConformanceCode && (
+                      <span className="font-mono">{result.certificateChainValidation.pkdConformanceCode}: </span>
+                    )}
+                    {result.certificateChainValidation.pkdConformanceText || 'ICAO PKD 비준수 인증서'}
+                  </p>
+                </div>
+              )}
+
               {/* DG Parsing Results (shown when verification succeeds) */}
               {result.status === 'VALID' && (dg1ParseResult || dg2ParseResult) && (
                 <div className="mt-3 pt-3 border-t border-white/20">
@@ -1593,6 +1652,23 @@ export function PAVerify() {
                                 {step.details.expirationMessage && (
                                   <p className="mt-1 text-gray-600 dark:text-gray-400">
                                     {step.details.expirationMessage}
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                            {/* DSC Non-Conformant Warning (ICAO PKD nc-data) */}
+                            {step.details.dscNonConformant && (
+                              <div className="w-full mt-2 p-2 rounded text-xs bg-amber-100 dark:bg-amber-900/30 border border-amber-300 dark:border-amber-700">
+                                <div className="flex items-center gap-2">
+                                  <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                  <span className="font-semibold text-amber-700 dark:text-amber-300">Non-Conformant DSC (ICAO PKD)</span>
+                                </div>
+                                {step.details.pkdConformanceCode && (
+                                  <p className="mt-1 text-gray-600 dark:text-gray-400">
+                                    <span className="font-mono font-medium">{step.details.pkdConformanceCode}</span>
+                                    {step.details.pkdConformanceText && (
+                                      <span> — {step.details.pkdConformanceText}</span>
+                                    )}
                                   </p>
                                 )}
                               </div>

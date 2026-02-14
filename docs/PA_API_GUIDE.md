@@ -1,6 +1,6 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.3
+**Version**: 2.1.4
 **Last Updated**: 2026-02-14
 **API Gateway Port**: 8080
 
@@ -95,6 +95,8 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 
 ### Response (Success - VALID)
 
+> **Note**: 아래 예시에서 `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` 필드는 DSC가 ICAO PKD Non-Conformant인 경우에만 포함됩니다. 대부분의 검증에서는 이 필드가 포함되지 않습니다.
+
 ```json
 {
   "success": true,
@@ -122,7 +124,10 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
       "cscaExpired": false,
       "validAtSigningTime": true,
       "expirationStatus": "VALID",
-      "expirationMessage": ""
+      "expirationMessage": "",
+      "dscNonConformant": true,
+      "pkdConformanceCode": "ERR:CSCA.CDP.14",
+      "pkdConformanceText": "The Subject Public Key Info field does not contain an rsaEncryption OID"
     },
 
     "sodSignatureValidation": {
@@ -224,6 +229,9 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 | validAtSigningTime | boolean | 여권 서명 당시 인증서 유효 여부 (Point-in-Time Validation) |
 | expirationStatus | string | 만료 상태: `VALID`, `WARNING`, `EXPIRED` |
 | expirationMessage | string | 만료 상태 설명 메시지 |
+| dscNonConformant | boolean | DSC가 ICAO PKD Non-Conformant(비준수)인 경우 `true` (v2.1.4+, 해당 시에만 포함) |
+| pkdConformanceCode | string | ICAO PKD 비준수 사유 코드 (예: `ERR:CSCA.CDP.14`) (v2.1.4+, `dscNonConformant=true` 시에만 포함) |
+| pkdConformanceText | string | ICAO PKD 비준수 사유 설명 (v2.1.4+, `dscNonConformant=true` 시에만 포함) |
 
 ### DSC Auto-Registration Fields (v2.1.0+)
 
@@ -238,6 +246,8 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 > **Note**: `dscAutoRegistration` 필드는 DSC 자동 등록이 성공한 경우에만 포함됩니다. 자동 등록은 PA 검증 결과에 영향을 주지 않습니다 (검증이 INVALID여도 DSC 등록은 시도됩니다).
 
 > **Point-in-Time Validation (v1.2.0+)**: ICAO 9303 표준에 따라, 인증서가 현재 만료되었더라도 여권 서명 당시에 유효했다면 `validAtSigningTime`이 `true`로 설정됩니다. 이 경우 `expirationStatus`는 `EXPIRED`이지만 검증은 성공(`valid: true`)할 수 있습니다.
+
+> **DSC Non-Conformant 상태 (v2.1.4+)**: DSC가 ICAO PKD의 비준수(Non-Conformant) 인증서로 분류된 경우 `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` 필드가 응답에 포함됩니다. Non-Conformant는 ICAO Doc 9303 기술 사양 비준수를 의미하며, 인증서의 유효성과는 독립적입니다. 검증 결과(`valid`)는 Trust Chain, 서명 검증, CRL 상태에 의해 결정됩니다. 자세한 내용은 [DSC_NC_HANDLING.md](DSC_NC_HANDLING.md)를 참조하세요.
 
 ---
 
@@ -287,6 +297,7 @@ Fingerprint로 조회:
 
 ### Response (Success - 검증 결과 존재)
 
+**Conformant DSC (일반적인 경우)**:
 ```json
 {
   "success": true,
@@ -316,6 +327,38 @@ Fingerprint로 조회:
 }
 ```
 
+**Non-Conformant DSC_NC (v2.1.4+)**:
+```json
+{
+  "success": true,
+  "validation": {
+    "id": "660e8400-e29b-41d4-a716-446655440002",
+    "certificateType": "DSC_NC",
+    "countryCode": "DE",
+    "subjectDn": "/C=DE/O=Federal Republic of Germany/CN=Document Signer DE 42",
+    "issuerDn": "/C=DE/O=Federal Republic of Germany/CN=Country Signing CA DE",
+    "serialNumber": "5A6B7C8D",
+    "validationStatus": "VALID",
+    "trustChainValid": true,
+    "trustChainPath": "DSC → CSCA",
+    "cscaFound": true,
+    "cscaSubjectDn": "/C=DE/O=Federal Republic of Germany/CN=Country Signing CA DE",
+    "signatureValid": true,
+    "signatureAlgorithm": "SHA256withECDSA",
+    "validityPeriodValid": true,
+    "notBefore": "2020-01-01 00:00:00",
+    "notAfter": "2025-12-31 23:59:59",
+    "revocationStatus": "not_revoked",
+    "crlChecked": true,
+    "fingerprintSha256": "e5f6a7b8c9d0...",
+    "validatedAt": "2026-02-14T11:00:00",
+    "pkdConformanceCode": "ERR:CSCA.CDP.14",
+    "pkdConformanceText": "The Subject Public Key Info field does not contain an rsaEncryption OID",
+    "pkdVersion": "90"
+  }
+}
+```
+
 ### Response (Not Found - DSC가 DB에 없음)
 
 ```json
@@ -338,6 +381,9 @@ Fingerprint로 조회:
 | crlChecked | boolean | CRL 검사 수행 여부 |
 | revocationStatus | string | 폐지 상태: `not_revoked`, `revoked`, `unknown` |
 | fingerprintSha256 | string | DSC SHA-256 지문 (hex, 64자) |
+| pkdConformanceCode | string | ICAO PKD 비준수 사유 코드 (v2.1.4+, `certificateType="DSC_NC"` 시에만 포함) |
+| pkdConformanceText | string | ICAO PKD 비준수 사유 설명 (v2.1.4+, `certificateType="DSC_NC"` 시에만 포함) |
+| pkdVersion | string | ICAO PKD 버전 (v2.1.4+, `certificateType="DSC_NC"` 시에만 포함) |
 
 ---
 
@@ -804,6 +850,12 @@ if __name__ == "__main__":
         print(f"Country: {data['issuingCountry']}")
         print(f"Document: {data['documentNumber']}")
 
+        # Check DSC non-conformant status (v2.1.4+)
+        chain = data.get("certificateChainValidation", {})
+        if chain.get("dscNonConformant"):
+            print(f"⚠ DSC Non-Conformant: {chain['pkdConformanceCode']}")
+            print(f"  Reason: {chain['pkdConformanceText']}")
+
         # Check DSC auto-registration
         if "dscAutoRegistration" in data:
             reg = data["dscAutoRegistration"]
@@ -822,6 +874,11 @@ if __name__ == "__main__":
         print(f"Trust Chain: {'VALID' if v['trustChainValid'] else 'INVALID'}")
         print(f"Status: {v['validationStatus']}")
         print(f"CSCA: {v.get('cscaSubjectDn', 'N/A')}")
+
+        # Check non-conformant status (v2.1.4+)
+        if v.get("certificateType") == "DSC_NC":
+            print(f"⚠ Non-Conformant DSC: {v.get('pkdConformanceCode', 'N/A')}")
+            print(f"  Reason: {v.get('pkdConformanceText', 'N/A')}")
     else:
         print("DSC not found in local PKD")
 ```
@@ -1057,6 +1114,20 @@ curl http://localhost:8080/api/health | jq .
 ---
 
 ## Changelog
+
+### v2.1.4 (2026-02-14)
+
+**DSC Non-Conformant(비준수) 상태 조회 지원**:
+- PA Verify 응답의 `certificateChainValidation`에 DSC Non-Conformant 필드 추가
+  - `dscNonConformant`: DSC가 ICAO PKD Non-Conformant인 경우 `true` (해당 시에만 포함)
+  - `pkdConformanceCode`: 비준수 사유 코드 (예: `ERR:CSCA.CDP.14`)
+  - `pkdConformanceText`: 비준수 사유 설명
+- PA Lookup 응답에 DSC_NC conformance 데이터 추가 (`pkdConformanceCode`, `pkdConformanceText`, `pkdVersion`)
+- PA Service: SOD에서 추출한 DSC의 fingerprint로 LDAP `dc=nc-data` 검색하여 Non-Conformant 여부 판별
+- PA Service: `findDscBySubjectDn()` nc-data 폴백 검색 추가 (`dc=data` → `dc=nc-data`)
+- PKD Management: PA Lookup에서 `certificateType="DSC_NC"`인 경우 LDAP nc-data에서 conformance 데이터 보조 조회
+- Non-Conformant 상태는 정보성으로만 표시 (검증 결과 VALID/INVALID에 영향 없음)
+- 자세한 내용: [DSC_NC_HANDLING.md](DSC_NC_HANDLING.md)
 
 ### v2.1.3 (2026-02-14)
 
