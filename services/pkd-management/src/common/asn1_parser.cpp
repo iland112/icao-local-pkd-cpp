@@ -11,53 +11,68 @@
 #include <sstream>
 #include <regex>
 #include <array>
+#include <fstream>
+#include <openssl/asn1.h>
+#include <openssl/bio.h>
 
 namespace icao {
 namespace asn1 {
 
 std::string executeAsn1Parse(const std::string& filePath, int maxLines) {
-    spdlog::debug("[ASN1Parser] Executing OpenSSL asn1parse for: {} (maxLines: {})", filePath, maxLines);
+    spdlog::debug("[ASN1Parser] Parsing ASN.1 via OpenSSL C API for: {} (maxLines: {})", filePath, maxLines);
 
-    // Construct OpenSSL asn1parse command
-    // -i: indent output for readability
-    // -inform DER: input format is DER (binary)
-    std::string cmd = "openssl asn1parse -inform DER -i -in \"" + filePath + "\" 2>&1";
+    // Read DER file into memory (no shell command execution)
+    std::ifstream file(filePath, std::ios::binary);
+    if (!file.is_open()) {
+        throw std::runtime_error("Failed to open file: " + filePath);
+    }
 
-    std::array<char, 128> buffer;
+    std::vector<unsigned char> derData(
+        (std::istreambuf_iterator<char>(file)),
+        std::istreambuf_iterator<char>());
+    file.close();
+
+    if (derData.empty()) {
+        throw std::runtime_error("Empty DER file: " + filePath);
+    }
+
+    // Use OpenSSL ASN1_parse_dump to generate same output as "openssl asn1parse -i"
+    BIO* out = BIO_new(BIO_s_mem());
+    if (!out) {
+        throw std::runtime_error("Failed to create BIO for ASN.1 parsing");
+    }
+
+    int rc = ASN1_parse_dump(out, derData.data(), static_cast<long>(derData.size()), 1, 0);
+
+    BUF_MEM* bptr = nullptr;
+    BIO_get_mem_ptr(out, &bptr);
+
     std::string result;
+    if (rc == 1 && bptr && bptr->length > 0) {
+        result.assign(bptr->data, bptr->length);
+    }
+    BIO_free(out);
 
-    // Execute command and capture output
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
-    if (!pipe) {
-        throw std::runtime_error("Failed to execute OpenSSL asn1parse command");
+    if (result.empty()) {
+        throw std::runtime_error("ASN.1 parsing produced empty output for: " + filePath);
     }
 
-    int lineCount = 0;
-    bool limitReached = false;
-
-    // Read output with line limit enforced in C++
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-        if (maxLines > 0 && lineCount >= maxLines) {
-            limitReached = true;
-            break;  // Stop reading after maxLines
+    // Apply line limit
+    if (maxLines > 0) {
+        std::istringstream stream(result);
+        std::string line;
+        std::string truncated;
+        int lineCount = 0;
+        while (std::getline(stream, line) && lineCount < maxLines) {
+            truncated += line + "\n";
+            lineCount++;
         }
-        result += buffer.data();
-        lineCount++;
+        spdlog::debug("[ASN1Parser] ASN.1 parse output: {} lines (limit: {}, truncated: {})",
+                      lineCount, maxLines, lineCount >= maxLines);
+        return truncated;
     }
 
-    // Close pipe (ignore return code if we stopped early)
-    int returnCode = pclose(pipe.release());
-
-    if (returnCode != 0 && !limitReached) {
-        // Check if this is an actual error
-        if (result.find("Can't open") != std::string::npos || result.find("error") != std::string::npos) {
-            spdlog::error("[ASN1Parser] OpenSSL asn1parse failed with return code: {}", returnCode);
-            throw std::runtime_error("OpenSSL asn1parse failed: " + result);
-        }
-    }
-
-    spdlog::debug("[ASN1Parser] ASN.1 parse output: {} lines, {} bytes (limit: {}, truncated: {})",
-                  lineCount, result.size(), maxLines, limitReached);
+    spdlog::debug("[ASN1Parser] ASN.1 parse output: {} bytes", result.size());
     return result;
 }
 

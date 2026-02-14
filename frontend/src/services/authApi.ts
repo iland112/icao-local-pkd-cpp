@@ -116,7 +116,7 @@ authApiClient.interceptors.response.use(
       }
     }
 
-    console.error('[Auth API Error]:', error.response?.data || error.message);
+    if (import.meta.env.DEV) console.error('[Auth API Error]:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );

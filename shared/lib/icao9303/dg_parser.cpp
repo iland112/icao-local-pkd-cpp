@@ -200,7 +200,9 @@ static std::vector<uint8_t> convertJp2ToJpeg(const std::vector<uint8_t>& jp2Data
 // Helper function for Base64 encoding
 static std::string base64Encode(const std::vector<uint8_t>& data) {
     BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) return "";
     BIO* b64 = BIO_new(BIO_f_base64());
+    if (!b64) { BIO_free(bio); return ""; }
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);  // No newlines
     bio = BIO_push(b64, bio);
 

@@ -106,7 +106,7 @@ const auditApi = axios.create({
 auditApi.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    console.error('[Audit API Error]:', error.response?.data || error.message);
+    if (import.meta.env.DEV) console.error('[Audit API Error]:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );

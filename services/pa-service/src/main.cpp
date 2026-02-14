@@ -340,7 +340,9 @@ std::vector<uint8_t> hexToBytes(const std::string& hex) {
 
 std::vector<uint8_t> base64Decode(const std::string& encoded) {
     BIO* bio = BIO_new_mem_buf(encoded.data(), static_cast<int>(encoded.size()));
+    if (!bio) return {};
     BIO* b64 = BIO_new(BIO_f_base64());
+    if (!b64) { BIO_free(bio); return {}; }
     BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
     bio = BIO_push(b64, bio);
 
@@ -382,6 +384,7 @@ std::string trim(const std::string& str) {
 std::string getX509SubjectDn(X509* cert) {
     if (!cert) return "";
     char* dn = X509_NAME_oneline(X509_get_subject_name(cert), nullptr, 0);
+    if (!dn) return "";
     std::string result(dn);
     OPENSSL_free(dn);
     return result;
@@ -390,6 +393,7 @@ std::string getX509SubjectDn(X509* cert) {
 std::string getX509IssuerDn(X509* cert) {
     if (!cert) return "";
     char* dn = X509_NAME_oneline(X509_get_issuer_name(cert), nullptr, 0);
+    if (!dn) return "";
     std::string result(dn);
     OPENSSL_free(dn);
     return result;
@@ -398,8 +402,11 @@ std::string getX509IssuerDn(X509* cert) {
 std::string getX509SerialNumber(X509* cert) {
     if (!cert) return "";
     ASN1_INTEGER* serial = X509_get_serialNumber(cert);
+    if (!serial) return "";
     BIGNUM* bn = ASN1_INTEGER_to_BN(serial, nullptr);
+    if (!bn) return "";
     char* hex = BN_bn2hex(bn);
+    if (!hex) { BN_free(bn); return ""; }
     std::string result(hex);
     OPENSSL_free(hex);
     BN_free(bn);
@@ -538,35 +545,32 @@ Json::Value checkLdap() {
     auto start = std::chrono::steady_clock::now();
 
     std::string ldapUri = "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort);
-    std::string cmd = "ldapsearch -x -H " + ldapUri +
-                      " -D '" + appConfig.ldapBindDn + "'" +
-                      " -w '" + appConfig.ldapBindPassword + "'" +
-                      " -b '' -s base '(objectClass=*)' namingContexts 2>&1";
+    LDAP* ld = nullptr;
+    int rc = ldap_initialize(&ld, ldapUri.c_str());
 
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) {
-        result["status"] = "DOWN";
-        result["error"] = "Failed to execute ldapsearch";
-        return result;
-    }
+    if (rc == LDAP_SUCCESS) {
+        int version = LDAP_VERSION3;
+        ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
-    char buffer[256];
-    std::string output;
-    while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-        output += buffer;
+        struct timeval tv = {3, 0};  // 3 second timeout
+        ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &tv);
+
+        // Anonymous bind to verify connectivity
+        struct berval cred = {0, nullptr};
+        rc = ldap_sasl_bind_s(ld, nullptr, LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
+        ldap_unbind_ext_s(ld, nullptr, nullptr);
     }
-    int exitCode = pclose(pipe);
 
     auto end = std::chrono::steady_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    if (exitCode == 0 && output.find("namingContexts") != std::string::npos) {
+    if (rc == LDAP_SUCCESS) {
         result["status"] = "UP";
         result["responseTimeMs"] = static_cast<int>(duration.count());
         result["uri"] = ldapUri;
     } else {
         result["status"] = "DOWN";
-        result["error"] = "LDAP connection failed";
+        result["error"] = std::string("LDAP connection failed: ") + ldap_err2string(rc);
     }
 
     return result;
@@ -706,6 +710,7 @@ std::string extractHashAlgorithmOid(const std::vector<uint8_t>& sodBytes) {
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) return "";
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -755,6 +760,7 @@ std::string extractSignatureAlgorithm(const std::vector<uint8_t>& sodBytes) {
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) return "UNKNOWN";
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -814,6 +820,7 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) { spdlog::error("Failed to create BIO for DG hashes"); return result; }
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -831,12 +838,14 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
     }
 
     const unsigned char* p = ASN1_STRING_get0_data(*contentPtr);
+    long dataLen = ASN1_STRING_length(*contentPtr);
 
     // Parse LDSSecurityObject ASN.1
     const unsigned char* contentData = p;
+    const unsigned char* end = p + dataLen;  // Buffer boundary for all checks
 
     // Skip outer SEQUENCE tag and length
-    if (*contentData != 0x30) {
+    if (contentData >= end || *contentData != 0x30) {
         spdlog::error("Expected SEQUENCE tag for LDSSecurityObject");
         CMS_ContentInfo_free(cms);
         return result;
@@ -844,10 +853,12 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
     contentData++;
 
     // Parse length
+    if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
     size_t contentLen = 0;
     if (*contentData & 0x80) {
         int numBytes = *contentData & 0x7F;
         contentData++;
+        if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
         for (int i = 0; i < numBytes; i++) {
             contentLen = (contentLen << 8) | *contentData++;
         }
@@ -856,35 +867,42 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
     }
 
     // Skip version (INTEGER)
-    if (*contentData == 0x02) {
+    if (contentData < end && *contentData == 0x02) {
         contentData++;
+        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
         size_t versionLen = *contentData++;
+        if (contentData + versionLen > end) { CMS_ContentInfo_free(cms); return result; }
         contentData += versionLen;
     }
 
     // Skip hashAlgorithm (SEQUENCE - AlgorithmIdentifier)
-    if (*contentData == 0x30) {
+    if (contentData < end && *contentData == 0x30) {
         contentData++;
+        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
         size_t algLen = 0;
         if (*contentData & 0x80) {
             int numBytes = *contentData & 0x7F;
             contentData++;
+            if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
             for (int i = 0; i < numBytes; i++) {
                 algLen = (algLen << 8) | *contentData++;
             }
         } else {
             algLen = *contentData++;
         }
+        if (contentData + algLen > end) { CMS_ContentInfo_free(cms); return result; }
         contentData += algLen;
     }
 
     // Parse dataGroupHashValues (SEQUENCE OF DataGroupHash)
-    if (*contentData == 0x30) {
+    if (contentData < end && *contentData == 0x30) {
         contentData++;
+        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
         size_t dgHashesLen = 0;
         if (*contentData & 0x80) {
             int numBytes = *contentData & 0x7F;
             contentData++;
+            if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
             for (int i = 0; i < numBytes; i++) {
                 dgHashesLen = (dgHashesLen << 8) | *contentData++;
             }
@@ -892,17 +910,21 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
             dgHashesLen = *contentData++;
         }
 
+        // Clamp dgHashesEnd to buffer boundary
         const unsigned char* dgHashesEnd = contentData + dgHashesLen;
+        if (dgHashesEnd > end) dgHashesEnd = end;
 
         // Parse each DataGroupHash
         while (contentData < dgHashesEnd) {
             if (*contentData != 0x30) break;
             contentData++;
+            if (contentData >= dgHashesEnd) break;
 
             size_t dgHashLen = 0;
             if (*contentData & 0x80) {
                 int numBytes = *contentData & 0x7F;
                 contentData++;
+                if (contentData + numBytes > dgHashesEnd) break;
                 for (int i = 0; i < numBytes; i++) {
                     dgHashLen = (dgHashLen << 8) | *contentData++;
                 }
@@ -911,24 +933,29 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
             }
 
             const unsigned char* dgHashEnd = contentData + dgHashLen;
+            if (dgHashEnd > dgHashesEnd) break;
 
             // Parse dataGroupNumber (INTEGER)
             int dgNumber = 0;
-            if (*contentData == 0x02) {
+            if (contentData < dgHashEnd && *contentData == 0x02) {
                 contentData++;
+                if (contentData >= dgHashEnd) { contentData = dgHashEnd; continue; }
                 size_t intLen = *contentData++;
+                if (contentData + intLen > dgHashEnd) { contentData = dgHashEnd; continue; }
                 for (size_t i = 0; i < intLen; i++) {
                     dgNumber = (dgNumber << 8) | *contentData++;
                 }
             }
 
             // Parse dataGroupHashValue (OCTET STRING)
-            if (*contentData == 0x04) {
+            if (contentData < dgHashEnd && *contentData == 0x04) {
                 contentData++;
+                if (contentData >= dgHashEnd) { contentData = dgHashEnd; continue; }
                 size_t hashLen = 0;
                 if (*contentData & 0x80) {
                     int numBytes = *contentData & 0x7F;
                     contentData++;
+                    if (contentData + numBytes > dgHashEnd) { contentData = dgHashEnd; continue; }
                     for (int i = 0; i < numBytes; i++) {
                         hashLen = (hashLen << 8) | *contentData++;
                     }
@@ -936,11 +963,12 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
                     hashLen = *contentData++;
                 }
 
-                std::vector<uint8_t> hashValue(contentData, contentData + hashLen);
-                result[dgNumber] = hashValue;
-                contentData += hashLen;
-
-                spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
+                if (contentData + hashLen <= dgHashEnd) {
+                    std::vector<uint8_t> hashValue(contentData, contentData + hashLen);
+                    result[dgNumber] = hashValue;
+                    contentData += hashLen;
+                    spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
+                }
             }
 
             contentData = dgHashEnd;
@@ -973,6 +1001,10 @@ std::vector<uint8_t> calculateHash(const std::vector<uint8_t>& data, const std::
     }
 
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        spdlog::error("Failed to create EVP_MD_CTX");
+        return {};
+    }
     std::vector<uint8_t> hash(EVP_MAX_MD_SIZE);
     unsigned int hashLen = 0;
 
@@ -1163,6 +1195,11 @@ SodSignatureValidationResult validateSodSignature(
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) {
+        result.valid = false;
+        result.validationErrors = "Failed to create BIO";
+        return result;
+    }
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -1174,7 +1211,20 @@ SodSignatureValidationResult validateSodSignature(
 
     // Create certificate store with DSC
     X509_STORE* store = X509_STORE_new();
+    if (!store) {
+        result.valid = false;
+        result.validationErrors = "Failed to create X509 store";
+        CMS_ContentInfo_free(cms);
+        return result;
+    }
     STACK_OF(X509)* certs = sk_X509_new_null();
+    if (!certs) {
+        result.valid = false;
+        result.validationErrors = "Failed to create certificate stack";
+        X509_STORE_free(store);
+        CMS_ContentInfo_free(cms);
+        return result;
+    }
     sk_X509_push(certs, dscCert);
 
     // Verify signature

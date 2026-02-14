@@ -48,11 +48,23 @@ const relayApi = axios.create({
   },
 });
 
+// Request interceptor: Inject JWT token for protected endpoints (upload/save)
+relayApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Response interceptor for error handling
 relayApi.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    console.error('[Relay API Error]:', error.response?.data || error.message);
+    if (import.meta.env.DEV) console.error('[Relay API Error]:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );

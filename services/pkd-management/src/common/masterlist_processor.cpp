@@ -61,26 +61,30 @@ static CertificateMetadata extractCertificateMetadata(X509* cert) {
 
     if (notBefore) {
         BIO* bio = BIO_new(BIO_s_mem());
-        ASN1_TIME_print(bio, notBefore);
-        char timeBuf[64];
-        int len = BIO_read(bio, timeBuf, sizeof(timeBuf) - 1);
-        if (len > 0) {
-            timeBuf[len] = '\0';
-            meta.notBefore = timeBuf;
+        if (bio) {
+            ASN1_TIME_print(bio, notBefore);
+            char timeBuf[64];
+            int len = BIO_read(bio, timeBuf, sizeof(timeBuf) - 1);
+            if (len > 0) {
+                timeBuf[len] = '\0';
+                meta.notBefore = timeBuf;
+            }
+            BIO_free(bio);
         }
-        BIO_free(bio);
     }
 
     if (notAfter) {
         BIO* bio = BIO_new(BIO_s_mem());
-        ASN1_TIME_print(bio, notAfter);
-        char timeBuf[64];
-        int len = BIO_read(bio, timeBuf, sizeof(timeBuf) - 1);
-        if (len > 0) {
-            timeBuf[len] = '\0';
-            meta.notAfter = timeBuf;
+        if (bio) {
+            ASN1_TIME_print(bio, notAfter);
+            char timeBuf[64];
+            int len = BIO_read(bio, timeBuf, sizeof(timeBuf) - 1);
+            if (len > 0) {
+                timeBuf[len] = '\0';
+                meta.notAfter = timeBuf;
+            }
+            BIO_free(bio);
         }
-        BIO_free(bio);
     }
 
     // Convert to DER format

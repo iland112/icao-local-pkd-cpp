@@ -671,6 +671,7 @@ std::string LcValidator::extractSubjectDn(X509* cert) {
     if (!name) return "";
 
     BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) return "";
     X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
 
     char* data;
@@ -686,6 +687,7 @@ std::string LcValidator::extractIssuerDn(X509* cert) {
     if (!name) return "";
 
     BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) return "";
     X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
 
     char* data;
@@ -704,6 +706,7 @@ std::string LcValidator::extractSerialNumber(X509* cert) {
     if (!bn) return "";
 
     char* hex = BN_bn2hex(bn);
+    if (!hex) { BN_free(bn); return ""; }
     std::string serialHex(hex);
     OPENSSL_free(hex);
     BN_free(bn);
@@ -746,6 +749,7 @@ std::string LcValidator::asn1TimeToIso8601(const ASN1_TIME* asn1Time) {
     if (!asn1Time) return "";
 
     BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) return "";
     ASN1_TIME_print(bio, asn1Time);
 
     char* data;

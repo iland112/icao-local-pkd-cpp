@@ -387,6 +387,12 @@ bool verifyCmsSignature(CMS_ContentInfo* cms, X509* trustAnchor) {
 
     // Verify CMS signature
     BIO* contentBio = BIO_new(BIO_s_mem());
+    if (!contentBio) {
+        if (signerCerts) sk_X509_pop_free(signerCerts, X509_free);
+        X509_STORE_free(store);
+        spdlog::error("Failed to create content BIO for CMS verification");
+        return false;
+    }
     int result = CMS_verify(cms, signerCerts, store, nullptr, contentBio, CMS_NO_SIGNER_CERT_VERIFY);
 
     BIO_free(contentBio);
@@ -1217,6 +1223,10 @@ std::string generateUuid() {
 std::string computeFileHash(const std::vector<uint8_t>& content) {
     unsigned char hash[32];
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        spdlog::error("Failed to create EVP_MD_CTX");
+        return "";
+    }
     EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
     EVP_DigestUpdate(ctx, content.data(), content.size());
     unsigned int len = 0;
@@ -1365,6 +1375,7 @@ std::string asn1IntegerToHex(const ASN1_INTEGER* asn1Int) {
     BIGNUM* bn = ASN1_INTEGER_to_BN(asn1Int, nullptr);
     if (!bn) return "";
     char* hex = BN_bn2hex(bn);
+    if (!hex) { BN_free(bn); return ""; }
     std::string result(hex);
     OPENSSL_free(hex);
     BN_free(bn);
@@ -3377,8 +3388,11 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
             // Parse as CMS SignedData using OpenSSL CMS API
             BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
-            CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
-            BIO_free(bio);
+            CMS_ContentInfo* cms = nullptr;
+            if (bio) {
+                cms = d2i_CMS_bio(bio, nullptr);
+                BIO_free(bio);
+            }
 
             // Verify CMS signature with UN_CSCA trust anchor
             if (cms) {
@@ -3855,32 +3869,43 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 namespace {  // Reopen anonymous namespace for remaining internal functions
 
 /**
- * @brief Check LDAP connectivity
+ * @brief Check LDAP connectivity using LDAP C API (no system() calls)
  */
 Json::Value checkLdap() {
     Json::Value result;
     result["name"] = "ldap";
 
     try {
-        // Simple LDAP connection test using system ldapsearch
         auto start = std::chrono::steady_clock::now();
 
-        std::string cmd = "ldapsearch -x -H ldap://" + appConfig.ldapHost + ":" +
-                         std::to_string(appConfig.ldapPort) +
-                         " -b \"\" -s base \"(objectclass=*)\" namingContexts 2>/dev/null | grep -q namingContexts";
+        std::string ldapUri = "ldap://" + appConfig.ldapHost + ":" + std::to_string(appConfig.ldapPort);
+        LDAP* ld = nullptr;
+        int rc = ldap_initialize(&ld, ldapUri.c_str());
 
-        int ret = system(cmd.c_str());
+        if (rc == LDAP_SUCCESS) {
+            int version = LDAP_VERSION3;
+            ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
+
+            struct timeval tv = {3, 0};  // 3 second timeout
+            ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &tv);
+
+            // Anonymous bind to verify connectivity
+            struct berval cred = {0, nullptr};
+            rc = ldap_sasl_bind_s(ld, nullptr, LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
+            ldap_unbind_ext_s(ld, nullptr, nullptr);
+        }
+
         auto end = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-        if (ret == 0) {
+        if (rc == LDAP_SUCCESS) {
             result["status"] = "UP";
             result["responseTimeMs"] = static_cast<int>(duration.count());
             result["host"] = appConfig.ldapHost;
             result["port"] = appConfig.ldapPort;
         } else {
             result["status"] = "DOWN";
-            result["error"] = "LDAP connection failed";
+            result["error"] = std::string("LDAP connection failed: ") + ldap_err2string(rc);
         }
     } catch (const std::exception& e) {
         result["status"] = "DOWN";

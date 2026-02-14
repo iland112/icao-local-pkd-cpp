@@ -452,24 +452,27 @@ X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
         std::string country = extractDnAttribute(issuerDn, "C");
         std::string org = extractDnAttribute(issuerDn, "O");
 
-        // Build query using component-based matching
+        // Build parameterized query using component-based matching
         std::string query = "SELECT certificate_data, subject_dn FROM certificate "
                            "WHERE certificate_type = 'CSCA'";
+        std::vector<std::string> params;
+        int paramIdx = 1;
 
         if (!cn.empty()) {
-            std::string escaped = escapeSingleQuotes(cn);
-            query += " AND LOWER(subject_dn) LIKE '%cn=" + escaped + "%'";
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%cn=" + cn + "%");
         }
         if (!country.empty()) {
-            query += " AND LOWER(subject_dn) LIKE '%c=" + country + "%'";
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%c=" + country + "%");
         }
         if (!org.empty()) {
-            std::string escaped = escapeSingleQuotes(org);
-            query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%o=" + org + "%");
         }
         query += " LIMIT 20";  // Fetch candidates for post-filtering
 
-        Json::Value result = queryExecutor_->executeQuery(query);
+        Json::Value result = queryExecutor_->executeQuery(query, params);
 
         // Post-filter: find exact DN match using normalized comparison
         std::string targetNormalized = normalizeDnForComparison(issuerDn);
@@ -527,26 +530,29 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
         std::string country = extractDnAttribute(subjectDn, "C");
         std::string org = extractDnAttribute(subjectDn, "O");
 
-        // Build query using component-based matching
+        // Build parameterized query using component-based matching
         // ORDER BY created_at DESC: prefer newest CSCA first (most likely to match current DSCs)
         std::string query = "SELECT certificate_data, subject_dn FROM certificate "
                            "WHERE certificate_type = 'CSCA'";
+        std::vector<std::string> params;
+        int paramIdx = 1;
 
         if (!cn.empty()) {
-            std::string escaped = escapeSingleQuotes(cn);
-            query += " AND LOWER(subject_dn) LIKE '%cn=" + escaped + "%'";
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%cn=" + cn + "%");
         }
         if (!country.empty()) {
-            query += " AND LOWER(subject_dn) LIKE '%c=" + country + "%'";
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%c=" + country + "%");
         }
         if (!org.empty()) {
-            std::string escaped = escapeSingleQuotes(org);
-            query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
+            query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
+            params.push_back("%o=" + org + "%");
         }
 
         query += " ORDER BY created_at DESC";
 
-        Json::Value rows = queryExecutor_->executeQuery(query);
+        Json::Value rows = queryExecutor_->executeQuery(query, params);
 
         // Post-filter: match using normalized DN comparison
         std::string targetNormalized = normalizeDnForComparison(subjectDn);

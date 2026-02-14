@@ -82,6 +82,10 @@ X509* SodParser::extractDscCertificate(const std::vector<uint8_t>& sodBytes) {
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) {
+        spdlog::error("Failed to create BIO for DSC extraction");
+        return nullptr;
+    }
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -140,6 +144,10 @@ bool SodParser::verifySodSignature(
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) {
+        spdlog::error("Failed to create BIO for signature verification");
+        return false;
+    }
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -150,7 +158,18 @@ bool SodParser::verifySodSignature(
 
     // Create certificate store with DSC
     X509_STORE* store = X509_STORE_new();
+    if (!store) {
+        spdlog::error("Failed to create X509 store");
+        CMS_ContentInfo_free(cms);
+        return false;
+    }
     STACK_OF(X509)* certs = sk_X509_new_null();
+    if (!certs) {
+        spdlog::error("Failed to create certificate stack");
+        X509_STORE_free(store);
+        CMS_ContentInfo_free(cms);
+        return false;
+    }
     sk_X509_push(certs, dscCert);
 
     // Verify signature
@@ -193,6 +212,7 @@ std::string SodParser::extractSignatureAlgorithmOid(const std::vector<uint8_t>& 
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) return "";
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -222,6 +242,7 @@ std::string SodParser::extractHashAlgorithmOid(const std::vector<uint8_t>& sodBy
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) return "";
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -258,11 +279,21 @@ std::vector<uint8_t> SodParser::unwrapIcaoSod(const std::vector<uint8_t>& sodByt
         size_t offset = 1;
 
         // Parse length (can be short or long form)
+        if (offset >= sodBytes.size()) return sodBytes;
         if (sodBytes[offset] & 0x80) {
             int numLengthBytes = sodBytes[offset] & 0x7F;
+            if (offset + numLengthBytes + 1 > sodBytes.size()) {
+                spdlog::error("SOD unwrap: length bytes exceed buffer");
+                return sodBytes;
+            }
             offset += numLengthBytes + 1;
         } else {
             offset += 1;
+        }
+
+        if (offset >= sodBytes.size()) {
+            spdlog::error("SOD unwrap: offset exceeds buffer after length parse");
+            return sodBytes;
         }
 
         // Return unwrapped content
@@ -281,6 +312,10 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
     std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
 
     BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) {
+        spdlog::error("Failed to create BIO for DG hash parsing");
+        return result;
+    }
     CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
     BIO_free(bio);
 
@@ -299,10 +334,12 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
 
     // Parse LDSSecurityObject ASN.1 - Manual parsing (from v1.0)
     const unsigned char* p = ASN1_STRING_get0_data(*contentPtr);
+    long dataLen = ASN1_STRING_length(*contentPtr);
     const unsigned char* contentData = p;
+    const unsigned char* end = p + dataLen;  // Buffer boundary for all checks
 
     // Skip outer SEQUENCE tag and length
-    if (*contentData != 0x30) {
+    if (contentData >= end || *contentData != 0x30) {
         spdlog::error("Expected SEQUENCE tag for LDSSecurityObject");
         CMS_ContentInfo_free(cms);
         return result;
@@ -310,10 +347,12 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
     contentData++;
 
     // Parse length
+    if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
     size_t contentLen = 0;
     if (*contentData & 0x80) {
         int numBytes = *contentData & 0x7F;
         contentData++;
+        if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
         for (int i = 0; i < numBytes; i++) {
             contentLen = (contentLen << 8) | *contentData++;
         }
@@ -322,35 +361,42 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
     }
 
     // Skip version (INTEGER)
-    if (*contentData == 0x02) {
+    if (contentData < end && *contentData == 0x02) {
         contentData++;
+        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
         size_t versionLen = *contentData++;
+        if (contentData + versionLen > end) { CMS_ContentInfo_free(cms); return result; }
         contentData += versionLen;
     }
 
     // Skip hashAlgorithm (SEQUENCE - AlgorithmIdentifier)
-    if (*contentData == 0x30) {
+    if (contentData < end && *contentData == 0x30) {
         contentData++;
+        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
         size_t algLen = 0;
         if (*contentData & 0x80) {
             int numBytes = *contentData & 0x7F;
             contentData++;
+            if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
             for (int i = 0; i < numBytes; i++) {
                 algLen = (algLen << 8) | *contentData++;
             }
         } else {
             algLen = *contentData++;
         }
+        if (contentData + algLen > end) { CMS_ContentInfo_free(cms); return result; }
         contentData += algLen;
     }
 
     // Parse dataGroupHashValues (SEQUENCE OF DataGroupHash)
-    if (*contentData == 0x30) {
+    if (contentData < end && *contentData == 0x30) {
         contentData++;
+        if (contentData >= end) { CMS_ContentInfo_free(cms); return result; }
         size_t dgHashesLen = 0;
         if (*contentData & 0x80) {
             int numBytes = *contentData & 0x7F;
             contentData++;
+            if (contentData + numBytes > end) { CMS_ContentInfo_free(cms); return result; }
             for (int i = 0; i < numBytes; i++) {
                 dgHashesLen = (dgHashesLen << 8) | *contentData++;
             }
@@ -358,17 +404,21 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
             dgHashesLen = *contentData++;
         }
 
+        // Clamp dgHashesEnd to buffer boundary
         const unsigned char* dgHashesEnd = contentData + dgHashesLen;
+        if (dgHashesEnd > end) dgHashesEnd = end;
 
         // Parse each DataGroupHash
         while (contentData < dgHashesEnd) {
             if (*contentData != 0x30) break;
             contentData++;
+            if (contentData >= dgHashesEnd) break;
 
             size_t dgHashLen = 0;
             if (*contentData & 0x80) {
                 int numBytes = *contentData & 0x7F;
                 contentData++;
+                if (contentData + numBytes > dgHashesEnd) break;
                 for (int i = 0; i < numBytes; i++) {
                     dgHashLen = (dgHashLen << 8) | *contentData++;
                 }
@@ -377,24 +427,29 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
             }
 
             const unsigned char* dgHashEnd = contentData + dgHashLen;
+            if (dgHashEnd > dgHashesEnd) break;
 
             // Parse dataGroupNumber (INTEGER)
             int dgNumber = 0;
-            if (*contentData == 0x02) {
+            if (contentData < dgHashEnd && *contentData == 0x02) {
                 contentData++;
+                if (contentData >= dgHashEnd) { contentData = dgHashEnd; continue; }
                 size_t intLen = *contentData++;
+                if (contentData + intLen > dgHashEnd) { contentData = dgHashEnd; continue; }
                 for (size_t i = 0; i < intLen; i++) {
                     dgNumber = (dgNumber << 8) | *contentData++;
                 }
             }
 
             // Parse dataGroupHashValue (OCTET STRING)
-            if (*contentData == 0x04) {
+            if (contentData < dgHashEnd && *contentData == 0x04) {
                 contentData++;
+                if (contentData >= dgHashEnd) { contentData = dgHashEnd; continue; }
                 size_t hashLen = 0;
                 if (*contentData & 0x80) {
                     int numBytes = *contentData & 0x7F;
                     contentData++;
+                    if (contentData + numBytes > dgHashEnd) { contentData = dgHashEnd; continue; }
                     for (int i = 0; i < numBytes; i++) {
                         hashLen = (hashLen << 8) | *contentData++;
                     }
@@ -402,11 +457,12 @@ std::map<int, std::vector<uint8_t>> SodParser::parseDataGroupHashesRaw(
                     hashLen = *contentData++;
                 }
 
-                std::vector<uint8_t> hashValue(contentData, contentData + hashLen);
-                result[dgNumber] = hashValue;
-                contentData += hashLen;
-
-                spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
+                if (contentData + hashLen <= dgHashEnd) {
+                    std::vector<uint8_t> hashValue(contentData, contentData + hashLen);
+                    result[dgNumber] = hashValue;
+                    contentData += hashLen;
+                    spdlog::debug("Parsed DG{} hash: {} bytes", dgNumber, hashLen);
+                }
             }
 
             contentData = dgHashEnd;
@@ -511,26 +567,30 @@ Json::Value SodParser::parseSodForApi(const std::vector<uint8_t>& sodBytes) {
 
             if (notBefore) {
                 BIO* bio = BIO_new(BIO_s_mem());
-                ASN1_TIME_print(bio, notBefore);
-                char buf[256];
-                int len = BIO_read(bio, buf, sizeof(buf) - 1);
-                if (len > 0) {
-                    buf[len] = '\0';
-                    dscInfo["notBefore"] = buf;
+                if (bio) {
+                    ASN1_TIME_print(bio, notBefore);
+                    char buf[256];
+                    int len = BIO_read(bio, buf, sizeof(buf) - 1);
+                    if (len > 0) {
+                        buf[len] = '\0';
+                        dscInfo["notBefore"] = buf;
+                    }
+                    BIO_free(bio);
                 }
-                BIO_free(bio);
             }
 
             if (notAfter) {
                 BIO* bio = BIO_new(BIO_s_mem());
-                ASN1_TIME_print(bio, notAfter);
-                char buf[256];
-                int len = BIO_read(bio, buf, sizeof(buf) - 1);
-                if (len > 0) {
-                    buf[len] = '\0';
-                    dscInfo["notAfter"] = buf;
+                if (bio) {
+                    ASN1_TIME_print(bio, notAfter);
+                    char buf[256];
+                    int len = BIO_read(bio, buf, sizeof(buf) - 1);
+                    if (len > 0) {
+                        buf[len] = '\0';
+                        dscInfo["notAfter"] = buf;
+                    }
+                    BIO_free(bio);
                 }
-                BIO_free(bio);
             }
 
             // Country code from issuer

@@ -469,6 +469,7 @@ std::vector<uint8_t> derCertToPem(const std::vector<uint8_t>& derData) {
     if (!x509) return derData; // Fallback: return DER as-is
 
     BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) { X509_free(x509); return derData; }
     PEM_write_bio_X509(bio, x509);
     X509_free(x509);
 
@@ -489,6 +490,7 @@ std::vector<uint8_t> derCrlToPem(const std::vector<uint8_t>& derData) {
     if (!crl) return derData;
 
     BIO* bio = BIO_new(BIO_s_mem());
+    if (!bio) { X509_CRL_free(crl); return derData; }
     PEM_write_bio_X509_CRL(bio, crl);
     X509_CRL_free(crl);
 

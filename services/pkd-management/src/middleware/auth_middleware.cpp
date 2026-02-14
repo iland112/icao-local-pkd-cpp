@@ -37,13 +37,10 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/upload/[a-f0-9\\-]+/.*", // Upload sub-resources (validations, issues, etc.)
 
     // ========================================================================
-    // File Upload (TEMPORARY for Oracle testing - REMOVE after testing)
+    // Certificate Preview & Upload Progress (Read-only, no data modification)
     // ========================================================================
-    "^/api/upload/ldif$",          // LDIF file upload
-    "^/api/upload/masterlist$",    // Master List upload
-    "^/api/upload/certificate$",           // Individual certificate file upload (PEM, DER, CER, P7B, CRL)
     "^/api/upload/certificate/preview$",   // Certificate preview (parse only, no save)
-    "^/api/progress.*",            // Upload progress SSE stream
+    "^/api/progress.*",            // Upload progress SSE stream (EventSource cannot send custom headers)
 
     // ========================================================================
     // Certificate Search (Public directory service)
@@ -103,6 +100,8 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
 };
 
 bool AuthMiddleware::authEnabled_ = true;
+std::vector<std::regex> AuthMiddleware::compiledPatterns_;
+std::once_flag AuthMiddleware::patternsInitFlag_;
 
 AuthMiddleware::AuthMiddleware() {
     // Check if authentication is disabled (for testing)
@@ -252,14 +251,23 @@ bool AuthMiddleware::isAuthEnabled() {
 }
 
 bool AuthMiddleware::isPublicEndpoint(const std::string& path) const {
-    for (const auto& pattern : publicEndpoints_) {
-        try {
-            if (std::regex_match(path, std::regex(pattern))) {
-                return true;
+    // Pre-compile regex patterns once (thread-safe)
+    std::call_once(patternsInitFlag_, []() {
+        compiledPatterns_.reserve(publicEndpoints_.size());
+        for (const auto& pattern : publicEndpoints_) {
+            try {
+                compiledPatterns_.emplace_back(pattern, std::regex::optimize);
+            } catch (const std::regex_error& e) {
+                spdlog::error("[AuthMiddleware] Invalid regex pattern '{}': {}",
+                              pattern, e.what());
             }
-        } catch (const std::regex_error& e) {
-            spdlog::error("[AuthMiddleware] Invalid regex pattern '{}': {}",
-                          pattern, e.what());
+        }
+        spdlog::info("[AuthMiddleware] Pre-compiled {} regex patterns", compiledPatterns_.size());
+    });
+
+    for (const auto& re : compiledPatterns_) {
+        if (std::regex_match(path, re)) {
+            return true;
         }
     }
     return false;

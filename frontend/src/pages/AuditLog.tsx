@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Shield, Filter, User, Activity, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { createAuthenticatedClient } from '@/services/authApi';
+
+const authClient = createAuthenticatedClient('/api/auth');
 
 interface AuditLogEntry {
   id: string;
@@ -48,31 +51,22 @@ export function AuditLog() {
   const fetchAuditLogs = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('access_token');
       const offset = (page - 1) * limit;
 
-      const params = new URLSearchParams({
+      const params: Record<string, string> = {
         limit: limit.toString(),
         offset: offset.toString(),
-      });
+      };
 
-      if (username) params.append('username', username);
-      if (eventType) params.append('event_type', eventType);
-      if (successFilter) params.append('success', successFilter);
+      if (username) params.username = username;
+      if (eventType) params.event_type = eventType;
+      if (successFilter) params.success = successFilter;
 
-      const response = await fetch(`/api/auth/audit-log?${params}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch audit logs');
-
-      const data = await response.json();
+      const { data } = await authClient.get('/audit-log', { params });
       setLogs(data.logs || []);
       setTotal(data.total || 0);
     } catch (error) {
-      console.error('Error fetching audit logs:', error);
+      if (import.meta.env.DEV) console.error('Error fetching audit logs:', error);
     } finally {
       setLoading(false);
     }
@@ -80,19 +74,10 @@ export function AuditLog() {
 
   const fetchStats = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/auth/audit-log/stats', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch stats');
-
-      const data = await response.json();
+      const { data } = await authClient.get('/audit-log/stats');
       setStats(data.stats || null);
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      if (import.meta.env.DEV) console.error('Error fetching stats:', error);
     }
   };
 

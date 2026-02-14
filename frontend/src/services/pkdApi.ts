@@ -45,7 +45,7 @@ const pkdApi = axios.create({
 pkdApi.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
-    console.error('[PKD API Error]:', error.response?.data || error.message);
+    if (import.meta.env.DEV) console.error('[PKD API Error]:', error.response?.data || error.message);
     return Promise.reject(error);
   }
 );

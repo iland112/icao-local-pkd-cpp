@@ -115,13 +115,24 @@ std::vector<Upload> UploadRepository::findAll(
 
     try {
         // Map domain field names to database column names (support both camelCase and snake_case)
-        // ORDER BY uses raw column names - Oracle handles TIMESTAMP sorting natively
-        // TO_CHAR() is only for SELECT clause to convert results to string for OTL
         std::string dbSortBy = sortBy;
         if (sortBy == "createdAt" || sortBy == "created_at") {
             dbSortBy = "upload_timestamp";
         } else if (sortBy == "updatedAt" || sortBy == "updated_at") {
             dbSortBy = "completed_timestamp";
+        }
+
+        // Whitelist validation for ORDER BY (prevent SQL injection)
+        if (dbSortBy != "upload_timestamp" && dbSortBy != "completed_timestamp" &&
+            dbSortBy != "file_name" && dbSortBy != "status" &&
+            dbSortBy != "file_size" && dbSortBy != "total_entries") {
+            dbSortBy = "upload_timestamp";
+        }
+
+        std::string safeDirection = direction;
+        if (safeDirection != "ASC" && safeDirection != "DESC" &&
+            safeDirection != "asc" && safeDirection != "desc") {
+            safeDirection = "DESC";
         }
 
         // Oracle: upload_timestamp, completed_timestamp are now VARCHAR2 (simplified query)
@@ -140,7 +151,7 @@ std::vector<Upload> UploadRepository::findAll(
               << "COALESCE(expired_count, 0) AS expired_count, "
               << "COALESCE(revoked_count, 0) AS revoked_count "
               << "FROM uploaded_file "
-              << "ORDER BY " << dbSortBy << " " << direction << " "
+              << "ORDER BY " << dbSortBy << " " << safeDirection << " "
               << "OFFSET " << offset << " ROWS FETCH NEXT " << limit << " ROWS ONLY";
 
         Json::Value result = queryExecutor_->executeQuery(query.str());

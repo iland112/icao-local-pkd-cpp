@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.10.4
+**Current Version**: v2.10.5
 **Last Updated**: 2026-02-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -478,6 +478,29 @@ scripts/
 ---
 
 ## Version History
+
+### v2.10.5 (2026-02-15) - Security Hardening (Full Audit + OWASP)
+- **CRITICAL**: Upload endpoint authentication restored (removed TEMPORARY public access for LDIF/ML/Certificate)
+- **CRITICAL**: Command Injection eliminated — `system()`/`popen()` replaced with native C APIs across 4 services
+  - PKD Management: `system(ldapsearch)` → LDAP C API (`ldap_initialize` + `ldap_sasl_bind_s`)
+  - PA Service: `popen(ldapsearch)` → LDAP C API
+  - EmailSender: `system(mail)` × 3 → spdlog log-only
+  - ASN.1 Parser: `popen(openssl asn1parse)` → OpenSSL `ASN1_parse_dump()` C API
+- **HIGH**: SQL Injection prevention — ORDER BY whitelist validation, parameterized LIKE queries with `escapeSqlWildcards()`
+- **HIGH**: SOD Parser buffer overread protection — `end` pointer boundary checks in all ASN.1 manual parsing
+- **HIGH**: Null pointer checks added to 24 OpenSSL allocation sites across 8 files (BIO, EVP_MD_CTX, X509_STORE, BIGNUM, BN_bn2hex)
+- **MEDIUM**: nginx security headers added (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy)
+- **MEDIUM**: Auth middleware regex pre-compilation (`std::call_once` + `std::regex::optimize`)
+- **MEDIUM**: JWT_SECRET minimum length validation (32 bytes) at service startup
+- **MEDIUM**: LDAP DN escape utility (RFC 4514 special characters)
+- **MEDIUM**: Base64 input validation (`isValidBase64()` pre-check before decode)
+- Frontend OWASP: Default credentials hidden in production (`import.meta.env.DEV` guard)
+- Frontend OWASP: All `console.error` in 6 API service interceptors → DEV-only
+- Frontend OWASP: UserManagement.tsx / AuditLog.tsx refactored from raw `fetch()` to `createAuthenticatedClient` (centralized JWT injection + 401 handling)
+- Frontend OWASP: Relay API JWT token interceptor added
+- Memory leak audit: 0 leaks found, SodData RAII pattern verified
+- 23 files changed, +410/-277 lines
+- Action plan: `docs/SECURITY_FIX_ACTION_PLAN.md` updated with full completion status
 
 ### v2.10.4 (2026-02-15) - DSC_NC Non-Conformant Certificate Report Page
 - New page: DSC_NC Report (`/pkd/dsc-nc`) — full analysis dashboard for non-conformant DSC certificates

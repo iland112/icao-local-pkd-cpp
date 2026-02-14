@@ -34,7 +34,7 @@ export function Login() {
         setError('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
       }
     } catch (err: any) {
-      console.error('Login error:', err);
+      if (import.meta.env.DEV) console.error('Login error:', err);
 
       if (err.response?.status === 401) {
         setError('사용자명 또는 비밀번호가 올바르지 않습니다.');
@@ -175,12 +175,14 @@ export function Login() {
             </button>
           </form>
 
-          {/* Help Text */}
-          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-              기본 계정: <span className="font-mono font-medium">admin</span> / <span className="font-mono font-medium">admin123</span>
-            </p>
-          </div>
+          {/* Help Text - Only shown in development mode */}
+          {import.meta.env.DEV && (
+            <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
+                기본 계정: <span className="font-mono font-medium">admin</span> / <span className="font-mono font-medium">admin123</span>
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

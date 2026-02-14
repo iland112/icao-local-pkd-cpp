@@ -4,7 +4,9 @@
 #include "../auth/jwt_service.h"
 #include <memory>
 #include <set>
+#include <vector>
 #include <regex>
+#include <mutex>
 
 namespace middleware {
 
@@ -64,6 +66,8 @@ public:
 private:
     std::shared_ptr<auth::JwtService> jwtService_;
     static std::set<std::string> publicEndpoints_;
+    static std::vector<std::regex> compiledPatterns_;
+    static std::once_flag patternsInitFlag_;
     static bool authEnabled_;
 
     /**

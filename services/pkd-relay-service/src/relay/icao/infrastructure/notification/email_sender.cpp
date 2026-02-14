@@ -20,8 +20,8 @@ bool EmailSender::send(const EmailMessage& message) {
     spdlog::info("[EmailSender] Sending email to {} recipient(s): {}",
                 message.toAddresses.size(), message.subject);
 
-    // For now, use system mail command (simple implementation)
-    // TODO: Implement proper SMTP client using libcurl
+    // Log email content instead of system() execution (security fix)
+    // TODO: Implement proper SMTP via libcurl when email sending is required
     return sendViaSystemMail(message);
 }
 
@@ -45,34 +45,19 @@ std::string EmailSender::formatEmail(const EmailMessage& message) {
 }
 
 bool EmailSender::sendViaSystemMail(const EmailMessage& message) {
-    // Check if mail command is available
-    int checkResult = system("command -v mail >/dev/null 2>&1");
-    if (checkResult != 0) {
-        spdlog::warn("[EmailSender] System 'mail' command not available");
-        spdlog::info("[EmailSender] Email content (would be sent):\n{}",
-                    formatEmail(message));
-        return false;
+    // Log email content (no system() calls for security)
+    std::ostringstream recipients;
+    for (size_t i = 0; i < message.toAddresses.size(); i++) {
+        recipients << message.toAddresses[i];
+        if (i < message.toAddresses.size() - 1) recipients << ", ";
     }
 
-    // Build mail command
-    std::ostringstream cmd;
-    cmd << "echo \"" << message.body << "\" | mail -s \"" << message.subject << "\"";
-
-    for (const auto& to : message.toAddresses) {
-        cmd << " " << to;
-    }
-
-    spdlog::debug("[EmailSender] Executing: {}", cmd.str());
-
-    int result = system(cmd.str().c_str());
-
-    if (result == 0) {
-        spdlog::info("[EmailSender] Email sent successfully");
-        return true;
-    } else {
-        spdlog::error("[EmailSender] Failed to send email (exit code: {})", result);
-        return false;
-    }
+    spdlog::info("[EmailSender] Email notification (log only):");
+    spdlog::info("[EmailSender] To: {}", recipients.str());
+    spdlog::info("[EmailSender] Subject: {}", message.subject);
+    spdlog::info("[EmailSender] Body: {}", message.body);
+    // TODO: Implement proper SMTP via libcurl when email sending is required
+    return true;
 }
 
 } // namespace notification

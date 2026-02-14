@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, Edit, Trash2, Key, Shield, Search, X, Check, AlertCircle } from 'lucide-react';
+import { createAuthenticatedClient } from '@/services/authApi';
 
 interface User {
   id: string;
@@ -21,6 +22,8 @@ interface UserFormData {
   is_admin: boolean;
   permissions: string[];
 }
+
+const authClient = createAuthenticatedClient('/api/auth');
 
 const AVAILABLE_PERMISSIONS = [
   { value: 'upload:read', label: '업로드 조회' },
@@ -68,19 +71,10 @@ export function UserManagement() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/auth/users', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch users');
-
-      const data = await response.json();
+      const { data } = await authClient.get('/users');
       setUsers(data.users || []);
     } catch (error) {
-      console.error('Error fetching users:', error);
+      if (import.meta.env.DEV) console.error('Error fetching users:', error);
       setError('사용자 목록을 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);
@@ -90,27 +84,13 @@ export function UserManagement() {
   const handleCreateUser = async () => {
     try {
       setError('');
-      const token = localStorage.getItem('access_token');
-      const response = await fetch('/api/auth/users', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to create user');
-      }
-
+      await authClient.post('/users', formData);
       setSuccess('사용자가 생성되었습니다.');
       setShowCreateModal(false);
       fetchUsers();
       resetForm();
     } catch (error: any) {
-      setError(error.message || '사용자 생성에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || '사용자 생성에 실패했습니다.');
     }
   };
 
@@ -119,29 +99,14 @@ export function UserManagement() {
 
     try {
       setError('');
-      const token = localStorage.getItem('access_token');
       const { password, ...updateData } = formData;
-
-      const response = await fetch(`/api/auth/users/${selectedUser.id}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updateData),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to update user');
-      }
-
+      await authClient.put(`/users/${selectedUser.id}`, updateData);
       setSuccess('사용자 정보가 수정되었습니다.');
       setShowEditModal(false);
       fetchUsers();
       resetForm();
     } catch (error: any) {
-      setError(error.message || '사용자 수정에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || '사용자 수정에 실패했습니다.');
     }
   };
 
@@ -150,25 +115,13 @@ export function UserManagement() {
 
     try {
       setError('');
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/auth/users/${selectedUser.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to delete user');
-      }
-
+      await authClient.delete(`/users/${selectedUser.id}`);
       setSuccess('사용자가 삭제되었습니다.');
       setShowDeleteModal(false);
       fetchUsers();
       setSelectedUser(null);
     } catch (error: any) {
-      setError(error.message || '사용자 삭제에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || '사용자 삭제에 실패했습니다.');
     }
   };
 
@@ -182,27 +135,15 @@ export function UserManagement() {
 
     try {
       setError('');
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(`/api/auth/users/${selectedUser.id}/password`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ new_password: passwordData.newPassword }),
+      await authClient.put(`/users/${selectedUser.id}/password`, {
+        new_password: passwordData.newPassword,
       });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.message || 'Failed to change password');
-      }
-
       setSuccess('비밀번호가 변경되었습니다.');
       setShowPasswordModal(false);
       setPasswordData({ newPassword: '', confirmPassword: '' });
       setSelectedUser(null);
     } catch (error: any) {
-      setError(error.message || '비밀번호 변경에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || '비밀번호 변경에 실패했습니다.');
     }
   };
 
