@@ -98,6 +98,21 @@ public:
     Json::Value getStatisticsByUploadId(const std::string& uploadId);
 
     /**
+     * @brief Get validation reason breakdown (GROUP BY validation_status, trust_chain_message)
+     * @return JSON object with grouped reason counts
+     *
+     * Response format:
+     * {
+     *   "reasons": [
+     *     { "status": "INVALID", "reason": "Trust chain signature verification failed", "count": 103, "countryCode": "..." },
+     *     { "status": "PENDING", "reason": "CSCA not found in database", "count": 7, "countryCode": "LU" },
+     *     ...
+     *   ]
+     * }
+     */
+    Json::Value getReasonBreakdown();
+
+    /**
      * @brief Update validation result for revalidation
      * @param certificateId Certificate UUID
      * @param validationStatus New validation status (VALID/INVALID)

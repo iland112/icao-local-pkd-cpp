@@ -5336,6 +5336,31 @@ void registerRoutes() {
         {drogon::Get}
     );
 
+    // Validation reason breakdown endpoint
+    app.registerHandler(
+        "/api/upload/statistics/validation-reasons",
+        [](const drogon::HttpRequestPtr& req,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            spdlog::info("GET /api/upload/statistics/validation-reasons");
+
+            try {
+                Json::Value result = validationRepository->getReasonBreakdown();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("GET /api/upload/statistics/validation-reasons failed: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Upload history endpoint - returns PageResponse format
     // Phase 3.1: Connected to UploadService (Repository Pattern)
     app.registerHandler(

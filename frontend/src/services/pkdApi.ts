@@ -229,6 +229,17 @@ export const uploadHistoryApi = {
   getStatistics: () => pkdApi.get<UploadStatisticsOverview>('/upload/statistics'),
 
   /**
+   * Get validation reason breakdown (INVALID/PENDING grouped by trust_chain_message)
+   */
+  getValidationReasons: () =>
+    pkdApi.get<{
+      success: boolean;
+      reasons: Array<{ status: string; reason: string; countryCode: string; count: number }>;
+      expired: Array<{ countryCode: string; expireYear: number; count: number }>;
+      revoked: Array<{ countryCode: string; count: number }>;
+    }>('/upload/statistics/validation-reasons'),
+
+  /**
    * Get country-level statistics
    * @param limit - Number of countries to return (sorted by certificate count)
    * @returns Top countries by certificate count

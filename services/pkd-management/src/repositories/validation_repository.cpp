@@ -775,4 +775,133 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
     return stats;
 }
 
+Json::Value ValidationRepository::getReasonBreakdown()
+{
+    spdlog::debug("[ValidationRepository] Getting validation reason breakdown");
+
+    Json::Value response;
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        auto safeInt = [](const Json::Value& val) -> int {
+            if (val.isInt()) return val.asInt();
+            if (val.isString()) { try { return std::stoi(val.asString()); } catch(...) { return 0; } }
+            return 0;
+        };
+
+        // GROUP BY validation_status, trust_chain_message, country_code
+        // Only INVALID and PENDING are interesting for reason breakdown
+        std::string query;
+        if (dbType == "oracle") {
+            query =
+                "SELECT validation_status, trust_chain_message, country_code, COUNT(*) AS cnt "
+                "FROM validation_result "
+                "WHERE validation_status IN ('INVALID', 'PENDING') "
+                "AND trust_chain_message IS NOT NULL "
+                "GROUP BY validation_status, trust_chain_message, country_code "
+                "ORDER BY validation_status, cnt DESC";
+        } else {
+            query =
+                "SELECT validation_status, trust_chain_message, country_code, COUNT(*) AS cnt "
+                "FROM validation_result "
+                "WHERE validation_status IN ('INVALID', 'PENDING') "
+                "AND trust_chain_message IS NOT NULL AND trust_chain_message != '' "
+                "GROUP BY validation_status, trust_chain_message, country_code "
+                "ORDER BY validation_status, cnt DESC";
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, {});
+
+        Json::Value reasons(Json::arrayValue);
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            Json::Value row = result[i];
+            Json::Value reason;
+            reason["status"] = row.get("validation_status", "").asString();
+            reason["reason"] = row.get("trust_chain_message", "").asString();
+            reason["countryCode"] = row.get("country_code", "").asString();
+            reason["count"] = safeInt(row.get("cnt", 0));
+            reasons.append(reason);
+        }
+
+        response["success"] = true;
+        response["reasons"] = reasons;
+
+        // Expired certificates breakdown: GROUP BY country_code, year of not_after
+        std::string expiredQuery;
+        if (dbType == "oracle") {
+            expiredQuery =
+                "SELECT country_code, "
+                "  EXTRACT(YEAR FROM TO_TIMESTAMP(not_after, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')) AS expire_year, "
+                "  COUNT(*) AS cnt "
+                "FROM validation_result "
+                "WHERE validity_period_valid = 0 "
+                "AND not_after IS NOT NULL "
+                "GROUP BY country_code, EXTRACT(YEAR FROM TO_TIMESTAMP(not_after, 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"')) "
+                "ORDER BY cnt DESC";
+        } else {
+            expiredQuery =
+                "SELECT country_code, "
+                "  EXTRACT(YEAR FROM not_after::timestamp) AS expire_year, "
+                "  COUNT(*) AS cnt "
+                "FROM validation_result "
+                "WHERE validity_period_valid = FALSE "
+                "AND not_after IS NOT NULL AND not_after != '' "
+                "GROUP BY country_code, EXTRACT(YEAR FROM not_after::timestamp) "
+                "ORDER BY cnt DESC";
+        }
+
+        Json::Value expiredResult = queryExecutor_->executeQuery(expiredQuery, {});
+        Json::Value expired(Json::arrayValue);
+        for (Json::ArrayIndex i = 0; i < expiredResult.size(); i++) {
+            Json::Value row = expiredResult[i];
+            Json::Value entry;
+            entry["countryCode"] = row.get("country_code", "").asString();
+
+            // expire_year may come as double (EXTRACT returns numeric)
+            Json::Value yearVal = row.get("expire_year", 0);
+            if (yearVal.isDouble()) entry["expireYear"] = static_cast<int>(yearVal.asDouble());
+            else if (yearVal.isInt()) entry["expireYear"] = yearVal.asInt();
+            else if (yearVal.isString()) { try { entry["expireYear"] = std::stoi(yearVal.asString()); } catch(...) { entry["expireYear"] = 0; } }
+            else entry["expireYear"] = 0;
+
+            entry["count"] = safeInt(row.get("cnt", 0));
+            expired.append(entry);
+        }
+        response["expired"] = expired;
+
+        // Revoked certificates breakdown: GROUP BY country_code
+        std::string revokedQuery =
+            "SELECT country_code, COUNT(*) AS cnt "
+            "FROM validation_result "
+            "WHERE revocation_status = 'REVOKED' "
+            "GROUP BY country_code "
+            "ORDER BY cnt DESC";
+
+        Json::Value revokedResult = queryExecutor_->executeQuery(revokedQuery, {});
+        Json::Value revoked(Json::arrayValue);
+        for (Json::ArrayIndex i = 0; i < revokedResult.size(); i++) {
+            Json::Value row = revokedResult[i];
+            Json::Value entry;
+            entry["countryCode"] = row.get("country_code", "").asString();
+            entry["count"] = safeInt(row.get("cnt", 0));
+            revoked.append(entry);
+        }
+        response["revoked"] = revoked;
+
+        spdlog::info("[ValidationRepository] Reason breakdown: {} reasons, {} expired, {} revoked",
+                     reasons.size(), expired.size(), revoked.size());
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ValidationRepository] getReasonBreakdown failed: {}", e.what());
+        response["success"] = false;
+        response["error"] = e.what();
+        response["reasons"] = Json::arrayValue;
+        response["expired"] = Json::arrayValue;
+        response["revoked"] = Json::arrayValue;
+    }
+
+    return response;
+}
+
 } // namespace repositories

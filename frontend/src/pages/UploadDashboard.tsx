@@ -34,13 +34,41 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { uploadApi } from '@/services/api';
+import { uploadHistoryApi } from '@/services/pkdApi';
 import type { UploadStatisticsOverview, UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
+import { getFlagSvgPath } from '@/utils/countryCode';
+
+interface ValidationReasonEntry {
+  status: string;
+  reason: string;
+  countryCode: string;
+  count: number;
+}
+
+interface ExpiredEntry {
+  countryCode: string;
+  expireYear: number;
+  count: number;
+}
+
+interface RevokedEntry {
+  countryCode: string;
+  count: number;
+}
+
+type DetailDialogType = 'INVALID' | 'PENDING' | 'EXPIRED' | 'REVOKED' | null;
 
 export function UploadDashboard() {
   const [stats, setStats] = useState<UploadStatisticsOverview | null>(null);
   const [recentChanges, setRecentChanges] = useState<UploadChange[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reasonDialogOpen, setReasonDialogOpen] = useState<DetailDialogType>(null);
+  const [validationReasons, setValidationReasons] = useState<ValidationReasonEntry[]>([]);
+  const [expiredData, setExpiredData] = useState<ExpiredEntry[]>([]);
+  const [revokedData, setRevokedData] = useState<RevokedEntry[]>([]);
+  const [reasonsLoading, setReasonsLoading] = useState(false);
+  const [dataFetched, setDataFetched] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -60,6 +88,33 @@ export function UploadDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openDetailDialog = async (type: DetailDialogType) => {
+    setReasonDialogOpen(type);
+    if (!dataFetched) {
+      setReasonsLoading(true);
+      try {
+        const resp = await uploadHistoryApi.getValidationReasons();
+        setValidationReasons(resp.data.reasons || []);
+        setExpiredData(resp.data.expired || []);
+        setRevokedData(resp.data.revoked || []);
+        setDataFetched(true);
+      } catch (e) {
+        console.error('Failed to fetch validation detail:', e);
+      } finally {
+        setReasonsLoading(false);
+      }
+    }
+  };
+
+  const translateReason = (reason: string): string => {
+    if (reason.includes('Trust chain signature verification failed')) return '서명 검증 실패';
+    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return 'Trust Chain 끊김';
+    if (reason.includes('CSCA not found')) return 'CSCA 미등록';
+    if (reason.includes('not yet valid')) return '유효기간 미도래';
+    if (reason.includes('certificates expired')) return '인증서 만료 (서명 유효)';
+    return reason;
   };
 
   // Transform data for timeline chart
@@ -828,6 +883,11 @@ export function UploadDashboard() {
                       <span className="text-sm font-medium text-red-700 dark:text-red-300">검증 실패</span>
                     </div>
                     <p className="text-2xl font-bold text-red-800 dark:text-red-200">{(stats.validation?.trustChainInvalidCount ?? 0).toLocaleString()}</p>
+                    {(stats.validation?.trustChainInvalidCount ?? 0) > 0 && (
+                      <button onClick={() => openDetailDialog('INVALID')} className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline mt-1">
+                        상세 내용
+                      </button>
+                    )}
                   </div>
                   <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
                     <div className="flex items-center gap-2 mb-2">
@@ -835,6 +895,11 @@ export function UploadDashboard() {
                       <span className="text-sm font-medium text-amber-700 dark:text-amber-300">CSCA 미발견</span>
                     </div>
                     <p className="text-2xl font-bold text-amber-800 dark:text-amber-200">{(stats.validation?.cscaNotFoundCount ?? 0).toLocaleString()}</p>
+                    {(stats.validation?.cscaNotFoundCount ?? 0) > 0 && (
+                      <button onClick={() => openDetailDialog('PENDING')} className="text-xs text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 underline mt-1">
+                        상세 내용
+                      </button>
+                    )}
                   </div>
                   <div className="p-4 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
                     <div className="flex items-center gap-2 mb-2">
@@ -842,6 +907,11 @@ export function UploadDashboard() {
                       <span className="text-sm font-medium text-orange-700 dark:text-orange-300">만료됨</span>
                     </div>
                     <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats.validation?.expiredCount ?? 0).toLocaleString()}</p>
+                    {(stats.validation?.expiredCount ?? 0) > 0 && (
+                      <button onClick={() => openDetailDialog('EXPIRED')} className="text-xs text-orange-500 hover:text-orange-700 dark:text-orange-400 dark:hover:text-orange-300 underline mt-1">
+                        상세 내용
+                      </button>
+                    )}
                   </div>
                   <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
                     <div className="flex items-center gap-2 mb-2">
@@ -849,12 +919,280 @@ export function UploadDashboard() {
                       <span className="text-sm font-medium text-gray-700 dark:text-gray-300">폐지됨</span>
                     </div>
                     <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{(stats.validation?.revokedCount ?? 0).toLocaleString()}</p>
+                    {(stats.validation?.revokedCount ?? 0) > 0 && (
+                      <button onClick={() => openDetailDialog('REVOKED')} className="text-xs text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 underline mt-1">
+                        상세 내용
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           )}
         </>
+      )}
+
+      {/* Validation Reason Detail Dialog */}
+      {reasonDialogOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setReasonDialogOpen(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+            {/* Dialog Header */}
+            <div className={cn(
+              'px-6 py-4 border-b',
+              reasonDialogOpen === 'INVALID' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
+              reasonDialogOpen === 'PENDING' && 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+              reasonDialogOpen === 'EXPIRED' && 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
+              reasonDialogOpen === 'REVOKED' && 'bg-gray-50 dark:bg-gray-800/50 border-gray-200 dark:border-gray-700',
+            )}>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {reasonDialogOpen === 'INVALID' && <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />}
+                  {reasonDialogOpen === 'PENDING' && <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+                  {reasonDialogOpen === 'EXPIRED' && <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
+                  {reasonDialogOpen === 'REVOKED' && <XCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />}
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    {reasonDialogOpen === 'INVALID' && '검증 실패 상세'}
+                    {reasonDialogOpen === 'PENDING' && 'CSCA 미발견 상세'}
+                    {reasonDialogOpen === 'EXPIRED' && '만료 인증서 상세'}
+                    {reasonDialogOpen === 'REVOKED' && '폐지 인증서 상세'}
+                  </h3>
+                </div>
+                <button onClick={() => setReasonDialogOpen(null)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                {reasonDialogOpen === 'INVALID' && 'DSC_NC (Non-Conformant) 인증서는 ICAO 표준을 완전히 따르지 않아 서명 검증이 실패하는 것이 정상적인 결과입니다.'}
+                {reasonDialogOpen === 'PENDING' && 'PENDING은 검증 불가 상태로, 해당 국가의 CSCA가 Master List나 LDIF Collection에 포함되지 않아 Trust Chain을 구성할 수 없는 경우입니다.'}
+                {reasonDialogOpen === 'EXPIRED' && '유효기간이 경과한 인증서를 국가별, 만료 연도별로 분류합니다.'}
+                {reasonDialogOpen === 'REVOKED' && 'CRL(인증서 폐지 목록)에 의해 폐지된 인증서를 국가별로 분류합니다.'}
+              </p>
+            </div>
+
+            {/* Dialog Body */}
+            <div className="px-6 py-4 overflow-y-auto max-h-[55vh]">
+              {reasonsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+                  <span className="ml-2 text-gray-500">로딩 중...</span>
+                </div>
+              ) : (reasonDialogOpen === 'INVALID' || reasonDialogOpen === 'PENDING') ? (() => {
+                const filtered = validationReasons.filter(r => r.status === reasonDialogOpen);
+                if (filtered.length === 0) {
+                  return <p className="text-center text-gray-400 py-8">데이터가 없습니다.</p>;
+                }
+
+                const grouped = new Map<string, { reason: string; totalCount: number; countries: { code: string; count: number }[] }>();
+                for (const entry of filtered) {
+                  const key = translateReason(entry.reason);
+                  if (!grouped.has(key)) {
+                    grouped.set(key, { reason: key, totalCount: 0, countries: [] });
+                  }
+                  const g = grouped.get(key)!;
+                  g.totalCount += entry.count;
+                  // Merge same country across different raw reasons
+                  const existing = g.countries.find(c => c.code === entry.countryCode);
+                  if (existing) {
+                    existing.count += entry.count;
+                  } else {
+                    g.countries.push({ code: entry.countryCode, count: entry.count });
+                  }
+                }
+                for (const g of grouped.values()) {
+                  g.countries.sort((a, b) => b.count - a.count);
+                }
+                const sorted = [...grouped.values()].sort((a, b) => b.totalCount - a.totalCount);
+                const grandTotal = sorted.reduce((s, r) => s + r.totalCount, 0);
+
+                const getDescription = (reason: string) => {
+                  if (reason === '서명 검증 실패') return 'CSCA 공개키로 DSC 서명을 검증했으나 불일치';
+                  if (reason === 'Trust Chain 끊김') return '중간 CSCA가 없어 Trust Chain 구성 불가';
+                  if (reason === 'CSCA 미등록') return '해당 국가 CSCA가 DB에 없어 검증 수행 불가';
+                  if (reason === '유효기간 미도래') return '인증서 유효기간이 아직 시작되지 않음';
+                  if (reason === '인증서 만료 (서명 유효)') return '유효기간은 경과했으나 서명 검증은 성공';
+                  return '';
+                };
+                const isInvalid = reasonDialogOpen === 'INVALID';
+
+                return (
+                  <div className="space-y-3">
+                    {sorted.map((row, idx) => (
+                      <div key={idx} className={cn(
+                        'rounded-xl border p-4',
+                        isInvalid
+                          ? 'border-red-100 dark:border-red-900/40 bg-red-50/50 dark:bg-red-900/10'
+                          : 'border-amber-100 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-900/10'
+                      )}>
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={cn(
+                              'shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white',
+                              isInvalid ? 'bg-red-400 dark:bg-red-500' : 'bg-amber-400 dark:bg-amber-500'
+                            )}>
+                              {idx + 1}
+                            </span>
+                            <span className="font-semibold text-gray-900 dark:text-white">
+                              {row.reason}
+                            </span>
+                          </div>
+                          <span className={cn(
+                            'shrink-0 px-3 py-1 rounded-full text-sm font-bold',
+                            isInvalid
+                              ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300'
+                              : 'bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300'
+                          )}>
+                            {row.totalCount.toLocaleString()}건
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2.5 ml-8">
+                          {getDescription(row.reason)}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5 ml-8">
+                          {row.countries.map((c, ci) => (
+                            <span key={ci} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
+                              {getFlagSvgPath(c.code) && <img src={getFlagSvgPath(c.code)} alt={c.code} className="w-4 h-3 object-cover rounded-sm" />}
+                              <span className="font-bold">{c.code}</span>
+                              <span className="text-gray-400 dark:text-gray-500">{c.count.toLocaleString()}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className={cn(
+                      'flex items-center justify-between pt-2 border-t',
+                      isInvalid ? 'border-red-200 dark:border-red-800' : 'border-amber-200 dark:border-amber-800'
+                    )}>
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        총 {sorted.length}개 사유
+                      </span>
+                      <span className={cn(
+                        'text-lg font-bold',
+                        isInvalid ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+                      )}>
+                        합계 {grandTotal.toLocaleString()}건
+                      </span>
+                    </div>
+                  </div>
+                );
+              })() : reasonDialogOpen === 'EXPIRED' ? (() => {
+                if (expiredData.length === 0) {
+                  return <p className="text-center text-gray-400 py-8">데이터가 없습니다.</p>;
+                }
+
+                // Group by country, collect years
+                const byCountry = new Map<string, { totalCount: number; years: { year: number; count: number }[] }>();
+                for (const entry of expiredData) {
+                  if (!byCountry.has(entry.countryCode)) {
+                    byCountry.set(entry.countryCode, { totalCount: 0, years: [] });
+                  }
+                  const g = byCountry.get(entry.countryCode)!;
+                  g.totalCount += entry.count;
+                  g.years.push({ year: entry.expireYear, count: entry.count });
+                }
+                for (const g of byCountry.values()) {
+                  g.years.sort((a, b) => a.year - b.year);
+                }
+                const sorted = [...byCountry.entries()]
+                  .map(([code, data]) => ({ code, ...data }))
+                  .sort((a, b) => b.totalCount - a.totalCount);
+                const grandTotal = sorted.reduce((s, r) => s + r.totalCount, 0);
+
+                return (
+                  <div className="space-y-3">
+                    {sorted.map((row, idx) => (
+                      <div key={idx} className="rounded-xl border border-orange-100 dark:border-orange-900/40 bg-orange-50/50 dark:bg-orange-900/10 p-4">
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white bg-orange-400 dark:bg-orange-500">
+                              {idx + 1}
+                            </span>
+                            {getFlagSvgPath(row.code) && <img src={getFlagSvgPath(row.code)} alt={row.code} className="w-5 h-4 object-cover rounded-sm" />}
+                            <span className="font-semibold text-gray-900 dark:text-white text-lg">
+                              {row.code}
+                            </span>
+                          </div>
+                          <span className="shrink-0 px-3 py-1 rounded-full text-sm font-bold bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300">
+                            {row.totalCount.toLocaleString()}건
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 ml-8">
+                          {row.years.map((y, yi) => (
+                            <span key={yi} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300">
+                              <span className="font-bold">{y.year}년</span>
+                              <span className="text-gray-400 dark:text-gray-500">{y.count.toLocaleString()}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-2 border-t border-orange-200 dark:border-orange-800">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        총 {sorted.length}개 국가
+                      </span>
+                      <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
+                        합계 {grandTotal.toLocaleString()}건
+                      </span>
+                    </div>
+                  </div>
+                );
+              })() : reasonDialogOpen === 'REVOKED' ? (() => {
+                if (revokedData.length === 0) {
+                  return <p className="text-center text-gray-400 py-8">데이터가 없습니다.</p>;
+                }
+
+                const sorted = [...revokedData].sort((a, b) => b.count - a.count);
+                const grandTotal = sorted.reduce((s, r) => s + r.count, 0);
+
+                return (
+                  <div className="space-y-3">
+                    {sorted.map((row, idx) => (
+                      <div key={idx} className="rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50/50 dark:bg-gray-700/30 p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white bg-gray-400 dark:bg-gray-500">
+                              {idx + 1}
+                            </span>
+                            {getFlagSvgPath(row.countryCode) && <img src={getFlagSvgPath(row.countryCode)} alt={row.countryCode} className="w-5 h-4 object-cover rounded-sm" />}
+                            <span className="font-semibold text-gray-900 dark:text-white text-lg">
+                              {row.countryCode}
+                            </span>
+                          </div>
+                          <span className="px-3 py-1 rounded-full text-sm font-bold bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                            {row.count.toLocaleString()}건
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-2 border-t border-gray-300 dark:border-gray-600">
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                        총 {sorted.length}개 국가
+                      </span>
+                      <span className="text-lg font-bold text-gray-600 dark:text-gray-400">
+                        합계 {grandTotal.toLocaleString()}건
+                      </span>
+                    </div>
+                  </div>
+                );
+              })() : null}
+            </div>
+
+            {/* Dialog Footer */}
+            <div className={cn(
+              'px-6 py-3 border-t flex justify-end',
+              reasonDialogOpen === 'INVALID' && 'border-red-200 dark:border-red-800',
+              reasonDialogOpen === 'PENDING' && 'border-amber-200 dark:border-amber-800',
+              reasonDialogOpen === 'EXPIRED' && 'border-orange-200 dark:border-orange-800',
+              reasonDialogOpen === 'REVOKED' && 'border-gray-300 dark:border-gray-600',
+            )}>
+              <button
+                onClick={() => setReasonDialogOpen(null)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

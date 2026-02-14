@@ -30,6 +30,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/upload/countries/detailed.*",  // Detailed country statistics (homepage, with query params)
     "^/api/upload/history.*",      // Upload history (development access)
     "^/api/upload/statistics$",    // Upload statistics
+    "^/api/upload/statistics/validation-reasons$",  // Validation reason breakdown
     "^/api/upload/changes.*",      // Recent upload changes
     "^/api/upload/[a-f0-9\\-]+$",  // Upload by ID (deprecated pattern)
     "^/api/upload/detail/[a-f0-9\\-]+$", // Upload detail by ID (fixes 401 error)
