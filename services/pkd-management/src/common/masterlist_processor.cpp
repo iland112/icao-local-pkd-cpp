@@ -165,9 +165,7 @@ bool parseMasterListEntryV2(
     std::string signerDn = "Unknown";
 
     try {
-        // ====================================================================
         // Step 2a: Extract MLSC certificates from CMS SignedData
-        // ====================================================================
         // First, get all certificates from the CMS SignedData.certificates field
         STACK_OF(X509)* certs = CMS_get1_certs(cms);
         int numCerts = certs ? sk_X509_num(certs) : 0;
@@ -297,9 +295,7 @@ bool parseMasterListEntryV2(
             sk_X509_pop_free(certs, X509_free);
         }
 
-        // ====================================================================
         // Step 2b: Extract CSCA/LC certificates from pkiData
-        // ====================================================================
         ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
         if (!contentPtr || !*contentPtr) {
             spdlog::warn("[ML-LDIF] No encapsulated content (pkiData) found: {}", entry.dn);
@@ -572,9 +568,7 @@ bool processMasterListFile(
     std::string countryCode = "UN";  // Default to UN (ICAO)
 
     try {
-        // ====================================================================
         // Step 1: Extract MLSC certificates from SignerInfo
-        // ====================================================================
         // Note: CMS_get1_certs() returns SignedData.certificates field, which is empty in ICAO Master Lists
         // We need to extract certificates from SignerInfo instead
         STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
@@ -694,9 +688,7 @@ bool processMasterListFile(
             spdlog::warn("[ML-FILE] No SignerInfo found in CMS SignedData");
         }
 
-        // ====================================================================
         // Step 2: Extract CSCA/LC certificates from pkiData
-        // ====================================================================
         ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
         if (!contentPtr || !*contentPtr) {
             spdlog::error("[ML-FILE] Failed to extract encapsulated content (pkiData)");

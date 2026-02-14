@@ -92,9 +92,7 @@ CertificateRepository::CertificateRepository(common::IQueryExecutor* queryExecut
         queryExecutor_->getDatabaseType());
 }
 
-// ========================================================================
-// Search Operations
-// ========================================================================
+/// --- Search Operations ---
 
 Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
 {
@@ -345,9 +343,7 @@ Json::Value CertificateRepository::findBySubjectDn(
     return response;
 }
 
-// ========================================================================
-// Certificate Counts
-// ========================================================================
+/// --- Certificate Counts ---
 
 int CertificateRepository::countByType(const std::string& certType)
 {
@@ -398,9 +394,7 @@ int CertificateRepository::countByCountry(const std::string& countryCode)
     }
 }
 
-// ========================================================================
-// LDAP Storage Tracking
-// ========================================================================
+/// --- LDAP Storage Tracking ---
 
 Json::Value CertificateRepository::findNotStoredInLdap(int limit)
 {
@@ -432,9 +426,7 @@ bool CertificateRepository::markStoredInLdap(const std::string& fingerprint)
     }
 }
 
-// ========================================================================
-// X509 Certificate Retrieval (for Validation)
-// ========================================================================
+/// --- X509 Certificate Retrieval (for Validation) ---
 
 X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
 {
@@ -631,13 +623,9 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
     }
 }
 
-// ========================================================================
-// Private Helper Methods
-// ========================================================================
+/// --- Private Helper Methods ---
 
-// ========================================================================
-// DN Normalization Helpers
-// ========================================================================
+/// --- DN Normalization Helpers ---
 
 std::string CertificateRepository::extractDnAttribute(const std::string& dn, const std::string& attr)
 {
@@ -818,9 +806,7 @@ X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexD
     return cert;
 }
 
-// ============================================================================
-// Duplicate Certificate Tracking (v2.2.1)
-// ============================================================================
+/// --- Duplicate Certificate Tracking ---
 
 std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
     try {
@@ -887,9 +873,7 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
     }
 }
 
-// ============================================================================
-// Certificate Insert & Duplicate Tracking (Phase 6.1 - Oracle Migration)
-// ============================================================================
+/// --- Certificate Insert & Duplicate Tracking ---
 
 bool CertificateRepository::updateCertificateLdapStatus(
     const std::string& certificateId,
@@ -1014,9 +998,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                   certType, countryCode, fingerprint.substr(0, 16) + "...");
 
     try {
-        // ====================================================================
         // Step 1: Check if certificate already exists
-        // ====================================================================
         const char* checkQuery =
             "SELECT id, first_upload_id FROM certificate "
             "WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
@@ -1032,9 +1014,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             return std::make_pair(existingId, true);
         }
 
-        // ====================================================================
         // Step 2: Extract X.509 metadata from certificate
-        // ====================================================================
         const unsigned char* certPtr = certData.data();
         X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
 
@@ -1111,9 +1091,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             crlDpStr = "";
         }
 
-        // ====================================================================
         // Step 3: Insert new certificate with X.509 metadata
-        // ====================================================================
 
         std::string dbType = queryExecutor_->getDatabaseType();
 
@@ -1294,9 +1272,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
     }
 }
 
-// ============================================================================
-// Phase 2-2: LDAP Status Count by Upload ID
-// ============================================================================
+/// --- LDAP Status Count by Upload ID ---
 
 void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap) {
     std::string dbType = queryExecutor_->getDatabaseType();
@@ -1322,9 +1298,7 @@ void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadI
     }
 }
 
-// ============================================================================
-// Phase 2-4: Distinct Countries
-// ============================================================================
+/// --- Distinct Countries ---
 
 Json::Value CertificateRepository::getDistinctCountries() {
     std::string query = "SELECT DISTINCT country_code FROM certificate "
@@ -1334,9 +1308,7 @@ Json::Value CertificateRepository::getDistinctCountries() {
     return queryExecutor_->executeQuery(query);
 }
 
-// ============================================================================
-// Phase 2-5: Link Certificate Search
-// ============================================================================
+/// --- Link Certificate Search ---
 
 Json::Value CertificateRepository::searchLinkCertificates(
     const std::string& countryFilter,
@@ -1384,9 +1356,7 @@ Json::Value CertificateRepository::searchLinkCertificates(
     return queryExecutor_->executeQuery(sql.str(), paramValues);
 }
 
-// ============================================================================
-// Phase 2-5: Link Certificate Detail by ID
-// ============================================================================
+/// --- Link Certificate Detail by ID ---
 
 Json::Value CertificateRepository::findLinkCertificateById(const std::string& id) {
     std::string query =
@@ -1409,9 +1379,7 @@ Json::Value CertificateRepository::findLinkCertificateById(const std::string& id
     return rows[0];
 }
 
-// ============================================================================
-// Bulk Export (All LDAP-stored certificates)
-// ============================================================================
+/// --- Bulk Export (All LDAP-stored certificates) ---
 
 Json::Value CertificateRepository::findAllForExport() {
     std::string dbType = queryExecutor_->getDatabaseType();

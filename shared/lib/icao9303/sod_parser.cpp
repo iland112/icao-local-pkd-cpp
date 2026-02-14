@@ -38,9 +38,7 @@ SodParser::SodParser() {
     spdlog::debug("SodParser initialized");
 }
 
-// ==========================================================================
-// Main SOD Parsing Operations
-// ==========================================================================
+/// --- Main SOD Parsing Operations ---
 
 models::SodData SodParser::parseSod(const std::vector<uint8_t>& sodBytes) {
     spdlog::debug("Parsing SOD ({} bytes)", sodBytes.size());
@@ -194,9 +192,7 @@ bool SodParser::verifySodSignature(
     return valid;
 }
 
-// ==========================================================================
-// Algorithm Extraction
-// ==========================================================================
+/// --- Algorithm Extraction ---
 
 std::string SodParser::extractSignatureAlgorithm(const std::vector<uint8_t>& sodBytes) {
     std::string oid = extractSignatureAlgorithmOid(sodBytes);
@@ -268,9 +264,7 @@ std::string SodParser::extractHashAlgorithmOid(const std::vector<uint8_t>& sodBy
     return "";
 }
 
-// ==========================================================================
-// Helper Methods
-// ==========================================================================
+/// --- Helper Methods ---
 
 std::vector<uint8_t> SodParser::unwrapIcaoSod(const std::vector<uint8_t>& sodBytes) {
     // Check if SOD has ICAO wrapper tag (0x77)
@@ -506,9 +500,7 @@ const std::map<std::string, std::string>& SodParser::getSignatureAlgorithmNames(
     return SIGNATURE_ALGORITHM_NAMES;
 }
 
-// ==========================================================================
-// API-Specific Methods
-// ==========================================================================
+/// --- API-Specific Methods ---
 
 Json::Value SodParser::parseSodForApi(const std::vector<uint8_t>& sodBytes) {
     spdlog::debug("Parsing SOD for API response ({} bytes)", sodBytes.size());

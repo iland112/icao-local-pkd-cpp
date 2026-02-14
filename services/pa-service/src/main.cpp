@@ -59,12 +59,10 @@
 #include <optional>
 #include <regex>
 
-// Audit logging (Phase 4.4) - Shared library
 #include <icao/audit/audit_log.h>
-#include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
-#include "db_connection_pool_factory.h"  // Phase 4.4: Factory Pattern (includes interface)
+#include "db_connection_pool.h"
+#include "db_connection_pool_factory.h"
 
-// Repository Pattern - Phase 3: Service and Repository includes
 #include "repositories/pa_verification_repository.h"
 #include "repositories/data_group_repository.h"
 #include "repositories/ldap_certificate_repository.h"
@@ -75,7 +73,7 @@
 #include "services/certificate_validation_service.h"
 #include "services/dsc_auto_registration_service.h"
 #include "services/pa_verification_service.h"
-#include "common/country_code_utils.h"  // v2.9.1: ISO alpha-3 to alpha-2 conversion
+#include "common/country_code_utils.h"
 
 namespace {
 
@@ -249,14 +247,7 @@ struct AppConfig {
 
 AppConfig appConfig;
 
-// =============================================================================
-// Database Connection Pool (Phase 4.4: Factory Pattern with Oracle support)
-// =============================================================================
 std::shared_ptr<common::IDbConnectionPool> dbPool;
-
-// =============================================================================
-// Query Executor (Phase 5.1: Database-agnostic query execution)
-// =============================================================================
 std::unique_ptr<common::IQueryExecutor> queryExecutor;
 
 // =============================================================================
@@ -1110,7 +1101,8 @@ X509* searchCscaInOu(LDAP* ld, const std::string& ou, const std::string& country
 
 /**
  * @brief Retrieve CSCA certificate from LDAP by issuer DN
- * Sprint 3 Update: Search in both o=csca (self-signed) and o=lc (link certificates)
+ *
+ * Searches in both o=csca (self-signed) and o=lc (Link Certificates).
  */
 X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
     if (!ld) return nullptr;
@@ -1125,8 +1117,7 @@ X509* retrieveCscaFromLdap(LDAP* ld, const std::string& issuerDn) {
     std::string issuerCn = extractCnFromDn(issuerDn);
     spdlog::debug("Looking for CSCA matching issuer CN: {} in country: {}", issuerCn, countryCode);
 
-    // Sprint 3: Search in both o=csca (self-signed CSCA) and o=lc (Link Certificates)
-    // Try o=csca first (most CSCAs are self-signed, so this is more efficient)
+    // Try o=csca first, then o=lc (Link Certificates)
     X509* cscaCert = searchCscaInOu(ld, "csca", countryCode, issuerCn);
     if (cscaCert) {
         return cscaCert;
@@ -1568,9 +1559,6 @@ std::string savePaVerification(
         << "NOW(), NOW(), " << processingTimeMs
         << ")";
 
-    // Note: This SQL has some issues with escaping. Using parameterized query would be better.
-    // For now, simplified version:
-
     std::string simpleSql =
         "INSERT INTO pa_verification (id, issuing_country, document_number, sod_binary, sod_hash, "
         "verification_status, trust_chain_valid, sod_signature_valid, dg_hashes_valid, "
@@ -1745,15 +1733,12 @@ Json::Value buildDataGroupValidationJson(const DataGroupValidationResult& result
  * 4. Repositories (with Query Executor/LDAP injection)
  * 5. Services (with repository injection)
  *
- * Phase 5.1: Query Executor Pattern for database independence (PostgreSQL/Oracle)
  */
 void initializeServices() {
     spdlog::info("Initializing Repository Pattern services...");
 
     try {
-        // Step 1: Initialize database connection pool (Phase 4.4: Factory Pattern)
-        // Use Factory Pattern to create pool based on DB_TYPE environment variable
-        // Supports both PostgreSQL (production) and Oracle (development)
+        // Step 1: Initialize database connection pool
         spdlog::debug("Creating database connection pool using Factory Pattern...");
         dbPool = common::DbConnectionPoolFactory::createFromEnv();
 
@@ -1768,7 +1753,7 @@ void initializeServices() {
         std::string dbType = dbPool->getDatabaseType();
         spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
-        // Step 2: Create Query Executor (Phase 5.1: Database abstraction)
+        // Step 2: Create Query Executor
         spdlog::debug("Creating Query Executor from connection pool...");
         queryExecutor = common::createQueryExecutor(dbPool.get());
         if (!queryExecutor) {
@@ -1782,8 +1767,7 @@ void initializeServices() {
             throw std::runtime_error("Failed to get LDAP connection");
         }
 
-        // Step 4: Initialize Repositories (constructor-based dependency injection)
-        // Phase 5.1: Repositories now use Query Executor for database independence
+        // Step 4: Initialize Repositories
         spdlog::debug("Creating PaVerificationRepository...");
         paVerificationRepository = new repositories::PaVerificationRepository(queryExecutor.get());
 
@@ -2018,7 +2002,7 @@ void registerRoutes() {
 
                 // Get optional fields
                 std::string countryCode = (*jsonBody).get("issuingCountry", "").asString();
-                // v2.9.1: Normalize alpha-3 country codes (e.g., KOR→KR) for LDAP compatibility
+                // Normalize alpha-3 country codes (e.g., KOR→KR) for LDAP compatibility
                 if (!countryCode.empty()) {
                     std::string normalized = common::normalizeCountryCodeToAlpha2(countryCode);
                     if (normalized != countryCode) {

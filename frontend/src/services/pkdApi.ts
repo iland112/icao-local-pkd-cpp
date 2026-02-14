@@ -9,7 +9,6 @@
  * - LDAP direct queries
  *
  * @version 2.0.0
- * @since Phase 6 - Frontend API Refactoring
  */
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
@@ -25,9 +24,7 @@ import type {
   LdifStructureData,
 } from '@/types';
 
-// =============================================================================
-// Axios Instance
-// =============================================================================
+// --- Axios Instance ---
 
 /**
  * PKD API client
@@ -50,9 +47,7 @@ pkdApi.interceptors.response.use(
   }
 );
 
-// =============================================================================
-// Health Check APIs
-// =============================================================================
+// --- Health Check APIs ---
 
 /**
  * System Health Monitoring
@@ -77,9 +72,7 @@ export const healthApi = {
   checkLdap: () => pkdApi.get<{ status: string; responseTime?: number }>('/health/ldap'),
 };
 
-// =============================================================================
-// Certificate Search & Export APIs
-// =============================================================================
+// --- Certificate Search & Export APIs ---
 
 /**
  * Certificate search parameters
@@ -197,9 +190,7 @@ export const certificateApi = {
     pkdApi.get('/certificates/dsc-nc/report', { params }),
 };
 
-// =============================================================================
-// Upload History & Statistics (Read-Only)
-// =============================================================================
+// --- Upload History & Statistics (Read-Only) ---
 
 /**
  * Upload history and statistics (read-only views)
@@ -223,7 +214,7 @@ export const uploadHistoryApi = {
     pkdApi.get<ApiResponse<UploadedFile>>(`/upload/detail/${uploadId}`),
 
   /**
-   * Get upload issues (duplicates) by upload ID (v2.1.2.2)
+   * Get upload issues (duplicates) by upload ID
    * @param uploadId - Upload record UUID
    * @returns List of duplicate certificates detected during upload
    */
@@ -294,7 +285,7 @@ export const uploadHistoryApi = {
     pkdApi.get<UploadChangesResponse>('/upload/changes', { params: { limit } }),
 
   /**
-   * Get LDIF file structure for visualization (v2.2.2)
+   * Get LDIF file structure for visualization
    * @param uploadId - Upload record UUID
    * @param maxEntries - Maximum number of entries to return (1-10000, default: 100)
    * @returns LDIF structure with entries and statistics
@@ -306,9 +297,7 @@ export const uploadHistoryApi = {
     ),
 };
 
-// =============================================================================
-// LDAP Direct Query APIs
-// =============================================================================
+// --- LDAP Direct Query APIs ---
 
 /**
  * Direct LDAP queries (low-level access)
@@ -361,8 +350,6 @@ export const ldapApi = {
     pkdApi.get('/ldap/revocation/check', { params }),
 };
 
-// =============================================================================
-// Default Export
-// =============================================================================
+// --- Default Export ---
 
 export default pkdApi;

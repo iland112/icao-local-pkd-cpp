@@ -11,9 +11,7 @@ namespace middleware {
 
 // Static members initialization
 std::set<std::string> AuthMiddleware::publicEndpoints_ = {
-    // ========================================================================
-    // System & Authentication
-    // ========================================================================
+    // --- System & Authentication ---
     "^/api/health.*",              // Health check endpoints
     "^/api/auth/login$",           // Login endpoint
     "^/api/auth/register$",        // Registration endpoint (future)
@@ -23,9 +21,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/auth/users.*",          // User management endpoints (handler validates JWT + admin)
     "^/api/auth/audit-log.*",      // Auth audit log endpoints (handler validates JWT + admin)
 
-    // ========================================================================
-    // Dashboard & Statistics (Read-only public information)
-    // ========================================================================
+    // --- Dashboard & Statistics (Read-only public information) ---
     "^/api/upload/countries$",     // Dashboard country statistics (homepage)
     "^/api/upload/countries/detailed.*",  // Detailed country statistics (homepage, with query params)
     "^/api/upload/history.*",      // Upload history (development access)
@@ -36,15 +32,11 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/upload/detail/[a-f0-9\\-]+$", // Upload detail by ID (fixes 401 error)
     "^/api/upload/[a-f0-9\\-]+/.*", // Upload sub-resources (validations, issues, etc.)
 
-    // ========================================================================
-    // Certificate Preview & Upload Progress (Read-only, no data modification)
-    // ========================================================================
+    // --- Certificate Preview & Upload Progress (Read-only, no data modification) ---
     "^/api/upload/certificate/preview$",   // Certificate preview (parse only, no save)
     "^/api/progress.*",            // Upload progress SSE stream (EventSource cannot send custom headers)
 
-    // ========================================================================
-    // Certificate Search (Public directory service)
-    // ========================================================================
+    // --- Certificate Search (Public directory service) ---
     "^/api/certificates/countries$", // Country list for certificate search
     "^/api/certificates/search.*",   // Certificate search with filters
     "^/api/certificates/validation.*", // Certificate validation results (trust chain)
@@ -52,30 +44,22 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/certificates/export/.*",  // Certificate export endpoints
     "^/api/certificates/dsc-nc/report$", // DSC_NC non-conformant report
 
-    // ========================================================================
-    // ICAO PKD Version Monitoring (Read-only public information)
-    // ========================================================================
+    // --- ICAO PKD Version Monitoring (Read-only public information) ---
     "^/api/icao/status$",          // ICAO version status comparison
     "^/api/icao/latest$",          // Latest ICAO version information
     "^/api/icao/history.*",        // Version check history
     "^/api/icao/check-updates$",   // Trigger ICAO version check
 
-    // ========================================================================
-    // Sync Dashboard (Read-only monitoring)
-    // ========================================================================
+    // --- Sync Dashboard (Read-only monitoring) ---
     "^/api/sync/status$",          // DB-LDAP sync status
     "^/api/sync/stats$",           // Sync statistics
     "^/api/reconcile/history.*",   // Reconciliation history
 
-    // ========================================================================
-    // Audit Logs (Read-only monitoring)
-    // ========================================================================
+    // --- Audit Logs (Read-only monitoring) ---
     "^/api/audit/operations$",     // Operation audit logs
     "^/api/audit/operations/stats$", // Operation statistics
 
-    // ========================================================================
-    // PA (Passive Authentication) Service (Demo/Verification functionality)
-    // ========================================================================
+    // --- PA (Passive Authentication) Service (Demo/Verification functionality) ---
     "^/api/pa/verify$",            // PA verification (main function)
     "^/api/pa/parse-sod$",         // Parse SOD (Security Object Document)
     "^/api/pa/parse-dg1$",         // Parse DG1 (MRZ data)
@@ -86,16 +70,12 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/pa/[a-f0-9\\-]+$",      // PA verification detail by ID (UUID)
     "^/api/pa/[a-f0-9\\-]+/datagroups$", // DataGroups detail
 
-    // ========================================================================
-    // Static Files & Documentation
-    // ========================================================================
+    // --- Static Files & Documentation ---
     "^/static/.*",                 // Static files (CSS, JS, images)
     "^/api-docs.*",                // API documentation
     "^/swagger-ui/.*",             // Swagger UI
 
-    // ========================================================================
-    // Validation (Admin operations)
-    // ========================================================================
+    // --- Validation (Admin operations) ---
     "^/api/validation/revalidate$"  // DSC trust chain re-validation
 };
 

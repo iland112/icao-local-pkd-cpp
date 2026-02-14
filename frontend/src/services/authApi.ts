@@ -7,14 +7,12 @@
  * - Token refresh
  * - Current user info
  *
- * @version 2.0.0 (Phase 3 - Authentication)
+ * @version 2.0.0
  */
 
 import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 
-// =============================================================================
-// Types
-// =============================================================================
+// --- Types ---
 
 export interface LoginRequest {
   username: string;
@@ -65,9 +63,7 @@ export interface LogoutResponse {
   message?: string;
 }
 
-// =============================================================================
-// Axios Instance with Token Injection
-// =============================================================================
+// --- Axios Instance with Token Injection ---
 
 const authApiClient = axios.create({
   baseURL: '/api/auth',
@@ -121,9 +117,7 @@ authApiClient.interceptors.response.use(
   }
 );
 
-// =============================================================================
-// API Client for All Services (with Token Injection)
-// =============================================================================
+// --- API Client for All Services (with Token Injection) ---
 
 /**
  * Create authenticated axios client for non-auth APIs
@@ -171,9 +165,7 @@ export const createAuthenticatedClient = (baseURL: string = '/api') => {
   return client;
 };
 
-// =============================================================================
-// Authentication API Methods
-// =============================================================================
+// --- Authentication API Methods ---
 
 export const authApi = {
   /**

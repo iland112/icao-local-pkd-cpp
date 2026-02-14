@@ -20,9 +20,7 @@
 
 namespace icao {
 
-// ==========================================================================
-// JPEG2000 → JPEG Conversion (when OpenJPEG + libjpeg available)
-// ==========================================================================
+/// --- JPEG2000 to JPEG Conversion (when OpenJPEG + libjpeg available) ---
 
 #ifdef HAS_OPENJPEG
 
@@ -222,9 +220,7 @@ DgParser::DgParser() {
     spdlog::debug("DgParser initialized");
 }
 
-// ==========================================================================
-// Public API Methods
-// ==========================================================================
+/// --- Public API Methods ---
 
 Json::Value DgParser::parseDg1(const std::vector<uint8_t>& dg1Data) {
     spdlog::debug("Parsing DG1 ({} bytes)", dg1Data.size());
@@ -447,9 +443,7 @@ std::string DgParser::computeHash(
     return oss.str();
 }
 
-// ==========================================================================
-// Private Helper Methods
-// ==========================================================================
+/// --- Private Helper Methods ---
 
 std::string DgParser::trim(const std::string& str) {
     size_t start = str.find_first_not_of(" \t\n\r");
@@ -494,9 +488,7 @@ std::string DgParser::cleanMrzField(const std::string& field) {
     return result;
 }
 
-// ==========================================================================
-// MRZ Format Parsing Methods
-// ==========================================================================
+/// --- MRZ Format Parsing Methods ---
 
 Json::Value DgParser::parseMrzTd3(const std::string& mrzData) {
     // TD3 format (passport): 2 lines x 44 characters

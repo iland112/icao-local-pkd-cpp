@@ -10,12 +10,10 @@
  * - PA APIs (not yet migrated to separate module)
  * - Monitoring APIs (not yet migrated to separate module)
  *
- * @version 2.0.0 (Phase 6 - Frontend API Refactoring)
+ * @version 2.0.0
  */
 
-// =============================================================================
-// Phase 6: Re-exports from new API modules (Backward Compatibility)
-// =============================================================================
+// --- Re-exports from new API modules (Backward Compatibility) ---
 
 // Import APIs from new modules
 import {
@@ -113,9 +111,7 @@ if (import.meta.env.DEV && !warningShown) {
   warningShown = true;
 }
 
-// =============================================================================
-// PA Service APIs (port 8082) - Not yet migrated
-// =============================================================================
+// --- PA Service APIs (port 8082) - Not yet migrated ---
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
 import type {
@@ -172,9 +168,7 @@ export const paApi = {
     api.post('/certificates/pa-lookup', params),
 };
 
-// =============================================================================
-// Monitoring Service APIs (port 8084) - Not yet migrated
-// =============================================================================
+// --- Monitoring Service APIs (port 8084) - Not yet migrated ---
 
 const monitoringApi = axios.create({
   baseURL: '/api/monitoring',

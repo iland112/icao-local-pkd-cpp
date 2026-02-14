@@ -6,14 +6,11 @@
  * Endpoint: GET /api/audit/operations/stats
  *
  * @version 1.0.0
- * @since Phase 4.4 - Enhanced Audit Logging
  */
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
 
-// =============================================================================
-// Types
-// =============================================================================
+// --- Types ---
 
 /**
  * Operation types for audit logging
@@ -90,9 +87,7 @@ export interface AuditStatisticsResponse {
   };
 }
 
-// =============================================================================
-// Axios Instance
-// =============================================================================
+// --- Axios Instance ---
 
 const auditApi = axios.create({
   baseURL: '/api',
@@ -111,9 +106,7 @@ auditApi.interceptors.response.use(
   }
 );
 
-// =============================================================================
-// API Functions
-// =============================================================================
+// --- API Functions ---
 
 /**
  * Get audit log entries with filtering and pagination

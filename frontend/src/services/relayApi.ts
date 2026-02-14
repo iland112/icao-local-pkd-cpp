@@ -9,7 +9,6 @@
  * - Certificate reconciliation
  *
  * @version 2.0.0
- * @since Phase 6 - Frontend API Refactoring
  */
 
 import axios, { type AxiosError, type AxiosResponse } from 'axios';
@@ -25,9 +24,7 @@ import type {
   CertificatePreviewResult,
 } from '@/types';
 
-// =============================================================================
-// Axios Instance
-// =============================================================================
+// --- Axios Instance ---
 
 /**
  * Relay API client
@@ -69,9 +66,7 @@ relayApi.interceptors.response.use(
   }
 );
 
-// =============================================================================
-// Upload APIs
-// =============================================================================
+// --- Upload APIs ---
 
 /**
  * Upload & Parsing APIs
@@ -201,9 +196,7 @@ export const uploadApi = {
     relayApi.delete(`/upload/${uploadId}`),
 };
 
-// =============================================================================
-// Server-Sent Events (SSE)
-// =============================================================================
+// --- Server-Sent Events (SSE) ---
 
 /**
  * Create SSE connection for upload progress monitoring
@@ -268,9 +261,7 @@ export const createProgressEventSource = (uploadId: string): EventSource => {
 export const getProgressStatus = (uploadId: string) =>
   relayApi.get(`/progress/status/${uploadId}`);
 
-// =============================================================================
-// Sync Service APIs
-// =============================================================================
+// --- Sync Service APIs ---
 
 /**
  * Sync configuration interface
@@ -432,7 +423,7 @@ export const syncApi = {
     relayApi.put<UpdateSyncConfigResponse>('/sync/config', data),
 
   // -------------------------------------------------------------------------
-  // Certificate Re-validation (v1.1.0+)
+  // Certificate Re-validation
   // -------------------------------------------------------------------------
 
   /**
@@ -455,7 +446,7 @@ export const syncApi = {
   triggerDailySync: () => relayApi.post<{ success: boolean; message: string }>('/sync/trigger-daily'),
 
   // -------------------------------------------------------------------------
-  // Auto Reconcile (v1.2.0+)
+  // Auto Reconcile
   // -------------------------------------------------------------------------
 
   /**
@@ -478,8 +469,6 @@ export const syncApi = {
     relayApi.get<ReconciliationDetailsResponse>(`/sync/reconcile/${id}`),
 };
 
-// =============================================================================
-// Default Export
-// =============================================================================
+// --- Default Export ---
 
 export default relayApi;

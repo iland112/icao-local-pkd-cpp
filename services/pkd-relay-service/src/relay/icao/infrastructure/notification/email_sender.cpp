@@ -56,7 +56,6 @@ bool EmailSender::sendViaSystemMail(const EmailMessage& message) {
     spdlog::info("[EmailSender] To: {}", recipients.str());
     spdlog::info("[EmailSender] Subject: {}", message.subject);
     spdlog::info("[EmailSender] Body: {}", message.body);
-    // TODO: Implement proper SMTP via libcurl when email sending is required
     return true;
 }
 

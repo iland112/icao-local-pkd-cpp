@@ -16,9 +16,7 @@
 
 namespace services {
 
-// ============================================================
-// Constructor
-// ============================================================
+/// --- Constructor ---
 
 CertificateService::CertificateService(
     std::shared_ptr<repositories::ICertificateRepository> repository
@@ -28,9 +26,7 @@ CertificateService::CertificateService(
     }
 }
 
-// ============================================================
-// Public Use Cases
-// ============================================================
+/// --- Public Use Cases ---
 
 domain::models::CertificateSearchResult CertificateService::searchCertificates(
     const domain::models::CertificateSearchCriteria& criteria
@@ -140,9 +136,7 @@ ExportResult CertificateService::exportCountryCertificates(
     return result;
 }
 
-// ============================================================
-// Private Helper Methods
-// ============================================================
+/// --- Private Helper Methods ---
 
 std::vector<uint8_t> CertificateService::convertDerToPem(
     const std::vector<uint8_t>& derData,
@@ -380,9 +374,7 @@ std::string CertificateService::getFileExtension(
     }
 }
 
-// ============================================================
-// Free Function: Export All LDAP-Stored Data as DIT ZIP
-// ============================================================
+/// --- Free Function: Export All LDAP-Stored Data as DIT ZIP ---
 
 namespace {
 
@@ -563,7 +555,7 @@ ExportResult exportAllCertificatesFromDb(
 
         int addedCount = 0;
 
-        // ---- 1. Certificates (CSCA, DSC, MLSC, DSC_NC) ----
+        // 1. Certificates (CSCA, DSC, MLSC, DSC_NC)
         Json::Value certs = certRepo->findAllForExport();
         spdlog::info("Export: {} certificates to process", certs.size());
 
@@ -624,7 +616,7 @@ ExportResult exportAllCertificatesFromDb(
 
         spdlog::info("Export: {} certificates added to ZIP", addedCount);
 
-        // ---- 2. CRLs ----
+        // 2. CRLs
         Json::Value crls = crlRepo->findAllForExport();
         int crlCount = 0;
         spdlog::info("Export: {} CRLs to process", crls.size());
@@ -657,7 +649,7 @@ ExportResult exportAllCertificatesFromDb(
 
         spdlog::info("Export: {} CRLs added to ZIP", crlCount);
 
-        // ---- 3. Master Lists (from LDAP directly) ----
+        // 3. Master Lists (from LDAP directly)
         // master_list DB table is empty; ML data lives only in LDAP
         // DN pattern: cn={fingerprint},o=ml,c={CC},dc=data,...
         int mlCount = 0;
@@ -758,7 +750,7 @@ ExportResult exportAllCertificatesFromDb(
 
         spdlog::info("Export: {} Master Lists added to ZIP", mlCount);
 
-        // ---- Finalize ZIP ----
+        // Finalize ZIP
         if (addedCount == 0) {
             zip_discard(archive);
             unlink(tmpFilename);

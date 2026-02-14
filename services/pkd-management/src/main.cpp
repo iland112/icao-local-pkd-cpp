@@ -59,60 +59,60 @@
 #include "common.h"
 #include "common/ldap_utils.h"
 #include <icao/audit/audit_log.h>
-#include "db_connection_pool.h"  // v2.4.2: Shared database connection pool library
-#include "db_connection_pool_factory.h"  // v2.5.0: Factory Pattern for DB abstraction
-#include <ldap_connection_pool.h>  // v2.4.3: Shared LDAP connection pool library (NEW)
+#include "db_connection_pool.h"
+#include "db_connection_pool_factory.h"
+#include <ldap_connection_pool.h>
 #include "common/certificate_utils.h"
 #include "common/masterlist_processor.h"
 #include "common/x509_metadata_extractor.h"
-#include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
-#include "common/asn1_parser.h"       // ASN.1/TLV parser for Master List structure
+#include "common/progress_manager.h"
+#include "common/asn1_parser.h"
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 
-// Shared library (Phase 5)
-#include "icao/x509/dn_parser.h"      // Shared DN Parser
-#include "icao/x509/dn_components.h"  // Shared DN Components
+// Shared library
+#include "icao/x509/dn_parser.h"
+#include "icao/x509/dn_components.h"
 
 // Clean Architecture layers
 #include "domain/models/certificate.h"
 #include "repositories/ldap_certificate_repository.h"
 #include "services/certificate_service.h"
 
-// ICAO Auto Sync Module (v1.7.0)
+// ICAO Auto Sync Module
 #include "handlers/icao_handler.h"
 #include "services/icao_sync_service.h"
 #include "repositories/icao_version_repository.h"
 #include "infrastructure/http/http_client.h"
 #include "infrastructure/notification/email_sender.h"
 
-// Phase 1.5/1.6: Repository Pattern - Repositories
+// Repositories
 #include "repositories/upload_repository.h"
 #include "repositories/certificate_repository.h"
 #include "repositories/validation_repository.h"
 #include "repositories/audit_repository.h"
 #include "repositories/statistics_repository.h"
-#include "repositories/ldif_structure_repository.h"  // v2.2.2: LDIF structure visualization
-#include "repositories/user_repository.h"  // Phase 5.4: Authentication Repository Pattern
-#include "repositories/auth_audit_repository.h"  // Phase 5.4: Authentication Repository Pattern
-#include "repositories/crl_repository.h"  // Phase 6.4: CRL operations
-#include "repositories/deviation_list_repository.h"  // DL deviation data
+#include "repositories/ldif_structure_repository.h"
+#include "repositories/user_repository.h"
+#include "repositories/auth_audit_repository.h"
+#include "repositories/crl_repository.h"
+#include "repositories/deviation_list_repository.h"
 
-// Phase 1.5/1.6: Repository Pattern - Services
+// Services
 #include "services/upload_service.h"
 #include "services/validation_service.h"
 #include "services/audit_service.h"
 #include "services/statistics_service.h"
-#include "services/ldif_structure_service.h"  // v2.2.2: LDIF structure visualization
+#include "services/ldif_structure_service.h"
 
-// Authentication Module (Phase 3)
+// Authentication Module
 #include "middleware/auth_middleware.h"
 #include "middleware/permission_filter.h"
 #include "auth/jwt_service.h"
 #include "auth/password_hash.h"
 #include "handlers/auth_handler.h"
 
-// Sprint 2: Link Certificate Validation
+// Link Certificate Validation
 #include "common/lc_validator.h"
 
 // Global certificate service (initialized in main(), used by all routes)
@@ -124,28 +124,25 @@ std::shared_ptr<handlers::IcaoHandler> icaoHandler;
 // Global Auth handler (initialized in main())
 std::shared_ptr<handlers::AuthHandler> authHandler;
 
-// Phase 1.6: Global Repositories and Services (Repository Pattern)
-// v2.3.1: Replaced single connection with Connection Pool for thread safety
-// v2.5.0: Uses Factory Pattern for database type selection (Oracle migration Phase 2)
-// v2.5.0 Phase 3: Query Executor Pattern for database-agnostic queries
-std::shared_ptr<common::DbConnectionPool> dbPool;  // Database connection pool (currently PostgreSQL only)
-std::unique_ptr<common::IQueryExecutor> queryExecutor;  // Query executor (database-agnostic)
-std::shared_ptr<common::LdapConnectionPool> ldapPool;  // LDAP connection pool (NEW - v2.4.3)
+// Global Repositories and Services (Repository Pattern)
+std::shared_ptr<common::DbConnectionPool> dbPool;
+std::unique_ptr<common::IQueryExecutor> queryExecutor;
+std::shared_ptr<common::LdapConnectionPool> ldapPool;
 std::shared_ptr<repositories::UploadRepository> uploadRepository;
 std::shared_ptr<repositories::CertificateRepository> certificateRepository;
 std::shared_ptr<repositories::ValidationRepository> validationRepository;
 std::shared_ptr<repositories::AuditRepository> auditRepository;
 std::shared_ptr<repositories::StatisticsRepository> statisticsRepository;
-std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;  // v2.2.2
-std::shared_ptr<repositories::UserRepository> userRepository;  // Phase 5.4
-std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;  // Phase 5.4
-std::shared_ptr<repositories::CrlRepository> crlRepository;  // Phase 6.4
+std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;
+std::shared_ptr<repositories::UserRepository> userRepository;
+std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;
+std::shared_ptr<repositories::CrlRepository> crlRepository;
 std::shared_ptr<repositories::DeviationListRepository> deviationListRepository;  // DL deviation data
 std::shared_ptr<services::UploadService> uploadService;
 std::shared_ptr<services::ValidationService> validationService;
 std::shared_ptr<services::AuditService> auditService;
 std::shared_ptr<services::StatisticsService> statisticsService;
-std::shared_ptr<services::LdifStructureService> ldifStructureService;  // v2.2.2
+std::shared_ptr<services::LdifStructureService> ldifStructureService;
 
 // Global cache for available countries (populated on startup)
 std::set<std::string> cachedCountries;
@@ -153,7 +150,7 @@ std::mutex countriesCacheMutex;
 
 namespace {
 
-// Phase 6.1: Use global repository and connection pool from outside anonymous namespace
+// Use global repository and connection pool from outside anonymous namespace
 // Access via :: scope resolution operator (e.g., ::certificateRepository, ::dbPool)
 
 /**
@@ -187,7 +184,7 @@ struct AppConfig {
     std::string dbUser = "localpkd";
     std::string dbPassword;  // Must be set via environment variable
 
-    // LDAP Read: Application-level load balancing (v2.0.1 - HAProxy removed)
+    // LDAP Read: Application-level load balancing
     // Format: "host1:port1,host2:port2,..."
     std::string ldapReadHosts = "openldap1:389,openldap2:389";
     std::vector<std::string> ldapReadHostList;  // Parsed from ldapReadHosts
@@ -211,13 +208,13 @@ struct AppConfig {
     // Trust Anchor for Master List CMS signature verification
     std::string trustAnchorPath = "/app/data/cert/UN_CSCA_2.pem";
 
-    // ICAO Auto Sync Configuration (v1.7.0)
+    // ICAO Auto Sync Configuration
     std::string icaoPortalUrl = "https://pkddownloadsg.icao.int/";
     std::string notificationEmail = "admin@localhost";
     bool icaoAutoNotify = true;
     int icaoHttpTimeout = 10;  // seconds
 
-    // ICAO Scheduler Configuration (v2.10.0)
+    // ICAO Scheduler Configuration
     int icaoCheckScheduleHour = 9;   // 0-23, default 9 AM
     bool icaoSchedulerEnabled = true;
 
@@ -236,7 +233,7 @@ struct AppConfig {
         if (auto val = std::getenv("DB_USER")) config.dbUser = val;
         if (auto val = std::getenv("DB_PASSWORD")) config.dbPassword = val;
 
-        // LDAP Read Hosts (v2.0.1 - Application-level load balancing)
+        // LDAP Read Hosts (Application-level load balancing)
         if (auto val = std::getenv("LDAP_READ_HOSTS")) {
             config.ldapReadHosts = val;
             // Parse comma-separated host:port list
@@ -286,7 +283,7 @@ struct AppConfig {
         // ASN.1 Parser Configuration
         if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = std::stoi(val);
 
-        // ICAO Scheduler Configuration (v2.10.0)
+        // ICAO Scheduler Configuration
         if (auto val = std::getenv("ICAO_CHECK_SCHEDULE_HOUR")) {
             config.icaoCheckScheduleHour = std::stoi(val);
             if (config.icaoCheckScheduleHour < 0 || config.icaoCheckScheduleHour > 23)
@@ -321,7 +318,7 @@ std::atomic<size_t> g_ldapReadRoundRobinIndex{0};
 // =============================================================================
 
 // ============================================================================
-// Progress Manager - Now imported from common/progress_manager.h (Phase 4.4)
+// Progress Manager - Now imported from common/progress_manager.h
 // ============================================================================
 // Enhanced with X.509 metadata tracking and ICAO 9303 compliance monitoring.
 // See common/progress_manager.h for full implementation.
@@ -433,8 +430,8 @@ struct CscaValidationResult {
 };
 
 /**
- * @brief DSC Trust Chain Validation Result (Updated for Sprint 3)
- * Added trustChainPath for link certificate support
+ * @brief DSC Trust Chain Validation Result
+ * Includes trustChainPath for link certificate support
  */
 struct DscValidationResult {
     bool isValid;
@@ -447,7 +444,7 @@ struct DscValidationResult {
     bool cscaExpired;  // CSCA in chain has expired (informational)
     std::string cscaSubjectDn;
     std::string errorMessage;
-    std::string trustChainPath;  // Sprint 3: Human-readable chain path (e.g., "DSC → CN=CSCA_old → CN=Link → CN=CSCA_new")
+    std::string trustChainPath;  // Human-readable chain path (e.g., "DSC -> CN=CSCA_old -> CN=Link -> CN=CSCA_new")
 };
 
 CscaValidationResult validateCscaCertificate(X509* cert) {
@@ -543,7 +540,7 @@ CscaValidationResult validateCscaCertificate(X509* cert) {
 
 
 // =============================================================================
-// Sprint 2: Trust Chain Building Utilities
+// Trust Chain Building Utilities
 // =============================================================================
 
 /**
@@ -602,39 +599,6 @@ static bool isSelfSigned(X509* cert) {
     // Case-insensitive DN comparison (RFC 4517)
     return (strcasecmp(subjectDn.c_str(), issuerDn.c_str()) == 0);
 }
-
-// Phase 6.1: isLinkCertificate function commented out - unused after Repository Pattern refactoring
-/*
-static bool isLinkCertificate(X509* cert) {
-    if (!cert) return false;
-
-    // Must NOT be self-signed
-    if (isSelfSigned(cert)) {
-        return false;
-    }
-
-    // Check BasicConstraints: CA:TRUE
-    BASIC_CONSTRAINTS* bc = (BASIC_CONSTRAINTS*)X509_get_ext_d2i(cert, NID_basic_constraints, nullptr, nullptr);
-    if (!bc || !bc->ca) {
-        if (bc) BASIC_CONSTRAINTS_free(bc);
-        return false;
-    }
-    BASIC_CONSTRAINTS_free(bc);
-
-    // Check KeyUsage: keyCertSign
-    ASN1_BIT_STRING* usage = (ASN1_BIT_STRING*)X509_get_ext_d2i(cert, NID_key_usage, nullptr, nullptr);
-    if (!usage) {
-        return false;
-    }
-
-    bool hasKeyCertSign = (ASN1_BIT_STRING_get_bit(usage, 5) == 1);  // Bit 5 = keyCertSign
-    ASN1_BIT_STRING_free(usage);
-
-    return hasKeyCertSign;
-}
-*/
-
-// Phase 6.1: This function has been replaced by ::certificateRepository->findAllCscasBySubjectDn()
 
 /**
  * @brief Build trust chain from DSC to root CSCA
@@ -838,7 +802,7 @@ static bool validateTrustChain(const TrustChain& chain, bool& cscaExpired) {
 }
 
 // =============================================================================
-// DSC Trust Chain Validation (Updated for Sprint 3)
+// DSC Trust Chain Validation
 // =============================================================================
 
 /**
@@ -875,7 +839,6 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
     }
 
     // Step 2: Find ALL CSCAs matching issuer DN (including link certificates)
-    // Phase 6.1: Use Repository Pattern instead of direct SQL
     std::vector<X509*> allCscas = ::certificateRepository->findAllCscasBySubjectDn(issuerDn);
 
     if (allCscas.empty()) {
@@ -903,7 +866,7 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
 
     spdlog::info("DSC validation: Trust chain built successfully ({} steps)",
                  chain.certificates.size());
-    result.trustChainPath = chain.path;  // Sprint 3: Store human-readable chain path
+    result.trustChainPath = chain.path;
 
     // Step 4: Validate trust chain signatures (ICAO hybrid model)
     // Signature verification is a HARD requirement; expiration is informational
@@ -1069,7 +1032,6 @@ bool isValidP7sFile(const std::vector<uint8_t>& content) {
 
 /**
  * @brief Check if a file with the same hash already exists
- * @note v2.6.4: Migrated from PGconn to UploadRepository for Oracle support
  * @param fileHash SHA-256 hash of the file
  * @return JSON object with existing upload details if duplicate found, null otherwise
  */
@@ -1240,17 +1202,16 @@ std::string computeFileHash(const std::vector<uint8_t>& content) {
     return ss.str();
 }
 
-// escapeSqlString() DELETED in v2.6.4 - no longer needed with parameterized queries via QueryExecutor
+// escapeSqlString() - removed, no longer needed with parameterized queries via QueryExecutor
 
-// saveUploadRecord() DELETED in v2.6.4 - use ::uploadRepository->insert() instead
-// saveUploadRecord() body DELETED in v2.6.4 - use ::uploadRepository->insert() instead
+// saveUploadRecord() - removed, use ::uploadRepository->insert() instead
 
-// updateUploadStatus() DELETED in v2.6.4 - use ::uploadRepository->updateStatus() instead
+// updateUploadStatus() - removed, use ::uploadRepository->updateStatus() instead
 
 /**
  * @brief Send enhanced progress update with optional certificate metadata
  *
- * Phase 4.4 Task 3: Helper function for sending progress updates with
+ * Helper function for sending progress updates with
  * certificate metadata, ICAO compliance status, and validation statistics.
  *
  * @param uploadId Upload UUID
@@ -1525,7 +1486,7 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
     return entries;
 }
 
-// escapeBytea() DELETED in v2.6.4 - PostgreSQL-specific, not needed with QueryExecutor
+// escapeBytea() - removed, PostgreSQL-specific, not needed with QueryExecutor
 
 // =============================================================================
 // LDAP Storage Functions
@@ -1569,7 +1530,6 @@ LDAP* getLdapWriteConnection() {
 /**
  * @brief Get LDAP connection for read operations with application-level load balancing
  *
- * v2.0.1: HAProxy removed, direct connection to MMR nodes with round-robin
  * Round-robin across multiple LDAP servers configured in LDAP_READ_HOSTS
  */
 LDAP* getLdapReadConnection() {
@@ -1749,13 +1709,12 @@ std::pair<std::string, std::string> extractStandardAttributes(const std::string&
  * @param subjectDn Certificate Subject DN (used as CN for readability)
  * @param serialNumber Certificate serial number (used in multi-valued RDN)
  *
- * DN Structure (v1.4.21 - Multi-valued RDN like Java project):
+ * DN Structure (Multi-valued RDN like Java project):
  * cn={ESCAPED-SUBJECT-DN}+sn={SERIAL},o={csca|dsc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
  *
  * This matches the working Java implementation which uses multi-valued RDN (cn+sn).
  * Multi-valued RDN is more robust when Subject DN contains LDAP special characters.
- *
- * v1.5.0: Extracts only standard LDAP attributes for DN to avoid LDAP error 80
+ * Extracts only standard LDAP attributes for DN to avoid LDAP error 80
  */
 std::string buildCertificateDn(const std::string& certType, const std::string& countryCode,
                                 const std::string& subjectDn, const std::string& serialNumber) {
@@ -1780,7 +1739,6 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
         ou = "dsc";
         dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "LC") {
-        // Sprint 3: Link Certificate support
         ou = "lc";
         dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "DSC_NC") {
@@ -1791,17 +1749,16 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
         dataContainer = appConfig.ldapDataContainer;
     }
 
-    // v1.5.0: Extract only standard attributes to avoid LDAP error 80
+    // Extract only standard attributes to avoid LDAP error 80
     auto [standardDn, nonStandardAttrs] = extractStandardAttributes(subjectDn);
 
     // Escape Subject DN for safe use in LDAP DN (RFC 4514)
     std::string escapedSubjectDn = escapeLdapDnValue(standardDn);
 
-    // CRITICAL FIX v1.4.21: Use multi-valued RDN (cn+sn) like Java project
+    // Use multi-valued RDN (cn+sn) like Java project
     // This isolates the complex Subject DN structure and makes DN parsing more robust
     // Multi-valued RDN: cn={ESCAPED-SUBJECT-DN}+sn={SERIAL}
-    // Java DN: cn={ESCAPED-SUBJECT-DN}+sn={SERIAL},o={csca|dsc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
-    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    // Note: appConfig.ldapBaseDn already contains dc=download
     return "cn=" + escapedSubjectDn + "+sn=" + serialNumber + ",o=" + ou + ",c=" + countryCode +
            "," + dataContainer + "," + appConfig.ldapBaseDn;
 }
@@ -1812,7 +1769,7 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
  * @param certType CSCA, DSC, or DSC_NC
  * @param countryCode ISO country code
  *
- * DN Structure (v2.2.0 - Sprint 1: Fingerprint-based DN):
+ * DN Structure (Fingerprint-based DN):
  * cn={SHA256-FINGERPRINT},o={csca|dsc|dsc_nc},c={COUNTRY},dc={data|nc-data},dc=download,dc=pkd,{baseDN}
  *
  * Benefits:
@@ -1826,7 +1783,7 @@ std::string buildCertificateDn(const std::string& certType, const std::string& c
  */
 std::string buildCertificateDnV2(const std::string& fingerprint, const std::string& certType,
                                    const std::string& countryCode) {
-    // ICAO PKD DIT structure (updated for Sprint 2: added LC support)
+    // ICAO PKD DIT structure
     std::string ou;
     std::string dataContainer;
 
@@ -1840,11 +1797,9 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
         ou = "dsc";  // DSC_NC uses o=dsc in nc-data container (same as legacy DN)
         dataContainer = appConfig.ldapNcDataContainer;
     } else if (certType == "LC") {
-        // Sprint 2: Link Certificate support
         ou = "lc";
         dataContainer = appConfig.ldapDataContainer;
     } else if (certType == "MLSC") {
-        // Sprint 3: Master List Signer Certificate support
         ou = "mlsc";
         dataContainer = appConfig.ldapDataContainer;
     } else {
@@ -1866,7 +1821,7 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
 std::string buildCrlDn(const std::string& countryCode, const std::string& fingerprint) {
     // Fingerprint is SHA-256 hex (safe), but escape defensively
     // Country code is ISO 3166-1 alpha-2 (safe), but escape defensively
-    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    // Note: appConfig.ldapBaseDn already contains dc=download
     return "cn=" + ldap_utils::escapeDnComponent(fingerprint) +
            ",o=crl,c=" + ldap_utils::escapeDnComponent(countryCode) +
            "," + appConfig.ldapDataContainer + "," + appConfig.ldapBaseDn;
@@ -1879,9 +1834,8 @@ std::string buildCrlDn(const std::string& countryCode, const std::string& finger
  */
 bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcData = false) {
     std::string dataContainer = isNcData ? appConfig.ldapNcDataContainer : appConfig.ldapDataContainer;
-    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
 
-    // Sprint 3 Fix: Ensure data container exists before creating country entry
+    // Ensure data container exists before creating country entry
     std::string dataContainerDn = dataContainer + "," + appConfig.ldapBaseDn;
     LDAPMessage* dcResult = nullptr;
     int dcRc = ldap_search_ext_s(ld, dataContainerDn.c_str(), LDAP_SCOPE_BASE, "(objectClass=*)",
@@ -1966,8 +1920,6 @@ bool ensureCountryOuExists(LDAP* ld, const std::string& countryCode, bool isNcDa
     }
 
     // Create organizational units under country (csca, dsc, lc, mlsc, crl)
-    // Sprint 2: Added "lc" for Link Certificates
-    // Sprint 3: Added "mlsc" for Master List Signer Certificates
     std::vector<std::string> ous = isNcData ? std::vector<std::string>{"dsc"}
                                             : std::vector<std::string>{"csca", "dsc", "lc", "mlsc", "crl"};
 
@@ -2009,7 +1961,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
                                    const std::string& pkdConformanceCode = "",
                                    const std::string& pkdConformanceText = "",
                                    const std::string& pkdVersion = "",
-                                   bool useLegacyDn = false) {  // v2.1.2: Use fingerprint-based DN by default (fix LDAP storage failure)
+                                   bool useLegacyDn = false) {
     bool isNcData = (certType == "DSC_NC");
 
     // Ensure country structure exists
@@ -2018,10 +1970,10 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
         // Continue anyway - the OU might exist even if we couldn't create it
     }
 
-    // v1.5.0: Extract standard and non-standard attributes
+    // Extract standard and non-standard attributes
     auto [standardDn, nonStandardAttrs] = extractStandardAttributes(subjectDn);
 
-    // Sprint 1 (Week 5): Support both legacy (Subject DN + Serial) and new (Fingerprint) DN formats
+    // Support both legacy (Subject DN + Serial) and new (Fingerprint) DN formats
     std::string dn;
     if (useLegacyDn) {
         dn = buildCertificateDn(certType, countryCode, subjectDn, serialNumber);
@@ -2049,7 +2001,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     modObjectClass.mod_values = ocVals;
 
     // cn (Subject DN - required by person, must match DN's RDN)
-    // v2.1.2: For v2 DN (fingerprint-based), use fingerprint as cn; for legacy DN, use standard DN
+    // For v2 DN (fingerprint-based), use fingerprint as cn; for legacy DN, use standard DN
     // FIX: Avoid duplicate cn values when useLegacyDn=false (was causing LDAP operation failed error)
     LDAPMod modCn;
     modCn.mod_op = LDAP_MOD_ADD;
@@ -2079,7 +2031,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     char* snVals[] = {const_cast<char*>(serialNumber.c_str()), nullptr};
     modSn.mod_values = snVals;
 
-    // description (v1.5.0: Full Subject DN with non-standard attributes + fingerprint)
+    // description (Full Subject DN with non-standard attributes + fingerprint)
     std::string descriptionValue;
     if (!nonStandardAttrs.empty()) {
         descriptionValue = "Full Subject DN: " + subjectDn + " | Non-standard attributes: " + nonStandardAttrs + " | Fingerprint: " + fingerprint;
@@ -2102,7 +2054,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     berval* certBvVals[] = {&certBv, nullptr};
     modCert.mod_bvalues = certBvVals;
 
-    // v1.5.6: DSC_NC specific attributes (pkdConformanceCode, pkdConformanceText, pkdVersion)
+    // DSC_NC specific attributes (pkdConformanceCode, pkdConformanceText, pkdVersion)
     LDAPMod modConformanceCode, modConformanceText, modVersion;
     char* conformanceCodeVals[] = {nullptr, nullptr};
     char* conformanceTextVals[] = {nullptr, nullptr};
@@ -2161,7 +2113,7 @@ std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
     if (rc != LDAP_SUCCESS) {
         spdlog::warn("Failed to save certificate to LDAP {}: {} (error code: {})", dn, ldap_err2string(rc), rc);
 
-        // v1.4.22: Get detailed error information from LDAP connection
+        // Get detailed error information from LDAP connection
         char *matched_msg = nullptr;
         char *error_msg = nullptr;
         int ldap_rc = ldap_get_option(ld, LDAP_OPT_MATCHED_DN, &matched_msg);
@@ -2251,8 +2203,8 @@ std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
     return dn;
 }
 
-// updateCertificateLdapStatus → CertificateRepository::updateCertificateLdapStatus() (Phase 6.4)
-// updateCrlLdapStatus → CrlRepository::updateLdapStatus() (Phase 6.4)
+// updateCertificateLdapStatus -> CertificateRepository::updateCertificateLdapStatus()
+// updateCrlLdapStatus -> CrlRepository::updateLdapStatus()
 
 /**
  * @brief Build DN for Master List entry in LDAP (o=ml node)
@@ -2263,7 +2215,7 @@ std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
 std::string buildMasterListDn(const std::string& countryCode, const std::string& fingerprint) {
     // Fingerprint is SHA-256 hex (safe), but escape defensively
     // Country code is ISO 3166-1 alpha-2 (safe), but escape defensively
-    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    // Note: appConfig.ldapBaseDn already contains dc=download
     return "cn=" + ldap_utils::escapeDnComponent(fingerprint) +
            ",o=ml,c=" + ldap_utils::escapeDnComponent(countryCode) +
            ",dc=data," + appConfig.ldapBaseDn;
@@ -2275,7 +2227,7 @@ std::string buildMasterListDn(const std::string& countryCode, const std::string&
  * SECURITY: Uses ldap_utils::escapeDnComponent for safe DN construction (RFC 4514)
  */
 bool ensureMasterListOuExists(LDAP* ld, const std::string& countryCode) {
-    // CRITICAL FIX v2.0.0: Remove duplicate dc=download (appConfig.ldapBaseDn already contains it)
+    // Note: appConfig.ldapBaseDn already contains dc=download
     std::string countryDn = "c=" + ldap_utils::escapeDnComponent(countryCode) +
                            ",dc=data," + appConfig.ldapBaseDn;
 
@@ -2425,11 +2377,6 @@ std::string saveMasterListToLdap(LDAP* ld, const std::string& countryCode,
  * @brief Update Master List DB record with LDAP DN after successful LDAP storage
  */
 void updateMasterListLdapStatus(const std::string& mlId, const std::string& ldapDn) {
-    // TODO Phase 6.1: Implement MasterListRepository::updateLdapStatus() method
-    // This function needs to update stored_in_ldap, ldap_dn, stored_at fields
-    // SQL: UPDATE master_list SET ldap_dn = ldapDn, stored_in_ldap = TRUE, stored_at = NOW()
-    //      WHERE id = mlId
-
     if (ldapDn.empty()) return;
 
     spdlog::warn("[UpdateMasterListLdapStatus] Stub implementation - needs MasterListRepository");
@@ -2442,9 +2389,6 @@ void updateMasterListLdapStatus(const std::string& mlId, const std::string& ldap
 // =============================================================================
 
 
-// saveCrl → CrlRepository::save() (Phase 6.4)
-// saveRevokedCertificate → CrlRepository::saveRevokedCertificate() (Phase 6.4)
-
 /**
  * @brief Save Master List to database
  * @return Master List ID or empty string on failure
@@ -2453,12 +2397,6 @@ std::string saveMasterList(const std::string& uploadId,
                             const std::string& countryCode, const std::string& signerDn,
                             const std::string& fingerprint, int cscaCount,
                             const std::vector<uint8_t>& mlBinary) {
-    // TODO Phase 6.1: Implement MasterListRepository with save() method
-    // This function needs to save Master List CMS to master_list table
-    // SQL: INSERT INTO master_list (id, upload_id, signer_country, signer_dn,
-    //      fingerprint_sha256, csca_certificate_count, ml_binary, created_at)
-    //      VALUES (uuid, uploadId, countryCode, signerDn, fingerprint, cscaCount, mlBinary, NOW())
-
     std::string mlId = generateUuid();
 
     spdlog::warn("[SaveMasterList] Stub implementation - needs MasterListRepository");
@@ -2470,7 +2408,7 @@ std::string saveMasterList(const std::string& uploadId,
 }
 
 /**
- * @brief Parse and save certificate from LDIF entry (DB + LDAP) (Phase 6.1 - Repository Pattern)
+ * @brief Parse and save certificate from LDIF entry (DB + LDAP)
  */
 bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                            const LdifEntry& entry, const std::string& attrName,
@@ -2517,7 +2455,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         countryCode = extractCountryCode(issuerDn);
     }
 
-    // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+    // Extract comprehensive certificate metadata for progress tracking
     // Note: This extraction is done early (before validation) so metadata is available
     // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
     CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
@@ -2532,7 +2470,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // Prepare validation result record
     domain::models::ValidationResult valRecord;
     valRecord.uploadId = uploadId;
-    valRecord.fingerprint = fingerprint;  // Phase 6.2: needed for Oracle validation_result table
+    valRecord.fingerprint = fingerprint;
     valRecord.countryCode = countryCode;
     valRecord.subjectDn = subjectDn;
     valRecord.issuerDn = issuerDn;
@@ -2644,7 +2582,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                         dscValidation.errorMessage, countryCode);
         }
     } else {
-        // v2.2.2 FIX: Detect Link Certificates (subject != issuer, CA capability)
+        // Detect Link Certificates (subject != issuer, CA capability)
         // Check if this is a Link Certificate by validating CA status
         auto cscaValidation = validateCscaCertificate(cert);
         bool isLinkCertificate = (cscaValidation.isCa && cscaValidation.hasKeyCertSign);
@@ -2716,7 +2654,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
             dscCount++;
             valRecord.certificateType = "DSC";
 
-        // DSC - perform trust chain validation (Phase 6.1: Repository Pattern)
+        // DSC - perform trust chain validation
         // ICAO Doc 9303 Part 12 hybrid chain model: expiration is informational
         auto dscValidation = validateDscCertificate(cert, issuerDn);
         valRecord.cscaFound = dscValidation.cscaFound;
@@ -2774,12 +2712,12 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         }  // End of else block for regular DSC
     }
 
-    // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
+    // Check ICAO 9303 compliance after certificate type is determined
     IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
     spdlog::debug("Phase 4.4: ICAO compliance for {} cert: isCompliant={}, level={}",
                   certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
-    // Phase 4.4: Update enhanced statistics (ValidationStatistics)
+    // Update enhanced statistics (ValidationStatistics)
     enhancedStats.totalCertificates++;
     enhancedStats.certificateTypes[certType]++;
     enhancedStats.signatureAlgorithms[certMetadata.signatureAlgorithm]++;
@@ -2819,7 +2757,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
     X509_free(cert);
 
-    // 1. Save to DB with validation status (Phase 6.1: Repository Pattern)
+    // 1. Save to DB with validation status
     auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
         uploadId, certType, countryCode,
         subjectDn, issuerDn, serialNumber, fingerprint,
@@ -2841,12 +2779,12 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
         // 4. Save to LDAP
         if (ld) {
-            // v1.5.6: Extract DSC_NC specific attributes from LDIF entry
+            // Extract DSC_NC specific attributes from LDIF entry
             std::string pkdConformanceCode = entry.getFirstAttribute("pkdConformanceCode");
             std::string pkdConformanceText = entry.getFirstAttribute("pkdConformanceText");
             std::string pkdVersion = entry.getFirstAttribute("pkdVersion");
 
-            // v2.2.2 FIX: Use "LC" for LDAP storage of Link Certificates
+            // Use "LC" for LDAP storage of Link Certificates
             // DB stores as "CSCA" for querying, but LDAP uses "LC" for proper organizational unit
             std::string ldapCertType = certType;
             if (certType == "CSCA" && !valRecord.isSelfSigned) {
@@ -2859,7 +2797,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                                                         fingerprint, derBytes,
                                                         pkdConformanceCode, pkdConformanceText, pkdVersion);
             if (!ldapDn.empty()) {
-                // [Phase 6.1] Use Repository method instead of standalone function
+                // Use Repository method instead of standalone function
                 ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
                 ldapStoredCount++;
                 spdlog::debug("Saved certificate to LDAP: {}", ldapDn);
@@ -3022,9 +2960,9 @@ void sendCompletionProgress(const std::string& uploadId, int totalItems, const s
 }
 
 /**
- * @brief Parse and save Master List from LDIF entry (DB + LDAP) - DEPRECATED v2.0.0
+ * @brief Parse and save Master List from LDIF entry (DB + LDAP) - DEPRECATED
  *
- * @deprecated This function is deprecated since v2.0.0.
+ * @deprecated Use parseMasterListEntryV2() instead.
  *             Use parseMasterListEntryV2() instead which extracts individual CSCAs.
  *
  * This handles entries with pkdMasterListContent attribute.
@@ -3145,7 +3083,7 @@ void updateUploadStatistics(const std::string& uploadId,
                            const std::string& status, int cscaCount, int dscCount,
                            int dscNcCount, int crlCount, int totalEntries, int processedEntries,
                            const std::string& errorMessage) {
-    // Phase 6.1: Use UploadRepository instead of direct SQL
+    // Use UploadRepository instead of direct SQL
     if (!uploadRepository) {
         spdlog::error("[UpdateStats] uploadRepository is null");
         return;
@@ -3157,16 +3095,14 @@ void updateUploadStatistics(const std::string& uploadId,
     // Update certificate statistics
     ::uploadRepository->updateStatistics(uploadId, cscaCount, dscCount, dscNcCount, crlCount);
 
-    // TODO Phase 6.1: Add updateProcessingProgress() method to UploadRepository
-    // to update totalEntries and processedEntries fields
     spdlog::debug("[UpdateStats] Updated statistics for upload: {}", uploadId);
 }
 
 /**
  * @brief Process LDIF file asynchronously with full parsing (DB + LDAP)
- * @note Defined outside anonymous namespace for external linkage (Phase 4.4)
+ * @note Defined outside anonymous namespace for external linkage
  */
-// Guard against duplicate async processing (Phase 6.2)
+// Guard against duplicate async processing
 static std::mutex s_processingMutex;
 static std::set<std::string> s_processingUploads;
 
@@ -3283,7 +3219,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
         }
         // Note: No PGconn cleanup needed - Strategy Pattern uses Repository with connection pool
 
-        // Phase 6.2: Remove from processing set
+        // Remove from processing set
         cleanupGuard();
     }).detach();
 }
@@ -3306,7 +3242,7 @@ namespace {  // Anonymous namespace for internal helper functions
 
 /**
  * @brief Parse Master List (CMS SignedData) and extract CSCA certificates (DB + LDAP)
- * @note Defined outside anonymous namespace for external linkage (Phase 4.4)
+ * @note Defined outside anonymous namespace for external linkage
  */
 void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
     // Check and register this upload for processing (prevent duplicate threads)
@@ -3453,7 +3389,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                            // Extract comprehensive certificate metadata for progress tracking
                             CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
                             spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                           certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
@@ -3462,7 +3398,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             // Including both self-signed and cross-signed/link CSCAs
                             std::string certType = "CSCA";
 
-                            // Phase 4.4: Check ICAO 9303 compliance
+                            // Check ICAO 9303 compliance
                             IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
                             spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
@@ -3484,7 +3420,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                 }
                             }
 
-                            // Save certificate using Repository Pattern (Phase 6.1)
+                            // Save certificate using Repository Pattern
                             auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
                                 fingerprint, notBefore, notAfter, derBytes);
@@ -3616,7 +3552,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         std::string fingerprint = computeFileHash(derBytes);
                                         std::string countryCode = extractCountryCode(subjectDn);
 
-                                        // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                                        // Extract comprehensive certificate metadata for progress tracking
                                         CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
                                         spdlog::debug("Phase 4.4 (Master List Async): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                                       certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
@@ -3650,7 +3586,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                          subjectDn.substr(0, 50), issuerDn.substr(0, 50));
                                         }
 
-                                        // Phase 4.4: Check ICAO 9303 compliance after certificate type is determined
+                                        // Check ICAO 9303 compliance after certificate type is determined
                                         IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
                                         spdlog::debug("Phase 4.4 (Master List Async): ICAO compliance for {} cert: isCompliant={}, level={}",
                                                       certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
@@ -3675,7 +3611,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                             }
                                         }
 
-                                        // Save to DB with validation status using Repository Pattern (Phase 6.1)
+                                        // Save to DB with validation status using Repository Pattern
                                         auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
                                             uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
                                             fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
@@ -3749,7 +3685,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             std::string fingerprint = computeFileHash(derBytes);
                             std::string countryCode = extractCountryCode(subjectDn);
 
-                            // Phase 4.4: Extract comprehensive certificate metadata for progress tracking
+                            // Extract comprehensive certificate metadata for progress tracking
                             CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
                             spdlog::debug("Phase 4.4 (Master List CMS store): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                           certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
@@ -3758,7 +3694,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             // Including both self-signed and cross-signed/link CSCAs
                             std::string certType = "CSCA";
 
-                            // Phase 4.4: Check ICAO 9303 compliance
+                            // Check ICAO 9303 compliance
                             IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
                             spdlog::debug("Phase 4.4 (Master List CMS store): ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
@@ -3780,7 +3716,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                 }
                             }
 
-                            // Save certificate using Repository Pattern (Phase 6.1)
+                            // Save certificate using Repository Pattern
                             auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
                                 fingerprint, notBefore, notAfter, derBytes);
@@ -3822,7 +3758,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             int finalTotal = totalCertsInML > 0 ? totalCertsInML : totalCerts;
             ::uploadRepository->updateProgress(uploadId, finalTotal, cscaCount + dscCount);
 
-            // v1.5.1: Enhanced completion message with LDAP status
+            // Enhanced completion message with LDAP status
             std::string completionMsg = "처리 완료: ";
             std::vector<std::string> completionParts;
             if (cscaCount > 0) completionParts.push_back("CSCA " + std::to_string(cscaCount));
@@ -3861,7 +3797,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             ldap_unbind_ext_s(ld, nullptr, nullptr);
         }
 
-        // Phase 6.2: Remove from processing set
+        // Remove from processing set
         cleanupGuard();
     }).detach();
 }
@@ -3919,7 +3855,7 @@ void registerRoutes() {
     auto& app = drogon::app();
 
     // =========================================================================
-    // Phase 3: Register Authentication Middleware (Global)
+    // Register Authentication Middleware (Global)
     // =========================================================================
     // Note: Authentication is DISABLED by default for backward compatibility
     // Enable by setting: AUTH_ENABLED=true in environment
@@ -3929,7 +3865,7 @@ void registerRoutes() {
     // Instead, apply it to individual routes using .addFilter() method.
     //
     // =========================================================================
-    // Authentication Routes (Phase 5.4: Repository Pattern)
+    // Authentication Routes
     // =========================================================================
     // Note: AuthMiddleware is applied globally via registerPreHandlingAdvice()
     // (see initialization section at end of main())
@@ -3949,7 +3885,7 @@ void registerRoutes() {
            const std::string& uploadId) {
             spdlog::info("POST /api/upload/{}/parse - Trigger parsing", uploadId);
 
-            // v2.6.4: Use QueryExecutor instead of PGconn for Oracle support
+            // Use QueryExecutor for Oracle support
             if (!::queryExecutor) {
                 Json::Value error;
                 error["success"] = false;
@@ -4019,7 +3955,7 @@ void registerRoutes() {
             if (fileFormatStr == "LDIF") {
                 processLdifFileAsync(uploadId, contentBytes);
             } else if (fileFormatStr == "ML") {
-                // Phase 6.1: Use Strategy Pattern for Master List (Repository Pattern)
+                // Use Strategy Pattern for Master List processing
                 std::thread([uploadId, contentBytes]() {
                     spdlog::info("[Phase 6.1] Starting async Master List processing via Strategy for upload: {}", uploadId);
 
@@ -4115,7 +4051,7 @@ void registerRoutes() {
     );
 
     // Manual mode: Trigger validate and DB save endpoint
-    // [Phase 6.1] Refactored to use Repository Pattern instead of direct PostgreSQL connection
+    // Refactored to use Repository Pattern instead of direct PostgreSQL connection
     app.registerHandler(
         "/api/upload/{uploadId}/validate",
         [](const drogon::HttpRequestPtr& req,
@@ -4176,7 +4112,7 @@ void registerRoutes() {
     );
 
     // GET /api/upload/{uploadId}/validations - Get validation results for an upload
-    // Phase 4.5: Connected to ValidationService → ValidationRepository (Repository Pattern)
+    // Connected to ValidationService -> ValidationRepository (Repository Pattern)
     app.registerHandler(
         "/api/upload/{uploadId}/validations",
         [&](const drogon::HttpRequestPtr& req,
@@ -4216,7 +4152,7 @@ void registerRoutes() {
     );
 
     // GET /api/upload/{uploadId}/validation-statistics - Get validation statistics for an upload
-    // Phase 4.6: Connected to ValidationService → ValidationRepository (Repository Pattern)
+    // Connected to ValidationService -> ValidationRepository (Repository Pattern)
     app.registerHandler(
         "/api/upload/{uploadId}/validation-statistics",
         [](const drogon::HttpRequestPtr& req,
@@ -4245,7 +4181,7 @@ void registerRoutes() {
     );
 
     // GET /api/upload/{uploadId}/ldif-structure - Get LDIF file structure
-    // v2.2.2: LDIF Structure Visualization (Repository Pattern)
+    // LDIF Structure Visualization (Repository Pattern)
     app.registerHandler(
         "/api/upload/{uploadId}/ldif-structure",
         [](const drogon::HttpRequestPtr& req,
@@ -4285,8 +4221,6 @@ void registerRoutes() {
     );
 
     // Cleanup failed upload endpoint
-    // Phase 3.1: Connected to UploadService (Repository Pattern)
-    // TODO Phase 4: Move cleanupFailedUpload() logic into UploadService
     app.registerHandler(
         "/api/upload/{uploadId}",
         [](const drogon::HttpRequestPtr& req,
@@ -4315,7 +4249,7 @@ void registerRoutes() {
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 callback(resp);
 
-                // Phase 3.1: Audit logging - UPLOAD_DELETE success
+                // Audit logging - UPLOAD_DELETE success
                 {
                     AuditLogEntry auditEntry;
                     auto [userId, username] = extractUserFromRequest(req);
@@ -4339,7 +4273,7 @@ void registerRoutes() {
             } catch (const std::exception& e) {
                 spdlog::error("Failed to delete upload {}: {}", uploadId, e.what());
 
-                // Phase 3.1: Audit logging - UPLOAD_DELETE failed
+                // Audit logging - UPLOAD_DELETE failed
                 {
                     AuditLogEntry auditEntry;
                     auto [userId, username] = extractUserFromRequest(req);
@@ -4373,11 +4307,11 @@ void registerRoutes() {
     );
 
     // =========================================================================
-    // Audit Log API Endpoints (Phase 4.4)
+    // Audit Log API Endpoints
     // =========================================================================
 
     // GET /api/audit/operations - List audit log entries with filtering
-    // Phase 4.4: Connected to AuditService → AuditRepository (Repository Pattern)
+    // Connected to AuditService -> AuditRepository (Repository Pattern)
     app.registerHandler(
         "/api/audit/operations",
         [](const drogon::HttpRequestPtr& req,
@@ -4416,7 +4350,7 @@ void registerRoutes() {
     );
 
     // GET /api/audit/operations/stats - Audit log statistics
-    // Phase 4.4: Connected to AuditService → AuditRepository (Repository Pattern)
+    // Connected to AuditService -> AuditRepository (Repository Pattern)
     app.registerHandler(
         "/api/audit/operations/stats",
         [](const drogon::HttpRequestPtr& req,
@@ -4496,7 +4430,7 @@ void registerRoutes() {
     );
 
     // Re-validate DSC certificates endpoint
-    // Phase 4.7: Connected to ValidationService → CertificateRepository (Repository Pattern)
+    // Connected to ValidationService -> CertificateRepository (Repository Pattern)
     app.registerHandler(
         "/api/validation/revalidate",
         [](const drogon::HttpRequestPtr& req,
@@ -4622,7 +4556,7 @@ void registerRoutes() {
 
                 // Handle duplicate file
                 if (result.status == "DUPLICATE") {
-                    // Phase 3.1: Audit logging - FILE_UPLOAD failed (duplicate)
+                    // Audit logging - FILE_UPLOAD failed (duplicate)
                     {
                         AuditLogEntry auditEntry;
                         auto [userId2, sessionUsername2] = extractUserFromRequest(req);
@@ -4668,7 +4602,7 @@ void registerRoutes() {
 
                 // Handle upload failure
                 if (!result.success) {
-                    // Phase 3.1: Audit logging - FILE_UPLOAD failed
+                    // Audit logging - FILE_UPLOAD failed
                     {
                         AuditLogEntry auditEntry;
                         auto [userId3, sessionUsername3] = extractUserFromRequest(req);
@@ -4726,7 +4660,7 @@ void registerRoutes() {
                 resp->setStatusCode(drogon::k201Created);
                 callback(resp);
 
-                // Phase 3.1: Audit logging - FILE_UPLOAD success
+                // Audit logging - FILE_UPLOAD success
                 {
                     AuditLogEntry auditEntry;
                     auto [userId4, sessionUsername4] = extractUserFromRequest(req);
@@ -4849,7 +4783,7 @@ void registerRoutes() {
 
                 // Handle duplicate file
                 if (uploadResult.status == "DUPLICATE") {
-                    // Phase 3.1: Audit logging - FILE_UPLOAD failed (duplicate)
+                    // Audit logging - FILE_UPLOAD failed (duplicate)
                     {
                         AuditLogEntry auditEntry;
                         auto [userId5, sessionUsername5] = extractUserFromRequest(req);
@@ -4895,7 +4829,7 @@ void registerRoutes() {
 
                 // Handle upload failure
                 if (!uploadResult.success) {
-                    // Phase 3.1: Audit logging - FILE_UPLOAD failed
+                    // Audit logging - FILE_UPLOAD failed
                     {
                         AuditLogEntry auditEntry;
                         auto [userId6, sessionUsername6] = extractUserFromRequest(req);
@@ -5060,7 +4994,7 @@ void registerRoutes() {
                 resp->setStatusCode(drogon::k201Created);
                 callback(resp);
 
-                // Phase 3.1: Audit logging - FILE_UPLOAD success
+                // Audit logging - FILE_UPLOAD success
                 {
                     AuditLogEntry auditEntry;
                     auto [userId7, username7] = extractUserFromRequest(req);
@@ -5362,7 +5296,7 @@ void registerRoutes() {
     );
 
     // Upload statistics endpoint - returns UploadStatisticsOverview format
-    // Phase 3.1: Connected to UploadService (Repository Pattern)
+    // Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/statistics",
         [](const drogon::HttpRequestPtr& req,
@@ -5412,7 +5346,7 @@ void registerRoutes() {
     );
 
     // Upload history endpoint - returns PageResponse format
-    // Phase 3.1: Connected to UploadService (Repository Pattern)
+    // Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/history",
         [](const drogon::HttpRequestPtr& req,
@@ -5471,7 +5405,7 @@ void registerRoutes() {
     );
 
     // Get individual upload status - GET /api/upload/detail/{uploadId}
-    // Phase 3.1: Connected to UploadService (Repository Pattern)
+    // Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/detail/{uploadId}",
         [](const drogon::HttpRequestPtr& req,
@@ -5570,7 +5504,7 @@ void registerRoutes() {
             result["success"] = false;
 
             try {
-                // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
+                // Uses QueryExecutor for Oracle support
                 if (!::queryExecutor) {
                     throw std::runtime_error("Query executor not initialized");
                 }
@@ -5677,7 +5611,7 @@ void registerRoutes() {
                 }
             }
 
-            // v2.6.4: Migrated from PGconn to QueryExecutor for Oracle support
+            // Uses QueryExecutor for Oracle support
             Json::Value result;
             result["success"] = false;
 
@@ -5767,7 +5701,7 @@ void registerRoutes() {
     );
 
     // Country statistics endpoint - GET /api/upload/countries
-    // Phase 3.1: Connected to UploadService (Repository Pattern)
+    // Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/countries",
         [](const drogon::HttpRequestPtr& req,
@@ -5798,7 +5732,7 @@ void registerRoutes() {
     );
 
     // Detailed country statistics endpoint - GET /api/upload/countries/detailed
-    // Phase 3.1: Connected to UploadService (Repository Pattern)
+    // Connected to UploadService (Repository Pattern)
     app.registerHandler(
         "/api/upload/countries/detailed",
         [](const drogon::HttpRequestPtr& req,
@@ -6451,7 +6385,7 @@ paths:
                         certJson["pkdVersion"] = *cert.getPkdVersion();
                     }
 
-                    // X.509 Metadata (v2.3.0) - 15 fields
+                    // X.509 Metadata - 15 fields
                     certJson["version"] = cert.getVersion();
                     if (cert.getSignatureAlgorithm().has_value()) {
                         certJson["signatureAlgorithm"] = *cert.getSignatureAlgorithm();
@@ -6634,7 +6568,7 @@ paths:
     );
 
     // GET /api/certificates/validation - Get validation result by fingerprint
-    // Phase 3.2: Connected to ValidationService (Repository Pattern)
+    // Connected to ValidationService (Repository Pattern)
     app.registerHandler(
         "/api/certificates/validation",
         [&](const drogon::HttpRequestPtr& req,
@@ -6781,7 +6715,7 @@ paths:
                 resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
                 callback(resp);
 
-                // Phase 4.4: Audit logging - CERT_EXPORT success (single file)
+                // Audit logging - CERT_EXPORT success (single file)
                 {
                     AuditLogEntry auditEntry;
                     auto [userId8, username8] = extractUserFromRequest(req);
@@ -6862,7 +6796,7 @@ paths:
                 resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
                 callback(resp);
 
-                // Phase 3.1: Audit logging - CERT_EXPORT success (country ZIP)
+                // Audit logging - CERT_EXPORT success (country ZIP)
                 {
                     AuditLogEntry auditEntry;
                     auto [userId, username] = extractUserFromRequest(req);
@@ -7265,14 +7199,14 @@ paths:
         {drogon::Get}
     );
 
-    // Register ICAO Auto Sync routes (v1.7.0)
+    // Register ICAO Auto Sync routes
     if (icaoHandler) {
         icaoHandler->registerRoutes(app);
         spdlog::info("ICAO Auto Sync routes registered");
     }
 
     // =========================================================================
-    // Sprint 2: Link Certificate Validation API
+    // Link Certificate Validation API
     // =========================================================================
 
     // POST /api/validate/link-cert - Validate Link Certificate trust chain
@@ -7321,7 +7255,7 @@ paths:
                 return;
             }
 
-            // v2.6.4: Use QueryExecutor for Oracle support
+            // Use QueryExecutor for Oracle support
             if (!::queryExecutor) {
                 Json::Value error;
                 error["success"] = false;
@@ -7600,7 +7534,7 @@ paths:
     );
 
     // =========================================================================
-    // Sprint 1: LDAP DN Migration API (Internal)
+    // LDAP DN Migration API (Internal)
     // =========================================================================
 
     // POST /api/internal/migrate-ldap-dns - Migrate batch of certificates to v2 DN
@@ -7648,7 +7582,7 @@ paths:
 
             spdlog::info("Migration batch - offset: {}, limit: {}, mode: {}", offset, limit, mode);
 
-            // v2.6.4: Migrated from PGconn to connection pool + QueryExecutor
+            // Uses connection pool + QueryExecutor
             // NOTE: This endpoint uses PQunescapeBytea for certificate_data (BYTEA column).
             // For PostgreSQL, we use the connection pool. For Oracle, this internal migration
             // endpoint is not applicable (Oracle uses a different DN migration approach).
@@ -7879,7 +7813,7 @@ int main(int argc, char* argv[]) {
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
-    // Create LDAP connection pool FIRST (v2.4.3: Thread-safe LDAP connection management)
+    // Create LDAP connection pool FIRST (Thread-safe LDAP connection management)
     // Note: Using write host for upload operations
     try {
         std::string ldapWriteUri = "ldap://" + appConfig.ldapWriteHost + ":" + std::to_string(appConfig.ldapWritePort);
@@ -7900,7 +7834,7 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        // Initialize Certificate Service (Clean Architecture) - v2.4.3: Using LDAP connection pool
+        // Initialize Certificate Service (Clean Architecture) - Using LDAP connection pool
         // Certificate search base DN: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
         // Note: Repository will prepend dc=data,dc=download based on search criteria
         std::string certSearchBaseDn = appConfig.ldapBaseDn;
@@ -7912,21 +7846,19 @@ int main(int argc, char* argv[]) {
         certificateService = std::make_shared<services::CertificateService>(repository);
         spdlog::info("Certificate service initialized with LDAP connection pool (baseDN: {})", certSearchBaseDn);
 
-        // TODO: Replace with Redis-based caching for better performance and scalability
-        // Countries API now uses PostgreSQL for instant response (~70ms)
         spdlog::info("Countries API configured (PostgreSQL query, ~70ms response time)");
 
-        // ICAO Auto Sync Module initialization deferred to after QueryExecutor init (v2.6.4)
+        // ICAO Auto Sync Module initialization deferred to after QueryExecutor init
         // IcaoVersionRepository now uses IQueryExecutor instead of PGconn
 
-        // Phase 1.6: Initialize Repository Pattern - Repositories and Services
+        // Initialize Repository Pattern - Repositories and Services
         spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
 
-        // Create database connection pool for Repositories (v2.5.0: Factory Pattern with Oracle support)
+        // Create database connection pool for Repositories (Factory Pattern with Oracle support)
         std::shared_ptr<common::IDbConnectionPool> genericPool;
 
         try {
-            // v2.5.0: Use Factory Pattern to create pool based on DB_TYPE environment variable
+            // Use Factory Pattern to create pool based on DB_TYPE environment variable
             // Supports both PostgreSQL (production) and Oracle (development)
             genericPool = common::DbConnectionPoolFactory::createFromEnv();
 
@@ -7946,7 +7878,7 @@ int main(int argc, char* argv[]) {
             std::string dbType = genericPool->getDatabaseType();
             spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
-            // Phase 3 Complete: Query Executor Pattern supports both PostgreSQL and Oracle
+            // Query Executor Pattern supports both PostgreSQL and Oracle
             // Repositories work with any database through IQueryExecutor interface
             spdlog::info("Repository Pattern initialization complete - Ready for {} database", dbType);
 
@@ -7956,11 +7888,11 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        // Initialize Query Executor (v2.5.0 Phase 3: Database-agnostic query execution)
+        // Initialize Query Executor (Database-agnostic query execution)
         queryExecutor = common::createQueryExecutor(genericPool.get());
         spdlog::info("Query Executor initialized (DB type: {})", queryExecutor->getDatabaseType());
 
-        // Initialize Repositories with Query Executor (v2.5.0 Phase 3: Database-agnostic)
+        // Initialize Repositories with Query Executor (Database-agnostic)
         uploadRepository = std::make_shared<repositories::UploadRepository>(queryExecutor.get());
         certificateRepository = std::make_shared<repositories::CertificateRepository>(queryExecutor.get());
         validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get(), ldapPool, appConfig.ldapBaseDn);
@@ -7973,7 +7905,7 @@ int main(int argc, char* argv[]) {
         spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, User, AuthAudit, CRL, DL: Query Executor)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
-        // Initialize ICAO Auto Sync Module (v1.7.0, migrated to IQueryExecutor v2.6.4)
+        // Initialize ICAO Auto Sync Module
         spdlog::info("Initializing ICAO Auto Sync module...");
 
         auto icaoRepo = std::make_shared<repositories::IcaoVersionRepository>(queryExecutor.get());
@@ -8005,7 +7937,7 @@ int main(int argc, char* argv[]) {
         uploadService = std::make_shared<services::UploadService>(
             uploadRepository.get(),
             certificateRepository.get(),
-            ldapPool.get(),  // v2.4.3: Use LDAP connection pool instead of direct connection
+            ldapPool.get(),
             deviationListRepository.get()  // DL deviation data storage
         );
 
@@ -8029,7 +7961,7 @@ int main(int argc, char* argv[]) {
 
         spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, Statistics, LdifStructure)");
 
-        // Phase 5.4: Initialize Authentication Handler with Repository Pattern
+        // Initialize Authentication Handler with Repository Pattern
         spdlog::info("Initializing Authentication module with Repository Pattern...");
         authHandler = std::make_shared<handlers::AuthHandler>(
             userRepository.get(),
@@ -8059,7 +7991,7 @@ int main(int argc, char* argv[]) {
             resp->addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-User-Id");
         });
 
-        // Register AuthMiddleware globally for JWT authentication (v2.3.1)
+        // Register AuthMiddleware globally for JWT authentication
         spdlog::info("Registering AuthMiddleware globally...");
         try {
             auto authMiddleware = std::make_shared<middleware::AuthMiddleware>();
@@ -8103,7 +8035,7 @@ int main(int argc, char* argv[]) {
         // Register routes
         registerRoutes();
 
-        // ICAO Auto Version Check Scheduler (v2.10.0)
+        // ICAO Auto Version Check Scheduler
         if (appConfig.icaoSchedulerEnabled) {
             spdlog::info("[IcaoScheduler] Setting up daily version check at {:02d}:00",
                         appConfig.icaoCheckScheduleHour);
@@ -8162,7 +8094,7 @@ int main(int argc, char* argv[]) {
         // Run the server
         app.run();
 
-        // Phase 1.6: Cleanup - Close LDAP connections (Database connection pool auto-cleanup via shared_ptr)
+        // Cleanup - Close LDAP connections (Database connection pool auto-cleanup via shared_ptr)
         spdlog::info("Shutting down Repository Pattern resources...");
         dbPool.reset();  // Explicitly release connection pool
         spdlog::info("Database connection pool closed");

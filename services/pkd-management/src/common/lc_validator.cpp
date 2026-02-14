@@ -2,7 +2,6 @@
  * @file lc_validator.cpp
  * @brief Link Certificate (LC) trust chain validation implementation
  *
- * Sprint 2: Link Certificate Validation Core
  * Implements ICAO Doc 9303 Part 12 Link Certificate validation
  *
  * @version 1.0.0
@@ -448,9 +447,7 @@ std::string LcValidator::storeLinkCertificate(
     return lcId;
 }
 
-// ============================================================================
-// Private Helper Methods - Certificate Lookup
-// ============================================================================
+/// --- Private Helper Methods - Certificate Lookup ---
 
 X509* LcValidator::findCscaBySubjectDn(const std::string& subjectDn) {
     std::string dbType = executor_->getDatabaseType();
@@ -520,9 +517,7 @@ X509* LcValidator::findCscaByIssuerDn(const std::string& issuerDn) {
     }
 }
 
-// ============================================================================
-// Private Helper Methods - Certificate Validation
-// ============================================================================
+/// --- Private Helper Methods - Certificate Validation ---
 
 bool LcValidator::verifyCertificateSignature(X509* cert, EVP_PKEY* issuerPubKey) {
     int result = X509_verify(cert, issuerPubKey);
@@ -578,9 +573,7 @@ bool LcValidator::validateLcExtensions(X509* cert) {
     return true;
 }
 
-// ============================================================================
-// Private Helper Methods - Extension Extraction
-// ============================================================================
+/// --- Private Helper Methods - Extension Extraction ---
 
 std::optional<std::tuple<bool, int>> LcValidator::getBasicConstraints(X509* cert) {
     BASIC_CONSTRAINTS* bc = static_cast<BASIC_CONSTRAINTS*>(
@@ -662,9 +655,7 @@ std::string LcValidator::getExtendedKeyUsage(X509* cert) {
     return oss.str();
 }
 
-// ============================================================================
-// Private Helper Methods - Certificate Metadata Extraction
-// ============================================================================
+/// --- Private Helper Methods - Certificate Metadata Extraction ---
 
 std::string LcValidator::extractSubjectDn(X509* cert) {
     X509_NAME* name = X509_get_subject_name(cert);
