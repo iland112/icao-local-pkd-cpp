@@ -99,8 +99,10 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
         }
 
         // Convert DER bytes to hex string for bytea storage
+        // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
+        std::string dbType = queryExecutor_->getDatabaseType();
         std::ostringstream hexStream;
-        hexStream << "\\\\x";
+        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
         for (auto b : derBytes) {
             hexStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
         }
@@ -157,7 +159,7 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
             "\",\"verificationStatus\":\"" + verificationStatus + "\"}";
 
         // 4. Insert new DSC certificate
-        std::string dbType = queryExecutor_->getDatabaseType();
+        // dbType already declared above for hex prefix selection
         std::string newId;
 
         if (dbType == "oracle") {

@@ -73,9 +73,14 @@ export function FileUpload() {
   const [processingErrors, setProcessingErrors] = useState<ProcessingError[]>([]);
   const [errorCounts, setErrorCounts] = useState({ total: 0, parse: 0, db: 0, ldap: 0 });
 
-  // Event log for SSE events
+  // Event log for SSE events (filtered: only meaningful events)
   const [eventLogEntries, setEventLogEntries] = useState<EventLogEntry[]>([]);
   const eventIdRef = useRef(0);
+  const lastStageRef = useRef('');
+  const lastErrorCountRef = useRef(0);
+  const lastDuplicateCountRef = useRef(0);
+  const lastValidationReasonsRef = useRef<Record<string, number>>({});
+  const lastMilestoneRef = useRef(0);
 
   // Restore upload state on page load (for MANUAL mode)
   useEffect(() => {
@@ -304,6 +309,11 @@ export function FileUpload() {
     // Reset event log
     setEventLogEntries([]);
     eventIdRef.current = 0;
+    lastStageRef.current = '';
+    lastErrorCountRef.current = 0;
+    lastDuplicateCountRef.current = 0;
+    lastValidationReasonsRef.current = {};
+    lastMilestoneRef.current = 0;
   };
 
   const handleUpload = async () => {
@@ -558,46 +568,104 @@ export function FileUpload() {
     startPolling(id);
   };
 
-  const handleProgressUpdate = (progress: UploadProgress) => {
-    const { stage, stageName, message, percentage, processedCount, totalCount, errorMessage } = progress;
+  // Format numbers in message string with locale-aware separators (e.g., "DSC 21440/29838" → "DSC 21,440/29,838")
+  const formatMessageNumbers = (msg: string) => msg.replace(/\d+/g, m => Number(m).toLocaleString());
 
-    // Accumulate event log entry
+  // Translate validation reason to Korean
+  const translateReason = (reason: string): string => {
+    if (reason.includes('Trust chain signature verification failed')) return '서명 검증 실패';
+    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return 'Trust Chain 끊김';
+    if (reason.includes('CSCA not found')) return 'CSCA 미등록';
+    if (reason.includes('not yet valid')) return '유효기간 미도래';
+    if (reason.includes('certificates expired')) return '인증서 만료 (서명 유효)';
+    return reason;
+  };
+
+  const handleProgressUpdate = (progress: UploadProgress) => {
+    const { stage, stageName, percentage, processedCount, totalCount, errorMessage } = progress;
+    const message = progress.message ? formatMessageNumbers(progress.message) : '';
+
+    // Event log: only meaningful events (stage transitions, errors, milestones)
     {
       const now = new Date();
       const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
 
-      let status: EventLogEntry['status'] = 'info';
-      if (stage === 'FAILED' || errorMessage) status = 'fail';
-      else if (stage.endsWith('_COMPLETED') || stage === 'COMPLETED') status = 'success';
-      else if (stage.endsWith('_IN_PROGRESS')) status = 'info';
-
-      // Build detail string
-      let detail = '';
-      if (processedCount > 0 && totalCount > 0) {
-        detail = `${processedCount.toLocaleString()}/${totalCount.toLocaleString()}`;
-        if (percentage > 0) detail += ` (${percentage}%)`;
-      } else if (message) {
-        detail = message;
-      } else if (stageName) {
-        detail = stageName;
-      }
-      if (errorMessage) {
-        detail = errorMessage;
-        status = 'fail';
-      }
-      if (!detail && stage === 'COMPLETED') detail = 'SUCCESS';
-      if (!detail && stage === 'FAILED') detail = 'FAIL';
-      if (!detail) detail = `${percentage}%`;
-
-      const entry: EventLogEntry = {
-        id: ++eventIdRef.current,
-        timestamp: ts,
-        eventName: stage,
-        detail,
-        status,
+      const addEntry = (eventName: string, detail: string, status: EventLogEntry['status']) => {
+        setEventLogEntries(prev => [...prev, {
+          id: ++eventIdRef.current, timestamp: ts, eventName, detail, status,
+        }]);
       };
 
-      setEventLogEntries(prev => [...prev, entry]);
+      // 1) Errors always logged
+      if (errorMessage) {
+        addEntry(stage, errorMessage, 'fail');
+      }
+      // 2) Stage transitions (first occurrence of each stage)
+      else if (stage !== lastStageRef.current) {
+        const isComplete = stage.endsWith('_COMPLETED') || stage === 'COMPLETED';
+        const isFail = stage === 'FAILED';
+        const detail = message || stageName || (isComplete ? '완료' : isFail ? '실패' : '시작');
+        addEntry(stage, detail, isFail ? 'fail' : isComplete ? 'success' : 'info');
+      }
+      // 3) Milestones every 10,000 entries (for long-running operations)
+      else if (processedCount > 0 && totalCount > 0) {
+        const milestone = Math.floor(processedCount / 10000) * 10000;
+        if (milestone > 0 && milestone > lastMilestoneRef.current) {
+          lastMilestoneRef.current = milestone;
+          addEntry('MILESTONE', `${milestone.toLocaleString()}/${totalCount.toLocaleString()} 처리 완료 (${percentage}%)`, 'info');
+        }
+      }
+
+      lastStageRef.current = stage;
+
+      // 4) Surface new processing errors from statistics as individual events
+      if (progress.statistics?.recentErrors) {
+        const newErrors = progress.statistics.recentErrors;
+        const newCount = progress.statistics.totalErrorCount ?? 0;
+        if (newCount > lastErrorCountRef.current) {
+          // Log only newly appeared errors
+          const addedCount = newCount - lastErrorCountRef.current;
+          const recentNew = newErrors.slice(-addedCount);
+          for (const err of recentNew) {
+            const label = err.errorType === 'PARSE' ? '파싱 실패'
+              : err.errorType === 'DB_SAVE' ? 'DB 저장 실패'
+              : err.errorType === 'LDAP_SAVE' ? 'LDAP 저장 실패'
+              : err.errorType;
+            const detail = `[${err.countryCode}] ${err.certificateType} - ${err.message}`;
+            addEntry(label, detail, err.errorType === 'LDAP_SAVE' ? 'warning' : 'fail');
+          }
+          lastErrorCountRef.current = newCount;
+        }
+      }
+
+      // 5) Surface duplicate certificate count changes
+      if (progress.statistics?.duplicateCount != null) {
+        const dupCount = progress.statistics.duplicateCount;
+        if (dupCount > lastDuplicateCountRef.current) {
+          const newDups = dupCount - lastDuplicateCountRef.current;
+          addEntry('중복 인증서', `${newDups.toLocaleString()}개 중복 건너뜀 (누적 ${dupCount.toLocaleString()}개)`, 'warning');
+          lastDuplicateCountRef.current = dupCount;
+        }
+      }
+
+      // 6) Surface validation failure/pending reasons
+      if (progress.statistics?.validationReasons) {
+        const reasons = progress.statistics.validationReasons;
+        const prev = lastValidationReasonsRef.current;
+        for (const [key, count] of Object.entries(reasons)) {
+          if (key === 'VALID' || key.startsWith('VALID')) continue; // skip successes
+          const prevCount = prev[key] ?? 0;
+          if (count > prevCount) {
+            const isInvalid = key.startsWith('INVALID:');
+            const isPending = key.startsWith('PENDING:');
+            const reasonText = key.replace(/^(INVALID|EXPIRED_VALID|PENDING):\s*/, '');
+            const label = isInvalid ? '검증 실패' : isPending ? '검증 보류' : '만료-유효';
+            const translated = translateReason(reasonText);
+            addEntry(label, `${translated} (${count.toLocaleString()}건)`, isInvalid ? 'fail' : 'warning');
+          }
+        }
+        lastValidationReasonsRef.current = { ...reasons };
+      }
     }
 
     // Phase 4.4: Extract enhanced metadata fields
@@ -858,7 +926,7 @@ export function FileUpload() {
               {/* File Drop Zone */}
               <div
                 className={cn(
-                  'relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-300',
+                  'relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-300',
                   isDragging
                     ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 scale-[1.02]'
                     : selectedFile
@@ -883,14 +951,14 @@ export function FileUpload() {
                   className="hidden"
                   onChange={handleFileInputChange}
                 />
-                <div className="flex flex-col items-center justify-center space-y-3">
+                <div className="flex flex-col items-center justify-center space-y-2">
                   <div className={cn(
-                    'p-4 rounded-full transition-colors',
+                    'p-3 rounded-full transition-colors',
                     selectedFile ? 'bg-blue-100 dark:bg-blue-900/40' : 'bg-gray-100 dark:bg-gray-700'
                   )}>
                     <CloudUpload
                       className={cn(
-                        'w-10 h-10 transition-colors',
+                        'w-8 h-8 transition-colors',
                         selectedFile ? 'text-blue-500' : 'text-gray-400'
                       )}
                     />
@@ -1013,11 +1081,11 @@ export function FileUpload() {
                 )}
               </div>
 
-              {/* Preline-style Stepper */}
+              {/* Horizontal Stepper */}
               <div className="py-2">
                 <Stepper
                   steps={steps}
-                  orientation="vertical"
+                  orientation="horizontal"
                   size="md"
                   showProgress={true}
                 />
@@ -1028,7 +1096,7 @@ export function FileUpload() {
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <EventLog
                     events={eventLogEntries}
-                    onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; }}
+                    onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; lastStageRef.current = ''; lastErrorCountRef.current = 0; lastDuplicateCountRef.current = 0; lastValidationReasonsRef.current = {}; lastMilestoneRef.current = 0; }}
                   />
                 </div>
               )}
@@ -1159,6 +1227,75 @@ export function FileUpload() {
                   </div>
                 </div>
               )}
+
+              {/* Validation Result Summary */}
+              {overallStatus === 'FINALIZED' && statistics?.validationReasons && Object.keys(statistics.validationReasons).length > 0 && (() => {
+                const reasons = statistics.validationReasons!;
+                const validCount = reasons['VALID'] ?? 0;
+                const expiredValid = statistics.expiredValidCount ?? 0;
+                // Group INVALID and PENDING reasons
+                const invalidReasons: [string, number][] = [];
+                const pendingReasons: [string, number][] = [];
+                let invalidTotal = 0;
+                let pendingTotal = 0;
+                for (const [key, count] of Object.entries(reasons)) {
+                  if (key.startsWith('INVALID:')) {
+                    const reason = key.replace('INVALID: ', '');
+                    invalidReasons.push([translateReason(reason), count]);
+                    invalidTotal += count;
+                  } else if (key.startsWith('PENDING:')) {
+                    const reason = key.replace('PENDING: ', '');
+                    pendingReasons.push([translateReason(reason), count]);
+                    pendingTotal += count;
+                  }
+                }
+                if (invalidTotal === 0 && pendingTotal === 0 && expiredValid === 0) return null;
+                return (
+                  <div className="mt-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">검증 결과 요약</h4>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between text-green-600 dark:text-green-400">
+                        <span>✓ 성공 (VALID)</span>
+                        <span className="font-medium">{validCount.toLocaleString()}건</span>
+                      </div>
+                      {expiredValid > 0 && (
+                        <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                          <span>✓ 만료-유효 (EXPIRED_VALID)</span>
+                          <span className="font-medium">{expiredValid.toLocaleString()}건</span>
+                        </div>
+                      )}
+                      {invalidTotal > 0 && (
+                        <>
+                          <div className="flex justify-between text-red-600 dark:text-red-400">
+                            <span>✗ 실패 (INVALID)</span>
+                            <span className="font-medium">{invalidTotal.toLocaleString()}건</span>
+                          </div>
+                          {invalidReasons.map(([reason, count]) => (
+                            <div key={reason} className="flex justify-between text-red-500 dark:text-red-500 pl-4">
+                              <span className="text-xs">· {reason}</span>
+                              <span className="text-xs font-medium">{count.toLocaleString()}건</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                      {pendingTotal > 0 && (
+                        <>
+                          <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                            <span>○ 보류 (PENDING)</span>
+                            <span className="font-medium">{pendingTotal.toLocaleString()}건</span>
+                          </div>
+                          {pendingReasons.map(([reason, count]) => (
+                            <div key={reason} className="flex justify-between text-gray-400 dark:text-gray-500 pl-4">
+                              <span className="text-xs">· {reason}</span>
+                              <span className="text-xs font-medium">{count.toLocaleString()}건</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* LDAP Connection Failure Warning (v2.0.0 - Data Consistency Protection) */}
               {overallStatus === 'FAILED' && overallMessage &&

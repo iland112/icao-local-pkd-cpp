@@ -30,9 +30,10 @@ std::string CrlRepository::save(const std::string& uploadId,
         // Generate UUID (C++ for all DB types)
         std::string crlId = generateUuid();
 
-        // Convert binary CRL to hex string (\\x prefix for BLOB detection)
+        // Convert binary CRL to hex string
+        // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
         std::ostringstream hexStream;
-        hexStream << "\\\\x";
+        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
         for (size_t i = 0; i < crlBinary.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(crlBinary[i]);

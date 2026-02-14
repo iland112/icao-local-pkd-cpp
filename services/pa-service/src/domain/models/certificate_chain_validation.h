@@ -94,6 +94,8 @@ struct CertificateChainValidation {
     std::optional<std::string> crlStatusDescription;
     std::optional<std::string> crlStatusDetailedDescription;
     std::string crlStatusSeverity;  // "INFO", "WARNING", "CRITICAL"
+    std::optional<std::string> crlThisUpdate;   // CRL issued date (ISO 8601)
+    std::optional<std::string> crlNextUpdate;   // CRL next update date (ISO 8601)
 
     // Validation errors
     std::optional<std::string> validationErrors;

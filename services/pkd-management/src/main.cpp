@@ -436,6 +436,9 @@ struct DscValidationResult {
     bool signatureValid;
     bool notExpired;
     bool notRevoked;
+    // ICAO Doc 9303 Part 12 hybrid chain model: expiration is informational
+    bool dscExpired;   // DSC certificate has expired (informational)
+    bool cscaExpired;  // CSCA in chain has expired (informational)
     std::string cscaSubjectDn;
     std::string errorMessage;
     std::string trustChainPath;  // Sprint 3: Human-readable chain path (e.g., "DSC → CN=CSCA_old → CN=Link → CN=CSCA_new")
@@ -548,6 +551,7 @@ struct TrustChain {
     std::string errorMessage;
 };
 
+/**
 /**
  * @brief Get certificate subject DN as string
  * @param cert X509 certificate
@@ -732,7 +736,21 @@ static TrustChain buildTrustChain(X509* dscCert,
  * @param chain TrustChain structure to validate
  * @return true if all signatures and expiration checks pass, false otherwise
  */
-static bool validateTrustChain(const TrustChain& chain) {
+/**
+ * @brief Validate trust chain using ICAO Doc 9303 Part 12 hybrid chain model
+ *
+ * Per ICAO 9303: Signature verification is a HARD requirement.
+ * Certificate expiration is INFORMATIONAL (reported via cscaExpired out-param).
+ * Rationale: CSCA validity 13-15 years, DSC validity ~3 months, passport validity ~10 years.
+ * An expired CSCA's public key can still cryptographically verify DSC signatures.
+ *
+ * @param chain Trust chain to validate
+ * @param[out] cscaExpired Set to true if any CSCA in chain is expired
+ * @return true if all signature verifications pass (regardless of expiration)
+ */
+static bool validateTrustChain(const TrustChain& chain, bool& cscaExpired) {
+    cscaExpired = false;
+
     if (!chain.isValid) {
         spdlog::warn("Chain validation: Chain is already marked as invalid");
         return false;
@@ -750,17 +768,13 @@ static bool validateTrustChain(const TrustChain& chain) {
         X509* cert = chain.certificates[i];
         X509* issuer = (i + 1 < chain.certificates.size()) ? chain.certificates[i + 1] : cert;  // Last cert is self-signed
 
-        // Check expiration
+        // Check expiration (informational per ICAO hybrid model)
         if (X509_cmp_time(X509_get0_notAfter(cert), &now) < 0) {
-            spdlog::warn("Chain validation: Certificate {} is EXPIRED", i);
-            return false;
-        }
-        if (X509_cmp_time(X509_get0_notBefore(cert), &now) > 0) {
-            spdlog::warn("Chain validation: Certificate {} is NOT YET VALID", i);
-            return false;
+            cscaExpired = true;
+            spdlog::info("Chain validation: CSCA at depth {} is expired (informational per ICAO 9303)", i);
         }
 
-        // Verify signature (cert signed by issuer)
+        // Verify signature (cert signed by issuer) - HARD requirement
         EVP_PKEY* issuerPubKey = X509_get_pubkey(issuer);
         if (!issuerPubKey) {
             spdlog::error("Chain validation: Failed to extract public key from issuer {}", i);
@@ -782,8 +796,13 @@ static bool validateTrustChain(const TrustChain& chain) {
         spdlog::debug("Chain validation: Certificate {} signature VALID", i);
     }
 
-    spdlog::info("Chain validation: Trust chain VALID ({} certificates)",
-                 chain.certificates.size());
+    if (cscaExpired) {
+        spdlog::info("Chain validation: Trust chain signatures VALID, CSCA expired ({} certificates)",
+                     chain.certificates.size());
+    } else {
+        spdlog::info("Chain validation: Trust chain VALID ({} certificates)",
+                     chain.certificates.size());
+    }
     return true;
 }
 
@@ -799,26 +818,30 @@ static bool validateTrustChain(const TrustChain& chain) {
  * 3. DSC is not expired
  */
 DscValidationResult validateDscCertificate(X509* dscCert, const std::string& issuerDn) {
-    DscValidationResult result = {false, false, false, false, false, "", "", ""};  // Added trustChainPath field
+    DscValidationResult result = {false, false, false, false, false, false, false, "", "", ""};
 
     if (!dscCert) {
         result.errorMessage = "DSC certificate is null";
         return result;
     }
 
-    // Step 1: Check DSC expiration
+    // Step 1: Check DSC expiration (ICAO hybrid model: informational, not hard failure)
+    // Per ICAO Doc 9303 Part 12: DSC validity ~3 months, passport validity ~10 years
+    // Expired DSC is normal and expected; cryptographic validity is the hard requirement
     time_t now = time(nullptr);
     if (X509_cmp_time(X509_get0_notAfter(dscCert), &now) < 0) {
-        result.errorMessage = "DSC certificate is expired";
-        spdlog::warn("DSC validation: DSC is EXPIRED");
-        return result;
+        result.dscExpired = true;
+        result.notExpired = false;
+        spdlog::info("DSC validation: DSC is expired (informational per ICAO 9303)");
+    } else {
+        result.notExpired = true;
     }
     if (X509_cmp_time(X509_get0_notBefore(dscCert), &now) > 0) {
+        // NOT_YET_VALID is a hard failure (certificate not yet active)
         result.errorMessage = "DSC certificate is not yet valid";
         spdlog::warn("DSC validation: DSC is NOT YET VALID");
         return result;
     }
-    result.notExpired = true;
 
     // Step 2: Find ALL CSCAs matching issuer DN (including link certificates)
     // Phase 6.1: Use Repository Pattern instead of direct SQL
@@ -851,15 +874,22 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
                  chain.certificates.size());
     result.trustChainPath = chain.path;  // Sprint 3: Store human-readable chain path
 
-    // Step 4: Validate entire chain (signatures + expiration)
-    bool chainValid = validateTrustChain(chain);
+    // Step 4: Validate trust chain signatures (ICAO hybrid model)
+    // Signature verification is a HARD requirement; expiration is informational
+    bool cscaExpired = false;
+    bool signaturesValid = validateTrustChain(chain, cscaExpired);
+    result.cscaExpired = cscaExpired;
 
-    if (chainValid) {
+    if (signaturesValid) {
         result.signatureValid = true;
         result.isValid = true;
-        spdlog::info("DSC validation: Trust Chain VERIFIED - Path: {}", result.trustChainPath);
+        if (result.dscExpired || result.cscaExpired) {
+            spdlog::info("DSC validation: Trust Chain VERIFIED (expired) - Path: {}", result.trustChainPath);
+        } else {
+            spdlog::info("DSC validation: Trust Chain VERIFIED - Path: {}", result.trustChainPath);
+        }
     } else {
-        result.errorMessage = "Trust chain validation failed (signature or expiration check)";
+        result.errorMessage = "Trust chain signature verification failed";
         spdlog::error("DSC validation: Trust Chain FAILED - {}", result.errorMessage);
     }
 
@@ -2524,24 +2554,36 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         valRecord.certificateType = "DSC_NC";
         spdlog::info("Detected DSC_NC certificate from nc-data path: dn={}", entry.dn);
 
-        // DSC_NC - perform trust chain validation (Phase 6.1: Repository Pattern)
+        // DSC_NC - perform trust chain validation (ICAO hybrid model)
         auto dscValidation = validateDscCertificate(cert, issuerDn);
         valRecord.cscaFound = dscValidation.cscaFound;
         valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
         valRecord.signatureVerified = dscValidation.signatureValid;
         valRecord.validityCheckPassed = dscValidation.notExpired;
-        valRecord.isExpired = !dscValidation.notExpired;
-        valRecord.trustChainPath = dscValidation.trustChainPath;  // Sprint 3: Chain path
+        valRecord.isExpired = dscValidation.dscExpired;
+        valRecord.trustChainPath = dscValidation.trustChainPath;
 
         if (dscValidation.isValid) {
-            validationStatus = "VALID";
-            valRecord.validationStatus = "VALID";
-            valRecord.trustChainValid = true;
-            valRecord.trustChainMessage = "Trust chain verified: DSC signed by CSCA";
-            validationStats.validCount++;
-            validationStats.trustChainValidCount++;
-            spdlog::info("DSC_NC validation: Trust Chain VERIFIED for {} (issuer: {})",
-                        countryCode, issuerDn.substr(0, 50));
+            if (dscValidation.dscExpired || dscValidation.cscaExpired) {
+                validationStatus = "EXPIRED_VALID";
+                valRecord.validationStatus = "EXPIRED_VALID";
+                valRecord.trustChainValid = true;
+                valRecord.trustChainMessage = "Trust chain verified (certificates expired)";
+                validationStats.validCount++;
+                validationStats.trustChainValidCount++;
+                if (dscValidation.dscExpired) validationStats.expiredCount++;
+                spdlog::info("DSC_NC validation: Trust Chain VERIFIED (expired) for {} (issuer: {})",
+                            countryCode, issuerDn.substr(0, 50));
+            } else {
+                validationStatus = "VALID";
+                valRecord.validationStatus = "VALID";
+                valRecord.trustChainValid = true;
+                valRecord.trustChainMessage = "Trust chain verified: DSC signed by CSCA";
+                validationStats.validCount++;
+                validationStats.trustChainValidCount++;
+                spdlog::info("DSC_NC validation: Trust Chain VERIFIED for {} (issuer: {})",
+                            countryCode, issuerDn.substr(0, 50));
+            }
         } else if (dscValidation.cscaFound) {
             validationStatus = "INVALID";
             validationMessage = dscValidation.errorMessage;
@@ -2551,7 +2593,6 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
             valRecord.errorMessage = dscValidation.errorMessage;
             validationStats.invalidCount++;
             validationStats.trustChainInvalidCount++;
-            if (!dscValidation.notExpired) validationStats.expiredCount++;
             spdlog::error("DSC_NC validation: Trust Chain FAILED - {} for {}",
                          dscValidation.errorMessage, countryCode);
         } else {
@@ -2583,21 +2624,33 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
             valRecord.validityCheckPassed = cscaValidation.isValid;
             valRecord.keyUsageValid = cscaValidation.hasKeyCertSign;
 
-            // Link certificates need parent CSCA validation (same as DSC) (Phase 6.1: Repository Pattern)
+            // Link certificates need parent CSCA validation (ICAO hybrid model)
             auto lcValidation = validateDscCertificate(cert, issuerDn);
             valRecord.cscaFound = lcValidation.cscaFound;
             valRecord.cscaSubjectDn = lcValidation.cscaSubjectDn;
             valRecord.trustChainPath = lcValidation.trustChainPath;
+            valRecord.isExpired = lcValidation.dscExpired;
 
             if (lcValidation.isValid) {
-                validationStatus = "VALID";
-                valRecord.validationStatus = "VALID";
-                valRecord.trustChainValid = true;
-                valRecord.trustChainMessage = "Trust chain verified: Link Certificate signed by CSCA";
-                validationStats.validCount++;
-                validationStats.trustChainValidCount++;
-                spdlog::info("LC validation: Trust Chain VERIFIED for {} (issuer: {})",
-                            countryCode, issuerDn.substr(0, 50));
+                if (lcValidation.dscExpired || lcValidation.cscaExpired) {
+                    validationStatus = "EXPIRED_VALID";
+                    valRecord.validationStatus = "EXPIRED_VALID";
+                    valRecord.trustChainValid = true;
+                    valRecord.trustChainMessage = "Trust chain verified (certificates expired)";
+                    validationStats.validCount++;
+                    validationStats.trustChainValidCount++;
+                    spdlog::info("LC validation: Trust Chain VERIFIED (expired) for {} (issuer: {})",
+                                countryCode, issuerDn.substr(0, 50));
+                } else {
+                    validationStatus = "VALID";
+                    valRecord.validationStatus = "VALID";
+                    valRecord.trustChainValid = true;
+                    valRecord.trustChainMessage = "Trust chain verified: Link Certificate signed by CSCA";
+                    validationStats.validCount++;
+                    validationStats.trustChainValidCount++;
+                    spdlog::info("LC validation: Trust Chain VERIFIED for {} (issuer: {})",
+                                countryCode, issuerDn.substr(0, 50));
+                }
             } else if (lcValidation.cscaFound) {
                 validationStatus = "INVALID";
                 validationMessage = lcValidation.errorMessage;
@@ -2628,23 +2681,37 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
             valRecord.certificateType = "DSC";
 
         // DSC - perform trust chain validation (Phase 6.1: Repository Pattern)
+        // ICAO Doc 9303 Part 12 hybrid chain model: expiration is informational
         auto dscValidation = validateDscCertificate(cert, issuerDn);
         valRecord.cscaFound = dscValidation.cscaFound;
         valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
         valRecord.signatureVerified = dscValidation.signatureValid;
         valRecord.validityCheckPassed = dscValidation.notExpired;
-        valRecord.isExpired = !dscValidation.notExpired;
-        valRecord.trustChainPath = dscValidation.trustChainPath;  // Sprint 3: Chain path
+        valRecord.isExpired = dscValidation.dscExpired;
+        valRecord.trustChainPath = dscValidation.trustChainPath;
 
         if (dscValidation.isValid) {
-            validationStatus = "VALID";
-            valRecord.validationStatus = "VALID";
-            valRecord.trustChainValid = true;
-            valRecord.trustChainMessage = "Trust chain verified: DSC signed by CSCA";
-            validationStats.validCount++;
-            validationStats.trustChainValidCount++;
-            spdlog::info("DSC validation: Trust Chain VERIFIED for {} (issuer: {})",
-                        countryCode, issuerDn.substr(0, 50));
+            // Determine status per ICAO Doc 9303 hybrid chain model
+            if (dscValidation.dscExpired || dscValidation.cscaExpired) {
+                validationStatus = "EXPIRED_VALID";
+                valRecord.validationStatus = "EXPIRED_VALID";
+                valRecord.trustChainValid = true;
+                valRecord.trustChainMessage = "Trust chain verified (certificates expired)";
+                validationStats.validCount++;
+                validationStats.trustChainValidCount++;
+                if (dscValidation.dscExpired) validationStats.expiredCount++;
+                spdlog::info("DSC validation: Trust Chain VERIFIED (expired) for {} (issuer: {})",
+                            countryCode, issuerDn.substr(0, 50));
+            } else {
+                validationStatus = "VALID";
+                valRecord.validationStatus = "VALID";
+                valRecord.trustChainValid = true;
+                valRecord.trustChainMessage = "Trust chain verified: DSC signed by CSCA";
+                validationStats.validCount++;
+                validationStats.trustChainValidCount++;
+                spdlog::info("DSC validation: Trust Chain VERIFIED for {} (issuer: {})",
+                            countryCode, issuerDn.substr(0, 50));
+            }
         } else if (dscValidation.cscaFound) {
             validationStatus = "INVALID";
             validationMessage = dscValidation.errorMessage;
@@ -2654,7 +2721,6 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
             valRecord.errorMessage = dscValidation.errorMessage;
             validationStats.invalidCount++;
             validationStats.trustChainInvalidCount++;
-            if (!dscValidation.notExpired) validationStats.expiredCount++;
             spdlog::error("DSC validation: Trust Chain FAILED - {} for {}",
                          dscValidation.errorMessage, countryCode);
         } else {
@@ -2690,13 +2756,19 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         enhancedStats.icaoNonCompliantCount++;
     }
 
-    // Update validation status counts (matches legacy validationStats)
+    // Update validation status counts and reason tracking
     if (validationStatus == "VALID") {
         enhancedStats.validCount++;
+        enhancedStats.validationReasons["VALID"]++;
+    } else if (validationStatus == "EXPIRED_VALID") {
+        enhancedStats.expiredValidCount++;
+        enhancedStats.validationReasons["EXPIRED_VALID: " + valRecord.trustChainMessage]++;
     } else if (validationStatus == "INVALID") {
         enhancedStats.invalidCount++;
+        enhancedStats.validationReasons["INVALID: " + valRecord.trustChainMessage]++;
     } else if (validationStatus == "PENDING") {
         enhancedStats.pendingCount++;
+        enhancedStats.validationReasons["PENDING: " + valRecord.trustChainMessage]++;
     }
 
     spdlog::debug("Phase 4.4: Updated statistics - total={}, type={}, sigAlg={}, keySize={}, icaoCompliant={}",
@@ -2718,6 +2790,10 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         notBefore, notAfter, derBytes,
         validationStatus, validationMessage
     );
+
+    if (isDuplicate) {
+        enhancedStats.duplicateCount++;
+    }
 
     if (!certId.empty()) {
         spdlog::debug("Saved certificate to DB: type={}, country={}, fingerprint={}",
@@ -4387,6 +4463,7 @@ void registerRoutes() {
                 response["message"] = result.message;
                 response["totalProcessed"] = result.totalProcessed;
                 response["validCount"] = result.validCount;
+                response["expiredValidCount"] = result.expiredValidCount;
                 response["invalidCount"] = result.invalidCount;
                 response["pendingCount"] = result.pendingCount;
                 response["errorCount"] = result.errorCount;

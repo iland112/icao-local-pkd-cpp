@@ -44,6 +44,7 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
     result.success = false;
     result.totalProcessed = 0;
     result.validCount = 0;
+    result.expiredValidCount = 0;
     result.invalidCount = 0;
     result.pendingCount = 0;
     result.errorCount = 0;
@@ -51,8 +52,8 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
     auto startTime = std::chrono::steady_clock::now();
 
     try {
-        // Default limit for testing (can be parameterized later)
-        int limit = 10;
+        // Process all DSCs with csca_found=false
+        int limit = 50000;
 
         // Step 1: Get DSC certificates that need re-validation
         Json::Value dscs = certRepo_->findDscForRevalidation(limit);
@@ -79,38 +80,23 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
                     continue;
                 }
 
-                // Parse bytea hex format (\x...)
-                std::vector<uint8_t> derBytes;
-                if (certDataHex.length() > 2 && certDataHex[0] == '\\' && certDataHex[1] == 'x') {
-                    for (size_t i = 2; i < certDataHex.length(); i += 2) {
-                        if (i + 1 < certDataHex.length()) {
-                            char hex[3] = {certDataHex[i], certDataHex[i + 1], 0};
-                            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
-                        }
-                    }
-                }
-
-                if (derBytes.empty()) {
-                    spdlog::warn("Failed to parse certificate data for ID: {}", certId);
-                    result.errorCount++;
-                    continue;
-                }
-
-                // Convert DER to X509
-                const uint8_t* data = derBytes.data();
-                X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
+                // Parse certificate data (handles double-encoded BYTEA)
+                X509* cert = certRepo_->parseCertificateDataFromHex(certDataHex);
                 if (!cert) {
                     spdlog::error("Failed to parse X509 certificate for ID: {}", certId);
                     result.errorCount++;
                     continue;
                 }
 
-                // Validate certificate
+                // Validate certificate (ICAO Doc 9303 hybrid chain model)
                 ValidationResult valResult = validateCertificate(cert, "DSC");
 
                 // Count results
                 if (valResult.validationStatus == "VALID") {
                     result.validCount++;
+                } else if (valResult.validationStatus == "EXPIRED_VALID") {
+                    result.validCount++;
+                    result.expiredValidCount++;
                 } else if (valResult.validationStatus == "INVALID") {
                     result.invalidCount++;
                 } else if (valResult.validationStatus == "PENDING") {
@@ -119,8 +105,16 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
                     result.errorCount++;
                 }
 
-                // TODO Phase 5: Save validation result to database
-                // validationRepo_->save(...)
+                // Save validation result to database
+                validationRepo_->updateRevalidation(
+                    certId,
+                    valResult.validationStatus,
+                    valResult.trustChainValid,
+                    valResult.cscaFound,
+                    valResult.signatureValid,
+                    valResult.trustChainPath.empty() ? valResult.errorMessage : valResult.trustChainPath,
+                    valResult.cscaSubjectDn
+                );
 
                 // Free X509 certificate
                 X509_free(cert);
@@ -179,6 +173,8 @@ ValidationService::ValidationResult ValidationService::validateCertificate(
     result.crlChecked = false;
     result.revoked = false;
     result.cscaFound = false;
+    result.dscExpired = false;
+    result.cscaExpired = false;
     result.validationStatus = "PENDING";
 
     if (!cert) {
@@ -190,15 +186,16 @@ ValidationService::ValidationResult ValidationService::validateCertificate(
     try {
         spdlog::debug("Validating {} certificate", certType);
 
-        // Step 1: Check certificate expiration
+        // Step 1: Check certificate expiration (ICAO hybrid model: informational, not hard failure)
+        // Per ICAO Doc 9303 Part 12: DSC validity ~3 months, passport validity ~10 years
+        // Expired DSC is normal and expected; cryptographic validity is the hard requirement
         time_t now = time(nullptr);
         if (X509_cmp_time(X509_get0_notAfter(cert), &now) < 0) {
-            result.validationStatus = "INVALID";
-            result.errorMessage = "Certificate is expired";
-            spdlog::warn("Certificate validation: Certificate is EXPIRED");
-            return result;
+            result.dscExpired = true;
+            spdlog::info("Certificate validation: DSC is expired (informational per ICAO 9303)");
         }
         if (X509_cmp_time(X509_get0_notBefore(cert), &now) > 0) {
+            // NOT_YET_VALID is a hard failure (certificate not yet active)
             result.validationStatus = "INVALID";
             result.errorMessage = "Certificate is not yet valid";
             spdlog::warn("Certificate validation: Certificate is NOT YET VALID");
@@ -228,17 +225,27 @@ ValidationService::ValidationResult ValidationService::validateCertificate(
         result.trustChainPath = chain.path;
         spdlog::info("Certificate validation: Trust chain built ({} steps)", chain.certificates.size());
 
-        // Step 4: Validate entire chain (signatures + expiration)
-        bool chainValid = validateTrustChainInternal(chain);
+        // Step 4: Validate trust chain signatures (ICAO hybrid model)
+        // Signature verification is a HARD requirement; expiration is informational
+        bool cscaExpired = false;
+        bool signaturesValid = validateTrustChainInternal(chain, cscaExpired);
+        result.cscaExpired = cscaExpired;
 
-        if (chainValid) {
+        if (signaturesValid) {
             result.signatureValid = true;
             result.trustChainValid = true;
-            result.validationStatus = "VALID";
-            spdlog::info("Certificate validation: Trust Chain VERIFIED - Path: {}", result.trustChainPath);
+
+            // Determine validation status per ICAO Doc 9303 hybrid chain model
+            if (result.dscExpired || result.cscaExpired) {
+                result.validationStatus = "EXPIRED_VALID";
+                spdlog::info("Certificate validation: Trust Chain VERIFIED (expired) - Path: {}", result.trustChainPath);
+            } else {
+                result.validationStatus = "VALID";
+                spdlog::info("Certificate validation: Trust Chain VERIFIED - Path: {}", result.trustChainPath);
+            }
         } else {
             result.validationStatus = "INVALID";
-            result.errorMessage = "Trust chain validation failed (signature or expiration check)";
+            result.errorMessage = "Trust chain signature verification failed";
             spdlog::error("Certificate validation: Trust Chain FAILED - {}", result.errorMessage);
         }
 
@@ -599,8 +606,10 @@ bool ValidationService::verifyCertificateSignature(X509* cert, X509* issuerCert)
     }
 }
 
-bool ValidationService::validateTrustChainInternal(const TrustChain& chain)
+bool ValidationService::validateTrustChainInternal(const TrustChain& chain, bool& cscaExpired)
 {
+    cscaExpired = false;
+
     if (!chain.isValid) {
         spdlog::warn("Chain validation: Chain is already marked as invalid");
         return false;
@@ -613,6 +622,12 @@ bool ValidationService::validateTrustChainInternal(const TrustChain& chain)
 
     time_t now = time(nullptr);
 
+    // ICAO Doc 9303 Part 12 hybrid chain model:
+    // - Signature verification: HARD requirement (must pass)
+    // - Certificate expiration: INFORMATIONAL (reported but does not fail validation)
+    // Rationale: CSCA validity 13-15 years, DSC validity ~3 months, passport validity ~10 years
+    // An expired CSCA's public key can still cryptographically verify DSC signatures
+
     // Validate each certificate in chain (starting from index 1, skipping the leaf DSC)
     for (size_t i = 1; i < chain.certificates.size(); i++) {
         X509* cert = chain.certificates[i];
@@ -620,17 +635,13 @@ bool ValidationService::validateTrustChainInternal(const TrustChain& chain)
                        ? chain.certificates[i + 1]
                        : cert;  // Last cert is self-signed
 
-        // Check expiration
+        // Check expiration (informational per ICAO hybrid model)
         if (X509_cmp_time(X509_get0_notAfter(cert), &now) < 0) {
-            spdlog::warn("Chain validation: Certificate {} is EXPIRED", i);
-            return false;
-        }
-        if (X509_cmp_time(X509_get0_notBefore(cert), &now) > 0) {
-            spdlog::warn("Chain validation: Certificate {} is NOT YET VALID", i);
-            return false;
+            cscaExpired = true;
+            spdlog::info("Chain validation: CSCA at depth {} is expired (informational per ICAO 9303)", i);
         }
 
-        // Verify signature (cert signed by issuer)
+        // Verify signature (cert signed by issuer) - HARD requirement
         if (!verifyCertificateSignature(cert, issuer)) {
             spdlog::error("Chain validation: Signature verification FAILED at depth {}", i);
             return false;
@@ -639,8 +650,13 @@ bool ValidationService::validateTrustChainInternal(const TrustChain& chain)
         spdlog::debug("Chain validation: Certificate {} signature VALID", i);
     }
 
-    spdlog::info("Chain validation: Trust chain VALID ({} certificates)",
-                 chain.certificates.size());
+    if (cscaExpired) {
+        spdlog::info("Chain validation: Trust chain signatures VALID, CSCA expired ({} certificates)",
+                     chain.certificates.size());
+    } else {
+        spdlog::info("Chain validation: Trust chain VALID ({} certificates)",
+                     chain.certificates.size());
+    }
     return true;
 }
 

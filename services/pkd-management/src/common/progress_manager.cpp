@@ -311,6 +311,17 @@ Json::Value ValidationStatistics::toJson() const {
     }
     json["complianceViolations"] = complianceViolationsJson;
 
+    // Duplicate tracking
+    json["duplicateCount"] = duplicateCount;
+
+    // Validation reason tracking
+    Json::Value reasonsJson(Json::objectValue);
+    for (const auto& [reason, count] : validationReasons) {
+        reasonsJson[reason] = count;
+    }
+    json["validationReasons"] = reasonsJson;
+    json["expiredValidCount"] = expiredValidCount;
+
     // Error tracking
     json["totalErrorCount"] = totalErrorCount;
     json["parseErrorCount"] = parseErrorCount;

@@ -28,6 +28,8 @@ namespace repositories {
 struct Upload {
     std::string id;                  // UUID
     std::string fileName;
+    std::string originalFileName;    // Original filename before sanitization
+    std::string collectionNumber;    // Collection number (e.g., "001", "002", "ML")
     std::string fileHash;            // SHA-256 hash for deduplication
     std::string fileFormat;          // "LDIF", "MASTER_LIST"
     int fileSize;

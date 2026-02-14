@@ -97,6 +97,25 @@ public:
      */
     Json::Value getStatisticsByUploadId(const std::string& uploadId);
 
+    /**
+     * @brief Update validation result for revalidation
+     * @param certificateId Certificate UUID
+     * @param validationStatus New validation status (VALID/INVALID)
+     * @param trustChainValid Whether trust chain is valid
+     * @param cscaFound Whether CSCA was found
+     * @param signatureValid Whether signature is valid
+     * @param trustChainMessage Trust chain path or error message
+     * @param cscaSubjectDn CSCA subject DN if found
+     * @return true if update successful
+     */
+    bool updateRevalidation(const std::string& certificateId,
+                           const std::string& validationStatus,
+                           bool trustChainValid,
+                           bool cscaFound,
+                           bool signatureValid,
+                           const std::string& trustChainMessage,
+                           const std::string& cscaSubjectDn);
+
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 };

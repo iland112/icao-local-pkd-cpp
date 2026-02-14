@@ -48,6 +48,8 @@ Json::Value CertificateChainValidation::toJson() const {
     if (crlStatusDescription) json["crlStatusDescription"] = *crlStatusDescription;
     if (crlStatusDetailedDescription) json["crlStatusDetailedDescription"] = *crlStatusDetailedDescription;
     json["crlStatusSeverity"] = crlStatusSeverity;
+    if (crlThisUpdate) json["crlThisUpdate"] = *crlThisUpdate;
+    if (crlNextUpdate) json["crlNextUpdate"] = *crlNextUpdate;
 
     // Validation errors
     if (validationErrors) json["validationErrors"] = *validationErrors;

@@ -65,7 +65,8 @@ public:
     struct RevalidateResult {
         bool success;
         int totalProcessed;
-        int validCount;
+        int validCount;          // VALID + EXPIRED_VALID
+        int expiredValidCount;   // EXPIRED_VALID only (subset of validCount)
         int invalidCount;
         int pendingCount;
         int errorCount;
@@ -121,7 +122,11 @@ public:
         std::string cscaSubjectDn;
         std::string cscaFingerprint;
 
-        std::string validationStatus;  // "VALID", "INVALID", "PENDING", "ERROR"
+        // ICAO Doc 9303 hybrid chain model: expiration is informational, not a hard failure
+        bool dscExpired;    // DSC certificate has expired
+        bool cscaExpired;   // CSCA in chain has expired
+
+        std::string validationStatus;  // "VALID", "EXPIRED_VALID", "INVALID", "PENDING", "ERROR"
         std::string errorMessage;
     };
 
@@ -312,12 +317,17 @@ private:
     bool verifyCertificateSignature(X509* cert, X509* issuerCert);
 
     /**
-     * @brief Validate entire trust chain (signatures + expiration)
+     * @brief Validate trust chain signatures and check expiration (ICAO hybrid model)
+     *
+     * Per ICAO Doc 9303 Part 12, uses hybrid/chain model:
+     * - Signature verification is a hard requirement
+     * - Expiration is informational (reported but does not fail validation)
      *
      * @param chain Trust chain to validate
-     * @return true if all signatures and expiration checks pass
+     * @param[out] cscaExpired Set to true if any CSCA in chain is expired
+     * @return true if all signature verifications pass (regardless of expiration)
      */
-    bool validateTrustChainInternal(const TrustChain& chain);
+    bool validateTrustChainInternal(const TrustChain& chain, bool& cscaExpired);
 
     // ========================================================================
     // CRL Check

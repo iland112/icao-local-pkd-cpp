@@ -341,6 +341,15 @@ public:
      */
     Json::Value findLinkCertificateById(const std::string& id);
 
+    /**
+     * @brief Parse certificate data from hex-encoded bytea format to X509*
+     * @param hexData Hex-encoded certificate data (e.g., "\\x3082...")
+     * @return X509* certificate, or nullptr on failure
+     * @note Caller must free the returned X509* using X509_free()
+     * @note Handles double-encoded BYTEA (legacy data stored as text)
+     */
+    X509* parseCertificateDataFromHex(const std::string& hexData);
+
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 
@@ -348,15 +357,6 @@ private:
     std::string extractDnAttribute(const std::string& dn, const std::string& attr);
     std::string normalizeDnForComparison(const std::string& dn);
     std::string escapeSingleQuotes(const std::string& str);
-
-    // X509 certificate parsing helper
-    /**
-     * @brief Parse certificate data from hex-encoded bytea format to X509*
-     * @param hexData Hex-encoded certificate data (e.g., "\\x3082...")
-     * @return X509* certificate, or nullptr on failure
-     * @note Caller must free the returned X509* using X509_free()
-     */
-    X509* parseCertificateDataFromHex(const std::string& hexData);
 };
 
 } // namespace repositories

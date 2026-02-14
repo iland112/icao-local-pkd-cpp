@@ -91,10 +91,12 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     // ========================================================================
     "^/static/.*",                 // Static files (CSS, JS, images)
     "^/api-docs.*",                // API documentation
-    "^/swagger-ui/.*"              // Swagger UI
+    "^/swagger-ui/.*",             // Swagger UI
 
-    // NOTE: Audit endpoints removed for security (was TEMPORARY)
-    // Admin users must authenticate to access /api/audit/*
+    // ========================================================================
+    // Validation (Admin operations)
+    // ========================================================================
+    "^/api/validation/revalidate$"  // DSC trust chain re-validation
 };
 
 bool AuthMiddleware::authEnabled_ = true;

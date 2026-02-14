@@ -731,6 +731,13 @@ const CertificateSearch: React.FC = () => {
             유효
           </span>
         );
+      case 'EXPIRED_VALID':
+        return (
+          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
+            <CheckCircle className="w-3 h-3 mr-1" />
+            만료-유효
+          </span>
+        );
       case 'EXPIRED':
         return (
           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
@@ -862,6 +869,7 @@ const CertificateSearch: React.FC = () => {
                 >
                   <option value="all">전체</option>
                   <option value="VALID">유효</option>
+                  <option value="EXPIRED_VALID">만료-유효</option>
                   <option value="EXPIRED">만료</option>
                   <option value="NOT_YET_VALID">유효 전</option>
                 </select>
@@ -1458,7 +1466,12 @@ const CertificateSearch: React.FC = () => {
                           {/* Status Badge Row */}
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              {validationResult.trustChainValid ? (
+                              {validationResult.validationStatus === 'EXPIRED_VALID' ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
+                                  <CheckCircle className="w-3 h-3" />
+                                  만료-유효 (서명 검증 성공)
+                                </span>
+                              ) : validationResult.trustChainValid ? (
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
                                   <CheckCircle className="w-3 h-3" />
                                   신뢰 체인 유효

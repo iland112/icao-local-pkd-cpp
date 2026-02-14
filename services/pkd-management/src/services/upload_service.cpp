@@ -72,6 +72,27 @@ namespace services {
 
 using namespace icao::certificate_parser;
 
+/**
+ * @brief Parse collection number from ICAO filename
+ * e.g., "icaopkd-001-complete-009667.ldif" → "001"
+ *       "ICAO_ml_December2025.ml" → "ML"
+ */
+static std::string parseCollectionNumber(const std::string& fileName) {
+    // Match "icaopkd-NNN-" pattern
+    auto pos = fileName.find("icaopkd-");
+    if (pos != std::string::npos && fileName.size() >= pos + 11) {
+        std::string num = fileName.substr(pos + 8, 3);
+        if (num.size() == 3 && std::isdigit(num[0]) && std::isdigit(num[1]) && std::isdigit(num[2])) {
+            return num;
+        }
+    }
+    // Master List files
+    if (fileName.find("ICAO_ml") != std::string::npos || fileName.find(".ml") != std::string::npos) {
+        return "ML";
+    }
+    return "";
+}
+
 // ============================================================================
 // Constructor
 // ============================================================================
@@ -144,6 +165,8 @@ UploadService::CertificateUploadResult UploadService::uploadCertificate(
         repositories::Upload upload;
         upload.id = result.uploadId;
         upload.fileName = fileName;
+        upload.originalFileName = fileName;
+        upload.collectionNumber = parseCollectionNumber(fileName);
         upload.fileHash = fileHash;
         upload.fileFormat = result.fileFormat;
         upload.fileSize = fileContent.size();
@@ -581,6 +604,8 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         repositories::Upload upload;
         upload.id = result.uploadId;
         upload.fileName = fileName;
+        upload.originalFileName = fileName;
+        upload.collectionNumber = parseCollectionNumber(fileName);
         upload.fileHash = fileHash;
         upload.fileFormat = "LDIF";
         upload.fileSize = fileContent.size();
@@ -655,6 +680,8 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
         repositories::Upload upload;
         upload.id = result.uploadId;
         upload.fileName = fileName;
+        upload.originalFileName = fileName;
+        upload.collectionNumber = parseCollectionNumber(fileName);
         upload.fileHash = fileHash;
         upload.fileFormat = "ML";
         upload.fileSize = fileContent.size();

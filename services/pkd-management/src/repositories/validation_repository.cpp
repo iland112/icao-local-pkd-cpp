@@ -176,6 +176,46 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
     }
 }
 
+bool ValidationRepository::updateRevalidation(const std::string& certificateId,
+                                              const std::string& validationStatus,
+                                              bool trustChainValid,
+                                              bool cscaFound,
+                                              bool signatureValid,
+                                              const std::string& trustChainMessage,
+                                              const std::string& cscaSubjectDn)
+{
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        auto boolStr = [&](bool v) -> std::string {
+            return (dbType == "oracle") ? (v ? "1" : "0") : (v ? "TRUE" : "FALSE");
+        };
+
+        std::string query =
+            "UPDATE validation_result SET "
+            "validation_status = $1, "
+            "trust_chain_valid = " + boolStr(trustChainValid) + ", "
+            "csca_found = " + boolStr(cscaFound) + ", "
+            "signature_valid = " + boolStr(signatureValid) + ", "
+            "trust_chain_message = $2, "
+            "csca_subject_dn = $3 "
+            "WHERE certificate_id = $4";
+
+        std::vector<std::string> params = {
+            validationStatus,
+            trustChainMessage,
+            cscaSubjectDn,
+            certificateId
+        };
+
+        queryExecutor_->executeCommand(query, params);
+        return true;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ValidationRepository] updateRevalidation failed: {}", e.what());
+        return false;
+    }
+}
+
 bool ValidationRepository::updateStatistics(const std::string& uploadId,
                                            const domain::models::ValidationStatistics& stats)
 {
@@ -684,7 +724,8 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
         std::string query =
             "SELECT "
             "  COUNT(*) as total_count, "
-            "  SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END) as valid_count, "
+            "  SUM(CASE WHEN validation_status IN ('VALID', 'EXPIRED_VALID') THEN 1 ELSE 0 END) as valid_count, "
+            "  SUM(CASE WHEN validation_status = 'EXPIRED_VALID' THEN 1 ELSE 0 END) as expired_valid_count, "
             "  SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END) as invalid_count, "
             "  SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END) as pending_count, "
             "  SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END) as error_count, "
@@ -699,6 +740,7 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
         if (!result.empty()) {
             int totalCount = safeInt(result[0].get("total_count", 0));
             int validCount = safeInt(result[0].get("valid_count", 0));
+            int expiredValidCount = safeInt(result[0].get("expired_valid_count", 0));
             int invalidCount = safeInt(result[0].get("invalid_count", 0));
             int pendingCount = safeInt(result[0].get("pending_count", 0));
             int errorCount = safeInt(result[0].get("error_count", 0));
@@ -713,6 +755,7 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
 
             stats["totalCount"] = totalCount;
             stats["validCount"] = validCount;
+            stats["expiredValidCount"] = expiredValidCount;
             stats["invalidCount"] = invalidCount;
             stats["pendingCount"] = pendingCount;
             stats["errorCount"] = errorCount;

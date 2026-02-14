@@ -36,6 +36,7 @@ import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/c
 // Validation statistics interface
 interface ValidationStats {
   validCount: number;
+  expiredValidCount: number;
   invalidCount: number;
   pendingCount: number;
   errorCount: number;
@@ -1092,6 +1093,11 @@ export function UploadHistory() {
                           {selectedUpload.validation.validCount}
                         </p>
                         <span className="text-xs text-green-700 dark:text-green-300">검증 성공</span>
+                        {(selectedUpload.validation.expiredValidCount ?? 0) > 0 && (
+                          <span className="block text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            (만료-유효: {selectedUpload.validation.expiredValidCount})
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 text-center">

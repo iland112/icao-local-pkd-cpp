@@ -31,9 +31,10 @@ std::string DeviationListRepository::save(const std::string& uploadId,
         std::string dbType = queryExecutor_->getDatabaseType();
         std::string dlId = generateUuid();
 
-        // Convert binary DL to hex string (\\x prefix for BLOB detection)
+        // Convert binary DL to hex string
+        // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
         std::ostringstream hexStream;
-        hexStream << "\\\\x";
+        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
         for (size_t i = 0; i < dlBinary.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(dlBinary[i]);
@@ -124,7 +125,7 @@ std::string DeviationListRepository::saveDeviationEntry(
         std::string paramsHex;
         if (!entry.defectParameters.empty()) {
             std::ostringstream hexStream;
-            hexStream << "\\\\x";
+            hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
             for (auto b : entry.defectParameters) {
                 hexStream << std::hex << std::setw(2) << std::setfill('0')
                          << static_cast<int>(b);

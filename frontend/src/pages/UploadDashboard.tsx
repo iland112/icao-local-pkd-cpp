@@ -811,13 +811,16 @@ export function UploadDashboard() {
                   <TrendingUp className="w-5 h-5 text-violet-500" />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Trust Chain 검증</h3>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
                       <span className="text-sm font-medium text-green-700 dark:text-green-300">검증 성공</span>
                     </div>
                     <p className="text-2xl font-bold text-green-800 dark:text-green-200">{(stats.validation?.trustChainValidCount ?? 0).toLocaleString()}</p>
+                    {(stats.validation?.expiredValidCount ?? 0) > 0 && (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">만료-유효: {stats.validation!.expiredValidCount.toLocaleString()}</p>
+                    )}
                   </div>
                   <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
                     <div className="flex items-center gap-2 mb-2">
@@ -840,14 +843,12 @@ export function UploadDashboard() {
                     </div>
                     <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats.validation?.expiredCount ?? 0).toLocaleString()}</p>
                   </div>
-                  <div className="col-span-2 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <XCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">폐지됨 (Revoked)</span>
-                      </div>
-                      <p className="text-xl font-bold text-gray-800 dark:text-gray-200">{(stats.validation?.revokedCount ?? 0).toLocaleString()}</p>
+                  <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
+                    <div className="flex items-center gap-2 mb-2">
+                      <XCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-300">폐지됨</span>
                     </div>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-200">{(stats.validation?.revokedCount ?? 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>

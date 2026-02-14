@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.10.0
+**Current Version**: v2.10.1
 **Last Updated**: 2026-02-14
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -473,6 +473,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.10.1 (2026-02-14) - Validation Reason Tracking + Upload UX Improvements + PA CRL Date Fix
+- Validation reason tracking: `validationReasons` map in SSE statistics (reason string → count per status)
+- EXPIRED_VALID status tracking fix: was missing from enhancedStats if-else chain
+- Duplicate certificate tracking: `duplicateCount` in SSE ValidationStatistics
+- Event Log enhancements: validation failure/pending reasons displayed in real-time during processing
+- Validation result summary panel: grouped by status (VALID/EXPIRED_VALID/INVALID/PENDING) with Korean-translated sub-reasons after FINALIZED
+- Reason translation: "Trust chain signature verification failed" → "서명 검증 실패", "CSCA not found" → "CSCA 미등록", etc.
+- Number formatting: frontend-only locale-aware formatting for SSE progress messages (`formatMessageNumbers`)
+- Horizontal Stepper layout: indicators + connector row with detail panel below (compact space usage)
+- File drop zone height reduction: smaller padding (p-8→p-5), icon (w-10→w-8), container (p-4→p-3)
+- PA Service: `crlThisUpdate`/`crlNextUpdate` fields populated in service layer domain model (was null due to missing fields in `CertificateChainValidation`)
+- PA Service: CRL date extraction via `X509_CRL_get0_lastUpdate()`/`X509_CRL_get0_nextUpdate()` in `checkCrlStatus()`
 
 ### v2.10.0 (2026-02-14) - ICAO Auto Scheduler + Upload Processing UX + Event Log
 - ICAO PKD daily auto version check scheduler (configurable hour via `ICAO_CHECK_SCHEDULE_HOUR`, enable/disable via `ICAO_SCHEDULER_ENABLED`)

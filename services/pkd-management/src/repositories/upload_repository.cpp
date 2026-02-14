@@ -36,12 +36,14 @@ bool UploadRepository::insert(const Upload& upload)
 
         std::string query =
             "INSERT INTO uploaded_file "
-            "(id, file_name, file_hash, file_format, file_size, status, uploaded_by, upload_timestamp) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, " + timestampValue + ")";
+            "(id, file_name, original_file_name, collection_number, file_hash, file_format, file_size, status, uploaded_by, upload_timestamp) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, " + timestampValue + ")";
 
         std::vector<std::string> params = {
             upload.id,
             upload.fileName,
+            upload.originalFileName.empty() ? upload.fileName : upload.originalFileName,
+            upload.collectionNumber,
             upload.fileHash,
             upload.fileFormat,
             std::to_string(upload.fileSize),
@@ -482,7 +484,8 @@ Json::Value UploadRepository::getStatisticsSummary()
         if (dbType == "oracle") {
             validationQuery =
                 "SELECT "
-                "COALESCE(SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END), 0) as valid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status IN ('VALID', 'EXPIRED_VALID') THEN 1 ELSE 0 END), 0) as valid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'EXPIRED_VALID' THEN 1 ELSE 0 END), 0) as expired_valid_count, "
                 "COALESCE(SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END), 0) as invalid_count, "
                 "COALESCE(SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending_count, "
                 "COALESCE(SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END), 0) as error_count, "
@@ -495,7 +498,8 @@ Json::Value UploadRepository::getStatisticsSummary()
         } else {
             validationQuery =
                 "SELECT "
-                "COALESCE(SUM(CASE WHEN validation_status = 'VALID' THEN 1 ELSE 0 END), 0) as valid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status IN ('VALID', 'EXPIRED_VALID') THEN 1 ELSE 0 END), 0) as valid_count, "
+                "COALESCE(SUM(CASE WHEN validation_status = 'EXPIRED_VALID' THEN 1 ELSE 0 END), 0) as expired_valid_count, "
                 "COALESCE(SUM(CASE WHEN validation_status = 'INVALID' THEN 1 ELSE 0 END), 0) as invalid_count, "
                 "COALESCE(SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END), 0) as pending_count, "
                 "COALESCE(SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END), 0) as error_count, "
@@ -511,6 +515,7 @@ Json::Value UploadRepository::getStatisticsSummary()
         Json::Value validation;
         if (!validationResult.empty()) {
             validation["validCount"] = getInt(validationResult[0], "valid_count", 0);
+            validation["expiredValidCount"] = getInt(validationResult[0], "expired_valid_count", 0);
             validation["invalidCount"] = getInt(validationResult[0], "invalid_count", 0);
             validation["pendingCount"] = getInt(validationResult[0], "pending_count", 0);
             validation["errorCount"] = getInt(validationResult[0], "error_count", 0);

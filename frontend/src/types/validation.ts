@@ -13,7 +13,7 @@ export interface ValidationResult {
   subjectDn: string;
   issuerDn: string;
   serialNumber: string;
-  validationStatus: 'VALID' | 'INVALID' | 'PENDING' | 'ERROR';
+  validationStatus: 'VALID' | 'EXPIRED_VALID' | 'INVALID' | 'PENDING' | 'ERROR';
 
   // Trust Chain Fields (Sprint 3)
   trustChainValid: boolean;

@@ -40,7 +40,8 @@ public:
     bool isCertificateExpired(X509* cert);
 
     // CRL checking
-    domain::models::CrlStatus checkCrlStatus(X509* cert, const std::string& countryCode);
+    domain::models::CrlStatus checkCrlStatus(X509* cert, const std::string& countryCode,
+        std::string& crlThisUpdate, std::string& crlNextUpdate);
 
     // Trust chain building
     std::vector<X509*> buildTrustChain(X509* dscCert, const std::string& countryCode);

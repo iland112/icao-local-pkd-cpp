@@ -759,9 +759,11 @@ export function UploadDetail() {
                     <span className="text-gray-600 dark:text-gray-400">Overall Status:</span>
                     <span className={cn(
                       'font-medium',
-                      selectedValidation.validationStatus === 'VALID' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+                      selectedValidation.validationStatus === 'VALID' ? 'text-green-600 dark:text-green-400'
+                        : selectedValidation.validationStatus === 'EXPIRED_VALID' ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-red-600 dark:text-red-400'
                     )}>
-                      {selectedValidation.validationStatus}
+                      {selectedValidation.validationStatus === 'EXPIRED_VALID' ? 'EXPIRED_VALID (만료-유효)' : selectedValidation.validationStatus}
                     </span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">

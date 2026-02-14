@@ -54,6 +54,7 @@ export interface UploadedFile {
   // Validation statistics
   validation?: {
     validCount: number;
+    expiredValidCount: number;
     invalidCount: number;
     pendingCount: number;
     errorCount: number;
@@ -198,6 +199,13 @@ export interface ValidationStatistics {
   signatureAlgorithms: Record<string, number>;  // "SHA256withRSA" -> count
   keySizes: Record<string, number>;             // "2048" -> count
   certificateTypes: Record<string, number>;     // "DSC" -> count, "CSCA" -> count
+
+  // Duplicate tracking
+  duplicateCount?: number;
+
+  // Validation reason tracking ("INVALID: reason" → count)
+  validationReasons?: Record<string, number>;
+  expiredValidCount?: number;
 
   // Processing error tracking
   totalErrorCount?: number;
@@ -445,6 +453,7 @@ export interface PageResponse<T> {
 // Validation Statistics
 export interface ValidationStats {
   validCount: number;
+  expiredValidCount: number;
   invalidCount: number;
   pendingCount: number;
   errorCount: number;

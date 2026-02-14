@@ -238,6 +238,13 @@ struct ValidationStatistics {
     int icaoWarningCount;
     std::map<std::string, int> complianceViolations;  // violation type -> count
 
+    // Duplicate tracking
+    int duplicateCount = 0;
+
+    // Validation reason tracking ("INVALID: reason" → count, "PENDING: reason" → count)
+    std::map<std::string, int> validationReasons;
+    int expiredValidCount = 0;
+
     // Error tracking (processing failures only, not validation outcomes)
     int totalErrorCount = 0;
     int parseErrorCount = 0;       // BASE64_DECODE_FAILED + CERT_PARSE_FAILED + CRL_PARSE_FAILED + ML_PARSE_FAILED

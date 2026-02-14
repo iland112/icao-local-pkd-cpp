@@ -87,7 +87,7 @@ export const healthApi = {
 export interface CertificateSearchParams {
   country?: string;        // ISO 3166-1 alpha-2 code (e.g., "KR", "US")
   certType?: 'CSCA' | 'DSC' | 'DSC_NC' | 'CRL' | 'ALL';
-  validationStatus?: 'VALID' | 'INVALID' | 'PENDING' | 'EXPIRED';
+  validationStatus?: 'VALID' | 'EXPIRED_VALID' | 'INVALID' | 'PENDING' | 'EXPIRED';
   source?: string;         // Certificate source: PA_EXTRACTED, ML_PARSED, FILE_UPLOAD, etc.
   text?: string;           // Search in subject DN or serial number
   limit?: number;

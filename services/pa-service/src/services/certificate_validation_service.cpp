@@ -118,7 +118,10 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         result.signatureVerified = verifyCertificateSignature(dscCert, cscaCert);
 
         // Check CRL (ICAO Doc 9303 Part 11 - Certificate Revocation)
-        result.crlStatus = checkCrlStatus(dscCert, effectiveCountry);
+        std::string crlThisUpdate, crlNextUpdate;
+        result.crlStatus = checkCrlStatus(dscCert, effectiveCountry, crlThisUpdate, crlNextUpdate);
+        if (!crlThisUpdate.empty()) result.crlThisUpdate = crlThisUpdate;
+        if (!crlNextUpdate.empty()) result.crlNextUpdate = crlNextUpdate;
         result.crlChecked = (result.crlStatus != domain::models::CrlStatus::NOT_CHECKED);
         result.revoked = (result.crlStatus == domain::models::CrlStatus::REVOKED);
 
@@ -219,12 +222,30 @@ bool CertificateValidationService::isCertificateExpired(X509* cert) {
 
 domain::models::CrlStatus CertificateValidationService::checkCrlStatus(
     X509* cert,
-    const std::string& countryCode)
+    const std::string& countryCode,
+    std::string& crlThisUpdate,
+    std::string& crlNextUpdate)
 {
     X509_CRL* crl = crlRepo_->findCrlByCountry(countryCode);
     if (!crl) {
         return domain::models::CrlStatus::CRL_UNAVAILABLE;
     }
+
+    // Extract CRL thisUpdate / nextUpdate dates
+    auto asn1TimeToString = [](const ASN1_TIME* t) -> std::string {
+        if (!t) return "";
+        struct tm tm_val;
+        if (ASN1_TIME_to_tm(t, &tm_val) == 1) {
+            char buf[32];
+            strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_val);
+            return std::string(buf);
+        }
+        return "";
+    };
+
+    crlThisUpdate = asn1TimeToString(X509_CRL_get0_lastUpdate(crl));
+    crlNextUpdate = asn1TimeToString(X509_CRL_get0_nextUpdate(crl));
+    spdlog::info("CRL dates - thisUpdate: {}, nextUpdate: {}", crlThisUpdate, crlNextUpdate);
 
     if (crlRepo_->isCrlExpired(crl)) {
         X509_CRL_free(crl);

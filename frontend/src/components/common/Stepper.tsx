@@ -67,11 +67,113 @@ export function Stepper({
 
   const config = sizeConfig[size];
 
+  // Find the active step for horizontal detail panel
+  const activeStep = steps.find(s => s.status === 'active');
+
+  if (!isVertical) {
+    // Horizontal layout: indicators + connectors row, then detail panel below
+    return (
+      <div className={className}>
+        {/* Step indicators row */}
+        <div className="flex items-center">
+          {steps.map((step, index) => {
+            const isLast = index === steps.length - 1;
+            const icon = step.icon || defaultIcons[step.id];
+
+            return (
+              <div key={step.id} className={cn('flex items-center', !isLast && 'flex-1')}>
+                {/* Step indicator + label */}
+                <div className="flex flex-col items-center">
+                  <StepIndicator step={step} index={index} icon={icon} config={config} />
+                  <span className={cn(
+                    'mt-1.5 font-medium text-center whitespace-nowrap',
+                    config.text,
+                    step.status === 'active' ? 'text-blue-600 dark:text-blue-400 font-bold'
+                      : step.status === 'completed' ? 'text-teal-600 dark:text-teal-400'
+                      : step.status === 'error' ? 'text-red-600 dark:text-red-400'
+                      : 'text-gray-400 dark:text-neutral-500',
+                  )}>
+                    {step.label}
+                  </span>
+                </div>
+                {/* Connector line */}
+                {!isLast && (
+                  <div className={cn(
+                    'h-0.5 flex-1 mx-3 rounded-full transition-colors duration-300 self-start mt-4',
+                    step.status === 'completed' ? 'bg-teal-500'
+                      : step.status === 'active' ? 'bg-blue-400'
+                      : step.status === 'error' ? 'bg-red-400'
+                      : 'bg-gray-200 dark:bg-neutral-700',
+                  )} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Active step detail panel */}
+        {showProgress && activeStep && (activeStep.progress !== undefined || activeStep.details) && (
+          <div className="mt-3 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30">
+            {activeStep.progress !== undefined && activeStep.progress > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                    {activeStep.progress}%
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-300 ease-out"
+                    style={{ width: `${activeStep.progress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            {activeStep.details && (
+              <p className={cn(
+                'text-xs font-medium text-blue-600 dark:text-blue-400',
+                activeStep.progress !== undefined && activeStep.progress > 0 ? 'mt-1.5' : '',
+              )}>
+                {activeStep.details}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Completed step details (show last completed step's details if no active step) */}
+        {showProgress && !activeStep && (() => {
+          const lastCompleted = [...steps].reverse().find(s => s.status === 'completed' && s.details);
+          if (!lastCompleted) return null;
+          return (
+            <div className="mt-3 p-3 rounded-lg bg-teal-50/50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-900/30">
+              <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
+                {lastCompleted.details}
+              </p>
+            </div>
+          );
+        })()}
+
+        {/* Error step details */}
+        {showProgress && (() => {
+          const errorStep = steps.find(s => s.status === 'error' && s.details);
+          if (!errorStep) return null;
+          return (
+            <div className="mt-3 p-3 rounded-lg bg-red-50/50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30">
+              <p className="text-xs font-medium text-red-600 dark:text-red-400">
+                {errorStep.details}
+              </p>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  }
+
+  // Vertical layout (unchanged)
   return (
     <ul
       className={cn(
-        'relative flex',
-        isVertical ? 'flex-col gap-0' : 'flex-row gap-2',
+        'relative flex flex-col gap-0',
         className
       )}
     >
@@ -82,80 +184,34 @@ export function Stepper({
         return (
           <li
             key={step.id}
-            className={cn(
-              'group flex',
-              isVertical
-                ? `${config.spacing} relative`
-                : 'items-center shrink basis-0 flex-1'
-            )}
+            className={cn('group flex', `${config.spacing} relative`)}
           >
-            {/* Step Indicator Column (Vertical) */}
-            {isVertical ? (
-              <>
-                <div className="flex flex-col items-center">
-                  {/* Circle Indicator */}
-                  <StepIndicator
-                    step={step}
-                    index={index}
-                    icon={icon}
-                    config={config}
-                  />
-
-                  {/* Vertical Line */}
-                  {!isLast && (
-                    <div
-                      className={cn(
-                        'mt-1 flex-1 min-h-8',
-                        config.lineWidth,
-                        step.status === 'completed'
-                          ? 'bg-gradient-to-b from-teal-500 to-teal-400'
-                          : step.status === 'active'
-                          ? 'bg-gradient-to-b from-blue-500 to-blue-300'
-                          : step.status === 'error'
-                          ? 'bg-red-300'
-                          : 'bg-gray-200 dark:bg-neutral-700'
-                      )}
-                    />
+            <div className="flex flex-col items-center">
+              <StepIndicator
+                step={step}
+                index={index}
+                icon={icon}
+                config={config}
+              />
+              {!isLast && (
+                <div
+                  className={cn(
+                    'mt-1 flex-1 min-h-8',
+                    config.lineWidth,
+                    step.status === 'completed'
+                      ? 'bg-gradient-to-b from-teal-500 to-teal-400'
+                      : step.status === 'active'
+                      ? 'bg-gradient-to-b from-blue-500 to-blue-300'
+                      : step.status === 'error'
+                      ? 'bg-red-300'
+                      : 'bg-gray-200 dark:bg-neutral-700'
                   )}
-                </div>
-
-                {/* Content */}
-                <div className={cn('grow pb-6 pt-0.5', isLast && 'pb-0')}>
-                  <StepContent step={step} config={config} showProgress={showProgress} />
-                </div>
-              </>
-            ) : (
-              /* Horizontal Layout */
-              <>
-                <span className="min-w-7 min-h-7 inline-flex items-center">
-                  <StepIndicator
-                    step={step}
-                    index={index}
-                    icon={icon}
-                    config={config}
-                  />
-                  <span className={cn('ms-2 font-medium text-gray-800 dark:text-white', config.text)}>
-                    {step.label}
-                  </span>
-                </span>
-
-                {/* Horizontal Line */}
-                {!isLast && (
-                  <div
-                    className={cn(
-                      'w-full h-0.5 flex-1 mx-2 rounded-full transition-colors duration-300',
-                      step.status === 'completed'
-                        ? 'bg-teal-500'
-                        : step.status === 'active'
-                        ? 'bg-blue-500'
-                        : step.status === 'error'
-                        ? 'bg-red-400'
-                        : 'bg-gray-200 dark:bg-neutral-700'
-                    )}
-                  />
-                )}
-              </>
-            )}
+                />
+              )}
+            </div>
+            <div className={cn('grow pb-6 pt-0.5', isLast && 'pb-0')}>
+              <StepContent step={step} config={config} showProgress={showProgress} />
+            </div>
           </li>
         );
       })}
@@ -282,7 +338,6 @@ function StepContent({ step, config, showProgress }: StepContentProps) {
               style={{ width: `${step.progress}%` }}
             />
           </div>
-          {/* Details below progress bar - always visible when present */}
           {step.details && (
             <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1.5">
               {step.details}
@@ -291,7 +346,7 @@ function StepContent({ step, config, showProgress }: StepContentProps) {
         </div>
       )}
 
-      {/* Details for active status without progress bar (when progress is 0 or undefined but details exist) */}
+      {/* Details for active status without progress bar */}
       {step.status === 'active' && step.details && !(step.progress !== undefined && step.progress > 0) && (
         <p className="text-xs text-blue-600 dark:text-blue-400 font-medium mt-1">
           {step.details}

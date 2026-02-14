@@ -589,6 +589,7 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
             "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
             "AND vr.csca_found = FALSE "
             "AND vr.validation_status IN ('INVALID', 'PENDING') "
+            "ORDER BY c.not_after DESC "
             "LIMIT $1";
 
         std::vector<std::string> params = {std::to_string(limit)};
@@ -758,13 +759,30 @@ X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexD
         return nullptr;
     }
 
+    // Helper: decode hex string (with \x prefix) to bytes
+    auto decodeHex = [](const std::string& hex, size_t start) -> std::vector<uint8_t> {
+        std::vector<uint8_t> bytes;
+        bytes.reserve((hex.size() - start) / 2);
+        for (size_t i = start; i + 1 < hex.size(); i += 2) {
+            char h[3] = {hex[i], hex[i + 1], 0};
+            bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+        }
+        return bytes;
+    };
+
     // Parse bytea hex format (PostgreSQL escape format: \x...)
     std::vector<uint8_t> derBytes;
     if (hexData.size() > 2 && hexData[0] == '\\' && hexData[1] == 'x') {
-        // Hex encoded
-        for (size_t i = 2; i + 1 < hexData.size(); i += 2) {
-            char hex[3] = {hexData[i], hexData[i + 1], 0};
-            derBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+        // First hex decode
+        derBytes = decodeHex(hexData, 2);
+
+        // Handle double-encoded BYTEA: if the decoded bytes start with \x (0x5C 0x78)
+        // followed by ASCII hex digits, it means the data was stored as a hex text string
+        // rather than raw binary. Decode again.
+        if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
+            std::string innerHex(derBytes.begin(), derBytes.end());
+            derBytes = decodeHex(innerHex, 2);
+            spdlog::debug("[CertificateRepository] Double-encoded BYTEA detected, decoded twice");
         }
     } else {
         // Might be raw binary (starts with 0x30 for DER SEQUENCE)
@@ -1092,7 +1110,9 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
 
         // Convert DER bytes to hex string
         std::ostringstream hexStream;
-        hexStream << "\\\\x";  // PostgreSQL bytea hex format prefix (also used as BLOB marker for Oracle)
+        // PostgreSQL: \x prefix for hex bytea format (PQexecParams text mode)
+        // Oracle: \\x prefix as BLOB marker detected by OracleQueryExecutor
+        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
         for (size_t i = 0; i < certData.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(certData[i]);
