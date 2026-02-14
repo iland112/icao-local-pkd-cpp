@@ -9,6 +9,7 @@ import CertificateSearch from '@/pages/CertificateSearch';
 import IcaoStatus from '@/pages/IcaoStatus';
 import { OperationAuditLog } from '@/pages/OperationAuditLog';
 import ValidationDemo from '@/pages/ValidationDemo';
+import DscNcReport from '@/pages/DscNcReport';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +52,7 @@ function App() {
             <Route path="upload" element={<FileUpload />} />
             <Route path="upload/certificate" element={<CertificateUpload />} />
             <Route path="pkd/certificates" element={<CertificateSearch />} />
+            <Route path="pkd/dsc-nc" element={<DscNcReport />} />
             <Route path="upload-history" element={<UploadHistory />} />
             <Route path="upload/:uploadId" element={<UploadDetail />} />
             <Route path="upload-dashboard" element={<UploadDashboard />} />

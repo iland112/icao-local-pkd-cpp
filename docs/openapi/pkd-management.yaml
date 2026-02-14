@@ -691,6 +691,132 @@ paths:
                   error:
                     type: string
 
+  /api/certificates/dsc-nc/report:
+    get:
+      tags: [Certificates]
+      summary: DSC_NC non-conformant certificate report
+      description: |
+        Returns aggregated analysis of DSC_NC (non-conformant) certificates from LDAP `dc=nc-data`.
+        Includes summary statistics, conformance code distribution, country breakdown,
+        year distribution, algorithm analysis, and paginated certificate list.
+        Batch-fetches from LDAP (200 per batch) to handle large datasets.
+      operationId: getDscNcReport
+      parameters:
+        - name: country
+          in: query
+          schema:
+            type: string
+          description: Filter by country code (e.g., DE, FR)
+        - name: conformanceCode
+          in: query
+          schema:
+            type: string
+          description: Filter by conformance code prefix (e.g., ERR:CSCA)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: DSC_NC report data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  summary:
+                    type: object
+                    properties:
+                      totalDscNc:
+                        type: integer
+                      countryCount:
+                        type: integer
+                      conformanceCodeCount:
+                        type: integer
+                      validityBreakdown:
+                        type: object
+                        properties:
+                          VALID:
+                            type: integer
+                          EXPIRED:
+                            type: integer
+                          NOT_YET_VALID:
+                            type: integer
+                          UNKNOWN:
+                            type: integer
+                  conformanceCodes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        description:
+                          type: string
+                        count:
+                          type: integer
+                  byCountry:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        countryCode:
+                          type: string
+                        count:
+                          type: integer
+                        validCount:
+                          type: integer
+                        expiredCount:
+                          type: integer
+                  byYear:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        year:
+                          type: integer
+                        count:
+                          type: integer
+                  bySignatureAlgorithm:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        algorithm:
+                          type: string
+                        count:
+                          type: integer
+                  byPublicKeyAlgorithm:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        algorithm:
+                          type: string
+                        count:
+                          type: integer
+                  certificates:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      size:
+                        type: integer
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/DscNcCertificate'
+
   # ============================================
   # Authentication & User Management
   # ============================================
@@ -1083,6 +1209,43 @@ components:
       description: JWT token from /api/auth/login
 
   schemas:
+    DscNcCertificate:
+      type: object
+      properties:
+        fingerprint:
+          type: string
+        countryCode:
+          type: string
+        subjectDn:
+          type: string
+        issuerDn:
+          type: string
+        serialNumber:
+          type: string
+        notBefore:
+          type: string
+          format: date-time
+        notAfter:
+          type: string
+          format: date-time
+        validity:
+          type: string
+          enum: [VALID, EXPIRED, NOT_YET_VALID, UNKNOWN]
+        signatureAlgorithm:
+          type: string
+        publicKeyAlgorithm:
+          type: string
+        publicKeySize:
+          type: integer
+        pkdConformanceCode:
+          type: string
+          description: "ICAO PKD non-conformance code"
+        pkdConformanceText:
+          type: string
+          description: "ICAO PKD non-conformance description"
+        pkdVersion:
+          type: string
+
     HealthResponse:
       type: object
       properties:

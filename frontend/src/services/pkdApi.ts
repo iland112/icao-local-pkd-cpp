@@ -187,6 +187,14 @@ export const certificateApi = {
       responseType: 'blob',
       timeout: 300000, // 5 min timeout for large export
     }),
+
+  /**
+   * Get DSC_NC non-conformant certificate report
+   * @param params - Optional filters (country, conformanceCode, page, size)
+   * @returns Report with summary, charts data, and paginated certificates
+   */
+  getDscNcReport: (params?: { country?: string; conformanceCode?: string; page?: number; size?: number }) =>
+    pkdApi.get('/certificates/dsc-nc/report', { params }),
 };
 
 // =============================================================================

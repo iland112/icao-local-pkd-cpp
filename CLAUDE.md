@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.10.3
-**Last Updated**: 2026-02-14
+**Current Version**: v2.10.4
+**Last Updated**: 2026-02-15
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -141,6 +141,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Real-time upload processing status (PROCESSING state with periodic DB updates)
 - X.509 metadata extraction (22 fields per certificate)
 - ICAO 9303 compliance checking (6 validation categories)
+- DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
 
 ### Security
 
@@ -187,6 +188,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/certificates/search` - Certificate search (filters: country, type, status)
 - `GET /api/certificates/validation` - Validation result by fingerprint
 - `POST /api/certificates/pa-lookup` - Lightweight PA lookup by subject DN or fingerprint
+- `GET /api/certificates/dsc-nc/report` - DSC_NC non-conformant certificate report (charts + table)
 - `GET /api/certificates/export/{format}` - Certificate export
 - `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
@@ -233,14 +235,14 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
+- **Public**: Health checks, Dashboard statistics, Certificate search, DSC_NC report, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
 - **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion
 
 ---
 
 ## Frontend
 
-### Pages (20 total)
+### Pages (21 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -248,6 +250,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | FileUpload | `/upload` | LDIF/Master List upload |
 | CertificateUpload | `/upload/certificate` | Individual certificate upload (preview-before-save) |
 | CertificateSearch | `/pkd/certificates` | Certificate search & detail |
+| DscNcReport | `/pkd/dsc-nc` | DSC_NC non-conformant certificate report |
 | UploadHistory | `/upload-history` | Upload management |
 | UploadDetail | `/upload/:uploadId` | Upload detail & structure |
 | PAVerify | `/pa/verify` | PA verification |
@@ -475,6 +478,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.10.4 (2026-02-15) - DSC_NC Non-Conformant Certificate Report Page
+- New page: DSC_NC Report (`/pkd/dsc-nc`) — full analysis dashboard for non-conformant DSC certificates
+- Backend: `GET /api/certificates/dsc-nc/report` handler with batch LDAP fetching (200/batch), server-side aggregation
+- Aggregation: conformanceCodes, byCountry (valid/expired breakdown), byYear, bySignatureAlgorithm, byPublicKeyAlgorithm
+- Server-side filtering (country, conformanceCode prefix match) + pagination
+- Summary cards: country count, total DSC_NC, conformance code count, expiration rate
+- Charts (Recharts): conformance code horizontal bar, country bar (flag icons in Y-axis ticks), year bar, signature/public key algorithm pie
+- Custom chart tooltips: country tooltip with flag+name, conformance code tooltip with `?` icon + description
+- Validity status bar: VALID/EXPIRED/NOT_YET_VALID/UNKNOWN proportional segments
+- Table columns: country (flag icon), issued year, signature algorithm, public key (size badge, red highlight <2048bit), validity period, status, NC code (? tooltip)
+- CSV export with BOM for Excel UTF-8 compatibility (14 columns)
+- Filters: country dropdown, conformance code dropdown, reset button
+- Public endpoint (no JWT required)
+- Sidebar menu: ShieldX icon under PKD Management section
+- Frontend: `certificateApi.getDscNcReport()`, `exportDscNcReportToCsv()`, route + sidebar registration
 
 ### v2.10.3 (2026-02-14) - DSC Non-Conformant (nc-data) Support + DSC_NC Documentation
 - PA Service: DSC conformance check via LDAP `dc=nc-data` during PA Verify (`checkDscConformance()`)

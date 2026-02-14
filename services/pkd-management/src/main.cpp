@@ -6993,6 +6993,242 @@ paths:
         {drogon::Get}
     );
 
+    // GET /api/certificates/dsc-nc/report - DSC_NC Non-Conformant Certificate Report
+    app.registerHandler(
+        "/api/certificates/dsc-nc/report",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                // Parse query parameters
+                std::string countryFilter = req->getOptionalParameter<std::string>("country").value_or("");
+                std::string codeFilter = req->getOptionalParameter<std::string>("conformanceCode").value_or("");
+                int page = req->getOptionalParameter<int>("page").value_or(1);
+                int size = req->getOptionalParameter<int>("size").value_or(50);
+                if (page < 1) page = 1;
+                if (size < 1) size = 50;
+                if (size > 200) size = 200;
+
+                spdlog::info("DSC_NC report: country={}, code={}, page={}, size={}", countryFilter, codeFilter, page, size);
+
+                // Fetch all DSC_NC certificates from LDAP (batch 200 at a time)
+                domain::models::CertificateSearchResult result;
+                result.total = 0;
+                result.limit = 200;
+                result.offset = 0;
+                {
+                    int batchOffset = 0;
+                    const int batchSize = 200;
+                    while (true) {
+                        domain::models::CertificateSearchCriteria criteria;
+                        criteria.certType = domain::models::CertificateType::DSC_NC;
+                        criteria.limit = batchSize;
+                        criteria.offset = batchOffset;
+                        auto batch = ::certificateService->searchCertificates(criteria);
+                        for (auto& cert : batch.certificates) {
+                            result.certificates.push_back(std::move(cert));
+                        }
+                        result.total = batch.total;
+                        if (static_cast<int>(batch.certificates.size()) < batchSize) break;
+                        batchOffset += batchSize;
+                        if (batchOffset >= batch.total) break;
+                    }
+                }
+
+                // Single-pass aggregation
+                std::map<std::string, std::pair<std::string, int>> conformanceCodeMap; // code -> {description, count}
+                std::map<std::string, std::tuple<int, int, int>> countryMap; // country -> {total, valid, expired}
+                std::map<int, int> yearMap; // year -> count
+                std::map<std::string, int> sigAlgMap; // algorithm -> count
+                std::map<std::string, int> pubKeyAlgMap; // algorithm -> count
+                int validCount = 0, expiredCount = 0, notYetValidCount = 0, unknownCount = 0;
+
+                // Filtered certificates for table
+                std::vector<const domain::models::Certificate*> filteredCerts;
+
+                for (const auto& cert : result.certificates) {
+                    // Aggregation (always, before filtering)
+                    std::string code = cert.getPkdConformanceCode().value_or("UNKNOWN");
+                    std::string desc = cert.getPkdConformanceText().value_or("");
+                    conformanceCodeMap[code].first = desc;
+                    conformanceCodeMap[code].second++;
+
+                    std::string country = cert.getCountry();
+                    auto status = cert.getValidityStatus();
+                    auto& countryEntry = countryMap[country];
+                    std::get<0>(countryEntry)++;
+                    if (status == domain::models::ValidityStatus::VALID) {
+                        std::get<1>(countryEntry)++;
+                        validCount++;
+                    } else if (status == domain::models::ValidityStatus::EXPIRED) {
+                        std::get<2>(countryEntry)++;
+                        expiredCount++;
+                    } else if (status == domain::models::ValidityStatus::NOT_YET_VALID) {
+                        notYetValidCount++;
+                    } else {
+                        unknownCount++;
+                    }
+
+                    // Year from notBefore
+                    auto notBefore = std::chrono::system_clock::to_time_t(cert.getValidFrom());
+                    struct tm tmBuf;
+                    gmtime_r(&notBefore, &tmBuf);
+                    yearMap[tmBuf.tm_year + 1900]++;
+
+                    // Algorithms
+                    std::string sigAlg = cert.getSignatureAlgorithm().value_or("Unknown");
+                    sigAlgMap[sigAlg]++;
+                    std::string pubKeyAlg = cert.getPublicKeyAlgorithm().value_or("Unknown");
+                    pubKeyAlgMap[pubKeyAlg]++;
+
+                    // Apply filters for table
+                    bool passCountry = countryFilter.empty() || cert.getCountry() == countryFilter;
+                    bool passCode = codeFilter.empty() || code.find(codeFilter) == 0; // prefix match
+                    if (passCountry && passCode) {
+                        filteredCerts.push_back(&cert);
+                    }
+                }
+
+                // Build JSON response
+                Json::Value response;
+                response["success"] = true;
+
+                // Summary
+                Json::Value summary;
+                summary["totalDscNc"] = static_cast<int>(result.certificates.size());
+                summary["countryCount"] = static_cast<int>(countryMap.size());
+                summary["conformanceCodeCount"] = static_cast<int>(conformanceCodeMap.size());
+                Json::Value validityBreakdown;
+                validityBreakdown["VALID"] = validCount;
+                validityBreakdown["EXPIRED"] = expiredCount;
+                validityBreakdown["NOT_YET_VALID"] = notYetValidCount;
+                validityBreakdown["UNKNOWN"] = unknownCount;
+                summary["validityBreakdown"] = validityBreakdown;
+                response["summary"] = summary;
+
+                // Conformance codes (sorted by count desc)
+                std::vector<std::pair<std::string, std::pair<std::string, int>>> codeVec(conformanceCodeMap.begin(), conformanceCodeMap.end());
+                std::sort(codeVec.begin(), codeVec.end(), [](const auto& a, const auto& b) { return a.second.second > b.second.second; });
+                Json::Value codesArray(Json::arrayValue);
+                for (const auto& [code, descCount] : codeVec) {
+                    Json::Value item;
+                    item["code"] = code;
+                    item["description"] = descCount.first;
+                    item["count"] = descCount.second;
+                    codesArray.append(item);
+                }
+                response["conformanceCodes"] = codesArray;
+
+                // By country (sorted by count desc)
+                std::vector<std::pair<std::string, std::tuple<int, int, int>>> countryVec(countryMap.begin(), countryMap.end());
+                std::sort(countryVec.begin(), countryVec.end(), [](const auto& a, const auto& b) { return std::get<0>(a.second) > std::get<0>(b.second); });
+                Json::Value countryArray(Json::arrayValue);
+                for (const auto& [cc, counts] : countryVec) {
+                    Json::Value item;
+                    item["countryCode"] = cc;
+                    item["count"] = std::get<0>(counts);
+                    item["validCount"] = std::get<1>(counts);
+                    item["expiredCount"] = std::get<2>(counts);
+                    countryArray.append(item);
+                }
+                response["byCountry"] = countryArray;
+
+                // By year (sorted by year asc)
+                Json::Value yearArray(Json::arrayValue);
+                for (const auto& [year, count] : yearMap) {
+                    Json::Value item;
+                    item["year"] = year;
+                    item["count"] = count;
+                    yearArray.append(item);
+                }
+                response["byYear"] = yearArray;
+
+                // By signature algorithm
+                Json::Value sigAlgArray(Json::arrayValue);
+                for (const auto& [alg, count] : sigAlgMap) {
+                    Json::Value item;
+                    item["algorithm"] = alg;
+                    item["count"] = count;
+                    sigAlgArray.append(item);
+                }
+                response["bySignatureAlgorithm"] = sigAlgArray;
+
+                // By public key algorithm
+                Json::Value pubKeyAlgArray(Json::arrayValue);
+                for (const auto& [alg, count] : pubKeyAlgMap) {
+                    Json::Value item;
+                    item["algorithm"] = alg;
+                    item["count"] = count;
+                    pubKeyAlgArray.append(item);
+                }
+                response["byPublicKeyAlgorithm"] = pubKeyAlgArray;
+
+                // Certificates table (paginated)
+                int totalFiltered = static_cast<int>(filteredCerts.size());
+                int startIdx = (page - 1) * size;
+                int endIdx = std::min(startIdx + size, totalFiltered);
+
+                Json::Value certsObj;
+                certsObj["total"] = totalFiltered;
+                certsObj["page"] = page;
+                certsObj["size"] = size;
+
+                Json::Value items(Json::arrayValue);
+                for (int i = startIdx; i < endIdx; i++) {
+                    const auto& cert = *filteredCerts[i];
+                    Json::Value certJson;
+                    certJson["fingerprint"] = cert.getFingerprint();
+                    certJson["countryCode"] = cert.getCountry();
+                    certJson["subjectDn"] = cert.getSubjectDn();
+                    certJson["issuerDn"] = cert.getIssuerDn();
+                    certJson["serialNumber"] = cert.getSn();
+
+                    // Dates
+                    char timeBuf[32];
+                    auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
+                    auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
+                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
+                    certJson["notBefore"] = timeBuf;
+                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
+                    certJson["notAfter"] = timeBuf;
+
+                    // Validity
+                    auto status = cert.getValidityStatus();
+                    if (status == domain::models::ValidityStatus::VALID) certJson["validity"] = "VALID";
+                    else if (status == domain::models::ValidityStatus::EXPIRED) certJson["validity"] = "EXPIRED";
+                    else if (status == domain::models::ValidityStatus::NOT_YET_VALID) certJson["validity"] = "NOT_YET_VALID";
+                    else certJson["validity"] = "UNKNOWN";
+
+                    // Algorithms
+                    if (cert.getSignatureAlgorithm().has_value()) certJson["signatureAlgorithm"] = *cert.getSignatureAlgorithm();
+                    if (cert.getPublicKeyAlgorithm().has_value()) certJson["publicKeyAlgorithm"] = *cert.getPublicKeyAlgorithm();
+                    if (cert.getPublicKeySize().has_value()) certJson["publicKeySize"] = *cert.getPublicKeySize();
+
+                    // Conformance data
+                    if (cert.getPkdConformanceCode().has_value()) certJson["pkdConformanceCode"] = *cert.getPkdConformanceCode();
+                    if (cert.getPkdConformanceText().has_value()) certJson["pkdConformanceText"] = *cert.getPkdConformanceText();
+                    if (cert.getPkdVersion().has_value()) certJson["pkdVersion"] = *cert.getPkdVersion();
+
+                    items.append(certJson);
+                }
+                certsObj["items"] = items;
+                response["certificates"] = certsObj;
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("DSC_NC report error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Get}
+    );
+
     // Swagger UI redirect
     app.registerHandler(
         "/api/docs",

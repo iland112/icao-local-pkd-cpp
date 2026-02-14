@@ -97,6 +97,91 @@ const formatDateForCsv = (dateStr: string): string => {
 /**
  * Export duplicate statistics to CSV format
  */
+/**
+ * DSC_NC certificate item for CSV export
+ */
+interface DscNcCertItem {
+  fingerprint: string;
+  countryCode: string;
+  subjectDn: string;
+  issuerDn: string;
+  serialNumber: string;
+  notBefore: string;
+  notAfter: string;
+  validity: string;
+  signatureAlgorithm?: string;
+  publicKeyAlgorithm?: string;
+  publicKeySize?: number;
+  pkdConformanceCode?: string;
+  pkdConformanceText?: string;
+  pkdVersion?: string;
+}
+
+/**
+ * Export DSC_NC non-conformant certificate report to CSV
+ */
+export const exportDscNcReportToCsv = (
+  certificates: DscNcCertItem[],
+  filename: string = 'dsc-nc-report.csv'
+) => {
+  if (certificates.length === 0) {
+    console.warn('No DSC_NC certificates to export');
+    return;
+  }
+
+  const headers = [
+    'Country',
+    'Subject DN',
+    'Issuer DN',
+    'Serial Number',
+    'Not Before',
+    'Not After',
+    'Validity',
+    'Signature Algorithm',
+    'Public Key Algorithm',
+    'Public Key Size',
+    'Conformance Code',
+    'Conformance Text',
+    'PKD Version',
+    'Fingerprint (SHA-256)'
+  ];
+
+  const rows = certificates.map(cert => [
+    cert.countryCode,
+    `"${escapeCsvValue(cert.subjectDn)}"`,
+    `"${escapeCsvValue(cert.issuerDn)}"`,
+    cert.serialNumber,
+    formatDateForCsv(cert.notBefore),
+    formatDateForCsv(cert.notAfter),
+    cert.validity,
+    cert.signatureAlgorithm || '',
+    cert.publicKeyAlgorithm || '',
+    cert.publicKeySize != null ? String(cert.publicKeySize) : '',
+    cert.pkdConformanceCode || '',
+    cert.pkdConformanceText ? `"${escapeCsvValue(cert.pkdConformanceText)}"` : '',
+    cert.pkdVersion || '',
+    cert.fingerprint
+  ]);
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.join(','))
+  ].join('\n');
+
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 export const exportDuplicateStatisticsToCsv = (
   byType: Record<string, number>,
   totalDuplicates: number,
