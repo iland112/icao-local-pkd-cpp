@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.2
-**Last Updated**: 2026-02-13
+**Version**: 2.1.3
+**Last Updated**: 2026-02-14
 **API Gateway Port**: 8080
 
 ---
@@ -10,14 +10,19 @@
 
 PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) 검증을 수행하는 REST API 서비스입니다. 전자여권 판독기가 연결된 외부 클라이언트 애플리케이션에서 이 API를 사용하여 여권의 진위를 검증할 수 있습니다.
 
+**두 가지 검증 방식**을 제공합니다:
+- **전체 검증** (`POST /api/pa/verify`): SOD + Data Groups를 전송하여 8단계 전체 PA 검증 수행
+- **간편 조회** (`POST /api/certificates/pa-lookup`): DSC Subject DN 또는 Fingerprint만으로 기존 Trust Chain 검증 결과를 즉시 조회 (v2.1.3+)
+
 ### Base URL
 
 **API Gateway (권장)**:
 ```
-http://<server-host>:8080/api/pa
+PA Service:         http://<server-host>:8080/api/pa
+PKD Management:     http://<server-host>:8080/api
 ```
 
-> **Note**: 모든 API 요청은 API Gateway(포트 8080)를 통해 라우팅됩니다. API Gateway는 로드 밸런싱, Rate Limiting, 통합 로깅 등의 기능을 제공합니다.
+> **Note**: 모든 API 요청은 API Gateway(포트 8080)를 통해 라우팅됩니다. 전체 검증(`/api/pa/verify`)은 PA Service로, 간편 조회(`/api/certificates/pa-lookup`)는 PKD Management로 라우팅됩니다.
 
 ### 인증
 
@@ -27,20 +32,21 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 
 ## API Endpoints Summary
 
-| # | Method | Path | Description |
-|---|--------|------|-------------|
-| 1 | `POST` | `/api/pa/verify` | PA 검증 (8단계 프로세스) |
-| 2 | `POST` | `/api/pa/parse-sod` | SOD 메타데이터 파싱 |
-| 3 | `POST` | `/api/pa/parse-dg1` | DG1 → MRZ 파싱 |
-| 4 | `POST` | `/api/pa/parse-dg2` | DG2 → 얼굴 이미지 추출 |
-| 5 | `POST` | `/api/pa/parse-mrz-text` | MRZ 텍스트 파싱 |
-| 6 | `GET` | `/api/pa/history` | 검증 이력 조회 |
-| 7 | `GET` | `/api/pa/{id}` | 검증 상세 조회 |
-| 8 | `GET` | `/api/pa/{id}/datagroups` | Data Groups 상세 조회 |
-| 9 | `GET` | `/api/pa/statistics` | 검증 통계 |
-| 10 | `GET` | `/api/health` | 서비스 헬스 체크 |
-| 11 | `GET` | `/api/health/database` | DB 연결 상태 |
-| 12 | `GET` | `/api/health/ldap` | LDAP 연결 상태 |
+| # | Method | Path | Service | Description |
+|---|--------|------|---------|-------------|
+| 1 | `POST` | `/api/pa/verify` | PA | PA 검증 (8단계 전체 프로세스) |
+| **2** | **`POST`** | **`/api/certificates/pa-lookup`** | **PKD Mgmt** | **간편 조회: DSC Subject DN/Fingerprint → Trust Chain 결과 (v2.1.3+)** |
+| 3 | `POST` | `/api/pa/parse-sod` | PA | SOD 메타데이터 파싱 |
+| 4 | `POST` | `/api/pa/parse-dg1` | PA | DG1 → MRZ 파싱 |
+| 5 | `POST` | `/api/pa/parse-dg2` | PA | DG2 → 얼굴 이미지 추출 |
+| 6 | `POST` | `/api/pa/parse-mrz-text` | PA | MRZ 텍스트 파싱 |
+| 7 | `GET` | `/api/pa/history` | PA | 검증 이력 조회 |
+| 8 | `GET` | `/api/pa/{id}` | PA | 검증 상세 조회 |
+| 9 | `GET` | `/api/pa/{id}/datagroups` | PA | Data Groups 상세 조회 |
+| 10 | `GET` | `/api/pa/statistics` | PA | 검증 통계 |
+| 11 | `GET` | `/api/health` | PA | 서비스 헬스 체크 |
+| 12 | `GET` | `/api/health/database` | PA | DB 연결 상태 |
+| 13 | `GET` | `/api/health/ldap` | PA | LDAP 연결 상태 |
 
 ---
 
@@ -235,7 +241,107 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 
 ---
 
-## 2. SOD 파싱
+## 2. 간편 조회 - Trust Chain Lookup (v2.1.3+)
+
+SOD/DG 파일을 전송하지 않고, DSC의 Subject DN 또는 Fingerprint만으로 기존에 수행된 Trust Chain 검증 결과를 DB에서 즉시 조회합니다.
+
+**Endpoint**: `POST /api/certificates/pa-lookup`
+
+> **Note**: 이 엔드포인트는 PKD Management 서비스에서 제공됩니다 (PA Service가 아님). API Gateway를 통해 `/api/certificates/pa-lookup`으로 접근합니다.
+
+### 전체 검증 vs 간편 조회
+
+| 항목 | 전체 검증 (`/api/pa/verify`) | 간편 조회 (`/api/certificates/pa-lookup`) |
+|------|--------------------------|---------------------------------------|
+| 입력 | SOD + Data Groups (Base64) | Subject DN 또는 Fingerprint (문자열) |
+| 처리 | CMS 파싱, 서명 검증, 해시 비교 | DB 조회 (단순 SELECT) |
+| 응답 시간 | 100~500ms | 5~20ms |
+| SOD 서명 검증 | O | X (기존 결과 참조) |
+| DG 해시 검증 | O | X (해당 없음) |
+| Trust Chain 결과 | 실시간 검증 | 파일 업로드 시 수행된 결과 조회 |
+| DSC 자동 등록 | O | X |
+| 사용 시나리오 | 최초 여권 검증 | 이미 알려진 DSC의 상태 확인 |
+
+### Request
+
+Subject DN으로 조회:
+```json
+{
+  "subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"
+}
+```
+
+Fingerprint로 조회:
+```json
+{
+  "fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| subjectDn | string | 택1 필수 | DSC Subject DN (대소문자 무시 비교) |
+| fingerprint | string | 택1 필수 | DSC SHA-256 Fingerprint (hex, 64자) |
+
+> `subjectDn`과 `fingerprint` 중 하나만 제공하면 됩니다. 둘 다 제공된 경우 `subjectDn`이 우선 적용됩니다.
+
+### Response (Success - 검증 결과 존재)
+
+```json
+{
+  "success": true,
+  "validation": {
+    "id": "660e8400-e29b-41d4-a716-446655440001",
+    "certificateType": "DSC",
+    "countryCode": "KR",
+    "subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234",
+    "issuerDn": "/C=KR/O=Government of Korea/CN=Country Signing CA KR",
+    "serialNumber": "1A2B3C4D",
+    "validationStatus": "VALID",
+    "trustChainValid": true,
+    "trustChainMessage": "",
+    "trustChainPath": "DSC → CSCA",
+    "cscaFound": true,
+    "cscaSubjectDn": "/C=KR/O=Government of Korea/CN=Country Signing CA KR",
+    "signatureValid": true,
+    "signatureAlgorithm": "SHA256withRSA",
+    "validityPeriodValid": true,
+    "notBefore": "2024-01-01 00:00:00",
+    "notAfter": "2029-12-31 23:59:59",
+    "revocationStatus": "not_revoked",
+    "crlChecked": true,
+    "fingerprintSha256": "a1b2c3d4e5f6...",
+    "validatedAt": "2026-02-14T10:30:00"
+  }
+}
+```
+
+### Response (Not Found - DSC가 DB에 없음)
+
+```json
+{
+  "success": true,
+  "validation": null,
+  "message": "No validation result found for the given subjectDn"
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| validationStatus | string | `VALID`, `EXPIRED_VALID`, `INVALID`, `PENDING`, `ERROR` |
+| trustChainValid | boolean | DSC → CSCA 신뢰 체인 검증 성공 여부 |
+| trustChainPath | string | 신뢰 체인 경로 (예: "DSC → Link → CSCA") |
+| cscaFound | boolean | CSCA 인증서 검색 성공 여부 |
+| signatureValid | boolean | DSC 서명 검증 성공 여부 |
+| crlChecked | boolean | CRL 검사 수행 여부 |
+| revocationStatus | string | 폐지 상태: `not_revoked`, `revoked`, `unknown` |
+| fingerprintSha256 | string | DSC SHA-256 지문 (hex, 64자) |
+
+---
+
+## 3. SOD 파싱 {#sod-parse}
 
 SOD 메타데이터를 추출합니다 (검증 없이 파싱만 수행).
 
@@ -285,7 +391,7 @@ SOD 메타데이터를 추출합니다 (검증 없이 파싱만 수행).
 
 ---
 
-## 3. DG1 파싱 (MRZ)
+## 4. DG1 파싱 (MRZ)
 
 DG1에서 MRZ 정보를 추출합니다.
 
@@ -328,7 +434,7 @@ DG1에서 MRZ 정보를 추출합니다.
 
 ---
 
-## 4. DG2 파싱 (얼굴 이미지)
+## 5. DG2 파싱 (얼굴 이미지)
 
 DG2에서 얼굴 이미지를 추출합니다.
 
@@ -371,7 +477,7 @@ DG2에서 얼굴 이미지를 추출합니다.
 
 ---
 
-## 5. MRZ 텍스트 파싱
+## 6. MRZ 텍스트 파싱
 
 OCR로 읽은 MRZ 텍스트를 파싱합니다.
 
@@ -393,7 +499,7 @@ DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
-## 6. 검증 이력 조회
+## 7. 검증 이력 조회
 
 **Endpoint**: `GET /api/pa/history`
 
@@ -433,7 +539,7 @@ DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
-## 7. 검증 상세 조회
+## 8. 검증 상세 조회
 
 **Endpoint**: `GET /api/pa/{verificationId}`
 
@@ -467,7 +573,7 @@ DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
-## 8. Data Groups 상세 조회
+## 9. Data Groups 상세 조회
 
 **Endpoint**: `GET /api/pa/{verificationId}/datagroups`
 
@@ -509,7 +615,7 @@ DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
-## 9. 검증 통계
+## 10. 검증 통계
 
 **Endpoint**: `GET /api/pa/statistics`
 
@@ -533,7 +639,7 @@ DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
-## 10. 헬스 체크
+## 11. 헬스 체크
 
 ### 서비스 상태
 
@@ -613,6 +719,33 @@ class PAServiceClient:
         response.raise_for_status()
         return response.json()
 
+    def pa_lookup(self, subject_dn: str = None, fingerprint: str = None) -> dict:
+        """
+        Lightweight PA lookup by subject DN or fingerprint.
+        Returns pre-computed trust chain validation result from DB.
+
+        Args:
+            subject_dn: DSC Subject DN (e.g., "/C=KR/O=.../CN=...")
+            fingerprint: DSC SHA-256 fingerprint (hex, 64 chars)
+        Returns:
+            dict: {"success": true, "validation": {...}} or {"success": true, "validation": null}
+        """
+        params = {}
+        if subject_dn:
+            params["subjectDn"] = subject_dn
+        elif fingerprint:
+            params["fingerprint"] = fingerprint
+        else:
+            raise ValueError("Either subject_dn or fingerprint is required")
+
+        response = requests.post(
+            f"{self.base_url}/certificates/pa-lookup",
+            json=params,
+            headers={"Content-Type": "application/json"}
+        )
+        response.raise_for_status()
+        return response.json()
+
     def parse_sod(self, sod: bytes) -> dict:
         """Parse SOD metadata."""
         response = requests.post(
@@ -662,7 +795,7 @@ if __name__ == "__main__":
     dg1 = read_dg1_from_passport()
     dg2 = read_dg2_from_passport()
 
-    # Verify
+    # Option A: Full PA verification (with SOD + DG files)
     result = client.verify(sod, {1: dg1, 2: dg2})
 
     if result["success"] and result["data"]["status"] == "VALID":
@@ -679,6 +812,18 @@ if __name__ == "__main__":
     else:
         print("Verification failed!")
         print(f"Error: {result.get('error', 'INVALID status')}")
+
+    # Option B: Lightweight lookup (DSC subject DN only, no file upload)
+    lookup = client.pa_lookup(
+        subject_dn="/C=KR/O=Government of Korea/CN=Document Signer 1234"
+    )
+    if lookup["success"] and lookup.get("validation"):
+        v = lookup["validation"]
+        print(f"Trust Chain: {'VALID' if v['trustChainValid'] else 'INVALID'}")
+        print(f"Status: {v['validationStatus']}")
+        print(f"CSCA: {v.get('cscaSubjectDn', 'N/A')}")
+    else:
+        print("DSC not found in local PKD")
 ```
 
 ### Java (Spring RestTemplate)
@@ -708,6 +853,25 @@ public class PAServiceClient {
 
         ResponseEntity<Map> response = restTemplate.exchange(
             baseUrl + "/pa/verify",
+            HttpMethod.POST,
+            entity,
+            Map.class
+        );
+
+        return response.getBody();
+    }
+
+    public Map<String, Object> paLookup(String subjectDn) {
+        Map<String, Object> request = new HashMap<>();
+        request.put("subjectDn", subjectDn);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+        ResponseEntity<Map> response = restTemplate.exchange(
+            baseUrl + "/certificates/pa-lookup",
             HttpMethod.POST,
             entity,
             Map.class
@@ -755,13 +919,32 @@ public class PAServiceClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
+
+    public async Task<JsonElement> PaLookupAsync(
+        string subjectDn = null,
+        string fingerprint = null)
+    {
+        var request = new Dictionary<string, string>();
+        if (!string.IsNullOrEmpty(subjectDn))
+            request["subjectDn"] = subjectDn;
+        else if (!string.IsNullOrEmpty(fingerprint))
+            request["fingerprint"] = fingerprint;
+
+        var response = await _client.PostAsJsonAsync(
+            $"{_baseUrl}/certificates/pa-lookup",
+            request
+        );
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
+    }
 }
 ```
 
 ### curl
 
 ```bash
-# PA Verify
+# Full PA Verify (SOD + DG files required)
 curl -X POST http://localhost:8080/api/pa/verify \
   -H "Content-Type: application/json" \
   -d '{
@@ -771,6 +954,16 @@ curl -X POST http://localhost:8080/api/pa/verify \
       "2": "'$(base64 -w0 dg2.bin)'"
     }
   }' | jq .
+
+# Lightweight PA Lookup (by Subject DN - no file upload needed)
+curl -X POST http://localhost:8080/api/certificates/pa-lookup \
+  -H "Content-Type: application/json" \
+  -d '{"subjectDn": "/C=KR/O=Government of Korea/CN=Document Signer 1234"}' | jq .
+
+# Lightweight PA Lookup (by Fingerprint)
+curl -X POST http://localhost:8080/api/certificates/pa-lookup \
+  -H "Content-Type: application/json" \
+  -d '{"fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd"}' | jq .
 
 # Parse SOD only
 curl -X POST http://localhost:8080/api/pa/parse-sod \
@@ -830,8 +1023,10 @@ curl http://localhost:8080/api/health | jq .
 ## OpenAPI Specification
 
 전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:
-- **Swagger UI**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.2`
-- **OpenAPI YAML**: `http://<server-host>:8080/api/docs/pa-service.yaml`
+- **Swagger UI (PA Service)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.2`
+- **Swagger UI (PKD Management)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.10.2`
+- **OpenAPI YAML (PA)**: `http://<server-host>:8080/api/docs/pa-service.yaml`
+- **OpenAPI YAML (PKD Mgmt)**: `http://<server-host>:8080/api/docs/pkd-management.yaml`
 
 ---
 
@@ -862,6 +1057,17 @@ curl http://localhost:8080/api/health | jq .
 ---
 
 ## Changelog
+
+### v2.1.3 (2026-02-14)
+
+**경량 PA 조회 API 추가 (Lightweight PA Lookup)**:
+- `POST /api/certificates/pa-lookup` 엔드포인트 추가 (PKD Management 서비스)
+- DSC Subject DN 또는 SHA-256 Fingerprint로 기존 Trust Chain 검증 결과 즉시 조회
+- SOD/DG 파일 업로드 없이 DB에서 사전 계산된 검증 결과 반환 (5~20ms 응답)
+- 대소문자 무시 Subject DN 비교 (`LOWER()`)
+- `subjectDn`과 `fingerprint` 두 가지 조회 키 지원
+- Public endpoint (JWT 인증 불필요)
+- PostgreSQL + Oracle 모두 지원
 
 ### v2.1.2 (2026-02-13)
 

@@ -434,6 +434,187 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
     }
 }
 
+Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
+{
+    spdlog::debug("[ValidationRepository] Finding by subject DN: {}...", subjectDn.substr(0, 60));
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Step 1: Find certificate by subject_dn (case-insensitive)
+        std::string certQuery;
+        if (dbType == "oracle") {
+            certQuery =
+                "SELECT id, fingerprint_sha256 FROM certificate "
+                "WHERE certificate_type IN ('DSC', 'DSC_NC') "
+                "AND LOWER(subject_dn) = LOWER($1) "
+                "ORDER BY created_at DESC "
+                "OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY";
+        } else {
+            certQuery =
+                "SELECT id, fingerprint_sha256 FROM certificate "
+                "WHERE certificate_type IN ('DSC', 'DSC_NC') "
+                "AND LOWER(subject_dn) = LOWER($1) "
+                "ORDER BY created_at DESC "
+                "LIMIT 1";
+        }
+
+        std::vector<std::string> certParams = {subjectDn};
+        Json::Value certResult = queryExecutor_->executeQuery(certQuery, certParams);
+
+        if (certResult.empty()) {
+            spdlog::debug("[ValidationRepository] No certificate found for subject DN: {}...",
+                subjectDn.substr(0, 60));
+            return Json::nullValue;
+        }
+
+        std::string certificateId = certResult[0].get("id", "").asString();
+        std::string fingerprint = certResult[0].get("fingerprint_sha256", "").asString();
+
+        if (certificateId.empty()) {
+            spdlog::warn("[ValidationRepository] Certificate found but ID is empty");
+            return Json::nullValue;
+        }
+
+        // Step 2: Find validation result for this certificate
+        std::string query;
+        std::vector<std::string> params;
+
+        if (dbType == "oracle") {
+            // Oracle: certificate_id stores fingerprint directly
+            query =
+                "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                "       vr.csca_found, vr.csca_subject_dn, "
+                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.validity_period_valid, vr.not_before, vr.not_after, "
+                "       vr.revocation_status, vr.crl_checked, "
+                "       vr.validation_timestamp, "
+                "       vr.certificate_id AS fingerprint_sha256 "
+                "FROM validation_result vr "
+                "WHERE vr.certificate_id = $1 "
+                "ORDER BY vr.validation_timestamp DESC "
+                "OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY";
+            params = {fingerprint.empty() ? certificateId : fingerprint};
+        } else {
+            // PostgreSQL: JOIN with certificate table
+            query =
+                "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
+                "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
+                "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
+                "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
+                "       vr.signature_valid, vr.signature_algorithm, "
+                "       vr.validity_period_valid, vr.not_before, vr.not_after, "
+                "       vr.revocation_status, vr.crl_checked, "
+                "       vr.validation_timestamp, c.fingerprint_sha256 "
+                "FROM validation_result vr "
+                "LEFT JOIN certificate c ON vr.certificate_id = c.id "
+                "WHERE vr.certificate_id = $1 "
+                "ORDER BY vr.validation_timestamp DESC "
+                "LIMIT 1";
+            params = {certificateId};
+        }
+
+        Json::Value queryResult = queryExecutor_->executeQuery(query, params);
+
+        if (queryResult.empty()) {
+            spdlog::debug("[ValidationRepository] Certificate found but no validation result for DN: {}...",
+                subjectDn.substr(0, 60));
+            return Json::nullValue;
+        }
+
+        // Extract first row and build response (same format as findByFingerprint)
+        Json::Value row = queryResult[0];
+
+        Json::Value result;
+        result["id"] = row.get("id", Json::nullValue);
+        result["certificateId"] = row.get("certificate_id", Json::nullValue);
+        result["uploadId"] = row.get("upload_id", Json::nullValue);
+        result["certificateType"] = row.get("certificate_type", Json::nullValue);
+        result["countryCode"] = row.get("country_code", Json::nullValue);
+        result["subjectDn"] = row.get("subject_dn", Json::nullValue);
+        result["issuerDn"] = row.get("issuer_dn", Json::nullValue);
+        result["serialNumber"] = row.get("serial_number", Json::nullValue);
+        result["validationStatus"] = row.get("validation_status", Json::nullValue);
+
+        // Boolean fields
+        Json::Value tcvVal = row.get("trust_chain_valid", false);
+        if (tcvVal.isBool()) result["trustChainValid"] = tcvVal.asBool();
+        else if (tcvVal.isString()) {
+            std::string s = tcvVal.asString();
+            result["trustChainValid"] = (s == "t" || s == "true");
+        } else result["trustChainValid"] = false;
+
+        result["trustChainMessage"] = row.get("trust_chain_message", Json::nullValue);
+
+        // trust_chain_path JSONB
+        Json::Value tcpVal = row.get("trust_chain_path", Json::nullValue);
+        if (tcpVal.isArray() && tcpVal.size() > 0) {
+            result["trustChainPath"] = tcpVal[0].asString();
+        } else if (tcpVal.isString()) {
+            std::string tcpRaw = tcpVal.asString();
+            try {
+                Json::Reader reader;
+                Json::Value pathArray;
+                if (reader.parse(tcpRaw, pathArray) && pathArray.isArray() && pathArray.size() > 0)
+                    result["trustChainPath"] = pathArray[0].asString();
+                else result["trustChainPath"] = "";
+            } catch (...) { result["trustChainPath"] = ""; }
+        } else result["trustChainPath"] = "";
+
+        Json::Value cfVal = row.get("csca_found", false);
+        if (cfVal.isBool()) result["cscaFound"] = cfVal.asBool();
+        else if (cfVal.isString()) {
+            std::string s = cfVal.asString();
+            result["cscaFound"] = (s == "t" || s == "true");
+        } else result["cscaFound"] = false;
+
+        result["cscaSubjectDn"] = row.get("csca_subject_dn", Json::nullValue);
+
+        Json::Value svVal = row.get("signature_valid", false);
+        if (svVal.isBool()) result["signatureVerified"] = svVal.asBool();
+        else if (svVal.isString()) {
+            std::string s = svVal.asString();
+            result["signatureVerified"] = (s == "t" || s == "true");
+        } else result["signatureVerified"] = false;
+
+        result["signatureAlgorithm"] = row.get("signature_algorithm", Json::nullValue);
+
+        Json::Value vpVal = row.get("validity_period_valid", false);
+        if (vpVal.isBool()) result["validityCheckPassed"] = vpVal.asBool();
+        else if (vpVal.isString()) {
+            std::string s = vpVal.asString();
+            result["validityCheckPassed"] = (s == "t" || s == "true");
+        } else result["validityCheckPassed"] = false;
+
+        result["notBefore"] = row.get("not_before", Json::nullValue);
+        result["notAfter"] = row.get("not_after", Json::nullValue);
+        result["isExpired"] = false;
+        result["isNotYetValid"] = false;
+        result["crlCheckStatus"] = row.get("revocation_status", Json::nullValue);
+
+        Json::Value ccVal = row.get("crl_checked", false);
+        if (ccVal.isBool()) result["crlChecked"] = ccVal.asBool();
+        else if (ccVal.isString()) {
+            std::string s = ccVal.asString();
+            result["crlChecked"] = (s == "t" || s == "true");
+        } else result["crlChecked"] = false;
+
+        result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
+        result["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
+
+        spdlog::debug("[ValidationRepository] Found validation result for subject DN: {}...",
+            subjectDn.substr(0, 60));
+
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ValidationRepository] findBySubjectDn failed: {}", e.what());
+        return Json::nullValue;
+    }
+}
+
 Json::Value ValidationRepository::findByUploadId(
     const std::string& uploadId,
     int limit,

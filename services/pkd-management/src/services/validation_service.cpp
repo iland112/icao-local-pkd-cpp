@@ -310,6 +310,32 @@ Json::Value ValidationService::getValidationByFingerprint(const std::string& fin
     return response;
 }
 
+Json::Value ValidationService::getValidationBySubjectDn(const std::string& subjectDn)
+{
+    spdlog::info("ValidationService::getValidationBySubjectDn - subjectDn: {}",
+        subjectDn.substr(0, 60) + "...");
+
+    Json::Value response;
+
+    try {
+        Json::Value validation = validationRepo_->findBySubjectDn(subjectDn);
+
+        response["success"] = true;
+        if (validation.isNull()) {
+            response["validation"] = Json::nullValue;
+        } else {
+            response["validation"] = validation;
+        }
+
+    } catch (const std::exception& e) {
+        spdlog::error("ValidationService::getValidationBySubjectDn failed: {}", e.what());
+        response["success"] = false;
+        response["error"] = e.what();
+    }
+
+    return response;
+}
+
 Json::Value ValidationService::getValidationsByUploadId(
     const std::string& uploadId,
     int limit,
@@ -493,17 +519,42 @@ ValidationService::TrustChain ValidationService::buildTrustChain(X509* leafCert,
             visitedDns.insert(currentIssuerDn);
 
             // Find issuer certificate in CSCA list
+            // ICAO 9303 Part 12: When multiple CSCAs share the same DN (key rollover),
+            // select the one whose public key successfully verifies the current certificate's signature.
             X509* issuer = nullptr;
+            X509* dnMatchFallback = nullptr;  // Fallback: first DN match (if no signature matches)
             for (X509* csca : allCscas) {
                 std::string cscaSubjectDn = getSubjectDn(csca);
 
                 // Case-insensitive DN comparison
                 if (strcasecmp(currentIssuerDn.c_str(), cscaSubjectDn.c_str()) == 0) {
-                    issuer = csca;
-                    spdlog::debug("Chain building: Found issuer at depth {}: {}",
-                                  depth, cscaSubjectDn.substr(0, 50));
-                    break;
+                    // DN matches - verify signature to confirm correct key pair
+                    EVP_PKEY* cscaPubKey = X509_get_pubkey(csca);
+                    if (cscaPubKey) {
+                        int verifyResult = X509_verify(current, cscaPubKey);
+                        EVP_PKEY_free(cscaPubKey);
+                        if (verifyResult == 1) {
+                            issuer = csca;
+                            spdlog::debug("Chain building: Found issuer at depth {} (signature verified): {}",
+                                          depth, cscaSubjectDn.substr(0, 50));
+                            break;
+                        } else {
+                            spdlog::debug("Chain building: DN match but signature failed at depth {}: {}",
+                                          depth, cscaSubjectDn.substr(0, 50));
+                            if (!dnMatchFallback) dnMatchFallback = csca;
+                        }
+                    } else {
+                        spdlog::warn("Chain building: Failed to extract public key from CSCA: {}",
+                                     cscaSubjectDn.substr(0, 50));
+                        if (!dnMatchFallback) dnMatchFallback = csca;
+                    }
                 }
+            }
+            // If no signature-verified match found, use DN-only match for error reporting
+            if (!issuer && dnMatchFallback) {
+                spdlog::warn("Chain building: No signature-verified CSCA found at depth {}, "
+                             "using DN match fallback for chain path reporting", depth);
+                issuer = dnMatchFallback;
             }
 
             if (!issuer) {

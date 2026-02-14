@@ -14,14 +14,14 @@ import {
   Clock,
   Award,
   Globe,
-  User,
-  Image,
   ListChecks,
   ChevronDown,
   ChevronRight,
   ExternalLink,
   Hash,
   FileKey,
+  Search,
+  Zap,
 } from 'lucide-react';
 import { paApi } from '@/services/api';
 import type {
@@ -101,17 +101,57 @@ interface DGHashDetail {
 const initialSteps: VerificationStep[] = [
   { id: 1, title: 'Step 1: SOD 파싱', description: 'CMS SignedData 구조 분석 및 Data Group 해시 추출', status: 'pending' },
   { id: 2, title: 'Step 2: DSC 추출', description: 'SOD에서 Document Signer Certificate 추출', status: 'pending' },
-  { id: 3, title: 'Step 3: CSCA 조회', description: 'LDAP에서 Country Signing CA 인증서 조회', status: 'pending' },
-  { id: 4, title: 'Step 4: Trust Chain 검증', description: 'DSC가 CSCA에 의해 서명되었는지 검증', status: 'pending' },
+  { id: 3, title: 'Step 3: Trust Chain 검증', description: 'DSC 서명을 CSCA 공개키로 검증', status: 'pending' },
+  { id: 4, title: 'Step 4: CSCA 조회', description: 'Local PKD에서 CSCA 검색 (Link Certificate 포함)', status: 'pending' },
   { id: 5, title: 'Step 5: SOD 서명 검증', description: 'LDSSecurityObject가 DSC로 서명되었는지 검증', status: 'pending' },
   { id: 6, title: 'Step 6: Data Group 해시 검증', description: 'SOD의 예상 해시값과 실제 계산된 해시값 비교', status: 'pending' },
   { id: 7, title: 'Step 7: CRL 검사', description: 'DSC 인증서 폐기 여부 확인 (RFC 5280)', status: 'pending' },
-  { id: 8, title: 'Step 8: Data Group 파싱', description: 'DG1 (MRZ) 및 DG2 (얼굴 이미지) 데이터 추출', status: 'pending' },
+  { id: 8, title: 'Step 8: DSC 자동 등록', description: '신규 발견된 DSC를 Local PKD에 자동 등록', status: 'pending' },
 ];
+
+// Quick lookup result type (matches findByFingerprint/findBySubjectDn response)
+interface QuickLookupResult {
+  success: boolean;
+  validation?: {
+    certificateType?: string;
+    countryCode?: string;
+    subjectDn?: string;
+    issuerDn?: string;
+    serialNumber?: string;
+    validationStatus?: string;
+    trustChainValid?: boolean;
+    trustChainMessage?: string;
+    trustChainPath?: string;
+    cscaFound?: boolean;
+    cscaSubjectDn?: string;
+    signatureVerified?: boolean;
+    signatureAlgorithm?: string;
+    validityCheckPassed?: boolean;
+    notBefore?: string;
+    notAfter?: string;
+    crlCheckStatus?: string;
+    crlChecked?: boolean;
+    fingerprint?: string;
+    validatedAt?: string;
+  } | null;
+  error?: string;
+}
+
+type VerificationMode = 'full' | 'quick';
 
 export function PAVerify() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mrzInputRef = useRef<HTMLInputElement>(null);
+
+  // Mode state
+  const [verificationMode, setVerificationMode] = useState<VerificationMode>('full');
+
+  // Quick lookup states
+  const [quickLookupDn, setQuickLookupDn] = useState('');
+  const [quickLookupFingerprint, setQuickLookupFingerprint] = useState('');
+  const [quickLookupResult, setQuickLookupResult] = useState<QuickLookupResult | null>(null);
+  const [quickLookupLoading, setQuickLookupLoading] = useState(false);
+  const [quickLookupError, setQuickLookupError] = useState<string | null>(null);
 
   // File states
   const [sodFile, setSodFile] = useState<File | null>(null);
@@ -140,9 +180,8 @@ export function PAVerify() {
   // DG Parsing states
   const [dg1ParseResult, setDg1ParseResult] = useState<DG1ParseResult | null>(null);
   const [dg2ParseResult, setDg2ParseResult] = useState<DG2ParseResult | null>(null);
-  const [parsingDg1, setParsingDg1] = useState(false);
-  const [parsingDg2, setParsingDg2] = useState(false);
-  const [showRawMrz, setShowRawMrz] = useState(true);
+  const [, setParsingDg1] = useState(false);
+  const [, setParsingDg2] = useState(false);
 
   // 결과로부터 Step 상태 업데이트
   const updateStepsFromResult = useCallback((response: PAVerificationResponse) => {
@@ -193,31 +232,7 @@ export function PAVerify() {
         };
       }
 
-      // Step 3: CSCA 조회
-      if (response.certificateChainValidation?.cscaSubject) {
-        newSteps[2] = {
-          ...newSteps[2],
-          status: 'success',
-          message: '✓ CSCA 인증서 조회 성공',
-          details: {
-            dn: response.certificateChainValidation.cscaSubject,
-          },
-          expanded: true,
-        };
-      } else {
-        newSteps[2] = {
-          ...newSteps[2],
-          status: 'error',
-          message: '✗ CSCA 인증서를 찾을 수 없음',
-          details: {
-            error: response.certificateChainValidation?.validationErrors,
-            dscSubject: response.certificateChainValidation?.dscSubject,
-          },
-          expanded: true,
-        };
-      }
-
-      // Step 4: Trust Chain 검증
+      // Step 3: Trust Chain 검증
       if (response.certificateChainValidation?.valid) {
         const chainValidation = response.certificateChainValidation;
         // Determine status based on expiration
@@ -230,8 +245,8 @@ export function PAVerify() {
             ? '✓ Trust Chain 검증 성공 (인증서 만료 임박)'
             : '✓ Trust Chain 검증 성공';
 
-        newSteps[3] = {
-          ...newSteps[3],
+        newSteps[2] = {
+          ...newSteps[2],
           status: stepStatus,
           message: statusMessage,
           details: {
@@ -249,8 +264,8 @@ export function PAVerify() {
         };
       } else {
         const chainValidation = response.certificateChainValidation;
-        newSteps[3] = {
-          ...newSteps[3],
+        newSteps[2] = {
+          ...newSteps[2],
           status: 'error',
           message: '✗ Trust Chain 검증 실패',
           details: {
@@ -259,6 +274,30 @@ export function PAVerify() {
             cscaSubject: chainValidation?.cscaSubject,
             notBefore: chainValidation?.notBefore,
             notAfter: chainValidation?.notAfter,
+          },
+          expanded: true,
+        };
+      }
+
+      // Step 4: CSCA 조회
+      if (response.certificateChainValidation?.cscaSubject) {
+        newSteps[3] = {
+          ...newSteps[3],
+          status: 'success',
+          message: '✓ CSCA 인증서 조회 성공',
+          details: {
+            dn: response.certificateChainValidation.cscaSubject,
+          },
+          expanded: true,
+        };
+      } else {
+        newSteps[3] = {
+          ...newSteps[3],
+          status: 'error',
+          message: '✗ CSCA 인증서를 찾을 수 없음',
+          details: {
+            error: response.certificateChainValidation?.validationErrors,
+            dscSubject: response.certificateChainValidation?.dscSubject,
           },
           expanded: true,
         };
@@ -351,13 +390,51 @@ export function PAVerify() {
         };
       }
 
-      // Step 8: DG 파싱 (running 상태로 설정 - 자동 파싱 시작)
-      newSteps[7] = {
-        ...newSteps[7],
-        status: 'running',
-        message: 'DG1/DG2 데이터 파싱 중...',
-        expanded: true,
-      };
+      // Step 8: DSC 자동 등록
+      if (response.dscAutoRegistration) {
+        const dscReg = response.dscAutoRegistration;
+        if (dscReg.registered && dscReg.newlyRegistered) {
+          newSteps[7] = {
+            ...newSteps[7],
+            status: 'success',
+            message: '✓ DSC 자동 등록 완료',
+            details: {
+              certificateId: dscReg.certificateId,
+              fingerprint: dscReg.fingerprint,
+              countryCode: dscReg.countryCode,
+              newlyRegistered: true,
+            },
+            expanded: true,
+          };
+        } else if (dscReg.registered && !dscReg.newlyRegistered) {
+          newSteps[7] = {
+            ...newSteps[7],
+            status: 'success',
+            message: '✓ DSC 이미 등록됨',
+            details: {
+              certificateId: dscReg.certificateId,
+              fingerprint: dscReg.fingerprint,
+              countryCode: dscReg.countryCode,
+              newlyRegistered: false,
+            },
+            expanded: true,
+          };
+        } else {
+          newSteps[7] = {
+            ...newSteps[7],
+            status: 'warning',
+            message: '⚠ DSC 등록 실패',
+            expanded: true,
+          };
+        }
+      } else {
+        newSteps[7] = {
+          ...newSteps[7],
+          status: 'warning',
+          message: '⚠ DSC 자동 등록 정보 없음',
+          expanded: true,
+        };
+      }
 
       return newSteps;
     });
@@ -419,34 +496,11 @@ export function PAVerify() {
       }
     }
 
-    // Step 8 상태 업데이트
-    setSteps(prevSteps => {
-      const newSteps = [...prevSteps];
-      if (parsedCount > 0) {
-        newSteps[7] = {
-          ...newSteps[7],
-          status: 'success',
-          message: `✓ ${parsedCount}개 Data Group 파싱 완료`,
-          details: { dg1: dg1Result, dg2: dg2Result },
-          expanded: true,
-        };
-      } else if (dg1File || dg2File) {
-        newSteps[7] = {
-          ...newSteps[7],
-          status: 'error',
-          message: '✗ Data Group 파싱 실패',
-          expanded: true,
-        };
-      } else {
-        newSteps[7] = {
-          ...newSteps[7],
-          status: 'warning',
-          message: '⚠ 파싱할 DG1/DG2 파일이 없습니다',
-          expanded: true,
-        };
-      }
-      return newSteps;
-    });
+    // DG 파싱 결과는 상단 결과 박스에서 표시 (Step 8은 DSC 자동 등록으로 변경됨)
+    // parsedCount, dg1Result, dg2Result는 state에 저장되어 결과 박스에서 사용
+    void parsedCount;
+    void dg1Result;
+    void dg2Result;
   }, [dgFiles]);
 
   // 결과가 변경되면 Step 상태 업데이트 및 자동 DG 파싱
@@ -667,6 +721,39 @@ export function PAVerify() {
     });
   };
 
+  // Quick lookup handler
+  const handleQuickLookup = async () => {
+    if (!quickLookupDn && !quickLookupFingerprint) {
+      setQuickLookupError('Subject DN 또는 Fingerprint를 입력해주세요.');
+      return;
+    }
+
+    setQuickLookupLoading(true);
+    setQuickLookupError(null);
+    setQuickLookupResult(null);
+
+    try {
+      const params: { subjectDn?: string; fingerprint?: string } = {};
+      if (quickLookupDn) params.subjectDn = quickLookupDn;
+      else if (quickLookupFingerprint) params.fingerprint = quickLookupFingerprint;
+
+      const response = await paApi.paLookup(params);
+      const data = response.data as QuickLookupResult;
+      setQuickLookupResult(data);
+
+      if (!data.success) {
+        setQuickLookupError(data.error || '조회 실패');
+      } else if (!data.validation) {
+        setQuickLookupError('해당 인증서의 검증 결과가 없습니다. 파일 업로드를 통해 먼저 Trust Chain 검증을 수행해주세요.');
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '조회 중 오류가 발생했습니다.';
+      setQuickLookupError(msg);
+    } finally {
+      setQuickLookupLoading(false);
+    }
+  };
+
   const getStepStatusIcon = (status: StepStatus) => {
     switch (status) {
       case 'success':
@@ -716,6 +803,314 @@ export function PAVerify() {
         </div>
       </div>
 
+      {/* Mode Toggle Tabs */}
+      <div className="flex gap-2 mb-6">
+        <button
+          onClick={() => setVerificationMode('full')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+            verificationMode === 'full'
+              ? 'bg-teal-500 text-white shadow-md'
+              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+          )}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          전체 검증
+        </button>
+        <button
+          onClick={() => setVerificationMode('quick')}
+          className={cn(
+            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all',
+            verificationMode === 'quick'
+              ? 'bg-teal-500 text-white shadow-md'
+              : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700'
+          )}
+        >
+          <Zap className="w-4 h-4" />
+          간편 검증 (Trust Chain 조회)
+        </button>
+      </div>
+
+      {/* Quick Lookup Mode */}
+      {verificationMode === 'quick' && (
+        <div className="max-w-3xl space-y-5">
+          {/* Input Card */}
+          <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2.5 rounded-xl bg-teal-50 dark:bg-teal-900/30">
+                <Search className="w-5 h-5 text-teal-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">Trust Chain 조회</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  파일 업로드 시 수행된 Trust Chain 검증 결과를 DSC Subject DN 또는 Fingerprint로 조회합니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  DSC Subject DN
+                </label>
+                <input
+                  type="text"
+                  value={quickLookupDn}
+                  onChange={(e) => { setQuickLookupDn(e.target.value); setQuickLookupFingerprint(''); }}
+                  placeholder="/C=KR/O=Government of Korea/CN=Document Signer..."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+              <div className="text-center text-xs text-gray-400">또는</div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  SHA-256 Fingerprint
+                </label>
+                <input
+                  type="text"
+                  value={quickLookupFingerprint}
+                  onChange={(e) => { setQuickLookupFingerprint(e.target.value); setQuickLookupDn(''); }}
+                  placeholder="a1b2c3d4e5f6..."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm font-mono text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-teal-500 focus:border-transparent"
+                />
+              </div>
+              <button
+                onClick={handleQuickLookup}
+                disabled={quickLookupLoading || (!quickLookupDn && !quickLookupFingerprint)}
+                className={cn(
+                  'w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all',
+                  quickLookupLoading || (!quickLookupDn && !quickLookupFingerprint)
+                    ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 cursor-not-allowed'
+                    : 'bg-teal-500 hover:bg-teal-600 text-white shadow-md'
+                )}
+              >
+                {quickLookupLoading ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 조회 중...</>
+                ) : (
+                  <><Search className="w-4 h-4" /> Trust Chain 결과 조회</>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {quickLookupError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-red-700 dark:text-red-400">
+              <XCircle className="w-5 h-5 shrink-0" />
+              <span className="text-sm">{quickLookupError}</span>
+              <button onClick={() => setQuickLookupError(null)} className="ml-auto">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Result Card */}
+          {quickLookupResult?.validation && (
+            <div className="space-y-4">
+              {/* Overall Status */}
+              <div className={cn(
+                'rounded-2xl p-4',
+                quickLookupResult.validation.validationStatus === 'VALID' || quickLookupResult.validation.validationStatus === 'EXPIRED_VALID'
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+                  : quickLookupResult.validation.validationStatus === 'INVALID'
+                  ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
+                  : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'
+              )}>
+                <div className="flex items-center gap-3">
+                  {quickLookupResult.validation.validationStatus === 'VALID' || quickLookupResult.validation.validationStatus === 'EXPIRED_VALID' ? (
+                    <Award className="w-10 h-10" />
+                  ) : quickLookupResult.validation.validationStatus === 'INVALID' ? (
+                    <XCircle className="w-10 h-10" />
+                  ) : (
+                    <AlertTriangle className="w-10 h-10" />
+                  )}
+                  <div>
+                    <h2 className="text-lg font-bold">
+                      Trust Chain: {quickLookupResult.validation.validationStatus}
+                    </h2>
+                    <div className="flex items-center gap-4 mt-0.5 text-sm opacity-90">
+                      {quickLookupResult.validation.countryCode && (
+                        <span className="flex items-center gap-1">
+                          <Globe className="w-3.5 h-3.5" />
+                          {quickLookupResult.validation.countryCode}
+                        </span>
+                      )}
+                      {quickLookupResult.validation.certificateType && (
+                        <span className="flex items-center gap-1">
+                          <FileKey className="w-3.5 h-3.5" />
+                          {quickLookupResult.validation.certificateType}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Detail Card */}
+              <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-5 space-y-3">
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <ListChecks className="w-4 h-4 text-teal-500" />
+                  검증 상세 결과
+                </h3>
+
+                {/* Trust Chain */}
+                <div className={cn(
+                  'p-3 rounded-lg border text-xs',
+                  quickLookupResult.validation.trustChainValid
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                )}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {quickLookupResult.validation.trustChainValid
+                      ? <CheckCircle className="w-4 h-4 text-green-500" />
+                      : <XCircle className="w-4 h-4 text-red-500" />}
+                    <span className="font-semibold">Trust Chain 검증</span>
+                  </div>
+                  {quickLookupResult.validation.trustChainPath && (
+                    <div className="ml-6 text-gray-600 dark:text-gray-400">
+                      경로: {quickLookupResult.validation.trustChainPath}
+                    </div>
+                  )}
+                  {quickLookupResult.validation.trustChainMessage && (
+                    <div className="ml-6 text-gray-600 dark:text-gray-400">
+                      {quickLookupResult.validation.trustChainMessage}
+                    </div>
+                  )}
+                </div>
+
+                {/* CSCA Info */}
+                <div className={cn(
+                  'p-3 rounded-lg border text-xs',
+                  quickLookupResult.validation.cscaFound
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                )}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {quickLookupResult.validation.cscaFound
+                      ? <CheckCircle className="w-4 h-4 text-green-500" />
+                      : <AlertTriangle className="w-4 h-4 text-yellow-500" />}
+                    <span className="font-semibold">CSCA 조회</span>
+                  </div>
+                  {quickLookupResult.validation.cscaSubjectDn && (
+                    <div className="ml-6">
+                      <span className="text-gray-500">CSCA DN: </span>
+                      <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                        {quickLookupResult.validation.cscaSubjectDn}
+                      </code>
+                    </div>
+                  )}
+                </div>
+
+                {/* Signature Verification */}
+                <div className={cn(
+                  'p-3 rounded-lg border text-xs',
+                  quickLookupResult.validation.signatureVerified
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                )}>
+                  <div className="flex items-center gap-2">
+                    {quickLookupResult.validation.signatureVerified
+                      ? <CheckCircle className="w-4 h-4 text-green-500" />
+                      : <XCircle className="w-4 h-4 text-red-500" />}
+                    <span className="font-semibold">서명 검증</span>
+                    {quickLookupResult.validation.signatureAlgorithm && (
+                      <code className="ml-2 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
+                        {quickLookupResult.validation.signatureAlgorithm}
+                      </code>
+                    )}
+                  </div>
+                </div>
+
+                {/* Validity Period */}
+                <div className={cn(
+                  'p-3 rounded-lg border text-xs',
+                  quickLookupResult.validation.validityCheckPassed
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                )}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    {quickLookupResult.validation.validityCheckPassed
+                      ? <CheckCircle className="w-4 h-4 text-green-500" />
+                      : <AlertTriangle className="w-4 h-4 text-yellow-500" />}
+                    <span className="font-semibold">유효기간</span>
+                  </div>
+                  {(quickLookupResult.validation.notBefore || quickLookupResult.validation.notAfter) && (
+                    <div className="ml-6 text-gray-600 dark:text-gray-400">
+                      {quickLookupResult.validation.notBefore} ~ {quickLookupResult.validation.notAfter}
+                    </div>
+                  )}
+                </div>
+
+                {/* CRL Check */}
+                <div className={cn(
+                  'p-3 rounded-lg border text-xs',
+                  quickLookupResult.validation.crlCheckStatus === 'REVOKED'
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                )}>
+                  <div className="flex items-center gap-2">
+                    {quickLookupResult.validation.crlCheckStatus === 'REVOKED'
+                      ? <XCircle className="w-4 h-4 text-red-500" />
+                      : <CheckCircle className="w-4 h-4 text-green-500" />}
+                    <span className="font-semibold">CRL 검사</span>
+                    <span className="text-gray-500 ml-1">({quickLookupResult.validation.crlCheckStatus || 'NOT_CHECKED'})</span>
+                  </div>
+                </div>
+
+                {/* Certificate Info */}
+                <div className="p-3 rounded-lg bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-700 text-xs space-y-1.5">
+                  <div className="font-semibold text-gray-700 dark:text-gray-300 mb-1">인증서 정보</div>
+                  {quickLookupResult.validation.subjectDn && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-500 shrink-0 w-16">Subject:</span>
+                      <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                        {quickLookupResult.validation.subjectDn}
+                      </code>
+                    </div>
+                  )}
+                  {quickLookupResult.validation.issuerDn && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-500 shrink-0 w-16">Issuer:</span>
+                      <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                        {quickLookupResult.validation.issuerDn}
+                      </code>
+                    </div>
+                  )}
+                  {quickLookupResult.validation.fingerprint && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-500 shrink-0 w-16">Fingerprint:</span>
+                      <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                        {quickLookupResult.validation.fingerprint}
+                      </code>
+                    </div>
+                  )}
+                  {quickLookupResult.validation.validatedAt && (
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-500 shrink-0 w-16">검증일시:</span>
+                      <span className="text-gray-600 dark:text-gray-400">{quickLookupResult.validation.validatedAt}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* SOD/DG Note */}
+                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-xs text-blue-700 dark:text-blue-300">
+                  <div className="flex items-start gap-2">
+                    <Zap className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold">간편 검증 모드: </span>
+                      SOD 서명 검증, Data Group 해시 검증은 전체 검증 모드에서만 수행됩니다.
+                      위 결과는 파일 업로드 시 수행된 Trust Chain 검증 결과입니다.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Full Verification Mode */}
+      {verificationMode === 'full' && (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left Column: File Upload */}
         <div className="lg:col-span-1 space-y-4">
@@ -968,6 +1363,55 @@ export function PAVerify() {
                 </div>
               )}
 
+              {/* DG Parsing Results (shown when verification succeeds) */}
+              {result.status === 'VALID' && (dg1ParseResult || dg2ParseResult) && (
+                <div className="mt-3 pt-3 border-t border-white/20">
+                  <div className="flex gap-3">
+                    {/* DG2 Face Image */}
+                    {dg2ParseResult?.success && dg2ParseResult.faceImages?.[0] && (
+                      <div className="shrink-0">
+                        <img
+                          src={dg2ParseResult.faceImages[0].imageDataUrl}
+                          alt="Passport Face"
+                          className="w-20 h-26 object-cover rounded-lg border-2 border-white/40 shadow-md"
+                        />
+                      </div>
+                    )}
+                    {/* DG1 MRZ Data */}
+                    {dg1ParseResult?.success && (
+                      <div className="flex-grow grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                        <div>
+                          <span className="opacity-70">성명</span>
+                          <div className="font-semibold">{dg1ParseResult.fullName}</div>
+                        </div>
+                        <div>
+                          <span className="opacity-70">여권번호</span>
+                          <div className="font-mono font-semibold">{dg1ParseResult.documentNumber}</div>
+                        </div>
+                        <div>
+                          <span className="opacity-70">국적</span>
+                          <div className="font-semibold">{dg1ParseResult.nationality}</div>
+                        </div>
+                        <div>
+                          <span className="opacity-70">생년월일</span>
+                          <div className="font-mono font-semibold">{dg1ParseResult.dateOfBirth}</div>
+                        </div>
+                        <div>
+                          <span className="opacity-70">만료일</span>
+                          <div className="font-mono font-semibold">{dg1ParseResult.dateOfExpiry}</div>
+                        </div>
+                        <div>
+                          <span className="opacity-70">성별</span>
+                          <div className="font-semibold">
+                            {dg1ParseResult.sex === 'M' ? '남성' : dg1ParseResult.sex === 'F' ? '여성' : dg1ParseResult.sex}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Verification ID & Timestamp */}
               <div className="mt-3 pt-2 border-t border-white/20 text-xs flex flex-wrap gap-4 opacity-75">
                 <div>
@@ -1079,37 +1523,8 @@ export function PAVerify() {
                         </div>
                       )}
 
-                      {/* Step 3: CSCA 조회 상세 정보 */}
-                      {step.id === 3 && step.details && step.status === 'success' && (
-                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
-                          <div className="flex items-start gap-2">
-                            <span className="text-gray-500 shrink-0">CSCA DN:</span>
-                            <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
-                              {step.details.dn || ''}
-                            </code>
-                          </div>
-                        </div>
-                      )}
-                      {step.id === 3 && step.status === 'error' && step.details && (
-                        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs space-y-1.5">
-                          {step.details.dscSubject && (
-                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
-                              <span className="text-gray-500 shrink-0">DSC 발급자:</span>
-                              <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
-                                {step.details.dscSubject}
-                              </code>
-                            </div>
-                          )}
-                          {step.details.error && (
-                            <div className="text-red-600 dark:text-red-400">
-                              <span className="font-semibold">원인:</span> {String(step.details.error)}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Step 4: Trust Chain 검증 상세 정보 (성공) */}
-                      {step.id === 4 && step.details && step.status !== 'error' && (
+                      {/* Step 3: Trust Chain 검증 상세 정보 (성공) */}
+                      {step.id === 3 && step.details && step.status !== 'error' && (
                         <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
                           <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Trust Chain 경로:</div>
                           <div className="flex flex-col items-center gap-1">
@@ -1185,8 +1600,8 @@ export function PAVerify() {
                           </div>
                         </div>
                       )}
-                      {/* Step 4: Trust Chain 검증 상세 정보 (실패) */}
-                      {step.id === 4 && step.status === 'error' && step.details && (
+                      {/* Step 3: Trust Chain 검증 상세 정보 (실패) */}
+                      {step.id === 3 && step.status === 'error' && step.details && (
                         <div className="mt-2 space-y-2">
                           {/* 검증 대상 인증서 정보 */}
                           {(step.details.dscSubject || step.details.cscaSubject) && (
@@ -1230,6 +1645,35 @@ export function PAVerify() {
                               </div>
                             </div>
                           </div>
+                        </div>
+                      )}
+
+                      {/* Step 4: CSCA 조회 상세 정보 */}
+                      {step.id === 4 && step.details && step.status === 'success' && (
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
+                          <div className="flex items-start gap-2">
+                            <span className="text-gray-500 shrink-0">CSCA DN:</span>
+                            <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                              {step.details.dn || ''}
+                            </code>
+                          </div>
+                        </div>
+                      )}
+                      {step.id === 4 && step.status === 'error' && step.details && (
+                        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs space-y-1.5">
+                          {step.details.dscSubject && (
+                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                              <span className="text-gray-500 shrink-0">DSC 발급자:</span>
+                              <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                                {step.details.dscSubject}
+                              </code>
+                            </div>
+                          )}
+                          {step.details.error && (
+                            <div className="text-red-600 dark:text-red-400">
+                              <span className="font-semibold">원인:</span> {String(step.details.error)}
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -1370,148 +1814,30 @@ export function PAVerify() {
                         </div>
                       )}
 
-                      {/* Step 8: DG 파싱 */}
-                      {step.id === 8 && (
-                        <div className="space-y-3">
-                          {/* 파싱 진행 중 표시 */}
-                          {(parsingDg1 || parsingDg2) && !dg1ParseResult && !dg2ParseResult && (
-                            <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              <span>DG1/DG2 데이터 파싱 중...</span>
+                      {/* Step 8: DSC 자동 등록 */}
+                      {step.id === 8 && step.details && (
+                        <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-1.5">
+                          {step.details.fingerprint && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400 shrink-0">Fingerprint:</span>
+                              <code className="font-mono text-gray-700 dark:text-gray-300 break-all">{step.details.fingerprint}</code>
                             </div>
                           )}
-
-                          {/* DG Parsing Results Grid */}
-                          {(dg1ParseResult || dg2ParseResult) && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {/* DG2 Face Image */}
-                              {dg2ParseResult && dg2ParseResult.success && (
-                                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600 h-full">
-                                  <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                                    <Image className="w-4 h-4 text-purple-500" />
-                                    DG2 - 얼굴 이미지
-                                  </div>
-                                  {dg2ParseResult.faceImages && dg2ParseResult.faceImages.length > 0 && (
-                                    <div className="flex flex-col items-center">
-                                      <img
-                                        src={dg2ParseResult.faceImages[0].imageDataUrl}
-                                        alt="Passport Face Image"
-                                        className="w-28 h-36 object-cover rounded-lg shadow-md border-2 border-gray-200 dark:border-gray-500"
-                                      />
-                                      <div className="mt-3 w-full grid grid-cols-3 gap-2 text-xs text-center">
-                                        <div className="p-1.5 bg-gray-100 dark:bg-gray-600 rounded">
-                                          <div className="text-gray-500 dark:text-gray-400">포맷</div>
-                                          <div className="font-semibold">{dg2ParseResult.faceImages[0].imageFormat}</div>
-                                        </div>
-                                        <div className="p-1.5 bg-gray-100 dark:bg-gray-600 rounded">
-                                          <div className="text-gray-500 dark:text-gray-400">크기</div>
-                                          <div className="font-semibold">{(dg2ParseResult.faceImages[0].imageSize / 1024).toFixed(1)} KB</div>
-                                        </div>
-                                        <div className="p-1.5 bg-gray-100 dark:bg-gray-600 rounded">
-                                          <div className="text-gray-500 dark:text-gray-400">얼굴 수</div>
-                                          <div className="font-semibold">{dg2ParseResult.faceCount || 1}</div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* DG1 MRZ Data */}
-                              {dg1ParseResult && dg1ParseResult.success && (
-                                <div className="p-3 bg-white dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
-                                  <div className="flex items-center gap-2 mb-2 font-semibold text-sm text-gray-700 dark:text-gray-300">
-                                    <User className="w-4 h-4 text-indigo-500" />
-                                    DG1 - 기계판독영역 (MRZ)
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-2 text-xs">
-                                    <div>
-                                      <span className="text-gray-500">성명</span>
-                                      <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                        {dg1ParseResult.fullName}
-                                      </code>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">여권번호</span>
-                                      <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                        {dg1ParseResult.documentNumber}
-                                      </code>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">국적</span>
-                                      <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                        {dg1ParseResult.nationality}
-                                      </code>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">생년월일</span>
-                                      <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                        {dg1ParseResult.dateOfBirth}
-                                      </code>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">만료일</span>
-                                      <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                        {dg1ParseResult.dateOfExpiry}
-                                      </code>
-                                    </div>
-                                    <div>
-                                      <span className="text-gray-500">성별</span>
-                                      <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                        {dg1ParseResult.sex === 'M' ? '남성' : dg1ParseResult.sex === 'F' ? '여성' : dg1ParseResult.sex}
-                                      </code>
-                                    </div>
-                                    {dg1ParseResult.documentType && (
-                                      <div>
-                                        <span className="text-gray-500">문서유형</span>
-                                        <code className="block font-mono bg-gray-100 dark:bg-gray-600 px-1 py-0.5 rounded mt-0.5">
-                                          {dg1ParseResult.documentType === 'P' ? '여권 (P)' : dg1ParseResult.documentType}
-                                        </code>
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Raw MRZ Toggle */}
-                                  {dg1ParseResult.mrzLine1 && (
-                                    <div className="mt-2">
-                                      <button
-                                        onClick={() => setShowRawMrz(!showRawMrz)}
-                                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                                      >
-                                        <FileText className="w-3 h-3" />
-                                        원본 MRZ 데이터
-                                        {showRawMrz ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                      </button>
-                                      {showRawMrz && (
-                                        <div className="mt-1 font-mono text-xs bg-gray-900 text-green-400 p-2 rounded break-all">
-                                          {dg1ParseResult.mrzLine1}<br/>
-                                          {dg1ParseResult.mrzLine2}
-                                        </div>
-                                      )}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* DG1 파싱 실패 */}
-                              {dg1ParseResult && !dg1ParseResult.success && (
-                                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                                  <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400">
-                                    <XCircle className="w-4 h-4" />
-                                    DG1 파싱 실패: {dg1ParseResult.error}
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* DG2 파싱 실패 */}
-                              {dg2ParseResult && !dg2ParseResult.success && (
-                                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                                  <div className="flex items-center gap-2 text-sm text-red-700 dark:text-red-400">
-                                    <XCircle className="w-4 h-4" />
-                                    DG2 파싱 실패: {dg2ParseResult.error}
-                                  </div>
-                                </div>
-                              )}
+                          {step.details.certificateId && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400 shrink-0">Certificate ID:</span>
+                              <code className="font-mono text-gray-700 dark:text-gray-300">{step.details.certificateId}</code>
+                            </div>
+                          )}
+                          {step.details.countryCode && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400 shrink-0">Country:</span>
+                              <span className="text-gray-700 dark:text-gray-300">{step.details.countryCode}</span>
+                            </div>
+                          )}
+                          {step.details.newlyRegistered === false && (
+                            <div className="text-gray-500 dark:text-gray-400 italic">
+                              이미 Local PKD에 등록된 DSC 인증서입니다.
                             </div>
                           )}
                         </div>
@@ -1525,6 +1851,7 @@ export function PAVerify() {
 
         </div>
       </div>
+      )}
     </div>
   );
 }

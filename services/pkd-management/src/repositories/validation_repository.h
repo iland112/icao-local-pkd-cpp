@@ -57,6 +57,16 @@ public:
     Json::Value findByFingerprint(const std::string& fingerprint);
 
     /**
+     * @brief Find validation by DSC subject DN
+     * @param subjectDn DSC subject DN (slash or comma format)
+     * @return JSON object with validation result (same format as findByFingerprint)
+     *
+     * Queries certificate table for DSC/DSC_NC matching the subject DN,
+     * then joins with validation_result for the latest trust chain result.
+     */
+    Json::Value findBySubjectDn(const std::string& subjectDn);
+
+    /**
      * @brief Find validations by upload ID with pagination
      * @param uploadId Upload UUID
      * @param limit Maximum results

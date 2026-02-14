@@ -51,6 +51,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/certificates/countries$", // Country list for certificate search
     "^/api/certificates/search.*",   // Certificate search with filters
     "^/api/certificates/validation.*", // Certificate validation results (trust chain)
+    "^/api/certificates/pa-lookup$",   // PA lightweight lookup (subject DN / fingerprint)
     "^/api/certificates/export/.*",  // Certificate export endpoints
 
     // ========================================================================

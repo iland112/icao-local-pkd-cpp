@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.10.2** (2026-02-14): Lightweight PA lookup API (POST /api/certificates/pa-lookup) for DSC subject DN or fingerprint-based trust chain query
     - **v2.9.2** (2026-02-13): Full certificate export (DIT-structured ZIP with all LDAP-stored certs, CRLs, MLs)
     - **v2.9.1** (2026-02-13): Certificate source filter, bySource statistics, DB-based search
     - **v2.7.0** (2026-02-12): Individual certificate upload with preview-before-save
@@ -15,7 +16,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.9.2
+  version: 2.10.2
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -511,6 +512,65 @@ paths:
       responses:
         '200':
           description: Validation result
+
+  /api/certificates/pa-lookup:
+    post:
+      tags: [Certificates]
+      summary: Lightweight PA lookup by subject DN or fingerprint
+      description: |
+        Query pre-computed trust chain validation results from the database
+        without requiring SOD/DG file uploads.
+
+        Accepts either `subjectDn` or `fingerprint` to look up the most recent
+        validation result for a DSC certificate. This provides a fast alternative
+        to full PA verification when the DSC has already been validated via file upload.
+
+        **Use cases**:
+        - Quick trust chain status check for a known DSC
+        - Pre-validation screening before full PA verification
+        - Client applications that only have DSC subject DN from passport chip
+
+        **Note**: This endpoint queries PKD Management's `validation_result` table.
+        It does NOT perform real-time certificate validation. Results reflect the
+        most recent upload-time validation.
+      operationId: paLookup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subjectDn:
+                  type: string
+                  description: DSC certificate Subject DN (e.g., "/C=KR/O=Government of Korea/CN=Document Signer 1234")
+                fingerprint:
+                  type: string
+                  description: DSC certificate SHA-256 fingerprint (hex, 64 chars)
+              example:
+                subjectDn: "/C=KR/O=Government of Korea/CN=Document Signer 1234"
+      responses:
+        '200':
+          description: Validation result found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PALookupResponse'
+        '400':
+          description: Missing required parameter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "Either subjectDn or fingerprint parameter is required"
+        '500':
+          description: Internal server error
 
   /api/certificates/export/file:
     get:
@@ -1237,6 +1297,89 @@ components:
           enum: [admin, user]
         active:
           type: boolean
+
+    PALookupResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        validation:
+          type: object
+          nullable: true
+          description: Validation result (null if certificate not found)
+          properties:
+            id:
+              type: string
+              format: uuid
+              description: Validation result ID
+            certificateId:
+              type: string
+              description: Certificate record ID
+            uploadId:
+              type: string
+              format: uuid
+            certificateType:
+              type: string
+              enum: [DSC, DSC_NC]
+            countryCode:
+              type: string
+              description: ISO 3166-1 alpha-2 country code
+            subjectDn:
+              type: string
+              description: DSC Subject DN
+            issuerDn:
+              type: string
+              description: DSC Issuer DN
+            serialNumber:
+              type: string
+            validationStatus:
+              type: string
+              enum: [VALID, EXPIRED_VALID, INVALID, PENDING, ERROR]
+            trustChainValid:
+              type: boolean
+            trustChainMessage:
+              type: string
+            trustChainPath:
+              type: string
+              description: "Human-readable path (e.g., 'DSC → CSCA')"
+            cscaFound:
+              type: boolean
+            cscaSubjectDn:
+              type: string
+            signatureValid:
+              type: boolean
+            signatureAlgorithm:
+              type: string
+            validityPeriodValid:
+              type: boolean
+            notBefore:
+              type: string
+            notAfter:
+              type: string
+            revocationStatus:
+              type: string
+            crlChecked:
+              type: boolean
+            fingerprintSha256:
+              type: string
+              description: DSC SHA-256 fingerprint (hex, 64 chars)
+            validatedAt:
+              type: string
+              format: date-time
+      example:
+        success: true
+        validation:
+          certificateType: "DSC"
+          countryCode: "KR"
+          subjectDn: "/C=KR/O=Government of Korea/CN=Document Signer 1234"
+          validationStatus: "VALID"
+          trustChainValid: true
+          trustChainPath: "DSC → CSCA"
+          cscaFound: true
+          signatureValid: true
+          crlChecked: true
+          revocationStatus: "not_revoked"
+          fingerprintSha256: "a1b2c3d4e5f6..."
 
     IcaoVersion:
       type: object

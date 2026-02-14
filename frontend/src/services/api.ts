@@ -166,6 +166,10 @@ export const paApi = {
 
   parseDG2: (data: string) =>
     api.post('/pa/parse-dg2', { data }),
+
+  /** Lightweight PA lookup by subject DN or fingerprint (no SOD/DG required) */
+  paLookup: (params: { subjectDn?: string; fingerprint?: string }) =>
+    api.post('/certificates/pa-lookup', params),
 };
 
 // =============================================================================

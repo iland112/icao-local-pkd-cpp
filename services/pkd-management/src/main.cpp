@@ -684,17 +684,42 @@ static TrustChain buildTrustChain(X509* dscCert,
         visitedDns.insert(currentIssuerDn);
 
         // Find issuer certificate in CSCA list
+        // ICAO 9303 Part 12: When multiple CSCAs share the same DN (key rollover),
+        // select the one whose public key successfully verifies the current certificate's signature.
         X509* issuer = nullptr;
+        X509* dnMatchFallback = nullptr;  // Fallback: first DN match (if no signature matches)
         for (X509* csca : allCscas) {
             std::string cscaSubjectDn = getCertSubjectDn(csca);
 
             // Case-insensitive DN comparison (RFC 4517)
             if (strcasecmp(currentIssuerDn.c_str(), cscaSubjectDn.c_str()) == 0) {
-                issuer = csca;
-                spdlog::debug("Chain building: Found issuer at depth {}: {}",
-                              depth, cscaSubjectDn.substr(0, 50));
-                break;
+                // DN matches - verify signature to confirm correct key pair
+                EVP_PKEY* cscaPubKey = X509_get_pubkey(csca);
+                if (cscaPubKey) {
+                    int verifyResult = X509_verify(current, cscaPubKey);
+                    EVP_PKEY_free(cscaPubKey);
+                    if (verifyResult == 1) {
+                        issuer = csca;
+                        spdlog::debug("Chain building: Found issuer at depth {} (signature verified): {}",
+                                      depth, cscaSubjectDn.substr(0, 50));
+                        break;
+                    } else {
+                        spdlog::debug("Chain building: DN match but signature failed at depth {}: {}",
+                                      depth, cscaSubjectDn.substr(0, 50));
+                        if (!dnMatchFallback) dnMatchFallback = csca;
+                    }
+                } else {
+                    spdlog::warn("Chain building: Failed to extract public key from CSCA: {}",
+                                 cscaSubjectDn.substr(0, 50));
+                    if (!dnMatchFallback) dnMatchFallback = csca;
+                }
             }
+        }
+        // If no signature-verified match found, use DN-only match for error reporting
+        if (!issuer && dnMatchFallback) {
+            spdlog::warn("Chain building: No signature-verified CSCA found at depth {}, "
+                         "using DN match fallback for chain path reporting", depth);
+            issuer = dnMatchFallback;
         }
 
         if (!issuer) {
@@ -6619,6 +6644,61 @@ paths:
             }
         },
         {drogon::Get}
+    );
+
+    // POST /api/certificates/pa-lookup - Lightweight PA lookup by subject DN or fingerprint
+    app.registerHandler(
+        "/api/certificates/pa-lookup",
+        [&](const drogon::HttpRequestPtr& req,
+            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            try {
+                auto jsonBody = req->getJsonObject();
+                if (!jsonBody) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "JSON body is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                std::string subjectDn = (*jsonBody).get("subjectDn", "").asString();
+                std::string fingerprint = (*jsonBody).get("fingerprint", "").asString();
+
+                if (subjectDn.empty() && fingerprint.empty()) {
+                    Json::Value error;
+                    error["success"] = false;
+                    error["error"] = "Either subjectDn or fingerprint parameter is required";
+                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                    resp->setStatusCode(drogon::k400BadRequest);
+                    callback(resp);
+                    return;
+                }
+
+                Json::Value response;
+                if (!subjectDn.empty()) {
+                    spdlog::info("POST /api/certificates/pa-lookup - subjectDn: {}", subjectDn.substr(0, 60));
+                    response = validationService->getValidationBySubjectDn(subjectDn);
+                } else {
+                    spdlog::info("POST /api/certificates/pa-lookup - fingerprint: {}", fingerprint.substr(0, 16));
+                    response = validationService->getValidationByFingerprint(fingerprint);
+                }
+
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+                callback(resp);
+
+            } catch (const std::exception& e) {
+                spdlog::error("PA lookup error: {}", e.what());
+                Json::Value error;
+                error["success"] = false;
+                error["error"] = e.what();
+                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+                resp->setStatusCode(drogon::k500InternalServerError);
+                callback(resp);
+            }
+        },
+        {drogon::Post}
     );
 
     // GET /api/certificates/export/file - Export single certificate file

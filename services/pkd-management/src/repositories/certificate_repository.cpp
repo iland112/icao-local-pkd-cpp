@@ -528,6 +528,7 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
         std::string org = extractDnAttribute(subjectDn, "O");
 
         // Build query using component-based matching
+        // ORDER BY created_at DESC: prefer newest CSCA first (most likely to match current DSCs)
         std::string query = "SELECT certificate_data, subject_dn FROM certificate "
                            "WHERE certificate_type = 'CSCA'";
 
@@ -542,6 +543,8 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
             std::string escaped = escapeSingleQuotes(org);
             query += " AND LOWER(subject_dn) LIKE '%o=" + escaped + "%'";
         }
+
+        query += " ORDER BY created_at DESC";
 
         Json::Value rows = queryExecutor_->executeQuery(query);
 

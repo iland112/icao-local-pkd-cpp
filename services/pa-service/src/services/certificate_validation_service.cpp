@@ -6,6 +6,7 @@
 #include "certificate_validation_service.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
+#include <cstring>
 #include <openssl/err.h>
 #include <openssl/bn.h>
 
@@ -97,8 +98,53 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         result.countryCode = effectiveCountry;
 
         // Find CSCA certificate
-        X509* cscaCert = certRepo_->findCscaByIssuerDn(result.dscIssuer, effectiveCountry);
+        // ICAO 9303 Part 12: When multiple CSCAs share the same DN (key rollover),
+        // try all candidates and select the one whose signature verifies.
+        std::vector<X509*> allCscas = certRepo_->findAllCscasByCountry(effectiveCountry);
+        if (allCscas.empty()) {
+            result.valid = false;
+            result.validationErrors = "CSCA not found for issuer: " + result.dscIssuer;
+            result.expirationStatus = "INVALID";
+            return result;
+        }
+
+        std::string dscIssuerDn = result.dscIssuer;
+
+        // Try each CSCA: match by DN, then verify signature
+        X509* cscaCert = nullptr;
+        for (X509* candidate : allCscas) {
+            std::string candidateSubject = getSubjectDn(candidate);
+            // Case-insensitive DN comparison
+            if (strcasecmp(dscIssuerDn.c_str(), candidateSubject.c_str()) == 0) {
+                // DN matches - verify signature to confirm correct key pair
+                if (verifyCertificateSignature(dscCert, candidate)) {
+                    cscaCert = candidate;
+                    spdlog::debug("PA chain validation: Found signature-verified CSCA: {}",
+                                  candidateSubject.substr(0, 50));
+                    break;
+                } else {
+                    spdlog::debug("PA chain validation: DN match but signature failed: {}",
+                                  candidateSubject.substr(0, 50));
+                }
+            }
+        }
+
+        // Fallback: if no signature-verified match, try DN-only match
         if (!cscaCert) {
+            for (X509* candidate : allCscas) {
+                std::string candidateSubject = getSubjectDn(candidate);
+                if (strcasecmp(dscIssuerDn.c_str(), candidateSubject.c_str()) == 0) {
+                    cscaCert = candidate;
+                    spdlog::warn("PA chain validation: Using DN-only match (no signature verified): {}",
+                                 candidateSubject.substr(0, 50));
+                    break;
+                }
+            }
+        }
+
+        if (!cscaCert) {
+            // Free all candidates
+            for (X509* c : allCscas) X509_free(c);
             result.valid = false;
             result.validationErrors = "CSCA not found for issuer: " + result.dscIssuer;
             result.expirationStatus = "INVALID";
@@ -114,7 +160,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
 
         result.cscaExpired = isCertificateExpired(cscaCert);
 
-        // Verify signature
+        // Verify signature (may already be verified above, but re-check for consistency)
         result.signatureVerified = verifyCertificateSignature(dscCert, cscaCert);
 
         // Check CRL (ICAO Doc 9303 Part 11 - Certificate Revocation)
@@ -178,7 +224,8 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         result.trustChainPath = "DSC → " + result.cscaSubject.substr(0, 50);
         result.trustChainDepth = 2;
 
-        X509_free(cscaCert);
+        // Free all CSCA candidates (including the selected one)
+        for (X509* c : allCscas) X509_free(c);
 
     } catch (const std::exception& e) {
         spdlog::error("Certificate chain validation failed: {}", e.what());

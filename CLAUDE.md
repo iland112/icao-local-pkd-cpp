@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.10.1
+**Current Version**: v2.10.2
 **Last Updated**: 2026-02-14
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -127,6 +127,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Certificate validation (Trust Chain, CRL, Link Certificates)
 - LDAP integration (MMR cluster, Software Load Balancing)
 - Passive Authentication verification (ICAO 9303 Part 10 & 11)
+- Lightweight PA lookup: DSC subject DN or fingerprint → pre-computed trust chain result (no SOD/DG upload)
 - DSC auto-registration from PA verification (source_type='PA_EXTRACTED')
 - DB-LDAP sync monitoring with auto-reconciliation
 - Certificate search & export (country/type/status/source filters, full DIT-structured ZIP)
@@ -181,10 +182,11 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/upload/{id}/ldif-structure` - LDIF/ASN.1 structure
 - `GET /api/progress/{id}` - Upload progress SSE stream
 
-**Certificate Search**:
+**Certificate Search & Validation**:
 - `GET /api/certificates/countries` - Country list
 - `GET /api/certificates/search` - Certificate search (filters: country, type, status)
 - `GET /api/certificates/validation` - Validation result by fingerprint
+- `POST /api/certificates/pa-lookup` - Lightweight PA lookup by subject DN or fingerprint
 - `GET /api/certificates/export/{format}` - Certificate export
 - `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
@@ -231,7 +233,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
+- **Public**: Health checks, Dashboard statistics, Certificate search, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
 - **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion
 
 ---
@@ -473,6 +475,18 @@ scripts/
 ---
 
 ## Version History
+
+### v2.10.2 (2026-02-14) - Lightweight PA Lookup API + PA Trust Chain Multi-CSCA Fix
+- Lightweight PA lookup: `POST /api/certificates/pa-lookup` for DSC subject DN or fingerprint-based trust chain query
+- Pre-computed validation result retrieval from DB (5~20ms response, no SOD/DG file upload required)
+- Case-insensitive subject DN matching (`LOWER()`) with PostgreSQL + Oracle support
+- `findBySubjectDn()` in ValidationRepository, `getValidationBySubjectDn()` in ValidationService
+- Public endpoint (no JWT required)
+- PA Service: Multi-CSCA candidate selection with signature verification (ICAO 9303 key rollover support)
+- PA Service: `findAllCscasByCountry()` replaces single-result `findCscaByIssuerDn()` for correct CSCA selection
+- Frontend: PA Verify page "간편 검증" mode toggle (Subject DN / Fingerprint quick lookup)
+- Frontend: `dscAutoRegistration.duplicate` → `newlyRegistered` type alignment with backend response
+- OpenAPI spec updated (v2.10.2), PA Developer Guide updated (v2.1.3)
 
 ### v2.10.1 (2026-02-14) - Validation Reason Tracking + Upload UX Improvements + PA CRL Date Fix
 - Validation reason tracking: `validationReasons` map in SSE statistics (reason string → count per status)

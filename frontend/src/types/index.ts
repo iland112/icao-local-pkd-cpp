@@ -301,6 +301,13 @@ export interface PAVerificationResponse {
   dataGroupValidation: DataGroupValidationDto;
   processingDurationMs: number;
   errors: PAError[];
+  dscAutoRegistration?: {
+    registered: boolean;
+    newlyRegistered: boolean;
+    certificateId: string;
+    fingerprint: string;
+    countryCode: string;
+  };
 }
 
 export interface CertificateChainValidationDto {

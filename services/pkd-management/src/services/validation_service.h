@@ -176,6 +176,14 @@ public:
     Json::Value getValidationByFingerprint(const std::string& fingerprint);
 
     /**
+     * @brief Get validation result by DSC subject DN
+     *
+     * @param subjectDn DSC subject DN
+     * @return Json::Value Validation result from database
+     */
+    Json::Value getValidationBySubjectDn(const std::string& subjectDn);
+
+    /**
      * @brief Get validation results for an upload (paginated)
      *
      * @param uploadId Upload UUID
