@@ -1,3 +1,7 @@
+/**
+ * @file http_client.h
+ * @brief HTTP client for fetching external resources
+ */
 #pragma once
 
 #include <string>

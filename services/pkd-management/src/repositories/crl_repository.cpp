@@ -1,3 +1,7 @@
+/** @file crl_repository.cpp
+ *  @brief CrlRepository implementation
+ */
+
 #include "crl_repository.h"
 #include <spdlog/spdlog.h>
 #include <sstream>
@@ -168,9 +172,7 @@ std::string CrlRepository::generateUuid() {
     return ss.str();
 }
 
-// ============================================================================
-// Bulk Export (All LDAP-stored CRLs)
-// ============================================================================
+// --- Bulk Export (All LDAP-stored CRLs) ---
 
 Json::Value CrlRepository::findAllForExport() {
     std::string dbType = queryExecutor_->getDatabaseType();

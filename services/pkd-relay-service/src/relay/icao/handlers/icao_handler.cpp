@@ -1,3 +1,7 @@
+/**
+ * @file icao_handler.cpp
+ * @brief ICAO handler implementation
+ */
 #include "icao_handler.h"
 #include <spdlog/spdlog.h>
 #include <json/json.h>

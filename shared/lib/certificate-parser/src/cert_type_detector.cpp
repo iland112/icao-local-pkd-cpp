@@ -1,3 +1,8 @@
+/**
+ * @file cert_type_detector.cpp
+ * @brief Implementation of ICAO PKD certificate type detector
+ */
+
 #include "cert_type_detector.h"
 #include <openssl/evp.h>
 #include <openssl/bio.h>

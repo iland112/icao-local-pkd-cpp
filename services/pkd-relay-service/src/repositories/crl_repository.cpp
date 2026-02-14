@@ -1,3 +1,7 @@
+/**
+ * @file crl_repository.cpp
+ * @brief CRL repository implementation
+ */
 #include "crl_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>

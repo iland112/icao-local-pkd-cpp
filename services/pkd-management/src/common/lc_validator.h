@@ -2,14 +2,9 @@
  * @file lc_validator.h
  * @brief Link Certificate (LC) trust chain validation
  *
- * Sprint 2: Link Certificate Validation Core
- * Implements ICAO Doc 9303 Part 12 Link Certificate validation
- *
+ * Implements ICAO Doc 9303 Part 12 Link Certificate validation.
  * Link Certificates bridge CSCA key transitions:
- * Trust Chain: CSCA (old) → LC → CSCA (new)
- *
- * @version 1.0.0
- * @date 2026-01-24
+ * Trust Chain: CSCA (old) -> LC -> CSCA (new)
  */
 
 #pragma once

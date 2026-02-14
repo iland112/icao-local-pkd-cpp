@@ -1,3 +1,7 @@
+/**
+ * @file reconciliation_service.cpp
+ * @brief Reconciliation service implementation
+ */
 #include "reconciliation_service.h"
 #include <spdlog/spdlog.h>
 #include <chrono>

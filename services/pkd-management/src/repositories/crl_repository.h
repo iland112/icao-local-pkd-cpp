@@ -12,7 +12,6 @@
  *
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Phase 6.4: Extracted from main.cpp inline SQL
  * @date 2026-02-11
  */
 

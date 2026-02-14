@@ -5,7 +5,7 @@
  * Clean Architecture: Infrastructure Layer
  * Handles LDAP operations and transforms data into domain entities.
  *
- * v2.4.3: Migrated to use LdapConnectionPool for thread-safe connection management
+ * Migrated to use LdapConnectionPool for thread-safe connection management.
  */
 
 #include "ldap_certificate_repository.h"
@@ -27,9 +27,7 @@
 
 namespace repositories {
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 LdapCertificateRepository::LdapCertificateRepository(
     common::LdapConnectionPool* ldapPool,
@@ -44,9 +42,7 @@ LdapCertificateRepository::LdapCertificateRepository(
     spdlog::info("[LdapCertificateRepository] Initialized with connection pool (baseDn={})", baseDn_);
 }
 
-// ============================================================================
-// Public Interface Methods
-// ============================================================================
+// --- Public Interface Methods ---
 
 domain::models::CertificateSearchResult LdapCertificateRepository::search(
     const domain::models::CertificateSearchCriteria& criteria
@@ -84,7 +80,7 @@ domain::models::CertificateSearchResult LdapCertificateRepository::search(
     // Execute LDAP search
     LDAPMessage* result = nullptr;
     int rc = ldap_search_ext_s(
-        conn.get(),  // v2.4.3: Use connection from pool
+        conn.get(),  // Use connection from pool
         baseDn.c_str(),
         LDAP_SCOPE_SUBTREE,
         filter.c_str(),
@@ -243,7 +239,7 @@ domain::models::Certificate LdapCertificateRepository::getByDn(const std::string
     // Search for specific DN (base search)
     LDAPMessage* result = nullptr;
     int rc = ldap_search_ext_s(
-        conn.get(),  // v2.4.3: Use connection from pool
+        conn.get(),  // Use connection from pool
         dn.c_str(),
         LDAP_SCOPE_BASE,
         "(objectClass=*)",
@@ -298,7 +294,7 @@ std::vector<uint8_t> LdapCertificateRepository::getCertificateBinary(const std::
     // Search for specific DN
     LDAPMessage* result = nullptr;
     int rc = ldap_search_ext_s(
-        conn.get(),  // v2.4.3: Use connection from pool
+        conn.get(),  // Use connection from pool
         dn.c_str(),
         LDAP_SCOPE_BASE,
         "(objectClass=*)",
@@ -371,7 +367,7 @@ std::vector<std::string> LdapCertificateRepository::getDnsByCountryAndType(
     // Execute LDAP search
     LDAPMessage* result = nullptr;
     int rc = ldap_search_ext_s(
-        conn.get(),  // v2.4.3: Use connection from pool
+        conn.get(),  // Use connection from pool
         baseDn.c_str(),
         LDAP_SCOPE_SUBTREE,
         filter.c_str(),
@@ -414,9 +410,7 @@ std::vector<std::string> LdapCertificateRepository::getDnsByCountryAndType(
     return dns;
 }
 
-// ============================================================================
-// Private Helper Methods - Search Filter & Base DN
-// ============================================================================
+// --- Private Helper Methods - Search Filter & Base DN ---
 
 std::string LdapCertificateRepository::buildSearchFilter(
     const domain::models::CertificateSearchCriteria& criteria
@@ -503,9 +497,7 @@ std::string LdapCertificateRepository::getSearchBaseDn(
     return baseDn;
 }
 
-// ============================================================================
-// Private Helper Methods - LDAP Entry Parsing
-// ============================================================================
+// --- Private Helper Methods - LDAP Entry Parsing ---
 
 domain::models::Certificate LdapCertificateRepository::parseEntry(
     LDAP* ldap,
@@ -531,7 +523,7 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
         throw std::runtime_error("No certificate binary data found in entry: " + dn);
     }
 
-    // Parse X.509 certificate (including metadata - v2.3.0)
+    // Parse X.509 certificate (including metadata)
     std::string subjectDn, issuerDn, fingerprint;
     std::chrono::system_clock::time_point validFrom, validTo;
 
@@ -616,7 +608,7 @@ domain::models::Certificate LdapCertificateRepository::parseEntry(
             pkdVersion.has_value() ? "YES" : "NO");
     }
 
-    // Create Certificate entity (with X.509 metadata - v2.3.0)
+    // Create Certificate entity (with X.509 metadata)
     return domain::models::Certificate(
         dn,
         cn,
@@ -717,7 +709,7 @@ void LdapCertificateRepository::parseX509Certificate(
     std::string& fingerprint,
     std::chrono::system_clock::time_point& validFrom,
     std::chrono::system_clock::time_point& validTo,
-    // X.509 Metadata (v2.3.0)
+    // X.509 Metadata
     int& version,
     std::optional<std::string>& signatureAlgorithm,
     std::optional<std::string>& signatureHashAlgorithm,
@@ -847,7 +839,7 @@ void LdapCertificateRepository::parseX509Certificate(
         validTo = std::chrono::system_clock::from_time_t(t);
     }
 
-    // Extract X.509 metadata (v2.3.0)
+    // Extract X.509 metadata
     try {
         auto metadata = x509::extractMetadata(cert);
 
@@ -882,9 +874,7 @@ void LdapCertificateRepository::parseX509Certificate(
     X509_free(cert);
 }
 
-// ============================================================================
-// Private Helper Methods - LDAP Attribute Access
-// ============================================================================
+// --- Private Helper Methods - LDAP Attribute Access ---
 
 std::string LdapCertificateRepository::getAttributeValue(LDAP* ldap, LDAPMessage* entry, const char* attrName) {
     BerElement* ber = nullptr;

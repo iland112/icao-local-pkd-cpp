@@ -17,33 +17,75 @@
 
 namespace services {
 
+/**
+ * @brief Certificate chain validation service (DSC to CSCA trust chain)
+ *
+ * Validates DSC certificates against CSCA certificates retrieved from LDAP,
+ * performs CRL revocation checking, and builds trust chains per ICAO 9303.
+ */
 class CertificateValidationService {
 private:
     repositories::LdapCertificateRepository* certRepo_;
     repositories::LdapCrlRepository* crlRepo_;
 
 public:
+    /**
+     * @brief Constructor with repository dependencies
+     * @param certRepo LDAP certificate repository for CSCA/DSC lookup
+     * @param crlRepo LDAP CRL repository for revocation checking
+     * @throws std::invalid_argument if any dependency is nullptr
+     */
     CertificateValidationService(
         repositories::LdapCertificateRepository* certRepo,
         repositories::LdapCrlRepository* crlRepo
     );
+
+    /** @brief Destructor */
     ~CertificateValidationService() = default;
 
-    // Main validation method
+    /**
+     * @brief Validate DSC certificate chain against CSCA (ICAO 9303)
+     * @param dscCert DSC X509 certificate extracted from SOD
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @return CertificateChainValidation result with trust chain details
+     */
     domain::models::CertificateChainValidation validateCertificateChain(
         X509* dscCert,
         const std::string& countryCode
     );
 
-    // Certificate operations
+    /**
+     * @brief Verify certificate signature against issuer public key
+     * @param cert Certificate to verify
+     * @param issuerCert Issuer certificate containing the public key
+     * @return true if signature is valid
+     */
     bool verifyCertificateSignature(X509* cert, X509* issuerCert);
+
+    /**
+     * @brief Check if certificate has expired
+     * @param cert X509 certificate to check
+     * @return true if certificate notAfter is in the past
+     */
     bool isCertificateExpired(X509* cert);
 
-    // CRL checking
+    /**
+     * @brief Check CRL revocation status for a certificate
+     * @param cert Certificate to check
+     * @param countryCode Country code for CRL lookup
+     * @param[out] crlThisUpdate CRL issued date (ISO 8601)
+     * @param[out] crlNextUpdate CRL next update date (ISO 8601)
+     * @return CrlStatus indicating revocation check result
+     */
     domain::models::CrlStatus checkCrlStatus(X509* cert, const std::string& countryCode,
         std::string& crlThisUpdate, std::string& crlNextUpdate);
 
-    // Trust chain building
+    /**
+     * @brief Build trust chain from DSC to root CSCA
+     * @param dscCert DSC certificate (start of chain)
+     * @param countryCode Country code for CSCA lookup
+     * @return Vector of X509* certificates in chain order (caller must free)
+     */
     std::vector<X509*> buildTrustChain(X509* dscCert, const std::string& countryCode);
 
 private:

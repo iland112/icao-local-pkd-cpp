@@ -1,3 +1,8 @@
+/**
+ * @file oracle_query_executor.cpp
+ * @brief Oracle Query Executor implementation using OCI and OTL
+ */
+
 // Suppress OTL library warnings (third-party code)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wstringop-truncation"
@@ -19,9 +24,7 @@ static std::mutex g_ociConnectionMutex;
 
 namespace common {
 
-// ============================================================================
-// Constructor & Destructor
-// ============================================================================
+// --- Constructor & Destructor ---
 
 OracleQueryExecutor::OracleQueryExecutor(OracleConnectionPool* pool)
     : pool_(pool), ociEnv_(nullptr), ociErr_(nullptr),
@@ -69,9 +72,7 @@ OracleQueryExecutor::~OracleQueryExecutor()
     cleanupOCI();
 }
 
-// ============================================================================
-// Public Interface Implementation
-// ============================================================================
+// --- Public Interface Implementation ---
 
 Json::Value OracleQueryExecutor::executeQuery(
     const std::string& query,
@@ -589,9 +590,7 @@ Json::Value OracleQueryExecutor::executeScalar(
     return firstRow[members[0]];
 }
 
-// ============================================================================
-// Private Implementation
-// ============================================================================
+// --- Private Implementation ---
 
 std::string OracleQueryExecutor::convertPlaceholders(const std::string& query)
 {
@@ -708,9 +707,7 @@ Json::Value OracleQueryExecutor::otlStreamToJson(otl_stream& otlStream)
 //     return Json::nullValue;
 // }
 
-// ============================================================================
-// OCI Thread-Safe Connection Management (Per-Query)
-// ============================================================================
+// --- OCI Thread-Safe Connection Management (Per-Query) ---
 
 void OracleQueryExecutor::createOciConnection(OciConnection& conn)
 {
@@ -913,9 +910,7 @@ void OracleQueryExecutor::freeOciHandles(OciConnection& conn)
     }
 }
 
-// ============================================================================
-// OCI Implementation (Legacy - for executeQueryWithOCI)
-// ============================================================================
+// --- OCI Implementation (Legacy - for executeQueryWithOCI) ---
 
 void OracleQueryExecutor::initializeOCI()
 {
@@ -1085,9 +1080,7 @@ void OracleQueryExecutor::cleanupOCI()
     spdlog::debug("[OracleQueryExecutor] OCI connection and handles cleaned up");
 }
 
-// ============================================================================
-// OCI Session Pool Implementation (High-Performance Connection Reuse)
-// ============================================================================
+// --- OCI Session Pool Implementation (High-Performance Connection Reuse) ---
 
 void OracleQueryExecutor::initializeSessionPool()
 {
@@ -1273,9 +1266,7 @@ void OracleQueryExecutor::releasePooledSession(PooledSession& session)
     }
 }
 
-// ============================================================================
-// Legacy OCI Query Implementation
-// ============================================================================
+// --- Legacy OCI Query Implementation ---
 
 Json::Value OracleQueryExecutor::executeQueryWithOCI(
     const std::string& query,

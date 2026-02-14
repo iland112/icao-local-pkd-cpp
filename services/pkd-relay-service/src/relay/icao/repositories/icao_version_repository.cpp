@@ -1,3 +1,7 @@
+/**
+ * @file icao_version_repository.cpp
+ * @brief ICAO version repository implementation
+ */
 #include "icao_version_repository.h"
 
 namespace icao {
@@ -338,7 +342,7 @@ std::vector<icao::relay::icao_module::domain::models::IcaoVersion> IcaoVersionRe
     return versions;
 }
 
-// Private helper methods
+// --- Private helper methods ---
 
 icao::relay::icao_module::domain::models::IcaoVersion IcaoVersionRepository::resultToVersion(PGresult* res, int row) {
     icao::relay::icao_module::domain::models::IcaoVersion version;

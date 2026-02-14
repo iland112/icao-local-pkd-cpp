@@ -1,3 +1,7 @@
+/**
+ * @file reconciliation_engine.cpp
+ * @brief Reconciliation engine implementation
+ */
 #include "reconciliation_engine.h"
 #include <spdlog/spdlog.h>
 #include <chrono>
@@ -5,7 +9,11 @@
 namespace icao {
 namespace relay {
 
-// Helper: Oracle returns all values as strings, so .asInt() fails.
+/**
+ * @brief Parse JSON value to integer with type-safe conversion
+ *
+ * Oracle returns all values as strings, so .asInt() fails.
+ */
 static int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0) {
     if (!json.isMember(field) || json[field].isNull()) return defaultValue;
     const auto& v = json[field];
@@ -19,7 +27,6 @@ static int getInt(const Json::Value& json, const std::string& field, int default
     return defaultValue;
 }
 
-// Phase 6.4: Constructor now accepts IQueryExecutor* for database-agnostic operation
 ReconciliationEngine::ReconciliationEngine(
     const Config& config,
     common::LdapConnectionPool* ldapPool,
@@ -38,7 +45,7 @@ ReconciliationEngine::ReconciliationEngine(
     dbType_ = queryExecutor_->getDatabaseType();
 }
 
-// Helper: Get database-specific boolean literal for SQL WHERE clauses
+/** @brief Get database-specific boolean literal for SQL WHERE clauses */
 std::string ReconciliationEngine::boolLiteral(bool value) const {
     if (dbType_ == "oracle") {
         return value ? "1" : "0";
@@ -46,8 +53,11 @@ std::string ReconciliationEngine::boolLiteral(bool value) const {
     return value ? "TRUE" : "FALSE";
 }
 
-// Helper: Parse hex-encoded binary data (\x414243... format)
-// Both PostgreSQL bytea and Oracle BLOB (via OracleQueryExecutor) use this format
+/**
+ * @brief Parse hex-encoded binary data (\x414243... format)
+ *
+ * Both PostgreSQL bytea and Oracle BLOB (via OracleQueryExecutor) use this format.
+ */
 std::vector<unsigned char> ReconciliationEngine::parseHexBinary(const std::string& hexStr) {
     std::vector<unsigned char> result;
 
@@ -72,7 +82,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
     std::vector<CertificateInfo> result;
 
     try {
-        // Phase 6.4: Use database-specific boolean literal for stored_in_ldap filter
+        // Use database-specific boolean literal for stored_in_ldap filter
         std::string query =
             "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
             "fingerprint_sha256, certificate_data, is_self_signed "
@@ -338,7 +348,7 @@ std::string ReconciliationEngine::createReconciliationSummary(
     int syncStatusId) const {
 
     try {
-        // Phase 6.4: Generate ID using database-specific sequence (same pattern as ReconciliationRepository)
+        // Generate ID using database-specific sequence (same pattern as ReconciliationRepository)
         std::string idQuery;
         if (dbType_ == "postgres") {
             idQuery = "SELECT nextval('reconciliation_summary_id_seq') as id";
@@ -469,14 +479,14 @@ void ReconciliationEngine::logReconciliationOperation(
     }
 }
 
-// v2.0.5: Find CRLs missing in LDAP
+/** @brief Find CRLs in DB that are missing from LDAP */
 std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
     int limit) const {
 
     std::vector<CrlInfo> result;
 
     try {
-        // Phase 6.4: Use database-specific boolean literal
+        // Use database-specific boolean literal
         std::string query =
             "SELECT id, country_code, issuer_dn, fingerprint_sha256, crl_binary "
             "FROM crl "
@@ -570,7 +580,7 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
     return result;
 }
 
-// v2.0.5: Process CRLs
+/** @brief Process CRLs for reconciliation */
 void ReconciliationEngine::processCrls(
     LDAP* ld,
     bool dryRun,

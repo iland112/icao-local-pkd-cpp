@@ -19,9 +19,7 @@
 
 namespace common {
 
-// =============================================================================
-// OracleConnection Implementation
-// =============================================================================
+// --- OracleConnection Implementation ---
 
 OracleConnection::OracleConnection(void* conn, OracleConnectionPool* pool)
     : conn_(conn), pool_(pool), released_(false) {}
@@ -91,9 +89,7 @@ void OracleConnection::release() {
     }
 }
 
-// =============================================================================
-// OracleConnectionPool Implementation
-// =============================================================================
+// --- OracleConnectionPool Implementation ---
 
 OracleConnectionPool::OracleConnectionPool(
     const std::string& connString,

@@ -1,3 +1,7 @@
+/**
+ * @file email_sender.cpp
+ * @brief Email sender implementation
+ */
 #include "email_sender.h"
 #include <spdlog/spdlog.h>
 #include <sstream>

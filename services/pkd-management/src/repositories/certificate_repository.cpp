@@ -1,3 +1,7 @@
+/** @file certificate_repository.cpp
+ *  @brief CertificateRepository implementation
+ */
+
 #include "certificate_repository.h"
 #include "../common/x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
@@ -13,7 +17,7 @@
 
 namespace repositories {
 
-// Thread-local UUID generator (same pattern as CrlRepository)
+/** @brief Thread-local UUID v4 generator */
 static std::string generateUuid() {
     static thread_local std::random_device rd;
     static thread_local std::mt19937_64 gen(rd());
@@ -36,11 +40,15 @@ static std::string generateUuid() {
     return ss.str();
 }
 
-// Convert certificate date to Oracle-safe ISO 8601 format (no timezone suffix)
-// Handles two input formats:
-//   1. ASN1_TIME_print: "Jan 15 10:30:00 2024 GMT" → "2024-01-15 10:30:00"
-//   2. ISO with TZ:     "2024-04-15 15:00:00+00"   → "2024-04-15 15:00:00"
-// Oracle TO_TIMESTAMP expects exactly 'YYYY-MM-DD HH24:MI:SS' (19 chars)
+/**
+ * @brief Convert certificate date to Oracle-safe ISO 8601 format (no timezone suffix)
+ *
+ * Handles two input formats:
+ *   1. ASN1_TIME_print: "Jan 15 10:30:00 2024 GMT" -> "2024-01-15 10:30:00"
+ *   2. ISO with TZ:     "2024-04-15 15:00:00+00"   -> "2024-04-15 15:00:00"
+ *
+ * Oracle TO_TIMESTAMP expects exactly 'YYYY-MM-DD HH24:MI:SS' (19 chars).
+ */
 static std::string convertDateToIso(const std::string& opensslDate) {
     if (opensslDate.empty()) return "";
 
@@ -92,7 +100,7 @@ CertificateRepository::CertificateRepository(common::IQueryExecutor* queryExecut
         queryExecutor_->getDatabaseType());
 }
 
-/// --- Search Operations ---
+// --- Search Operations ---
 
 Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
 {
@@ -343,7 +351,7 @@ Json::Value CertificateRepository::findBySubjectDn(
     return response;
 }
 
-/// --- Certificate Counts ---
+// --- Certificate Counts ---
 
 int CertificateRepository::countByType(const std::string& certType)
 {
@@ -394,7 +402,7 @@ int CertificateRepository::countByCountry(const std::string& countryCode)
     }
 }
 
-/// --- LDAP Storage Tracking ---
+// --- LDAP Storage Tracking ---
 
 Json::Value CertificateRepository::findNotStoredInLdap(int limit)
 {
@@ -426,7 +434,7 @@ bool CertificateRepository::markStoredInLdap(const std::string& fingerprint)
     }
 }
 
-/// --- X509 Certificate Retrieval (for Validation) ---
+// --- X509 Certificate Retrieval (for Validation) ---
 
 X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
 {
@@ -623,9 +631,9 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
     }
 }
 
-/// --- Private Helper Methods ---
+// --- Private Helper Methods ---
 
-/// --- DN Normalization Helpers ---
+// --- DN Normalization Helpers ---
 
 std::string CertificateRepository::extractDnAttribute(const std::string& dn, const std::string& attr)
 {
@@ -806,7 +814,7 @@ X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexD
     return cert;
 }
 
-/// --- Duplicate Certificate Tracking ---
+// --- Duplicate Certificate Tracking ---
 
 std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
     try {
@@ -873,7 +881,7 @@ bool CertificateRepository::saveDuplicate(const std::string& uploadId,
     }
 }
 
-/// --- Certificate Insert & Duplicate Tracking ---
+// --- Certificate Insert & Duplicate Tracking ---
 
 bool CertificateRepository::updateCertificateLdapStatus(
     const std::string& certificateId,
@@ -1272,7 +1280,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
     }
 }
 
-/// --- LDAP Status Count by Upload ID ---
+// --- LDAP Status Count by Upload ID ---
 
 void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap) {
     std::string dbType = queryExecutor_->getDatabaseType();
@@ -1298,7 +1306,7 @@ void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadI
     }
 }
 
-/// --- Distinct Countries ---
+// --- Distinct Countries ---
 
 Json::Value CertificateRepository::getDistinctCountries() {
     std::string query = "SELECT DISTINCT country_code FROM certificate "
@@ -1308,7 +1316,7 @@ Json::Value CertificateRepository::getDistinctCountries() {
     return queryExecutor_->executeQuery(query);
 }
 
-/// --- Link Certificate Search ---
+// --- Link Certificate Search ---
 
 Json::Value CertificateRepository::searchLinkCertificates(
     const std::string& countryFilter,
@@ -1356,7 +1364,7 @@ Json::Value CertificateRepository::searchLinkCertificates(
     return queryExecutor_->executeQuery(sql.str(), paramValues);
 }
 
-/// --- Link Certificate Detail by ID ---
+// --- Link Certificate Detail by ID ---
 
 Json::Value CertificateRepository::findLinkCertificateById(const std::string& id) {
     std::string query =
@@ -1379,7 +1387,7 @@ Json::Value CertificateRepository::findLinkCertificateById(const std::string& id
     return rows[0];
 }
 
-/// --- Bulk Export (All LDAP-stored certificates) ---
+// --- Bulk Export (All LDAP-stored certificates) ---
 
 Json::Value CertificateRepository::findAllForExport() {
     std::string dbType = queryExecutor_->getDatabaseType();

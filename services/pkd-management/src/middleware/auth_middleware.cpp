@@ -1,3 +1,7 @@
+/** @file auth_middleware.cpp
+ *  @brief AuthMiddleware implementation
+ */
+
 #include "auth_middleware.h"
 #include "../repositories/auth_audit_repository.h"
 #include <spdlog/spdlog.h>

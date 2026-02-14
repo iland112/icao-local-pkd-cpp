@@ -1,3 +1,8 @@
+/**
+ * @file common.h
+ * @brief Common data structures and forward declarations for PKD Management
+ */
+
 #pragma once
 
 #include <string>

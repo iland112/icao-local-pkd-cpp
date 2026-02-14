@@ -14,20 +14,15 @@ typedef struct x509_st X509;
 
 /**
  * @file progress_manager.h
- * @brief Enhanced Progress Manager - Thread-safe progress tracking with X.509 metadata and ICAO 9303 compliance
+ * @brief Thread-safe progress tracking with X.509 metadata and ICAO 9303 compliance
  *
- * Extracted from main.cpp as part of Phase 4.4 Task 1.3 refactoring.
- * Enhanced with detailed certificate metadata tracking and ICAO 9303 compliance monitoring.
- *
- * @version 2.2.0-dev (Phase 4.4)
- * @date 2026-01-30
+ * Provides detailed certificate metadata tracking and ICAO 9303 compliance monitoring
+ * for real-time SSE streaming during file upload processing.
  */
 
 namespace common {
 
-// =============================================================================
-// Processing Stage Enumeration (Enhanced)
-// =============================================================================
+/// @name Processing Stage Enumeration
 
 /**
  * @brief Processing stage enumeration
@@ -44,7 +39,7 @@ enum class ProcessingStage {
     PARSING_IN_PROGRESS,
     PARSING_COMPLETED,
 
-    // Validation stages (Enhanced - Phase 4.4)
+    // Validation stages
     VALIDATION_STARTED,
     VALIDATION_EXTRACTING_METADATA,    // Extracting X.509 certificate metadata
     VALIDATION_VERIFYING_SIGNATURE,    // Verifying certificate signature
@@ -84,9 +79,7 @@ std::string stageToKorean(ProcessingStage stage);
  */
 int stageToBasePercentage(ProcessingStage stage);
 
-// =============================================================================
-// Certificate Metadata (Phase 4.4 Enhancement)
-// =============================================================================
+/// @name Certificate Metadata
 
 /**
  * @brief X.509 Certificate metadata for progress tracking
@@ -135,9 +128,7 @@ struct CertificateMetadata {
     Json::Value toJson() const;
 };
 
-// =============================================================================
-// ICAO 9303 Compliance Status (Phase 4.4 Enhancement)
-// =============================================================================
+/// @name ICAO 9303 Compliance Status
 
 /**
  * @brief ICAO 9303 compliance check result
@@ -166,9 +157,7 @@ struct IcaoComplianceStatus {
     Json::Value toJson() const;
 };
 
-// =============================================================================
-// Processing Error (for per-certificate error tracking)
-// =============================================================================
+/// @name Processing Error Tracking
 
 /**
  * @brief Per-certificate processing error record
@@ -190,9 +179,7 @@ struct ProcessingError {
     Json::Value toJson() const;
 };
 
-// =============================================================================
-// Validation Statistics (Phase 4.4 Enhancement)
-// =============================================================================
+/// @name Validation Statistics
 
 /**
  * @brief Real-time validation statistics
@@ -275,9 +262,7 @@ void addProcessingError(
     const std::string& message
 );
 
-// =============================================================================
-// Processing Progress (Enhanced)
-// =============================================================================
+/// @name Processing Progress
 
 /**
  * @brief Enhanced processing progress data structure
@@ -297,7 +282,7 @@ struct ProcessingProgress {
     std::string details;
     std::chrono::system_clock::time_point updatedAt;
 
-    // Enhanced fields (Phase 4.4)
+    // Enhanced metadata fields
     std::optional<CertificateMetadata> currentCertificate;  // Currently processing certificate
     std::optional<IcaoComplianceStatus> currentCompliance;  // Current cert compliance status
     std::optional<ValidationStatistics> statistics;         // Aggregated statistics
@@ -355,9 +340,7 @@ struct ProcessingProgress {
     );
 };
 
-// =============================================================================
-// Progress Manager (Thread-safe Singleton)
-// =============================================================================
+/// @name Progress Manager (Thread-safe Singleton)
 
 /**
  * @brief Enhanced SSE Progress Manager
@@ -431,9 +414,7 @@ public:
     void clearProgress(const std::string& uploadId);
 };
 
-// =============================================================================
-// ICAO 9303 Compliance Checker
-// =============================================================================
+/// @name ICAO 9303 Compliance Checker
 
 /**
  * @brief Check certificate compliance with ICAO 9303 Part 12 specifications
@@ -459,9 +440,7 @@ public:
  */
 IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType);
 
-// =============================================================================
-// Certificate Metadata Extraction for Progress Tracking
-// =============================================================================
+/// @name Certificate Metadata Extraction for Progress Tracking
 
 /**
  * @brief Extract complete certificate metadata for progress tracking

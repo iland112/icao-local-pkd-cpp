@@ -4,9 +4,6 @@
  *
  * C++ REST API based ICAO Local PKD Management and
  * Passive Authentication (PA) Verification System.
- *
- * @author SmartCore Inc.
- * @date 2025-12-29
  */
 
 #include <drogon/drogon.h>
@@ -313,15 +310,8 @@ AppConfig appConfig;
 // LDAP Read Load Balancing: Thread-safe round-robin index (global variable)
 std::atomic<size_t> g_ldapReadRoundRobinIndex{0};
 
-// =============================================================================
-// SSE Progress Management
-// =============================================================================
-
-// ============================================================================
-// Progress Manager - Now imported from common/progress_manager.h
-// ============================================================================
-// Enhanced with X.509 metadata tracking and ICAO 9303 compliance monitoring.
-// See common/progress_manager.h for full implementation.
+// --- SSE Progress Management ---
+// Progress Manager imported from common/progress_manager.h
 
 using common::ProcessingStage;
 using common::ProcessingProgress;
@@ -338,9 +328,7 @@ using icao::audit::createAuditEntryFromRequest;
 using icao::audit::extractUserFromRequest;
 using icao::audit::extractIpAddress;
 
-// =============================================================================
-// Trust Anchor & CMS Signature Verification
-// =============================================================================
+// --- Trust Anchor & CMS Signature Verification ---
 
 /**
  * @brief Load UN_CSCA trust anchor certificate
@@ -408,9 +396,7 @@ bool verifyCmsSignature(CMS_ContentInfo* cms, X509* trustAnchor) {
     return true;
 }
 
-// =============================================================================
-// CSCA Self-Signature Validation
-// =============================================================================
+// --- CSCA Self-Signature Validation ---
 
 /**
  * @brief Verify CSCA certificate is properly self-signed
@@ -539,9 +525,7 @@ CscaValidationResult validateCscaCertificate(X509* cert) {
  */
 
 
-// =============================================================================
-// Trust Chain Building Utilities
-// =============================================================================
+// --- Trust Chain Building Utilities ---
 
 /**
  * @brief Trust Chain structure for DSC → CSCA validation
@@ -801,9 +785,7 @@ static bool validateTrustChain(const TrustChain& chain, bool& cscaExpired) {
     return true;
 }
 
-// =============================================================================
-// DSC Trust Chain Validation
-// =============================================================================
+// --- DSC Trust Chain Validation ---
 
 /**
  * @brief Validate DSC certificate against its issuing CSCA
@@ -898,9 +880,7 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
 // Functions that need to be accessible from other compilation units
 // (processing_strategy.cpp, ldif_processor.cpp)
 
-// =============================================================================
-// Credential Scrubbing Utility
-// =============================================================================
+// --- Credential Scrubbing Utility ---
 
 /**
  * @brief Scrub sensitive credentials from log messages
@@ -936,9 +916,7 @@ std::string scrubCredentials(const std::string& message) {
     return scrubbed;
 }
 
-// =============================================================================
-// File Upload Security
-// =============================================================================
+// --- File Upload Security ---
 
 /**
  * @brief Sanitize filename to prevent path traversal attacks
@@ -1280,11 +1258,7 @@ int countLdifEntries(const std::string& content) {
     return count;
 }
 
-// ============================================================================
-// Certificate/CRL Parsing and DB Storage Functions
-// ============================================================================
-
-// Note: LdifEntry and ValidationStats are now in common.h
+// --- Certificate/CRL Parsing and DB Storage Functions ---
 
 /**
  * @brief Base64 decode
@@ -1488,9 +1462,7 @@ std::vector<LdifEntry> parseLdifContent(const std::string& content) {
 
 // escapeBytea() - removed, PostgreSQL-specific, not needed with QueryExecutor
 
-// =============================================================================
-// LDAP Storage Functions
-// =============================================================================
+// --- LDAP Storage Functions ---
 
 /**
  * @brief Get LDAP connection for write operations (direct to primary master)
@@ -2384,9 +2356,7 @@ void updateMasterListLdapStatus(const std::string& mlId, const std::string& ldap
                  mlId.substr(0, 8) + "...", ldapDn);
 }
 
-// =============================================================================
-// Database Storage Functions
-// =============================================================================
+// --- Database Storage Functions ---
 
 
 /**
@@ -2459,7 +2429,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // Note: This extraction is done early (before validation) so metadata is available
     // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
     CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-    spdlog::debug("Phase 4.4: Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+    spdlog::debug("Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                   certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
 
     // Determine certificate type and perform validation
@@ -2714,7 +2684,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
     // Check ICAO 9303 compliance after certificate type is determined
     IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
-    spdlog::debug("Phase 4.4: ICAO compliance for {} cert: isCompliant={}, level={}",
+    spdlog::debug("ICAO compliance for {} cert: isCompliant={}, level={}",
                   certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
     // Update enhanced statistics (ValidationStatistics)
@@ -2745,7 +2715,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         enhancedStats.validationReasons["PENDING: " + valRecord.trustChainMessage]++;
     }
 
-    spdlog::debug("Phase 4.4: Updated statistics - total={}, type={}, sigAlg={}, keySize={}, icaoCompliant={}",
+    spdlog::debug("Updated statistics - total={}, type={}, sigAlg={}, keySize={}, icaoCompliant={}",
                   enhancedStats.totalCertificates, certType, certMetadata.signatureAlgorithm,
                   certMetadata.keySize, icaoCompliance.isCompliant);
     // Note: This requires passing ValidationStatistics as a parameter to this function
@@ -3124,7 +3094,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             s_processingUploads.erase(uploadId);
         };
 
-        spdlog::info("[Phase 6.2] Starting async LDIF processing for upload: {}", uploadId);
+        spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
 
         // Get processing_mode from upload record using Repository
         auto uploadOpt = ::uploadRepository->findById(uploadId);
@@ -3262,7 +3232,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             s_processingUploads.erase(uploadId);
         };
 
-        spdlog::info("[Phase 6.2] Starting async Master List processing for upload: {}", uploadId);
+        spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
         // Get processing_mode from upload record using Repository
         auto uploadOpt = ::uploadRepository->findById(uploadId);
@@ -3391,7 +3361,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                             // Extract comprehensive certificate metadata for progress tracking
                             CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                            spdlog::debug("Master List PKCS7 fallback: Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                           certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
 
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
@@ -3400,7 +3370,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                             // Check ICAO 9303 compliance
                             IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
-                            spdlog::debug("Phase 4.4 (Master List PKCS7 fallback): ICAO compliance for {} cert: isCompliant={}, level={}",
+                            spdlog::debug("Master List PKCS7 fallback: ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
                             totalCerts++;
@@ -3428,10 +3398,10 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             if (!certId.empty()) {
                                 if (isDuplicate) {
                                     skippedDuplicates++;
-                                    spdlog::debug("[Phase 6.1] Skipping duplicate CSCA: fingerprint={}", fingerprint.substr(0, 16));
+                                    spdlog::debug("Skipping duplicate CSCA: fingerprint={}", fingerprint.substr(0, 16));
                                 } else {
                                     cscaCount++;
-                                    spdlog::debug("[Phase 6.1] Saved CSCA to DB: fingerprint={}", fingerprint.substr(0, 16));
+                                    spdlog::debug("Saved CSCA to DB: fingerprint={}", fingerprint.substr(0, 16));
 
                                     if (ld) {
                                         std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -3554,7 +3524,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                                         // Extract comprehensive certificate metadata for progress tracking
                                         CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-                                        spdlog::debug("Phase 4.4 (Master List Async): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                                        spdlog::debug("Master List Async: Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                                       certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
 
                                         // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
@@ -3588,7 +3558,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                                         // Check ICAO 9303 compliance after certificate type is determined
                                         IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
-                                        spdlog::debug("Phase 4.4 (Master List Async): ICAO compliance for {} cert: isCompliant={}, level={}",
+                                        spdlog::debug("Master List Async: ICAO compliance for {} cert: isCompliant={}, level={}",
                                                       certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
                                         totalCerts++;
@@ -3619,14 +3589,14 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                         if (!certId.empty()) {
                                             if (isDuplicate) {
                                                 skippedDuplicates++;
-                                                spdlog::debug("[Phase 6.1] Skipping duplicate CSCA from Master List: fingerprint={}", fingerprint.substr(0, 16));
+                                                spdlog::debug("Skipping duplicate CSCA from Master List: fingerprint={}", fingerprint.substr(0, 16));
 
                                                 // Track duplicate in certificate_duplicates table
                                                 ::certificateRepository->trackCertificateDuplicate(certId, uploadId, "ML_FILE", countryCode, "", "");
                                             } else {
                                                 // All Master List certificates are CSCA
                                                 cscaCount++;
-                                                spdlog::debug("[Phase 6.1] Saved CSCA from Master List to DB: country={}, fingerprint={}",
+                                                spdlog::debug("Saved CSCA from Master List to DB: country={}, fingerprint={}",
                                                              countryCode, fingerprint.substr(0, 16));
 
                                                 // Save to LDAP
@@ -3637,7 +3607,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                     if (!ldapDn.empty()) {
                                                         ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
                                                         ldapStoredCount++;
-                                                        spdlog::debug("[Phase 6.1] Saved {} from Master List to LDAP: {}", certType, ldapDn);
+                                                        spdlog::debug("Saved {} from Master List to LDAP: {}", certType, ldapDn);
                                                     }
                                                 }
                                             }
@@ -3687,7 +3657,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                             // Extract comprehensive certificate metadata for progress tracking
                             CertificateMetadata certMetadata = common::extractCertificateMetadataForProgress(cert, false);
-                            spdlog::debug("Phase 4.4 (Master List CMS store): Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
+                            spdlog::debug("Master List CMS store: Extracted metadata for cert: type={}, sigAlg={}, keySize={}",
                                           certMetadata.certificateType, certMetadata.signatureAlgorithm, certMetadata.keySize);
 
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
@@ -3696,7 +3666,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                             // Check ICAO 9303 compliance
                             IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
-                            spdlog::debug("Phase 4.4 (Master List CMS store): ICAO compliance for {} cert: isCompliant={}, level={}",
+                            spdlog::debug("Master List CMS store: ICAO compliance for {} cert: isCompliant={}, level={}",
                                           certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
                             totalCerts++;
@@ -3724,10 +3694,10 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                             if (!certId.empty()) {
                                 if (isDuplicate) {
                                     skippedDuplicates++;
-                                    spdlog::debug("[Phase 6.1] Skipping duplicate CSCA: fingerprint={}", fingerprint.substr(0, 16));
+                                    spdlog::debug("Skipping duplicate CSCA: fingerprint={}", fingerprint.substr(0, 16));
                                 } else {
                                     cscaCount++;
-                                    spdlog::debug("[Phase 6.1] Saved CSCA to DB: fingerprint={}", fingerprint.substr(0, 16));
+                                    spdlog::debug("Saved CSCA to DB: fingerprint={}", fingerprint.substr(0, 16));
 
                                     if (ld) {
                                         std::string ldapDn = saveCertificateToLdap(ld, certType, countryCode,
@@ -3854,28 +3824,22 @@ Json::Value checkLdap() {
 void registerRoutes() {
     auto& app = drogon::app();
 
-    // =========================================================================
-    // Register Authentication Middleware (Global)
-    // =========================================================================
+    // --- Register Authentication Middleware (Global) ---
     // Note: Authentication is DISABLED by default for backward compatibility
     // Enable by setting: AUTH_ENABLED=true in environment
     //
     // IMPORTANT: AuthMiddleware uses HttpFilterBase (not HttpFilter<T>) for manual
     // instantiation with parameters. It cannot be registered globally via registerFilter().
     // Instead, apply it to individual routes using .addFilter() method.
-    //
-    // =========================================================================
-    // Authentication Routes
-    // =========================================================================
+
+    // --- Authentication Routes ---
     // Note: AuthMiddleware is applied globally via registerPreHandlingAdvice()
     // (see initialization section at end of main())
     if (authHandler) {
         authHandler->registerRoutes(app);
     }
 
-    // =========================================================================
-    // API Routes
-    // =========================================================================
+    // --- API Routes ---
 
     // Manual mode: Trigger parse endpoint
     app.registerHandler(
@@ -3957,7 +3921,7 @@ void registerRoutes() {
             } else if (fileFormatStr == "ML") {
                 // Use Strategy Pattern for Master List processing
                 std::thread([uploadId, contentBytes]() {
-                    spdlog::info("[Phase 6.1] Starting async Master List processing via Strategy for upload: {}", uploadId);
+                    spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
                     // Get processing mode from upload record using Repository
                     auto uploadOpt = ::uploadRepository->findById(uploadId);
@@ -4306,9 +4270,7 @@ void registerRoutes() {
         {drogon::Delete}
     );
 
-    // =========================================================================
-    // Audit Log API Endpoints
-    // =========================================================================
+    // --- Audit Log API Endpoints ---
 
     // GET /api/audit/operations - List audit log entries with filtering
     // Connected to AuditService -> AuditRepository (Repository Pattern)
@@ -6267,9 +6229,7 @@ paths:
         {drogon::Get}
     );
 
-    // ==========================================================================
-    // Certificate Search APIs
-    // ==========================================================================
+    // --- Certificate Search APIs ---
 
     // GET /api/certificates/search - Search certificates from LDAP
     app.registerHandler(
@@ -7205,9 +7165,7 @@ paths:
         spdlog::info("ICAO Auto Sync routes registered");
     }
 
-    // =========================================================================
-    // Link Certificate Validation API
-    // =========================================================================
+    // --- Link Certificate Validation API ---
 
     // POST /api/validate/link-cert - Validate Link Certificate trust chain
     app.registerHandler(
@@ -7533,9 +7491,7 @@ paths:
         {drogon::Get}
     );
 
-    // =========================================================================
-    // LDAP DN Migration API (Internal)
-    // =========================================================================
+    // --- LDAP DN Migration API (Internal) ---
 
     // POST /api/internal/migrate-ldap-dns - Migrate batch of certificates to v2 DN
     app.registerHandler(
@@ -7783,7 +7739,7 @@ paths:
         {drogon::Post}
     );
 
-    spdlog::info("API routes registered (including Sprint 1 migration endpoints)");
+    spdlog::info("API routes registered");
 }
 
 } // anonymous namespace
@@ -7809,7 +7765,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    spdlog::info("====== ICAO Local PKD v2.1.3.1 Repository-Pattern-Phase3 (Build 20260130-005800) ======");
+    spdlog::info("====== ICAO Local PKD Management Service ======");
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
@@ -7852,7 +7808,7 @@ int main(int argc, char* argv[]) {
         // IcaoVersionRepository now uses IQueryExecutor instead of PGconn
 
         // Initialize Repository Pattern - Repositories and Services
-        spdlog::info("Initializing Repository Pattern (Phase 1.6)...");
+        spdlog::info("Initializing Repository Pattern...");
 
         // Create database connection pool for Repositories (Factory Pattern with Oracle support)
         std::shared_ptr<common::IDbConnectionPool> genericPool;

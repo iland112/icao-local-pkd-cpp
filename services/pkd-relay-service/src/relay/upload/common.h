@@ -1,3 +1,7 @@
+/**
+ * @file common.h
+ * @brief Common types and declarations for upload processing
+ */
 #pragma once
 
 #include <string>

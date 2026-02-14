@@ -1,3 +1,8 @@
+/**
+ * @file ldif_processor.h
+ * @brief LDIF file processor for certificate, CRL, and Master List extraction
+ */
+
 #pragma once
 
 #include <string>
@@ -5,7 +10,7 @@
 #include <libpq-fe.h>
 #include <ldap.h>
 #include "common.h"
-#include "common/progress_manager.h"  // For ValidationStatistics
+#include "common/progress_manager.h"
 
 /**
  * @brief LDIF file processor
@@ -27,7 +32,7 @@ public:
     static std::vector<LdifEntry> parseLdifContent(const std::string& content);
 
     /**
-     * @brief Process LDIF entries (save to DB and validate) (Phase 6.1 - Repository Pattern)
+     * @brief Process LDIF entries (save to DB and validate)
      * @param uploadId Upload record UUID
      * @param entries Parsed LDIF entries
      * @param ld LDAP connection (can be nullptr to skip LDAP upload)
@@ -63,7 +68,7 @@ public:
     );
 
     /**
-     * @brief Upload certificates from DB to LDAP (Phase 6.1 - Repository Pattern)
+     * @brief Upload certificates from DB to LDAP
      * @param uploadId Upload record UUID
      * @param ld LDAP connection
      * @return Number of entries uploaded

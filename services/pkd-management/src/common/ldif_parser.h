@@ -7,10 +7,6 @@
  *
  * This is separate from the main LDIF processing logic (ldif_processor.h)
  * which handles certificate extraction and database storage.
- *
- * @author SmartCore Inc.
- * @date 2026-01-31
- * @version v2.2.2
  */
 
 #ifndef LDIF_PARSER_H

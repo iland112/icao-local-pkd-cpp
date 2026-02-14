@@ -21,7 +21,6 @@
  * - HTTP request/response (Controller's job)
  * - Direct database access (Repository's job)
  *
- * @note Part of main.cpp refactoring Phase 4.4
  * @date 2026-01-30
  */
 
@@ -46,9 +45,8 @@ public:
      */
     ~AuditService() = default;
 
-    // ========================================================================
-    // Audit Log Retrieval
-    // ========================================================================
+    /// @name Audit Log Retrieval
+    /// @{
 
     /**
      * @brief Filter parameters for audit log query
@@ -105,6 +103,8 @@ public:
      * }
      */
     Json::Value getOperationStatistics();
+
+    /// @}
 
 private:
     // Repository Dependencies

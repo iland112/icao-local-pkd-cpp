@@ -1,7 +1,7 @@
 /**
  * @file pa_verification_repository.cpp
  * @brief Implementation of PaVerificationRepository (Query Executor Pattern)
- * @updated 2026-02-05 (Phase 5.1: Database-agnostic implementation)
+ * @updated 2026-02-05
  */
 
 #include "pa_verification_repository.h"
@@ -13,9 +13,7 @@
 
 namespace repositories {
 
-// ============================================================================
-// Helper: Safe integer extraction from Json::Value (Oracle returns strings)
-// ============================================================================
+// --- Helper: Safe integer extraction from Json::Value (Oracle returns strings) ---
 
 static int safeInt(const Json::Value& val, int defaultValue = 0) {
     if (val.isNull()) return defaultValue;
@@ -29,9 +27,7 @@ static int safeInt(const Json::Value& val, int defaultValue = 0) {
     return defaultValue;
 }
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 PaVerificationRepository::PaVerificationRepository(common::IQueryExecutor* executor)
     : queryExecutor_(executor)
@@ -44,9 +40,7 @@ PaVerificationRepository::PaVerificationRepository(common::IQueryExecutor* execu
         queryExecutor_->getDatabaseType());
 }
 
-// ============================================================================
-// CRUD Operations
-// ============================================================================
+// --- CRUD Operations ---
 
 std::string PaVerificationRepository::insert(const domain::models::PaVerification& verification) {
     spdlog::debug("[PaVerificationRepository] Inserting PA verification record");
@@ -391,9 +385,7 @@ bool PaVerificationRepository::updateStatus(const std::string& id, const std::st
     }
 }
 
-// ============================================================================
-// Helper Methods
-// ============================================================================
+// --- Helper Methods ---
 
 std::string PaVerificationRepository::buildWhereClause(
     const std::string& status,

@@ -28,9 +28,7 @@ LdapCertificateRepository::LdapCertificateRepository(LDAP* conn, const std::stri
     spdlog::debug("LdapCertificateRepository initialized with baseDn: {}", baseDn_);
 }
 
-// ==========================================================================
-// CSCA Certificate Operations
-// ==========================================================================
+// --- CSCA Certificate Operations ---
 
 X509* LdapCertificateRepository::findCscaBySubjectDn(
     const std::string& subjectDn,
@@ -217,9 +215,7 @@ X509* LdapCertificateRepository::findCscaByIssuerDn(
     return nullptr;
 }
 
-// ==========================================================================
-// DSC Certificate Operations
-// ==========================================================================
+// --- DSC Certificate Operations ---
 
 X509* LdapCertificateRepository::findDscBySubjectDn(
     const std::string& subjectDn,
@@ -269,9 +265,7 @@ X509* LdapCertificateRepository::findDscBySubjectDn(
     return nullptr;
 }
 
-// ==========================================================================
-// Helper Methods
-// ==========================================================================
+// --- Helper Methods ---
 
 std::string LdapCertificateRepository::buildLdapFilter(
     const std::string& type,
@@ -454,9 +448,7 @@ std::string LdapCertificateRepository::normalizeDn(const std::string& dn) {
     }
 }
 
-// ==========================================================================
-// Private Helper Methods
-// ==========================================================================
+// --- Private Helper Methods ---
 
 LDAPMessage* LdapCertificateRepository::executeLdapSearch(
     const std::string& baseDn,
@@ -525,9 +517,7 @@ std::vector<X509*> LdapCertificateRepository::extractCertificatesFromResult(LDAP
     return certs;
 }
 
-// ==========================================================================
-// DSC Conformance Check (nc-data LDAP lookup)
-// ==========================================================================
+// --- DSC Conformance Check (nc-data LDAP lookup) ---
 
 DscConformanceInfo LdapCertificateRepository::checkDscConformance(
     X509* dscCert,

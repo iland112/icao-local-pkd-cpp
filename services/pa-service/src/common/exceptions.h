@@ -55,9 +55,8 @@ public:
     }
 };
 
-// =============================================================================
-// Database Exceptions
-// =============================================================================
+/// @name Database Exceptions
+/// @{
 
 class DatabaseException : public PaServiceException {
 public:
@@ -113,9 +112,10 @@ public:
             details) {}
 };
 
-// =============================================================================
-// LDAP Exceptions
-// =============================================================================
+/// @}
+
+/// @name LDAP Exceptions
+/// @{
 
 class LdapException : public PaServiceException {
 public:
@@ -171,9 +171,10 @@ public:
             details) {}
 };
 
-// =============================================================================
-// Repository Exceptions
-// =============================================================================
+/// @}
+
+/// @name Repository Exceptions
+/// @{
 
 class RepositoryException : public PaServiceException {
 public:
@@ -211,9 +212,10 @@ public:
             "Type: " + entityType + ", ID: " + identifier) {}
 };
 
-// =============================================================================
-// Service Exceptions
-// =============================================================================
+/// @}
+
+/// @name Service Exceptions
+/// @{
 
 class ServiceException : public PaServiceException {
 public:
@@ -242,9 +244,10 @@ public:
             "Operation: " + operation + ", Error: " + error) {}
 };
 
-// =============================================================================
-// Validation Exceptions
-// =============================================================================
+/// @}
+
+/// @name Validation Exceptions
+/// @{
 
 class ValidationException : public PaServiceException {
 public:
@@ -300,9 +303,10 @@ public:
             "Issuer: " + issuerDn + ", Country: " + country) {}
 };
 
-// =============================================================================
-// Parsing Exceptions
-// =============================================================================
+/// @}
+
+/// @name Parsing Exceptions
+/// @{
 
 class ParsingException : public PaServiceException {
 public:
@@ -339,5 +343,7 @@ public:
             "Invalid format",
             "Expected: " + expectedFormat + (details.empty() ? "" : ", Details: " + details)) {}
 };
+
+/// @}
 
 } // namespace common

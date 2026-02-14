@@ -1,10 +1,6 @@
 /**
  * @file ldif_parser.cpp
  * @brief LDIF Structure Parser Implementation
- *
- * @author SmartCore Inc.
- * @date 2026-01-31
- * @version v2.2.2
  */
 
 #include "ldif_parser.h"
@@ -18,9 +14,7 @@
 namespace icao {
 namespace ldif {
 
-// =============================================================================
-// Public Methods
-// =============================================================================
+// --- Public Methods ---
 
 LdifStructure LdifParser::parse(const std::string& filePath, int maxEntries) {
     spdlog::info("Parsing LDIF file: {} (maxEntries: {})", filePath, maxEntries);
@@ -188,9 +182,7 @@ size_t LdifParser::calculateDecodedSize(size_t base64Length) {
     return decodedSize;
 }
 
-// =============================================================================
-// Private Methods
-// =============================================================================
+// --- Private Methods ---
 
 size_t LdifParser::parseEntry(
     const std::string& content,

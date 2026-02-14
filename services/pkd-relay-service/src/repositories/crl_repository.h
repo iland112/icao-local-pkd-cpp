@@ -1,3 +1,7 @@
+/**
+ * @file crl_repository.h
+ * @brief Repository for CRL table operations
+ */
 #pragma once
 
 #include "../domain/models/crl.h"
@@ -15,8 +19,6 @@ namespace icao::relay::repositories {
  * Handles CRL-related database operations for DB-LDAP synchronization.
  * All queries use parameterized statements for SQL injection prevention.
  * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
- *
- * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class CrlRepository {
 public:
@@ -32,11 +34,13 @@ public:
      */
     ~CrlRepository() = default;
 
-    // Disable copy and move
+    /// @name Non-copyable and non-movable
+    /// @{
     CrlRepository(const CrlRepository&) = delete;
     CrlRepository& operator=(const CrlRepository&) = delete;
     CrlRepository(CrlRepository&&) = delete;
     CrlRepository& operator=(CrlRepository&&) = delete;
+    /// @}
 
     /**
      * @brief Count total CRLs

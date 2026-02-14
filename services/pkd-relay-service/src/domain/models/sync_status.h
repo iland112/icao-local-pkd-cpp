@@ -1,3 +1,7 @@
+/**
+ * @file sync_status.h
+ * @brief Sync status domain model for DB-LDAP synchronization tracking
+ */
 #pragma once
 
 #include <string>
@@ -15,7 +19,8 @@ namespace icao::relay::domain {
  */
 class SyncStatus {
 public:
-    // Constructors
+    /// @name Constructors
+    /// @{
     SyncStatus() = default;
 
     SyncStatus(
@@ -54,45 +59,59 @@ public:
           error_message_(error_message),
           check_duration_ms_(check_duration_ms)
     {}
+    /// @}
 
-    // Getters
+    /// @name Getters
+    /// @{
     std::string getId() const { return id_; }
     std::chrono::system_clock::time_point getCheckedAt() const { return checked_at_; }
+    /// @}
 
-    // Database statistics
+    /// @name Database statistics
+    /// @{
     int getDbCscaCount() const { return db_csca_count_; }
     int getDbMlscCount() const { return db_mlsc_count_; }
     int getDbDscCount() const { return db_dsc_count_; }
     int getDbDscNcCount() const { return db_dsc_nc_count_; }
     int getDbCrlCount() const { return db_crl_count_; }
     int getDbStoredInLdapCount() const { return db_stored_in_ldap_count_; }
+    /// @}
 
-    // LDAP statistics
+    /// @name LDAP statistics
+    /// @{
     int getLdapCscaCount() const { return ldap_csca_count_; }
     int getLdapMlscCount() const { return ldap_mlsc_count_; }
     int getLdapDscCount() const { return ldap_dsc_count_; }
     int getLdapDscNcCount() const { return ldap_dsc_nc_count_; }
     int getLdapCrlCount() const { return ldap_crl_count_; }
     int getLdapTotalEntries() const { return ldap_total_entries_; }
+    /// @}
 
-    // Discrepancies
+    /// @name Discrepancies
+    /// @{
     int getCscaDiscrepancy() const { return csca_discrepancy_; }
     int getMlscDiscrepancy() const { return mlsc_discrepancy_; }
     int getDscDiscrepancy() const { return dsc_discrepancy_; }
     int getDscNcDiscrepancy() const { return dsc_nc_discrepancy_; }
     int getCrlDiscrepancy() const { return crl_discrepancy_; }
     int getTotalDiscrepancy() const { return total_discrepancy_; }
+    /// @}
 
-    // Country statistics (JSONB)
+    /// @name Country statistics (JSONB)
+    /// @{
     std::optional<Json::Value> getDbCountryStats() const { return db_country_stats_; }
     std::optional<Json::Value> getLdapCountryStats() const { return ldap_country_stats_; }
+    /// @}
 
-    // Status
+    /// @name Status
+    /// @{
     std::string getStatus() const { return status_; }
     std::optional<std::string> getErrorMessage() const { return error_message_; }
     int getCheckDurationMs() const { return check_duration_ms_; }
+    /// @}
 
-    // Setters
+    /// @name Setters
+    /// @{
     void setId(const std::string& id) { id_ = id; }
     void setCheckedAt(const std::chrono::system_clock::time_point& checked_at) {
         checked_at_ = checked_at;
@@ -101,6 +120,7 @@ public:
     void setErrorMessage(const std::optional<std::string>& error_message) {
         error_message_ = error_message;
     }
+    /// @}
 
     /**
      * @brief Convert to JSON representation

@@ -14,7 +14,6 @@
  * Handles all database operations related to certificates (CSCA, DSC, DSC_NC, MLSC, Link Certs).
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of Oracle migration Phase 3: Query Executor Pattern
  * @date 2026-02-04
  */
 
@@ -39,7 +38,7 @@ struct CertificateSearchFilter {
  * @brief Repository for certificate table
  *
  * Handles database operations for certificate CRUD and search.
- * Database-agnostic design for future Oracle migration.
+ * Database-agnostic design using IQueryExecutor.
  */
 class CertificateRepository {
 public:
@@ -51,9 +50,8 @@ public:
     explicit CertificateRepository(common::IQueryExecutor* queryExecutor);
     ~CertificateRepository() = default;
 
-    // ========================================================================
-    // Search Operations
-    // ========================================================================
+    /// @name Search Operations
+    /// @{
 
     /**
      * @brief Search certificates with filters
@@ -86,9 +84,10 @@ public:
      */
     Json::Value findBySubjectDn(const std::string& subjectDn, int limit);
 
-    // ========================================================================
-    // Certificate Counts
-    // ========================================================================
+    /// @}
+
+    /// @name Certificate Counts
+    /// @{
 
     /**
      * @brief Count certificates by type
@@ -110,9 +109,10 @@ public:
      */
     int countByCountry(const std::string& countryCode);
 
-    // ========================================================================
-    // LDAP Storage Tracking
-    // ========================================================================
+    /// @}
+
+    /// @name LDAP Storage Tracking
+    /// @{
 
     /**
      * @brief Find certificates not yet stored in LDAP
@@ -128,9 +128,10 @@ public:
      */
     bool markStoredInLdap(const std::string& fingerprint);
 
-    // ========================================================================
-    // Duplicate Certificate Tracking (v2.2.1)
-    // ========================================================================
+    /// @}
+
+    /// @name Duplicate Certificate Tracking
+    /// @{
 
     /**
      * @brief Find the upload_id of the first upload that introduced this certificate
@@ -160,9 +161,10 @@ public:
                       const std::string& countryCode = "",
                       const std::string& serialNumber = "");
 
-    // ========================================================================
-    // X509 Certificate Retrieval (for Validation)
-    // ========================================================================
+    /// @}
+
+    /// @name X509 Certificate Retrieval
+    /// @{
 
     /**
      * @brief Find CSCA certificate by issuer DN
@@ -206,9 +208,10 @@ public:
      */
     Json::Value findDscForRevalidation(int limit);
 
-    // ========================================================================
-    // Certificate Insert & Duplicate Tracking (Phase 6.1 - Oracle Migration)
-    // ========================================================================
+    /// @}
+
+    /// @name Certificate Insert and Duplicate Tracking
+    /// @{
 
     /**
      * @brief Save certificate with automatic duplicate detection
@@ -326,6 +329,11 @@ public:
      * @return JSON array of certificate rows
      */
     Json::Value findAllForExport();
+
+    /// @}
+
+    /// @name Link Certificate Operations
+    /// @{
 
     /**
      * @brief Search link certificates with filters

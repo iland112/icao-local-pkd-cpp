@@ -9,9 +9,6 @@
  * @brief AuthAuditLog Domain Model
  *
  * Represents an authentication audit log entry.
- *
- * @note Part of Phase 5.4: AuthHandler Repository Pattern Migration
- * @date 2026-02-08
  */
 
 namespace domain {

@@ -81,9 +81,7 @@ namespace {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-function"
 
-// =============================================================================
-// Algorithm OID Mappings (matching Java implementation)
-// =============================================================================
+// --- Algorithm OID Mappings ---
 
 const std::map<std::string, std::string> HASH_ALGORITHM_NAMES = {
     {"1.3.14.3.2.26", "SHA-1"},
@@ -101,9 +99,7 @@ const std::map<std::string, std::string> SIGNATURE_ALGORITHM_NAMES = {
     {"1.2.840.10045.4.3.4", "SHA512withECDSA"}
 };
 
-// =============================================================================
-// CRL Status Enum (matching Java implementation)
-// =============================================================================
+// --- CRL Status Enum ---
 
 enum class CrlStatus {
     VALID,
@@ -126,9 +122,7 @@ std::string crlStatusToString(CrlStatus status) {
     }
 }
 
-// =============================================================================
-// Result Structures (matching Java DTOs)
-// =============================================================================
+// --- Result Structures ---
 
 struct CertificateChainValidationResult {
     bool valid = false;
@@ -191,9 +185,7 @@ struct PassiveAuthenticationError {
     std::string timestamp;
 };
 
-// =============================================================================
-// Application Configuration
-// =============================================================================
+// --- Application Configuration ---
 
 struct AppConfig {
     std::string dbHost = "postgres";
@@ -250,9 +242,7 @@ AppConfig appConfig;
 std::shared_ptr<common::IDbConnectionPool> dbPool;
 std::unique_ptr<common::IQueryExecutor> queryExecutor;
 
-// =============================================================================
-// Repository Pattern - Global Service and Repository Pointers
-// =============================================================================
+// --- Global Service and Repository Pointers ---
 
 // Repositories
 repositories::PaVerificationRepository* paVerificationRepository = nullptr;
@@ -267,9 +257,7 @@ services::CertificateValidationService* certificateValidationService = nullptr;
 services::DscAutoRegistrationService* dscAutoRegistrationService = nullptr;
 services::PaVerificationService* paVerificationService = nullptr;
 
-// =============================================================================
-// Utility Functions
-// =============================================================================
+// --- Utility Functions ---
 
 std::string generateUuid() {
     std::random_device rd;
@@ -368,9 +356,7 @@ std::string trim(const std::string& str) {
     return str.substr(start, end - start + 1);
 }
 
-// =============================================================================
-// X509 Helper Functions
-// =============================================================================
+// --- X509 Helper Functions ---
 
 std::string getX509SubjectDn(X509* cert) {
     if (!cert) return "";
@@ -442,9 +428,7 @@ std::string extractCnFromDn(const std::string& dn) {
     return dn;
 }
 
-// =============================================================================
-// Logging Initialization
-// =============================================================================
+// --- Logging Initialization ---
 
 void printBanner() {
     std::cout << R"(
@@ -485,9 +469,7 @@ void initializeLogging() {
     }
 }
 
-// =============================================================================
-// Database Health Check
-// =============================================================================
+// --- Database Health Check ---
 
 Json::Value checkDatabase() {
     Json::Value result;
@@ -525,9 +507,7 @@ Json::Value checkDatabase() {
     return result;
 }
 
-// =============================================================================
-// LDAP Functions
-// =============================================================================
+// --- LDAP Functions ---
 
 Json::Value checkLdap() {
     Json::Value result;
@@ -615,9 +595,7 @@ LDAP* getLdapConnection() {
     return nullptr;
 }
 
-// =============================================================================
-// SOD Parsing Functions (OpenSSL CMS API)
-// =============================================================================
+// --- SOD Parsing Functions (OpenSSL CMS API) ---
 
 /**
  * @brief Unwrap ICAO Tag 0x77 wrapper from SOD if present
@@ -971,9 +949,7 @@ std::map<int, std::vector<uint8_t>> parseDataGroupHashes(const std::vector<uint8
     return result;
 }
 
-// =============================================================================
-// Hash Calculation Functions
-// =============================================================================
+// --- Hash Calculation Functions ---
 
 std::vector<uint8_t> calculateHash(const std::vector<uint8_t>& data, const std::string& algorithm) {
     const EVP_MD* md = nullptr;
@@ -1008,9 +984,7 @@ std::vector<uint8_t> calculateHash(const std::vector<uint8_t>& data, const std::
     return hash;
 }
 
-// =============================================================================
-// LDAP CSCA Lookup Functions
-// =============================================================================
+// --- LDAP CSCA Lookup Functions ---
 
 /**
  * @brief Helper function to search CSCA in a specific organizational unit
@@ -1169,9 +1143,7 @@ X509_CRL* searchCrlFromLdap(LDAP* ld, const std::string& countryCode) {
     return crl;
 }
 
-// =============================================================================
-// Verification Functions
-// =============================================================================
+// --- Verification Functions ---
 
 /**
  * @brief Verify SOD signature using DSC certificate
@@ -1479,9 +1451,7 @@ DataGroupValidationResult validateDataGroupHashes(
     return result;
 }
 
-// =============================================================================
-// Database Functions
-// =============================================================================
+// --- Database Functions ---
 
 PGconn* getDbConnection() {
     std::string conninfo = "host=" + appConfig.dbHost +
@@ -1649,9 +1619,7 @@ void savePaDataGroups(
     spdlog::debug("Saved {} data groups for verification {}", dgResult.details.size(), verificationId);
 }
 
-// =============================================================================
-// JSON Response Builders (matching Java DTOs)
-// =============================================================================
+// --- JSON Response Builders ---
 
 Json::Value buildCertificateChainValidationJson(const CertificateChainValidationResult& result) {
     Json::Value json;
@@ -1719,9 +1687,7 @@ Json::Value buildDataGroupValidationJson(const DataGroupValidationResult& result
     return json;
 }
 
-// =============================================================================
-// Repository Pattern - Service Initialization
-// =============================================================================
+// --- Service Initialization ---
 
 /**
  * @brief Initialize all services and repositories with dependency injection
@@ -1860,9 +1826,7 @@ void cleanupServices() {
     spdlog::info("✅ All services cleaned up");
 }
 
-// =============================================================================
-// API Route Handlers
-// =============================================================================
+// --- API Route Handlers ---
 
 void registerRoutes() {
     auto& app = drogon::app();
@@ -2746,9 +2710,7 @@ paths:
 
 } // anonymous namespace
 
-// =============================================================================
-// Main Entry Point
-// =============================================================================
+// --- Main Entry Point ---
 
 int main(int /* argc */, char* /* argv */[]) {
     printBanner();

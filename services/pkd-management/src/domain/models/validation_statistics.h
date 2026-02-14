@@ -3,9 +3,6 @@
 /**
  * @file validation_statistics.h
  * @brief Domain Model for Validation Statistics
- *
- * @note Part of Phase 4.4 refactoring
- * @date 2026-01-30
  */
 
 namespace domain {

@@ -13,7 +13,6 @@
  *
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of Phase 5.4: AuthHandler Repository Pattern Migration
  * @date 2026-02-08
  */
 

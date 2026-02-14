@@ -9,9 +9,7 @@
 
 namespace common {
 
-// =============================================================================
-// DbConnection Implementation
-// =============================================================================
+// --- DbConnection Implementation ---
 
 DbConnection::~DbConnection() {
     if (!released_ && conn_) {
@@ -48,9 +46,7 @@ void DbConnection::release() {
     released_ = true;
 }
 
-// =============================================================================
-// DbConnectionPool Implementation
-// =============================================================================
+// --- DbConnectionPool Implementation ---
 
 DbConnectionPool::DbConnectionPool(
     const std::string& connString,

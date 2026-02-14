@@ -1,3 +1,7 @@
+/**
+ * @file icao_version_repository.h
+ * @brief Repository for ICAO PKD version tracking
+ */
 #pragma once
 
 #include <string>

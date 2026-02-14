@@ -1,3 +1,8 @@
+/**
+ * @file dl_parser.cpp
+ * @brief Implementation of ICAO Deviation List parser
+ */
+
 #include "dl_parser.h"
 #include <openssl/bio.h>
 #include <openssl/err.h>
@@ -17,9 +22,7 @@ static const unsigned char DL_OID_BYTES[] = {
     0x06, 0x06, 0x67, 0x81, 0x08, 0x01, 0x01, 0x07
 };
 
-// ============================================================================
-// ASN.1 low-level helpers
-// ============================================================================
+// --- ASN.1 low-level helpers ---
 
 namespace {
     // Read ASN.1 TLV header, return content pointer and length.
@@ -86,9 +89,7 @@ namespace {
     }
 }
 
-// ============================================================================
-// Public methods
-// ============================================================================
+// --- Public methods ---
 
 DlParseResult DlParser::parse(const std::vector<uint8_t>& data) {
     DlParseResult result;
@@ -215,9 +216,7 @@ bool DlParser::containsDlOid(const std::vector<uint8_t>& data) {
     return it != data.end();
 }
 
-// ============================================================================
-// CMS extraction methods
-// ============================================================================
+// --- CMS extraction methods ---
 
 X509* DlParser::extractSignerCertificateFromCms(CMS_ContentInfo* cms) {
     if (!cms) return nullptr;
@@ -343,9 +342,7 @@ bool DlParser::verifyCmsSignature(CMS_ContentInfo* cms, X509* signerCert) {
     return ret == 1;
 }
 
-// ============================================================================
-// eContent metadata extraction (version + hashAlgorithm)
-// ============================================================================
+// --- eContent metadata extraction (version + hashAlgorithm) ---
 
 DlParser::ContentMetadata DlParser::extractContentMetadata(CMS_ContentInfo* cms) {
     ContentMetadata meta;
@@ -393,9 +390,7 @@ DlParser::ContentMetadata DlParser::extractContentMetadata(CMS_ContentInfo* cms)
     return meta;
 }
 
-// ============================================================================
-// ASN.1 Deviation content parsing
-// ============================================================================
+// --- ASN.1 Deviation content parsing ---
 
 std::vector<DeviationEntry> DlParser::extractDeviationsFromCms(CMS_ContentInfo* cms) {
     std::vector<DeviationEntry> deviations;
@@ -560,9 +555,7 @@ std::vector<DeviationEntry> DlParser::extractDeviationsFromCms(CMS_ContentInfo* 
     return deviations;
 }
 
-// ============================================================================
-// Helper methods
-// ============================================================================
+// --- Helper methods ---
 
 std::string DlParser::getCountryFromCert(X509* cert) {
     if (!cert) return "";

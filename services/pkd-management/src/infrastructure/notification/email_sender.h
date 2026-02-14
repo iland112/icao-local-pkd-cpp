@@ -1,3 +1,8 @@
+/**
+ * @file email_sender.h
+ * @brief Email notification sender using SMTP protocol
+ */
+
 #pragma once
 
 #include <string>

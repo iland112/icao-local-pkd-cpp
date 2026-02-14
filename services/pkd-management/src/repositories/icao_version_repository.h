@@ -16,8 +16,6 @@ namespace repositories {
  * Provides CRUD operations and business-specific queries.
  *
  * Uses IQueryExecutor for database-agnostic operation (PostgreSQL + Oracle).
- *
- * @note Migrated from PGconn to IQueryExecutor for Oracle support (v2.6.4)
  */
 class IcaoVersionRepository {
 public:

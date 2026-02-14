@@ -14,7 +14,6 @@
  * Provides CRUD operations and business-specific queries.
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of Oracle migration Phase 3: Query Executor Pattern
  * @date 2026-02-04
  */
 
@@ -69,7 +68,7 @@ struct Upload {
  * @brief Repository for uploaded_file table
  *
  * Handles database operations for file upload tracking.
- * Database-agnostic design for future Oracle migration.
+ * Database-agnostic design using IQueryExecutor.
  */
 class UploadRepository {
 public:
@@ -82,9 +81,8 @@ public:
 
     ~UploadRepository() = default;
 
-    // ========================================================================
-    // CRUD Operations
-    // ========================================================================
+    /// @name CRUD Operations
+    /// @{
 
     /**
      * @brief Insert a new upload record
@@ -177,9 +175,10 @@ public:
      */
     bool updateFileHash(const std::string& uploadId, const std::string& fileHash);
 
-    // ========================================================================
-    // Business-Specific Queries
-    // ========================================================================
+    /// @}
+
+    /// @name Business-Specific Queries
+    /// @{
 
     /**
      * @brief Find duplicate upload by file hash
@@ -299,6 +298,8 @@ public:
      * }
      */
     Json::Value findDuplicatesByUploadId(const std::string& uploadId);
+
+    /// @}
 
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)

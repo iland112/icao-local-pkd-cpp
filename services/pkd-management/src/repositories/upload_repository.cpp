@@ -1,3 +1,7 @@
+/** @file upload_repository.cpp
+ *  @brief UploadRepository implementation
+ */
+
 #include "upload_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -6,7 +10,7 @@
 
 namespace repositories {
 
-/// --- Constructor ---
+// --- Constructor ---
 
 UploadRepository::UploadRepository(common::IQueryExecutor* queryExecutor)
     : queryExecutor_(queryExecutor)
@@ -17,7 +21,7 @@ UploadRepository::UploadRepository(common::IQueryExecutor* queryExecutor)
     spdlog::debug("[UploadRepository] Initialized (DB type: {})", queryExecutor_->getDatabaseType());
 }
 
-/// --- CRUD Operations ---
+// --- CRUD Operations ---
 
 bool UploadRepository::insert(const Upload& upload)
 {
@@ -324,7 +328,7 @@ bool UploadRepository::updateFileHash(const std::string& uploadId, const std::st
     }
 }
 
-/// --- Business-Specific Queries ---
+// --- Business-Specific Queries ---
 
 std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHash)
 {
@@ -851,7 +855,7 @@ Json::Value UploadRepository::findDuplicatesByUploadId(const std::string& upload
     return result;
 }
 
-/// --- Upload Change History (CTE with deltas) ---
+// --- Upload Change History (CTE with deltas) ---
 
 Json::Value UploadRepository::getChangeHistory(int limit) {
     // Oracle: CASE WHEN IS NULL instead of COALESCE(..., '') since '' = NULL in Oracle
@@ -902,7 +906,7 @@ Json::Value UploadRepository::getChangeHistory(int limit) {
     return queryExecutor_->executeQuery(query);
 }
 
-/// --- Private Helper Methods ---
+// --- Private Helper Methods ---
 
 Upload UploadRepository::jsonToUpload(const Json::Value& json)
 {

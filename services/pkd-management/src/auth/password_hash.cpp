@@ -1,3 +1,7 @@
+/** @file password_hash.cpp
+ *  @brief PBKDF2-HMAC-SHA256 password hashing implementation
+ */
+
 #include "password_hash.h"
 #include <openssl/evp.h>
 #include <openssl/rand.h>

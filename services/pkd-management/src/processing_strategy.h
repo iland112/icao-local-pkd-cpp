@@ -1,3 +1,8 @@
+/**
+ * @file processing_strategy.h
+ * @brief Processing strategy pattern for AUTO and MANUAL upload modes
+ */
+
 #pragma once
 
 #include <string>
@@ -17,7 +22,7 @@ public:
     virtual ~ProcessingStrategy() = default;
 
     /**
-     * @brief Process LDIF file according to the strategy (Phase 6.1 - Repository Pattern)
+     * @brief Process LDIF file according to the strategy
      * @param uploadId Upload record UUID
      * @param entries Parsed LDIF entries
      * @param ld LDAP connection (can be nullptr)
@@ -30,7 +35,7 @@ public:
     ) = 0;
 
     /**
-     * @brief Process Master List file according to the strategy (Phase 6.1 - Repository Pattern)
+     * @brief Process Master List file according to the strategy
      * @param uploadId Upload record UUID
      * @param content Raw file content
      * @param ld LDAP connection (can be nullptr)
@@ -43,7 +48,7 @@ public:
     ) = 0;
 
     /**
-     * @brief Validate and save to database (MANUAL mode Stage 2, Phase 6.1 - Repository Pattern)
+     * @brief Validate and save to database (MANUAL mode Stage 2)
      * @param uploadId Upload record UUID
      * @note Uses global certificateRepository and uploadRepository for database operations
      * @note Only implemented for ManualProcessingStrategy
@@ -108,7 +113,7 @@ public:
         const std::string& uploadId
     );
 
-    // Cleanup failed upload (Phase 6.1 - Repository Pattern)
+    /** @brief Cleanup failed upload (delete DB records and temp files) */
     static void cleanupFailedUpload(
         const std::string& uploadId
     );

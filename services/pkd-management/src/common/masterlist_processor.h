@@ -1,3 +1,8 @@
+/**
+ * @file masterlist_processor.h
+ * @brief ICAO PKD Master List processing and CSCA certificate extraction
+ */
+
 #pragma once
 
 #include <string>
@@ -23,9 +28,9 @@ struct MasterListStats {
 };
 
 /**
- * @brief Parse Collection 002 Master List entry (v2.0.0, Phase 6.1 - Repository Pattern)
+ * @brief Parse Collection 002 Master List entry using the Repository Pattern
  *
- * NEW BEHAVIOR (v2.0.0):
+ * Current behavior:
  * - Extracts individual CSCAs from each Master List CMS
  * - Saves CSCAs to o=csca (primary, included in stats)
  * - Saves original ML CMS to o=ml (backup, excluded from stats)
@@ -64,9 +69,9 @@ bool parseMasterListEntryV2(
 );
 
 /**
- * @brief Process Master List file (.ml format) - v2.1.1 (Phase 6.1 - Repository Pattern)
+ * @brief Process Master List file (.ml format) using the Repository Pattern
  *
- * CORRECT BEHAVIOR (v2.1.1):
+ * Behavior:
  * - Extracts MLSC from CMS SignerInfo (1-2 certificates, saves to o=mlsc)
  * - Extracts CSCAs from pkiData (self-signed, saves to o=csca)
  * - Extracts Link Certificates from pkiData (cross-signed, saves to o=lc)

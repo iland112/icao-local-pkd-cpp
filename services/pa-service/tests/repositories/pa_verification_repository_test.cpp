@@ -66,9 +66,7 @@ protected:
     }
 };
 
-// =============================================================================
-// INSERT Tests
-// =============================================================================
+// --- INSERT Tests ---
 
 TEST_F(PaVerificationRepositoryTest, InsertValidVerification) {
     // Arrange
@@ -109,9 +107,7 @@ TEST_F(PaVerificationRepositoryTest, InsertWithOptionalFields) {
     EXPECT_TRUE(retrieved["signatureValid"].asBool());
 }
 
-// =============================================================================
-// FIND BY ID Tests
-// =============================================================================
+// --- FIND BY ID Tests ---
 
 TEST_F(PaVerificationRepositoryTest, FindByIdExists) {
     // Arrange
@@ -135,9 +131,7 @@ TEST_F(PaVerificationRepositoryTest, FindByIdNotExists) {
     EXPECT_TRUE(result.isNull());
 }
 
-// =============================================================================
-// FIND BY MRZ Tests
-// =============================================================================
+// --- FIND BY MRZ Tests ---
 
 TEST_F(PaVerificationRepositoryTest, FindByMrzExists) {
     // Arrange
@@ -162,9 +156,7 @@ TEST_F(PaVerificationRepositoryTest, FindByMrzNotExists) {
     EXPECT_TRUE(result.isNull());
 }
 
-// =============================================================================
-// UPDATE STATUS Tests
-// =============================================================================
+// --- UPDATE STATUS Tests ---
 
 TEST_F(PaVerificationRepositoryTest, UpdateStatusSuccess) {
     // Arrange
@@ -191,9 +183,7 @@ TEST_F(PaVerificationRepositoryTest, UpdateStatusNotFound) {
     EXPECT_FALSE(updated);
 }
 
-// =============================================================================
-// PAGINATION Tests
-// =============================================================================
+// --- PAGINATION Tests ---
 
 TEST_F(PaVerificationRepositoryTest, FindAllWithPagination) {
     // Arrange - Insert 5 test records
@@ -228,9 +218,7 @@ TEST_F(PaVerificationRepositoryTest, FindAllWithOffset) {
     EXPECT_NE(page1[0]["id"].asString(), page2[0]["id"].asString());
 }
 
-// =============================================================================
-// PARAMETERIZED QUERY SECURITY Tests
-// =============================================================================
+// --- PARAMETERIZED QUERY SECURITY Tests ---
 
 TEST_F(PaVerificationRepositoryTest, SqlInjectionPrevention) {
     // Arrange - Try SQL injection in document number

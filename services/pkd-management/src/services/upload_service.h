@@ -10,7 +10,7 @@
 #include "../repositories/upload_repository.h"
 #include "../repositories/certificate_repository.h"
 #include "../repositories/deviation_list_repository.h"
-#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool (NEW)
+#include <ldap_connection_pool.h>
 
 /**
  * @file upload_service.h
@@ -31,7 +31,6 @@
  * - Direct database access (Repository's job - but currently mixed)
  * - Authentication/Authorization (Middleware's job)
  *
- * @note This is Phase 1 of main.cpp refactoring
  * @date 2026-01-29
  */
 
@@ -63,9 +62,8 @@ public:
      */
     ~UploadService() = default;
 
-    // ========================================================================
-    // Certificate Preview (parse only, no DB/LDAP save)
-    // ========================================================================
+    /// @name Certificate Preview (parse only, no DB/LDAP save)
+    /// @{
 
     struct CertificatePreviewItem {
         std::string subjectDn;
@@ -136,9 +134,10 @@ public:
         const std::vector<uint8_t>& fileContent
     );
 
-    // ========================================================================
-    // Individual Certificate Upload (PEM, DER, CER, P7B, DL, CRL)
-    // ========================================================================
+    /// @}
+
+    /// @name Individual Certificate Upload (PEM, DER, CER, P7B, DL, CRL)
+    /// @{
 
     /**
      * @brief Individual Certificate Upload Result
@@ -181,9 +180,10 @@ public:
         const std::string& uploadedBy
     );
 
-    // ========================================================================
-    // LDIF Upload
-    // ========================================================================
+    /// @}
+
+    /// @name LDIF Upload
+    /// @{
 
     /**
      * @brief LDIF Upload Result
@@ -227,7 +227,7 @@ public:
     );
 
     /**
-     * @brief Process LDIF file asynchronously (Phase 4.4)
+     * @brief Process LDIF file asynchronously
      *
      * @param uploadId Upload UUID
      * @param content File content bytes
@@ -238,9 +238,10 @@ public:
      */
     void processLdifAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 
-    // ========================================================================
-    // Master List Upload
-    // ========================================================================
+    /// @}
+
+    /// @name Master List Upload
+    /// @{
 
     /**
      * @brief Master List Upload Result
@@ -285,9 +286,10 @@ public:
     // Note: Master List async processing is handled by Strategy Pattern thread in the upload handler (main.cpp)
     // processMasterListAsync was removed to prevent dual-processing bug
 
-    // ========================================================================
-    // Upload Management (MANUAL mode)
-    // ========================================================================
+    /// @}
+
+    /// @name Upload Management (MANUAL mode)
+    /// @{
 
     /**
      * @brief Trigger parsing for MANUAL mode upload
@@ -320,9 +322,10 @@ public:
      */
     bool triggerValidation(const std::string& uploadId);
 
-    // ========================================================================
-    // Upload History & Detail
-    // ========================================================================
+    /// @}
+
+    /// @name Upload History & Detail
+    /// @{
 
     /**
      * @brief Upload History Filter Parameters
@@ -365,9 +368,10 @@ public:
      */
     Json::Value getUploadDetail(const std::string& uploadId);
 
-    // ========================================================================
-    // Upload Validations
-    // ========================================================================
+    /// @}
+
+    /// @name Upload Validations
+    /// @{
 
     /**
      * @brief Validation Filter Parameters
@@ -401,9 +405,10 @@ public:
         const ValidationFilter& filter
     );
 
-    // ========================================================================
-    // Upload Issues (Duplicates)
-    // ========================================================================
+    /// @}
+
+    /// @name Upload Issues (Duplicates)
+    /// @{
 
     /**
      * @brief Get upload issues (duplicate certificates)
@@ -427,9 +432,10 @@ public:
      */
     Json::Value getUploadIssues(const std::string& uploadId);
 
-    // ========================================================================
-    // Upload Deletion
-    // ========================================================================
+    /// @}
+
+    /// @name Upload Deletion
+    /// @{
 
     /**
      * @brief Delete failed or pending upload
@@ -445,9 +451,10 @@ public:
      */
     bool deleteUpload(const std::string& uploadId);
 
-    // ========================================================================
-    // Statistics
-    // ========================================================================
+    /// @}
+
+    /// @name Statistics
+    /// @{
 
     /**
      * @brief Get upload statistics
@@ -487,16 +494,16 @@ public:
      */
     Json::Value getDetailedCountryStatistics(int limit = 0);
 
+    /// @}
+
 private:
     // Dependencies (non-owning pointers)
     repositories::UploadRepository* uploadRepo_;
     repositories::CertificateRepository* certRepo_;
-    common::LdapConnectionPool* ldapPool_;  // v2.4.3: LDAP connection pool (changed from LDAP* ldapConn_)
+    common::LdapConnectionPool* ldapPool_;  ///< LDAP connection pool (non-owning)
     repositories::DeviationListRepository* dlRepo_;  // DL deviation data storage
 
-    // ========================================================================
     // Helper Methods
-    // ========================================================================
 
     /**
      * @brief Generate unique upload ID (UUID v4)

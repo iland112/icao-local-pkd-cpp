@@ -1,7 +1,12 @@
+/**
+ * @file certificate_utils.cpp
+ * @brief X.509 certificate parsing, database management, and LDAP storage implementation
+ */
+
 #include "certificate_utils.h"
 #include "x509_metadata_extractor.h"
-#include "../repositories/certificate_repository.h"  // Phase 6.1: Repository Pattern
-#include "../repositories/upload_repository.h"        // Phase 6.1: Repository Pattern
+#include "../repositories/certificate_repository.h"
+#include "../repositories/upload_repository.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
@@ -13,7 +18,7 @@
 #include <algorithm>
 #include <iomanip>
 
-// Phase 6.1: Global repository declarations (defined in main.cpp)
+// Global repository declarations (defined in main.cpp)
 namespace repositories {
     class CertificateRepository;
     class UploadRepository;
@@ -37,7 +42,7 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     const std::string& validationStatus,
     const std::string& validationMessage
 ) {
-    // Phase 6.1: Delegate to CertificateRepository (Repository Pattern)
+    // Delegate to CertificateRepository
     if (!certificateRepository) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return std::make_pair(std::string(""), false);
@@ -58,7 +63,7 @@ bool trackCertificateDuplicate(
     const std::string& sourceEntryDn,
     const std::string& sourceFileName
 ) {
-    // Phase 6.1: Delegate to CertificateRepository (Repository Pattern)
+    // Delegate to CertificateRepository
     if (!certificateRepository) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return false;
@@ -74,7 +79,7 @@ bool incrementDuplicateCount(
     const std::string& certificateId,
     const std::string& uploadId
 ) {
-    // Phase 6.1: Delegate to CertificateRepository (Repository Pattern)
+    // Delegate to CertificateRepository
     if (!certificateRepository) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return false;
@@ -88,7 +93,7 @@ bool updateCscaExtractionStats(
     int extractedCount,
     int duplicateCount
 ) {
-    // TODO Phase 6.1: Add updateCscaExtractionStats() method to UploadRepository
+    // TODO: Add updateCscaExtractionStats() method to UploadRepository
     // This method updates csca_extracted_from_ml and csca_duplicates fields
     // SQL: UPDATE uploaded_file
     //      SET csca_extracted_from_ml = csca_extracted_from_ml + extractedCount,
@@ -112,7 +117,7 @@ bool updateCertificateLdapStatus(
     const std::string& certificateId,
     const std::string& ldapDn
 ) {
-    // Phase 6.1: Delegate to CertificateRepository
+    // Delegate to CertificateRepository
     // This method updates stored_in_ldap, ldap_dn_v2, and stored_at fields
 
     if (!certificateRepository) {
@@ -131,9 +136,7 @@ std::string getSourceType(const std::string& fileFormat) {
     return "UNKNOWN";
 }
 
-// =============================================================================
-// X.509 Certificate Parsing Utilities Implementation
-// =============================================================================
+// --- X.509 Certificate Parsing Utilities Implementation ---
 
 std::string x509NameToString(X509_NAME* name) {
     if (!name) return "";

@@ -1,3 +1,8 @@
+/**
+ * @file certificate_utils.h
+ * @brief X.509 certificate parsing, database management, and LDAP storage utilities
+ */
+
 #pragma once
 
 #include <string>
@@ -10,9 +15,7 @@
 
 namespace certificate_utils {
 
-// =============================================================================
-// X.509 Certificate Parsing Utilities
-// =============================================================================
+/// @name X.509 Certificate Parsing Utilities
 
 /**
  * @brief Convert X509_NAME to string (RFC 2253 format)
@@ -134,9 +137,7 @@ std::string extractCmsAsn1Text(const std::vector<uint8_t>& cmsData);
  */
 std::string extractAsn1TextAuto(const std::vector<uint8_t>& fileData);
 
-// =============================================================================
-// Database Certificate Management
-// =============================================================================
+/// @name Database Certificate Management
 
 /**
  * @brief Save certificate with duplicate detection
@@ -159,7 +160,7 @@ std::string extractAsn1TextAuto(const std::vector<uint8_t>& fileData);
  * @param validationMessage Validation message
  * @return std::pair<std::string, bool> (certificate_id UUID, isDuplicate)
  *
- * @note Phase 6.1: Uses global certificateRepository for database operations
+ * @note Uses global certificateRepository for database operations
  * @note Returns empty string ("") on error
  */
 std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
@@ -191,7 +192,7 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
  * @param sourceEntryDn LDIF entry DN (optional, for LDIF sources)
  * @param sourceFileName Original filename (optional)
  * @return bool Success status
- * @note Phase 6.1: Uses global certificateRepository for database operations
+ * @note Uses global certificateRepository for database operations
  */
 bool trackCertificateDuplicate(
     const std::string& certificateId,
@@ -211,7 +212,7 @@ bool trackCertificateDuplicate(
  * @param certificateId Certificate UUID to update
  * @param uploadId Current upload UUID
  * @return bool Success status
- * @note Phase 6.1: Uses global certificateRepository for database operations
+ * @note Uses global certificateRepository for database operations
  */
 bool incrementDuplicateCount(
     const std::string& certificateId,
@@ -228,7 +229,7 @@ bool incrementDuplicateCount(
  * @param extractedCount Number of CSCAs extracted from Master Lists
  * @param duplicateCount Number of duplicates detected
  * @return bool Success status
- * @note Phase 6.1: Uses global uploadRepository for database operations
+ * @note Uses global uploadRepository for database operations
  */
 bool updateCscaExtractionStats(
     const std::string& uploadId,
@@ -244,7 +245,7 @@ bool updateCscaExtractionStats(
  * @param certificateId Certificate UUID
  * @param ldapDn LDAP DN where certificate is stored
  * @return bool Success status
- * @note Phase 6.1: Uses global certificateRepository for database operations
+ * @note Uses global certificateRepository for database operations
  */
 bool updateCertificateLdapStatus(
     const std::string& certificateId,

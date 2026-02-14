@@ -12,7 +12,6 @@
  * Handles connection acquisition from pool, query execution,
  * result parsing, and JSON conversion.
  *
- * @note Part of Oracle migration Phase 3
  * @date 2026-02-04
  */
 

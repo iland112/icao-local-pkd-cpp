@@ -1,3 +1,7 @@
+/**
+ * @file ldap_operations.cpp
+ * @brief LDAP operations implementation
+ */
 #include "ldap_operations.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
@@ -24,7 +28,7 @@ std::string LdapOperations::buildDn(const std::string& certType,
         ou = "csca";
         dataContainer = config_.ldapDataContainer;
     } else if (certType == "LC") {
-        // v2.2.2 FIX: Link Certificate support (Sprint 3)
+        // Link Certificate support
         // Link certificates are CSCA-type certs where subject_dn != issuer_dn
         ou = "lc";
         dataContainer = config_.ldapDataContainer;
@@ -174,7 +178,7 @@ bool LdapOperations::deleteCertificate(LDAP* ld,
     return true;
 }
 
-// v2.0.4: Helper to create LDAP entry if it doesn't exist
+/** @brief Create LDAP entry if it does not already exist */
 bool LdapOperations::createEntryIfNotExists(
     LDAP* ld,
     const std::string& dn,
@@ -247,7 +251,7 @@ bool LdapOperations::createEntryIfNotExists(
     return true;
 }
 
-// v2.0.4: Ensure parent DN hierarchy exists
+/** @brief Ensure parent DN hierarchy exists in LDAP */
 bool LdapOperations::ensureParentDnExists(
     LDAP* ld,
     const std::string& certType,
@@ -273,7 +277,7 @@ bool LdapOperations::ensureParentDnExists(
     if (certType == "CSCA") {
         ou = "csca";
     } else if (certType == "LC") {
-        // v2.2.2 FIX: Link Certificate support (Sprint 3)
+        // Link Certificate support
         ou = "lc";
     } else if (certType == "DSC" || certType == "DSC_NC") {
         ou = "dsc";
@@ -296,7 +300,7 @@ bool LdapOperations::ensureParentDnExists(
     return true;
 }
 
-// v2.0.5: Build CRL DN (compatible with PKD Management buildCrlDn)
+/** @brief Build CRL DN (compatible with PKD Management buildCrlDn) */
 std::string LdapOperations::buildCrlDn(const std::string& countryCode,
                                        const std::string& fingerprint) const {
     // CRL DN format: cn={FINGERPRINT},o=crl,c={COUNTRY},dc=data,{baseDn}
@@ -304,7 +308,7 @@ std::string LdapOperations::buildCrlDn(const std::string& countryCode,
            "," + config_.ldapDataContainer + "," + config_.ldapBaseDn;
 }
 
-// v2.0.5: Add CRL to LDAP (compatible with PKD Management saveCrlToLdap)
+/** @brief Add CRL to LDAP (compatible with PKD Management saveCrlToLdap) */
 bool LdapOperations::addCrl(LDAP* ld,
                             const CrlInfo& crl,
                             std::string& errorMsg) const {

@@ -1,3 +1,7 @@
+/**
+ * @file reconciliation_log.h
+ * @brief Reconciliation log entry domain model
+ */
 #pragma once
 
 #include <string>
@@ -15,7 +19,8 @@ namespace icao::relay::domain {
  */
 class ReconciliationLog {
 public:
-    // Constructors
+    /// @name Constructors
+    /// @{
     ReconciliationLog() = default;
 
     ReconciliationLog(
@@ -38,8 +43,10 @@ public:
           result_(result),
           error_message_(error_message)
     {}
+    /// @}
 
-    // Getters
+    /// @name Getters
+    /// @{
     std::string getId() const { return id_; }
     std::string getReconciliationId() const { return reconciliation_id_; }
     std::chrono::system_clock::time_point getCreatedAt() const { return created_at_; }
@@ -49,14 +56,17 @@ public:
     std::string getAction() const { return action_; }
     std::string getResult() const { return result_; }
     std::optional<std::string> getErrorMessage() const { return error_message_; }
+    /// @}
 
-    // Setters
+    /// @name Setters
+    /// @{
     void setId(const std::string& id) { id_ = id; }
     void setReconciliationId(const std::string& reconciliation_id) { reconciliation_id_ = reconciliation_id; }
     void setResult(const std::string& result) { result_ = result; }
     void setErrorMessage(const std::optional<std::string>& error_message) {
         error_message_ = error_message;
     }
+    /// @}
 
     /**
      * @brief Convert to JSON representation

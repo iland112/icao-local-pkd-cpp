@@ -1,3 +1,7 @@
+/**
+ * @file icao_handler.h
+ * @brief HTTP handler for ICAO Auto Sync endpoints
+ */
 #pragma once
 
 #include <drogon/drogon.h>

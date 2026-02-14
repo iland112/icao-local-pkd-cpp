@@ -10,9 +10,6 @@
  * @brief User Domain Model
  *
  * Represents a user in the authentication system.
- *
- * @note Part of Phase 5.4: AuthHandler Repository Pattern Migration
- * @date 2026-02-08
  */
 
 namespace domain {

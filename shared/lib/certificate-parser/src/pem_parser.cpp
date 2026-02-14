@@ -1,3 +1,8 @@
+/**
+ * @file pem_parser.cpp
+ * @brief Implementation of PEM format parser
+ */
+
 #include "pem_parser.h"
 #include <openssl/bio.h>
 #include <openssl/pem.h>

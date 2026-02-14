@@ -1,3 +1,11 @@
+/**
+ * @file country_code_utils.h
+ * @brief ISO 3166-1 country code normalization utilities
+ *
+ * Converts between ISO 3166-1 alpha-3 (3-letter) and alpha-2 (2-letter) country codes.
+ * Includes ICAO/MRTD special codes from Doc 9303 Part 3.
+ */
+
 #pragma once
 
 #include <string>

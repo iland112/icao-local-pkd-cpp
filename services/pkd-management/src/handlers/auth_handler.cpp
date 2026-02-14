@@ -1,3 +1,7 @@
+/** @file auth_handler.cpp
+ *  @brief AuthHandler implementation
+ */
+
 #include "auth_handler.h"
 #include <spdlog/spdlog.h>
 #include <json/json.h>
@@ -37,7 +41,7 @@ AuthHandler::AuthHandler(
         jwtExpiration
     );
 
-    spdlog::info("[AuthHandler] Initialized with Repository Pattern (Phase 5.4)");
+    spdlog::info("[AuthHandler] Initialized with Repository Pattern");
 }
 
 void AuthHandler::registerRoutes(drogon::HttpAppFramework& app) {
@@ -81,9 +85,7 @@ void AuthHandler::registerRoutes(drogon::HttpAppFramework& app) {
         {drogon::Get}
     );
 
-    // ========================================================================
-    // User Management Routes (Admin only)
-    // ========================================================================
+    // --- User Management Routes (Admin only) ---
 
     // GET /api/auth/users - List users
     app.registerHandler(
@@ -601,9 +603,7 @@ std::optional<auth::JwtClaims> AuthHandler::requireAdmin(
     return claims;
 }
 
-// ============================================================================
-// User Management Endpoints
-// ============================================================================
+// --- User Management Endpoints ---
 
 void AuthHandler::handleListUsers(
     const drogon::HttpRequestPtr& req,
@@ -1246,9 +1246,7 @@ void AuthHandler::handleChangePassword(
     }
 }
 
-// ============================================================================
-// Audit Log Endpoints
-// ============================================================================
+// --- Audit Log Endpoints ---
 
 void AuthHandler::handleGetAuditLog(
     const drogon::HttpRequestPtr& req,

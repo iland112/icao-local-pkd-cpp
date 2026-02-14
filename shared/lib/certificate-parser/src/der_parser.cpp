@@ -1,3 +1,8 @@
+/**
+ * @file der_parser.cpp
+ * @brief Implementation of DER format parser
+ */
+
 #include "der_parser.h"
 #include <openssl/bio.h>
 #include <openssl/err.h>

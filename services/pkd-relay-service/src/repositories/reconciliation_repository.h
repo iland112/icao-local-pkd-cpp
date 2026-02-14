@@ -1,3 +1,7 @@
+/**
+ * @file reconciliation_repository.h
+ * @brief Repository for reconciliation summary and log table operations
+ */
 #pragma once
 
 #include "../domain/models/reconciliation_summary.h"
@@ -16,8 +20,6 @@ namespace icao::relay::repositories {
  * Handles all database operations for reconciliation tracking.
  * All queries use parameterized statements for SQL injection prevention.
  * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
- *
- * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class ReconciliationRepository {
 public:
@@ -33,15 +35,16 @@ public:
      */
     ~ReconciliationRepository() = default;
 
-    // Disable copy and move
+    /// @name Non-copyable and non-movable
+    /// @{
     ReconciliationRepository(const ReconciliationRepository&) = delete;
     ReconciliationRepository& operator=(const ReconciliationRepository&) = delete;
     ReconciliationRepository(ReconciliationRepository&&) = delete;
     ReconciliationRepository& operator=(ReconciliationRepository&&) = delete;
+    /// @}
 
-    // ========================================================================
-    // ReconciliationSummary Operations
-    // ========================================================================
+    /// @name ReconciliationSummary Operations
+    /// @{
 
     /**
      * @brief Create new reconciliation summary record
@@ -77,10 +80,10 @@ public:
      * @return Total number of records
      */
     int countSummaries();
+    /// @}
 
-    // ========================================================================
-    // ReconciliationLog Operations
-    // ========================================================================
+    /// @name ReconciliationLog Operations
+    /// @{
 
     /**
      * @brief Create reconciliation log entry
@@ -108,6 +111,7 @@ public:
      * @return Number of log entries
      */
     int countLogsByReconciliationId(const std::string& reconciliationId);
+    /// @}
 
 private:
     /**

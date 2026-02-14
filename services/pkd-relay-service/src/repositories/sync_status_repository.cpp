@@ -1,3 +1,7 @@
+/**
+ * @file sync_status_repository.cpp
+ * @brief Sync status repository implementation
+ */
 #include "sync_status_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -6,8 +10,12 @@
 
 namespace icao::relay::repositories {
 
-// Helper: Oracle returns all values as strings, so .asInt() fails.
-// This handles int, uint, string, double types gracefully.
+/**
+ * @brief Parse JSON value to integer with type-safe conversion
+ *
+ * Oracle returns all values as strings, so .asInt() fails.
+ * This handles int, uint, string, double types gracefully.
+ */
 static int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0) {
     if (!json.isMember(field) || json[field].isNull()) return defaultValue;
     const auto& v = json[field];

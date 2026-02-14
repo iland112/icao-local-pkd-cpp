@@ -1,3 +1,8 @@
+/**
+ * @file file_detector.h
+ * @brief Certificate file format detection using extension and content analysis
+ */
+
 #pragma once
 
 #include <string>

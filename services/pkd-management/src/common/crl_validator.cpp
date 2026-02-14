@@ -2,11 +2,7 @@
  * @file crl_validator.cpp
  * @brief CRL-based certificate revocation checking implementation
  *
- * Sprint 2: Link Certificate Validation Core
  * Implements RFC 5280 CRL validation for CSCA/DSC/LC certificates
- *
- * @version 1.0.0
- * @date 2026-01-24
  */
 
 #include "crl_validator.h"
@@ -351,9 +347,7 @@ void CrlValidator::logRevocationCheck(
     }
 }
 
-// ============================================================================
-// Private Helper Methods
-// ============================================================================
+// --- Private Helper Methods ---
 
 std::string CrlValidator::revocationReasonToString(RevocationReason reason) {
     switch (reason) {

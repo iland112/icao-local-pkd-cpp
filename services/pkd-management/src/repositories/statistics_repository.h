@@ -12,7 +12,6 @@
  * Handles complex aggregation queries for statistics and analytics.
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of Oracle migration Phase 3: Query Executor Pattern
  * @date 2026-02-04
  */
 

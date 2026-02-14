@@ -1,3 +1,7 @@
+/** @file audit_repository.cpp
+ *  @brief AuditRepository implementation
+ */
+
 #include "audit_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -177,7 +181,7 @@ Json::Value AuditRepository::findAll(
     }
 }
 
-// Helper function for camelCase conversion
+/** @brief Convert snake_case column name to camelCase */
 std::string AuditRepository::toCamelCase(const std::string& snake_case)
 {
     std::string camelCase;

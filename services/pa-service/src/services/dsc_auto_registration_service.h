@@ -37,7 +37,14 @@ struct DscRegistrationResult {
  */
 class DscAutoRegistrationService {
 public:
+    /**
+     * @brief Constructor with query executor injection
+     * @param queryExecutor Database query executor (PostgreSQL or Oracle)
+     * @throws std::invalid_argument if queryExecutor is nullptr
+     */
     explicit DscAutoRegistrationService(common::IQueryExecutor* queryExecutor);
+
+    /** @brief Destructor */
     ~DscAutoRegistrationService() = default;
 
     /**
@@ -58,10 +65,19 @@ public:
 private:
     common::IQueryExecutor* queryExecutor_;
 
+    /** @brief Compute SHA-256 fingerprint of an X509 certificate */
     std::string computeFingerprint(X509* cert);
+
+    /** @brief Get DER-encoded bytes of an X509 certificate */
     std::vector<uint8_t> getDerBytes(X509* cert);
+
+    /** @brief Convert X509_NAME to OpenSSL oneline string */
     std::string x509NameToString(X509_NAME* name);
+
+    /** @brief Convert ASN1_TIME to human-readable string */
     std::string asn1TimeToString(const ASN1_TIME* t);
+
+    /** @brief Generate a UUID v4 string */
     std::string generateUuid();
 };
 

@@ -1,3 +1,7 @@
+/**
+ * @file sync_service.h
+ * @brief Service layer for DB-LDAP sync status operations
+ */
 #pragma once
 
 #include "../repositories/sync_status_repository.h"

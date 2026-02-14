@@ -1,3 +1,7 @@
+/** @file icao_version_repository.cpp
+ *  @brief IcaoVersionRepository implementation
+ */
+
 #include "icao_version_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -312,7 +316,7 @@ std::vector<domain::models::IcaoVersion> IcaoVersionRepository::getAllVersions()
     }
 }
 
-// Private helper methods
+// --- Private Helper Methods ---
 
 domain::models::IcaoVersion IcaoVersionRepository::jsonToVersion(const Json::Value& row) {
     domain::models::IcaoVersion version;

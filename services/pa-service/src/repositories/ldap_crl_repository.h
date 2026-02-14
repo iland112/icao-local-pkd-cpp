@@ -50,9 +50,8 @@ public:
     LdapCrlRepository(const LdapCrlRepository&) = delete;
     LdapCrlRepository& operator=(const LdapCrlRepository&) = delete;
 
-    // ==========================================================================
-    // CRL Operations
-    // ==========================================================================
+    /// @name CRL Operations
+    /// @{
 
     /**
      * @brief Find CRL by country code
@@ -91,9 +90,10 @@ public:
      */
     std::string getCrlExpirationStatus(X509_CRL* crl);
 
-    // ==========================================================================
-    // Helper Methods
-    // ==========================================================================
+    /// @}
+
+    /// @name Helper Methods
+    /// @{
 
     /**
      * @brief Build LDAP filter for CRL search
@@ -122,6 +122,8 @@ public:
      * @return X509_CRL* or nullptr on error (caller must X509_CRL_free)
      */
     X509_CRL* parseCrlFromLdap(struct berval** crlData);
+
+    /// @}
 
 private:
     /**

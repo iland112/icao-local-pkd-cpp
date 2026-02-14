@@ -1,3 +1,7 @@
+/** @file permission_filter.cpp
+ *  @brief PermissionFilter implementation
+ */
+
 #include "permission_filter.h"
 #include <spdlog/spdlog.h>
 #include <json/json.h>

@@ -1,3 +1,7 @@
+/**
+ * @file html_parser.h
+ * @brief HTML parser for ICAO PKD portal version extraction
+ */
 #pragma once
 
 #include <string>

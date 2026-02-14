@@ -27,7 +27,6 @@
  * - Direct database access implementation (Repository's job - but currently mixed)
  * - Business logic for uploads/validation (UploadService/ValidationService's job)
  *
- * @note Part of main.cpp refactoring Phase 1
  * @date 2026-01-29
  */
 
@@ -56,9 +55,8 @@ public:
      */
     ~StatisticsService() = default;
 
-    // ========================================================================
-    // Upload Statistics
-    // ========================================================================
+    /// @name Upload Statistics
+    /// @{
 
     /**
      * @brief Get upload statistics
@@ -107,9 +105,10 @@ public:
      */
     Json::Value getUploadTrend(int days = 30);
 
-    // ========================================================================
-    // Certificate Statistics
-    // ========================================================================
+    /// @}
+
+    /// @name Certificate Statistics
+    /// @{
 
     /**
      * @brief Get certificate statistics
@@ -151,9 +150,10 @@ public:
      */
     Json::Value getCrlStatistics();
 
-    // ========================================================================
-    // Country Statistics
-    // ========================================================================
+    /// @}
+
+    /// @name Country Statistics
+    /// @{
 
     /**
      * @brief Get country statistics (summary)
@@ -229,9 +229,10 @@ public:
      */
     Json::Value getCountryDetail(const std::string& countryCode);
 
-    // ========================================================================
-    // Validation Statistics
-    // ========================================================================
+    /// @}
+
+    /// @name Validation Statistics
+    /// @{
 
     /**
      * @brief Get validation statistics
@@ -272,9 +273,10 @@ public:
      */
     Json::Value getValidationStatisticsByUpload(const std::string& uploadId);
 
-    // ========================================================================
-    // System-Wide Statistics
-    // ========================================================================
+    /// @}
+
+    /// @name System-Wide Statistics
+    /// @{
 
     /**
      * @brief Get system-wide statistics (dashboard)
@@ -305,9 +307,10 @@ public:
      */
     Json::Value getDatabaseStatistics();
 
-    // ========================================================================
-    // Trend Analysis
-    // ========================================================================
+    /// @}
+
+    /// @name Trend Analysis
+    /// @{
 
     /**
      * @brief Get certificate growth trend
@@ -337,9 +340,10 @@ public:
      */
     Json::Value getValidationTrend(int days = 30);
 
-    // ========================================================================
-    // Export Statistics
-    // ========================================================================
+    /// @}
+
+    /// @name Export Statistics
+    /// @{
 
     /**
      * @brief Export statistics to CSV format
@@ -364,14 +368,14 @@ public:
      */
     std::string generateStatisticsReport(const std::string& format = "json");
 
+    /// @}
+
 private:
     // Repository Dependencies
     repositories::StatisticsRepository* statsRepo_;
     repositories::UploadRepository* uploadRepo_;
 
-    // ========================================================================
     // Helper Methods
-    // ========================================================================
 
     /**
      * @brief Calculate percentage

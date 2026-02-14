@@ -2,11 +2,7 @@
  * @file crl_validator.h
  * @brief CRL-based certificate revocation checking
  *
- * Sprint 2: Link Certificate Validation Core
  * Implements RFC 5280 CRL validation for CSCA/DSC/LC certificates
- *
- * @version 1.0.0
- * @date 2026-01-24
  */
 
 #pragma once

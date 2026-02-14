@@ -9,9 +9,7 @@
 
 namespace common {
 
-// =============================================================================
-// LdapConnection Implementation
-// =============================================================================
+// --- LdapConnection Implementation ---
 
 LdapConnection::~LdapConnection() {
     if (!released_ && ldap_) {
@@ -32,9 +30,7 @@ void LdapConnection::release() {
     released_ = true;
 }
 
-// =============================================================================
-// LdapConnectionPool Implementation
-// =============================================================================
+// --- LdapConnectionPool Implementation ---
 
 LdapConnectionPool::LdapConnectionPool(
     const std::string& ldapUrl,

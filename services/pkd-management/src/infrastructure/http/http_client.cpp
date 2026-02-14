@@ -1,3 +1,8 @@
+/**
+ * @file http_client.cpp
+ * @brief HTTP client implementation using Drogon HttpClient
+ */
+
 #include "http_client.h"
 #include <spdlog/spdlog.h>
 #include <regex>

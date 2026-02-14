@@ -26,7 +26,6 @@
  * - Direct database access (Repository's job)
  * - Upload processing (UploadService's job)
  *
- * @note Part of main.cpp refactoring Phase 1.6
  * @date 2026-01-29
  */
 
@@ -55,9 +54,8 @@ public:
      */
     ~ValidationService() = default;
 
-    // ========================================================================
-    // DSC Re-validation
-    // ========================================================================
+    /// @name DSC Re-validation
+    /// @{
 
     /**
      * @brief Re-validation Result
@@ -99,9 +97,10 @@ public:
      */
     RevalidateResult revalidateDscCertificatesForUpload(const std::string& uploadId);
 
-    // ========================================================================
-    // Single Certificate Validation
-    // ========================================================================
+    /// @}
+
+    /// @name Single Certificate Validation
+    /// @{
 
     /**
      * @brief Validation Result for Single Certificate
@@ -150,9 +149,10 @@ public:
      */
     ValidationResult validateCertificateByFingerprint(const std::string& fingerprint);
 
-    // ========================================================================
-    // Validation Result Retrieval
-    // ========================================================================
+    /// @}
+
+    /// @name Validation Result Retrieval
+    /// @{
 
     /**
      * @brief Get validation result by certificate fingerprint
@@ -227,9 +227,10 @@ public:
      */
     Json::Value getValidationStatistics(const std::string& uploadId);
 
-    // ========================================================================
-    // Link Certificate Validation
-    // ========================================================================
+    /// @}
+
+    /// @name Link Certificate Validation
+    /// @{
 
     /**
      * @brief Link Certificate Validation Result
@@ -266,14 +267,14 @@ public:
      */
     LinkCertValidationResult validateLinkCertificateById(const std::string& certId);
 
+    /// @}
+
 private:
     // Repository Dependencies
     repositories::ValidationRepository* validationRepo_;
     repositories::CertificateRepository* certRepo_;
 
-    // ========================================================================
     // Trust Chain Building
-    // ========================================================================
 
     /**
      * @brief Trust Chain Node
@@ -337,9 +338,7 @@ private:
      */
     bool validateTrustChainInternal(const TrustChain& chain, bool& cscaExpired);
 
-    // ========================================================================
     // CRL Check
-    // ========================================================================
 
     /**
      * @brief Check if certificate is revoked via CRL
@@ -349,9 +348,7 @@ private:
      */
     bool checkCrlRevocation(X509* cert);
 
-    // ========================================================================
     // Utility Methods
-    // ========================================================================
 
     /**
      * @brief Build human-readable trust chain path

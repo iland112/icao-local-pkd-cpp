@@ -2,7 +2,6 @@
  * @file ldap_dn_test.cpp
  * @brief Unit tests for LDAP DN building functions
  *
- * Sprint 1: Week 5 - LDAP Storage Fix
  * Tests both legacy DN (Subject DN + Serial) and v2 DN (Fingerprint-based)
  */
 
@@ -46,9 +45,7 @@ std::string buildCertificateDnV2(const std::string& fingerprint, const std::stri
            "," + dataContainer + "," + appConfig.ldapBaseDn;
 }
 
-// =============================================================================
-// Test Suite: LDAP DN v2 (Fingerprint-based)
-// =============================================================================
+// --- Test Suite: LDAP DN v2 (Fingerprint-based) ---
 
 class LdapDnV2Test : public ::testing::Test {
 protected:
@@ -207,9 +204,7 @@ TEST_F(LdapDnV2Test, OrganizationalUnit_Mapping) {
     EXPECT_NE(dnDSC_NC.find("o=dsc_nc"), std::string::npos);
 }
 
-// =============================================================================
-// Performance Tests
-// =============================================================================
+// --- Performance Tests ---
 
 TEST_F(LdapDnV2Test, Performance_BuildDn) {
     std::string fingerprint = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
@@ -230,9 +225,7 @@ TEST_F(LdapDnV2Test, Performance_BuildDn) {
               << "(" << (duration.count() / 10.0) << "us per DN)" << std::endl;
 }
 
-// =============================================================================
-// Integration Tests (require database)
-// =============================================================================
+// --- Integration Tests (require database) ---
 
 // NOTE: These tests are disabled by default as they require database connection
 // Enable with: GTEST_FILTER=*Integration* ./ldap_dn_test
@@ -259,9 +252,7 @@ TEST_F(LdapDnV2Test, DISABLED_Integration_FingerprintUniqueness) {
     //      HAVING COUNT(*) > 1;
 }
 
-// =============================================================================
-// Main
-// =============================================================================
+// --- Main ---
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);

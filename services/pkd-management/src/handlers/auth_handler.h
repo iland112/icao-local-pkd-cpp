@@ -18,7 +18,7 @@ namespace handlers {
  * - POST /api/auth/refresh - Refresh JWT token
  * - GET /api/auth/me - Get current user info
  *
- * @note Phase 5.4: Migrated to Repository Pattern for Oracle support
+ * Uses Repository Pattern for database-agnostic operation.
  */
 class AuthHandler {
 public:
@@ -162,9 +162,8 @@ private:
         const std::string& userAgent,
         const std::string& errorMessage = "");
 
-    // ========================================================================
-    // User Management Endpoints (Admin Only)
-    // ========================================================================
+    /// @name User Management Endpoints (Admin Only)
+    /// @{
 
     /**
      * @brief GET /api/auth/users - List all users (admin only)
@@ -219,9 +218,10 @@ private:
     std::optional<auth::JwtClaims> requireAdmin(
         const drogon::HttpRequestPtr& req);
 
-    // ========================================================================
-    // Audit Log Endpoints (Admin Only)
-    // ========================================================================
+    /// @}
+
+    /// @name Audit Log Endpoints (Admin Only)
+    /// @{
 
     /**
      * @brief GET /api/auth/audit-log - Get authentication audit logs (admin only)
@@ -284,6 +284,8 @@ private:
     void handleGetAuditStats(
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /// @}
 };
 
 } // namespace handlers

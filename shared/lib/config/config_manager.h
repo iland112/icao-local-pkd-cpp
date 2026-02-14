@@ -99,9 +99,7 @@ public:
      */
     static std::string getEnv(const std::string& key, const std::string& defaultValue = "");
 
-    // ==========================================================================
-    // Predefined Configuration Keys
-    // ==========================================================================
+    /// @name Predefined Configuration Keys
 
     // Database
     static constexpr const char* DB_HOST = "DB_HOST";

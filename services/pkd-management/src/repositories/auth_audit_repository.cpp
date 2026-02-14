@@ -1,3 +1,7 @@
+/** @file auth_audit_repository.cpp
+ *  @brief AuthAuditRepository implementation
+ */
+
 #include "auth_audit_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -5,9 +9,7 @@
 
 namespace repositories {
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 AuthAuditRepository::AuthAuditRepository(common::IQueryExecutor* queryExecutor)
     : queryExecutor_(queryExecutor)
@@ -20,9 +22,7 @@ AuthAuditRepository::AuthAuditRepository(common::IQueryExecutor* queryExecutor)
     spdlog::debug("[AuthAuditRepository] Initialized (DB type: {})", dbType);
 }
 
-// ============================================================================
-// Public Methods
-// ============================================================================
+// --- Public Methods ---
 
 bool AuthAuditRepository::insert(
     const std::optional<std::string>& userId,
@@ -194,7 +194,7 @@ Json::Value AuthAuditRepository::findAll(
     }
 }
 
-// Helper: snake_case to camelCase
+/** @brief Convert snake_case column name to camelCase */
 std::string AuthAuditRepository::toCamelCase(const std::string& snake_case)
 {
     std::string camelCase;

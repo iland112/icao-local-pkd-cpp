@@ -1,13 +1,9 @@
-// =============================================================================
-// ICAO Local PKD - Monitoring Service
-// =============================================================================
-// Version: 1.1.0
-// Description: System resource and service health monitoring (DB-independent)
-// =============================================================================
-// Changelog:
-//   v1.0.0 (2026-01-13): Initial release
-//   v1.1.0 (2026-02-12): Remove PostgreSQL dependency for Oracle compatibility
-// =============================================================================
+/**
+ * @file main.cpp
+ * @brief ICAO Local PKD Monitoring Service
+ *
+ * System resource and service health monitoring (DB-independent).
+ */
 
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
@@ -32,9 +28,7 @@
 
 using namespace drogon;
 
-// =============================================================================
-// Global Configuration
-// =============================================================================
+// --- Global Configuration ---
 struct Config {
     // Server
     int serverPort = 8084;
@@ -64,9 +58,7 @@ struct Config {
 
 Config g_config;
 
-// =============================================================================
-// System Metrics Structures
-// =============================================================================
+// --- System Metrics Structures ---
 struct CpuMetrics {
     float usagePercent = 0.0f;
     float load1min = 0.0f;
@@ -103,9 +95,7 @@ struct SystemMetrics {
     NetworkMetrics network;
 };
 
-// =============================================================================
-// Service Health Structures
-// =============================================================================
+// --- Service Health Structures ---
 enum class ServiceStatus {
     UP,
     DEGRADED,
@@ -121,9 +111,7 @@ struct ServiceHealth {
     std::chrono::system_clock::time_point checkedAt;
 };
 
-// =============================================================================
-// System Metrics Collector
-// =============================================================================
+// --- System Metrics Collector ---
 class SystemMetricsCollector {
 public:
     SystemMetricsCollector() {
@@ -358,9 +346,7 @@ private:
     }
 };
 
-// =============================================================================
-// Service Health Checker
-// =============================================================================
+// --- Service Health Checker ---
 
 // No-op write callback to discard curl response body
 static size_t discardWriteCallback(void* /*contents*/, size_t size, size_t nmemb, void* /*userp*/) {
@@ -414,9 +400,7 @@ public:
     }
 };
 
-// =============================================================================
-// HTTP Handlers
-// =============================================================================
+// --- HTTP Handlers ---
 
 // Health check
 void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
@@ -524,9 +508,7 @@ void handleServicesHealth(const HttpRequestPtr&, std::function<void(const HttpRe
     callback(resp);
 }
 
-// =============================================================================
-// Logging Setup
-// =============================================================================
+// --- Logging Setup ---
 void setupLogging() {
     try {
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
@@ -556,9 +538,7 @@ void setupLogging() {
     }
 }
 
-// =============================================================================
-// Main
-// =============================================================================
+// --- Main ---
 int main() {
     // Initialize CURL library (must be done before any threads)
     curl_global_init(CURL_GLOBAL_DEFAULT);

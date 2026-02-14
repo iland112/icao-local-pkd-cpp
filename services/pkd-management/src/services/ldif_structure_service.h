@@ -7,7 +7,6 @@
  *
  * @author SmartCore Inc.
  * @date 2026-01-31
- * @version v2.2.2
  */
 
 #pragma once

@@ -1,3 +1,7 @@
+/**
+ * @file crl.h
+ * @brief CRL domain model for DB-LDAP synchronization
+ */
 #pragma once
 
 #include <string>
@@ -15,7 +19,8 @@ namespace icao::relay::domain {
  */
 class Crl {
 public:
-    // Constructors
+    /// @name Constructors
+    /// @{
     Crl() = default;
 
     Crl(
@@ -33,8 +38,10 @@ public:
           this_update_(this_update), next_update_(next_update),
           stored_in_ldap_(stored_in_ldap), crl_data_(crl_data)
     {}
+    /// @}
 
-    // Getters
+    /// @name Getters
+    /// @{
     std::string getId() const { return id_; }
     std::string getFingerprintSha256() const { return fingerprint_sha256_; }
     std::string getIssuerDn() const { return issuer_dn_; }
@@ -43,8 +50,10 @@ public:
     std::chrono::system_clock::time_point getNextUpdate() const { return next_update_; }
     bool isStoredInLdap() const { return stored_in_ldap_; }
     std::vector<unsigned char> getCrlData() const { return crl_data_; }
+    /// @}
 
-    // Setters
+    /// @name Setters
+    /// @{
     void setId(const std::string& id) { id_ = id; }
     void setFingerprintSha256(const std::string& fingerprint) { fingerprint_sha256_ = fingerprint; }
     void setIssuerDn(const std::string& issuer_dn) { issuer_dn_ = issuer_dn; }
@@ -57,6 +66,7 @@ public:
     }
     void setStoredInLdap(bool stored) { stored_in_ldap_ = stored; }
     void setCrlData(const std::vector<unsigned char>& data) { crl_data_ = data; }
+    /// @}
 
     /**
      * @brief Convert to JSON representation (without binary CRL data)

@@ -1,3 +1,11 @@
+/**
+ * @file ldap_utils.h
+ * @brief LDAP utility functions for DN escaping and filter construction
+ *
+ * Provides RFC 4514 DN component escaping and RFC 4515 filter value escaping
+ * to prevent LDAP injection attacks.
+ */
+
 #pragma once
 
 #include <string>

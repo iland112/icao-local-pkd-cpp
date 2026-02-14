@@ -1,3 +1,7 @@
+/**
+ * @file config.h
+ * @brief Global configuration for PKD Relay Service
+ */
 #pragma once
 
 #include <string>
@@ -7,24 +11,28 @@
 namespace icao {
 namespace relay {
 
-// =============================================================================
-// Global Configuration
-// =============================================================================
+/**
+ * @brief Global configuration loaded from environment variables
+ */
 struct Config {
-    // Server
+    /// @name Server
+    /// @{
     int serverPort = 8083;
+    /// @}
 
-    // Database
+    /// @name Database
+    /// @{
     std::string dbHost = "postgres";
     int dbPort = 5432;
     std::string dbName = "pkd";
     std::string dbUser = "pkd";
     std::string dbPassword;  // Must be set via environment variable
+    /// @}
 
-    // LDAP (read) - Software Load Balancing
-    std::string ldapReadHosts = "openldap1:389,openldap2:389";  // Comma-separated list
-
-    // LDAP (write - for reconciliation)
+    /// @name LDAP
+    /// @{
+    std::string ldapReadHosts = "openldap1:389,openldap2:389";  // Comma-separated list (read - Software Load Balancing)
+    // Write - for reconciliation
     std::string ldapWriteHost = "openldap1";
     int ldapWritePort = 389;
     std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
@@ -34,17 +42,23 @@ struct Config {
     // LDAP DIT Structure (runtime configurable)
     std::string ldapDataContainer = "dc=data";       // Container for normal certificates
     std::string ldapNcDataContainer = "dc=nc-data";  // Container for non-conformant DSC
+    /// @}
 
-    // Sync settings
+    /// @name Sync settings
+    /// @{
     bool autoReconcile = true;
     int maxReconcileBatchSize = 100;
+    /// @}
 
-    // Daily scheduler settings
+    /// @name Daily scheduler settings
+    /// @{
     bool dailySyncEnabled = true;
     int dailySyncHour = 0;      // 00:00 (midnight)
     int dailySyncMinute = 0;
     bool revalidateCertsOnSync = true;
+    /// @}
 
+    /** @brief Load configuration from environment variables */
     void loadFromEnv() {
         if (auto e = std::getenv("SERVER_PORT")) serverPort = std::stoi(e);
         if (auto e = std::getenv("DB_HOST")) dbHost = e;
@@ -68,7 +82,7 @@ struct Config {
         if (auto e = std::getenv("REVALIDATE_CERTS_ON_SYNC")) revalidateCertsOnSync = (std::string(e) == "true");
     }
 
-    // Validate required credentials are set
+    /** @brief Validate that required credentials are set */
     void validateRequiredCredentials() const {
         if (dbPassword.empty()) {
             throw std::runtime_error("FATAL: DB_PASSWORD environment variable not set");
@@ -78,7 +92,7 @@ struct Config {
         }
     }
 
-    // Load user-configurable settings from database (implemented in config.cpp)
+    /** @brief Load user-configurable settings from database */
     bool loadFromDatabase();
 };
 

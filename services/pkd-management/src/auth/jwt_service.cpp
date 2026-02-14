@@ -1,3 +1,7 @@
+/** @file jwt_service.cpp
+ *  @brief JwtService implementation (HS256 JWT generation and validation)
+ */
+
 #include "jwt_service.h"
 #include <spdlog/spdlog.h>
 #include <openssl/hmac.h>

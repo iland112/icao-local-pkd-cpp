@@ -2,7 +2,6 @@
  * @file crl_validator_test.cpp
  * @brief Unit tests for CRL validation functionality
  *
- * Sprint 2: Link Certificate Validation Core
  * Tests CRL-based certificate revocation checking (RFC 5280)
  */
 
@@ -17,9 +16,7 @@
 
 using namespace crl;
 
-// ============================================================================
-// Test Fixtures
-// ============================================================================
+// --- Test Fixtures ---
 
 class CrlValidatorTest : public ::testing::Test {
 protected:
@@ -134,9 +131,7 @@ protected:
     }
 };
 
-// ============================================================================
-// Utility Function Tests
-// ============================================================================
+// --- Utility Function Tests ---
 
 TEST_F(CrlValidatorTest, RevocationStatusToString) {
     EXPECT_EQ(revocationStatusToString(RevocationStatus::GOOD), "GOOD");
@@ -195,9 +190,7 @@ TEST_F(CrlValidatorTest, HexSerialToAsn1_LongSerial) {
     ASN1_INTEGER_free(serial);
 }
 
-// ============================================================================
-// CRL Creation and Parsing Tests
-// ============================================================================
+// --- CRL Creation and Parsing Tests ---
 
 TEST_F(CrlValidatorTest, CreateTestCrl_Empty) {
     X509_CRL* crl = createTestCrl({});
@@ -252,9 +245,7 @@ TEST_F(CrlValidatorTest, CrlBinaryRoundtrip) {
     X509_CRL_free(parsedCrl);
 }
 
-// ============================================================================
-// Revocation Check Logic Tests (without DB)
-// ============================================================================
+// --- Revocation Check Logic Tests (without DB) ---
 
 TEST_F(CrlValidatorTest, CheckRevocation_CertInRevokedList) {
     std::string targetSerial = "1A2B3C";
@@ -335,9 +326,7 @@ TEST_F(CrlValidatorTest, CheckRevocation_EmptyCrl) {
     X509_CRL_free(crl);
 }
 
-// ============================================================================
-// Serial Number Edge Cases
-// ============================================================================
+// --- Serial Number Edge Cases ---
 
 TEST_F(CrlValidatorTest, SerialNumber_SingleDigit) {
     std::string serial = "1";
@@ -369,9 +358,7 @@ TEST_F(CrlValidatorTest, SerialNumber_MaxLength) {
     ASN1_INTEGER_free(serialAsn1);
 }
 
-// ============================================================================
-// Performance Tests
-// ============================================================================
+// --- Performance Tests ---
 
 TEST_F(CrlValidatorTest, Performance_LargeCrl) {
     // Create CRL with 1000 revoked certificates
@@ -403,9 +390,7 @@ TEST_F(CrlValidatorTest, Performance_LargeCrl) {
     X509_CRL_free(crl);
 }
 
-// ============================================================================
-// Main
-// ============================================================================
+// --- Main ---
 
 int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);

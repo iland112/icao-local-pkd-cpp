@@ -1,3 +1,7 @@
+/** @file upload_service.cpp
+ *  @brief UploadService implementation
+ */
+
 #include "upload_service.h"
 #include "../repositories/crl_repository.h"
 #include <spdlog/spdlog.h>
@@ -20,17 +24,14 @@
 #include <icao/x509/certificate_parser.h>
 #include <dl_parser.h>
 
-// ============================================================================
-// External Declarations for Processing Functions in main.cpp
-// ============================================================================
+// --- External Declarations for Processing Functions in main.cpp ---
 
-// Phase 4.4 Note: These async processing functions are currently in main.cpp
+// These async processing functions are currently in main.cpp.
 // Full migration to UploadService requires extracting:
 // - ProgressManager (SSE progress tracking singleton)
 // - ProcessingStrategy (AUTO/MANUAL mode pattern)
 // - Helper functions (parseCertificateEntry, parseCrlEntry, etc.)
 // - Shared types (ProcessingProgress, ProcessingStage enum)
-// Once these are refactored to shared headers/libs, the logic can be moved here
 
 extern void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 
@@ -53,7 +54,7 @@ extern std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
     const std::string& issuerDn, const std::string& fingerprint,
     const std::vector<uint8_t>& crlData);
 
-// CRL Repository (Phase 6.4: DB operations moved to CrlRepository)
+// CRL Repository (DB operations in CrlRepository)
 namespace repositories { class CrlRepository; }
 extern std::shared_ptr<repositories::CrlRepository> crlRepository;
 
@@ -93,9 +94,7 @@ static std::string parseCollectionNumber(const std::string& fileName) {
     return "";
 }
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 UploadService::UploadService(
     repositories::UploadRepository* uploadRepo,
@@ -118,9 +117,7 @@ UploadService::UploadService(
                 dlRepo_ ? " (DL support enabled)" : "");
 }
 
-// ============================================================================
-// Public Methods - Individual Certificate Upload
-// ============================================================================
+// --- Public Methods - Individual Certificate Upload ---
 
 UploadService::CertificateUploadResult UploadService::uploadCertificate(
     const std::string& fileName,
@@ -263,9 +260,7 @@ UploadService::CertificateUploadResult UploadService::uploadCertificate(
     return result;
 }
 
-// ============================================================================
-// Public Methods - Certificate Preview (parse only, no save)
-// ============================================================================
+// --- Public Methods - Certificate Preview (parse only, no save) ---
 
 UploadService::CertificatePreviewResult UploadService::previewCertificate(
     const std::string& fileName,
@@ -562,9 +557,7 @@ UploadService::CertificatePreviewResult UploadService::previewCertificate(
     return result;
 }
 
-// ============================================================================
-// Public Methods - LDIF Upload
-// ============================================================================
+// --- Public Methods - LDIF Upload ---
 
 UploadService::LdifUploadResult UploadService::uploadLdif(
     const std::string& fileName,
@@ -620,7 +613,7 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         std::string tempFilePath = saveToTempFile(result.uploadId, fileContent, ".ldif");
         spdlog::debug("Saved to temp file: {}", tempFilePath);
 
-        // Step 7: Trigger async processing (Phase 4.4)
+        // Step 7: Trigger async processing
         processLdifAsync(result.uploadId, fileContent);
         spdlog::info("UploadService::uploadLdif - Async LDIF processing triggered for upload: {}", result.uploadId);
 
@@ -717,9 +710,7 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
     return result;
 }
 
-// ============================================================================
-// Public Methods - Upload History
-// ============================================================================
+// --- Public Methods - Upload History ---
 
 Json::Value UploadService::getUploadHistory(const UploadHistoryFilter& filter)
 {
@@ -854,9 +845,7 @@ Json::Value UploadService::getUploadDetail(const std::string& uploadId)
     return response;
 }
 
-// ============================================================================
-// Stubs (TODO)
-// ============================================================================
+// --- Stubs (TODO) ---
 
 bool UploadService::triggerParsing(const std::string& uploadId)
 {
@@ -954,9 +943,7 @@ Json::Value UploadService::getDetailedCountryStatistics(int limit)
     }
 }
 
-// ============================================================================
-// Private Helper Methods
-// ============================================================================
+// --- Private Helper Methods ---
 
 std::string UploadService::generateUploadId()
 {
@@ -1005,9 +992,7 @@ std::string UploadService::computeFileHash(const std::vector<uint8_t>& content)
     return ss.str();
 }
 
-// ============================================================================
-// Private Helpers - Individual Certificate Processing
-// ============================================================================
+// --- Private Helpers - Individual Certificate Processing ---
 
 void UploadService::processSingleCertificate(CertificateUploadResult& result, X509* cert,
                                               const std::vector<uint8_t>& rawContent, LDAP* ld)
@@ -1205,9 +1190,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
     X509_CRL_free(crl);
 }
 
-// ============================================================================
-// Private Helpers - DL (Deviation List) Processing
-// ============================================================================
+// --- Private Helpers - DL (Deviation List) Processing ---
 
 void UploadService::processDlFile(CertificateUploadResult& result,
                                    const std::vector<uint8_t>& fileContent, LDAP* ld)
@@ -1293,13 +1276,11 @@ void UploadService::processDlFile(CertificateUploadResult& result,
     }
 }
 
-// ============================================================================
-// Async Processing Methods (Phase 4.4 - Migrated from main.cpp)
-// ============================================================================
+// --- Async Processing Methods (Migrated from main.cpp) ---
 
 void UploadService::processLdifAsync(const std::string& uploadId, const std::vector<uint8_t>& content)
 {
-    // Phase 4.4 Note: Currently delegates to main.cpp implementation
+    // Currently delegates to main.cpp implementation
     // Full migration to UploadService requires:
     // 1. Extracting ProgressManager to shared header (currently in main.cpp)
     // 2. Extracting ProcessingStrategy to separate compilation unit

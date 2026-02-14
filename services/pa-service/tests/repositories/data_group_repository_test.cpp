@@ -99,9 +99,7 @@ protected:
     }
 };
 
-// =============================================================================
-// INSERT Tests
-// =============================================================================
+// --- INSERT Tests ---
 
 TEST_F(DataGroupRepositoryTest, InsertValidDataGroup) {
     // Arrange
@@ -155,9 +153,7 @@ TEST_F(DataGroupRepositoryTest, InsertWithoutBinaryData) {
     EXPECT_EQ(retrieved["dataSize"].asInt(), 0);
 }
 
-// =============================================================================
-// FIND BY VERIFICATION ID Tests
-// =============================================================================
+// --- FIND BY VERIFICATION ID Tests ---
 
 TEST_F(DataGroupRepositoryTest, FindByVerificationIdMultipleGroups) {
     // Arrange - Insert 3 data groups
@@ -187,9 +183,7 @@ TEST_F(DataGroupRepositoryTest, FindByVerificationIdNoGroups) {
     EXPECT_EQ(result.size(), 0);
 }
 
-// =============================================================================
-// FIND BY ID Tests
-// =============================================================================
+// --- FIND BY ID Tests ---
 
 TEST_F(DataGroupRepositoryTest, FindByIdExists) {
     // Arrange
@@ -213,9 +207,7 @@ TEST_F(DataGroupRepositoryTest, FindByIdNotExists) {
     EXPECT_TRUE(result.isNull());
 }
 
-// =============================================================================
-// DELETE Tests
-// =============================================================================
+// --- DELETE Tests ---
 
 TEST_F(DataGroupRepositoryTest, DeleteByVerificationIdSuccess) {
     // Arrange - Insert 3 data groups
@@ -242,9 +234,7 @@ TEST_F(DataGroupRepositoryTest, DeleteByVerificationIdNoGroups) {
     EXPECT_EQ(deletedCount, 0);
 }
 
-// =============================================================================
-// HASH VALIDATION Tests
-// =============================================================================
+// --- HASH VALIDATION Tests ---
 
 TEST_F(DataGroupRepositoryTest, InsertInvalidHash) {
     // Arrange
@@ -262,9 +252,7 @@ TEST_F(DataGroupRepositoryTest, InsertInvalidHash) {
     EXPECT_NE(retrieved["expectedHash"].asString(), retrieved["actualHash"].asString());
 }
 
-// =============================================================================
-// DG NUMBER PARSING Tests
-// =============================================================================
+// --- DG NUMBER PARSING Tests ---
 
 TEST_F(DataGroupRepositoryTest, DgNumberParsing) {
     // Test all DG numbers 1-16

@@ -1,3 +1,7 @@
+/**
+ * @file validation_service.h
+ * @brief Service for certificate validation and revalidation
+ */
 #pragma once
 
 #include "../repositories/validation_repository.h"

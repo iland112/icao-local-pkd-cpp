@@ -1,3 +1,7 @@
+/**
+ * @file certificate_repository.cpp
+ * @brief Certificate repository implementation
+ */
 #include "certificate_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>

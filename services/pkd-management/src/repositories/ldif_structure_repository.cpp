@@ -4,7 +4,6 @@
  *
  * @author SmartCore Inc.
  * @date 2026-01-31
- * @version v2.2.2
  */
 
 #include "ldif_structure_repository.h"
@@ -14,9 +13,7 @@
 
 namespace repositories {
 
-// =============================================================================
-// LdifStructureData Methods
-// =============================================================================
+// --- LdifStructureData Methods ---
 
 Json::Value LdifStructureData::toJson() const {
     Json::Value root;
@@ -63,9 +60,7 @@ Json::Value LdifStructureData::toJson() const {
     return root;
 }
 
-// =============================================================================
-// LdifStructureRepository Methods
-// =============================================================================
+// --- LdifStructureRepository Methods ---
 
 LdifStructureRepository::LdifStructureRepository(UploadRepository* uploadRepo)
     : uploadRepository_(uploadRepo) {

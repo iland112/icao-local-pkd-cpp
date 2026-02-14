@@ -12,7 +12,6 @@
  *
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of Phase 5.4: AuthHandler Repository Pattern Migration
  * @date 2026-02-08
  */
 
@@ -100,7 +99,7 @@ public:
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
 
-    // Helper: snake_case to camelCase conversion
+    /** @brief Convert snake_case to camelCase */
     std::string toCamelCase(const std::string& snake_case);
 };
 

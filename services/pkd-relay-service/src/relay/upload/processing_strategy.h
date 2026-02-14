@@ -1,3 +1,7 @@
+/**
+ * @file processing_strategy.h
+ * @brief Processing strategy pattern for AUTO/MANUAL upload modes
+ */
 #pragma once
 
 #include <string>
@@ -80,7 +84,7 @@ public:
  */
 class ManualProcessingStrategy : public ProcessingStrategy {
 public:
-    // Stage 1: Parse only
+    /** @brief Stage 1: Parse only */
     void processLdifEntries(
         const std::string& uploadId,
         const std::vector<LdifEntry>& entries,
@@ -95,13 +99,13 @@ public:
         LDAP* ld
     ) override;
 
-    // Stage 2: Validate and save to DB + LDAP
+    /** @brief Stage 2: Validate and save to DB + LDAP */
     void validateAndSaveToDb(
         const std::string& uploadId,
         PGconn* conn
     );
 
-    // Cleanup failed upload
+    /** @brief Cleanup failed upload resources */
     static void cleanupFailedUpload(
         const std::string& uploadId,
         PGconn* conn

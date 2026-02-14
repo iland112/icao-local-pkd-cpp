@@ -1,3 +1,7 @@
+/** @file validation_service.cpp
+ *  @brief ValidationService implementation
+ */
+
 #include "validation_service.h"
 #include <spdlog/spdlog.h>
 #include <cstring>
@@ -12,9 +16,7 @@
 
 namespace services {
 
-// ============================================================================
-// Constructor & Destructor
-// ============================================================================
+// --- Constructor & Destructor ---
 
 ValidationService::ValidationService(
     repositories::ValidationRepository* validationRepo,
@@ -32,9 +34,7 @@ ValidationService::ValidationService(
     spdlog::info("ValidationService initialized with Repository dependencies");
 }
 
-// ============================================================================
-// Public Methods - DSC Re-validation
-// ============================================================================
+// --- Public Methods - DSC Re-validation ---
 
 ValidationService::RevalidateResult ValidationService::revalidateDscCertificates()
 {
@@ -158,9 +158,7 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
     return result;
 }
 
-// ============================================================================
-// Public Methods - Single Certificate Validation
-// ============================================================================
+// --- Public Methods - Single Certificate Validation ---
 
 ValidationService::ValidationResult ValidationService::validateCertificate(
     X509* cert,
@@ -278,9 +276,7 @@ ValidationService::ValidationResult ValidationService::validateCertificateByFing
     return result;
 }
 
-// ============================================================================
-// Public Methods - Validation Result Retrieval
-// ============================================================================
+// --- Public Methods - Validation Result Retrieval ---
 
 Json::Value ValidationService::getValidationByFingerprint(const std::string& fingerprint)
 {
@@ -400,9 +396,7 @@ Json::Value ValidationService::getValidationStatistics(const std::string& upload
     return response;
 }
 
-// ============================================================================
-// Public Methods - Link Certificate Validation
-// ============================================================================
+// --- Public Methods - Link Certificate Validation ---
 
 ValidationService::LinkCertValidationResult ValidationService::validateLinkCertificate(X509* cert)
 {
@@ -447,9 +441,7 @@ ValidationService::LinkCertValidationResult ValidationService::validateLinkCerti
     return result;
 }
 
-// ============================================================================
-// Private Methods - Trust Chain Building
-// ============================================================================
+// --- Private Methods - Trust Chain Building ---
 
 ValidationService::TrustChain ValidationService::buildTrustChain(X509* leafCert, int maxDepth)
 {
@@ -711,9 +703,7 @@ bool ValidationService::validateTrustChainInternal(const TrustChain& chain, bool
     return true;
 }
 
-// ============================================================================
-// Private Methods - CRL Check
-// ============================================================================
+// --- Private Methods - CRL Check ---
 
 bool ValidationService::checkCrlRevocation(X509* cert)
 {
@@ -735,9 +725,7 @@ bool ValidationService::checkCrlRevocation(X509* cert)
     }
 }
 
-// ============================================================================
-// Private Methods - Utility
-// ============================================================================
+// --- Private Methods - Utility ---
 
 std::string ValidationService::buildTrustChainPath(const std::vector<TrustChainNode>& chain)
 {

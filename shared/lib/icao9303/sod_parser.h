@@ -43,9 +43,7 @@ public:
      */
     ~SodParser() = default;
 
-    // ==========================================================================
-    // Main SOD Parsing Operations
-    // ==========================================================================
+    /// @name Main SOD Parsing Operations
 
     /**
      * @brief Parse SOD from binary data
@@ -77,9 +75,7 @@ public:
      */
     bool verifySodSignature(const std::vector<uint8_t>& sodBytes, X509* dscCert);
 
-    // ==========================================================================
-    // Algorithm Extraction
-    // ==========================================================================
+    /// @name Algorithm Extraction
 
     /**
      * @brief Extract signature algorithm from SOD
@@ -109,9 +105,7 @@ public:
      */
     std::string extractHashAlgorithmOid(const std::vector<uint8_t>& sodBytes);
 
-    // ==========================================================================
-    // Helper Methods
-    // ==========================================================================
+    /// @name Helper Methods
 
     /**
      * @brief Unwrap ICAO SOD (remove outer tag if present)
@@ -142,9 +136,7 @@ public:
      */
     std::string getAlgorithmName(const std::string& oid, bool isHash);
 
-    // ==========================================================================
-    // API-Specific Methods
-    // ==========================================================================
+    /// @name API-Specific Methods
 
     /**
      * @brief Parse SOD for API response (includes detailed metadata)

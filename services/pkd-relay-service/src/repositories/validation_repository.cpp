@@ -1,3 +1,7 @@
+/**
+ * @file validation_repository.cpp
+ * @brief Validation repository implementation
+ */
 #include "validation_repository.h"
 #include <spdlog/spdlog.h>
 #include <json/json.h>

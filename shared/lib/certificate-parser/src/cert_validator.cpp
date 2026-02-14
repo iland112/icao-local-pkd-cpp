@@ -1,3 +1,8 @@
+/**
+ * @file cert_validator.cpp
+ * @brief Implementation of X.509 certificate validator
+ */
+
 #include "cert_validator.h"
 #include <openssl/evp.h>
 #include <openssl/err.h>

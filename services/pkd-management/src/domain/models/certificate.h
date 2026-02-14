@@ -66,7 +66,7 @@ public:
         // DN Components (optional, for internal use)
         std::optional<icao::x509::DnComponents> subjectDnComponents = std::nullopt,
         std::optional<icao::x509::DnComponents> issuerDnComponents = std::nullopt,
-        // X.509 Metadata Fields (v2.3.0)
+        // X.509 Metadata Fields
         int version = 2,
         std::optional<std::string> signatureAlgorithm = std::nullopt,
         std::optional<std::string> signatureHashAlgorithm = std::nullopt,
@@ -131,7 +131,7 @@ public:
     const std::optional<std::string>& getPkdConformanceText() const { return pkdConformanceText_; }
     const std::optional<std::string>& getPkdVersion() const { return pkdVersion_; }
 
-    // X.509 Metadata Getters (v2.3.0)
+    // X.509 Metadata Getters
     int getVersion() const { return version_; }
     const std::optional<std::string>& getSignatureAlgorithm() const { return signatureAlgorithm_; }
     const std::optional<std::string>& getSignatureHashAlgorithm() const { return signatureHashAlgorithm_; }
@@ -204,7 +204,7 @@ private:
     std::optional<std::string> pkdConformanceText_;  // PKD conformance text
     std::optional<std::string> pkdVersion_;          // PKD version
 
-    // X.509 Metadata Fields (v2.3.0) - 15 fields
+    // X.509 Metadata Fields
     int version_;                                           // 0=v1, 1=v2, 2=v3
     std::optional<std::string> signatureAlgorithm_;         // "sha256WithRSAEncryption"
     std::optional<std::string> signatureHashAlgorithm_;     // "SHA-256"

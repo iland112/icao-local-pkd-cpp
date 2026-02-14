@@ -1,3 +1,8 @@
+/**
+ * @file der_parser.h
+ * @brief DER (Distinguished Encoding Rules) format parser for X.509 certificates
+ */
+
 #pragma once
 
 #include <string>

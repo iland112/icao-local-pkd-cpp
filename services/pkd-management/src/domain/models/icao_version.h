@@ -1,3 +1,8 @@
+/**
+ * @file icao_version.h
+ * @brief Domain Model for ICAO PKD Version metadata
+ */
+
 #pragma once
 
 #include <string>

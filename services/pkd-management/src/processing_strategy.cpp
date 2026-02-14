@@ -1,12 +1,17 @@
+/**
+ * @file processing_strategy.cpp
+ * @brief Processing strategy implementations for AUTO and MANUAL upload modes
+ */
+
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 #include "common.h"
 #include "common/masterlist_processor.h"
-#include "common/progress_manager.h"  // Phase 4.4: Enhanced progress tracking
-#include "repositories/upload_repository.h"  // Phase 6.1: Repository Pattern
-#include "repositories/validation_repository.h"  // Phase 6.4: ValidationRepository for updateStatistics
+#include "common/progress_manager.h"
+#include "repositories/upload_repository.h"
+#include "repositories/validation_repository.h"
 #include "domain/models/validation_statistics.h"
-#include "i_query_executor.h"  // Phase 6.3: Database-agnostic query execution
+#include "i_query_executor.h"
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
 #include <spdlog/spdlog.h>
@@ -16,13 +21,12 @@
 #include <memory>
 #include <ldap.h>
 
-// Phase 4.4: Using declarations for enhanced progress tracking
 using common::ValidationStatistics;
 using common::CertificateMetadata;
 using common::IcaoComplianceStatus;
 using common::ProcessingStage;
 
-// Phase 6.1: Global repository declarations (defined in main.cpp)
+// Global repository declarations (defined in main.cpp)
 // Forward declare the class first
 namespace repositories {
     class UploadRepository;
@@ -30,9 +34,6 @@ namespace repositories {
 }
 extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
 extern std::shared_ptr<repositories::ValidationRepository> validationRepository;
-
-// This file will be implemented in phases
-// For now, we provide the factory implementation
 
 std::unique_ptr<ProcessingStrategy> ProcessingStrategyFactory::create(const std::string& mode) {
     if (mode == "AUTO") {
@@ -44,9 +45,7 @@ std::unique_ptr<ProcessingStrategy> ProcessingStrategyFactory::create(const std:
     }
 }
 
-// ============================================================================
-// AutoProcessingStrategy - Process in one go
-// ============================================================================
+// --- AutoProcessingStrategy - Process in one go ---
 
 // Forward declarations for functions still in main.cpp
 extern void updateUploadStatistics(const std::string& uploadId,
@@ -66,9 +65,9 @@ void AutoProcessingStrategy::processLdifEntries(
     spdlog::info("AUTO mode: Processing {} LDIF entries for upload {}", entries.size(), uploadId);
 
     ValidationStats stats;  // Existing validation statistics (legacy)
-    common::ValidationStatistics enhancedStats{};  // Phase 4.4: Enhanced statistics with metadata tracking
+    common::ValidationStatistics enhancedStats{};  // Enhanced statistics with metadata tracking
 
-    // v1.5.9: Pre-scan entries to calculate total counts for "X/Total" progress display
+    // Pre-scan entries to calculate total counts for "X/Total" progress display
     LdifProcessor::TotalCounts totalCounts;
     for (const auto& entry : entries) {
         // Count certificates (userCertificate or cACertificate)
@@ -111,7 +110,7 @@ void AutoProcessingStrategy::processLdifEntries(
         ::validationRepository->updateStatistics(uploadId, valStats);
     }
 
-    // Update ML and MLSC counts via repository (v2.6.2 fix)
+    // Update ML and MLSC counts via repository
     if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
         ::uploadRepository->updateStatistics(uploadId,
             counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
@@ -152,7 +151,6 @@ void AutoProcessingStrategy::processMasterListContent(
 ) {
     spdlog::info("AUTO mode: Processing Master List ({} bytes) for upload {}", content.size(), uploadId);
 
-    // v2.1.1: Use new masterlist_processor for correct MLSC/CSCA/LC extraction
     MasterListStats stats;
     common::ValidationStatistics enhancedStats{};
     bool success = processMasterListFile(ld, uploadId, content, stats, &enhancedStats);
@@ -174,9 +172,6 @@ void AutoProcessingStrategy::processMasterListContent(
                 stats.mlCount, stats.cscaExtractedCount, stats.cscaNewCount, stats.cscaDuplicateCount);
 
     // Update uploaded_file table with final statistics
-    // csca_count = newly inserted CSCA count (not total in file)
-    // total_entries = total CSCA certificates in ML file
-    // processed_entries = newly inserted CSCA count
     updateUploadStatistics(uploadId, "COMPLETED",
                           stats.cscaNewCount,          // csca_count (newly inserted only)
                           0,                            // dsc_count (Master Lists don't contain DSC)
@@ -206,9 +201,7 @@ void AutoProcessingStrategy::validateAndSaveToDb(
     throw std::runtime_error("validateAndSaveToDb() is not supported in AUTO mode");
 }
 
-// ============================================================================
-// ManualProcessingStrategy - Stage 1: Parse and save to temp
-// ============================================================================
+// --- ManualProcessingStrategy - Stage 1: Parse and save to temp ---
 
 std::string ManualProcessingStrategy::getTempFilePath(const std::string& uploadId, const std::string& type) const {
     return "/app/temp/" + uploadId + "_" + type + ".json";
@@ -381,7 +374,7 @@ void ManualProcessingStrategy::processLdifEntries(
     saveLdifEntriesToTempFile(uploadId, entries);
 
     // Update upload status using repository
-    // TODO Phase 6.1: Need uploadRepository->updateStatusAndTotalEntries() method
+    // TODO: Need uploadRepository->updateStatusAndTotalEntries() method
     // For now, using updateStatus() and noting that total_entries update is missing
     if (uploadRepository) {
         uploadRepository->updateStatus(uploadId, "PENDING", "");
@@ -467,7 +460,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         }
 
         ValidationStats stats;
-        common::ValidationStatistics enhancedStats{};  // Phase 4.4: Enhanced statistics with metadata tracking
+        common::ValidationStatistics enhancedStats{};  // Enhanced statistics with metadata tracking
 
         // Process entries (save to BOTH DB and LDAP simultaneously)
         auto counts = LdifProcessor::processEntries(uploadId, entries, ld, stats, enhancedStats, &totalCounts);
@@ -492,7 +485,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
             ::validationRepository->updateStatistics(uploadId, valStats);
         }
 
-        // Update ML and MLSC counts via repository (v2.6.2 fix - Oracle compatible)
+        // Update ML and MLSC counts via repository
         if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
             ::uploadRepository->updateStatistics(uploadId,
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
@@ -530,7 +523,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         spdlog::info("MANUAL mode Stage 2: Processing Master List ({} bytes)", content.size());
         processMasterListToDbAndLdap(uploadId, content, ld);
 
-        // Update upload status to COMPLETED via repository (Oracle compatible)
+        // Update upload status to COMPLETED via repository
         if (::uploadRepository) {
             ::uploadRepository->updateStatus(uploadId, "COMPLETED", "");
         }
@@ -609,9 +602,7 @@ void ManualProcessingStrategy::cleanupFailedUpload(
                  certsDeleted, crlsDeleted, mlsDeleted);
 }
 
-// ============================================================================
-// ManualProcessingStrategy - Helper: Process Master List to DB (Stage 2)
-// ============================================================================
+// --- ManualProcessingStrategy - Helper: Process Master List to DB (Stage 2) ---
 
 void ManualProcessingStrategy::processMasterListToDbAndLdap(
     const std::string& uploadId,
@@ -620,7 +611,6 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
 ) {
     spdlog::info("MANUAL mode Stage 2: Processing Master List to DB + LDAP ({} bytes)", content.size());
 
-    // v2.1.1: Use new masterlist_processor for correct MLSC/CSCA/LC extraction
     MasterListStats stats;
     common::ValidationStatistics enhancedStats{};
     bool success = processMasterListFile(ld, uploadId, content, stats, &enhancedStats);
@@ -651,7 +641,7 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
                           stats.cscaExtractedCount,   // processed_entries
                           "");                        // error_message
 
-    // Update MLSC and ML counts directly via repository (v2.6.2 fix)
+    // Update MLSC and ML counts directly via repository
     if (::uploadRepository) {
         ::uploadRepository->updateStatistics(uploadId,
             stats.cscaExtractedCount, 0, 0, 0,

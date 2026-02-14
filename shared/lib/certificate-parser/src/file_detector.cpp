@@ -1,3 +1,8 @@
+/**
+ * @file file_detector.cpp
+ * @brief Implementation of certificate file format detector
+ */
+
 #include "file_detector.h"
 #include <algorithm>
 #include <cctype>

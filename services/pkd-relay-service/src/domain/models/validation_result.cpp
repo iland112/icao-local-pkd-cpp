@@ -1,3 +1,7 @@
+/**
+ * @file validation_result.cpp
+ * @brief Validation result domain model implementation
+ */
 #include "validation_result.h"
 #include <ctime>
 #include <iomanip>

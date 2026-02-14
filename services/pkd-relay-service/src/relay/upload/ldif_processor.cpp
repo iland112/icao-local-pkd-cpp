@@ -1,3 +1,7 @@
+/**
+ * @file ldif_processor.cpp
+ * @brief LDIF file parser and processor implementation
+ */
 #include "ldif_processor.h"
 #include "common.h"
 #include <spdlog/spdlog.h>
@@ -6,12 +10,7 @@
 #include <sstream>
 #include <algorithm>
 
-// Note: This file contains extracted logic from main.cpp
-// The actual implementation will call existing functions from main.cpp
-// until we fully extract all helper functions.
-
 // Forward declarations of functions that still exist in main.cpp
-// These will be moved here gradually
 extern std::vector<LdifEntry> parseLdifContent(const std::string& content);
 extern bool parseCertificateEntry(PGconn* conn, LDAP* ld, const std::string& uploadId,
                                   const LdifEntry& entry, const std::string& attrName,

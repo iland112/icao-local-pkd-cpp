@@ -1,3 +1,7 @@
+/**
+ * @file certificate.h
+ * @brief Certificate domain model for DB-LDAP reconciliation
+ */
 #pragma once
 
 #include <string>
@@ -13,7 +17,8 @@ namespace icao::relay::domain {
  */
 class Certificate {
 public:
-    // Constructors
+    /// @name Constructors
+    /// @{
     Certificate() = default;
 
     Certificate(
@@ -30,8 +35,10 @@ public:
           subject_dn_(subject_dn), issuer_dn_(issuer_dn),
           stored_in_ldap_(stored_in_ldap)
     {}
+    /// @}
 
-    // Getters
+    /// @name Getters
+    /// @{
     std::string getId() const { return id_; }
     std::string getFingerprintSha256() const { return fingerprint_sha256_; }
     std::string getCertificateType() const { return certificate_type_; }
@@ -39,8 +46,10 @@ public:
     std::string getSubjectDn() const { return subject_dn_; }
     std::string getIssuerDn() const { return issuer_dn_; }
     bool isStoredInLdap() const { return stored_in_ldap_; }
+    /// @}
 
-    // Setters
+    /// @name Setters
+    /// @{
     void setId(const std::string& id) { id_ = id; }
     void setFingerprintSha256(const std::string& fingerprint) { fingerprint_sha256_ = fingerprint; }
     void setCertificateType(const std::string& type) { certificate_type_ = type; }
@@ -48,6 +57,7 @@ public:
     void setSubjectDn(const std::string& subject_dn) { subject_dn_ = subject_dn; }
     void setIssuerDn(const std::string& issuer_dn) { issuer_dn_ = issuer_dn; }
     void setStoredInLdap(bool stored) { stored_in_ldap_ = stored; }
+    /// @}
 
     /**
      * @brief Convert to JSON representation

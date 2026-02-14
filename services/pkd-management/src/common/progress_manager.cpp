@@ -1,3 +1,8 @@
+/**
+ * @file progress_manager.cpp
+ * @brief Thread-safe progress tracking implementation
+ */
+
 #include "progress_manager.h"
 #include "certificate_utils.h"
 #include "x509_metadata_extractor.h"
@@ -11,9 +16,7 @@
 
 namespace common {
 
-// =============================================================================
-// Processing Stage Helper Functions
-// =============================================================================
+// --- Processing Stage Helper Functions ---
 
 std::string stageToString(ProcessingStage stage) {
     switch (stage) {
@@ -93,9 +96,7 @@ int stageToBasePercentage(ProcessingStage stage) {
     }
 }
 
-// =============================================================================
-// CertificateMetadata Implementation
-// =============================================================================
+// --- CertificateMetadata Implementation ---
 
 Json::Value CertificateMetadata::toJson() const {
     Json::Value json;
@@ -151,9 +152,7 @@ Json::Value CertificateMetadata::toJson() const {
     return json;
 }
 
-// =============================================================================
-// IcaoComplianceStatus Implementation
-// =============================================================================
+// --- IcaoComplianceStatus Implementation ---
 
 Json::Value IcaoComplianceStatus::toJson() const {
     Json::Value json;
@@ -188,9 +187,7 @@ Json::Value IcaoComplianceStatus::toJson() const {
     return json;
 }
 
-// =============================================================================
-// ProcessingError Implementation
-// =============================================================================
+// --- ProcessingError Implementation ---
 
 Json::Value ProcessingError::toJson() const {
     Json::Value json;
@@ -250,9 +247,7 @@ void addProcessingError(
     stats.recentErrors.push_back(std::move(error));
 }
 
-// =============================================================================
-// ValidationStatistics Implementation
-// =============================================================================
+// --- ValidationStatistics Implementation ---
 
 Json::Value ValidationStatistics::toJson() const {
     Json::Value json;
@@ -337,9 +332,7 @@ Json::Value ValidationStatistics::toJson() const {
     return json;
 }
 
-// =============================================================================
-// ProcessingProgress Implementation
-// =============================================================================
+// --- ProcessingProgress Implementation ---
 
 std::string ProcessingProgress::toJson() const {
     Json::Value json;
@@ -361,7 +354,7 @@ std::string ProcessingProgress::toJson() const {
     ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
     json["updatedAt"] = ss.str();
 
-    // Enhanced fields (Phase 4.4)
+    // Enhanced metadata fields
     if (currentCertificate.has_value()) {
         json["currentCertificate"] = currentCertificate->toJson();
     }
@@ -439,9 +432,7 @@ ProcessingProgress ProcessingProgress::createWithMetadata(
     return p;
 }
 
-// =============================================================================
-// ProgressManager Implementation
-// =============================================================================
+// --- ProgressManager Implementation ---
 
 ProgressManager& ProgressManager::getInstance() {
     static ProgressManager instance;
@@ -513,9 +504,7 @@ void ProgressManager::clearProgress(const std::string& uploadId) {
     sseCallbacks_.erase(uploadId);
 }
 
-// =============================================================================
-// ICAO 9303 Compliance Checker Implementation
-// =============================================================================
+// --- ICAO 9303 Compliance Checker Implementation ---
 
 IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType) {
     IcaoComplianceStatus status;
@@ -540,9 +529,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
     // Extract metadata using existing extractor
     x509::CertificateMetadata metadata = x509::extractMetadata(cert);
 
-    // =============================================================================
-    // 1. Key Usage Validation
-    // =============================================================================
+    // --- 1. Key Usage Validation ---
 
     std::vector<std::string> requiredKeyUsage;
     std::vector<std::string> forbiddenKeyUsage;
@@ -582,9 +569,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         }
     }
 
-    // =============================================================================
-    // 2. Signature Algorithm Validation
-    // =============================================================================
+    // --- 2. Signature Algorithm Validation ---
 
     std::string sigAlg = metadata.signatureAlgorithm;
     std::string hashAlg = metadata.signatureHashAlgorithm;
@@ -615,9 +600,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         status.violations.push_back("Public key algorithm not ICAO-approved (must be RSA or ECDSA): " + pubKeyAlg);
     }
 
-    // =============================================================================
-    // 3. Key Size Validation
-    // =============================================================================
+    // --- 3. Key Size Validation ---
 
     int keySize = metadata.publicKeySize;
 
@@ -651,9 +634,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         }
     }
 
-    // =============================================================================
-    // 4. Validity Period Validation
-    // =============================================================================
+    // --- 4. Validity Period Validation ---
 
     // Extract notBefore and notAfter times
     const ASN1_TIME* notBefore = X509_get0_notBefore(cert);
@@ -680,9 +661,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         }
     }
 
-    // =============================================================================
-    // 5. DN Format Validation
-    // =============================================================================
+    // --- 5. DN Format Validation ---
 
     // ICAO requires C (Country) attribute in Subject DN
     X509_NAME* subject = X509_get_subject_name(cert);
@@ -697,9 +676,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         status.violations.push_back("Certificate has no Subject DN");
     }
 
-    // =============================================================================
-    // 6. Required Extensions Validation
-    // =============================================================================
+    // --- 6. Required Extensions Validation ---
 
     // Basic Constraints extension is CRITICAL for CA certificates
     if (certType == "CSCA" || certType == "MLSC") {
@@ -720,9 +697,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         status.violations.push_back("Missing Key Usage extension");
     }
 
-    // =============================================================================
-    // Final Compliance Assessment
-    // =============================================================================
+    // --- Final Compliance Assessment ---
 
     if (!status.keyUsageCompliant || !status.algorithmCompliant ||
         !status.keySizeCompliant || !status.dnFormatCompliant ||
@@ -760,9 +735,7 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
     return status;
 }
 
-// =============================================================================
-// Certificate Metadata Extraction for Progress Tracking
-// =============================================================================
+// --- Certificate Metadata Extraction for Progress Tracking ---
 
 CertificateMetadata extractCertificateMetadataForProgress(X509* cert, bool includeAsn1Text)
 {

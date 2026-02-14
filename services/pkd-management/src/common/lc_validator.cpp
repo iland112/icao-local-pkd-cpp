@@ -3,9 +3,6 @@
  * @brief Link Certificate (LC) trust chain validation implementation
  *
  * Implements ICAO Doc 9303 Part 12 Link Certificate validation
- *
- * @version 1.0.0
- * @date 2026-01-24
  */
 
 #include "lc_validator.h"

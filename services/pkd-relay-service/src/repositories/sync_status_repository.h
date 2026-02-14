@@ -1,3 +1,7 @@
+/**
+ * @file sync_status_repository.h
+ * @brief Repository for sync_status table operations
+ */
 #pragma once
 
 #include "../domain/models/sync_status.h"
@@ -15,8 +19,6 @@ namespace icao::relay::repositories {
  * Handles all database operations for sync status tracking.
  * All queries use parameterized statements for SQL injection prevention.
  * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
- *
- * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class SyncStatusRepository {
 public:
@@ -32,11 +34,13 @@ public:
      */
     ~SyncStatusRepository() = default;
 
-    // Disable copy and move
+    /// @name Non-copyable and non-movable
+    /// @{
     SyncStatusRepository(const SyncStatusRepository&) = delete;
     SyncStatusRepository& operator=(const SyncStatusRepository&) = delete;
     SyncStatusRepository(SyncStatusRepository&&) = delete;
     SyncStatusRepository& operator=(SyncStatusRepository&&) = delete;
+    /// @}
 
     /**
      * @brief Save new sync check result

@@ -1,3 +1,8 @@
+/**
+ * @file postgresql_query_executor.cpp
+ * @brief PostgreSQL Query Executor implementation using libpq
+ */
+
 #include "postgresql_query_executor.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -5,9 +10,7 @@
 
 namespace common {
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 PostgreSQLQueryExecutor::PostgreSQLQueryExecutor(DbConnectionPool* pool)
     : pool_(pool)
@@ -18,9 +21,7 @@ PostgreSQLQueryExecutor::PostgreSQLQueryExecutor(DbConnectionPool* pool)
     spdlog::debug("[PostgreSQLQueryExecutor] Initialized");
 }
 
-// ============================================================================
-// Public Interface Implementation
-// ============================================================================
+// --- Public Interface Implementation ---
 
 Json::Value PostgreSQLQueryExecutor::executeQuery(
     const std::string& query,
@@ -214,9 +215,7 @@ Json::Value PostgreSQLQueryExecutor::executeScalar(
     return result;
 }
 
-// ============================================================================
-// Private Implementation
-// ============================================================================
+// --- Private Implementation ---
 
 PGresult* PostgreSQLQueryExecutor::executeRawQuery(
     const std::string& query,

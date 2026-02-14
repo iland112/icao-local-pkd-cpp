@@ -13,7 +13,6 @@
  * Implementations handle database-specific APIs (PostgreSQL libpq, Oracle OTL, etc.)
  * and return results in a standardized JSON format.
  *
- * @note Part of Oracle migration Phase 3 - Repository Layer Abstraction
  * @date 2026-02-04
  */
 

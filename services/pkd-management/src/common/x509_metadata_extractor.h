@@ -13,8 +13,6 @@
  *
  * Extracts all relevant metadata from X509 certificates for database storage.
  * Based on RFC 5280 and OpenSSL API.
- *
- * @date 2026-01-30
  */
 
 namespace x509 {

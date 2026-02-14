@@ -1,3 +1,8 @@
+/**
+ * @file masterlist_processor.cpp
+ * @brief ICAO PKD Master List processing and CSCA certificate extraction implementation
+ */
+
 #include "masterlist_processor.h"
 #include "certificate_utils.h"
 #include "main_utils.h"
@@ -514,10 +519,6 @@ bool parseMasterListEntryV2(
 
     return true;
 }
-// New function for direct Master List file processing
-// Uses the same proven logic as parseMasterListEntryV2
-// Fixed processMasterListFile() - Extract pkiData (536 certificates)
-// Based on main.cpp 4270-4600 logic
 
 bool processMasterListFile(
     LDAP* ld,

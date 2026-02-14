@@ -1,3 +1,7 @@
+/**
+ * @file processing_strategy.cpp
+ * @brief Processing strategy implementation for AUTO/MANUAL modes
+ */
 #include "processing_strategy.h"
 #include "ldif_processor.h"
 #include "common.h"
@@ -10,9 +14,6 @@
 #include <libpq-fe.h>
 #include <ldap.h>
 
-// This file will be implemented in phases
-// For now, we provide the factory implementation
-
 std::unique_ptr<ProcessingStrategy> ProcessingStrategyFactory::create(const std::string& mode) {
     if (mode == "AUTO") {
         return std::make_unique<AutoProcessingStrategy>();
@@ -23,9 +24,7 @@ std::unique_ptr<ProcessingStrategy> ProcessingStrategyFactory::create(const std:
     }
 }
 
-// ============================================================================
-// AutoProcessingStrategy - Process in one go
-// ============================================================================
+// --- AutoProcessingStrategy - Process in one go ---
 
 // Forward declarations for functions still in main.cpp
 extern void updateUploadStatistics(PGconn* conn, const std::string& uploadId,
@@ -136,9 +135,7 @@ void AutoProcessingStrategy::processMasterListContent(
     spdlog::info("AUTO mode: Master List processing completed");
 }
 
-// ============================================================================
-// ManualProcessingStrategy - Stage 1: Parse and save to temp
-// ============================================================================
+// --- ManualProcessingStrategy - Stage 1: Parse and save to temp ---
 
 std::string ManualProcessingStrategy::getTempFilePath(const std::string& uploadId, const std::string& type) const {
     return "/app/temp/" + uploadId + "_" + type + ".json";
@@ -531,9 +528,7 @@ void ManualProcessingStrategy::cleanupFailedUpload(
                  certsDeleted, crlsDeleted, mlsDeleted);
 }
 
-// ============================================================================
-// ManualProcessingStrategy - Helper: Process Master List to DB (Stage 2)
-// ============================================================================
+// --- ManualProcessingStrategy - Helper: Process Master List to DB (Stage 2) ---
 
 void ManualProcessingStrategy::processMasterListToDbAndLdap(
     const std::string& uploadId,

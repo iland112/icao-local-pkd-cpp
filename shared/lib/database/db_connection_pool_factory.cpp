@@ -15,9 +15,7 @@
 
 namespace common {
 
-// =============================================================================
-// DbPoolConfig Implementation
-// =============================================================================
+// --- DbPoolConfig Implementation ---
 
 std::string DbPoolConfig::buildPostgresConnString() const {
     std::ostringstream oss;
@@ -82,9 +80,7 @@ DbPoolConfig DbPoolConfig::fromEnvironment() {
     return config;
 }
 
-// =============================================================================
-// DbConnectionPoolFactory Implementation
-// =============================================================================
+// --- DbConnectionPoolFactory Implementation ---
 
 std::shared_ptr<IDbConnectionPool> DbConnectionPoolFactory::create(const DbPoolConfig& config) {
     std::string normalizedType = normalizeDbType(config.dbType);

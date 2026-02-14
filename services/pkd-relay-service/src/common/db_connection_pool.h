@@ -44,11 +44,14 @@ public:
 
     ~DbConnection();
 
-    // Delete copy constructor and assignment
+    /// @name Non-copyable
+    /// @{
     DbConnection(const DbConnection&) = delete;
     DbConnection& operator=(const DbConnection&) = delete;
+    /// @}
 
-    // Move constructor and assignment
+    /// @name Movable
+    /// @{
     DbConnection(DbConnection&& other) noexcept
         : conn_(other.conn_), pool_(other.pool_), released_(other.released_) {
         other.conn_ = nullptr;
@@ -68,6 +71,7 @@ public:
         }
         return *this;
     }
+    /// @}
 
     /**
      * @brief Get raw PostgreSQL connection
@@ -128,9 +132,11 @@ public:
      */
     ~DbConnectionPool();
 
-    // Delete copy constructor and assignment
+    /// @name Non-copyable
+    /// @{
     DbConnectionPool(const DbConnectionPool&) = delete;
     DbConnectionPool& operator=(const DbConnectionPool&) = delete;
+    /// @}
 
     /**
      * @brief Initialize connection pool

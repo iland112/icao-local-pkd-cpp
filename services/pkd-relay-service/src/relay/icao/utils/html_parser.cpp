@@ -1,3 +1,7 @@
+/**
+ * @file html_parser.cpp
+ * @brief HTML parser implementation
+ */
 #include "html_parser.h"
 #include <regex>
 #include <spdlog/spdlog.h>

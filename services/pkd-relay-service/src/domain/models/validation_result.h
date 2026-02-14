@@ -1,3 +1,7 @@
+/**
+ * @file validation_result.h
+ * @brief Validation result domain model for certificate expiration tracking
+ */
 #pragma once
 
 #include <string>
@@ -31,7 +35,8 @@ public:
           not_after_(not_after)
     {}
 
-    // Getters
+    /// @name Getters
+    /// @{
     const std::string& getId() const { return id_; }
     const std::string& getCertificateId() const { return certificate_id_; }
     const std::string& getCertificateType() const { return certificate_type_; }
@@ -39,8 +44,9 @@ public:
     bool isValidityPeriodValid() const { return validity_period_valid_; }
     const std::string& getValidationStatus() const { return validation_status_; }
     const std::string& getNotAfter() const { return not_after_; }
+    /// @}
 
-    // Check if certificate is expired (based on current time)
+    /** @brief Check if certificate is expired based on current time */
     bool isExpired() const;
 
 private:

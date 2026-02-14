@@ -24,9 +24,7 @@ LdapCrlRepository::LdapCrlRepository(LDAP* conn, const std::string& baseDn)
     spdlog::debug("LdapCrlRepository initialized with baseDn: {}", baseDn_);
 }
 
-// ==========================================================================
-// CRL Operations
-// ==========================================================================
+// --- CRL Operations ---
 
 X509_CRL* LdapCrlRepository::findCrlByCountry(const std::string& countryCode) {
     spdlog::debug("Finding CRL for country: {}", countryCode);
@@ -178,9 +176,7 @@ std::string LdapCrlRepository::getCrlExpirationStatus(X509_CRL* crl) {
     return "VALID";
 }
 
-// ==========================================================================
-// Helper Methods
-// ==========================================================================
+// --- Helper Methods ---
 
 std::string LdapCrlRepository::buildCrlFilter(const std::string& countryCode) {
     // Build compound LDAP filter for CRL entries
@@ -224,9 +220,7 @@ std::string LdapCrlRepository::normalizeDn(const std::string& dn) {
     return normalized;
 }
 
-// ==========================================================================
-// Private Helper Methods
-// ==========================================================================
+// --- Private Helper Methods ---
 
 LDAPMessage* LdapCrlRepository::executeCrlSearch(
     const std::string& baseDn,

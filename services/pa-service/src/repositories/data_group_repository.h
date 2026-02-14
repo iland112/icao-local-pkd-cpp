@@ -8,7 +8,7 @@
  *
  * @author SmartCore Inc.
  * @date 2026-02-02
- * @updated 2026-02-05 (Phase 5.1.3: Query Executor Pattern)
+ * @updated 2026-02-05
  */
 
 #pragma once
@@ -52,9 +52,8 @@ public:
     DataGroupRepository(const DataGroupRepository&) = delete;
     DataGroupRepository& operator=(const DataGroupRepository&) = delete;
 
-    // ==========================================================================
-    // Query Methods
-    // ==========================================================================
+    /// @name Query Methods
+    /// @{
 
     /**
      * @brief Find all data groups for a verification ID
@@ -84,6 +83,8 @@ public:
      * @return Number of deleted rows
      */
     int deleteByVerificationId(const std::string& verificationId);
+
+    /// @}
 
 private:
     /**

@@ -1,3 +1,7 @@
+/**
+ * @file ldif_processor.h
+ * @brief LDIF file parser and processor
+ */
 #pragma once
 
 #include <string>

@@ -1,3 +1,14 @@
+/**
+ * @file oracle_query_executor.h
+ * @brief Oracle Query Executor - OTL-based implementation
+ *
+ * Implements IQueryExecutor using Oracle OTL (Oracle Template Library).
+ * Handles connection acquisition from pool, query execution with OTL streams,
+ * result parsing, and JSON conversion.
+ *
+ * @date 2026-02-04
+ */
+
 #pragma once
 
 #include "i_query_executor.h"
@@ -18,18 +29,6 @@
 #include "external/otl/otlv4.h"
 
 #pragma GCC diagnostic pop
-
-/**
- * @file oracle_query_executor.h
- * @brief Oracle Query Executor - OTL-based implementation
- *
- * Implements IQueryExecutor using Oracle OTL (Oracle Template Library).
- * Handles connection acquisition from pool, query execution with OTL streams,
- * result parsing, and JSON conversion.
- *
- * @note Part of Oracle migration Phase 3
- * @date 2026-02-04
- */
 
 namespace common {
 
@@ -117,9 +116,7 @@ private:
 
     std::string connString_; ///< Oracle connection string (user/password@host:port/service)
 
-    // =========================================================================
-    // OCI Session Pool (high-performance connection reuse)
-    // =========================================================================
+    /// @name OCI Session Pool (high-performance connection reuse)
 
     /**
      * @brief Pooled session handle returned by acquirePooledSession()
@@ -166,9 +163,7 @@ private:
      */
     void releasePooledSession(PooledSession& session);
 
-    // =========================================================================
-    // Legacy per-query connection methods (kept as fallback)
-    // =========================================================================
+    /// @name Legacy per-query connection methods (kept as fallback)
 
     struct OciConnection {
         OCIEnv* env = nullptr;
@@ -178,23 +173,43 @@ private:
         OCISession* session = nullptr;
     };
 
+    /** @brief Create a new OCI connection with full handle setup */
     void createOciConnection(OciConnection& conn);
+    /** @brief Disconnect OCI session and detach from server */
     void disconnectOci(OciConnection& conn);
+    /** @brief Free all OCI handles in the connection */
     void freeOciHandles(OciConnection& conn);
 
-    // =========================================================================
-    // OCI lifecycle and helpers
-    // =========================================================================
+    /// @name OCI lifecycle and helpers
 
+    /** @brief Initialize OCI environment and connect to Oracle */
     void initializeOCI();
+    /** @brief Clean up OCI connection and free handles */
     void cleanupOCI();
 
+    /**
+     * @brief Execute query using legacy OCI direct connection
+     * @param query SQL query string
+     * @param params Query parameters
+     * @return JSON array of result rows
+     */
     Json::Value executeQueryWithOCI(
         const std::string& query,
         const std::vector<std::string>& params
     );
 
+    /**
+     * @brief Convert PostgreSQL $N placeholders to OTL :vN<char[4000]> format
+     * @param query SQL query with PostgreSQL-style placeholders
+     * @return Converted query string for OTL
+     */
     std::string convertPlaceholders(const std::string& query);
+
+    /**
+     * @brief Convert OTL stream results to JSON array
+     * @param otlStream OTL stream with query results
+     * @return JSON array of result rows
+     */
     Json::Value otlStreamToJson(otl_stream& otlStream);
 };
 

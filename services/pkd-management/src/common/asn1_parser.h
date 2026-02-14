@@ -17,7 +17,7 @@ namespace icao {
 namespace asn1 {
 
 /**
- * ASN.1 Node representing a single TLV element
+ * @brief ASN.1 Node representing a single TLV element
  */
 struct Asn1Node {
     int offset;           // Byte offset in file
@@ -30,7 +30,7 @@ struct Asn1Node {
 };
 
 /**
- * Parse ASN.1/DER file using OpenSSL and generate tree structure
+ * @brief Parse ASN.1/DER file using OpenSSL and generate tree structure
  *
  * @param filePath Path to the ASN.1/DER file
  * @param maxLines Maximum number of lines to parse (0 = unlimited, default 100)
@@ -39,7 +39,7 @@ struct Asn1Node {
 Json::Value parseAsn1Structure(const std::string& filePath, int maxLines = 100);
 
 /**
- * Execute OpenSSL asn1parse command and capture output
+ * @brief Execute OpenSSL asn1parse command and capture output
  *
  * @param filePath Path to the ASN.1/DER file
  * @param maxLines Maximum number of lines to return (0 = unlimited)
@@ -48,7 +48,7 @@ Json::Value parseAsn1Structure(const std::string& filePath, int maxLines = 100);
 std::string executeAsn1Parse(const std::string& filePath, int maxLines = 100);
 
 /**
- * Parse OpenSSL asn1parse output into structured JSON
+ * @brief Parse OpenSSL asn1parse output into structured JSON
  *
  * @param asn1ParseOutput Raw output from OpenSSL asn1parse -i
  * @return Json::Value with parsed ASN.1 structure

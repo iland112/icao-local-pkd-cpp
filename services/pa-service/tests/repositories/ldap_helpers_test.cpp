@@ -13,9 +13,7 @@
 #include <string>
 #include <algorithm>
 
-// =============================================================================
-// Helper Function Declarations (from ldap_certificate_repository.cpp)
-// =============================================================================
+// --- Helper Function Declarations (from ldap_certificate_repository.cpp) ---
 
 namespace {
 
@@ -97,9 +95,7 @@ std::string normalizeDn(const std::string& dn) {
 
 } // namespace
 
-// =============================================================================
-// DN Attribute Extraction Tests
-// =============================================================================
+// --- DN Attribute Extraction Tests ---
 
 class DnAttributeExtractionTest : public ::testing::Test {};
 
@@ -141,9 +137,7 @@ TEST_F(DnAttributeExtractionTest, ExtractComplexDn) {
     EXPECT_EQ(extractDnAttribute(dn, "C"), "KR");
 }
 
-// =============================================================================
-// LDAP Filter Escaping Tests
-// =============================================================================
+// --- LDAP Filter Escaping Tests ---
 
 class LdapFilterEscapingTest : public ::testing::Test {};
 
@@ -183,9 +177,7 @@ TEST_F(LdapFilterEscapingTest, SqlInjectionAttempt) {
     EXPECT_NE(escaped.find("DROP"), std::string::npos);
 }
 
-// =============================================================================
-// DN Normalization Tests
-// =============================================================================
+// --- DN Normalization Tests ---
 
 class DnNormalizationTest : public ::testing::Test {};
 
@@ -233,9 +225,7 @@ TEST_F(DnNormalizationTest, MultipleSpaces) {
     EXPECT_EQ(normalized.find("  "), std::string::npos);  // No double spaces
 }
 
-// =============================================================================
-// Integration Tests
-// =============================================================================
+// --- Integration Tests ---
 
 class LdapHelpersIntegrationTest : public ::testing::Test {};
 

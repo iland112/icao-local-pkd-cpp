@@ -1,3 +1,7 @@
+/** @file user_repository.cpp
+ *  @brief UserRepository implementation
+ */
+
 #include "user_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -6,9 +10,7 @@
 
 namespace repositories {
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 UserRepository::UserRepository(common::IQueryExecutor* queryExecutor)
     : queryExecutor_(queryExecutor)
@@ -21,9 +23,7 @@ UserRepository::UserRepository(common::IQueryExecutor* queryExecutor)
     spdlog::debug("[UserRepository] Initialized (DB type: {})", dbType);
 }
 
-// ============================================================================
-// Public Methods
-// ============================================================================
+// --- Public Methods ---
 
 std::optional<domain::User> UserRepository::findByUsername(const std::string& username)
 {
@@ -430,9 +430,7 @@ bool UserRepository::updatePassword(const std::string& id, const std::string& pa
     }
 }
 
-// ============================================================================
-// Private Helper Methods
-// ============================================================================
+// --- Private Helper Methods ---
 
 domain::User UserRepository::jsonToUser(const Json::Value& json)
 {

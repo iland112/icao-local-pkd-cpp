@@ -1,7 +1,7 @@
 /**
  * @file data_group_repository.cpp
  * @brief Implementation of DataGroupRepository (Query Executor Pattern)
- * @updated 2026-02-05 (Phase 5.1.3: Database-agnostic implementation)
+ * @updated 2026-02-05
  */
 
 #include "data_group_repository.h"
@@ -13,9 +13,7 @@
 
 namespace repositories {
 
-// ============================================================================
-// Constructor
-// ============================================================================
+// --- Constructor ---
 
 DataGroupRepository::DataGroupRepository(common::IQueryExecutor* executor)
     : queryExecutor_(executor)
@@ -28,9 +26,7 @@ DataGroupRepository::DataGroupRepository(common::IQueryExecutor* executor)
         queryExecutor_->getDatabaseType());
 }
 
-// ============================================================================
-// Query Methods
-// ============================================================================
+// --- Query Methods ---
 
 Json::Value DataGroupRepository::findByVerificationId(const std::string& verificationId) {
     spdlog::debug("[DataGroupRepository] Finding data groups for verification: {}", verificationId);
@@ -201,9 +197,7 @@ int DataGroupRepository::deleteByVerificationId(const std::string& verificationI
     }
 }
 
-// ============================================================================
-// Helper Methods
-// ============================================================================
+// --- Helper Methods ---
 
 Json::Value DataGroupRepository::toCamelCase(const Json::Value& dbRow) {
     // Field name mapping: snake_case (DB) -> camelCase (Frontend)

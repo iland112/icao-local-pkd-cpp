@@ -7,9 +7,6 @@
  *
  * Security Note: All functions handle sensitive data (certificates, LDAP credentials).
  * Ensure proper input validation and error handling when using these functions.
- *
- * @version 2.0.0
- * @date 2026-01-23
  */
 
 #pragma once
@@ -83,7 +80,7 @@ std::string extractCountryCode(const std::string& dn);
 std::string extractCountryCodeFromDn(const std::string& dn);
 
 /**
- * @brief Save Master List metadata to PostgreSQL database (Phase 6.1: Repository Pattern)
+ * @brief Save Master List metadata to database using the Repository Pattern
  *
  * Inserts Master List record into the master_list table.
  *
@@ -133,7 +130,7 @@ std::string saveMasterListToLdap(
 );
 
 /**
- * @brief Update Master List LDAP storage status in database (Phase 6.1: Repository Pattern)
+ * @brief Update Master List LDAP storage status in database
  *
  * Updates master_list.ldap_dn and ldap_stored_at fields.
  *

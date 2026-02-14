@@ -1,3 +1,8 @@
+/**
+ * @file x509_metadata_extractor.cpp
+ * @brief X.509 Certificate Metadata Extraction Implementation
+ */
+
 #include "x509_metadata_extractor.h"
 #include <spdlog/spdlog.h>
 #include <openssl/bn.h>
@@ -10,9 +15,7 @@
 
 namespace x509 {
 
-// =============================================================================
-// Main Extraction Function
-// =============================================================================
+// --- Main Extraction Function ---
 
 CertificateMetadata extractMetadata(X509* cert)
 {
@@ -60,9 +63,7 @@ CertificateMetadata extractMetadata(X509* cert)
     return metadata;
 }
 
-// =============================================================================
-// Basic Fields
-// =============================================================================
+// --- Basic Fields ---
 
 int getVersion(X509* cert)
 {
@@ -97,9 +98,7 @@ std::string extractHashAlgorithm(const std::string& signatureAlgorithm)
     return "unknown";
 }
 
-// =============================================================================
-// Public Key Info
-// =============================================================================
+// --- Public Key Info ---
 
 std::string getPublicKeyAlgorithm(X509* cert)
 {
@@ -161,9 +160,7 @@ std::optional<std::string> getPublicKeyCurve(X509* cert)
     return std::string(curve_name);
 }
 
-// =============================================================================
-// Key Usage Extensions
-// =============================================================================
+// --- Key Usage Extensions ---
 
 std::vector<std::string> getKeyUsage(X509* cert)
 {
@@ -217,9 +214,7 @@ std::vector<std::string> getExtendedKeyUsage(X509* cert)
     return usages;
 }
 
-// =============================================================================
-// Basic Constraints
-// =============================================================================
+// --- Basic Constraints ---
 
 bool isCA(X509* cert)
 {
@@ -249,9 +244,7 @@ std::optional<int> getPathLenConstraint(X509* cert)
     return pathLen;
 }
 
-// =============================================================================
-// Identifiers
-// =============================================================================
+// --- Identifiers ---
 
 std::optional<std::string> getSubjectKeyIdentifier(X509* cert)
 {
@@ -280,9 +273,7 @@ std::optional<std::string> getAuthorityKeyIdentifier(X509* cert)
     return hex;
 }
 
-// =============================================================================
-// CRL & OCSP
-// =============================================================================
+// --- CRL and OCSP ---
 
 std::vector<std::string> getCrlDistributionPoints(X509* cert)
 {
@@ -339,9 +330,7 @@ std::optional<std::string> getOcspResponderUrl(X509* cert)
     return ocsp_url;
 }
 
-// =============================================================================
-// Computed/Derived
-// =============================================================================
+// --- Computed/Derived ---
 
 bool isSelfSigned(X509* cert)
 {
@@ -351,9 +340,7 @@ bool isSelfSigned(X509* cert)
     return (X509_NAME_cmp(subject, issuer) == 0);
 }
 
-// =============================================================================
-// Utility Functions
-// =============================================================================
+// --- Utility Functions ---
 
 std::string bytesToHex(const unsigned char* data, size_t len)
 {

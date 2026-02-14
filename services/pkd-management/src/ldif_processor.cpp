@@ -1,18 +1,18 @@
+/**
+ * @file ldif_processor.cpp
+ * @brief LDIF file processor implementation
+ */
+
 #include "ldif_processor.h"
 #include "common.h"
-#include "common/masterlist_processor.h"  // v2.0.7: For parseMasterListEntryV2
+#include "common/masterlist_processor.h"
 #include <spdlog/spdlog.h>
 #include <libpq-fe.h>
 #include <ldap.h>
 #include <sstream>
 #include <algorithm>
 
-// Note: This file contains extracted logic from main.cpp
-// The actual implementation will call existing functions from main.cpp
-// until we fully extract all helper functions.
-
-// Forward declarations of functions that still exist in main.cpp (Phase 6.1 - Repository Pattern)
-// These will be moved here gradually
+// Forward declarations of functions that still exist in main.cpp
 extern std::vector<LdifEntry> parseLdifContent(const std::string& content);
 extern bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                                   const LdifEntry& entry, const std::string& attrName,
@@ -32,7 +32,7 @@ extern void sendDbSavingProgress(const std::string& uploadId, int processedCount
 #include "repositories/upload_repository.h"
 extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
 
-// Forward declaration for sendProgressWithMetadata helper function (from main.cpp) - Phase 4.4
+// Forward declaration for sendProgressWithMetadata helper function (from main.cpp)
 extern void sendProgressWithMetadata(
     const std::string& uploadId,
     common::ProcessingStage stage,
@@ -84,14 +84,14 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 parseCrlEntry(ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount, enhancedStats);
             }
 
-            // Check for Master List (v2.0.7: Use new CSCA extraction processor)
+            // Check for Master List
             if (entry.hasAttribute("pkdMasterListContent;binary") ||
                 entry.hasAttribute("pkdMasterListContent")) {
                 MasterListStats mlStats;
                 parseMasterListEntryV2(ld, uploadId, entry, mlStats, &enhancedStats);
-                // Track Master List file count (v2.1.1)
+                // Track Master List file count
                 counts.mlCount++;
-                // Track MLSC count (v2.1.1)
+                // Track MLSC count
                 counts.mlscCount += mlStats.mlscCount;
                 counts.ldapMlStoredCount += mlStats.ldapMlStoredCount;
                 // Add extracted CSCAs to counts
@@ -115,7 +115,7 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 counts.mlscCount, counts.mlCount);
         }
 
-        // v1.5.2: Send progress update to frontend every 50 entries
+        // Send progress update to frontend every 50 entries
         if (processedEntries % 50 == 0 || processedEntries == totalEntries) {
             // Build detailed progress message with X/Total format if totalCounts provided
             std::string progressMsg = "처리 중: ";
@@ -125,7 +125,7 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
             int totalCrl = totalCounts ? totalCounts->totalCrl : 0;
             int totalMl = totalCounts ? totalCounts->totalMl : 0;
 
-            // v1.5.4: Show individual cert types (CSCA/DSC/DSC_NC) separately
+            // Show individual cert types (CSCA/DSC/DSC_NC) separately
             // Only display items with count > 0
             if (counts.cscaCount > 0) {
                 if (totalCerts > 0) {
@@ -172,10 +172,10 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 progressMsg += parts[i];
             }
 
-            // Phase 4.4: Update processed count in statistics
+            // Update processed count in statistics
             enhancedStats.processedCount = counts.cscaCount + counts.dscCount + counts.dscNcCount;
 
-            // Phase 4.4: Send enhanced progress with validation statistics via SSE
+            // Send enhanced progress with validation statistics via SSE
             sendProgressWithMetadata(
                 uploadId,
                 common::ProcessingStage::VALIDATION_IN_PROGRESS,
@@ -198,7 +198,7 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     spdlog::info("LDIF processing completed: {} CSCA, {} DSC, {} DSC_NC, {} CRLs, {} MLs",
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount);
 
-    // Phase 4.4: Send final progress with complete validation statistics
+    // Send final progress with complete validation statistics
     enhancedStats.processedCount = counts.cscaCount + counts.dscCount + counts.dscNcCount;
     sendProgressWithMetadata(
         uploadId,
@@ -225,7 +225,7 @@ int LdifProcessor::uploadToLdap(
 
     spdlog::info("Uploading certificates from DB to LDAP for upload {}", uploadId);
 
-    // TODO Phase 6.1: Replace with CertificateRepository::findNotStoredInLdapByUploadId()
+    // TODO: Replace with CertificateRepository::findNotStoredInLdapByUploadId()
     // For now, this is a stub implementation
     // The actual LDAP upload logic needs:
     // 1. certificateRepository->findNotStoredInLdapByUploadId(uploadId)

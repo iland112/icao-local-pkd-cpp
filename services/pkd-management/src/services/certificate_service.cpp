@@ -16,7 +16,7 @@
 
 namespace services {
 
-/// --- Constructor ---
+// --- Constructor ---
 
 CertificateService::CertificateService(
     std::shared_ptr<repositories::ICertificateRepository> repository
@@ -26,7 +26,7 @@ CertificateService::CertificateService(
     }
 }
 
-/// --- Public Use Cases ---
+// --- Public Use Cases ---
 
 domain::models::CertificateSearchResult CertificateService::searchCertificates(
     const domain::models::CertificateSearchCriteria& criteria
@@ -136,7 +136,7 @@ ExportResult CertificateService::exportCountryCertificates(
     return result;
 }
 
-/// --- Private Helper Methods ---
+// --- Private Helper Methods ---
 
 std::vector<uint8_t> CertificateService::convertDerToPem(
     const std::vector<uint8_t>& derData,
@@ -374,7 +374,7 @@ std::string CertificateService::getFileExtension(
     }
 }
 
-/// --- Free Function: Export All LDAP-Stored Data as DIT ZIP ---
+// --- Free Function: Export All LDAP-Stored Data as DIT ZIP ---
 
 namespace {
 

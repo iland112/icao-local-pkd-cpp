@@ -1,3 +1,7 @@
+/**
+ * @file reconciliation_summary.h
+ * @brief Reconciliation summary domain model
+ */
 #pragma once
 
 #include <string>
@@ -15,7 +19,8 @@ namespace icao::relay::domain {
  */
 class ReconciliationSummary {
 public:
-    // Constructors
+    /// @name Constructors
+    /// @{
     ReconciliationSummary() = default;
 
     ReconciliationSummary(
@@ -48,8 +53,10 @@ public:
           error_message_(error_message),
           sync_status_id_(sync_status_id)
     {}
+    /// @}
 
-    // Getters
+    /// @name Getters
+    /// @{
     std::string getId() const { return id_; }
     std::string getTriggeredBy() const { return triggered_by_; }
     std::chrono::system_clock::time_point getTriggeredAt() const { return triggered_at_; }
@@ -58,30 +65,40 @@ public:
     }
     std::string getStatus() const { return status_; }
     bool isDryRun() const { return dry_run_; }
+    /// @}
 
-    // Success/failure counts
+    /// @name Success/failure counts
+    /// @{
     int getSuccessCount() const { return success_count_; }
     int getFailedCount() const { return failed_count_; }
+    /// @}
 
-    // Certificate additions
+    /// @name Certificate additions
+    /// @{
     int getCscaAdded() const { return csca_added_; }
     int getDscAdded() const { return dsc_added_; }
     int getDscNcAdded() const { return dsc_nc_added_; }
     int getCrlAdded() const { return crl_added_; }
     int getTotalAdded() const { return total_added_; }
+    /// @}
 
-    // Certificate deletions
+    /// @name Certificate deletions
+    /// @{
     int getCscaDeleted() const { return csca_deleted_; }
     int getDscDeleted() const { return dsc_deleted_; }
     int getDscNcDeleted() const { return dsc_nc_deleted_; }
     int getCrlDeleted() const { return crl_deleted_; }
+    /// @}
 
-    // Metadata
+    /// @name Metadata
+    /// @{
     int getDurationMs() const { return duration_ms_; }
     std::optional<std::string> getErrorMessage() const { return error_message_; }
     std::optional<int> getSyncStatusId() const { return sync_status_id_; }
+    /// @}
 
-    // Setters
+    /// @name Setters
+    /// @{
     void setId(const std::string& id) { id_ = id; }
     void setCompletedAt(const std::chrono::system_clock::time_point& completed_at) {
         completed_at_ = completed_at;
@@ -91,14 +108,17 @@ public:
     void setErrorMessage(const std::optional<std::string>& error_message) {
         error_message_ = error_message;
     }
+    /// @}
 
-    // Update counters
+    /// @name Update counters
+    /// @{
     void incrementSuccessCount() { success_count_++; }
     void incrementFailedCount() { failed_count_++; }
     void incrementCscaAdded() { csca_added_++; total_added_++; }
     void incrementDscAdded() { dsc_added_++; total_added_++; }
     void incrementDscNcAdded() { dsc_nc_added_++; total_added_++; }
     void incrementCrlAdded() { crl_added_++; total_added_++; }
+    /// @}
 
     /**
      * @brief Convert to JSON representation

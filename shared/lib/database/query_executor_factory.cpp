@@ -15,7 +15,6 @@
  *
  * Creates appropriate QueryExecutor based on connection pool type.
  *
- * @note Part of Oracle migration Phase 3
  * @date 2026-02-04
  */
 

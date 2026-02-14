@@ -1,3 +1,8 @@
+/**
+ * @file dl_parser.h
+ * @brief ICAO Deviation List (DL) parser for Doc 9303 Part 12
+ */
+
 #pragma once
 
 #include <string>
@@ -130,29 +135,52 @@ struct DlParseResult {
  */
 class DlParser {
 public:
+    /**
+     * @brief Parse a Deviation List file
+     * @param data Raw DL file content (CMS SignedData)
+     * @return DlParseResult with deviation entries and metadata
+     */
     static DlParseResult parse(const std::vector<uint8_t>& data);
+
+    /**
+     * @brief Check if binary data contains the ICAO DL OID (2.23.136.1.1.7)
+     * @param data Binary data to check
+     * @return true if DL OID is found
+     */
     static bool containsDlOid(const std::vector<uint8_t>& data);
 
 private:
-    // CMS-based extraction
+    /// @name CMS-based extraction
+    /** @brief Extract signer certificate from CMS structure */
     static X509* extractSignerCertificateFromCms(CMS_ContentInfo* cms);
+    /** @brief Extract all embedded certificates from CMS */
     static std::vector<X509*> extractCertificatesFromCms(CMS_ContentInfo* cms);
+    /** @brief Extract deviation entries from CMS eContent */
     static std::vector<DeviationEntry> extractDeviationsFromCms(CMS_ContentInfo* cms);
+    /** @brief Extract signing time from CMS signer attributes */
     static std::string extractSigningTime(CMS_ContentInfo* cms);
+    /** @brief Verify CMS signature using signer certificate */
     static bool verifyCmsSignature(CMS_ContentInfo* cms, X509* signerCert);
 
-    // eContent metadata extraction
+    /// @name eContent metadata extraction
+    /** @brief Metadata extracted from DL eContent */
     struct ContentMetadata {
         int version = 0;
         std::string hashAlgorithm;
     };
+    /** @brief Extract version and hash algorithm from CMS eContent */
     static ContentMetadata extractContentMetadata(CMS_ContentInfo* cms);
 
-    // ASN.1 parsing helpers
+    /// @name ASN.1 parsing helpers
+    /** @brief Extract country code from certificate subject DN */
     static std::string getCountryFromCert(X509* cert);
+    /** @brief Extract organization from certificate subject DN */
     static std::string getOrganizationFromCert(X509* cert);
+    /** @brief Classify deviation OID into category */
     static std::string classifyDeviationOid(const std::string& oid);
+    /** @brief Convert algorithm OID to human-readable name */
     static std::string oidToAlgorithmName(const std::string& oid);
+    /** @brief Convert X509_NAME to RFC 2253 string */
     static std::string x509NameToString(X509_NAME* name);
 };
 

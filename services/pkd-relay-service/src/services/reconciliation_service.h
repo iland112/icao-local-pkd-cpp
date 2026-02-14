@@ -1,3 +1,7 @@
+/**
+ * @file reconciliation_service.h
+ * @brief Service layer for DB-LDAP reconciliation operations
+ */
 #pragma once
 
 #include "../repositories/reconciliation_repository.h"

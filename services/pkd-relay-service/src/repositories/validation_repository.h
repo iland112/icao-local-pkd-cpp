@@ -1,3 +1,7 @@
+/**
+ * @file validation_repository.h
+ * @brief Repository for certificate validation operations
+ */
 #pragma once
 
 #include "../domain/models/validation_result.h"

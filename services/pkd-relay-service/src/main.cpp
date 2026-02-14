@@ -1,18 +1,10 @@
-// =============================================================================
-// ICAO Local PKD - PKD Relay Service
-// =============================================================================
-// Version: 2.1.0
-// Description: Data relay layer (ICAO portal monitoring, LDIF upload/parsing, DB-LDAP sync)
-// =============================================================================
-// Changelog:
-//   v2.1.0 (2026-01-26): MLSC (Master List Signer Certificate) sync support
-//   v2.0.5 (2026-01-25): CRL reconciliation support, reconciliation_log UUID fix
-//   v1.4.0 (2026-01-14): Modularized code, Auto Reconcile implementation
-//   v1.3.0 (2026-01-13): User-configurable settings UI, dynamic config reload
-//   v1.2.0 (2026-01-07): Remove interval sync, keep only daily scheduler
-//   v1.1.0 (2026-01-06): Daily scheduler at midnight, certificate re-validation
-//   v1.0.0 (2026-01-03): Initial release
-// =============================================================================
+/**
+ * @file main.cpp
+ * @brief PKD Relay Service entry point
+ *
+ * Data relay layer for ICAO portal monitoring, LDIF upload/parsing,
+ * and DB-LDAP synchronization.
+ */
 
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
@@ -46,11 +38,11 @@
 #include "relay/sync/common/config.h"
 #include "relay/sync/reconciliation_engine.h"
 
-// Repository Pattern (Phase 4.4: Factory Pattern with Oracle support)
+// Repository Pattern
 #include "db_connection_pool.h"
-#include "db_connection_pool_factory.h"  // Phase 4.4: Factory Pattern (includes interface)
-#include "i_query_executor.h"            // Phase 5.3: Query Executor Factory
-#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
+#include "db_connection_pool_factory.h"
+#include "i_query_executor.h"
+#include <ldap_connection_pool.h>
 #include "repositories/sync_status_repository.h"
 #include "repositories/certificate_repository.h"
 #include "repositories/crl_repository.h"
@@ -63,17 +55,13 @@
 using namespace drogon;
 using namespace icao::relay;
 
-// =============================================================================
-// Global Configuration Instance
-// =============================================================================
+// --- Global Configuration Instance ---
 Config g_config;
 
-// =============================================================================
-// Repository Pattern - Global Service Instances (Phase 5.2: Query Executor Pattern)
-// =============================================================================
+// --- Global Service Instances ---
 std::shared_ptr<common::IDbConnectionPool> g_dbPool;
-std::unique_ptr<common::IQueryExecutor> g_queryExecutor;  // Phase 5.3: Query Executor (PostgreSQL/Oracle)
-std::shared_ptr<common::LdapConnectionPool> g_ldapPool;  // v2.4.3: LDAP connection pool
+std::unique_ptr<common::IQueryExecutor> g_queryExecutor;
+std::shared_ptr<common::LdapConnectionPool> g_ldapPool;
 
 std::shared_ptr<repositories::SyncStatusRepository> g_syncStatusRepo;
 std::shared_ptr<repositories::CertificateRepository> g_certificateRepo;
@@ -85,9 +73,7 @@ std::shared_ptr<services::SyncService> g_syncService;
 std::shared_ptr<services::ReconciliationService> g_reconciliationService;
 std::shared_ptr<services::ValidationService> g_validationService;
 
-// =============================================================================
-// PostgreSQL Connection
-// =============================================================================
+// --- PostgreSQL Connection ---
 class PgConnection {
 public:
     PgConnection() : conn_(nullptr) {}
@@ -122,11 +108,9 @@ private:
     PGconn* conn_;
 };
 
-// =============================================================================
-// Config Database Operations
-// =============================================================================
+// --- Config Database Operations ---
 bool Config::loadFromDatabase() {
-    // Phase 6.4: Use Query Executor if available, fallback to PgConnection for early startup
+    // Use Query Executor if available, fallback to PgConnection for early startup
     if (g_queryExecutor) {
         try {
             const char* query = "SELECT daily_sync_enabled, daily_sync_hour, daily_sync_minute, "
@@ -207,9 +191,7 @@ bool Config::loadFromDatabase() {
     return false;
 }
 
-// =============================================================================
-// Database Operations
-// =============================================================================
+// --- Database Operations ---
 DbStats getDbStats() {
     DbStats stats;
 
@@ -231,11 +213,11 @@ DbStats getDbStats() {
             return 0;
         };
 
-        // Phase 6.4: Get CSCA count (certificate_type = 'CSCA', excludes MLSC which has its own type)
+        // Get CSCA count (certificate_type = 'CSCA', excludes MLSC which has its own type)
         stats.cscaCount = scalarCount(
             "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'CSCA'");
 
-        // Phase 6.4: Get MLSC count (certificate_type = 'MLSC')
+        // Get MLSC count (certificate_type = 'MLSC')
         // Previously used ldap_dn_v2 LIKE '%o=mlsc%' but ldap_dn_v2 is NULL in Oracle
         stats.mlscCount = scalarCount(
             "SELECT COUNT(*) FROM certificate WHERE certificate_type = 'MLSC'");
@@ -296,7 +278,7 @@ DbStats getDbStats() {
 }
 
 int saveSyncStatus(const SyncResult& result) {
-    // Phase 5.2: Use Repository Pattern instead of direct PostgreSQL connection
+    // Use Repository Pattern instead of direct PostgreSQL connection
     // This enables Oracle support through Query Executor abstraction
 
     // Convert country stats to JSON
@@ -370,12 +352,9 @@ int saveSyncStatus(const SyncResult& result) {
     return syncId;
 }
 
-// NOTE: getLatestSyncStatus() and getSyncHistory() removed in Phase 6.4
-// These functions were replaced by SyncService (g_syncService->getCurrentStatus() and getSyncHistory())
+// NOTE: getLatestSyncStatus() and getSyncHistory() replaced by SyncService
 
-// =============================================================================
-// LDAP Operations
-// =============================================================================
+// --- LDAP Operations ---
 LdapStats getLdapStats() {
     LdapStats stats;
 
@@ -415,10 +394,10 @@ LdapStats getLdapStats() {
                 if (dnStr.find("o=csca,") != std::string::npos) {
                     stats.cscaCount++;
                 } else if (dnStr.find("o=mlsc,") != std::string::npos) {
-                    // Sprint 3: Count Master List Signer Certificates
+                    // Count Master List Signer Certificates
                     stats.mlscCount++;
                 } else if (dnStr.find("o=lc,") != std::string::npos) {
-                    // Sprint 3: Count Link Certificates as CSCA
+                    // Count Link Certificates as CSCA
                     stats.cscaCount++;
                 } else if (dnStr.find("o=dsc,") != std::string::npos) {
                     stats.dscCount++;
@@ -474,9 +453,7 @@ LdapStats getLdapStats() {
     return stats;
 }
 
-// =============================================================================
-// Sync Checker
-// =============================================================================
+// --- Sync Checker ---
 SyncResult performSyncCheck() {
     SyncResult result;
     auto startTime = std::chrono::high_resolution_clock::now();
@@ -525,11 +502,9 @@ SyncResult performSyncCheck() {
     return result;
 }
 
-// =============================================================================
-// Certificate Re-validation
+// --- Certificate Re-validation ---
 // NOTE: performCertificateRevalidation(), saveRevalidationResult(), RevalidationResult struct
-// removed in Phase 6.4 - replaced by g_validationService->revalidateAll() (database-agnostic)
-// =============================================================================
+// replaced by g_validationService->revalidateAll() (database-agnostic)
 
 // Get revalidation history
 Json::Value getRevalidationHistory(int limit = 10) {
@@ -541,7 +516,7 @@ Json::Value getRevalidationHistory(int limit = 10) {
     }
 
     try {
-        // Phase 6.4: Use Query Executor (database-agnostic)
+        // Use Query Executor (database-agnostic)
         std::string query = "SELECT id, executed_at, total_processed, newly_expired, newly_valid, "
             "unchanged, errors, duration_ms FROM revalidation_history "
             "ORDER BY executed_at DESC LIMIT $1";
@@ -575,9 +550,7 @@ Json::Value getRevalidationHistory(int limit = 10) {
     return result;
 }
 
-// =============================================================================
-// Daily Scheduler
-// =============================================================================
+// --- Daily Scheduler ---
 
 // Calculate seconds until next scheduled time
 int secondsUntilScheduledTime(int targetHour, int targetMinute) {
@@ -608,9 +581,7 @@ std::string formatScheduledTime(int targetHour, int targetMinute) {
     return ss.str();
 }
 
-// =============================================================================
-// Scheduler (Daily sync only)
-// =============================================================================
+// --- Scheduler (Daily sync only) ---
 class SyncScheduler {
 public:
     SyncScheduler() : running_(false), lastDailySyncDate_("") {}
@@ -667,7 +638,7 @@ public:
                             // 2. Re-validate certificates if enabled
                             if (g_config.revalidateCertsOnSync) {
                                 spdlog::info("[Daily] Step 2: Performing certificate re-validation...");
-                                // Phase 6.4: Use ValidationService (database-agnostic)
+                                // Use ValidationService (database-agnostic)
                                 Json::Value revalResult = g_validationService->revalidateAll();
                                 if (revalResult.get("success", false).asBool()) {
                                     spdlog::info("[Daily] Re-validation completed successfully");
@@ -681,7 +652,7 @@ public:
                                 spdlog::info("[Daily] Step 3: Auto reconcile triggered (discrepancy: {})",
                                            syncResult.totalDiscrepancy);
 
-                                // Phase 6.4: Use Query Executor (database-agnostic)
+                                // Use Query Executor (database-agnostic)
                                 ReconciliationEngine engine(g_config, g_ldapPool.get(), g_queryExecutor.get());
                                 ReconciliationResult reconResult = engine.performReconciliation(
                                     false, "DAILY_SYNC", syncStatusId);
@@ -751,9 +722,7 @@ private:
 
 SyncScheduler g_scheduler;
 
-// =============================================================================
-// HTTP Handlers
-// =============================================================================
+// --- HTTP Handlers ---
 
 // Health check
 void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
@@ -762,7 +731,7 @@ void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePt
     response["service"] = "sync-service";
     response["timestamp"] = trantor::Date::now().toFormattedString(false);
 
-    // Phase 6.4: Check DB connection via Query Executor (database-agnostic)
+    // Check DB connection via Query Executor (database-agnostic)
     try {
         if (g_queryExecutor) {
             // Oracle requires FROM DUAL for any SELECT
@@ -786,7 +755,7 @@ void handleHealth(const HttpRequestPtr&, std::function<void(const HttpResponsePt
 
 // Get latest sync status
 void handleSyncStatus(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
-    // Phase 4: Migrated to use SyncService
+    // Use SyncService
     Json::Value result = g_syncService->getCurrentStatus();
     auto resp = HttpResponse::newHttpJsonResponse(result);
 
@@ -799,7 +768,7 @@ void handleSyncStatus(const HttpRequestPtr&, std::function<void(const HttpRespon
 
 // Get sync history
 void handleSyncHistory(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
-    // Phase 4: Migrated to use SyncService
+    // Use SyncService
     int limit = 50;  // Default from service
     int offset = 0;
 
@@ -823,7 +792,7 @@ void handleSyncHistory(const HttpRequestPtr& req, std::function<void(const HttpR
 // Trigger manual sync check
 void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
-        // Phase 4: Migrated to use SyncService
+        // Use SyncService
         spdlog::info("Starting sync check...");
 
         // Get DB stats (still using existing function)
@@ -879,7 +848,7 @@ void handleSyncCheck(const HttpRequestPtr&, std::function<void(const HttpRespons
 void handleDiscrepancies(const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
         std::string dbType = g_queryExecutor->getDatabaseType();
-        // Phase 6.4: Database-agnostic boolean literal
+        // Database-agnostic boolean literal
         std::string boolFalse = (dbType == "oracle") ? "0" : "FALSE";
 
         std::string query =
@@ -947,7 +916,7 @@ void handleReconcile(const HttpRequestPtr& req, std::function<void(const HttpRes
     }
 
     try {
-        // Phase 6.4: Create reconciliation engine with Query Executor (database-agnostic)
+        // Create reconciliation engine with Query Executor (database-agnostic)
         ReconciliationEngine engine(g_config, g_ldapPool.get(), g_queryExecutor.get());
         ReconciliationResult result = engine.performReconciliation(dryRun);
 
@@ -1003,7 +972,7 @@ void handleReconcile(const HttpRequestPtr& req, std::function<void(const HttpRes
 // Get reconciliation history
 void handleReconciliationHistory(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
-        // Phase 4: Migrated to use ReconciliationService
+        // Use ReconciliationService
         // Parse query parameters
         int limit = 50;
         int offset = 0;
@@ -1042,7 +1011,7 @@ void handleReconciliationHistory(const HttpRequestPtr& req, std::function<void(c
 // Get reconciliation details by ID
 void handleReconciliationDetails(const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
-        // Phase 4: Migrated to use ReconciliationService
+        // Use ReconciliationService
         auto reconciliationIdStr = req->getParameter("id");
         if (reconciliationIdStr.empty()) {
             Json::Value error;
@@ -1135,7 +1104,7 @@ void handleUpdateSyncConfig(const HttpRequestPtr& req, std::function<void(const 
             }
         }
 
-        // Phase 6.4: Use Query Executor (database-agnostic)
+        // Use Query Executor (database-agnostic)
         std::string dbType = g_queryExecutor->getDatabaseType();
 
         // Helper: format boolean for database
@@ -1289,9 +1258,7 @@ void handleTriggerDailySync(const HttpRequestPtr&, std::function<void(const Http
     callback(resp);
 }
 
-// =============================================================================
-// Logging Setup
-// =============================================================================
+// --- Logging Setup ---
 void setupLogging() {
     try {
         auto console_sink = std::make_shared<spdlog::sinks::stdout_color_sink_mt>();
@@ -1322,14 +1289,12 @@ void setupLogging() {
     }
 }
 
-// =============================================================================
-// Repository Pattern - Service Initialization
-// =============================================================================
+// --- Service Initialization ---
 void initializeServices() {
     spdlog::info("Initializing Repository Pattern services...");
 
     try {
-        // Initialize Database Connection Pool (Phase 4.4: Factory Pattern)
+        // Initialize Database Connection Pool (Factory Pattern)
         // Use Factory Pattern to create pool based on DB_TYPE environment variable
         // Supports both PostgreSQL (production) and Oracle (development)
         spdlog::info("Creating database connection pool using Factory Pattern...");
@@ -1346,7 +1311,7 @@ void initializeServices() {
         std::string dbType = g_dbPool->getDatabaseType();
         spdlog::info("✅ Database connection pool initialized (type={})", dbType);
 
-        // Phase 5.3: Create Query Executor using Factory Pattern (supports PostgreSQL and Oracle)
+        // Create Query Executor using Factory Pattern (supports PostgreSQL and Oracle)
         g_queryExecutor = common::createQueryExecutor(g_dbPool.get());
         spdlog::info("✅ {} Query Executor created", dbType == "postgres" ? "PostgreSQL" : "Oracle");
 
@@ -1370,7 +1335,7 @@ void initializeServices() {
         }
         spdlog::info("✅ LDAP connection pool initialized ({})", ldapUri);
 
-        // Phase 5.3: Initialize Repositories with Query Executor (database-agnostic)
+        // Initialize Repositories with Query Executor (database-agnostic)
         spdlog::info("Creating repository instances with Query Executor...");
         g_syncStatusRepo = std::make_shared<repositories::SyncStatusRepository>(g_queryExecutor.get());
         g_certificateRepo = std::make_shared<repositories::CertificateRepository>(g_queryExecutor.get());
@@ -1419,7 +1384,7 @@ void shutdownServices() {
     g_certificateRepo.reset();
     g_syncStatusRepo.reset();
 
-    // Phase 5.3: Query Executor will be automatically cleaned up by unique_ptr
+    // Query Executor will be automatically cleaned up by unique_ptr
     g_queryExecutor.reset();
 
     // Database connection pool will be automatically cleaned up
@@ -1431,9 +1396,7 @@ void shutdownServices() {
     spdlog::info("✅ Repository Pattern services shut down successfully");
 }
 
-// =============================================================================
-// Main
-// =============================================================================
+// --- Main ---
 int main() {
     // Load configuration from environment
     g_config.loadFromEnv();

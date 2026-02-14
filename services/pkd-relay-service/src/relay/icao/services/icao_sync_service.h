@@ -1,3 +1,7 @@
+/**
+ * @file icao_sync_service.h
+ * @brief ICAO PKD version sync service
+ */
 #pragma once
 
 #include <string>

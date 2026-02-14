@@ -1,3 +1,8 @@
+/**
+ * @file cert_type_detector.h
+ * @brief ICAO PKD certificate type detection using X.509 attributes
+ */
+
 #pragma once
 
 #include <string>

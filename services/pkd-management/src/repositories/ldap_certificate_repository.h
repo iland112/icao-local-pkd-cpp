@@ -5,14 +5,14 @@
  * Clean Architecture: Repository in Infrastructure Layer
  * Handles LDAP queries and transforms data into domain entities
  *
- * v2.4.3: Migrated to use LdapConnectionPool for thread-safe connection management
+ * Migrated to use LdapConnectionPool for thread-safe connection management.
  */
 
 #pragma once
 
 #include "../domain/models/certificate.h"
 #include <ldap.h>
-#include <ldap_connection_pool.h>  // v2.4.3: LDAP connection pool
+#include <ldap_connection_pool.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -97,7 +97,7 @@ public:
  * Implements certificate data access using OpenLDAP C API.
  * Transforms LDAP entries into domain Certificate entities.
  *
- * v2.4.3: Uses LdapConnectionPool for thread-safe connection management
+ * Uses LdapConnectionPool for thread-safe connection management.
  */
 class LdapCertificateRepository : public ICertificateRepository {
 public:
@@ -132,7 +132,7 @@ public:
 
 private:
     // Dependencies (non-owning pointers)
-    common::LdapConnectionPool* ldapPool_;  // v2.4.3: Connection pool
+    common::LdapConnectionPool* ldapPool_;  ///< LDAP connection pool (non-owning)
     std::string baseDn_;  // Base DN for searches
 
     /**
@@ -192,7 +192,7 @@ private:
         std::string& fingerprint,
         std::chrono::system_clock::time_point& validFrom,
         std::chrono::system_clock::time_point& validTo,
-        // X.509 Metadata (v2.3.0)
+        // X.509 Metadata
         int& version,
         std::optional<std::string>& signatureAlgorithm,
         std::optional<std::string>& signatureHashAlgorithm,
@@ -208,7 +208,7 @@ private:
         std::vector<std::string>& crlDistributionPoints,
         std::optional<std::string>& ocspResponderUrl,
         std::optional<bool>& isCertSelfSigned,
-        // DN Components (shared library)
+        // DN Components
         std::optional<icao::x509::DnComponents>& subjectDnComponents,
         std::optional<icao::x509::DnComponents>& issuerDnComponents
     );

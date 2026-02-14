@@ -1,3 +1,7 @@
+/**
+ * @file types.h
+ * @brief Data types for DB-LDAP synchronization operations
+ */
 #pragma once
 
 #include <string>
@@ -7,41 +11,46 @@
 namespace icao {
 namespace relay {
 
-// =============================================================================
-// Database Statistics
-// =============================================================================
+/// @name Database Statistics
+/// @{
+
+/** @brief Database certificate and CRL count statistics */
 struct DbStats {
     int cscaCount = 0;
-    int mlscCount = 0;  // Master List Signer Certificates (Sprint 3)
+    int mlscCount = 0;
     int dscCount = 0;
     int dscNcCount = 0;
     int crlCount = 0;
     int storedInLdapCount = 0;
     std::map<std::string, std::map<std::string, int>> countryStats;
 };
+/// @}
 
-// =============================================================================
-// LDAP Statistics
-// =============================================================================
+/// @name LDAP Statistics
+/// @{
+
+/** @brief LDAP directory certificate and CRL count statistics */
 struct LdapStats {
     int cscaCount = 0;
-    int mlscCount = 0;  // Master List Signer Certificates (Sprint 3)
+    int mlscCount = 0;
     int dscCount = 0;
     int dscNcCount = 0;
     int crlCount = 0;
     int totalEntries = 0;
     std::map<std::string, std::map<std::string, int>> countryStats;
 };
+/// @}
 
-// =============================================================================
-// Sync Result
-// =============================================================================
+/// @name Sync Result
+/// @{
+
+/** @brief Result of a DB-LDAP sync check */
 struct SyncResult {
     std::string status;  // SYNCED, DISCREPANCY, ERROR
     DbStats dbStats;
     LdapStats ldapStats;
     int cscaDiscrepancy = 0;
-    int mlscDiscrepancy = 0;  // Master List Signer Certificates (Sprint 3)
+    int mlscDiscrepancy = 0;
     int dscDiscrepancy = 0;
     int dscNcDiscrepancy = 0;
     int crlDiscrepancy = 0;
@@ -50,10 +59,12 @@ struct SyncResult {
     std::string errorMessage;
     int syncStatusId = 0;
 };
+/// @}
 
-// =============================================================================
-// Certificate Information
-// =============================================================================
+/// @name Certificate Information
+/// @{
+
+/** @brief Certificate data for LDAP operations */
 struct CertificateInfo {
     std::string id;             // UUID or integer ID as string
     std::string certType;       // CSCA, DSC, DSC_NC, CRL
@@ -64,10 +75,12 @@ struct CertificateInfo {
     std::vector<unsigned char> certData;
     std::string ldapDn;         // LDAP Distinguished Name
 };
+/// @}
 
-// =============================================================================
-// CRL Information (v2.0.5)
-// =============================================================================
+/// @name CRL Information
+/// @{
+
+/** @brief CRL data for LDAP operations */
 struct CrlInfo {
     std::string id;             // UUID
     std::string countryCode;
@@ -76,10 +89,12 @@ struct CrlInfo {
     std::vector<unsigned char> crlData;
     std::string ldapDn;         // LDAP Distinguished Name
 };
+/// @}
 
-// =============================================================================
-// Reconciliation Failure
-// =============================================================================
+/// @name Reconciliation Types
+/// @{
+
+/** @brief A single reconciliation failure record */
 struct ReconciliationFailure {
     std::string certType;
     std::string operation;      // ADD, DELETE
@@ -88,9 +103,7 @@ struct ReconciliationFailure {
     std::string error;
 };
 
-// =============================================================================
-// Reconciliation Result
-// =============================================================================
+/** @brief Aggregate result of a reconciliation run */
 struct ReconciliationResult {
     bool success = false;
     int totalProcessed = 0;
@@ -109,6 +122,7 @@ struct ReconciliationResult {
     std::string errorMessage;
     std::vector<ReconciliationFailure> failures;
 };
+/// @}
 
 } // namespace relay
 } // namespace icao

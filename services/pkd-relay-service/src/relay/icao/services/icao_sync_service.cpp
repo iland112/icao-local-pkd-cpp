@@ -1,3 +1,7 @@
+/**
+ * @file icao_sync_service.cpp
+ * @brief ICAO sync service implementation
+ */
 #include "icao_sync_service.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
@@ -96,7 +100,7 @@ IcaoSyncService::getVersionComparison() {
     return repo_->getVersionComparison();
 }
 
-// Private methods
+// --- Private methods ---
 
 std::vector<domain::models::IcaoVersion> IcaoSyncService::fetchRemoteVersions() {
     // Fetch HTML from ICAO portal

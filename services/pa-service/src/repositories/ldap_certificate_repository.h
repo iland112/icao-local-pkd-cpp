@@ -64,9 +64,8 @@ public:
     LdapCertificateRepository(const LdapCertificateRepository&) = delete;
     LdapCertificateRepository& operator=(const LdapCertificateRepository&) = delete;
 
-    // ==========================================================================
-    // CSCA Certificate Operations
-    // ==========================================================================
+    /// @name CSCA Certificate Operations
+    /// @{
 
     /**
      * @brief Find CSCA certificate by subject DN
@@ -91,9 +90,10 @@ public:
      */
     X509* findCscaByIssuerDn(const std::string& issuerDn, const std::string& countryCode);
 
-    // ==========================================================================
-    // DSC Certificate Operations (if needed for future use)
-    // ==========================================================================
+    /// @}
+
+    /// @name DSC Certificate Operations
+    /// @{
 
     /**
      * @brief Find DSC certificate by subject DN (dc=data first, dc=nc-data fallback)
@@ -117,9 +117,10 @@ public:
      */
     DscConformanceInfo checkDscConformance(X509* dscCert, const std::string& countryCode);
 
-    // ==========================================================================
-    // Helper Methods
-    // ==========================================================================
+    /// @}
+
+    /// @name Helper Methods
+    /// @{
 
     /**
      * @brief Build LDAP filter for certificate search
@@ -178,6 +179,8 @@ public:
      * @return Normalized DN (lowercase, sorted components)
      */
     std::string normalizeDn(const std::string& dn);
+
+    /// @}
 
 private:
     /**

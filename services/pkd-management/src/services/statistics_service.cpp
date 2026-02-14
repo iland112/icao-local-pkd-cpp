@@ -1,3 +1,7 @@
+/** @file statistics_service.cpp
+ *  @brief StatisticsService implementation
+ */
+
 #include "statistics_service.h"
 #include <spdlog/spdlog.h>
 #include <sstream>
@@ -7,9 +11,7 @@
 
 namespace services {
 
-// ============================================================================
-// Constructor & Destructor
-// ============================================================================
+// --- Constructor & Destructor ---
 
 StatisticsService::StatisticsService(
     repositories::StatisticsRepository* statsRepo,
@@ -27,9 +29,7 @@ StatisticsService::StatisticsService(
     spdlog::info("StatisticsService initialized with Repository dependencies");
 }
 
-// ============================================================================
-// Public Methods - Upload Statistics
-// ============================================================================
+// --- Public Methods - Upload Statistics ---
 
 Json::Value StatisticsService::getUploadStatistics()
 {
@@ -73,9 +73,7 @@ Json::Value StatisticsService::getUploadTrend(int days)
     return response;
 }
 
-// ============================================================================
-// Public Methods - Certificate Statistics
-// ============================================================================
+// --- Public Methods - Certificate Statistics ---
 
 Json::Value StatisticsService::getCertificateStatistics()
 {
@@ -101,9 +99,7 @@ Json::Value StatisticsService::getCrlStatistics()
     return response;
 }
 
-// ============================================================================
-// Public Methods - Country Statistics
-// ============================================================================
+// --- Public Methods - Country Statistics ---
 
 Json::Value StatisticsService::getCountryStatistics()
 {
@@ -177,9 +173,7 @@ Json::Value StatisticsService::getCountryDetail(const std::string& countryCode)
     return response;
 }
 
-// ============================================================================
-// Public Methods - Validation Statistics
-// ============================================================================
+// --- Public Methods - Validation Statistics ---
 
 Json::Value StatisticsService::getValidationStatistics()
 {
@@ -206,9 +200,7 @@ Json::Value StatisticsService::getValidationStatisticsByUpload(const std::string
     return response;
 }
 
-// ============================================================================
-// Public Methods - System-Wide Statistics
-// ============================================================================
+// --- Public Methods - System-Wide Statistics ---
 
 Json::Value StatisticsService::getSystemStatistics()
 {
@@ -236,9 +228,7 @@ Json::Value StatisticsService::getDatabaseStatistics()
     return response;
 }
 
-// ============================================================================
-// Public Methods - Trend Analysis
-// ============================================================================
+// --- Public Methods - Trend Analysis ---
 
 Json::Value StatisticsService::getCertificateGrowthTrend(int days)
 {
@@ -264,9 +254,7 @@ Json::Value StatisticsService::getValidationTrend(int days)
     return response;
 }
 
-// ============================================================================
-// Public Methods - Export Statistics
-// ============================================================================
+// --- Public Methods - Export Statistics ---
 
 std::string StatisticsService::exportStatisticsToCSV(const std::string& statisticsType)
 {
@@ -294,9 +282,7 @@ std::string StatisticsService::generateStatisticsReport(const std::string& forma
     return "";
 }
 
-// ============================================================================
-// Private Helper Methods
-// ============================================================================
+// --- Private Helper Methods ---
 
 double StatisticsService::calculatePercentage(int part, int total)
 {

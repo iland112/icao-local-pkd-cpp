@@ -1,3 +1,7 @@
+/**
+ * @file sync_service.cpp
+ * @brief Sync service implementation
+ */
 #include "sync_service.h"
 #include <spdlog/spdlog.h>
 #include <chrono>

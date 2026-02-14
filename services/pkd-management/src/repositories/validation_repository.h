@@ -15,7 +15,6 @@
  *
  * Database-agnostic interface using IQueryExecutor (supports PostgreSQL and Oracle).
  *
- * @note Part of Oracle migration Phase 3: Query Executor Pattern
  * @date 2026-02-04
  */
 
@@ -36,7 +35,7 @@ public:
     ~ValidationRepository() = default;
 
     /**
-     * @brief Save validation result (Phase 4.4)
+     * @brief Save validation result
      * @param result ValidationResult domain model
      * @return true if save successful, false otherwise
      *

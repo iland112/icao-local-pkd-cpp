@@ -5,9 +5,6 @@
 /**
  * @file validation_result.h
  * @brief Domain Model for Certificate Validation Result
- *
- * @note Moved from main.cpp as part of Phase 4.4 refactoring
- * @date 2026-01-30
  */
 
 namespace domain {

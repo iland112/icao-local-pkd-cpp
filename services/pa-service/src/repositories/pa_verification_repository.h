@@ -8,7 +8,7 @@
  *
  * @author SmartCore Inc.
  * @date 2026-02-01
- * @updated 2026-02-05 (Phase 5.1: Query Executor Pattern)
+ * @updated 2026-02-05
  */
 
 #pragma once
@@ -52,9 +52,8 @@ public:
     PaVerificationRepository(const PaVerificationRepository&) = delete;
     PaVerificationRepository& operator=(const PaVerificationRepository&) = delete;
 
-    // ==========================================================================
-    // CRUD Operations
-    // ==========================================================================
+    /// @name CRUD Operations
+    /// @{
 
     /**
      * @brief Insert new PA verification record
@@ -106,6 +105,8 @@ public:
      * @return true if updated
      */
     bool updateStatus(const std::string& id, const std::string& status);
+
+    /// @}
 
 private:
     /**

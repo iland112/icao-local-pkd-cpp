@@ -1,3 +1,8 @@
+/**
+ * @file pem_parser.h
+ * @brief PEM (Privacy Enhanced Mail) format parser for X.509 certificates
+ */
+
 #pragma once
 
 #include <string>

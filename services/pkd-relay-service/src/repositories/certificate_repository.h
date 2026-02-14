@@ -1,3 +1,7 @@
+/**
+ * @file certificate_repository.h
+ * @brief Repository for certificate table operations
+ */
 #pragma once
 
 #include "../domain/models/certificate.h"
@@ -15,8 +19,6 @@ namespace icao::relay::repositories {
  * Handles certificate-related database operations for DB-LDAP synchronization.
  * All queries use parameterized statements for SQL injection prevention.
  * Uses Query Executor Pattern for database independence (PostgreSQL/Oracle).
- *
- * @date 2026-02-05 (Phase 5.2: Query Executor Pattern)
  */
 class CertificateRepository {
 public:
@@ -32,11 +34,13 @@ public:
      */
     ~CertificateRepository() = default;
 
-    // Disable copy and move
+    /// @name Non-copyable and non-movable
+    /// @{
     CertificateRepository(const CertificateRepository&) = delete;
     CertificateRepository& operator=(const CertificateRepository&) = delete;
     CertificateRepository(CertificateRepository&&) = delete;
     CertificateRepository& operator=(CertificateRepository&&) = delete;
+    /// @}
 
     /**
      * @brief Count certificates by type

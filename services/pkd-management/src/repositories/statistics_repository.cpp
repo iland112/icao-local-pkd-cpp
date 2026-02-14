@@ -1,3 +1,7 @@
+/** @file statistics_repository.cpp
+ *  @brief StatisticsRepository implementation
+ */
+
 #include "statistics_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>

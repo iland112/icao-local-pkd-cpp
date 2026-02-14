@@ -1,12 +1,14 @@
+/** @file audit_service.cpp
+ *  @brief AuditService implementation
+ */
+
 #include "audit_service.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
 namespace services {
 
-// ============================================================================
-// Constructor & Destructor
-// ============================================================================
+// --- Constructor & Destructor ---
 
 AuditService::AuditService(repositories::AuditRepository* auditRepo)
     : auditRepo_(auditRepo)
@@ -17,9 +19,7 @@ AuditService::AuditService(repositories::AuditRepository* auditRepo)
     spdlog::info("AuditService initialized with Repository dependencies");
 }
 
-// ============================================================================
-// Public Methods - Audit Log Retrieval
-// ============================================================================
+// --- Public Methods - Audit Log Retrieval ---
 
 Json::Value AuditService::getOperationLogs(const AuditLogFilter& filter)
 {
@@ -95,9 +95,7 @@ Json::Value AuditService::getOperationStatistics()
     }
 }
 
-// ============================================================================
-// Private Helper Methods
-// ============================================================================
+// --- Private Helper Methods ---
 
 int AuditService::validateLimit(int limit)
 {

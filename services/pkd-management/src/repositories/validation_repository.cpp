@@ -1,3 +1,7 @@
+/** @file validation_repository.cpp
+ *  @brief ValidationRepository implementation
+ */
+
 #include "validation_repository.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -8,7 +12,7 @@
 
 namespace repositories {
 
-// Thread-local UUID generator
+/** @brief Thread-local UUID v4 generator */
 static std::string generateUuid() {
     static thread_local std::random_device rd;
     static thread_local std::mt19937_64 gen(rd());

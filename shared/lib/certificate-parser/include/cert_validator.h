@@ -1,3 +1,8 @@
+/**
+ * @file cert_validator.h
+ * @brief X.509 certificate validator (RFC 5280 and ICAO Doc 9303 Part 12)
+ */
+
 #pragma once
 
 #include <string>
