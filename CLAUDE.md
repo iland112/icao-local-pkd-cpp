@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.9.2
-**Last Updated**: 2026-02-13
+**Current Version**: v2.10.0
+**Last Updated**: 2026-02-14
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -131,11 +131,13 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - DB-LDAP sync monitoring with auto-reconciliation
 - Certificate search & export (country/type/status/source filters, full DIT-structured ZIP)
 - Certificate source tracking and dashboard statistics (bySource)
-- ICAO PKD version monitoring (auto-detection of new versions)
+- ICAO PKD version monitoring (auto-detection of new versions, daily scheduled check)
+- ICAO PKD dashboard notification banner (new version alert with dismiss)
 - Trust chain visualization (frontend tree component)
 - Upload issues tracking (duplicate detection with tab-based UI)
 - LDIF/ASN.1 structure visualization
-- Real-time upload statistics streaming (SSE)
+- Real-time upload statistics streaming (SSE) with Event Log panel
+- Real-time upload processing status (PROCESSING state with periodic DB updates)
 - X.509 metadata extraction (22 fields per certificate)
 - ICAO 9303 compliance checking (6 validation categories)
 
@@ -266,6 +268,10 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | TrustChainVisualization | Trust chain path display |
 | DuplicateCertificatesTree | Duplicate detection with country grouping |
 | LdifStructure / MasterListStructure | File structure visualization |
+| EventLog | Scrollable SSE event log with auto-scroll and timestamps |
+| ProcessingErrorsPanel | Upload processing error summary and details |
+| RealTimeStatisticsPanel | Live validation statistics during upload |
+| CurrentCertificateCard | Currently processing certificate metadata |
 
 ### Dependencies
 
@@ -467,6 +473,28 @@ scripts/
 ---
 
 ## Version History
+
+### v2.10.0 (2026-02-14) - ICAO Auto Scheduler + Upload Processing UX + Event Log
+- ICAO PKD daily auto version check scheduler (configurable hour via `ICAO_CHECK_SCHEDULE_HOUR`, enable/disable via `ICAO_SCHEDULER_ENABLED`)
+- Drogon event loop timer-based scheduling (initial delay + 24h recurring)
+- `last_checked_at` timestamp tracking in IcaoSyncService (thread-safe mutex)
+- ICAO status API: `any_needs_update` and `last_checked_at` fields added
+- Dashboard: ICAO PKD update notification banner (amber gradient, dismissible, collection version diff display)
+- IcaoStatus page: last checked timestamp display in header
+- Upload processing: `PROCESSING` intermediate DB status (between PENDING and COMPLETED)
+- LDIF processing: periodic DB progress updates every 500 entries (`updateProgress` + `updateStatistics`)
+- Master List processing: `PROCESSING` status set before certificate extraction loop
+- Upload history API: `totalEntries`/`processedEntries` fields added to list response
+- Frontend `UploadStatus` type: `PROCESSING` state added
+- UploadHistory: auto-refresh (5s polling) when uploads are in progress, inline progress bar
+- UploadDetail: auto-refresh (3s polling), live progress card with certificate counts
+- EventLog component: scrollable SSE event log with auto-scroll, timestamps, status dots, clear button
+- FileUpload: SSE events accumulated in EventLog panel (persistent, reviewable)
+- Number formatting: all certificate/entry counts use locale-aware comma separation (toLocaleString)
+- ProcessingErrorsPanel component: upload error summary with parse/DB/LDAP breakdown
+- ProgressManager: centralized progress tracking for ML processing with periodic DB+SSE updates
+- Oracle compatibility: all new queries support both PostgreSQL and Oracle
+- Docker compose: `ICAO_CHECK_SCHEDULE_HOUR` and `ICAO_SCHEDULER_ENABLED` env vars
 
 ### v2.9.2 (2026-02-13) - Full Certificate Export + PA CRL Expiration Check
 - Full certificate export: all LDAP-stored certificates, CRLs, and Master Lists as DIT-structured ZIP

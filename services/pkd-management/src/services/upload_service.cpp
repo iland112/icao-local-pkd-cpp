@@ -727,6 +727,8 @@ Json::Value UploadService::getUploadHistory(const UploadHistoryFilter& filter)
             item["crlCount"] = upload.crlCount;
             item["mlscCount"] = upload.mlscCount;
             item["mlCount"] = upload.mlCount;
+            item["totalEntries"] = upload.totalEntries;
+            item["processedEntries"] = upload.processedEntries;
 
             // Validation statistics
             Json::Value validation;

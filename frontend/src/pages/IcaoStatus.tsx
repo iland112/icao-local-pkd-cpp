@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2 } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/utils/cn';
 
 interface IcaoVersion {
@@ -43,11 +43,14 @@ interface StatusApiResponse {
   success: boolean;
   count: number;
   status: VersionStatus[];
+  any_needs_update?: boolean;
+  last_checked_at?: string | null;
 }
 
 export default function IcaoStatus() {
   const [versionHistory, setVersionHistory] = useState<IcaoVersion[]>([]);
   const [versionStatus, setVersionStatus] = useState<VersionStatus[]>([]);
+  const [lastCheckedAt, setLastCheckedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +78,9 @@ export default function IcaoStatus() {
 
       if (data.success) {
         setVersionStatus(data.status);
+        if (data.last_checked_at) {
+          setLastCheckedAt(data.last_checked_at);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch version status:', err);
@@ -140,9 +146,17 @@ export default function IcaoStatus() {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD Auto Sync</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              ICAO PKD 포털의 버전 업데이트를 모니터링합니다.
-            </p>
+            <div className="flex items-center gap-3">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                ICAO PKD 포털의 버전 업데이트를 모니터링합니다.
+              </p>
+              {lastCheckedAt && (
+                <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                  <Clock className="w-3 h-3" />
+                  마지막 확인: {formatTimestamp(lastCheckedAt)}
+                </span>
+              )}
+            </div>
           </div>
           {/* Quick Actions */}
           <div className="flex gap-2">

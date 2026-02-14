@@ -189,6 +189,68 @@ Json::Value IcaoComplianceStatus::toJson() const {
 }
 
 // =============================================================================
+// ProcessingError Implementation
+// =============================================================================
+
+Json::Value ProcessingError::toJson() const {
+    Json::Value json;
+    json["timestamp"] = timestamp;
+    json["errorType"] = errorType;
+    json["entryDn"] = entryDn;
+    json["certificateDn"] = certificateDn;
+    json["countryCode"] = countryCode;
+    json["certificateType"] = certificateType;
+    json["message"] = message;
+    return json;
+}
+
+void addProcessingError(
+    ValidationStatistics& stats,
+    const std::string& errorType,
+    const std::string& entryDn,
+    const std::string& certificateDn,
+    const std::string& countryCode,
+    const std::string& certificateType,
+    const std::string& message
+) {
+    // Increment counters
+    stats.totalErrorCount++;
+
+    if (errorType == "BASE64_DECODE_FAILED" || errorType == "CERT_PARSE_FAILED" ||
+        errorType == "CRL_PARSE_FAILED" || errorType == "ML_PARSE_FAILED" ||
+        errorType == "ML_CERT_PARSE_FAILED") {
+        stats.parseErrorCount++;
+    } else if (errorType == "DB_SAVE_FAILED" || errorType == "ML_CERT_SAVE_FAILED") {
+        stats.dbSaveErrorCount++;
+    } else if (errorType == "LDAP_SAVE_FAILED" || errorType == "ML_LDAP_SAVE_FAILED") {
+        stats.ldapSaveErrorCount++;
+    } else {
+        // ENTRY_PROCESSING_EXCEPTION and others count toward parse errors
+        stats.parseErrorCount++;
+    }
+
+    // Create error record with ISO 8601 timestamp
+    ProcessingError error;
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
+    error.timestamp = ss.str();
+    error.errorType = errorType;
+    error.entryDn = entryDn;
+    error.certificateDn = certificateDn;
+    error.countryCode = countryCode;
+    error.certificateType = certificateType;
+    error.message = message;
+
+    // Append to bounded list
+    if (static_cast<int>(stats.recentErrors.size()) >= ValidationStatistics::MAX_RECENT_ERRORS) {
+        stats.recentErrors.erase(stats.recentErrors.begin());
+    }
+    stats.recentErrors.push_back(std::move(error));
+}
+
+// =============================================================================
 // ValidationStatistics Implementation
 // =============================================================================
 
@@ -248,6 +310,18 @@ Json::Value ValidationStatistics::toJson() const {
         complianceViolationsJson[violation] = count;
     }
     json["complianceViolations"] = complianceViolationsJson;
+
+    // Error tracking
+    json["totalErrorCount"] = totalErrorCount;
+    json["parseErrorCount"] = parseErrorCount;
+    json["dbSaveErrorCount"] = dbSaveErrorCount;
+    json["ldapSaveErrorCount"] = ldapSaveErrorCount;
+
+    Json::Value errorsArray(Json::arrayValue);
+    for (const auto& err : recentErrors) {
+        errorsArray.append(err.toJson());
+    }
+    json["recentErrors"] = errorsArray;
 
     return json;
 }

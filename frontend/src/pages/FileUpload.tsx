@@ -16,11 +16,13 @@ import {
   Database,
 } from 'lucide-react';
 import { uploadApi, createProgressEventSource } from '@/services/api';
-import type { ProcessingMode, UploadProgress, UploadedFile, ValidationStatistics, CertificateMetadata, IcaoComplianceStatus } from '@/types';
+import type { ProcessingMode, UploadProgress, UploadedFile, ValidationStatistics, CertificateMetadata, IcaoComplianceStatus, ProcessingError } from '@/types';
 import { cn } from '@/utils/cn';
 import { Stepper, type Step, type StepStatus } from '@/components/common/Stepper';
 import { RealTimeStatisticsPanel } from '@/components/RealTimeStatisticsPanel';
+import { ProcessingErrorsPanel } from '@/components/ProcessingErrorsPanel';
 import { CurrentCertificateCard } from '@/components/CurrentCertificateCard';
+import { EventLog, type EventLogEntry } from '@/components/EventLog';
 
 interface StageStatus {
   status: 'IDLE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED';
@@ -66,6 +68,14 @@ export function FileUpload() {
   const [statistics, setStatistics] = useState<ValidationStatistics | null>(null);
   const [currentCertificate, setCurrentCertificate] = useState<CertificateMetadata | null>(null);
   const [currentCompliance, setCurrentCompliance] = useState<IcaoComplianceStatus | null>(null);
+
+  // Processing error tracking
+  const [processingErrors, setProcessingErrors] = useState<ProcessingError[]>([]);
+  const [errorCounts, setErrorCounts] = useState({ total: 0, parse: 0, db: 0, ldap: 0 });
+
+  // Event log for SSE events
+  const [eventLogEntries, setEventLogEntries] = useState<EventLogEntry[]>([]);
+  const eventIdRef = useRef(0);
 
   // Restore upload state on page load (for MANUAL mode)
   useEffect(() => {
@@ -121,7 +131,7 @@ export function FileUpload() {
             status: 'COMPLETED',
             message: '파싱 완료',
             percentage: 100,
-            details: `${entriesCount}건 처리`
+            details: `${entriesCount?.toLocaleString()}건 처리`
           });
         } else {
           // Parsing not started yet - keep IDLE state
@@ -138,12 +148,12 @@ export function FileUpload() {
         if (hasCertificates) {
           // Build detailed certificate breakdown
           const certDetails = [];
-          if (upload.mlscCount) certDetails.push(`MLSC: ${upload.mlscCount}`);  // Master List Signer Certificate (v2.1.1)
-          if (upload.cscaCount) certDetails.push(`CSCA: ${upload.cscaCount}`);
-          if (upload.dscCount) certDetails.push(`DSC: ${upload.dscCount}`);
-          if (upload.dscNcCount) certDetails.push(`DSC_NC: ${upload.dscNcCount}`);
-          if (upload.crlCount) certDetails.push(`CRL: ${upload.crlCount}`);
-          if (upload.mlCount) certDetails.push(`ML: ${upload.mlCount}`);
+          if (upload.mlscCount) certDetails.push(`MLSC: ${upload.mlscCount.toLocaleString()}`);  // Master List Signer Certificate (v2.1.1)
+          if (upload.cscaCount) certDetails.push(`CSCA: ${upload.cscaCount.toLocaleString()}`);
+          if (upload.dscCount) certDetails.push(`DSC: ${upload.dscCount.toLocaleString()}`);
+          if (upload.dscNcCount) certDetails.push(`DSC_NC: ${upload.dscNcCount.toLocaleString()}`);
+          if (upload.crlCount) certDetails.push(`CRL: ${upload.crlCount.toLocaleString()}`);
+          if (upload.mlCount) certDetails.push(`ML: ${upload.mlCount.toLocaleString()}`);
 
           setDbSaveStage({
             status: 'COMPLETED',
@@ -288,6 +298,12 @@ export function FileUpload() {
     setStatistics(null);
     setCurrentCertificate(null);
     setCurrentCompliance(null);
+    // Reset processing errors
+    setProcessingErrors([]);
+    setErrorCounts({ total: 0, parse: 0, db: 0, ldap: 0 });
+    // Reset event log
+    setEventLogEntries([]);
+    eventIdRef.current = 0;
   };
 
   const handleUpload = async () => {
@@ -388,7 +404,7 @@ export function FileUpload() {
           status: 'COMPLETED',
           message: '파싱 완료',
           percentage: 100,
-          details: `${entriesCount}건 처리`
+          details: `${entriesCount?.toLocaleString()}건 처리`
         });
       }
 
@@ -398,13 +414,13 @@ export function FileUpload() {
       if (upload.status === 'COMPLETED' || hasCertificates) {
         // Build detailed certificate breakdown
         const parts: string[] = [];
-        if (upload.mlscCount) parts.push(`MLSC ${upload.mlscCount}`);
-        if (upload.cscaCount) parts.push(`CSCA ${upload.cscaCount}`);
-        if (upload.dscCount) parts.push(`DSC ${upload.dscCount}`);
-        if (upload.dscNcCount) parts.push(`DSC_NC ${upload.dscNcCount}`);
-        if (upload.crlCount) parts.push(`CRL ${upload.crlCount}`);
-        if (upload.mlCount) parts.push(`ML ${upload.mlCount}`);
-        const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${upload.processedEntries || upload.totalEntries}건 저장 (DB+LDAP)`;
+        if (upload.mlscCount) parts.push(`MLSC ${upload.mlscCount.toLocaleString()}`);
+        if (upload.cscaCount) parts.push(`CSCA ${upload.cscaCount.toLocaleString()}`);
+        if (upload.dscCount) parts.push(`DSC ${upload.dscCount.toLocaleString()}`);
+        if (upload.dscNcCount) parts.push(`DSC_NC ${upload.dscNcCount.toLocaleString()}`);
+        if (upload.crlCount) parts.push(`CRL ${upload.crlCount.toLocaleString()}`);
+        if (upload.mlCount) parts.push(`ML ${upload.mlCount.toLocaleString()}`);
+        const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${(upload.processedEntries || upload.totalEntries)?.toLocaleString()}건 저장 (DB+LDAP)`;
 
         setDbSaveStage({
           status: 'COMPLETED',
@@ -545,9 +561,62 @@ export function FileUpload() {
   const handleProgressUpdate = (progress: UploadProgress) => {
     const { stage, stageName, message, percentage, processedCount, totalCount, errorMessage } = progress;
 
+    // Accumulate event log entry
+    {
+      const now = new Date();
+      const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
+
+      let status: EventLogEntry['status'] = 'info';
+      if (stage === 'FAILED' || errorMessage) status = 'fail';
+      else if (stage.endsWith('_COMPLETED') || stage === 'COMPLETED') status = 'success';
+      else if (stage.endsWith('_IN_PROGRESS')) status = 'info';
+
+      // Build detail string
+      let detail = '';
+      if (processedCount > 0 && totalCount > 0) {
+        detail = `${processedCount.toLocaleString()}/${totalCount.toLocaleString()}`;
+        if (percentage > 0) detail += ` (${percentage}%)`;
+      } else if (message) {
+        detail = message;
+      } else if (stageName) {
+        detail = stageName;
+      }
+      if (errorMessage) {
+        detail = errorMessage;
+        status = 'fail';
+      }
+      if (!detail && stage === 'COMPLETED') detail = 'SUCCESS';
+      if (!detail && stage === 'FAILED') detail = 'FAIL';
+      if (!detail) detail = `${percentage}%`;
+
+      const entry: EventLogEntry = {
+        id: ++eventIdRef.current,
+        timestamp: ts,
+        eventName: stage,
+        detail,
+        status,
+      };
+
+      setEventLogEntries(prev => [...prev, entry]);
+    }
+
     // Phase 4.4: Extract enhanced metadata fields
     if (progress.statistics) {
       setStatistics(progress.statistics);
+
+      // Extract processing error data from statistics
+      const stats = progress.statistics;
+      if (stats.totalErrorCount && stats.totalErrorCount > 0) {
+        setErrorCounts({
+          total: stats.totalErrorCount,
+          parse: stats.parseErrorCount ?? 0,
+          db: stats.dbSaveErrorCount ?? 0,
+          ldap: stats.ldapSaveErrorCount ?? 0,
+        });
+        if (stats.recentErrors && stats.recentErrors.length > 0) {
+          setProcessingErrors(stats.recentErrors);
+        }
+      }
     }
     if (progress.currentCertificate) {
       setCurrentCertificate(progress.currentCertificate);
@@ -604,11 +673,11 @@ export function FileUpload() {
       // Show final count on completion (use processedCount if available, fallback to totalCount)
       const count = processedCount || totalCount;
       if (count > 0) {
-        details = `${count}건 처리`;
+        details = `${count.toLocaleString()}건 처리`;
       }
     } else if (processedCount > 0 && totalCount > 0) {
       // Show progress during processing
-      details = `${processedCount}/${totalCount}`;
+      details = `${processedCount.toLocaleString()}/${totalCount.toLocaleString()}`;
     }
 
     const stageStatus: StageStatus = {
@@ -646,7 +715,7 @@ export function FileUpload() {
         status: stage === 'VALIDATION_COMPLETED' ? 'IN_PROGRESS' : stageStatus.status,  // Keep IN_PROGRESS until DB_SAVING_COMPLETED
         message: stageName || message,
         percentage: stagePercent,
-        details: stage === 'VALIDATION_COMPLETED' && validationCount > 0 ? `검증: ${validationCount}건` : details,
+        details: stage === 'VALIDATION_COMPLETED' && validationCount > 0 ? `검증: ${validationCount.toLocaleString()}건` : details,
       };
       setDbSaveStage(validationStatus);
     } else if (stage.startsWith('DB_SAVING')) {
@@ -658,7 +727,7 @@ export function FileUpload() {
         status: stage === 'DB_SAVING_COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
         message: stageName || message,
         percentage: stage === 'DB_SAVING_COMPLETED' ? 100 : stagePercent,
-        details: stage === 'DB_SAVING_COMPLETED' && saveCount > 0 ? `${saveCount}건 저장` : details,
+        details: stage === 'DB_SAVING_COMPLETED' && saveCount > 0 ? `${saveCount.toLocaleString()}건 저장` : details,
       };
       setDbSaveStage(dbStatus);
     } else if (stage.startsWith('LDAP_SAVING')) {
@@ -682,7 +751,7 @@ export function FileUpload() {
       setDbSaveStage(prev => {
         const completionDetails = (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('ML')))
           ? message
-          : (prev.details || `${totalCount}건 저장 (DB+LDAP)`);
+          : (prev.details || `${totalCount.toLocaleString()}건 저장 (DB+LDAP)`);
         return { ...prev, status: 'COMPLETED', percentage: 100, details: completionDetails };
       });
       setOverallStatus('FINALIZED');
@@ -954,6 +1023,16 @@ export function FileUpload() {
                 />
               </div>
 
+              {/* Event Log */}
+              {(eventLogEntries.length > 0 || overallStatus === 'PROCESSING') && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <EventLog
+                    events={eventLogEntries}
+                    onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; }}
+                  />
+                </div>
+              )}
+
               {/* Phase 4.4: Currently Processing Certificate */}
               {currentCertificate && (overallStatus === 'PROCESSING' || dbSaveStage.status === 'IN_PROGRESS') && (
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -971,6 +1050,20 @@ export function FileUpload() {
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <RealTimeStatisticsPanel
                     statistics={statistics}
+                    isProcessing={overallStatus === 'PROCESSING'}
+                  />
+                </div>
+              )}
+
+              {/* Processing Errors Panel */}
+              {errorCounts.total > 0 && (
+                <div className="mt-4">
+                  <ProcessingErrorsPanel
+                    errors={processingErrors}
+                    totalErrorCount={errorCounts.total}
+                    parseErrorCount={errorCounts.parse}
+                    dbSaveErrorCount={errorCounts.db}
+                    ldapSaveErrorCount={errorCounts.ldap}
                     isProcessing={overallStatus === 'PROCESSING'}
                   />
                 </div>

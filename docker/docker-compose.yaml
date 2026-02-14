@@ -118,6 +118,9 @@ services:
       - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
       # ASN.1 Parser Configuration
       - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}     # Default: 100 (max lines for Master List structure parsing)
+      # ICAO Scheduler Configuration (v2.10.0)
+      - ICAO_CHECK_SCHEDULE_HOUR=${ICAO_CHECK_SCHEDULE_HOUR:-9}   # Daily check hour (0-23)
+      - ICAO_SCHEDULER_ENABLED=${ICAO_SCHEDULER_ENABLED:-true}    # Enable/disable scheduler
     depends_on:
       # DB dependency removed: services handle DB connection via DB_TYPE (postgres/oracle)
       # DB container startup is managed by scripts (--profile postgres or --profile oracle)

@@ -103,7 +103,8 @@ bool parseMasterListEntryV2(
     LDAP* ld,
     const std::string& uploadId,
     const LdifEntry& entry,
-    MasterListStats& stats
+    MasterListStats& stats,
+    common::ValidationStatistics* enhancedStats
 ) {
     // Step 1: Extract and decode pkdMasterListContent
     std::string base64Value = entry.getFirstAttribute("pkdMasterListContent;binary");
@@ -112,12 +113,16 @@ bool parseMasterListEntryV2(
     }
     if (base64Value.empty()) {
         spdlog::warn("[ML] No pkdMasterListContent found in entry: {}", entry.dn);
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            entry.dn, "", "", "ML", "No pkdMasterListContent found in entry");
         return false;
     }
 
     std::vector<uint8_t> mlBytes = base64Decode(base64Value);
     if (mlBytes.empty()) {
         spdlog::error("[ML] Failed to decode Master List content: {}", entry.dn);
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            entry.dn, "", "", "ML", "Failed to decode Master List content (Base64)");
         return false;
     }
 
@@ -133,6 +138,8 @@ bool parseMasterListEntryV2(
     BIO* bio = BIO_new_mem_buf(mlBytes.data(), static_cast<int>(mlBytes.size()));
     if (!bio) {
         spdlog::error("[ML-LDIF] Failed to create BIO for Master List: {}", entry.dn);
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            entry.dn, "", countryCode, "ML", "Failed to create BIO for Master List");
         return false;
     }
 
@@ -141,6 +148,8 @@ bool parseMasterListEntryV2(
 
     if (!cms) {
         spdlog::error("[ML-LDIF] Failed to parse Master List as CMS SignedData: {}", entry.dn);
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            entry.dn, "", countryCode, "ML", "Failed to parse Master List as CMS SignedData");
         return false;
     }
 
@@ -235,6 +244,8 @@ bool parseMasterListEntryV2(
                 if (certId.empty()) {
                     spdlog::error("[ML-LDIF] MLSC {}/{} - Failed to save to DB, reason: Database operation failed",
                                  i + 1, numSigners);
+                    if (enhancedStats && !isDuplicate) common::addProcessingError(*enhancedStats, "ML_CERT_SAVE_FAILED",
+                        entry.dn, meta.subjectDn, certCountryCode, "MLSC", "MLSC database save failed");
                     continue;
                 }
 
@@ -269,6 +280,8 @@ bool parseMasterListEntryV2(
                         } else {
                             spdlog::warn("[ML-LDIF] MLSC {}/{} - Failed to save to LDAP, reason: LDAP operation failed",
                                         i + 1, numSigners);
+                            if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_LDAP_SAVE_FAILED",
+                                entry.dn, meta.subjectDn, certCountryCode, "MLSC", "MLSC LDAP save failed");
                         }
                     }
                 }
@@ -355,6 +368,8 @@ bool parseMasterListEntryV2(
 
             if (!cert) {
                 spdlog::warn("[ML-LDIF] Failed to parse certificate in certList SET");
+                if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_CERT_PARSE_FAILED",
+                    entry.dn, "", countryCode, "CSCA", "Failed to parse certificate in Master List certList SET");
                 break;
             }
 
@@ -397,6 +412,9 @@ bool parseMasterListEntryV2(
                 std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
                 spdlog::error("[ML-LDIF] {} {} - Failed to save to DB, reason: Database operation failed, fingerprint: {}",
                              certTypeLabel, totalCerts, meta.fingerprint.substr(0, 16) + "...");
+                if (enhancedStats && !isDuplicate) common::addProcessingError(*enhancedStats, "ML_CERT_SAVE_FAILED",
+                    entry.dn, meta.subjectDn, certCountryCode, certType,
+                    certTypeLabel + " database save failed, fingerprint: " + meta.fingerprint.substr(0, 16));
                 X509_free(cert);
                 continue;
             }
@@ -435,6 +453,9 @@ bool parseMasterListEntryV2(
                     } else {
                         spdlog::warn("[ML-LDIF] {} {} - Failed to save to LDAP, reason: LDAP operation failed",
                                     certTypeLabel, totalCerts);
+                        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_LDAP_SAVE_FAILED",
+                            entry.dn, meta.subjectDn, certCountryCode, certType,
+                            certTypeLabel + " LDAP save failed");
                     }
                 }
             }
@@ -452,6 +473,8 @@ bool parseMasterListEntryV2(
 
     } catch (const std::exception& e) {
         spdlog::error("[ML-LDIF] Exception during Master List processing: {}, dn={}", e.what(), entry.dn);
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ENTRY_PROCESSING_EXCEPTION",
+            entry.dn, "", countryCode, "ML", std::string("ML processing exception: ") + e.what());
         CMS_ContentInfo_free(cms);
         return false;
     }
@@ -475,10 +498,14 @@ bool parseMasterListEntryV2(
                 spdlog::info("[ML-LDIF] Saved Master List to LDAP o=ml: {}", ldapDn);
             } else {
                 spdlog::warn("[ML-LDIF] Failed to save Master List to LDAP o=ml, reason: LDAP operation failed");
+                if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_LDAP_SAVE_FAILED",
+                    entry.dn, "", countryCode, "ML", "Master List LDAP save to o=ml failed");
             }
         }
     } else {
         spdlog::error("[ML-LDIF] Failed to save Master List to DB, reason: Database operation failed");
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_CERT_SAVE_FAILED",
+            entry.dn, "", countryCode, "ML", "Master List database save failed");
         return false;
     }
 
@@ -496,7 +523,8 @@ bool processMasterListFile(
     LDAP* ld,
     const std::string& uploadId,
     const std::vector<uint8_t>& content,
-    MasterListStats& stats
+    MasterListStats& stats,
+    common::ValidationStatistics* enhancedStats
 ) {
     spdlog::info("[ML-FILE] Processing Master List file: {} bytes", content.size());
 
@@ -506,6 +534,8 @@ bool processMasterListFile(
     // Validate CMS format: first byte must be 0x30 (SEQUENCE tag)
     if (content.empty() || content[0] != 0x30) {
         spdlog::error("[ML-FILE] Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            "", "", "", "ML", "Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
         return false;
     }
 
@@ -513,6 +543,8 @@ bool processMasterListFile(
     BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
     if (!bio) {
         spdlog::error("[ML-FILE] Failed to create BIO");
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            "", "", "", "ML", "Failed to create BIO for Master List file");
         return false;
     }
 
@@ -521,6 +553,8 @@ bool processMasterListFile(
 
     if (!cms) {
         spdlog::error("[ML-FILE] Failed to parse Master List as CMS SignedData");
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+            "", "", "", "ML", "Failed to parse Master List file as CMS SignedData");
         return false;
     }
 
@@ -662,6 +696,8 @@ bool processMasterListFile(
         ASN1_OCTET_STRING** contentPtr = CMS_get0_content(cms);
         if (!contentPtr || !*contentPtr) {
             spdlog::error("[ML-FILE] Failed to extract encapsulated content (pkiData)");
+            if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+                "", "", "", "ML", "Failed to extract encapsulated content (pkiData) from Master List CMS");
             CMS_ContentInfo_free(cms);
             return false;
         }
@@ -683,6 +719,8 @@ bool processMasterListFile(
 
         if (ret == 0x80 || tag != V_ASN1_SEQUENCE) {
             spdlog::error("[ML-FILE] Invalid Master List structure: expected SEQUENCE");
+            if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+                "", "", "", "ML", "Invalid Master List ASN.1 structure: expected SEQUENCE tag");
             CMS_ContentInfo_free(cms);
             return false;
         }
@@ -715,6 +753,8 @@ bool processMasterListFile(
 
         if (!certSetStart || certSetLen == 0) {
             spdlog::error("[ML-FILE] Failed to find certList SET in Master List structure");
+            if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_PARSE_FAILED",
+                "", "", "", "ML", "Failed to find certList SET in Master List ASN.1 structure");
             CMS_ContentInfo_free(cms);
             return false;
         }
@@ -732,6 +772,8 @@ bool processMasterListFile(
 
             if (!cert) {
                 spdlog::warn("[ML-FILE] Failed to parse certificate in certList SET");
+                if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_CERT_PARSE_FAILED",
+                    "", "", "", "CSCA", "Failed to parse certificate #" + std::to_string(totalCerts + 1) + " in Master List certList SET");
                 break;
             }
 
@@ -741,6 +783,8 @@ bool processMasterListFile(
             CertificateMetadata meta = extractCertificateMetadata(cert);
             if (meta.derData.empty() || meta.fingerprint.empty()) {
                 spdlog::warn("[ML-FILE] Certificate {}/{} - Failed to extract metadata", totalCerts, "?");
+                if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_CERT_PARSE_FAILED",
+                    "", "", "", "CSCA", "Failed to extract metadata for certificate #" + std::to_string(totalCerts) + " in Master List");
                 X509_free(cert);
                 continue;
             }
@@ -772,6 +816,9 @@ bool processMasterListFile(
 
             if (certId.empty()) {
                 spdlog::error("[ML-FILE] Certificate {} - Failed to save", totalCerts);
+                if (enhancedStats) common::addProcessingError(*enhancedStats, "ML_CERT_SAVE_FAILED",
+                    "", meta.subjectDn, certCountryCode, certType,
+                    "Failed to save certificate #" + std::to_string(totalCerts) + " to database");
                 X509_free(cert);
                 continue;
             }
@@ -833,6 +880,8 @@ bool processMasterListFile(
 
     } catch (const std::exception& e) {
         spdlog::error("[ML-FILE] Exception during Master List processing: {}", e.what());
+        if (enhancedStats) common::addProcessingError(*enhancedStats, "ENTRY_PROCESSING_EXCEPTION",
+            "", "", "", "ML", std::string("Master List processing exception: ") + e.what());
         CMS_ContentInfo_free(cms);
         return false;
     }

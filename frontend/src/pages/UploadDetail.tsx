@@ -47,6 +47,17 @@ export function UploadDetail() {
     }
   }, [uploadId]);
 
+  // Auto-refresh when upload is in progress (3s interval)
+  useEffect(() => {
+    if (!upload || !['PENDING', 'UPLOADING', 'PARSING', 'PROCESSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'].includes(upload.status)) return;
+
+    const interval = setInterval(() => {
+      fetchUploadDetail();
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [upload?.status, uploadId]);
+
   const fetchUploadDetail = async () => {
     if (!uploadId) return;
 
@@ -97,11 +108,15 @@ export function UploadDetail() {
     fetchValidationResults(0);
   };
 
+  // Statuses considered "in progress"
+  const IN_PROGRESS_STATUSES: UploadStatus[] = ['PENDING', 'UPLOADING', 'PARSING', 'PROCESSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'];
+
   const getStatusBadge = (status: UploadStatus) => {
     const styles: Record<UploadStatus, { bg: string; text: string; icon: React.ReactNode }> = {
       PENDING: { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-300', icon: <Clock className="w-4 h-4" /> },
       UPLOADING: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> },
       PARSING: { bg: 'bg-blue-100 dark:bg-blue-900/30', text: 'text-blue-600 dark:text-blue-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> },
+      PROCESSING: { bg: 'bg-cyan-100 dark:bg-cyan-900/30', text: 'text-cyan-600 dark:text-cyan-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> },
       VALIDATING: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> },
       SAVING_DB: { bg: 'bg-indigo-100 dark:bg-indigo-900/30', text: 'text-indigo-600 dark:text-indigo-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> },
       SAVING_LDAP: { bg: 'bg-purple-100 dark:bg-purple-900/30', text: 'text-purple-600 dark:text-purple-400', icon: <Loader2 className="w-4 h-4 animate-spin" /> },
@@ -110,21 +125,22 @@ export function UploadDetail() {
     };
 
     const style = styles[status];
-    const label = {
+    const label: Record<UploadStatus, string> = {
       PENDING: '대기',
       UPLOADING: '업로드 중',
       PARSING: '파싱 중',
+      PROCESSING: '처리 중',
       VALIDATING: '검증 중',
       SAVING_DB: 'DB 저장 중',
       SAVING_LDAP: 'LDAP 저장 중',
       COMPLETED: '완료',
       FAILED: '실패',
-    }[status];
+    };
 
     return (
       <span className={cn('inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium', style.bg, style.text)}>
         {style.icon}
-        {label}
+        {label[status]}
       </span>
     );
   };
@@ -283,6 +299,24 @@ export function UploadDetail() {
                   <p className="text-sm text-gray-500">{formatDate(upload.uploadedAt || upload.createdAt || '')}</p>
                 </div>
               </div>
+              {/* Processing in-progress timeline entry */}
+              {IN_PROGRESS_STATUSES.includes(upload.status) && upload.status !== 'PENDING' && (
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {upload.status === 'PROCESSING' ? '인증서 처리 중' : '처리 진행 중'}
+                    </p>
+                    {upload.totalEntries && upload.totalEntries > 0 && (
+                      <p className="text-sm text-blue-600 dark:text-blue-400">
+                        {(upload.processedEntries || 0).toLocaleString()} / {upload.totalEntries.toLocaleString()} 엔트리
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
               {upload.completedAt && (
                 <div className="flex items-center gap-4">
                   <div className={cn(
@@ -405,6 +439,90 @@ export function UploadDetail() {
                     </button>
                   )}
                 </div>
+              </div>
+            </div>
+          ) : IN_PROGRESS_STATUSES.includes(upload.status) ? (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+              <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                처리 진행 중
+              </h2>
+              <div className="space-y-4">
+                {/* Progress Bar */}
+                {upload.totalEntries && upload.totalEntries > 0 && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-500 dark:text-gray-400">진행률</span>
+                      <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                        {Math.round(((upload.processedEntries || 0) / upload.totalEntries) * 100)}%
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-cyan-500 h-3 rounded-full transition-all duration-500"
+                        style={{ width: `${Math.round(((upload.processedEntries || 0) / upload.totalEntries) * 100)}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {(upload.processedEntries || 0).toLocaleString()} / {upload.totalEntries.toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                {/* Live Certificate Counts */}
+                <div className="grid grid-cols-2 gap-3">
+                  {(upload.cscaCount ?? 0) > 0 && (
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Shield className="w-4 h-4 text-blue-500" />
+                        <span className="text-xs text-blue-600 dark:text-blue-400">CSCA</span>
+                      </div>
+                      <span className="text-xl font-bold text-blue-700 dark:text-blue-300">
+                        {upload.cscaCount}
+                      </span>
+                    </div>
+                  )}
+                  {(upload.dscCount ?? 0) > 0 && (
+                    <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-xl">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Shield className="w-4 h-4 text-green-500" />
+                        <span className="text-xs text-green-600 dark:text-green-400">DSC</span>
+                      </div>
+                      <span className="text-xl font-bold text-green-700 dark:text-green-300">
+                        {upload.dscCount}
+                      </span>
+                    </div>
+                  )}
+                  {(upload.dscNcCount ?? 0) > 0 && (
+                    <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-xl">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Shield className="w-4 h-4 text-orange-500" />
+                        <span className="text-xs text-orange-600 dark:text-orange-400">DSC_NC</span>
+                      </div>
+                      <span className="text-xl font-bold text-orange-700 dark:text-orange-300">
+                        {upload.dscNcCount}
+                      </span>
+                    </div>
+                  )}
+                  {(upload.crlCount ?? 0) > 0 && (
+                    <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Globe className="w-4 h-4 text-purple-500" />
+                        <span className="text-xs text-purple-600 dark:text-purple-400">CRL</span>
+                      </div>
+                      <span className="text-xl font-bold text-purple-700 dark:text-purple-300">
+                        {upload.crlCount}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* No counts yet */}
+                {(upload.cscaCount ?? 0) === 0 && (upload.dscCount ?? 0) === 0 && (upload.crlCount ?? 0) === 0 && (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
+                    인증서 처리가 시작되면 카운트가 표시됩니다.
+                  </p>
+                )}
               </div>
             </div>
           ) : (

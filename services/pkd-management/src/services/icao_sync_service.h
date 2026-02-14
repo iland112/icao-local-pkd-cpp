@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <mutex>
 #include "../domain/models/icao_version.h"
 #include "../repositories/icao_version_repository.h"
 #include "../infrastructure/http/http_client.h"
@@ -71,11 +72,19 @@ public:
      */
     std::vector<std::tuple<std::string, int, int, std::string>> getVersionComparison();
 
+    /**
+     * @brief Get timestamp of last version check
+     * @return ISO 8601 timestamp, or empty string if never checked
+     */
+    std::string getLastCheckedAt() const;
+
 private:
     std::shared_ptr<repositories::IcaoVersionRepository> repo_;
     std::shared_ptr<infrastructure::http::HttpClient> httpClient_;
     std::shared_ptr<infrastructure::notification::EmailSender> emailSender_;
     Config config_;
+    mutable std::mutex lastCheckMutex_;
+    std::string lastCheckedAt_;
 
     /**
      * @brief Fetch and parse ICAO portal HTML
@@ -104,6 +113,11 @@ private:
      */
     infrastructure::notification::EmailSender::EmailMessage buildNotificationMessage(
         const std::vector<domain::models::IcaoVersion>& newVersions);
+
+    /**
+     * @brief Update last checked timestamp to current time
+     */
+    void updateLastCheckedAt();
 };
 
 } // namespace services

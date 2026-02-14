@@ -153,13 +153,21 @@ void AutoProcessingStrategy::processMasterListContent(
     spdlog::info("AUTO mode: Processing Master List ({} bytes) for upload {}", content.size(), uploadId);
 
     // v2.1.1: Use new masterlist_processor for correct MLSC/CSCA/LC extraction
-    // TODO Phase 6.1: processMasterListFile needs conn parameter removed (masterlist_processor.h/cpp)
-    // For now, pass nullptr as conn since we're transitioning to Repository Pattern
     MasterListStats stats;
-    bool success = processMasterListFile(ld, uploadId, content, stats);
+    common::ValidationStatistics enhancedStats{};
+    bool success = processMasterListFile(ld, uploadId, content, stats, &enhancedStats);
 
     if (!success) {
+        if (enhancedStats.totalErrorCount > 0) {
+            spdlog::warn("AUTO mode: Master List processing failed with {} errors", enhancedStats.totalErrorCount);
+        }
         throw std::runtime_error("Failed to process Master List file");
+    }
+
+    if (enhancedStats.totalErrorCount > 0) {
+        spdlog::warn("AUTO mode: Master List processing completed with {} errors (parse: {}, db: {}, ldap: {})",
+                    enhancedStats.totalErrorCount, enhancedStats.parseErrorCount,
+                    enhancedStats.dbSaveErrorCount, enhancedStats.ldapSaveErrorCount);
     }
 
     spdlog::info("AUTO mode: Master List processing completed - {} MLSC, {} CSCA/LC extracted ({} new, {} duplicate)",
@@ -614,10 +622,20 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
 
     // v2.1.1: Use new masterlist_processor for correct MLSC/CSCA/LC extraction
     MasterListStats stats;
-    bool success = processMasterListFile(ld, uploadId, content, stats);
+    common::ValidationStatistics enhancedStats{};
+    bool success = processMasterListFile(ld, uploadId, content, stats, &enhancedStats);
 
     if (!success) {
+        if (enhancedStats.totalErrorCount > 0) {
+            spdlog::warn("MANUAL mode Stage 2: Master List processing failed with {} errors", enhancedStats.totalErrorCount);
+        }
         throw std::runtime_error("Failed to process Master List file");
+    }
+
+    if (enhancedStats.totalErrorCount > 0) {
+        spdlog::warn("MANUAL mode Stage 2: Master List processing completed with {} errors (parse: {}, db: {}, ldap: {})",
+                    enhancedStats.totalErrorCount, enhancedStats.parseErrorCount,
+                    enhancedStats.dbSaveErrorCount, enhancedStats.ldapSaveErrorCount);
     }
 
     spdlog::info("MANUAL mode Stage 2: Master List saved to DB and LDAP - {} MLSC, {} CSCA/LC extracted",

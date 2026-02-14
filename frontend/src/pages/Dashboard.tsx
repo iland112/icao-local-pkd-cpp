@@ -19,10 +19,30 @@ import {
   Globe,
   Loader2,
   Shield,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { healthApi, ldapApi, uploadApi } from '@/services/api';
 import { cn } from '@/utils/cn';
 import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
+
+interface IcaoStatusItem {
+  collection_type: string;
+  detected_version: number;
+  uploaded_version: number;
+  version_diff: number;
+  needs_update: boolean;
+  status: string;
+  status_message: string;
+}
+
+interface IcaoStatusResponse {
+  success: boolean;
+  any_needs_update: boolean;
+  last_checked_at: string | null;
+  status: IcaoStatusItem[];
+}
 
 // Country statistics type
 interface CountryStats {
@@ -57,6 +77,9 @@ export function Dashboard() {
   const [countryData, setCountryData] = useState<CountryStats[]>([]);
   const [countryLoading, setCountryLoading] = useState(true);
   const [showCountryDialog, setShowCountryDialog] = useState(false);
+  const [icaoStatus, setIcaoStatus] = useState<IcaoStatusResponse | null>(null);
+  const [icaoDismissed, setIcaoDismissed] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const updateDateTime = () => {
@@ -80,7 +103,22 @@ export function Dashboard() {
     testDatabaseConnection();
     testLdapConnection();
     loadCountryData();
+    loadIcaoStatus();
   }, []);
+
+  const loadIcaoStatus = async () => {
+    try {
+      const response = await fetch('/api/icao/status');
+      if (response.ok) {
+        const data: IcaoStatusResponse = await response.json();
+        if (data.success) {
+          setIcaoStatus(data);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load ICAO status:', error);
+    }
+  };
 
   const loadCountryData = async () => {
     setCountryLoading(true);
@@ -239,6 +277,65 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* ICAO PKD Update Notification Banner */}
+      {icaoStatus?.any_needs_update && !icaoDismissed && (
+        <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl shadow-lg overflow-hidden">
+          <div className="px-6 py-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3 flex-1">
+                <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/50 mt-0.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
+                    ICAO PKD 새 버전 감지
+                  </h3>
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {icaoStatus.status
+                      .filter((s) => s.needs_update)
+                      .map((s) => (
+                        <span
+                          key={s.collection_type}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-700"
+                        >
+                          {s.collection_type}
+                          <span className="font-bold text-orange-600 dark:text-orange-400">
+                            +{s.version_diff}
+                          </span>
+                          <span className="text-amber-500">
+                            (v{s.uploaded_version} → v{s.detected_version})
+                          </span>
+                        </span>
+                      ))}
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <button
+                      onClick={() => navigate('/icao')}
+                      className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
+                    >
+                      상세 보기 →
+                    </button>
+                    {icaoStatus.last_checked_at && (
+                      <span className="text-xs text-amber-500 dark:text-amber-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        마지막 확인: {new Date(icaoStatus.last_checked_at).toLocaleString('ko-KR')}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setIcaoDismissed(true)}
+                className="p-1 rounded-lg text-amber-400 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
+                title="닫기"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Country Certificate Statistics - Top 10 in 2 columns */}
       <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">

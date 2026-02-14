@@ -21,7 +21,7 @@ export interface HealthStatus {
 
 // Upload types
 export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST' | 'PEM' | 'DER' | 'CER' | 'P7B' | 'DL' | 'CRL';  // Backend uses 'ML', some places use 'MASTER_LIST'
-export type UploadStatus = 'PENDING' | 'UPLOADING' | 'PARSING' | 'VALIDATING' | 'SAVING_DB' | 'SAVING_LDAP' | 'COMPLETED' | 'FAILED';
+export type UploadStatus = 'PENDING' | 'UPLOADING' | 'PARSING' | 'PROCESSING' | 'VALIDATING' | 'SAVING_DB' | 'SAVING_LDAP' | 'COMPLETED' | 'FAILED';
 export type ProcessingMode = 'AUTO' | 'MANUAL';
 
 export interface UploadedFile {
@@ -198,6 +198,23 @@ export interface ValidationStatistics {
   signatureAlgorithms: Record<string, number>;  // "SHA256withRSA" -> count
   keySizes: Record<string, number>;             // "2048" -> count
   certificateTypes: Record<string, number>;     // "DSC" -> count, "CSCA" -> count
+
+  // Processing error tracking
+  totalErrorCount?: number;
+  parseErrorCount?: number;
+  dbSaveErrorCount?: number;
+  ldapSaveErrorCount?: number;
+  recentErrors?: ProcessingError[];
+}
+
+export interface ProcessingError {
+  timestamp: string;
+  errorType: string;
+  entryDn: string;
+  certificateDn: string;
+  countryCode: string;
+  certificateType: string;
+  message: string;
 }
 
 export interface UploadProgress {

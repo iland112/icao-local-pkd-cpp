@@ -69,6 +69,9 @@ interface UploadHistoryItem {
   cscaDuplicates?: number;       // Duplicate certificates detected
   // LDAP storage status (v2.0.0 - Data Consistency)
   ldapUploadedCount?: number;    // Number of certificates stored in LDAP
+  // Processing progress (v2.9.3)
+  totalEntries?: number;         // Total entries to process
+  processedEntries?: number;     // Entries processed so far
 }
 
 // Full status step definition (for dialog detail view)
@@ -76,11 +79,15 @@ const STATUS_STEPS: { key: UploadStatus; label: string; icon: React.ReactNode }[
   { key: 'PENDING', label: '대기', icon: <Clock className="w-4 h-4" /> },
   { key: 'UPLOADING', label: '업로드', icon: <Upload className="w-4 h-4" /> },
   { key: 'PARSING', label: '파싱', icon: <FileCheck className="w-4 h-4" /> },
+  { key: 'PROCESSING', label: '처리', icon: <Loader2 className="w-4 h-4" /> },
   { key: 'VALIDATING', label: '검증', icon: <ShieldCheck className="w-4 h-4" /> },
   { key: 'SAVING_DB', label: 'DB 저장', icon: <Database className="w-4 h-4" /> },
   { key: 'SAVING_LDAP', label: 'LDAP 저장', icon: <Server className="w-4 h-4" /> },
   { key: 'COMPLETED', label: '완료', icon: <CheckCircle className="w-4 h-4" /> },
 ];
+
+// Statuses considered "in progress"
+const IN_PROGRESS_STATUSES: UploadStatus[] = ['PENDING', 'UPLOADING', 'PARSING', 'PROCESSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'];
 
 export function UploadHistory() {
   const [uploads, setUploads] = useState<UploadHistoryItem[]>([]);
@@ -119,6 +126,18 @@ export function UploadHistory() {
   useEffect(() => {
     fetchUploads();
   }, [page]);
+
+  // Auto-refresh when any upload is in progress (5s interval)
+  useEffect(() => {
+    const hasInProgress = uploads.some(u => IN_PROGRESS_STATUSES.includes(u.status));
+    if (!hasInProgress) return;
+
+    const interval = setInterval(() => {
+      fetchUploads();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [uploads]);
 
   // Fetch upload issues when detail dialog is opened (v2.1.2.2)
   useEffect(() => {
@@ -169,7 +188,7 @@ export function UploadHistory() {
     const completed = uploads.filter((u) => u.status === 'COMPLETED').length;
     const failed = uploads.filter((u) => u.status === 'FAILED').length;
     const inProgress = uploads.filter((u) =>
-      ['PENDING', 'UPLOADING', 'PARSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'].includes(u.status)
+      IN_PROGRESS_STATUSES.includes(u.status)
     ).length;
     const total = uploads.length;
 
@@ -217,8 +236,10 @@ export function UploadHistory() {
     return STATUS_STEPS.findIndex(step => step.key === status);
   };
 
-  // Render simple status badge (진행 중 / 완료 / 실패)
-  const renderStatusProgress = (status: UploadStatus) => {
+  // Render status badge with progress info for in-progress uploads
+  const renderStatusProgress = (upload: UploadHistoryItem) => {
+    const { status } = upload;
+
     // 실패
     if (status === 'FAILED') {
       return (
@@ -239,11 +260,31 @@ export function UploadHistory() {
       );
     }
 
-    // 진행 중 (PENDING, UPLOADING, PARSING, VALIDATING, SAVING_DB, SAVING_LDAP)
+    // 진행 중 (PENDING, UPLOADING, PARSING, PROCESSING, VALIDATING, SAVING_DB, SAVING_LDAP)
+    const hasProgress = upload.processedEntries !== undefined && upload.totalEntries && upload.totalEntries > 0;
+    const progressPct = hasProgress ? Math.round((upload.processedEntries! / upload.totalEntries!) * 100) : 0;
+
     return (
-      <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="text-sm font-medium">진행 중</span>
+      <div className="space-y-1">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm font-medium">
+            {status === 'PROCESSING' ? '처리 중' : '진행 중'}
+          </span>
+        </div>
+        {hasProgress && (
+          <div className="px-1">
+            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
+              <div
+                className="bg-blue-500 h-1.5 rounded-full transition-all duration-500"
+                style={{ width: `${progressPct}%` }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {upload.processedEntries!.toLocaleString()}/{upload.totalEntries!.toLocaleString()} ({progressPct}%)
+            </p>
+          </div>
+        )}
       </div>
     );
   };
@@ -426,6 +467,7 @@ export function UploadHistory() {
               <option value="PENDING">대기</option>
               <option value="UPLOADING">업로드 중</option>
               <option value="PARSING">파싱 중</option>
+              <option value="PROCESSING">처리 중</option>
               <option value="VALIDATING">검증 중</option>
               <option value="SAVING_DB">DB 저장 중</option>
               <option value="SAVING_LDAP">LDAP 저장 중</option>
@@ -612,7 +654,7 @@ export function UploadHistory() {
                       <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {formatFileSize(upload.fileSize)}
                       </td>
-                      <td className="px-6 py-4">{renderStatusProgress(upload.status)}</td>
+                      <td className="px-6 py-4">{renderStatusProgress(upload)}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1 text-xs">
                           {(upload.cscaCount > 0 || (!upload.cscaCount && !upload.dscCount && !upload.dscNcCount && upload.certificateCount > 0)) && (
@@ -851,6 +893,30 @@ export function UploadHistory() {
                       })}
                     </div>
                   </div>
+
+                  {/* Processing Progress Bar (v2.9.3) */}
+                  {IN_PROGRESS_STATUSES.includes(selectedUpload.status) && selectedUpload.totalEntries && selectedUpload.totalEntries > 0 && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                          <span className="text-sm font-medium text-blue-700 dark:text-blue-300">처리 진행률</span>
+                        </div>
+                        <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
+                          {selectedUpload.processedEntries?.toLocaleString() || 0} / {selectedUpload.totalEntries.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2.5">
+                        <div
+                          className="bg-blue-500 h-2.5 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.round(((selectedUpload.processedEntries || 0) / selectedUpload.totalEntries) * 100)}%` }}
+                        />
+                      </div>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 text-right">
+                        {Math.round(((selectedUpload.processedEntries || 0) / selectedUpload.totalEntries) * 100)}%
+                      </p>
+                    </div>
+                  )}
 
                   {/* Error Message - Compact */}
                   {selectedUpload.errorMessage && (

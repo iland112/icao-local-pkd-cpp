@@ -190,6 +190,8 @@ void IcaoHandler::handleGetStatus(
         response["success"] = true;
         response["count"] = static_cast<int>(comparisons.size());
 
+        bool anyNeedsUpdate = false;
+
         Json::Value statusArray(Json::arrayValue);
         for (const auto& comp : comparisons) {
             Json::Value item;
@@ -202,7 +204,9 @@ void IcaoHandler::handleGetStatus(
             int detectedVersion = std::get<1>(comp);
             int uploadedVersion = std::get<2>(comp);
             item["version_diff"] = detectedVersion - uploadedVersion;
-            item["needs_update"] = (detectedVersion > uploadedVersion);
+            bool needsUpdate = (detectedVersion > uploadedVersion);
+            item["needs_update"] = needsUpdate;
+            if (needsUpdate) anyNeedsUpdate = true;
 
             // Status message
             if (uploadedVersion == 0) {
@@ -220,6 +224,11 @@ void IcaoHandler::handleGetStatus(
             statusArray.append(item);
         }
         response["status"] = statusArray;
+        response["any_needs_update"] = anyNeedsUpdate;
+
+        // Last checked timestamp
+        auto lastChecked = service_->getLastCheckedAt();
+        response["last_checked_at"] = lastChecked.empty() ? Json::Value::null : Json::Value(lastChecked);
 
         auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);

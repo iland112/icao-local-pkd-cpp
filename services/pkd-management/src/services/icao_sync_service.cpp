@@ -2,6 +2,8 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <sstream>
+#include <chrono>
+#include <ctime>
 
 namespace services {
 
@@ -53,6 +55,7 @@ IcaoSyncService::CheckResult IcaoSyncService::checkForUpdates() {
         result.success = true;
         result.message = "No new versions detected. System is up to date.";
         spdlog::info("[IcaoSyncService] {}", result.message);
+        updateLastCheckedAt();
         return result;
     }
 
@@ -80,6 +83,7 @@ IcaoSyncService::CheckResult IcaoSyncService::checkForUpdates() {
     result.newVersions = newVersions;
     result.message = "New versions detected and saved";
 
+    updateLastCheckedAt();
     return result;
 }
 
@@ -223,6 +227,22 @@ IcaoSyncService::buildNotificationMessage(
     message.body = body.str();
 
     return message;
+}
+
+std::string IcaoSyncService::getLastCheckedAt() const {
+    std::lock_guard<std::mutex> lock(lastCheckMutex_);
+    return lastCheckedAt_;
+}
+
+void IcaoSyncService::updateLastCheckedAt() {
+    std::lock_guard<std::mutex> lock(lastCheckMutex_);
+    auto now = std::chrono::system_clock::now();
+    auto time_t_now = std::chrono::system_clock::to_time_t(now);
+    struct tm tm_info;
+    localtime_r(&time_t_now, &tm_info);
+    char buf[64];
+    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &tm_info);
+    lastCheckedAt_ = buf;
 }
 
 } // namespace services

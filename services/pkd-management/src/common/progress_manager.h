@@ -167,6 +167,30 @@ struct IcaoComplianceStatus {
 };
 
 // =============================================================================
+// Processing Error (for per-certificate error tracking)
+// =============================================================================
+
+/**
+ * @brief Per-certificate processing error record
+ *
+ * Tracks individual processing failures (parse errors, save failures)
+ * for real-time display in frontend during batch upload processing.
+ */
+struct ProcessingError {
+    std::string timestamp;        // ISO 8601
+    std::string errorType;        // BASE64_DECODE_FAILED, CERT_PARSE_FAILED, CRL_PARSE_FAILED,
+                                  // DB_SAVE_FAILED, LDAP_SAVE_FAILED, ML_PARSE_FAILED,
+                                  // ENTRY_PROCESSING_EXCEPTION
+    std::string entryDn;          // LDIF entry DN
+    std::string certificateDn;    // Subject DN (if available)
+    std::string countryCode;
+    std::string certificateType;  // CSCA, DSC, DSC_NC, CRL, ML
+    std::string message;          // Error detail
+
+    Json::Value toJson() const;
+};
+
+// =============================================================================
 // Validation Statistics (Phase 4.4 Enhancement)
 // =============================================================================
 
@@ -214,11 +238,35 @@ struct ValidationStatistics {
     int icaoWarningCount;
     std::map<std::string, int> complianceViolations;  // violation type -> count
 
+    // Error tracking (processing failures only, not validation outcomes)
+    int totalErrorCount = 0;
+    int parseErrorCount = 0;       // BASE64_DECODE_FAILED + CERT_PARSE_FAILED + CRL_PARSE_FAILED + ML_PARSE_FAILED
+    int dbSaveErrorCount = 0;      // DB_SAVE_FAILED
+    int ldapSaveErrorCount = 0;    // LDAP_SAVE_FAILED
+    std::vector<ProcessingError> recentErrors;  // Last N errors (bounded)
+    static constexpr int MAX_RECENT_ERRORS = 100;
+
     /**
      * @brief Convert to JSON for SSE streaming
      */
     Json::Value toJson() const;
 };
+
+/**
+ * @brief Add a processing error to statistics
+ *
+ * Thread-safe note: Only called from the sequential processing loop,
+ * no additional synchronization needed.
+ */
+void addProcessingError(
+    ValidationStatistics& stats,
+    const std::string& errorType,
+    const std::string& entryDn,
+    const std::string& certificateDn,
+    const std::string& countryCode,
+    const std::string& certificateType,
+    const std::string& message
+);
 
 // =============================================================================
 // Processing Progress (Enhanced)

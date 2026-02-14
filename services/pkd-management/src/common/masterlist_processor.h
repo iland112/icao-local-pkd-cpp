@@ -4,6 +4,7 @@
 #include <vector>
 #include <libpq-fe.h>
 #include <ldap.h>
+#include "progress_manager.h"  // For ValidationStatistics, addProcessingError
 
 // Forward declaration
 struct LdifEntry;
@@ -58,7 +59,8 @@ bool parseMasterListEntryV2(
     LDAP* ld,
     const std::string& uploadId,
     const LdifEntry& entry,
-    MasterListStats& stats
+    MasterListStats& stats,
+    common::ValidationStatistics* enhancedStats = nullptr
 );
 
 /**
@@ -97,5 +99,6 @@ bool processMasterListFile(
     LDAP* ld,
     const std::string& uploadId,
     const std::vector<uint8_t>& content,
-    MasterListStats& stats
+    MasterListStats& stats,
+    common::ValidationStatistics* enhancedStats = nullptr
 );

@@ -20,12 +20,17 @@ extern bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                                   int& ldapStoredCount, ValidationStats& validationStats,
                                   common::ValidationStatistics& enhancedStats);
 extern bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
-                         const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount);
+                         const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount,
+                         common::ValidationStatistics& enhancedStats);
 extern bool parseMasterListEntry(LDAP* ld, const std::string& uploadId,
                                 const LdifEntry& entry, int& mlCount, int& ldapMlStoredCount);
 
 // Forward declaration for sendDbSavingProgress helper function (from main.cpp)
 extern void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message);
+
+// For periodic DB progress updates during processing
+#include "repositories/upload_repository.h"
+extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
 
 // Forward declaration for sendProgressWithMetadata helper function (from main.cpp) - Phase 4.4
 extern void sendProgressWithMetadata(
@@ -76,14 +81,14 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
             // Check for CRL
             if (entry.hasAttribute("certificateRevocationList;binary")) {
-                parseCrlEntry(ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount);
+                parseCrlEntry(ld, uploadId, entry, counts.crlCount, counts.ldapCrlStoredCount, enhancedStats);
             }
 
             // Check for Master List (v2.0.7: Use new CSCA extraction processor)
             if (entry.hasAttribute("pkdMasterListContent;binary") ||
                 entry.hasAttribute("pkdMasterListContent")) {
                 MasterListStats mlStats;
-                parseMasterListEntryV2(ld, uploadId, entry, mlStats);
+                parseMasterListEntryV2(ld, uploadId, entry, mlStats, &enhancedStats);
                 // Track Master List file count (v2.1.1)
                 counts.mlCount++;
                 // Track MLSC count (v2.1.1)
@@ -96,9 +101,19 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
         } catch (const std::exception& e) {
             spdlog::warn("Error processing entry {}: {}", entry.dn, e.what());
+            common::addProcessingError(enhancedStats, "ENTRY_PROCESSING_EXCEPTION",
+                entry.dn, "", "", "", std::string("Exception: ") + e.what());
         }
 
         processedEntries++;
+
+        // Update DB progress every 500 entries (for upload history/detail page)
+        if (uploadRepository && (processedEntries % 500 == 0 || processedEntries == totalEntries)) {
+            uploadRepository->updateProgress(uploadId, totalEntries, processedEntries);
+            uploadRepository->updateStatistics(uploadId,
+                counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
+                counts.mlscCount, counts.mlCount);
+        }
 
         // v1.5.2: Send progress update to frontend every 50 entries
         if (processedEntries % 50 == 0 || processedEntries == totalEntries) {

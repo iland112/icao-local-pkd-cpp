@@ -217,6 +217,10 @@ struct AppConfig {
     bool icaoAutoNotify = true;
     int icaoHttpTimeout = 10;  // seconds
 
+    // ICAO Scheduler Configuration (v2.10.0)
+    int icaoCheckScheduleHour = 9;   // 0-23, default 9 AM
+    bool icaoSchedulerEnabled = true;
+
     // ASN.1 Parser Configuration
     int asn1MaxLines = 100;  // Default max lines for Master List structure parsing
 
@@ -281,6 +285,15 @@ struct AppConfig {
 
         // ASN.1 Parser Configuration
         if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = std::stoi(val);
+
+        // ICAO Scheduler Configuration (v2.10.0)
+        if (auto val = std::getenv("ICAO_CHECK_SCHEDULE_HOUR")) {
+            config.icaoCheckScheduleHour = std::stoi(val);
+            if (config.icaoCheckScheduleHour < 0 || config.icaoCheckScheduleHour > 23)
+                config.icaoCheckScheduleHour = 9;
+        }
+        if (auto val = std::getenv("ICAO_SCHEDULER_ENABLED"))
+            config.icaoSchedulerEnabled = (std::string(val) == "true");
 
         return config;
     }
@@ -2405,7 +2418,11 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                  base64Value.size(), base64Value.substr(0, 20));
 
     std::vector<uint8_t> derBytes = base64Decode(base64Value);
-    if (derBytes.empty()) return false;
+    if (derBytes.empty()) {
+        common::addProcessingError(enhancedStats, "BASE64_DECODE_FAILED",
+            entry.dn, "", "", "", "Base64 decode returned empty for attribute: " + attrName);
+        return false;
+    }
 
     spdlog::debug("parseCertificateEntry: derBytes size={}, first4bytes=0x{:02x}{:02x}{:02x}{:02x}",
                  derBytes.size(),
@@ -2418,6 +2435,8 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     X509* cert = d2i_X509(nullptr, &data, static_cast<long>(derBytes.size()));
     if (!cert) {
         spdlog::warn("Failed to parse certificate from entry: {}", entry.dn);
+        common::addProcessingError(enhancedStats, "CERT_PARSE_FAILED",
+            entry.dn, "", "", "", "Failed to parse X.509 certificate (d2i_X509 returned NULL)");
         return false;
     }
 
@@ -2732,8 +2751,16 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                 ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
                 ldapStoredCount++;
                 spdlog::debug("Saved certificate to LDAP: {}", ldapDn);
+            } else {
+                common::addProcessingError(enhancedStats, "LDAP_SAVE_FAILED",
+                    entry.dn, subjectDn, countryCode, certType,
+                    "LDAP save returned empty DN for fingerprint: " + fingerprint.substr(0, 16));
             }
         }
+    } else if (!isDuplicate) {
+        common::addProcessingError(enhancedStats, "DB_SAVE_FAILED",
+            entry.dn, subjectDn, countryCode, certType,
+            "Database save returned empty ID");
     }
 
     return !certId.empty();
@@ -2743,17 +2770,24 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
  * @brief Parse and save CRL from LDIF entry (DB + LDAP)
  */
 bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
-                   const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount) {
+                   const LdifEntry& entry, int& crlCount, int& ldapCrlStoredCount,
+                   common::ValidationStatistics& enhancedStats) {
     std::string base64Value = entry.getFirstAttribute("certificateRevocationList;binary");
     if (base64Value.empty()) return false;
 
     std::vector<uint8_t> derBytes = base64Decode(base64Value);
-    if (derBytes.empty()) return false;
+    if (derBytes.empty()) {
+        common::addProcessingError(enhancedStats, "BASE64_DECODE_FAILED",
+            entry.dn, "", "", "CRL", "Base64 decode failed for CRL");
+        return false;
+    }
 
     const uint8_t* data = derBytes.data();
     X509_CRL* crl = d2i_X509_CRL(nullptr, &data, static_cast<long>(derBytes.size()));
     if (!crl) {
         spdlog::warn("Failed to parse CRL from entry: {}", entry.dn);
+        common::addProcessingError(enhancedStats, "CRL_PARSE_FAILED",
+            entry.dn, "", "", "CRL", "Failed to parse CRL (d2i_X509_CRL returned NULL)");
         return false;
     }
 
@@ -2822,8 +2856,16 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
                 ::crlRepository->updateLdapStatus(crlId, ldapDn);
                 ldapCrlStoredCount++;
                 spdlog::debug("Saved CRL to LDAP: {}", ldapDn);
+            } else {
+                common::addProcessingError(enhancedStats, "LDAP_SAVE_FAILED",
+                    entry.dn, issuerDn, countryCode, "CRL",
+                    "CRL LDAP save returned empty DN for fingerprint: " + fingerprint.substr(0, 16));
             }
         }
+    } else {
+        common::addProcessingError(enhancedStats, "DB_SAVE_FAILED",
+            entry.dn, issuerDn, countryCode, "CRL",
+            "CRL database save returned empty ID");
     }
 
     X509_CRL_free(crl);
@@ -3085,6 +3127,13 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
 
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
 
+            // Update DB record: status = PROCESSING, total_entries populated
+            if (::uploadRepository) {
+                ::uploadRepository->updateStatus(uploadId, "PROCESSING", "");
+                ::uploadRepository->updateProgress(uploadId, totalEntries, 0);
+                spdlog::info("Upload {} status updated to PROCESSING (total_entries={})", uploadId, totalEntries);
+            }
+
             // Use Strategy Pattern to handle AUTO vs MANUAL modes
             auto strategy = ProcessingStrategyFactory::create(processingMode);
             strategy->processLdifEntries(uploadId, entries, ld);
@@ -3245,6 +3294,12 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 } else {
                     spdlog::warn("Trust anchor not available - skipping CMS signature verification");
                 }
+            }
+
+            // Update DB record: status = PROCESSING before certificate extraction
+            if (::uploadRepository) {
+                ::uploadRepository->updateStatus(uploadId, "PROCESSING", "");
+                spdlog::info("Upload {} status updated to PROCESSING (Master List)", uploadId);
             }
 
             if (!cms) {
@@ -7604,6 +7659,59 @@ int main(int argc, char* argv[]) {
 
         // Register routes
         registerRoutes();
+
+        // ICAO Auto Version Check Scheduler (v2.10.0)
+        if (appConfig.icaoSchedulerEnabled) {
+            spdlog::info("[IcaoScheduler] Setting up daily version check at {:02d}:00",
+                        appConfig.icaoCheckScheduleHour);
+
+            // Calculate seconds until next target hour
+            auto now = std::chrono::system_clock::now();
+            auto time_t_now = std::chrono::system_clock::to_time_t(now);
+            struct tm tm_now;
+            localtime_r(&time_t_now, &tm_now);
+
+            int currentSeconds = tm_now.tm_hour * 3600 + tm_now.tm_min * 60 + tm_now.tm_sec;
+            int targetSeconds = appConfig.icaoCheckScheduleHour * 3600;
+            int delaySeconds = targetSeconds - currentSeconds;
+            if (delaySeconds <= 0) {
+                delaySeconds += 86400;  // Next day
+            }
+
+            spdlog::info("[IcaoScheduler] First check scheduled in {} seconds ({:.1f} hours)",
+                        delaySeconds, delaySeconds / 3600.0);
+
+            // Capture icaoService by shared_ptr for safe timer callback
+            auto scheduledIcaoService = icaoService;
+
+            app.getLoop()->runAfter(static_cast<double>(delaySeconds), [scheduledIcaoService, &app]() {
+                spdlog::info("[IcaoScheduler] Running scheduled ICAO version check");
+                try {
+                    auto result = scheduledIcaoService->checkForUpdates();
+                    spdlog::info("[IcaoScheduler] Check complete: {} (new versions: {})",
+                                result.message, result.newVersionCount);
+                } catch (const std::exception& e) {
+                    spdlog::error("[IcaoScheduler] Exception during scheduled check: {}", e.what());
+                }
+
+                // Register recurring 24-hour timer
+                app.getLoop()->runEvery(86400.0, [scheduledIcaoService]() {
+                    spdlog::info("[IcaoScheduler] Running daily ICAO version check");
+                    try {
+                        auto result = scheduledIcaoService->checkForUpdates();
+                        spdlog::info("[IcaoScheduler] Check complete: {} (new versions: {})",
+                                    result.message, result.newVersionCount);
+                    } catch (const std::exception& e) {
+                        spdlog::error("[IcaoScheduler] Exception during daily check: {}", e.what());
+                    }
+                });
+            });
+
+            spdlog::info("[IcaoScheduler] Scheduler enabled (daily at {:02d}:00)",
+                        appConfig.icaoCheckScheduleHour);
+        } else {
+            spdlog::info("[IcaoScheduler] Scheduler disabled (ICAO_SCHEDULER_ENABLED=false)");
+        }
 
         spdlog::info("Server starting on http://0.0.0.0:{}", appConfig.serverPort);
         spdlog::info("Press Ctrl+C to stop the server");

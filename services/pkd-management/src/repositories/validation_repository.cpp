@@ -125,31 +125,44 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                 result.validationStatus
             };
         } else {
-            // PostgreSQL schema: is_expired, crl_revoked, error_message
+            // PostgreSQL schema: column names must match actual table definition
+            // certificate_id is UUID FK → use result.certificateId (not fingerprint)
+            std::string validityPeriodValidStr = boolStr(!result.isExpired);
+            std::string revocationStatus = result.crlCheckStatus;
+
             query =
                 "INSERT INTO validation_result ("
-                "upload_id, fingerprint_sha256, certificate_type, "
-                "trust_chain_valid, trust_chain_path, csca_subject_dn, csca_found, "
-                "signature_verified, is_expired, crl_checked, crl_revoked, "
-                "validation_status, error_message"
+                "upload_id, certificate_id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
+                "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
+                "signature_valid, signature_algorithm, "
+                "validity_period_valid, not_before, not_after, "
+                "crl_checked, revocation_status, "
+                "validation_status"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19"
                 ")";
 
             params = {
-                result.uploadId,
-                fingerprintValue,
-                result.certificateType,
-                trustChainValidStr,
-                trustChainPathJson,
-                result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn,
-                cscaFoundStr,
-                signatureVerifiedStr,
-                isExpiredStr,
-                crlCheckedStr,
-                crlRevokedStr,
-                result.validationStatus,
-                result.errorMessage.empty() ? "" : result.errorMessage
+                result.uploadId,                                          // $1
+                result.certificateId,                                     // $2 (UUID FK)
+                result.certificateType,                                   // $3
+                result.countryCode,                                       // $4
+                result.subjectDn.empty() ? "N/A" : result.subjectDn,     // $5 (NOT NULL)
+                result.issuerDn.empty() ? "N/A" : result.issuerDn,       // $6 (NOT NULL)
+                result.serialNumber,                                      // $7
+                trustChainValidStr,                                       // $8
+                result.trustChainMessage.empty() ? "" : result.trustChainMessage, // $9
+                result.cscaSubjectDn.empty() ? "" : result.cscaSubjectDn, // $10
+                cscaFoundStr,                                             // $11
+                signatureVerifiedStr,                                     // $12
+                result.signatureAlgorithm,                                // $13
+                validityPeriodValidStr,                                   // $14
+                result.notBefore,                                         // $15
+                result.notAfter,                                          // $16
+                crlCheckedStr,                                            // $17
+                revocationStatus,                                         // $18
+                result.validationStatus                                   // $19
             };
         }
 
@@ -443,14 +456,14 @@ Json::Value ValidationRepository::findByUploadId(
                 " OFFSET $" + std::to_string(paramIdx) +
                 " ROWS FETCH NEXT $" + std::to_string(paramIdx + 1) + " ROWS ONLY";
         } else {
-            // PostgreSQL: full columns, LIMIT/OFFSET
+            // PostgreSQL: actual table columns, LIMIT/OFFSET
             dataQuery =
                 "SELECT vr.id, vr.certificate_id, vr.upload_id, vr.certificate_type, "
                 "       vr.country_code, vr.subject_dn, vr.issuer_dn, vr.serial_number, "
                 "       vr.validation_status, vr.trust_chain_valid, vr.trust_chain_message, "
                 "       vr.trust_chain_path, vr.csca_found, vr.csca_subject_dn, "
                 "       vr.signature_valid, vr.signature_algorithm, "
-                "       vr.validity_period_valid, vr.is_expired, vr.is_not_yet_valid, "
+                "       vr.validity_period_valid, "
                 "       vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
                 "       vr.validation_timestamp, c.fingerprint_sha256 "
