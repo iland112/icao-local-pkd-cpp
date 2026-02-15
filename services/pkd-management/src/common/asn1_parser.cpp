@@ -14,6 +14,7 @@
 #include <fstream>
 #include <openssl/asn1.h>
 #include <openssl/bio.h>
+#include <openssl/buffer.h>
 
 namespace icao {
 namespace asn1 {
