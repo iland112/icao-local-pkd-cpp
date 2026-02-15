@@ -6,6 +6,7 @@
 #include <json/json.h>
 #include "../repositories/validation_repository.h"
 #include "../repositories/certificate_repository.h"
+#include "../repositories/crl_repository.h"
 
 /**
  * @file validation_service.h
@@ -43,10 +44,12 @@ public:
      * @brief Constructor with Repository Dependency Injection
      * @param validationRepo Validation repository (non-owning pointer)
      * @param certRepo Certificate repository (non-owning pointer)
+     * @param crlRepo CRL repository for revocation checking (non-owning pointer, optional)
      */
     ValidationService(
         repositories::ValidationRepository* validationRepo,
-        repositories::CertificateRepository* certRepo
+        repositories::CertificateRepository* certRepo,
+        repositories::CrlRepository* crlRepo = nullptr
     );
 
     /**
@@ -273,6 +276,7 @@ private:
     // Repository Dependencies
     repositories::ValidationRepository* validationRepo_;
     repositories::CertificateRepository* certRepo_;
+    repositories::CrlRepository* crlRepo_;
 
     // Trust Chain Building
 

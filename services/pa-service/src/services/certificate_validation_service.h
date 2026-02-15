@@ -47,11 +47,13 @@ public:
      * @brief Validate DSC certificate chain against CSCA (ICAO 9303)
      * @param dscCert DSC X509 certificate extracted from SOD
      * @param countryCode ISO 3166-1 alpha-2 country code
+     * @param signingTime Optional SOD signing time (ISO 8601) for point-in-time validation
      * @return CertificateChainValidation result with trust chain details
      */
     domain::models::CertificateChainValidation validateCertificateChain(
         X509* dscCert,
-        const std::string& countryCode
+        const std::string& countryCode,
+        const std::string& signingTime = ""
     );
 
     /**
@@ -78,7 +80,8 @@ public:
      * @return CrlStatus indicating revocation check result
      */
     domain::models::CrlStatus checkCrlStatus(X509* cert, const std::string& countryCode,
-        std::string& crlThisUpdate, std::string& crlNextUpdate);
+        std::string& crlThisUpdate, std::string& crlNextUpdate,
+        std::string& revocationReason);
 
     /**
      * @brief Build trust chain from DSC to root CSCA
@@ -87,6 +90,36 @@ public:
      * @return Vector of X509* certificates in chain order (caller must free)
      */
     std::vector<X509*> buildTrustChain(X509* dscCert, const std::string& countryCode);
+
+    /**
+     * @brief Validate certificate extensions per RFC 5280 and ICAO 9303 Part 12
+     *
+     * Checks:
+     * - No unknown critical extensions (RFC 5280 Section 4.2)
+     * - DSC: must have digitalSignature key usage
+     * - CSCA: must have keyCertSign and cRLSign key usage
+     *
+     * @param cert X509 certificate to validate
+     * @param role Certificate role ("DSC" or "CSCA")
+     * @return Warning message (empty if all checks pass)
+     */
+    std::string validateExtensions(X509* cert, const std::string& role);
+
+    /**
+     * @brief ICAO 9303 algorithm compliance check result
+     */
+    struct AlgorithmComplianceResult {
+        bool compliant = true;
+        std::string algorithm;
+        std::string warning;  // Non-empty if deprecated algorithm
+    };
+
+    /**
+     * @brief Validate DSC signature algorithm against ICAO 9303 requirements
+     * @param cert X509 certificate to check
+     * @return AlgorithmComplianceResult with compliance details
+     */
+    AlgorithmComplianceResult validateAlgorithmCompliance(X509* cert);
 
 private:
     std::string getSubjectDn(X509* cert);

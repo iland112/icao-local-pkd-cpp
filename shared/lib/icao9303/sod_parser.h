@@ -105,6 +105,17 @@ public:
      */
     std::string extractHashAlgorithmOid(const std::vector<uint8_t>& sodBytes);
 
+    /**
+     * @brief Extract signing time from SOD CMS SignedData signed attributes
+     *
+     * Per ICAO Doc 9303 Part 12, the signing time indicates when the
+     * Document Signer signed the SOD. Used for point-in-time validation.
+     *
+     * @param sodBytes SOD data bytes
+     * @return Signing time in ISO 8601 format ("YYYY-MM-DD HH:MM:SS") or empty string
+     */
+    std::string extractSigningTime(const std::vector<uint8_t>& sodBytes);
+
     /// @name Helper Methods
 
     /**

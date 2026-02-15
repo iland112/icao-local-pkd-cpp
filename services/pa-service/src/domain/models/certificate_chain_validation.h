@@ -81,10 +81,11 @@ struct CertificateChainValidation {
     std::string trustChainPath;
     int trustChainDepth = 0;  // Number of certificates in chain
 
-    // Certificate expiration status (ICAO 9303 - point-in-time validation)
+    // Certificate expiration status (ICAO 9303 Part 12 - point-in-time validation)
     bool validAtSigningTime = true;  // Was valid at document signing time
     std::string expirationStatus;    // "VALID", "WARNING", "EXPIRED"
     std::optional<std::string> expirationMessage;
+    std::optional<std::string> signingTime;  // SOD signing time (ISO 8601) for point-in-time validation
 
     // CRL checking
     bool crlChecked = false;
@@ -96,6 +97,7 @@ struct CertificateChainValidation {
     std::string crlStatusSeverity;  // "INFO", "WARNING", "CRITICAL"
     std::optional<std::string> crlThisUpdate;   // CRL issued date (ISO 8601)
     std::optional<std::string> crlNextUpdate;   // CRL next update date (ISO 8601)
+    std::optional<std::string> crlRevocationReason;  // RFC 5280 CRLReason (e.g., "keyCompromise")
 
     // Validation errors
     std::optional<std::string> validationErrors;

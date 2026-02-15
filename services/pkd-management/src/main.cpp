@@ -7899,7 +7899,8 @@ int main(int argc, char* argv[]) {
 
         validationService = std::make_shared<services::ValidationService>(
             validationRepository.get(),
-            certificateRepository.get()
+            certificateRepository.get(),
+            crlRepository.get()
         );
 
         auditService = std::make_shared<services::AuditService>(

@@ -46,6 +46,10 @@ struct SodData {
     // Value: hex-encoded hash
     std::map<std::string, std::string> dataGroupHashes;
 
+    // Signing time (extracted from CMS SignedData signed attributes)
+    // ISO 8601 format: "YYYY-MM-DD HH:MM:SS" or empty if not present
+    std::string signingTime;
+
     // Signed attributes (optional)
     std::map<std::string, std::string> signedAttributes;
 
@@ -80,6 +84,7 @@ struct SodData {
           hashAlgorithmOid(other.hashAlgorithmOid),
           dscCertificate(other.dscCertificate ? X509_dup(other.dscCertificate) : nullptr),
           dataGroupHashes(other.dataGroupHashes),
+          signingTime(other.signingTime),
           signedAttributes(other.signedAttributes),
           ldsSecurityObjectVersion(other.ldsSecurityObjectVersion),
           ldsSecurityObjectOid(other.ldsSecurityObjectOid),
@@ -103,6 +108,7 @@ struct SodData {
             hashAlgorithmOid = other.hashAlgorithmOid;
             dscCertificate = other.dscCertificate ? X509_dup(other.dscCertificate) : nullptr;
             dataGroupHashes = other.dataGroupHashes;
+            signingTime = other.signingTime;
             signedAttributes = other.signedAttributes;
             ldsSecurityObjectVersion = other.ldsSecurityObjectVersion;
             ldsSecurityObjectOid = other.ldsSecurityObjectOid;
@@ -123,6 +129,7 @@ struct SodData {
           hashAlgorithmOid(std::move(other.hashAlgorithmOid)),
           dscCertificate(other.dscCertificate),
           dataGroupHashes(std::move(other.dataGroupHashes)),
+          signingTime(std::move(other.signingTime)),
           signedAttributes(std::move(other.signedAttributes)),
           ldsSecurityObjectVersion(std::move(other.ldsSecurityObjectVersion)),
           ldsSecurityObjectOid(std::move(other.ldsSecurityObjectOid)),
@@ -147,6 +154,7 @@ struct SodData {
             hashAlgorithmOid = std::move(other.hashAlgorithmOid);
             dscCertificate = other.dscCertificate;
             dataGroupHashes = std::move(other.dataGroupHashes);
+            signingTime = std::move(other.signingTime);
             signedAttributes = std::move(other.signedAttributes);
             ldsSecurityObjectVersion = std::move(other.ldsSecurityObjectVersion);
             ldsSecurityObjectOid = std::move(other.ldsSecurityObjectOid);
@@ -176,6 +184,9 @@ struct SodData {
         json["ldsSecurityObjectVersion"] = ldsSecurityObjectVersion;
         json["dataGroupCount"] = static_cast<int>(dataGroupHashes.size());
         json["parsingSuccess"] = parsingSuccess;
+        if (!signingTime.empty()) {
+            json["signingTime"] = signingTime;
+        }
 
         if (parsingErrors) {
             json["parsingErrors"] = *parsingErrors;

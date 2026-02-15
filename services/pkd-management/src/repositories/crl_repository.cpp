@@ -172,6 +172,38 @@ std::string CrlRepository::generateUuid() {
     return ss.str();
 }
 
+// --- CRL Lookup by Country ---
+
+Json::Value CrlRepository::findByCountryCode(const std::string& countryCode) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+
+        // Get the most recent CRL for the country (by this_update descending)
+        std::string query;
+        if (dbType == "oracle") {
+            query =
+                "SELECT crl_binary, this_update, next_update "
+                "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
+                "ORDER BY this_update DESC FETCH FIRST 1 ROWS ONLY";
+        } else {
+            query =
+                "SELECT crl_binary, this_update, next_update "
+                "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
+                "ORDER BY this_update DESC LIMIT 1";
+        }
+
+        Json::Value results = queryExecutor_->executeQuery(query, {countryCode});
+        if (results.isArray() && results.size() > 0) {
+            return results[0];
+        }
+        return Json::nullValue;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findByCountryCode failed for {}: {}", countryCode, e.what());
+        return Json::nullValue;
+    }
+}
+
 // --- Bulk Export (All LDAP-stored CRLs) ---
 
 Json::Value CrlRepository::findAllForExport() {

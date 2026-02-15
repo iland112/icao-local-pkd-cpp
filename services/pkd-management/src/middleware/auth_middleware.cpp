@@ -201,18 +201,28 @@ void AuthMiddleware::doFilter(
         return;
     }
 
-    // Store claims in session for handler access
-    auto session = req->getSession();
-    session->insert("user_id", claims->userId);
-    session->insert("username", claims->username);
-    session->insert("is_admin", claims->isAdmin);
+    // Store claims in request attributes for handler access
+    // (session may be NULL if Drogon sessions are not enabled)
+    auto attrs = req->getAttributes();
+    attrs->insert("user_id", claims->userId);
+    attrs->insert("username", claims->username);
+    attrs->insert("is_admin", claims->isAdmin);
 
-    // Store permissions as JSON string (session doesn't support vector directly)
+    // Store permissions as JSON string
     Json::Value permsJson(Json::arrayValue);
     for (const auto& perm : claims->permissions) {
         permsJson.append(perm);
     }
-    session->insert("permissions", permsJson.toStyledString());
+    attrs->insert("permissions", permsJson.toStyledString());
+
+    // Also store in session if available (backward compatibility)
+    auto session = req->getSession();
+    if (session) {
+        session->insert("user_id", claims->userId);
+        session->insert("username", claims->username);
+        session->insert("is_admin", claims->isAdmin);
+        session->insert("permissions", permsJson.toStyledString());
+    }
 
     spdlog::debug("[AuthMiddleware] User {} authenticated for {}",
                   claims->username, path);

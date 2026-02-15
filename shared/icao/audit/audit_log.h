@@ -373,22 +373,35 @@ extractUserFromRequest(const drogon::HttpRequestPtr& req) {
     std::optional<std::string> userId;
     std::optional<std::string> username;
 
+    // Try request attributes first (set by AuthMiddleware, always available)
+    auto attrs = req->getAttributes();
+    try {
+        auto attrUserId = attrs->get<std::string>("user_id");
+        if (!attrUserId.empty()) userId = attrUserId;
+    } catch (...) {}
+
+    try {
+        auto attrUsername = attrs->get<std::string>("username");
+        if (!attrUsername.empty()) username = attrUsername;
+    } catch (...) {}
+
+    if (userId && username) {
+        return {userId, username};
+    }
+
+    // Fall back to session (if available)
     auto session = req->getSession();
     if (!session) {
         return {userId, username};
     }
 
     try {
-        userId = session->get<std::string>("user_id");
-    } catch (...) {
-        // user_id not found in session
-    }
+        if (!userId) userId = session->get<std::string>("user_id");
+    } catch (...) {}
 
     try {
-        username = session->get<std::string>("username");
-    } catch (...) {
-        // username not found in session
-    }
+        if (!username) username = session->get<std::string>("username");
+    } catch (...) {}
 
     return {userId, username};
 }

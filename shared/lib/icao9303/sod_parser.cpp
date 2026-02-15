@@ -58,6 +58,12 @@ models::SodData SodParser::parseSod(const std::vector<uint8_t>& sodBytes) {
         // Extract data group hashes
         sodData.dataGroupHashes = extractDataGroupHashes(sodBytes);
 
+        // Extract signing time from CMS signed attributes (for point-in-time validation)
+        sodData.signingTime = extractSigningTime(sodBytes);
+        if (!sodData.signingTime.empty()) {
+            spdlog::info("SOD signing time: {}", sodData.signingTime);
+        }
+
         // Set LDS version (assume V0 for now, can be extracted from encapsulated content)
         sodData.ldsSecurityObjectVersion = "V0";
 
@@ -262,6 +268,75 @@ std::string SodParser::extractHashAlgorithmOid(const std::vector<uint8_t>& sodBy
 
     CMS_ContentInfo_free(cms);
     return "";
+}
+
+std::string SodParser::extractSigningTime(const std::vector<uint8_t>& sodBytes) {
+    std::vector<uint8_t> cmsBytes = unwrapIcaoSod(sodBytes);
+
+    BIO* bio = BIO_new_mem_buf(cmsBytes.data(), static_cast<int>(cmsBytes.size()));
+    if (!bio) return "";
+    CMS_ContentInfo* cms = d2i_CMS_bio(bio, nullptr);
+    BIO_free(bio);
+
+    if (!cms) return "";
+
+    STACK_OF(CMS_SignerInfo)* signerInfos = CMS_get0_SignerInfos(cms);
+    if (!signerInfos || sk_CMS_SignerInfo_num(signerInfos) == 0) {
+        CMS_ContentInfo_free(cms);
+        return "";
+    }
+
+    CMS_SignerInfo* si = sk_CMS_SignerInfo_value(signerInfos, 0);
+    if (!si) {
+        CMS_ContentInfo_free(cms);
+        return "";
+    }
+
+    // Get signing time from signed attributes (NID_pkcs9_signingTime)
+    int idx = CMS_signed_get_attr_by_NID(si, NID_pkcs9_signingTime, -1);
+    if (idx < 0) {
+        spdlog::debug("No signingTime attribute found in SOD CMS signed attributes");
+        CMS_ContentInfo_free(cms);
+        return "";
+    }
+
+    X509_ATTRIBUTE* attr = CMS_signed_get_attr(si, idx);
+    if (!attr) {
+        CMS_ContentInfo_free(cms);
+        return "";
+    }
+
+    ASN1_TYPE* attrVal = X509_ATTRIBUTE_get0_type(attr, 0);
+    if (!attrVal) {
+        CMS_ContentInfo_free(cms);
+        return "";
+    }
+
+    ASN1_TIME* sigTime = nullptr;
+    if (attrVal->type == V_ASN1_UTCTIME) {
+        sigTime = attrVal->value.utctime;
+    } else if (attrVal->type == V_ASN1_GENERALIZEDTIME) {
+        sigTime = attrVal->value.generalizedtime;
+    }
+
+    std::string result;
+    if (sigTime) {
+        struct tm tmResult = {};
+        if (ASN1_TIME_to_tm(sigTime, &tmResult) == 1) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ",
+                     tmResult.tm_year + 1900,
+                     tmResult.tm_mon + 1,
+                     tmResult.tm_mday,
+                     tmResult.tm_hour,
+                     tmResult.tm_min,
+                     tmResult.tm_sec);
+            result = std::string(buf);
+        }
+    }
+
+    CMS_ContentInfo_free(cms);
+    return result;
 }
 
 /// --- Helper Methods ---

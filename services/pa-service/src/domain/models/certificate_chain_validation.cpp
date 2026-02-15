@@ -39,6 +39,7 @@ Json::Value CertificateChainValidation::toJson() const {
     json["validAtSigningTime"] = validAtSigningTime;
     json["expirationStatus"] = expirationStatus;
     if (expirationMessage) json["expirationMessage"] = *expirationMessage;
+    if (signingTime) json["signingTime"] = *signingTime;
 
     // CRL checking
     json["crlChecked"] = crlChecked;
@@ -50,6 +51,7 @@ Json::Value CertificateChainValidation::toJson() const {
     json["crlStatusSeverity"] = crlStatusSeverity;
     if (crlThisUpdate) json["crlThisUpdate"] = *crlThisUpdate;
     if (crlNextUpdate) json["crlNextUpdate"] = *crlNextUpdate;
+    if (crlRevocationReason) json["crlRevocationReason"] = *crlRevocationReason;
 
     // Validation errors
     if (validationErrors) json["validationErrors"] = *validationErrors;

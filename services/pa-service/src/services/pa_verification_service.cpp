@@ -55,10 +55,11 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
             return response;
         }
 
-        // Step 2: Validate certificate chain
+        // Step 2: Validate certificate chain (with point-in-time validation if signing time available)
         auto certValidation = certValidator_->validateCertificateChain(
             sod.dscCertificate,
-            countryCode
+            countryCode,
+            sod.signingTime  // Pass SOD signing time for ICAO 9303 Part 12 point-in-time validation
         );
 
         // Step 3: Verify SOD signature

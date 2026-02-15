@@ -29,12 +29,25 @@ void PermissionFilter::doFilter(
     drogon::FilterCallback&& fcb,
     drogon::FilterChainCallback&& fccb) {
 
-    auto session = req->getSession();
+    // Get user info from request attributes (set by AuthMiddleware)
+    std::string username;
+    bool isAdmin = false;
+    std::string permsJson;
 
-    // Get user info from session (set by AuthMiddleware)
-    std::string username = session->get<std::string>("username");
-    bool isAdmin = session->get<bool>("is_admin");
-    std::string permsJson = session->get<std::string>("permissions");
+    auto attrs = req->getAttributes();
+    try { username = attrs->get<std::string>("username"); } catch (...) {}
+    try { isAdmin = attrs->get<bool>("is_admin"); } catch (...) {}
+    try { permsJson = attrs->get<std::string>("permissions"); } catch (...) {}
+
+    // Fall back to session if attributes not available
+    if (username.empty()) {
+        auto session = req->getSession();
+        if (session) {
+            try { username = session->get<std::string>("username"); } catch (...) {}
+            try { isAdmin = session->get<bool>("is_admin"); } catch (...) {}
+            try { permsJson = session->get<std::string>("permissions"); } catch (...) {}
+        }
+    }
 
     if (username.empty()) {
         Json::Value resp;

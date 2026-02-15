@@ -20,10 +20,12 @@ namespace services {
 
 ValidationService::ValidationService(
     repositories::ValidationRepository* validationRepo,
-    repositories::CertificateRepository* certRepo
+    repositories::CertificateRepository* certRepo,
+    repositories::CrlRepository* crlRepo
 )
     : validationRepo_(validationRepo)
     , certRepo_(certRepo)
+    , crlRepo_(crlRepo)
 {
     if (!validationRepo_) {
         throw std::invalid_argument("ValidationService: validationRepo cannot be nullptr");
@@ -247,6 +249,19 @@ ValidationService::ValidationResult ValidationService::validateCertificate(
             spdlog::error("Certificate validation: Trust Chain FAILED - {}", result.errorMessage);
         }
 
+        // Step 5: CRL revocation check (ICAO Doc 9303 Part 11)
+        if (result.trustChainValid && crlRepo_) {
+            bool revoked = checkCrlRevocation(cert);
+            result.crlChecked = true;
+            result.revoked = revoked;
+            if (revoked) {
+                result.crlMessage = "Certificate is revoked per CRL";
+                spdlog::warn("Certificate validation: Certificate is REVOKED");
+            } else {
+                result.crlMessage = "Certificate not revoked";
+            }
+        }
+
         // Cleanup chain certificates (except first one which is the input cert)
         for (size_t i = 1; i < chain.certificates.size(); i++) {
             X509_free(chain.certificates[i]);
@@ -409,14 +424,62 @@ ValidationService::LinkCertValidationResult ValidationService::validateLinkCerti
         return result;
     }
 
-    spdlog::info("ValidationService::validateLinkCertificate");
+    spdlog::info("ValidationService::validateLinkCertificate - Starting validation");
 
     try {
-        // TODO: Extract Link Certificate validation logic
-        spdlog::warn("TODO: Implement Link Certificate validation");
+        // Step 1: Verify this is actually a Link Certificate
+        if (!isLinkCertificate(cert)) {
+            result.message = "Certificate does not meet Link Certificate criteria "
+                             "(requires: not self-signed, CA:TRUE, keyCertSign)";
+            return result;
+        }
 
-        result.isValid = false;
-        result.message = "Not yet implemented";
+        // Step 2: Build trust chain from Link Certificate to root CSCA
+        TrustChain chain = buildTrustChain(cert, 5);
+
+        if (!chain.isValid) {
+            result.message = "Failed to build trust chain: " + chain.message;
+            result.trustChainPath = chain.path;
+            spdlog::warn("Link cert validation: {}", result.message);
+            return result;
+        }
+
+        result.trustChainPath = chain.path;
+        result.chainLength = static_cast<int>(chain.certificates.size());
+
+        // Collect subject DNs for result
+        for (X509* chainCert : chain.certificates) {
+            result.certificateDns.push_back(getSubjectDn(chainCert));
+        }
+
+        // Step 3: Validate all signatures in chain (HARD requirement)
+        bool cscaExpired = false;
+        bool signaturesValid = validateTrustChainInternal(chain, cscaExpired);
+
+        if (!signaturesValid) {
+            result.message = "Link Certificate trust chain signature verification failed";
+            spdlog::error("Link cert validation: {}", result.message);
+            // Cleanup chain certificates (except first)
+            for (size_t i = 1; i < chain.certificates.size(); i++) {
+                X509_free(chain.certificates[i]);
+            }
+            return result;
+        }
+
+        // Step 4: Validation successful
+        result.isValid = true;
+        if (cscaExpired) {
+            result.message = "Link Certificate trust chain verified (CSCA expired, informational per ICAO 9303)";
+        } else {
+            result.message = "Link Certificate trust chain verified successfully";
+        }
+
+        spdlog::info("Link cert validation: {} (chain length: {})", result.message, result.chainLength);
+
+        // Cleanup chain certificates (except first which is input cert)
+        for (size_t i = 1; i < chain.certificates.size(); i++) {
+            X509_free(chain.certificates[i]);
+        }
 
     } catch (const std::exception& e) {
         spdlog::error("Link Certificate validation failed: {}", e.what());
@@ -486,8 +549,17 @@ ValidationService::TrustChain ValidationService::buildTrustChain(X509* leafCert,
 
             // Check if current certificate is self-signed (root)
             if (isSelfSigned(current)) {
+                // Verify self-signature (RFC 5280 Section 6.1)
+                // A tampered root CSCA with correct DN but invalid self-signature must be rejected
+                if (!verifyCertificateSignature(current, current)) {
+                    chain.isValid = false;
+                    chain.message = "Root CSCA self-signature verification failed at depth " + std::to_string(depth);
+                    spdlog::error("Chain building: {}", chain.message);
+                    for (X509* csca : allCscas) X509_free(csca);
+                    return chain;
+                }
                 chain.isValid = true;
-                spdlog::info("Chain building: Reached root CSCA at depth {}", depth);
+                spdlog::info("Chain building: Reached root CSCA at depth {} (self-signature verified)", depth);
                 break;
             }
 
@@ -711,13 +783,100 @@ bool ValidationService::checkCrlRevocation(X509* cert)
         return false;
     }
 
+    if (!crlRepo_) {
+        spdlog::debug("CRL check skipped: CrlRepository not available");
+        return false;
+    }
+
     spdlog::debug("Checking CRL revocation");
 
     try {
-        // TODO: Extract CRL check logic
-        spdlog::warn("TODO: Implement CRL revocation check");
+        // Extract country code from certificate issuer DN
+        std::string issuerDn = getIssuerDn(cert);
+        std::string countryCode = extractDnAttribute(issuerDn, "C");
+        if (countryCode.empty()) {
+            spdlog::warn("CRL check: Cannot extract country code from issuer DN: {}", issuerDn);
+            return false;
+        }
 
-        return false;
+        // Lookup CRL from database by country code
+        Json::Value crlData = crlRepo_->findByCountryCode(countryCode);
+        if (crlData.isNull()) {
+            spdlog::info("CRL check: No CRL found for country {}", countryCode);
+            return false;
+        }
+
+        std::string crlBinaryHex = crlData.get("crl_binary", "").asString();
+        if (crlBinaryHex.empty()) {
+            spdlog::warn("CRL check: Empty CRL binary for country {}", countryCode);
+            return false;
+        }
+
+        // Decode hex to DER bytes (handle \x prefix and double-encoding)
+        std::vector<uint8_t> derBytes;
+        size_t hexStart = 0;
+        if (crlBinaryHex.size() > 2 && crlBinaryHex[0] == '\\' && crlBinaryHex[1] == 'x') {
+            hexStart = 2;
+        }
+        derBytes.reserve((crlBinaryHex.size() - hexStart) / 2);
+        for (size_t i = hexStart; i + 1 < crlBinaryHex.size(); i += 2) {
+            char h[3] = {crlBinaryHex[i], crlBinaryHex[i + 1], 0};
+            derBytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+        }
+
+        // Handle double-encoded BYTEA (decoded bytes start with \x = 0x5C 0x78)
+        if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
+            std::vector<uint8_t> innerBytes;
+            innerBytes.reserve((derBytes.size() - 2) / 2);
+            for (size_t i = 2; i + 1 < derBytes.size(); i += 2) {
+                char h[3] = {static_cast<char>(derBytes[i]), static_cast<char>(derBytes[i + 1]), 0};
+                innerBytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+            }
+            derBytes = std::move(innerBytes);
+        }
+
+        if (derBytes.empty()) {
+            spdlog::warn("CRL check: Failed to decode CRL binary for country {}", countryCode);
+            return false;
+        }
+
+        // Parse DER bytes to X509_CRL
+        const unsigned char* p = derBytes.data();
+        X509_CRL* crl = d2i_X509_CRL(nullptr, &p, static_cast<long>(derBytes.size()));
+        if (!crl) {
+            spdlog::warn("CRL check: Failed to parse CRL DER for country {}", countryCode);
+            return false;
+        }
+
+        // Check if CRL is expired (nextUpdate < now)
+        const ASN1_TIME* nextUpdate = X509_CRL_get0_nextUpdate(crl);
+        if (nextUpdate) {
+            time_t now = time(nullptr);
+            if (X509_cmp_time(nextUpdate, &now) < 0) {
+                spdlog::info("CRL check: CRL expired for country {} (informational)", countryCode);
+                // Continue checking - expired CRL still provides information
+            }
+        }
+
+        // Check certificate serial number against CRL
+        ASN1_INTEGER* certSerial = X509_get_serialNumber(cert);
+        bool isRevoked = false;
+        if (certSerial) {
+            X509_REVOKED* revokedEntry = nullptr;
+            int ret = X509_CRL_get0_by_serial(crl, &revokedEntry, certSerial);
+            if (ret == 1 && revokedEntry) {
+                isRevoked = true;
+                spdlog::warn("CRL check: Certificate REVOKED (country: {})", countryCode);
+            }
+        }
+
+        X509_CRL_free(crl);
+
+        if (!isRevoked) {
+            spdlog::debug("CRL check: Certificate not revoked (country: {})", countryCode);
+        }
+
+        return isRevoked;
 
     } catch (const std::exception& e) {
         spdlog::error("CRL check failed: {}", e.what());

@@ -61,6 +61,14 @@ relayApi.interceptors.request.use(
 relayApi.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/login') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
     if (import.meta.env.DEV) console.error('[Relay API Error]:', error.response?.data || error.message);
     return Promise.reject(error);
   }

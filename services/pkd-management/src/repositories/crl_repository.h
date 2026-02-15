@@ -50,6 +50,13 @@ public:
     void updateLdapStatus(const std::string& crlId, const std::string& ldapDn);
 
     /**
+     * @brief Find CRL binary data by country code
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @return JSON object with crl_binary (hex), this_update, next_update, or null if not found
+     */
+    Json::Value findByCountryCode(const std::string& countryCode);
+
+    /**
      * @brief Find all CRLs stored in LDAP for bulk export
      * @return JSON array with country_code, issuer_dn, crl_binary (hex), fingerprint_sha256
      */
