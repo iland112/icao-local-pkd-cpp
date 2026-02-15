@@ -173,7 +173,7 @@ export default function DscNcReport() {
       const timestamp = new Date().toISOString().slice(0, 10);
       exportDscNcReportToCsv(reportData.certificates.items, `dsc-nc-report-${timestamp}.csv`);
     } catch (err) {
-      console.error('CSV export failed:', err);
+      if (import.meta.env.DEV) console.error('CSV export failed:', err);
     }
   };
 

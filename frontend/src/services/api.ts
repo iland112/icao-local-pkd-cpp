@@ -37,6 +37,7 @@ import {
   certificateApi,
   uploadHistoryApi,
   ldapApi,
+  icaoApi,
 } from './pkdApi';
 
 // Import authentication API
@@ -72,6 +73,7 @@ export {
   certificateApi,
   uploadHistoryApi,
   ldapApi,
+  icaoApi,
   authApi,
   createAuthenticatedClient,
 };
@@ -166,6 +168,10 @@ export const paApi = {
   /** Lightweight PA lookup by subject DN or fingerprint (no SOD/DG required) */
   paLookup: (params: { subjectDn?: string; fingerprint?: string }) =>
     api.post('/certificates/pa-lookup', params),
+
+  /** Get data groups (DG1, DG2) for a PA verification record */
+  getDataGroups: (verificationId: string) =>
+    api.get(`/pa/${verificationId}/datagroups`),
 };
 
 // --- Monitoring Service APIs (port 8084) - Not yet migrated ---

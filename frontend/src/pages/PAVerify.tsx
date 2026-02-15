@@ -466,15 +466,11 @@ export function PAVerify() {
       setParsingDg1(true);
       try {
         const base64 = await fileToBase64(dg1File.file);
-        const response = await fetch('/api/pa/parse-dg1', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dg1Base64: base64 }),
-        });
-        const data = await response.json();
-        dg1Result = data;
-        setDg1ParseResult(data);
-        if (data.success) parsedCount++;
+        const response = await paApi.parseDG1(base64);
+        const data = response.data;
+        dg1Result = data as DG1ParseResult;
+        setDg1ParseResult(data as DG1ParseResult);
+        if ((data as DG1ParseResult).success) parsedCount++;
       } catch {
         dg1Result = { success: false, error: 'DG1 파싱 실패' };
         setDg1ParseResult(dg1Result);
@@ -488,15 +484,11 @@ export function PAVerify() {
       setParsingDg2(true);
       try {
         const base64 = await fileToBase64(dg2File.file);
-        const response = await fetch('/api/pa/parse-dg2', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dg2Base64: base64 }),
-        });
-        const data = await response.json();
-        dg2Result = data;
-        setDg2ParseResult(data);
-        if (data.success) parsedCount++;
+        const response = await paApi.parseDG2(base64);
+        const data = response.data;
+        dg2Result = data as DG2ParseResult;
+        setDg2ParseResult(data as DG2ParseResult);
+        if ((data as DG2ParseResult).success) parsedCount++;
       } catch {
         dg2Result = { success: false, error: 'DG2 파싱 실패' };
         setDg2ParseResult(dg2Result);
@@ -572,7 +564,7 @@ export function PAVerify() {
         dataGroups: [1, 2],
       });
     } catch {
-      console.error('Failed to preview SOD');
+      if (import.meta.env.DEV) console.error('Failed to preview SOD');
     }
   };
 

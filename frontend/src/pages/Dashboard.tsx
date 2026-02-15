@@ -23,7 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { healthApi, ldapApi, uploadApi } from '@/services/api';
+import { healthApi, ldapApi, uploadApi, icaoApi } from '@/services/api';
 import { cn } from '@/utils/cn';
 import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
 
@@ -108,15 +108,13 @@ export function Dashboard() {
 
   const loadIcaoStatus = async () => {
     try {
-      const response = await fetch('/api/icao/status');
-      if (response.ok) {
-        const data: IcaoStatusResponse = await response.json();
-        if (data.success) {
-          setIcaoStatus(data);
-        }
+      const response = await icaoApi.getStatus();
+      const data = response.data as IcaoStatusResponse;
+      if (data.success) {
+        setIcaoStatus(data);
       }
     } catch (error) {
-      console.error('Failed to load ICAO status:', error);
+      if (import.meta.env.DEV) console.error('Failed to load ICAO status:', error);
     }
   };
 
@@ -134,7 +132,7 @@ export function Dashboard() {
         })));
       }
     } catch (error) {
-      console.error('Failed to load country statistics:', error);
+      if (import.meta.env.DEV) console.error('Failed to load country statistics:', error);
     } finally {
       setCountryLoading(false);
     }

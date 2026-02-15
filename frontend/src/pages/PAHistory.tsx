@@ -97,7 +97,7 @@ export function PAHistory() {
       setTotalPages(Math.ceil(total / pageSize) || 1);
       setTotalElements(total);
     } catch (error) {
-      console.error('Failed to fetch PA history:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch PA history:', error);
       setHistory([]);
     } finally {
       setLoading(false);
@@ -219,14 +219,10 @@ export function PAHistory() {
     if (record.status === 'VALID' && record.verificationId) {
       setDgLoading(true);
       try {
-        const response = await fetch(`/api/pa/${record.verificationId}/datagroups`);
-        if (!response.ok) {
-          throw new Error('Failed to load DG data');
-        }
-        const data = await response.json();
-        setDgData(data);
+        const response = await paApi.getDataGroups(record.verificationId);
+        setDgData(response.data as DGDataResponse);
       } catch (error) {
-        console.error('Failed to load DG data:', error);
+        if (import.meta.env.DEV) console.error('Failed to load DG data:', error);
         setDgError('DG 데이터를 불러올 수 없습니다.');
       } finally {
         setDgLoading(false);

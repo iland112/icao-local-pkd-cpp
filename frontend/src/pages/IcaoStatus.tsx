@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2, Clock } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { icaoApi } from '@/services/pkdApi';
 
 interface IcaoVersion {
   id: number;
@@ -73,8 +74,8 @@ export default function IcaoStatus() {
 
   const fetchVersionStatus = async () => {
     try {
-      const response = await fetch('/api/icao/status');
-      const data: StatusApiResponse = await response.json();
+      const response = await icaoApi.getStatus();
+      const data = response.data as StatusApiResponse;
 
       if (data.success) {
         setVersionStatus(data.status);
@@ -83,20 +84,20 @@ export default function IcaoStatus() {
         }
       }
     } catch (err) {
-      console.error('Failed to fetch version status:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch version status:', err);
     }
   };
 
   const fetchVersionHistory = async () => {
     try {
-      const response = await fetch('/api/icao/history?limit=10');
-      const data: ApiResponse = await response.json();
+      const response = await icaoApi.getHistory(10);
+      const data = response.data as ApiResponse;
 
       if (data.success) {
         setVersionHistory(data.versions);
       }
     } catch (err) {
-      console.error('Failed to fetch version history:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch version history:', err);
     }
   };
 
@@ -105,22 +106,16 @@ export default function IcaoStatus() {
     setError(null);
 
     try {
-      const response = await fetch('/api/icao/check-updates');
-
-      if (response.ok) {
-        // Wait a moment for async processing
-        setTimeout(() => {
-          fetchVersionStatus();
-          fetchVersionHistory();
-          setChecking(false);
-        }, 2000);
-      } else {
-        setError('Failed to trigger version check');
+      await icaoApi.checkUpdates();
+      // Wait a moment for async processing
+      setTimeout(() => {
+        fetchVersionStatus();
+        fetchVersionHistory();
         setChecking(false);
-      }
+      }, 2000);
     } catch (err) {
       setError('Network error: Unable to check for updates');
-      console.error('Check updates error:', err);
+      if (import.meta.env.DEV) console.error('Check updates error:', err);
       setChecking(false);
     }
   };

@@ -93,7 +93,7 @@ add_executable(${PROJECT_NAME}
     src/repositories/certificate_repository.cpp
     src/repositories/validation_repository.cpp
     src/repositories/audit_repository.cpp
-    src/repositories/statistics_repository.cpp
+
     src/repositories/ldif_structure_repository.cpp  # v2.2.2: LDIF structure visualization
     src/repositories/user_repository.cpp  # Phase 5.4: AuthHandler migration
     src/repositories/auth_audit_repository.cpp  # Phase 5.4: AuthHandler migration
@@ -104,7 +104,7 @@ add_executable(${PROJECT_NAME}
     src/services/upload_service.cpp
     src/services/validation_service.cpp
     src/services/audit_service.cpp
-    src/services/statistics_service.cpp
+
     src/services/ldif_structure_service.cpp  # v2.2.2: LDIF structure visualization
 
     # ICAO Auto Sync Module (NEW - v1.7.0)
@@ -149,25 +149,6 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${LDAP_LIBRARY}
     ${LBER_LIBRARY}
     ${UUID_LIBRARY}
-)
-
-# =============================================================================
-# Authentication Module Tests (Optional)
-# =============================================================================
-add_executable(test_auth
-    src/auth/test_auth.cpp
-    src/auth/password_hash.cpp
-    src/auth/jwt_service.cpp
-)
-
-target_include_directories(test_auth PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
-
-target_link_libraries(test_auth PRIVATE
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    spdlog::spdlog
 )
 
 # =============================================================================

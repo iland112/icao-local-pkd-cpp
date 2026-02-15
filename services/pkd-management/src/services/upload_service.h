@@ -288,42 +288,6 @@ public:
 
     /// @}
 
-    /// @name Upload Management (MANUAL mode)
-    /// @{
-
-    /**
-     * @brief Trigger parsing for MANUAL mode upload
-     *
-     * @param uploadId Upload UUID
-     * @return true if parsing triggered successfully
-     *
-     * Business Logic:
-     * 1. Load upload record from database
-     * 2. Verify status is "PENDING"
-     * 3. Update status to "PARSING"
-     * 4. Trigger parsing logic
-     * 5. Update status to "PARSED"
-     */
-    bool triggerParsing(const std::string& uploadId);
-
-    /**
-     * @brief Trigger validation and DB save for MANUAL mode upload
-     *
-     * @param uploadId Upload UUID
-     * @return true if validation triggered successfully
-     *
-     * Business Logic:
-     * 1. Load upload record from database
-     * 2. Verify status is "PARSED"
-     * 3. Update status to "VALIDATING"
-     * 4. Load parsed data from temp file
-     * 5. Validate and save to DB & LDAP
-     * 6. Update status to "COMPLETED" or "FAILED"
-     */
-    bool triggerValidation(const std::string& uploadId);
-
-    /// @}
-
     /// @name Upload History & Detail
     /// @{
 
@@ -367,43 +331,6 @@ public:
      * - Error message (if failed)
      */
     Json::Value getUploadDetail(const std::string& uploadId);
-
-    /// @}
-
-    /// @name Upload Validations
-    /// @{
-
-    /**
-     * @brief Validation Filter Parameters
-     */
-    struct ValidationFilter {
-        int limit = 50;
-        int offset = 0;
-        std::string status;    // "VALID", "INVALID", "PENDING", "ERROR"
-        std::string certType;  // "DSC", "DSC_NC"
-    };
-
-    /**
-     * @brief Get validation results for an upload
-     *
-     * @param uploadId Upload UUID
-     * @param filter Filter and pagination parameters
-     * @return Json::Value Paginated validation results
-     *
-     * Response format:
-     * {
-     *   "success": true,
-     *   "count": 50,
-     *   "total": 1000,
-     *   "limit": 50,
-     *   "offset": 0,
-     *   "validations": [...]
-     * }
-     */
-    Json::Value getUploadValidations(
-        const std::string& uploadId,
-        const ValidationFilter& filter
-    );
 
     /// @}
 

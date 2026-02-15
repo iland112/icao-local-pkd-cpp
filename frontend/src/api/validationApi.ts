@@ -1,9 +1,11 @@
 /**
- * Sprint 3 Task 3.6: Validation API Client
+ * Validation API Client
  *
- * API client for fetching validation results with trust chain information
+ * API client for fetching validation results with trust chain information.
+ * Uses pkdApi axios instance for consistent error handling and interceptors.
  */
 
+import pkdApi from '@/services/pkdApi';
 import type { ValidationListResponse, ValidationDetailResponse } from '@/types/validation';
 
 /**
@@ -22,21 +24,17 @@ export const getUploadValidations = async (
     certType?: 'CSCA' | 'DSC' | 'DSC_NC';
   } = {}
 ): Promise<ValidationListResponse> => {
-  const params = new URLSearchParams();
-  if (options.limit) params.append('limit', options.limit.toString());
-  if (options.offset) params.append('offset', options.offset.toString());
-  if (options.status) params.append('status', options.status);
-  if (options.certType) params.append('certType', options.certType);
+  const params: Record<string, string | number> = {};
+  if (options.limit) params.limit = options.limit;
+  if (options.offset) params.offset = options.offset;
+  if (options.status) params.status = options.status;
+  if (options.certType) params.certType = options.certType;
 
-  const queryString = params.toString();
-  const url = `/api/upload/${uploadId}/validations${queryString ? `?${queryString}` : ''}`;
-
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch validations: ${response.statusText}`);
-  }
-
-  return response.json();
+  const response = await pkdApi.get<ValidationListResponse>(
+    `/upload/${uploadId}/validations`,
+    { params }
+  );
+  return response.data;
 };
 
 /**
@@ -48,12 +46,11 @@ export const getUploadValidations = async (
 export const getCertificateValidation = async (
   fingerprint: string
 ): Promise<ValidationDetailResponse> => {
-  const response = await fetch(`/api/certificates/validation?fingerprint=${encodeURIComponent(fingerprint)}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch validation: ${response.statusText}`);
-  }
-
-  return response.json();
+  const response = await pkdApi.get<ValidationDetailResponse>(
+    '/certificates/validation',
+    { params: { fingerprint } }
+  );
+  return response.data;
 };
 
 /**

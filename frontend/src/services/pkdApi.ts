@@ -350,6 +350,40 @@ export const ldapApi = {
     pkdApi.get('/ldap/revocation/check', { params }),
 };
 
+// --- ICAO Version Monitoring APIs ---
+
+/**
+ * ICAO PKD version monitoring
+ * Endpoints: /api/icao/*
+ */
+export const icaoApi = {
+  /**
+   * Get ICAO PKD version status comparison (detected vs uploaded)
+   * @returns Version status for each collection type
+   */
+  getStatus: () => pkdApi.get('/icao/status'),
+
+  /**
+   * Get ICAO version check history
+   * @param limit - Number of records to return
+   * @returns Historical version records
+   */
+  getHistory: (limit: number = 10) =>
+    pkdApi.get('/icao/history', { params: { limit } }),
+
+  /**
+   * Trigger ICAO version update check
+   * @returns Check result
+   */
+  checkUpdates: () => pkdApi.get('/icao/check-updates'),
+
+  /**
+   * Get latest ICAO version info
+   * @returns Latest version details
+   */
+  getLatest: () => pkdApi.get('/icao/latest'),
+};
+
 // --- Default Export ---
 
 export default pkdApi;

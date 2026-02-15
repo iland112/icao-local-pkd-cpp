@@ -50,7 +50,7 @@ export function SyncDashboard() {
       ]);
 
       // Debug logging
-      console.log('API Responses:', {
+      if (import.meta.env.DEV) console.log('API Responses:', {
         status: statusRes.data,
         history: historyRes.data,
         config: configRes.data,
@@ -62,7 +62,7 @@ export function SyncDashboard() {
       setConfig(configRes.data ?? null);
       setRevalidationHistory(Array.isArray(revalHistoryRes.data) ? revalHistoryRes.data : []);
     } catch (err) {
-      console.error('Failed to fetch sync data:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch sync data:', err);
       setError('동기화 서비스에 연결할 수 없습니다.');
     } finally {
       setLoading(false);
@@ -91,7 +91,7 @@ export function SyncDashboard() {
       // Fetch full data to update history and other states
       await fetchData();
     } catch (err) {
-      console.error('Manual check failed:', err);
+      if (import.meta.env.DEV) console.error('Manual check failed:', err);
       setError('수동 검사 실패');
     } finally {
       setChecking(false);
@@ -104,7 +104,7 @@ export function SyncDashboard() {
       await syncServiceApi.triggerRevalidation();
       await fetchData();
     } catch (err) {
-      console.error('Revalidation failed:', err);
+      if (import.meta.env.DEV) console.error('Revalidation failed:', err);
       setError('인증서 재검증 실패');
     } finally {
       setRevalidating(false);
@@ -133,7 +133,7 @@ export function SyncDashboard() {
       setShowConfigDialog(false);
       setError(null);
     } catch (err) {
-      console.error('Failed to update config:', err);
+      if (import.meta.env.DEV) console.error('Failed to update config:', err);
       setError('설정 업데이트 실패');
     } finally {
       setSaving(false);

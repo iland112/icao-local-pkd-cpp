@@ -48,7 +48,7 @@ export function PADetail() {
       setResult(response.data);
     } catch (err) {
       setError('PA 검증 정보를 불러오는데 실패했습니다.');
-      console.error('Failed to fetch PA detail:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch PA detail:', err);
     } finally {
       setLoading(false);
     }

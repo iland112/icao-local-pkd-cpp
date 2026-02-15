@@ -153,7 +153,7 @@ export function UploadHistory() {
         const response = await uploadHistoryApi.getIssues(selectedUpload.id);
         setUploadIssues(response.data);
       } catch (error) {
-        console.error('Failed to fetch upload issues:', error);
+        if (import.meta.env.DEV) console.error('Failed to fetch upload issues:', error);
         setUploadIssues(null);
       } finally {
         setLoadingIssues(false);
@@ -178,7 +178,7 @@ export function UploadHistory() {
       setTotalPages(data.totalPages);
       setTotalElements(data.totalElements);
     } catch (error) {
-      console.error('Failed to fetch upload history:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch upload history:', error);
     } finally {
       setLoading(false);
     }
@@ -323,7 +323,7 @@ export function UploadHistory() {
       setActiveTab('details'); // Reset to details tab
       setDialogOpen(true);
     } catch (error) {
-      console.error('Failed to fetch upload details:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch upload details:', error);
       // Fallback to basic upload data from history list
       setSelectedUpload(upload);
       setActiveTab('details'); // Reset to details tab
@@ -356,9 +356,9 @@ export function UploadHistory() {
       await fetchUploads();
       closeDeleteDialog();
       // Show success message (optional - can add toast notification here)
-      console.log('Upload deleted successfully');
+      if (import.meta.env.DEV) console.log('Upload deleted successfully');
     } catch (error) {
-      console.error('Failed to delete upload:', error);
+      if (import.meta.env.DEV) console.error('Failed to delete upload:', error);
       alert('업로드 삭제에 실패했습니다.');
     } finally {
       setDeleting(false);

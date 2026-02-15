@@ -73,7 +73,7 @@ export function UploadDetail() {
       }
     } catch (err) {
       setError('업로드 정보를 불러오는데 실패했습니다.');
-      console.error('Failed to fetch upload detail:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch upload detail:', err);
     } finally {
       setLoading(false);
     }
@@ -96,7 +96,7 @@ export function UploadDetail() {
         setValidationPage(page);
       }
     } catch (err) {
-      console.error('Failed to fetch validation results:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch validation results:', err);
     } finally {
       setValidationLoading(false);
     }

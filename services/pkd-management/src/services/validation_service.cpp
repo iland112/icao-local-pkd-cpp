@@ -147,19 +147,6 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
     return result;
 }
 
-ValidationService::RevalidateResult ValidationService::revalidateDscCertificatesForUpload(
-    const std::string& uploadId
-)
-{
-    spdlog::info("ValidationService::revalidateDscCertificatesForUpload - uploadId: {}", uploadId);
-    spdlog::warn("TODO: Implement upload-specific re-validation");
-
-    RevalidateResult result;
-    result.success = false;
-    result.message = "Not yet implemented";
-    return result;
-}
-
 // --- Public Methods - Single Certificate Validation ---
 
 ValidationService::ValidationResult ValidationService::validateCertificate(
@@ -273,21 +260,6 @@ ValidationService::ValidationResult ValidationService::validateCertificate(
         result.errorMessage = e.what();
     }
 
-    return result;
-}
-
-ValidationService::ValidationResult ValidationService::validateCertificateByFingerprint(
-    const std::string& fingerprint
-)
-{
-    spdlog::info("ValidationService::validateCertificateByFingerprint - fingerprint: {}",
-        fingerprint.substr(0, 16) + "...");
-
-    spdlog::warn("TODO: Load certificate from DB and validate");
-
-    ValidationResult result;
-    result.validationStatus = "ERROR";
-    result.errorMessage = "Not yet implemented";
     return result;
 }
 
@@ -487,20 +459,6 @@ ValidationService::LinkCertValidationResult ValidationService::validateLinkCerti
         result.message = e.what();
     }
 
-    return result;
-}
-
-ValidationService::LinkCertValidationResult ValidationService::validateLinkCertificateById(
-    const std::string& certId
-)
-{
-    spdlog::info("ValidationService::validateLinkCertificateById - certId: {}", certId);
-
-    spdlog::warn("TODO: Load Link Certificate from DB and validate");
-
-    LinkCertValidationResult result;
-    result.isValid = false;
-    result.message = "Not yet implemented";
     return result;
 }
 

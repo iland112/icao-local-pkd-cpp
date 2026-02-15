@@ -84,7 +84,7 @@ export function UploadDashboard() {
       setStats(statsResponse.data);
       setRecentChanges(changesResponse.data.changes || []);
     } catch (error) {
-      console.error('Failed to fetch upload dashboard data:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch upload dashboard data:', error);
     } finally {
       setLoading(false);
     }
@@ -101,7 +101,7 @@ export function UploadDashboard() {
         setRevokedData(resp.data.revoked || []);
         setDataFetched(true);
       } catch (e) {
-        console.error('Failed to fetch validation detail:', e);
+        if (import.meta.env.DEV) console.error('Failed to fetch validation detail:', e);
       } finally {
         setReasonsLoading(false);
       }

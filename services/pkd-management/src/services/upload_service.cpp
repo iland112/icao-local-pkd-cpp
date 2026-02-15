@@ -845,32 +845,6 @@ Json::Value UploadService::getUploadDetail(const std::string& uploadId)
     return response;
 }
 
-// --- Stubs (TODO) ---
-
-bool UploadService::triggerParsing(const std::string& uploadId)
-{
-    spdlog::warn("UploadService::triggerParsing - TODO: Implement");
-    return false;
-}
-
-bool UploadService::triggerValidation(const std::string& uploadId)
-{
-    spdlog::warn("UploadService::triggerValidation - TODO: Implement");
-    return false;
-}
-
-Json::Value UploadService::getUploadValidations(
-    const std::string& uploadId,
-    const ValidationFilter& filter
-)
-{
-    spdlog::warn("UploadService::getUploadValidations - TODO: Implement");
-    Json::Value response;
-    response["success"] = false;
-    response["message"] = "Not yet implemented";
-    return response;
-}
-
 Json::Value UploadService::getUploadIssues(const std::string& uploadId)
 {
     spdlog::info("UploadService::getUploadIssues - uploadId: {}", uploadId);

@@ -5,6 +5,8 @@ import { getCountryDisplayName } from '@/utils/countryNames';
 import { cn } from '@/utils/cn';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 import { validationApi } from '@/api/validationApi';
+import { certificateApi } from '@/services/pkdApi';
+import pkdApi from '@/services/pkdApi';
 import type { ValidationResult } from '@/types/validation';
 import { TreeViewer } from '@/components/TreeViewer';
 import type { TreeNode } from '@/components/TreeViewer';
@@ -102,20 +104,14 @@ const CertificateSearch: React.FC = () => {
   const fetchCountries = async () => {
     setCountriesLoading(true);
     try {
-      console.log('Fetching countries from /api/certificates/countries...');
-      const response = await fetch('/api/certificates/countries');
-      const data = await response.json();
-
-      console.log('Countries API response:', data);
+      const response = await certificateApi.getCountries();
+      const data = response.data as unknown as { success: boolean; countries: string[] };
 
       if (data.success && data.countries) {
         setCountries(data.countries);
-        console.log(`Loaded ${data.countries.length} countries`);
-      } else {
-        console.error('Countries API returned unsuccessful:', data);
       }
     } catch (err) {
-      console.error('Failed to fetch countries:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch countries:', err);
     } finally {
       setCountriesLoading(false);
     }
@@ -127,27 +123,28 @@ const CertificateSearch: React.FC = () => {
     setError(null);
 
     try {
-      const params = new URLSearchParams();
-      if (criteria.country) params.append('country', criteria.country);
-      if (criteria.certType) params.append('certType', criteria.certType);
-      if (criteria.validity && criteria.validity !== 'all') params.append('validity', criteria.validity);
-      if (criteria.source) params.append('source', criteria.source);
-      if (criteria.searchTerm) params.append('searchTerm', criteria.searchTerm);
-      params.append('limit', criteria.limit.toString());
-      params.append('offset', criteria.offset.toString());
+      const params: Record<string, string> = {
+        limit: criteria.limit.toString(),
+        offset: criteria.offset.toString(),
+      };
+      if (criteria.country) params.country = criteria.country;
+      if (criteria.certType) params.certType = criteria.certType;
+      if (criteria.validity && criteria.validity !== 'all') params.validity = criteria.validity;
+      if (criteria.source) params.source = criteria.source;
+      if (criteria.searchTerm) params.searchTerm = criteria.searchTerm;
 
-      const response = await fetch(`/api/certificates/search?${params.toString()}`);
-      const data = await response.json();
+      const response = await pkdApi.get('/certificates/search', { params });
+      const data = response.data as Record<string, unknown>;
 
       if (data.success) {
-        setCertificates(data.certificates);
-        setTotal(data.total);
+        setCertificates(data.certificates as Certificate[]);
+        setTotal(data.total as number);
         // Store statistics from backend (if available)
         if (data.stats) {
-          setApiStats(data.stats);
+          setApiStats(data.stats as { total: number; valid: number; expired: number; notYetValid: number; unknown: number });
         }
       } else {
-        setError(data.error || 'Search failed');
+        setError((data.error as string) || 'Search failed');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search certificates');
@@ -199,7 +196,7 @@ const CertificateSearch: React.FC = () => {
         setValidationResult(response.validation);
       }
     } catch (err) {
-      console.error('Failed to fetch validation result:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch validation result:', err);
     } finally {
       setValidationLoading(false);
     }

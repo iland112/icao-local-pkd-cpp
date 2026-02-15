@@ -88,7 +88,7 @@
 #include "repositories/certificate_repository.h"
 #include "repositories/validation_repository.h"
 #include "repositories/audit_repository.h"
-#include "repositories/statistics_repository.h"
+
 #include "repositories/ldif_structure_repository.h"
 #include "repositories/user_repository.h"
 #include "repositories/auth_audit_repository.h"
@@ -99,7 +99,7 @@
 #include "services/upload_service.h"
 #include "services/validation_service.h"
 #include "services/audit_service.h"
-#include "services/statistics_service.h"
+
 #include "services/ldif_structure_service.h"
 
 // Authentication Module
@@ -129,7 +129,7 @@ std::shared_ptr<repositories::UploadRepository> uploadRepository;
 std::shared_ptr<repositories::CertificateRepository> certificateRepository;
 std::shared_ptr<repositories::ValidationRepository> validationRepository;
 std::shared_ptr<repositories::AuditRepository> auditRepository;
-std::shared_ptr<repositories::StatisticsRepository> statisticsRepository;
+
 std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;
 std::shared_ptr<repositories::UserRepository> userRepository;
 std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;
@@ -138,7 +138,7 @@ std::shared_ptr<repositories::DeviationListRepository> deviationListRepository; 
 std::shared_ptr<services::UploadService> uploadService;
 std::shared_ptr<services::ValidationService> validationService;
 std::shared_ptr<services::AuditService> auditService;
-std::shared_ptr<services::StatisticsService> statisticsService;
+
 std::shared_ptr<services::LdifStructureService> ldifStructureService;
 
 // Global cache for available countries (populated on startup)
@@ -7853,12 +7853,11 @@ int main(int argc, char* argv[]) {
         certificateRepository = std::make_shared<repositories::CertificateRepository>(queryExecutor.get());
         validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get(), ldapPool, appConfig.ldapBaseDn);
         auditRepository = std::make_shared<repositories::AuditRepository>(queryExecutor.get());
-        statisticsRepository = std::make_shared<repositories::StatisticsRepository>(queryExecutor.get());
         userRepository = std::make_shared<repositories::UserRepository>(queryExecutor.get());
         authAuditRepository = std::make_shared<repositories::AuthAuditRepository>(queryExecutor.get());
         crlRepository = std::make_shared<repositories::CrlRepository>(queryExecutor.get());
         deviationListRepository = std::make_shared<repositories::DeviationListRepository>(queryExecutor.get());
-        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, Statistics, User, AuthAudit, CRL, DL: Query Executor)");
+        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL: Query Executor)");
         ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
 
         // Initialize ICAO Auto Sync Module
@@ -7907,16 +7906,11 @@ int main(int argc, char* argv[]) {
             auditRepository.get()
         );
 
-        statisticsService = std::make_shared<services::StatisticsService>(
-            statisticsRepository.get(),
-            uploadRepository.get()
-        );
-
         ldifStructureService = std::make_shared<services::LdifStructureService>(
             ldifStructureRepository.get()
         );
 
-        spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, Statistics, LdifStructure)");
+        spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, LdifStructure)");
 
         // Initialize Authentication Handler with Repository Pattern
         spdlog::info("Initializing Authentication module with Repository Pattern...");

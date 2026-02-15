@@ -8,7 +8,7 @@ import MonitoringDashboard from '@/pages/MonitoringDashboard';
 import CertificateSearch from '@/pages/CertificateSearch';
 import IcaoStatus from '@/pages/IcaoStatus';
 import { OperationAuditLog } from '@/pages/OperationAuditLog';
-import ValidationDemo from '@/pages/ValidationDemo';
+
 import DscNcReport from '@/pages/DscNcReport';
 
 const queryClient = new QueryClient({
@@ -63,7 +63,7 @@ function App() {
             <Route path="sync" element={<SyncDashboard />} />
             <Route path="icao" element={<IcaoStatus />} />
             <Route path="monitoring" element={<MonitoringDashboard />} />
-            <Route path="validation-demo" element={<ValidationDemo />} />
+
             <Route path="profile" element={<Profile />} />
             <Route path="admin/users" element={<UserManagement />} />
             <Route path="admin/operation-audit" element={<OperationAuditLog />} />

@@ -177,9 +177,9 @@ export function FileUpload() {
         setOverallStatus('PROCESSING');
         setOverallMessage(`업로드 재개: ${upload.fileName}`);
 
-        console.log('Upload state restored:', savedUploadId, upload);
+        if (import.meta.env.DEV) console.log('Upload state restored:', savedUploadId, upload);
       } catch (error) {
-        console.error('Failed to restore upload state:', error);
+        if (import.meta.env.DEV) console.error('Failed to restore upload state:', error);
         localStorage.removeItem('currentUploadId');
       }
     };
@@ -396,12 +396,12 @@ export function FileUpload() {
     try {
       const response = await uploadApi.getDetail(id);
       if (!response.data?.success || !response.data.data) {
-        console.warn('[Polling] Failed to fetch upload details');
+        if (import.meta.env.DEV) console.warn('[Polling] Failed to fetch upload details');
         return;
       }
 
       const upload = response.data.data as UploadedFile;
-      console.log('[Polling] Syncing state from DB:', upload.status, upload);
+      if (import.meta.env.DEV) console.log('[Polling] Syncing state from DB:', upload.status, upload);
 
       // Update stage states based on DB data
       // Stage 1: Upload & Parse (always completed if we have the record)
@@ -475,7 +475,7 @@ export function FileUpload() {
         }
       }
     } catch (error) {
-      console.error('[Polling] Error syncing state from DB:', error);
+      if (import.meta.env.DEV) console.error('[Polling] Error syncing state from DB:', error);
     }
   };
 
@@ -487,10 +487,10 @@ export function FileUpload() {
     }
 
     // Start polling every 30 seconds
-    console.log('[Polling] Starting 30s interval backup for uploadId:', id);
+    if (import.meta.env.DEV) console.log('[Polling] Starting 30s interval backup for uploadId:', id);
     pollingIntervalRef.current = setInterval(() => {
       if (!sseConnected) {
-        console.log('[Polling] SSE disconnected, using polling as primary source');
+        if (import.meta.env.DEV) console.log('[Polling] SSE disconnected, using polling as primary source');
       }
       syncStateFromDB(id);
     }, 30000); // 30 seconds
@@ -523,7 +523,7 @@ export function FileUpload() {
     eventSource.addEventListener('connected', () => {
       reconnectAttempts = 0;
       setSseConnected(true);
-      console.log('[SSE] Connected to progress stream');
+      if (import.meta.env.DEV) console.log('[SSE] Connected to progress stream');
     });
 
     // Handle 'progress' events from backend
@@ -548,17 +548,17 @@ export function FileUpload() {
     };
 
     eventSource.onerror = () => {
-      console.warn('[SSE] Connection error, closing...');
+      if (import.meta.env.DEV) console.warn('[SSE] Connection error, closing...');
       setSseConnected(false);
       eventSource.close();
 
       // Try to reconnect if not too many attempts
       if (reconnectAttempts < maxReconnectAttempts && isProcessing) {
         reconnectAttempts++;
-        console.log(`[SSE] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
+        if (import.meta.env.DEV) console.log(`[SSE] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
         setTimeout(() => connectToProgressStream(id), 1000);
       } else {
-        console.log('[SSE] Max reconnect attempts reached, relying on polling');
+        if (import.meta.env.DEV) console.log('[SSE] Max reconnect attempts reached, relying on polling');
         sseRef.current = null;
         // Don't set isProcessing to false - let polling continue
       }
@@ -736,7 +736,7 @@ export function FileUpload() {
     if (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('ML') || message.includes('LDAP'))) {
       // Backend message contains detailed breakdown, use it directly
       details = message;
-      console.log(`[FileUpload] Using detailed message as details: "${details}"`);
+      if (import.meta.env.DEV) console.log(`[FileUpload] Using detailed message as details: "${details}"`);
     } else if (stage.endsWith('_COMPLETED') || stage === 'COMPLETED') {
       // Show final count on completion (use processedCount if available, fallback to totalCount)
       const count = processedCount || totalCount;

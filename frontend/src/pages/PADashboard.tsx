@@ -54,7 +54,7 @@ export function PADashboard() {
       const items = (histData.data ?? histData.content ?? []) as PAHistoryItem[];
       setRecentVerifications(items);
     } catch (error) {
-      console.error('Failed to fetch PA dashboard data:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch PA dashboard data:', error);
     } finally {
       setLoading(false);
     }

@@ -67,23 +67,6 @@ public:
      */
     Json::Value findByFingerprint(const std::string& fingerprint);
 
-    /**
-     * @brief Find certificates by country code
-     * @param countryCode ISO 3166-1 alpha-2 code
-     * @param limit Maximum results
-     * @param offset Pagination offset
-     * @return JSON array of certificates
-     */
-    Json::Value findByCountry(const std::string& countryCode, int limit, int offset);
-
-    /**
-     * @brief Find certificates by subject DN
-     * @param subjectDn Subject Distinguished Name
-     * @param limit Maximum results
-     * @return JSON array of certificates
-     */
-    Json::Value findBySubjectDn(const std::string& subjectDn, int limit);
-
     /// @}
 
     /// @name Certificate Counts
@@ -113,13 +96,6 @@ public:
 
     /// @name LDAP Storage Tracking
     /// @{
-
-    /**
-     * @brief Find certificates not yet stored in LDAP
-     * @param limit Maximum results
-     * @return JSON array of certificates
-     */
-    Json::Value findNotStoredInLdap(int limit);
 
     /**
      * @brief Mark certificate as stored in LDAP

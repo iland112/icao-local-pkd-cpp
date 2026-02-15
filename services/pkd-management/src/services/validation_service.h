@@ -92,14 +92,6 @@ public:
      */
     RevalidateResult revalidateDscCertificates();
 
-    /**
-     * @brief Re-validate DSC certificates for specific upload
-     *
-     * @param uploadId Upload UUID
-     * @return RevalidateResult Validation statistics
-     */
-    RevalidateResult revalidateDscCertificatesForUpload(const std::string& uploadId);
-
     /// @}
 
     /// @name Single Certificate Validation
@@ -143,14 +135,6 @@ public:
         X509* cert,
         const std::string& certType = "DSC"
     );
-
-    /**
-     * @brief Validate certificate by fingerprint
-     *
-     * @param fingerprint SHA-256 fingerprint (64 hex chars)
-     * @return ValidationResult Validation result
-     */
-    ValidationResult validateCertificateByFingerprint(const std::string& fingerprint);
 
     /// @}
 
@@ -261,14 +245,6 @@ public:
      * @return LinkCertValidationResult Validation result
      */
     LinkCertValidationResult validateLinkCertificate(X509* cert);
-
-    /**
-     * @brief Validate Link Certificate by ID
-     *
-     * @param certId Certificate UUID
-     * @return LinkCertValidationResult Validation result
-     */
-    LinkCertValidationResult validateLinkCertificateById(const std::string& certId);
 
     /// @}
 

@@ -36,7 +36,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
       const response = await uploadHistoryApi.getDetailedCountryStatistics(0); // 0 = all countries
       setData(response.data.countries || []);
     } catch (err) {
-      console.error('Failed to fetch detailed country statistics:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch detailed country statistics:', err);
       setError('데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);

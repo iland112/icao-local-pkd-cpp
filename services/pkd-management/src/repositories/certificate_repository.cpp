@@ -321,36 +321,6 @@ Json::Value CertificateRepository::findByFingerprint(const std::string& fingerpr
     }
 }
 
-Json::Value CertificateRepository::findByCountry(
-    const std::string& countryCode,
-    int limit,
-    int offset
-)
-{
-    spdlog::debug("[CertificateRepository] Finding by country: {}", countryCode);
-
-    // TODO: Implement find by country
-    spdlog::warn("[CertificateRepository] findByCountry - TODO: Implement");
-
-    Json::Value response = Json::arrayValue;
-    return response;
-}
-
-Json::Value CertificateRepository::findBySubjectDn(
-    const std::string& subjectDn,
-    int limit
-)
-{
-    spdlog::debug("[CertificateRepository] Finding by subject DN: {}",
-        subjectDn.substr(0, 50));
-
-    // TODO: Implement find by subject DN
-    spdlog::warn("[CertificateRepository] findBySubjectDn - TODO: Implement");
-
-    Json::Value response = Json::arrayValue;
-    return response;
-}
-
 // --- Certificate Counts ---
 
 int CertificateRepository::countByType(const std::string& certType)
@@ -403,17 +373,6 @@ int CertificateRepository::countByCountry(const std::string& countryCode)
 }
 
 // --- LDAP Storage Tracking ---
-
-Json::Value CertificateRepository::findNotStoredInLdap(int limit)
-{
-    spdlog::debug("[CertificateRepository] Finding not stored in LDAP (limit: {})", limit);
-
-    // TODO: Implement find not stored in LDAP
-    spdlog::warn("[CertificateRepository] findNotStoredInLdap - TODO: Implement");
-
-    Json::Value response = Json::arrayValue;
-    return response;
-}
 
 bool CertificateRepository::markStoredInLdap(const std::string& fingerprint)
 {

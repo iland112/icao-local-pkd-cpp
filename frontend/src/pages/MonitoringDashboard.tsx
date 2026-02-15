@@ -53,7 +53,7 @@ export default function MonitoringDashboard() {
 
       setLastUpdate(new Date());
     } catch (err) {
-      console.error('Failed to fetch monitoring data:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch monitoring data:', err);
       setError('모니터링 데이터를 불러오는데 실패했습니다.');
     } finally {
       setLoading(false);

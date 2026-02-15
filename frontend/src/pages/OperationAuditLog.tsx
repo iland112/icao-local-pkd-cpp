@@ -102,7 +102,7 @@ export function OperationAuditLog() {
       setAuditLogs(response.data);
       setTotal(response.total);
     } catch (error) {
-      console.error('Failed to fetch audit logs:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch audit logs:', error);
     } finally {
       setLoading(false);
     }
@@ -114,7 +114,7 @@ export function OperationAuditLog() {
       const response = await getAuditStatistics();
       setStatistics(response.data);
     } catch (error) {
-      console.error('Failed to fetch audit statistics:', error);
+      if (import.meta.env.DEV) console.error('Failed to fetch audit statistics:', error);
     }
   };
 
