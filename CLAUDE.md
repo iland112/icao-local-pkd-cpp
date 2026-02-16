@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.10.5
-**Last Updated**: 2026-02-15
+**Current Version**: v2.11.0
+**Last Updated**: 2026-02-16
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -97,6 +97,7 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
 | `icao::logging` | Structured logging (spdlog) |
 | `icao::certificate-parser` | X.509 certificate parsing |
 | `icao::icao9303` | ICAO 9303 SOD/DG parsers |
+| `icao::validation` | ICAO 9303 certificate validation (trust chain, CRL, extensions, algorithm compliance) |
 
 ### LDAP Structure
 
@@ -478,6 +479,23 @@ scripts/
 ---
 
 ## Version History
+
+### v2.11.0 (2026-02-16) - Validation Library Extraction (icao::validation)
+- New shared library: `icao::validation` — idempotent ICAO 9303 certificate validation functions extracted from both services
+- Library modules: `cert_ops` (pure X509 ops), `trust_chain_builder`, `crl_checker`, `extension_validator`, `algorithm_compliance`
+- Provider/Adapter pattern: `ICscaProvider` / `ICrlProvider` interfaces abstract DB vs LDAP backends
+- PKD Management adapters: `DbCscaProvider` (CertificateRepository), `DbCrlProvider` (CrlRepository + hex→DER decode)
+- PA Service adapters: `LdapCscaProvider` (LdapCertificateRepository), `LdapCrlProvider` (LdapCrlRepository)
+- PKD Management `validation_service.cpp`: 1,078 → 408 lines (~62% reduction), 10+ private methods removed
+- PA Service `certificate_validation_service.cpp`: 617 → 364 lines (~41% reduction), 6+ utility methods removed
+- Trust chain: multi-CSCA key rollover, deep chain (DSC→Link→Root), circular reference detection, root self-signature verification
+- CRL checker: RFC 5280 CRLReason extraction (11 codes), expiration check, provider-based lookup
+- Extension validator: unknown critical extensions, DSC/CSCA key usage bits, warnings list
+- Algorithm compliance: ICAO approved algorithms (SHA-256+, RSA-2048+, ECDSA, RSA-PSS), key size extraction
+- DN utilities consolidated: `normalizeDnForComparison`, `extractDnAttribute` (slash + RFC 2253 formats)
+- Public API of both services fully preserved (zero breaking changes)
+- Docker build verified: both pkd-management and pa-service compile and link successfully
+- Future ICAO standard changes require only `shared/lib/icao-validation/` updates
 
 ### v2.10.5 (2026-02-15) - Security Hardening (Full Audit + OWASP)
 - **CRITICAL**: Upload endpoint authentication restored (removed TEMPORARY public access for LDIF/ML/Certificate)

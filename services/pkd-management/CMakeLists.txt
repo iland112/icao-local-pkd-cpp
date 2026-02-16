@@ -105,6 +105,10 @@ add_executable(${PROJECT_NAME}
     src/services/validation_service.cpp
     src/services/audit_service.cpp
 
+    # Provider Adapters (v2.11.0: icao::validation library integration)
+    src/adapters/db_csca_provider.cpp
+    src/adapters/db_crl_provider.cpp
+
     src/services/ldif_structure_service.cpp  # v2.2.2: LDIF structure visualization
 
     # ICAO Auto Sync Module (NEW - v1.7.0)
@@ -138,6 +142,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     icao::exception      # Shared exception handling library (NEW)
     icao::logging        # Shared structured logging library (NEW)
     icao::certificate-parser  # Certificate parsing (FileDetector, PemParser, DerParser, CertTypeDetector)
+    icao::validation         # ICAO validation library (cert_ops, TrustChainBuilder, CrlChecker)
     icao-common
     Drogon::Drogon
     OpenSSL::SSL

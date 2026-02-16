@@ -18,6 +18,7 @@ option(BUILD_CONFIG_LIB "Build configuration management library" ON)
 option(BUILD_EXCEPTION_LIB "Build exception handling library" ON)
 option(BUILD_LOGGING_LIB "Build structured logging library" ON)
 option(BUILD_CERTIFICATE_PARSER_LIB "Build certificate parser library" ON)
+option(BUILD_VALIDATION_LIB "Build ICAO validation library" ON)
 
 # Add subdirectories
 if(BUILD_AUDIT_LIB)
@@ -52,6 +53,10 @@ if(BUILD_CERTIFICATE_PARSER_LIB)
     add_subdirectory(lib/certificate-parser)
 endif()
 
+if(BUILD_VALIDATION_LIB)
+    add_subdirectory(lib/icao-validation)
+endif()
+
 # Display configuration summary
 message(STATUS "")
 message(STATUS "=== ICAO Shared Libraries Configuration ===")
@@ -63,5 +68,6 @@ message(STATUS "  Configuration:       ${BUILD_CONFIG_LIB}")
 message(STATUS "  Exception Handling:  ${BUILD_EXCEPTION_LIB}")
 message(STATUS "  Structured Logging:  ${BUILD_LOGGING_LIB}")
 message(STATUS "  Certificate Parser:  ${BUILD_CERTIFICATE_PARSER_LIB}")
+message(STATUS "  ICAO Validation:     ${BUILD_VALIDATION_LIB}")
 message(STATUS "==========================================")
 message(STATUS "")

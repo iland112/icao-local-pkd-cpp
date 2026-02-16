@@ -85,6 +85,9 @@ set(SERVICES_SRC
     src/services/certificate_validation_service.cpp
     src/services/dsc_auto_registration_service.cpp
     src/services/pa_verification_service.cpp
+    # Provider Adapters (v2.11.0: icao::validation library integration)
+    src/adapters/ldap_csca_provider.cpp
+    src/adapters/ldap_crl_provider.cpp
 )
 
 # Common Utilities
@@ -116,6 +119,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     icao::database       # Shared database connection pool library
     icao::audit          # Shared audit logging library
     icao::icao9303       # Shared ICAO 9303 parser library (SOD, DG, MRZ)
+    icao::validation     # Shared ICAO validation library (trust chain, CRL, extensions)
     icao-common
     Drogon::Drogon
     OpenSSL::SSL
