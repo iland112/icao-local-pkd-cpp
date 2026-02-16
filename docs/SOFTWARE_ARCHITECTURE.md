@@ -1,8 +1,8 @@
 # ICAO Local PKD - Software Architecture
 
-**Version**: 2.0.0
-**Last Updated**: 2026-01-21
-**Status**: Production Ready
+**Version**: 2.11.0
+**Last Updated**: 2026-02-17
+**Status**: Production Ready (Multi-DBMS: PostgreSQL + Oracle)
 
 ---
 
@@ -27,75 +27,76 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ### Core Principles
 
-- **🔧 Microservices**: 독립적으로 배포 가능한 서비스 분리
-- **📊 Data Consistency**: PostgreSQL-LDAP 이중 저장 및 동기화
-- **🚀 High Performance**: C++20 기반 고성능 백엔드
-- **🎨 Modern UI**: React 19 기반 CSR (Client-Side Rendering)
-- **🔐 Security First**: 다층 보안 아키텍처
-- **📈 Scalability**: 수평 확장 가능 설계
+- **Microservices**: 독립적으로 배포 가능한 4개 서비스 분리
+- **Multi-DBMS**: PostgreSQL + Oracle 런타임 전환 (DB_TYPE 환경변수)
+- **Data Consistency**: DB-LDAP 이중 저장 및 자동 동기화 (Reconciliation)
+- **High Performance**: C++20 기반 고성능 백엔드
+- **Modern UI**: React 19 + TypeScript + Tailwind CSS 4
+- **Security First**: JWT 인증, RBAC, OWASP 보안 강화
+- **Shared Validation**: icao::validation 공유 라이브러리 (86 단위 테스트)
 
 ---
 
 ## Technical Architecture Diagram
 
-### System Overview (v2.0.0)
+### System Overview (v2.11.0)
 
 ```mermaid
 graph TB
     %% Layer 1: External Access
     subgraph L1[" "]
         direction TB
-        L1Title["🌐 Layer 1: External Access"]
+        L1Title["Layer 1: External Access"]
         subgraph L1Nodes[" "]
             direction LR
-            User["👤 User Browser"]
-            ICAOPortal["🌍 ICAO Portal<br/>pkd.icao.int"]
+            User["User Browser"]
+            ICAOPortal["ICAO Portal<br/>pkd.icao.int"]
         end
     end
 
     %% Layer 2: DMZ
     subgraph L2[" "]
         direction TB
-        L2Title["🔒 Layer 2: DMZ - Public Ports"]
+        L2Title["Layer 2: DMZ - Public Ports"]
         subgraph L2Nodes[" "]
             direction LR
-            Frontend["⚡ Frontend<br/>React 19 SPA<br/>Port 3000"]
-            APIGateway["🔀 API Gateway<br/>Nginx Reverse Proxy<br/>Port 8080"]
+            Frontend["Frontend<br/>React 19 SPA<br/>Port 3000"]
+            APIGateway["API Gateway<br/>Nginx Reverse Proxy<br/>Port 8080"]
         end
     end
 
     %% Layer 3: Application Services
     subgraph L3[" "]
         direction TB
-        L3Title["🔧 Layer 3: Application Services - C++ Microservices"]
+        L3Title["Layer 3: Application Services - C++ Microservices"]
         subgraph L3Nodes[" "]
             direction LR
-            PKD["📦 PKD Management<br/>Upload & Validation<br/>Port 8081"]
-            PA["🔐 PA Service<br/>Passive Auth Verify<br/>Port 8082"]
-            Relay["🔄 PKD Relay<br/>ICAO Integration<br/>Port 8083"]
+            PKD["PKD Management<br/>Upload & Validation<br/>Port 8081"]
+            PA["PA Service<br/>Passive Auth Verify<br/>Port 8082"]
+            Relay["PKD Relay<br/>DB-LDAP Sync<br/>Port 8083"]
+            Monitoring["Monitoring<br/>System Metrics<br/>Port 8084"]
         end
     end
 
     %% Layer 4: Data Storage
     subgraph L4[" "]
         direction TB
-        L4Title["💾 Layer 4: Data Storage - Persistent Layer"]
+        L4Title["Layer 4: Data Storage - Persistent Layer"]
         subgraph L4Nodes[" "]
             direction LR
-            PostgreSQL[("🗄️ PostgreSQL<br/>30K Certificates<br/>Port 5432")]
-            HAProxy["⚖️ HAProxy<br/>LDAP Load Balancer<br/>Port 389"]
-            LDAPCluster[("📂 LDAP MMR Cluster<br/>Master 1 + Master 2<br/>Ports 3891/3892")]
+            DB[("PostgreSQL / Oracle<br/>31K Certificates<br/>Port 5432 / 1521")]
+            LDAPCluster[("LDAP MMR Cluster<br/>Master 1 + Master 2<br/>Ports 3891/3892")]
         end
     end
 
     %% Layer 5: Infrastructure
     subgraph L5[" "]
         direction TB
-        L5Title["🏗️ Layer 5: Infrastructure - Docker Compose Runtime"]
-        Docker["🐳 Docker Compose Network"]
+        L5Title["Layer 5: Infrastructure - Docker Compose Runtime"]
+        Docker["Docker Compose Network"]
     end
 
-    %% Vertical connections - Layer by layer
+    %% Vertical connections
     User -->|1. HTTPS| Frontend
     User -->|2. REST API| APIGateway
 
@@ -104,28 +105,25 @@ graph TB
     APIGateway -->|4. Route| PKD
     APIGateway -.-> PA
     APIGateway -.-> Relay
+    APIGateway -.-> Monitoring
 
-    PKD -->|5. Query| PostgreSQL
-    PA --> PostgreSQL
-    Relay --> PostgreSQL
+    PKD -->|5. Query| DB
+    PA --> DB
+    Relay --> DB
 
-    PKD --> HAProxy
-    PA --> HAProxy
-    Relay --> HAProxy
+    PKD -->|6. LDAP SLB| LDAPCluster
+    PA --> LDAPCluster
+    Relay --> LDAPCluster
 
-    HAProxy -->|6. LB| LDAPCluster
-
-    PostgreSQL -.->|7. Runtime| Docker
-    HAProxy -.-> Docker
+    DB -.->|7. Runtime| Docker
     LDAPCluster -.-> Docker
 
     ICAOPortal -.->|Scraping| Relay
 
-    %% Styling - Titles
+    %% Styling
     classDef titleStyle fill:#37474F,stroke:#263238,stroke-width:2px,color:#fff,font-weight:bold
     class L1Title,L2Title,L3Title,L4Title,L5Title titleStyle
 
-    %% Styling - Nodes
     classDef external fill:#E3F2FD,stroke:#1976D2,stroke-width:2px,color:#000
     classDef dmz fill:#FFF3E0,stroke:#F57C00,stroke-width:2px,color:#000
     classDef app fill:#E8F5E9,stroke:#388E3C,stroke-width:2px,color:#000
@@ -134,15 +132,13 @@ graph TB
 
     class User,ICAOPortal external
     class Frontend,APIGateway dmz
-    class PKD,PA,Relay app
-    class PostgreSQL,HAProxy,LDAPCluster data
+    class PKD,PA,Relay,Monitoring app
+    class DB,LDAPCluster data
     class Docker infra
 
-    %% Styling - Containers (transparent borders)
     classDef containerStyle fill:none,stroke:#546E7A,stroke-width:2px,stroke-dasharray:5 5
     class L1,L2,L3,L4,L5 containerStyle
 
-    %% Styling - Node containers (invisible)
     classDef nodeContainer fill:none,stroke:none
     class L1Nodes,L2Nodes,L3Nodes,L4Nodes nodeContainer
 ```
@@ -151,7 +147,7 @@ graph TB
 
 1. **5-Layer Hierarchy**: 명확한 계층 분리로 관심사 분리 (Separation of Concerns)
 2. **Minimal Coupling**: 각 계층은 바로 아래 계층만 의존 (Vertical Flow)
-3. **Gateway Pattern**: API Gateway + HAProxy로 단일 진입점 제공
+3. **Gateway Pattern**: API Gateway (nginx)로 단일 진입점 제공, App-level LDAP SLB
 4. **Data Abstraction**: LDAP MMR 클러스터로 2개 Master 노드 통합
 5. **Simplified Topology**: 연결선 최소화로 시스템 복잡도 감소
 
@@ -159,11 +155,11 @@ graph TB
 
 | Layer | Purpose | Components | Key Characteristics |
 |-------|---------|------------|---------------------|
-| **🌐 Layer 1: External** | 외부 접근 및 연계 | User, ICAO Portal | Public Internet |
-| **🔒 Layer 2: DMZ** | 공개 서비스 영역 | Frontend, API Gateway | Ports 3000, 8080 |
-| **🔧 Layer 3: Application** | 비즈니스 로직 처리 | PKD, PA, Relay (C++20 Microservices) | Internal Network |
-| **💾 Layer 4: Data** | 데이터 영속성 | HAProxy, PostgreSQL, LDAP MMR | Internal Storage + LB |
-| **🏗️ Layer 5: Infrastructure** | 컨테이너 런타임 | Docker Compose | Platform Layer |
+| **Layer 1: External** | 외부 접근 및 연계 | User, ICAO Portal | Public Internet |
+| **Layer 2: DMZ** | 공개 서비스 영역 | Frontend, API Gateway | Ports 3000, 8080 |
+| **Layer 3: Application** | 비즈니스 로직 처리 | PKD, PA, Relay, Monitoring (C++20) | Internal Network |
+| **Layer 4: Data** | 데이터 영속성 | PostgreSQL/Oracle, LDAP MMR | Internal Storage + App-level SLB |
+| **Layer 5: Infrastructure** | 컨테이너 런타임 | Docker Compose | Platform Layer |
 
 ### Data Flow Summary
 
@@ -173,10 +169,10 @@ User → Frontend → API Gateway → Services (PKD/PA/Relay) → Data (PostgreS
 ```
 
 **Service Architecture**:
-- **3 Microservices**: PKD Management (:8081), PA Service (:8082), PKD Relay (:8083)
-- **2 Data Stores**: PostgreSQL (30,637 certificates), LDAP MMR Cluster (Master 1+2)
-- **2 Gateway Nodes**: API Gateway (HTTP), HAProxy (LDAP)
-- **1 Frontend**: React 19 SPA
+- **4 Microservices**: PKD Management (:8081), PA Service (:8082), PKD Relay (:8083), Monitoring (:8084)
+- **2 Data Stores**: PostgreSQL/Oracle (31,212 certificates), LDAP MMR Cluster (Master 1+2)
+- **1 Gateway Node**: API Gateway (HTTP), App-level LDAP SLB
+- **1 Frontend**: React 19 SPA (21 pages)
 
 ---
 
@@ -265,12 +261,15 @@ flowchart LR
 ```
 
 **Key Features**:
-- ✅ Clean Architecture (6 Layers)
-- ✅ Strategy Pattern (AUTO/MANUAL Mode)
-- ✅ ICAO Auto Sync Integration (v1.7.0)
-- ✅ LDIF/Master List Parsing
-- ✅ Trust Chain Validation
-- ✅ Certificate Search & Export
+- Clean Architecture (6 Layers)
+- Strategy Pattern (AUTO/MANUAL Mode)
+- ICAO Auto Sync with Daily Scheduler
+- LDIF/Master List Parsing + Individual Certificate Upload (PEM/DER/P7B/DL/CRL)
+- Trust Chain Validation (icao::validation shared library)
+- Certificate Search & Export (DIT-structured ZIP)
+- JWT Authentication + RBAC (admin/user)
+- DSC_NC Report, PA Lookup API
+- Multi-DBMS (PostgreSQL + Oracle)
 
 ---
 
@@ -337,12 +336,14 @@ flowchart LR
 ```
 
 **Key Features**:
-- ✅ ICAO 9303 PA Compliance
-- ✅ SOD CMS Verification
-- ✅ DG Hash Validation
-- ✅ Trust Chain Validation
-- ✅ MRZ Parsing (TD1/TD2/TD3)
-- ✅ Face Image Extraction
+- ICAO 9303 PA Compliance (Part 10, 11, 12)
+- SOD CMS Verification + DG Hash Validation
+- Trust Chain Validation (icao::validation shared library)
+- CRL Revocation Checking (RFC 5280)
+- DSC Auto-Registration (PA_EXTRACTED source type)
+- DSC Non-Conformant (nc-data) Support
+- MRZ Parsing (TD1/TD2/TD3) + Face Image Extraction (JPEG2000 conversion)
+- Multi-DBMS (PostgreSQL + Oracle)
 
 ---
 
@@ -414,11 +415,22 @@ flowchart LR
 ```
 
 **Key Features**:
-- ✅ ICAO PKD 외부 연계 (Version Detection)
-- ✅ HTML Scraping (Table + Link Fallback)
-- ✅ Email Notification (SMTP)
-- ✅ Clean Architecture (4 Layers)
-- ✅ Cron Job Integration
+- ICAO PKD 외부 연계 (Version Detection)
+- HTML Scraping (Table + Link Fallback)
+- DB-LDAP Reconciliation (CSCA, DSC, CRL)
+- Daily Auto Version Check Scheduler
+- Clean Architecture (4 Layers)
+- Multi-DBMS (PostgreSQL + Oracle)
+
+---
+
+### 4. Monitoring Service (Port 8084)
+
+**Key Features**:
+- System Resource Monitoring (CPU, Memory, Disk, Network)
+- Service Health Checks (HTTP Probes to all backend services)
+- DB-Independent Architecture (no PostgreSQL/Oracle dependency)
+- JSON Metrics API
 
 ---
 
@@ -450,7 +462,7 @@ erDiagram
     }
 
     CERTIFICATE {
-        serial id PK
+        uuid id PK
         uuid upload_id FK
         varchar country_code
         varchar cert_type
@@ -458,13 +470,20 @@ erDiagram
         varchar subject_dn
         varchar issuer_dn
         varchar serial_number
+        varchar fingerprint_sha256
+        varchar source_type
+        varchar validation_status
+        varchar signature_algorithm
+        varchar public_key_algorithm
+        int public_key_size
+        boolean is_self_signed
         timestamp not_before
         timestamp not_after
         boolean stored_in_ldap
     }
 
     CRL {
-        serial id PK
+        uuid id PK
         uuid upload_id FK
         varchar country_code
         bytea crl_der
@@ -475,7 +494,7 @@ erDiagram
     }
 
     MASTER_LIST {
-        serial id PK
+        uuid id PK
         uuid upload_id FK
         varchar country_code
         bytea ml_der
@@ -486,16 +505,60 @@ erDiagram
     }
 
     VALIDATION_RESULT {
-        serial id PK
-        int certificate_id FK
-        varchar validation_type
-        boolean is_valid
-        text error_message
+        uuid id PK
+        varchar certificate_id
+        varchar validation_status
+        varchar trust_chain_path
+        varchar crl_check_status
+        varchar csca_subject_dn
+        varchar csca_fingerprint
+        text message
         timestamp validated_at
     }
 
+    AUTH_AUDIT_LOG {
+        uuid id PK
+        varchar event_type
+        varchar username
+        varchar ip_address
+        varchar user_agent
+        boolean success
+        timestamp created_at
+    }
+
+    OPERATION_AUDIT_LOG {
+        uuid id PK
+        varchar operation_type
+        varchar entity_type
+        varchar entity_id
+        varchar username
+        varchar ip_address
+        jsonb details
+        timestamp created_at
+    }
+
+    DEVIATION_LIST {
+        uuid id PK
+        uuid upload_id FK
+        varchar country_code
+        bytea dl_binary
+        varchar issuer_dn
+        timestamp created_at
+    }
+
+    RECONCILIATION_LOG {
+        uuid id PK
+        uuid summary_id FK
+        varchar entity_type
+        varchar fingerprint
+        varchar action
+        varchar status
+        text message
+        timestamp created_at
+    }
+
     PA_VERIFICATION {
-        serial id PK
+        uuid id PK
         varchar country_code
         varchar sod_issuer
         varchar verification_status
@@ -505,7 +568,7 @@ erDiagram
     }
 
     SYNC_STATUS {
-        serial id PK
+        uuid id PK
         int db_csca_count
         int db_dsc_count
         int ldap_csca_count
@@ -518,7 +581,7 @@ erDiagram
     }
 
     RECONCILIATION_SUMMARY {
-        serial id PK
+        uuid id PK
         varchar triggered_by
         varchar status
         int csca_added
@@ -530,7 +593,7 @@ erDiagram
     }
 
     ICAO_PKD_VERSIONS {
-        serial id PK
+        uuid id PK
         varchar collection_type
         varchar file_name
         int file_version
@@ -542,10 +605,11 @@ erDiagram
     }
 ```
 
-**총 테이블**: 9개
-- **Upload & Certificate**: uploaded_file, certificate, crl, master_list
+**총 테이블**: 14개
+- **Upload & Certificate**: uploaded_file, certificate, crl, master_list, deviation_list
 - **Validation**: validation_result
 - **PA**: pa_verification
+- **Audit**: auth_audit_log, operation_audit_log
 - **Sync**: sync_status, reconciliation_summary, reconciliation_log
 - **ICAO Sync**: icao_pkd_versions
 
@@ -598,7 +662,7 @@ graph TD
 **LDAP Schema**:
 - **objectClass**: pkdDownload, cRLDistributionPoint
 - **Attributes**: userCertificate;binary, cACertificate;binary, certificateRevocationList;binary
-- **Total Entries**: 30,226 (525 CSCA + 29,610 DSC + 91 CRL)
+- **Total Entries**: 31,212 (845 CSCA + 27 MLSC + 29,838 DSC + 502 DSC_NC + 69 CRL)
 
 ---
 
@@ -617,18 +681,26 @@ graph TD
             Header[Header.tsx<br/>User Info and Theme]
         end
 
-        subgraph "Page Components"
+        subgraph "Page Components (21 Pages)"
             Dashboard[Dashboard.tsx<br/>시스템 개요]
             FileUpload[FileUpload.tsx<br/>파일 업로드]
+            CertUpload[CertificateUpload.tsx<br/>개별 인증서]
             CertSearch[CertificateSearch.tsx<br/>인증서 조회]
+            DscNcReport[DscNcReport.tsx<br/>DSC_NC 보고서]
             UploadHistory[UploadHistory.tsx<br/>업로드 이력]
+            UploadDetail[UploadDetail.tsx<br/>업로드 상세]
             UploadDashboard[UploadDashboard.tsx<br/>통계 대시보드]
             PAVerify[PAVerify.tsx<br/>PA 검증 수행]
             PAHistory[PAHistory.tsx<br/>검증 이력]
+            PADetail[PADetail.tsx<br/>PA 상세]
             PADashboard[PADashboard.tsx<br/>PA 통계]
             SyncDashboard[SyncDashboard.tsx<br/>동기화 상태]
             IcaoStatus[IcaoStatus.tsx<br/>ICAO 버전 상태]
-            SystemMonitoring[SystemMonitoring.tsx<br/>시스템 모니터링]
+            SystemMonitoring[MonitoringDashboard.tsx<br/>시스템 모니터링]
+            Login[Login.tsx<br/>JWT 인증]
+            UserMgmt[UserManagement.tsx<br/>사용자 관리]
+            AuditLog[AuditLog.tsx<br/>인증 감사]
+            OpAuditLog[OperationAuditLog.tsx<br/>운영 감사]
         end
 
         subgraph "Shared Components"
@@ -859,7 +931,7 @@ sequenceDiagram
     participant Gateway as API Gateway
     participant PKD as PKD Management
     participant LDIF as LDIF Processor
-    participant DB as PostgreSQL
+    participant DB as PostgreSQL/Oracle
     participant LDAP as OpenLDAP
 
     User->>Frontend: Select LDIF file + AUTO mode
@@ -966,17 +1038,17 @@ graph TB
 
         subgraph Gateway["🔀 Gateway Layer"]
             APIGateway["API Gateway<br/>━━━━━━━━<br/>nginx:1.25<br/>Reverse Proxy<br/>━━━━━━━━<br/>:8080"]
-            HAProxy["HAProxy<br/>━━━━━━━━<br/>haproxy:2.8<br/>LDAP LB<br/>━━━━━━━━<br/>:389"]
         end
 
         subgraph Application["🔧 Application Layer"]
             PKD["PKD Management<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8081"]
             PA["PA Service<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8082"]
             Relay["PKD Relay<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8083"]
+            Mon["Monitoring<br/>━━━━━━━━<br/>Custom C++<br/>Drogon 1.9<br/>━━━━━━━━<br/>:8084"]
         end
 
         subgraph DataLayer["💾 Data Layer"]
-            PG["PostgreSQL<br/>━━━━━━━━<br/>postgres:15<br/>RDBMS<br/>━━━━━━━━<br/>:5432"]
+            PG["PostgreSQL / Oracle<br/>━━━━━━━━<br/>postgres:15 / xe:21c<br/>Multi-DBMS<br/>━━━━━━━━<br/>:5432 / :1521"]
             LDAP1["OpenLDAP 1<br/>━━━━━━━━<br/>osixia:1.5.0<br/>MMR Primary<br/>━━━━━━━━<br/>:3891"]
             LDAP2["OpenLDAP 2<br/>━━━━━━━━<br/>osixia:1.5.0<br/>MMR Secondary<br/>━━━━━━━━<br/>:3892"]
         end
@@ -993,15 +1065,15 @@ graph TB
     %% External to Docker Network
     User -->|HTTP/3000| Frontend
     APIClient -->|HTTP/8080| APIGateway
-    LDAPClient -->|LDAP/389| HAProxy
 
     %% Presentation to Gateway
     Frontend -->|proxy_pass| APIGateway
 
     %% Gateway to Application
-    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/sync| PKD
+    APIGateway -->|/api/upload<br/>/api/cert<br/>/api/auth<br/>/api/icao| PKD
     APIGateway -->|/api/pa/*| PA
-    APIGateway -->|/api/relay/*| Relay
+    APIGateway -->|/api/sync/*| Relay
+    APIGateway -->|/api/monitoring/*| Mon
 
     %% Application to Data Layer
     PKD -->|SQL| PG
@@ -1009,12 +1081,12 @@ graph TB
     Relay -->|SQL| PG
 
     PKD -->|LDAP Write| LDAP1
-    PKD -->|LDAP Read| HAProxy
-    PA -->|LDAP Read| HAProxy
-    Relay -->|LDAP Read| HAProxy
-
-    HAProxy -->|Round-robin| LDAP1
-    HAProxy -->|Round-robin| LDAP2
+    PKD -->|LDAP Read<br/>App SLB| LDAP1
+    PKD -->|LDAP Read<br/>App SLB| LDAP2
+    PA -->|LDAP Read<br/>App SLB| LDAP1
+    PA -->|LDAP Read<br/>App SLB| LDAP2
+    Relay -->|LDAP Read<br/>App SLB| LDAP1
+    Relay -->|LDAP Read<br/>App SLB| LDAP2
 
     %% Data Layer Replication
     LDAP1 <-->|MMR Sync| LDAP2
@@ -1029,19 +1101,18 @@ graph TB
     %% Styling - External
     style User fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
     style APIClient fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
-    style LDAPClient fill:#E3F2FD,stroke:#1976D2,stroke-width:2px
 
     %% Styling - Presentation
     style Frontend fill:#81C784,stroke:#388E3C,stroke-width:3px
 
     %% Styling - Gateway
     style APIGateway fill:#FF9800,stroke:#F57C00,stroke-width:3px
-    style HAProxy fill:#FFA726,stroke:#F57C00,stroke-width:3px
 
     %% Styling - Application
     style PKD fill:#42A5F5,stroke:#1976D2,stroke-width:3px
     style PA fill:#42A5F5,stroke:#1976D2,stroke-width:3px
     style Relay fill:#42A5F5,stroke:#1976D2,stroke-width:3px
+    style Mon fill:#42A5F5,stroke:#1976D2,stroke-width:3px
 
     %% Styling - Data Layer
     style PG fill:#7E57C2,stroke:#5E35B1,stroke-width:3px
@@ -1059,10 +1130,12 @@ graph TB
 **Architecture Highlights**:
 
 1. **Layered Design**: 명확한 4계층 구조 (Presentation → Gateway → Application → Data)
-2. **Gateway Pattern**: API Gateway와 HAProxy로 트래픽 분산 및 로드밸런싱
-3. **Microservices**: 3개의 독립적인 C++ 서비스 (PKD, PA, Relay)
-4. **MMR Replication**: OpenLDAP Multi-Master 복제로 고가용성 보장
-5. **Bind Mounts**: 모든 데이터는 호스트 파일시스템에 영구 저장
+2. **Gateway Pattern**: API Gateway (nginx)로 서비스 라우팅 및 리버스 프록시
+3. **App-Level SLB**: LDAP Software Load Balancing (서비스 내부 라운드로빈, HAProxy 제거)
+4. **Microservices**: 4개의 독립적인 C++ 서비스 (PKD, PA, Relay, Monitoring)
+5. **Multi-DBMS**: PostgreSQL 15 / Oracle XE 21c 런타임 전환 (DB_TYPE)
+6. **MMR Replication**: OpenLDAP Multi-Master 복제로 고가용성 보장
+7. **Bind Mounts**: 모든 데이터는 호스트 파일시스템에 영구 저장
 
 **Container Details**:
 
@@ -1073,12 +1146,12 @@ graph TB
 | pkd-management | Custom C++ (Debian) | 2.0 | 2GB | always |
 | pa-service | Custom C++ (Debian) | 2.0 | 2GB | always |
 | pkd-relay | Custom C++ (Debian) | 1.0 | 1GB | always |
+| monitoring | Custom C++ (Debian) | 0.5 | 256MB | always |
 | postgres | postgres:15-alpine | 2.0 | 2GB | always |
 | openldap1 | osixia/openldap:1.5.0 | 1.0 | 1GB | always |
 | openldap2 | osixia/openldap:1.5.0 | 1.0 | 1GB | always |
-| haproxy | haproxy:2.8-alpine | 0.5 | 256MB | always |
 
-**Total Resources**: 10 cores, 11GB RAM
+**Total Resources**: 10 cores, 10.5GB RAM (PostgreSQL mode), Oracle 컨테이너 추가 시 +2GB
 
 ---
 
@@ -1104,10 +1177,10 @@ graph TB
             PKD3["PKD Mgmt<br/>:8081"]
             PA3["PA Service<br/>:8082"]
             Relay3["PKD Relay<br/>:8083"]
+            Mon3["Monitoring<br/>:8084"]
             PG3["PostgreSQL<br/>:5432"]
             LDAP5["OpenLDAP1<br/>:3891"]
             LDAP6["OpenLDAP2<br/>:3892"]
-            HAProxy3["HAProxy<br/>:389"]
         end
 
         subgraph Storage3["💾 Persistent Storage"]
@@ -1130,6 +1203,7 @@ graph TB
     Load -->|docker load| PKD3
     Load -->|docker load| PA3
     Load -->|docker load| Relay3
+    Load -->|docker load| Mon3
 
     %% Services to Storage
     PG3 -->|bind mount| PGData3
@@ -1152,10 +1226,10 @@ graph TB
     style PKD3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
     style PA3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
     style Relay3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
+    style Mon3 fill:#42A5F5,stroke:#1976D2,stroke-width:2px
     style PG3 fill:#7E57C2,stroke:#5E35B1,stroke-width:2px
     style LDAP5 fill:#26A69A,stroke:#00796B,stroke-width:2px
     style LDAP6 fill:#26A69A,stroke:#00796B,stroke-width:2px
-    style HAProxy3 fill:#FFA726,stroke:#F57C00,stroke-width:2px
 
     %% Styling - Storage
     style ProjectDir fill:#F5F5F5,stroke:#9E9E9E,stroke-width:2px
@@ -1202,59 +1276,91 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "보안 레이어"
+    subgraph "보안 레이어 (v2.10.5 Full Audit)"
+        subgraph "인증/인가 레이어"
+            JWT["JWT Authentication<br/>HS256, 32+ byte secret"]
+            RBAC["RBAC<br/>admin / user roles"]
+            AuthMiddleware["Auth Middleware<br/>std::regex::optimize"]
+            AuditLog["Dual Audit Logging<br/>auth_audit_log + operation_audit_log"]
+        end
+
         subgraph "네트워크 레이어"
             Firewall[호스트 방화벽<br/>iptables]
             Docker[Docker 네트워크 격리<br/>icao-network]
+            NginxHeaders["nginx Security Headers<br/>X-Content-Type-Options<br/>X-Frame-Options<br/>Referrer-Policy"]
         end
 
         subgraph "애플리케이션 레이어"
             RateLimit2[속도 제한<br/>100 req/s per IP]
             CORS[CORS 정책<br/>Same-Origin]
             CSP[콘텐츠 보안 정책<br/>frame-ancestors self]
+            NoSystemCall["Command Injection 방지<br/>system()/popen() → Native C API"]
         end
 
         subgraph "데이터 레이어"
-            DBAuth[PostgreSQL 인증<br/>username/password]
-            LDAPAuth[LDAP 바인드<br/>cn=admin DN]
+            DBAuth[DB 인증<br/>PostgreSQL / Oracle]
+            LDAPAuth["LDAP 바인드<br/>cn=admin DN<br/>DN Escape (RFC 4514)"]
             Encryption[TLS/SSL 지원<br/>프로덕션]
         end
 
         subgraph "코드 레이어"
-            Validation[입력 검증<br/>SQL 인젝션 방지]
-            Sanitization[출력 살균<br/>XSS 방지]
-            Parameterized[매개변수화 쿼리<br/>libpq]
+            Parameterized["매개변수화 쿼리<br/>100% parameterized SQL"]
+            OrderByWhitelist["ORDER BY Whitelist<br/>SQL 인젝션 방지"]
+            Base64Validation["Base64 입력 검증<br/>isValidBase64() pre-check"]
+            NullChecks["OpenSSL Null Checks<br/>24 allocation sites"]
+            BufferOverread["SOD Parser 보호<br/>end pointer boundary"]
         end
     end
 
+    JWT --> RBAC
+    RBAC --> AuthMiddleware
+    AuthMiddleware --> AuditLog
+
     Firewall --> Docker
-    Docker --> RateLimit2
+    Docker --> NginxHeaders
+
+    NginxHeaders --> RateLimit2
     RateLimit2 --> CORS
     CORS --> CSP
+    CSP --> NoSystemCall
 
-    CSP --> DBAuth
-    CSP --> LDAPAuth
+    NoSystemCall --> DBAuth
+    NoSystemCall --> LDAPAuth
     DBAuth --> Encryption
     LDAPAuth --> Encryption
 
-    Encryption --> Validation
-    Validation --> Sanitization
-    Sanitization --> Parameterized
+    Encryption --> Parameterized
+    Parameterized --> OrderByWhitelist
+    OrderByWhitelist --> Base64Validation
+    Base64Validation --> NullChecks
+    NullChecks --> BufferOverread
 
-    style Firewall fill:#F44336,stroke:#C62828,stroke-width:2px,color:#fff
+    style JWT fill:#F44336,stroke:#C62828,stroke-width:2px,color:#fff
     style Encryption fill:#4CAF50,stroke:#388E3C,stroke-width:2px,color:#fff
     style Parameterized fill:#2196F3,stroke:#1976D2,stroke-width:2px,color:#fff
+    style NoSystemCall fill:#FF5722,stroke:#E64A19,stroke-width:2px,color:#fff
 ```
 
-**Security Checklist**:
+**Security Checklist (v2.10.5 완료)**:
+- ✅ JWT Authentication (HS256) + RBAC (admin/user)
+- ✅ Dual audit logging (auth_audit_log + operation_audit_log)
 - ✅ Backend services not exposed externally (API Gateway only)
 - ✅ Rate limiting (DDoS protection)
-- ✅ SQL injection prevention (parameterized queries)
+- ✅ 100% parameterized SQL queries (all 3 services)
+- ✅ ORDER BY whitelist validation
+- ✅ LIKE query parameter escaping (`escapeSqlWildcards()`)
+- ✅ Command injection eliminated — `system()`/`popen()` → Native C API
 - ✅ XSS prevention (JSON serialization)
 - ✅ CORS policy (configurable)
-- ✅ Script permissions (755, user-owned)
-- ✅ Log file permissions (640)
-- ✅ HTTPS support ready (production)
+- ✅ nginx security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy)
+- ✅ JWT_SECRET minimum length validation (32 bytes)
+- ✅ LDAP DN escape utility (RFC 4514)
+- ✅ Base64 input validation (pre-check before decode)
+- ✅ SOD parser buffer overread protection (end pointer boundary)
+- ✅ OpenSSL null pointer checks (24 allocation sites)
+- ✅ Frontend OWASP hardening (DEV-only console.error, credential guards, centralized JWT injection)
+- ✅ Credential externalization (.env)
+- ✅ File upload validation (MIME type, path sanitization)
 
 ---
 
@@ -1266,11 +1372,12 @@ graph TB
 |-----------|-----------|---------|---------|
 | Language | C++20 | GCC 11+ | High performance |
 | Framework | Drogon | 1.9+ | Async HTTP server |
-| Database | PostgreSQL | 15 | Transactional data |
-| LDAP | OpenLDAP | 2.6+ | Certificate storage |
+| Database | PostgreSQL / Oracle | 15 / XE 21c | Multi-DBMS (runtime switching) |
+| LDAP | OpenLDAP | 2.6+ | Certificate storage (MMR cluster) |
 | Crypto | OpenSSL | 3.x | X.509, CMS, Hash |
 | JSON | nlohmann/json | 3.11+ | JSON parsing |
 | Logging | spdlog | 1.12+ | Structured logging |
+| Testing | Google Test | 1.14+ | Unit testing (86 tests) |
 | Build | CMake + vcpkg | 3.20+ | Dependency management |
 
 ### Frontend
@@ -1281,6 +1388,9 @@ graph TB
 | Framework | React | 19 | UI library |
 | Bundler | Vite | 5.x | Fast dev server |
 | Styling | TailwindCSS | 4.x | Utility-first CSS |
+| State | Zustand | latest | State management |
+| Data Fetching | TanStack Query | latest | Server state |
+| Charts | ECharts + Recharts | latest | Data visualization |
 | Icons | Lucide React | latest | SVG icons |
 | HTTP Client | Axios | latest | API requests |
 
@@ -1288,11 +1398,12 @@ graph TB
 
 | Component | Technology | Version | Purpose |
 |-----------|-----------|---------|---------|
-| API Gateway | Nginx | 1.25+ | Reverse proxy |
-| Load Balancer | HAProxy | 2.8+ | LDAP load balancing |
+| API Gateway | Nginx | 1.25+ | Reverse proxy, security headers |
+| LDAP LB | App-level SLB | - | Software load balancing (in-app) |
 | Container | Docker | 24+ | Containerization |
 | Orchestration | Docker Compose | 2.x | Multi-container apps |
-| CI/CD | GitHub Actions | - | Automated builds |
+| CI/CD | GitHub Actions | - | ARM64 cross-compilation |
+| Artifact Conversion | skopeo | latest | OCI → Docker format |
 
 ---
 
@@ -1304,15 +1415,16 @@ graph TB
 |--------|-------|------------|
 | **Certificate Search** | 2,222 req/s | 10k requests, 100 concurrent |
 | **PA Verification** | 416 req/s | 1k requests, 50 concurrent |
+| **PA Lookup** | 5~20ms | Pre-computed validation result |
 | **API Latency** | <100ms | Average response time |
-| **Database Query** | 40ms | PostgreSQL DISTINCT query (92 countries) |
-| **LDAP Search** | <200ms | HAProxy load balanced |
+| **Database Query** | 40ms | PostgreSQL DISTINCT query (95 countries) |
+| **LDAP Search** | <200ms | App-level SLB (round-robin) |
 
 ### Scalability
 
 | Component | Current | Max Tested | Notes |
 |-----------|---------|------------|-------|
-| **Certificates** | 30,637 | 100,000+ | PostgreSQL + LDAP |
+| **Certificates** | 31,212 | 100,000+ | PostgreSQL/Oracle + LDAP |
 | **Concurrent Users** | 100 | 1,000+ | Nginx workers × connections |
 | **Upload File Size** | 100MB | 200MB | Nginx client_max_body_size |
 | **Batch Size** | 1,000 | 10,000 | DB insert batch |
@@ -1329,28 +1441,31 @@ graph LR
         GW[GET /health<br/>API Gateway]
         PKD_H[GET /api/health<br/>PKD Management]
         PA_H[GET /api/pa/health<br/>PA Service]
-        Relay_H[GET /api/relay/health<br/>PKD Relay Service]
-        DB_H[GET /api/health/database<br/>PostgreSQL]
+        Relay_H[GET /api/sync/health<br/>PKD Relay Service]
+        Mon_H[GET /api/monitoring/health<br/>Monitoring Service]
+        DB_H[GET /api/health/database<br/>Database Status]
         LDAP_H[GET /api/health/ldap<br/>LDAP Status]
     end
 
     subgraph "Monitoring Tools"
         Docker[Docker Healthcheck<br/>Container Status]
         Script[Health Check Script<br/>./docker-health.sh]
-        HAStats[HAProxy Stats<br/>:8404]
+        MonDash[Monitoring Dashboard<br/>/monitoring]
     end
 
     GW --> Docker
     PKD_H --> Docker
     PA_H --> Docker
     Relay_H --> Docker
+    Mon_H --> Docker
 
     DB_H --> Script
     LDAP_H --> Script
-    HAStats --> Script
+    MonDash --> Mon_H
 
     style GW fill:#4CAF50,stroke:#388E3C,stroke-width:2px
     style Script fill:#FF9800,stroke:#F57C00,stroke-width:2px
+    style MonDash fill:#42A5F5,stroke:#1976D2,stroke-width:2px
 ```
 
 ### Logging Strategy
@@ -1360,7 +1475,7 @@ graph LR
 | **PKD Management** | INFO | /var/log/pkd-management.log | 30 days |
 | **PA Service** | INFO | /var/log/pa-service.log | 30 days |
 | **PKD Relay Service** | INFO | /var/log/pkd-relay.log | 30 days |
-| **ICAO Relay Cron** | INFO | /var/log/icao-relay/*.log | 30 days |
+| **Monitoring Service** | INFO | stdout (Docker logs) | 30 days |
 | **Nginx Access** | COMBINED | /var/log/nginx/access.log | 30 days |
 | **Nginx Error** | WARN | /var/log/nginx/error.log | 30 days |
 
@@ -1368,11 +1483,18 @@ graph LR
 
 ## Future Enhancements
 
+### Completed (Previously Planned)
+
+- ✅ JWT Authentication (v1.8.0)
+- ✅ Role-Based Access Control — RBAC admin/user (v1.9.0)
+- ✅ Multi-DBMS Support — PostgreSQL + Oracle (v2.6.0)
+- ✅ Monitoring Service — DB-independent system metrics (v2.7.1)
+- ✅ OWASP Security Hardening — Full audit (v2.10.5)
+- ✅ ICAO 9303 Validation Library — 86 unit tests (v2.10.6)
+
 ### Phase 1 (Planned)
 
 - 🔜 HTTPS/TLS Support (Let's Encrypt)
-- 🔜 JWT Authentication
-- 🔜 Role-Based Access Control (RBAC)
 - 🔜 Horizontal Scaling (Multiple instances)
 - 🔜 Redis Caching Layer
 
@@ -1388,19 +1510,22 @@ graph LR
 
 ## Conclusion
 
-ICAO Local PKD v2.0.0은 **마이크로서비스 아키텍처**, **Clean Architecture**, **서비스 분리 원칙**을 통해 높은 성능, 확장성, 안정성을 제공합니다.
+ICAO Local PKD v2.11.0은 **마이크로서비스 아키텍처**, **Multi-DBMS**, **ICAO 9303 완전 준수**를 통해 높은 성능, 확장성, 보안성을 제공합니다.
 
 **핵심 강점**:
-- ✅ 독립적으로 확장 가능한 마이크로서비스
-- ✅ PostgreSQL-LDAP 데이터 일관성 보장 (Auto Reconcile)
-- ✅ C++20 고성능 백엔드
-- ✅ React 19 모던 프론트엔드
-- ✅ PKD Relay Service (v2.0.0) 외부 연계 전담
-- ✅ Docker 기반 간편한 배포
-- ✅ 99.9% 업타임 목표 달성
+- ✅ 4개 독립 마이크로서비스 (PKD Management, PA, Relay, Monitoring)
+- ✅ Multi-DBMS 지원 — PostgreSQL 15 / Oracle XE 21c 런타임 전환
+- ✅ JWT 인증 + RBAC (admin/user) + Dual Audit Logging
+- ✅ OWASP 보안 강화 완료 (Command Injection 제거, SQL Injection 방지)
+- ✅ icao::validation 공유 라이브러리 (86 단위 테스트, ICAO 9303 Part 12)
+- ✅ DB-LDAP 데이터 일관성 보장 (31,212 인증서, 100% 동기화)
+- ✅ C++20 고성능 백엔드 + React 19 모던 프론트엔드 (21 페이지)
+- ✅ ARM64 CI/CD 파이프라인 (GitHub Actions → Luckfox 배포)
+- ✅ Docker 기반 간편한 배포, 99.9% 업타임
 
 ---
 
 **Document Created**: 2026-01-20
+**Last Rewrite**: 2026-02-17
 **Author**: ICAO Local PKD Development Team
 **Organization**: SmartCore Inc.

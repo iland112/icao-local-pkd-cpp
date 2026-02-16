@@ -1,8 +1,8 @@
 # ICAO Local PKD - Architecture & Design Principles
 
-**Version**: 1.0.0
-**Created**: 2026-01-29
-**Status**: ✅ Active Standard
+**Version**: 2.11.0
+**Last Updated**: 2026-02-17
+**Status**: Active Standard
 
 ---
 
@@ -43,8 +43,10 @@ services/
 │   ├── Auto Reconciliation
 │   └── Sync Status Monitoring
 │
-└── monitoring-service/    # 모니터링 서비스 (미구현)
-    └── Health Check & Metrics
+└── monitoring-service/    # 모니터링 서비스 (Port: 8084)
+    ├── System Resource Monitoring (CPU, Memory, Disk, Network)
+    ├── Service Health Checks (HTTP Probes)
+    └── DB-Independent Architecture (no PostgreSQL/Oracle dependency)
 ```
 
 ### 서비스 통신
@@ -549,15 +551,102 @@ class UploadService {
 
 ---
 
+## Query Executor Pattern (Database Abstraction)
+
+Multi-DBMS 지원(PostgreSQL + Oracle)을 위한 데이터베이스 추상화 패턴.
+
+### IQueryExecutor Interface
+
+```cpp
+// shared/lib/database/include/icao/database/query_executor.h
+class IQueryExecutor {
+public:
+    virtual QueryResult executeQuery(const std::string& sql,
+                                      const std::vector<std::string>& params) = 0;
+    virtual int executeNonQuery(const std::string& sql,
+                                 const std::vector<std::string>& params) = 0;
+    virtual DatabaseType getDatabaseType() const = 0;
+};
+```
+
+### 구현체
+- **PostgreSqlQueryExecutor**: libpq 기반 (10-50x faster)
+- **OracleQueryExecutor**: OCI Session Pool 기반
+
+### 런타임 선택
+```cpp
+// Factory Pattern으로 DB_TYPE 환경변수에 따라 런타임 선택
+auto executor = QueryExecutorFactory::create(DB_TYPE);  // "postgres" or "oracle"
+```
+
+모든 Repository는 `IQueryExecutor`를 통해 SQL을 실행하므로 DB 교체가 가능하다.
+
+---
+
+## Provider/Adapter Pattern (Validation Infrastructure)
+
+검증 로직과 데이터 소스(DB vs LDAP)를 분리하는 패턴.
+
+### Provider Interface
+
+```cpp
+// shared/lib/icao-validation/include/icao/validation/providers.h
+class ICscaProvider {
+public:
+    virtual std::vector<X509*> findAllCscasByIssuerDn(const std::string& issuerDn) = 0;
+    virtual X509* findCscaByIssuerDn(const std::string& issuerDn,
+                                      const std::string& countryCode = "") = 0;
+};
+
+class ICrlProvider {
+public:
+    virtual X509_CRL* findCrlByCountry(const std::string& countryCode) = 0;
+};
+```
+
+### Adapter 구현
+
+| 서비스 | CSCA Provider | CRL Provider |
+|--------|--------------|-------------|
+| PKD Management | `DbCscaProvider` → CertificateRepository | `DbCrlProvider` → CrlRepository |
+| PA Service | `LdapCscaProvider` → LdapCertificateRepository | `LdapCrlProvider` → LdapCrlRepository |
+
+각 서비스는 자체 데이터 접근 레이어에 맞는 Adapter를 구현한다. `icao::validation` 라이브러리는 인프라 코드를 포함하지 않는다.
+
+---
+
+## Shared Validation Library (icao::validation)
+
+ICAO 9303 인증서 검증 로직을 공유 라이브러리로 추출한 패턴 (v2.11.0).
+
+### 설계 원칙
+- **Pure Function**: 인프라 의존성 없이 OpenSSL X509 API만 사용
+- **Idempotent**: 동일 입력 → 동일 출력 (멱등성 보장)
+- **Provider Pattern**: 데이터 소스는 인터페이스를 통해 주입
+
+### 모듈 구성
+
+| 모듈 | 책임 |
+|------|------|
+| `cert_ops` | Pure X509 연산 (지문, 유효성, DN 추출, 정규화) |
+| `trust_chain_builder` | Multi-CSCA 신뢰 체인 구축 (키 전환 지원) |
+| `crl_checker` | RFC 5280 CRL 폐기 확인 |
+| `extension_validator` | X.509 확장 필드 검증 (key usage, critical extensions) |
+| `algorithm_compliance` | ICAO Doc 9303 Part 12 알고리즘 요구사항 |
+
+### 테스트
+86개 단위 테스트 (GTest). 모든 모듈에 멱등성 검증 포함 (50-100 iterations).
+
+---
+
 ## 참고 문서
 
-- **[CLAUDE.md](../CLAUDE.md)** - 프로젝트 개요 및 현재 버전
-- **[SPRINT3_COMPLETION_SUMMARY.md](SPRINT3_COMPLETION_SUMMARY.md)** - Sprint 3 구현 세부사항
+- **[CLAUDE.md](../CLAUDE.md)** - 프로젝트 개요 및 현재 버전 (v2.11.0)
+- **[SOFTWARE_ARCHITECTURE.md](SOFTWARE_ARCHITECTURE.md)** - 시스템 아키텍처
+- **[SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)** - 보안 감사 보고서
 - **[DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)** - 개발 가이드
 
 ---
 
-**Document Status**: ✅ Active Standard
-**Last Updated**: 2026-01-29
-**Reviewed By**: Development Team
-**Approved By**: Project Lead
+**Document Status**: Active Standard
+**Last Updated**: 2026-02-17

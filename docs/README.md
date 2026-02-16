@@ -1,7 +1,7 @@
 # ICAO Local PKD - Documentation
 
-**Version**: v2.9.0
-**Last Updated**: 2026-02-13
+**Version**: v2.11.0
+**Last Updated**: 2026-02-17
 
 ---
 
@@ -30,10 +30,10 @@
   - Common cache-related issues
 
 ### API & Integration
-- **[PA_API_GUIDE.md](PA_API_GUIDE.md)** - Passive Authentication API (v2.1.1)
+- **[PA_API_GUIDE.md](PA_API_GUIDE.md)** - Passive Authentication API (v2.1.4)
   - 12 endpoints documentation
   - 8-step verification process
-  - DSC auto-registration, DG2 face image extraction
+  - DSC auto-registration, DG2 face image extraction, DSC conformance check
 
 - **[LDAP_QUERY_GUIDE.md](LDAP_QUERY_GUIDE.md)** - LDAP Operations
   - Correct connection parameters
@@ -48,11 +48,29 @@
 - **[SOFTWARE_ARCHITECTURE.md](SOFTWARE_ARCHITECTURE.md)** - System Design
   - 4-service microarchitecture overview
   - Database schema, LDAP DIT structure
-  - Design patterns
+  - Design patterns, shared libraries
 
 - **[ARCHITECTURE_DESIGN_PRINCIPLES.md](ARCHITECTURE_DESIGN_PRINCIPLES.md)** - Design Principles
   - DDD, Microservices, Strategy Pattern, SRP
-  - Foundational design decisions
+  - Query Executor, Provider/Adapter patterns
+  - Shared validation library architecture
+
+### Security & Analysis
+- **[SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)** - Security Audit Report
+  - 23 findings across CRITICAL/HIGH/MEDIUM/LOW
+  - All resolved in v2.10.5
+
+- **[SECURITY_FIX_ACTION_PLAN.md](SECURITY_FIX_ACTION_PLAN.md)** - Security Fix Implementation
+  - Phase 1-4 completion details (+410/-277 lines, 23 files)
+
+- **[DSC_TRUST_CHAIN_FAILURE_REPORT.md](DSC_TRUST_CHAIN_FAILURE_REPORT.md)** - Trust Chain Failure Analysis
+  - 25,972 certificate validation analysis
+
+- **[DSC_NC_HANDLING.md](DSC_NC_HANDLING.md)** - DSC Non-Conformant Handling
+  - ICAO PKD nc-data branch architecture and design decisions
+
+- **[EPASSPORT_TRUST_CHAIN_GUIDE.md](EPASSPORT_TRUST_CHAIN_GUIDE.md)** - Trust Chain Technical Guide
+  - ICAO Doc 9303 PKI hierarchy, PA procedure, Link Certificates, SOD
 
 ### Reference
 - **[MASTER_LIST_PROCESSING_GUIDE.md](MASTER_LIST_PROCESSING_GUIDE.md)** - Master List Format & Processing
@@ -69,9 +87,10 @@
 
 | Spec | Service | Version |
 |------|---------|---------|
-| [pkd-management.yaml](openapi/pkd-management.yaml) | PKD Management | v2.9.1 |
-| [pa-service.yaml](openapi/pa-service.yaml) | PA Service | v2.1.1 |
-| [pkd-relay.yaml](openapi/pkd-relay.yaml) | PKD Relay | v2.0.0 |
+| [pkd-management.yaml](openapi/pkd-management.yaml) | PKD Management | v2.10.2 |
+| [pa-service.yaml](openapi/pa-service.yaml) | PA Service | v2.1.4 |
+| [pkd-relay.yaml](openapi/pkd-relay-service.yaml) | PKD Relay | v2.0.0 |
+| [monitoring-service.yaml](openapi/monitoring-service.yaml) | Monitoring | v1.1.0 |
 
 **Swagger UI**: http://localhost:8090 (or http://localhost:8080/api-docs/)
 
@@ -81,7 +100,7 @@
 
 **Location**: [archive/](archive/)
 
-100+ historical implementation documents including:
+143+ historical implementation documents including:
 - Sprint planning and completion summaries (Sprint 1-3)
 - Phase completion reports (Security, Oracle migration, Repository pattern)
 - Feature design and implementation notes
@@ -101,11 +120,16 @@ docs/
 +-- DEPLOYMENT_PROCESS.md                  # CI/CD pipeline
 +-- LUCKFOX_DEPLOYMENT.md                  # ARM64 deployment
 +-- BUILD_SOP.md                           # Build verification
-+-- PA_API_GUIDE.md                        # PA Service API guide
++-- PA_API_GUIDE.md                        # PA Service API guide (v2.1.4)
 +-- LDAP_QUERY_GUIDE.md                    # LDAP operations guide
 +-- CERTIFICATE_SEARCH_QUICKSTART.md       # Certificate search guide
 +-- SOFTWARE_ARCHITECTURE.md               # System architecture
 +-- ARCHITECTURE_DESIGN_PRINCIPLES.md      # Design principles
++-- SECURITY_AUDIT_REPORT.md              # Security audit (23 findings, all resolved)
++-- SECURITY_FIX_ACTION_PLAN.md           # Security fix implementation log
++-- DSC_TRUST_CHAIN_FAILURE_REPORT.md     # Trust chain failure analysis
++-- DSC_NC_HANDLING.md                    # DSC non-conformant handling
++-- EPASSPORT_TRUST_CHAIN_GUIDE.md        # Trust chain technical guide
 +-- MASTER_LIST_PROCESSING_GUIDE.md        # ML format reference
 +-- DVL_ANALYSIS.md                        # Deviation List reference
 +-- ICAO_PKD_COST_ANALYSIS.md             # Cost analysis
@@ -114,8 +138,10 @@ docs/
 +-- openapi/                               # OpenAPI specifications
 |   +-- pkd-management.yaml
 |   +-- pa-service.yaml
-|   +-- pkd-relay.yaml
-+-- archive/                               # 100+ historical documents
+|   +-- pkd-relay-service.yaml
+|   +-- monitoring-service.yaml
++-- presentations/                         # Snapshot presentations (v2.0.0)
++-- archive/                               # 143+ historical documents
 ```
 
 ---
@@ -129,8 +155,9 @@ docs/
 - **Troubleshoot build**: [DOCKER_BUILD_CACHE.md](DOCKER_BUILD_CACHE.md)
 - **Use PA API**: [PA_API_GUIDE.md](PA_API_GUIDE.md)
 - **Switch DB (PostgreSQL/Oracle)**: [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md#switching-databases)
+- **Run unit tests**: [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md#unit-tests)
 
 ### Related
-- **[../CLAUDE.md](../CLAUDE.md)** - Project quick reference (v2.9.0)
+- **[../CLAUDE.md](../CLAUDE.md)** - Project quick reference (v2.11.0)
   - Architecture overview, API endpoints, version history
   - Helper scripts, common issues, key decisions

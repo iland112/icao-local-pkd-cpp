@@ -1,9 +1,10 @@
 # Security Audit Report - ICAO Local PKD
 
 **Date**: 2026-02-13
-**Version**: v2.9.0
+**Version**: v2.9.0 (감사 시점) → **v2.10.5에서 전체 해결 완료** (2026-02-15)
 **Auditor**: Code Review (Automated + Manual)
 **Scope**: 전체 C++ 백엔드 서비스 (pkd-management, pa-service, pkd-relay-service) + shared libraries
+**Resolution**: [SECURITY_FIX_ACTION_PLAN.md](SECURITY_FIX_ACTION_PLAN.md) — 23개 파일, +410/-277 lines
 
 ---
 
@@ -11,11 +12,11 @@
 
 | 심각도 | 건수 | 상태 |
 |--------|------|------|
-| **CRITICAL** | 5 | 미조치 |
-| **HIGH** | 8 | 미조치 |
-| **MEDIUM** | 7 | 미조치 |
-| **LOW** | 3 | 미조치 |
-| **Total** | **23** | |
+| **CRITICAL** | 5 | **완료** (v2.10.5) |
+| **HIGH** | 8 | **완료** (v2.10.5) |
+| **MEDIUM** | 7 | **완료** (v2.10.5) |
+| **LOW** | 3 | **완료** (v2.10.5) |
+| **Total** | **23** | **전체 완료** |
 
 ### 긍정적 사항
 - 대부분의 SQL 쿼리가 parameterized queries (QueryExecutor) 사용
@@ -24,11 +25,11 @@
 - LDAP connection pool RAII 패턴 적용
 - JWT 인증 구현 완료
 
-### 주요 위험 요소
-- 인증 우회: 업로드 엔드포인트 임시 공개 상태 (CRITICAL)
-- Command Injection: system()/popen() 4개소 (CRITICAL)
-- SOD 파서 버퍼 오버리드: ASN.1 수동 파싱 경계 검사 부재 (CRITICAL)
-- SQL Injection: LIKE 절 문자열 연결 2개소 (HIGH)
+### ~~주요 위험 요소~~ (v2.10.5에서 전체 해결)
+- ~~인증 우회: 업로드 엔드포인트 임시 공개 상태 (CRITICAL)~~ → 인증 복원 완료
+- ~~Command Injection: system()/popen() 4개소 (CRITICAL)~~ → 네이티브 C API로 교체 완료
+- ~~SOD 파서 버퍼 오버리드: ASN.1 수동 파싱 경계 검사 부재 (CRITICAL)~~ → end 포인터 경계 검사 추가
+- ~~SQL Injection: LIKE 절 문자열 연결 2개소 (HIGH)~~ → parameterized LIKE + wildcard escape 완료
 
 ---
 
@@ -426,4 +427,38 @@ int returnCode = pclose(pipe.release());  // unique_ptr에서 release 후 수동
 
 ---
 
+---
+
+## 9. 해결 완료 (Resolution Summary)
+
+**모든 23건의 취약점이 v2.10.5 (2026-02-15)에서 해결 완료되었습니다.**
+
+| ID | 해결 방법 |
+|----|-----------|
+| C-01 | 업로드 엔드포인트 임시 공개 5줄 삭제, JWT 인증 복원 |
+| C-02 | EmailSender `system(mail)` x3 → spdlog log-only 대체 |
+| C-03 | PKD Management `system(ldapsearch)` → LDAP C API (`ldap_initialize` + `ldap_sasl_bind_s`) |
+| C-04 | PA Service `popen(ldapsearch)` → LDAP C API |
+| C-05 | SOD 파서 `end` 포인터 경계 검사 추가 (ASN.1 수동 파싱 전체) |
+| H-01/H-02 | Parameterized LIKE queries + `escapeSqlWildcards()` 유틸리티 |
+| H-03 | ORDER BY 화이트리스트 검증 |
+| H-04 | `popen(openssl asn1parse)` → OpenSSL `ASN1_parse_dump()` C API |
+| H-05 | PA Service BIO null 체크 3개소 추가 |
+| H-06 | Base64Util BIO null 체크 추가 |
+| H-07 | LDAP connection pool RAII 패턴 검증 완료 (이미 안전) |
+| H-08 | Auth middleware regex `std::call_once` + `std::regex::optimize` 사전 컴파일 |
+| M-01 | C-05 수정에서 함께 해결 (SOD 파서 경계 검사) |
+| M-02 | JWT_SECRET 최소 32바이트 길이 검증 (서비스 시작 시) |
+| M-03 | nginx 보안 헤더 추가 (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy) |
+| M-04 | LDAP DN 이스케이프 유틸리티 (RFC 4514 특수문자) |
+| M-05 | nginx `client_max_body_size` 이미 설정 (비이슈) |
+| M-06 | Frontend `console.error` → DEV-only, 에러 메시지 내부 정보 제거 |
+| M-07 | H-04 수정에서 함께 해결 (popen 제거로 pclose 이중 호출 원천 차단) |
+| L-01 | JWT 라이브러리 내장 timing-safe 비교 확인 (비이슈) |
+| L-02 | `isValidBase64()` 사전 검증 추가 |
+| L-03 | Dead code 제거 완료 |
+
+상세 구현 내역: [SECURITY_FIX_ACTION_PLAN.md](SECURITY_FIX_ACTION_PLAN.md)
+
 *Report generated: 2026-02-13*
+*Resolution updated: 2026-02-17*

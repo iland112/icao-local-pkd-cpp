@@ -1,7 +1,7 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.9.0
-**Last Updated**: 2026-02-13
+**Version**: 2.11.0
+**Last Updated**: 2026-02-17
 
 ---
 
@@ -68,7 +68,7 @@ source scripts/helpers/db-helpers.sh && db_count_certs
 
 ## Architecture Overview
 
-### System Architecture (v2.9.0)
+### System Architecture (v2.11.0)
 
 ```
 Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LDAP
@@ -98,6 +98,7 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
 | `icao::logging` | Structured logging (spdlog) |
 | `icao::certificate-parser` | X.509 certificate parsing (22 fields) |
 | `icao::icao9303` | ICAO 9303 SOD/DG parsers |
+| `icao::validation` | ICAO 9303 certificate validation (trust chain, CRL, extensions, algorithm compliance) |
 
 ### Connection Pool Configuration
 
@@ -117,6 +118,7 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
 | **Factory Pattern** | Runtime database selection via `DB_TYPE` |
 | **Strategy Pattern** | Processing strategies (AUTO/MANUAL upload modes) |
 | **RAII** | Connection pooling (DB and LDAP) |
+| **Provider/Adapter Pattern** | Infrastructure abstraction for validation (`ICscaProvider`, `ICrlProvider`) |
 
 ---
 
@@ -231,6 +233,30 @@ curl -X POST http://localhost:8080/api/pa/verify \
   -H "Content-Type: application/json" \
   -d '{"sod":"<base64>","dataGroups":{"1":"<base64>","2":"<base64>"}}' | jq .
 ```
+
+### Unit Tests
+
+```bash
+# Run icao::validation unit tests (86 tests) via Docker
+docker build -f shared/lib/icao-validation/tests/Dockerfile.test \
+  --build-arg BASE_IMAGE=icao-vcpkg-base:latest \
+  -t icao-validation-tests .
+
+# Or build locally (requires OpenSSL + GTest)
+cd shared/lib/icao-validation
+cmake -B build -S . -DBUILD_VALIDATION_TESTS=ON
+cmake --build build -j$(nproc)
+cd build && ctest --output-on-failure --verbose
+```
+
+Test modules (86 tests total):
+- `test_cert_ops` — Pure X509 certificate operations (34 tests)
+- `test_extension_validator` — X.509 extension validation (10 tests)
+- `test_algorithm_compliance` — ICAO algorithm requirements (14 tests)
+- `test_trust_chain_builder` — Trust chain construction (11 tests)
+- `test_crl_checker` — CRL revocation checking (17 tests)
+
+All modules include idempotency verification (50-100 iterations per function).
 
 ---
 
