@@ -1,0 +1,21 @@
+# =============================================================================
+# icao::validation Library Test Runner
+# Uses vcpkg-base image for OpenSSL + GTest dependencies
+# =============================================================================
+ARG BASE_IMAGE=icao-vcpkg-base:latest
+FROM ${BASE_IMAGE} AS builder
+
+WORKDIR /app
+
+# Copy only the validation library (minimal context)
+COPY shared/lib/icao-validation/ ./
+
+# Build library + tests
+RUN cmake -B build -S . \
+    -DCMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DBUILD_VALIDATION_TESTS=ON \
+    && cmake --build build -j$(nproc)
+
+# Run tests
+RUN cd build && ctest --output-on-failure --verbose

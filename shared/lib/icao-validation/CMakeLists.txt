@@ -70,6 +70,53 @@ install(EXPORT icao-validation-targets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/icao-validation
 )
 
+# =============================================================================
+# Testing (Optional)
+# =============================================================================
+option(BUILD_VALIDATION_TESTS "Build icao::validation unit tests" OFF)
+
+if(BUILD_VALIDATION_TESTS)
+    enable_testing()
+
+    # Try find_package first (vcpkg), fallback to FetchContent
+    find_package(GTest QUIET)
+    if(NOT GTest_FOUND)
+        include(FetchContent)
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG release-1.12.1
+        )
+        set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(googletest)
+    endif()
+
+    set(TEST_SOURCES
+        tests/test_cert_ops.cpp
+        tests/test_extension_validator.cpp
+        tests/test_algorithm_compliance.cpp
+        tests/test_trust_chain_builder.cpp
+        tests/test_crl_checker.cpp
+    )
+
+    add_executable(icao_validation_tests ${TEST_SOURCES})
+
+    target_include_directories(icao_validation_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/tests
+    )
+
+    target_link_libraries(icao_validation_tests PRIVATE
+        icao-validation
+        GTest::gtest_main
+    )
+
+    include(GoogleTest)
+    gtest_discover_tests(icao_validation_tests)
+
+    message(STATUS "icao::validation unit tests enabled")
+endif()
+
 # Print configuration summary
 message(STATUS "=================================")
 message(STATUS "ICAO Validation Library")
