@@ -3,6 +3,7 @@
  */
 
 #include "auth_audit_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -44,12 +45,7 @@ bool AuthAuditRepository::insert(
 
         // Get database type for proper boolean formatting
         std::string dbType = queryExecutor_->getDatabaseType();
-        std::string successValue;
-        if (dbType == "oracle") {
-            successValue = success ? "1" : "0";  // Oracle expects NUMBER(1)
-        } else {
-            successValue = success ? "true" : "false";  // PostgreSQL BOOLEAN
-        }
+        std::string successValue = common::db::boolLiteral(dbType, success);
 
         std::vector<std::string> params = {
             userId.value_or(""),
@@ -104,11 +100,7 @@ Json::Value AuthAuditRepository::findAll(
         }
 
         if (!usernameFilter.empty()) {
-            if (dbType == "oracle") {
-                whereClause += " AND UPPER(username) LIKE UPPER($" + std::to_string(paramIndex++) + ")";
-            } else {
-                whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
-            }
+            whereClause += " AND " + common::db::ilikeCond(dbType, "username", "$" + std::to_string(paramIndex++));
             params.push_back("%" + usernameFilter + "%");
         }
 
@@ -118,12 +110,8 @@ Json::Value AuthAuditRepository::findAll(
         }
 
         if (!successFilter.empty()) {
-            std::string boolVal;
-            if (dbType == "oracle") {
-                boolVal = (successFilter == "true" || successFilter == "1") ? "1" : "0";
-            } else {
-                boolVal = (successFilter == "true" || successFilter == "1") ? "true" : "false";
-            }
+            bool isSuccess = (successFilter == "true" || successFilter == "1");
+            std::string boolVal = common::db::boolLiteral(dbType, isSuccess);
             whereClause += " AND success = $" + std::to_string(paramIndex++);
             params.push_back(boolVal);
         }
@@ -236,11 +224,7 @@ int AuthAuditRepository::count(
         }
 
         if (!usernameFilter.empty()) {
-            if (dbType == "oracle") {
-                whereClause += " AND UPPER(username) LIKE UPPER($" + std::to_string(paramIndex++) + ")";
-            } else {
-                whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
-            }
+            whereClause += " AND " + common::db::ilikeCond(dbType, "username", "$" + std::to_string(paramIndex++));
             params.push_back("%" + usernameFilter + "%");
         }
 
@@ -250,12 +234,8 @@ int AuthAuditRepository::count(
         }
 
         if (!successFilter.empty()) {
-            std::string boolVal;
-            if (dbType == "oracle") {
-                boolVal = (successFilter == "true" || successFilter == "1") ? "1" : "0";
-            } else {
-                boolVal = (successFilter == "true" || successFilter == "1") ? "true" : "false";
-            }
+            bool isSuccess = (successFilter == "true" || successFilter == "1");
+            std::string boolVal = common::db::boolLiteral(dbType, isSuccess);
             whereClause += " AND success = $" + std::to_string(paramIndex++);
             params.push_back(boolVal);
         }
@@ -277,7 +257,7 @@ int AuthAuditRepository::count(
             queryExecutor_->executeScalar(query, params);
 
         // Oracle returns strings, PostgreSQL returns ints
-        int count = result.isString() ? std::stoi(result.asString()) : result.asInt();
+        int count = common::db::scalarToInt(result);
         spdlog::debug("[AuthAuditRepository] Total audit logs: {}", count);
 
         return count;
@@ -297,14 +277,7 @@ Json::Value AuthAuditRepository::getStatistics()
 
         // Helper to parse int from Oracle string or PostgreSQL int
         auto getInt = [](const Json::Value& val, int defaultVal) -> int {
-            if (val.isNull()) return defaultVal;
-            if (val.isInt()) return val.asInt();
-            if (val.isUInt()) return static_cast<int>(val.asUInt());
-            if (val.isString()) {
-                try { return std::stoi(val.asString()); } catch (...) { return defaultVal; }
-            }
-            if (val.isDouble()) return static_cast<int>(val.asDouble());
-            return defaultVal;
+            return common::db::scalarToInt(val, defaultVal);
         };
 
         Json::Value stats;
@@ -313,7 +286,7 @@ Json::Value AuthAuditRepository::getStatistics()
         {
             const char* query = "SELECT COUNT(*) FROM auth_audit_log";
             Json::Value result = queryExecutor_->executeScalar(query);
-            stats["totalEvents"] = result.isString() ? std::stoi(result.asString()) : result.asInt();
+            stats["totalEvents"] = common::db::scalarToInt(result);
         }
 
         // By event type
@@ -338,11 +311,7 @@ Json::Value AuthAuditRepository::getStatistics()
                 "SELECT username, COUNT(*) as cnt FROM auth_audit_log "
                 "WHERE username != 'anonymous' "
                 "GROUP BY username ORDER BY cnt DESC";
-            if (dbType == "oracle") {
-                query += " FETCH FIRST 10 ROWS ONLY";
-            } else {
-                query += " LIMIT 10";
-            }
+            query += common::db::limitClause(dbType, 10);
 
             Json::Value result = queryExecutor_->executeQuery(query);
             Json::Value topUsers = Json::arrayValue;
@@ -359,13 +328,13 @@ Json::Value AuthAuditRepository::getStatistics()
 
         // Failed logins count
         {
-            std::string boolFalse = (dbType == "oracle") ? "0" : "FALSE";
+            std::string boolFalse = common::db::boolLiteral(dbType, false);
             std::string query =
                 "SELECT COUNT(*) FROM auth_audit_log "
                 "WHERE event_type LIKE 'LOGIN%' AND success = " + boolFalse;
 
             Json::Value result = queryExecutor_->executeScalar(query);
-            stats["failedLogins"] = result.isString() ? std::stoi(result.asString()) : result.asInt();
+            stats["failedLogins"] = common::db::scalarToInt(result);
         }
 
         // Last 24h events
@@ -378,7 +347,7 @@ Json::Value AuthAuditRepository::getStatistics()
             }
 
             Json::Value result = queryExecutor_->executeScalar(query);
-            stats["last24hEvents"] = result.isString() ? std::stoi(result.asString()) : result.asInt();
+            stats["last24hEvents"] = common::db::scalarToInt(result);
         }
 
         spdlog::debug("[AuthAuditRepository] Statistics retrieved successfully");

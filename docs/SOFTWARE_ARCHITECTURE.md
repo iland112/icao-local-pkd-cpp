@@ -1,6 +1,6 @@
 # ICAO Local PKD - Software Architecture
 
-**Version**: 2.11.0
+**Version**: 2.12.0
 **Last Updated**: 2026-02-17
 **Status**: Production Ready (Multi-DBMS: PostgreSQL + Oracle)
 
@@ -39,7 +39,7 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ## Technical Architecture Diagram
 
-### System Overview (v2.11.0)
+### System Overview (v2.12.0)
 
 ```mermaid
 graph TB
@@ -261,8 +261,10 @@ flowchart LR
 ```
 
 **Key Features**:
-- Clean Architecture (6 Layers)
+- Clean Architecture (6 Layers) with ServiceContainer (centralized DI, pimpl pattern)
+- Handler Pattern: UploadHandler (10), UploadStatsHandler (11), CertificateHandler (12), AuthHandler, IcaoHandler
 - Strategy Pattern (AUTO/MANUAL Mode)
+- Query Helpers (`common::db::`) — database-agnostic utility functions across 15 repositories
 - ICAO Auto Sync with Daily Scheduler
 - LDIF/Master List Parsing + Individual Certificate Upload (PEM/DER/P7B/DL/CRL)
 - Trust Chain Validation (icao::validation shared library)
@@ -1510,7 +1512,7 @@ graph LR
 
 ## Conclusion
 
-ICAO Local PKD v2.11.0은 **마이크로서비스 아키텍처**, **Multi-DBMS**, **ICAO 9303 완전 준수**를 통해 높은 성능, 확장성, 보안성을 제공합니다.
+ICAO Local PKD v2.12.0은 **마이크로서비스 아키텍처**, **Multi-DBMS**, **ICAO 9303 완전 준수**를 통해 높은 성능, 확장성, 보안성을 제공합니다.
 
 **핵심 강점**:
 - ✅ 4개 독립 마이크로서비스 (PKD Management, PA, Relay, Monitoring)

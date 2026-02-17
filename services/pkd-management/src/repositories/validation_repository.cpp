@@ -3,6 +3,7 @@
  */
 
 #include "validation_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <random>
@@ -57,8 +58,7 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
 
         // Database-aware boolean formatting
         auto boolStr = [&dbType](bool val) -> std::string {
-            if (dbType == "oracle") return val ? "1" : "0";
-            return val ? "true" : "false";
+            return common::db::boolLiteral(dbType, val);
         };
 
         // Prepare boolean strings
@@ -195,7 +195,7 @@ bool ValidationRepository::updateRevalidation(const std::string& certificateId,
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
         auto boolStr = [&](bool v) -> std::string {
-            return (dbType == "oracle") ? (v ? "1" : "0") : (v ? "TRUE" : "FALSE");
+            return common::db::boolLiteral(dbType, v);
         };
 
         std::string query =
@@ -663,9 +663,7 @@ Json::Value ValidationRepository::findByUploadId(
         // Get total count
         std::string countQuery = "SELECT COUNT(*) FROM validation_result vr " + whereClause;
         Json::Value countResult = queryExecutor_->executeScalar(countQuery, paramValues);
-        int total = 0;
-        if (countResult.isInt()) total = countResult.asInt();
-        else if (countResult.isString()) { try { total = std::stoi(countResult.asString()); } catch(...) {} }
+        int total = common::db::scalarToInt(countResult);
 
         std::string dbType = queryExecutor_->getDatabaseType();
 
@@ -886,9 +884,7 @@ int ValidationRepository::countByStatus(const std::string& status)
         std::vector<std::string> params = {status};
 
         Json::Value result = queryExecutor_->executeScalar(query, params);
-        if (result.isInt()) return result.asInt();
-        if (result.isString()) { try { return std::stoi(result.asString()); } catch(...) { return 0; } }
-        return 0;
+        return common::db::scalarToInt(result);
 
     } catch (const std::exception& e) {
         spdlog::error("[ValidationRepository] Count by status failed: {}", e.what());
@@ -907,14 +903,12 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
 
         // Helper to safely get int from Oracle (returns strings) or PostgreSQL
         auto safeInt = [](const Json::Value& val) -> int {
-            if (val.isInt()) return val.asInt();
-            if (val.isString()) { try { return std::stoi(val.asString()); } catch(...) { return 0; } }
-            return 0;
+            return common::db::scalarToInt(val);
         };
 
         // Oracle uses NUMBER(1) for booleans (1/0), PostgreSQL uses TRUE/FALSE
-        std::string trueCheck = (dbType == "oracle") ? "= 1" : "= TRUE";
-        std::string falseCheck = (dbType == "oracle") ? "= 0" : "= FALSE";
+        std::string trueCheck = "= " + common::db::boolLiteral(dbType, true);
+        std::string falseCheck = "= " + common::db::boolLiteral(dbType, false);
 
         std::string query =
             "SELECT "
@@ -980,9 +974,7 @@ Json::Value ValidationRepository::getReasonBreakdown()
         std::string dbType = queryExecutor_->getDatabaseType();
 
         auto safeInt = [](const Json::Value& val) -> int {
-            if (val.isInt()) return val.asInt();
-            if (val.isString()) { try { return std::stoi(val.asString()); } catch(...) { return 0; } }
-            return 0;
+            return common::db::scalarToInt(val);
         };
 
         // GROUP BY validation_status, trust_chain_message, country_code

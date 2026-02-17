@@ -3,6 +3,7 @@
  */
 
 #include "deviation_list_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <iomanip>
@@ -38,7 +39,7 @@ std::string DeviationListRepository::save(const std::string& uploadId,
         // Convert binary DL to hex string
         // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
         std::ostringstream hexStream;
-        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
+        hexStream << common::db::hexPrefix(dbType);
         for (size_t i = 0; i < dlBinary.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(dlBinary[i]);
@@ -129,7 +130,7 @@ std::string DeviationListRepository::saveDeviationEntry(
         std::string paramsHex;
         if (!entry.defectParameters.empty()) {
             std::ostringstream hexStream;
-            hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
+            hexStream << common::db::hexPrefix(dbType);
             for (auto b : entry.defectParameters) {
                 hexStream << std::hex << std::setw(2) << std::setfill('0')
                          << static_cast<int>(b);

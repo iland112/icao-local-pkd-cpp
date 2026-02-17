@@ -1,6 +1,6 @@
 # ICAO Local PKD - Architecture & Design Principles
 
-**Version**: 2.11.0
+**Version**: 2.12.0
 **Last Updated**: 2026-02-17
 **Status**: Active Standard
 
@@ -87,27 +87,43 @@ services/
 ```
 services/pkd-management/src/
 │
-├── domain/                    # 도메인 레이어 (비즈니스 핵심)
-│   ├── models/                # 도메인 모델 (엔티티)
-│   │   ├── certificate.h      # Certificate 엔티티
-│   │   └── icao_version.h     # ICAO Version 엔티티
-│   │
-│   └── services/              # 도메인 서비스
-│       └── certificate_service.h
+├── infrastructure/               # 인프라 레이어 (v2.12.0)
+│   ├── service_container.h/.cpp  # ServiceContainer — 중앙 DI (pimpl 패턴)
+│   ├── app_config.h              # AppConfig — 환경변수 파싱
+│   ├── http/http_client.h        # HTTP 클라이언트
+│   └── notification/email_sender.h
 │
-├── repositories/              # 인프라스트럭처 레이어 (데이터 접근)
-│   ├── ldap_certificate_repository.h
-│   └── postgres_certificate_repository.h
+├── handlers/                     # 핸들러 레이어 (main.cpp에서 추출)
+│   ├── upload_handler.h/.cpp     # 업로드 API (10 endpoints)
+│   ├── upload_stats_handler.h/.cpp # 통계/이력 API (11 endpoints)
+│   ├── certificate_handler.h/.cpp  # 인증서 API (12 endpoints)
+│   ├── auth_handler.h/.cpp       # 인증 API
+│   └── icao_handler.h/.cpp       # ICAO 동기화 API
 │
-├── services/                  # 애플리케이션 서비스 레이어
-│   └── upload_service.h
+├── repositories/                 # 저장소 레이어 (10개 리포지토리)
+│   ├── upload_repository.h/.cpp
+│   ├── certificate_repository.h/.cpp
+│   ├── validation_repository.h/.cpp
+│   ├── crl_repository.h/.cpp
+│   ├── ldap_certificate_repository.h/.cpp
+│   └── ...
 │
-├── processing_strategy.h      # 전략 패턴 (비즈니스 로직 분리)
-├── ldif_processor.h          # LDIF 처리 프로세서
+├── services/                     # 서비스 레이어
+│   ├── upload_service.h/.cpp
+│   ├── validation_service.h/.cpp
+│   ├── certificate_service.h/.cpp
+│   └── icao_sync_service.h/.cpp
+│
+├── adapters/                     # icao::validation 어댑터
+│   ├── db_csca_provider.cpp
+│   └── db_crl_provider.cpp
+│
+├── processing_strategy.h         # 전략 패턴 (AUTO/MANUAL)
+├── ldif_processor.h              # LDIF 처리기
 ├── common/
-│   └── masterlist_processor.h # Master List 처리 프로세서
+│   └── masterlist_processor.h    # Master List 처리기
 │
-└── main.cpp                  # 애플리케이션 진입점 (컨트롤러)
+└── main.cpp                      # 진입점 (4,722줄, v2.11.0 대비 -41.7%)
 ```
 
 ### DDD 레이어 책임
@@ -641,7 +657,7 @@ ICAO 9303 인증서 검증 로직을 공유 라이브러리로 추출한 패턴 
 
 ## 참고 문서
 
-- **[CLAUDE.md](../CLAUDE.md)** - 프로젝트 개요 및 현재 버전 (v2.11.0)
+- **[CLAUDE.md](../CLAUDE.md)** - 프로젝트 개요 및 현재 버전 (v2.12.0)
 - **[SOFTWARE_ARCHITECTURE.md](SOFTWARE_ARCHITECTURE.md)** - 시스템 아키텍처
 - **[SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)** - 보안 감사 보고서
 - **[DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)** - 개발 가이드

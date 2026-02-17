@@ -20,7 +20,7 @@ import {
   User,
   AlertTriangle,
 } from 'lucide-react';
-import { paApi } from '@/services/api';
+import { paApi } from '@/services/paApi';
 import type { PAHistoryItem, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
@@ -89,10 +89,9 @@ export function PAHistory() {
         direction: 'DESC',
       });
       // Backend returns: { success, total, page, size, data: [...] }
-      // Map to component state
-      const resData = response.data as unknown as Record<string, unknown>;
-      const items = (resData.data ?? resData.content ?? []) as PAHistoryItem[];
-      const total = (resData.total ?? resData.totalElements ?? 0) as number;
+      const resData = response.data;
+      const items = resData.data ?? [];
+      const total = resData.total ?? 0;
       setHistory(items);
       setTotalPages(Math.ceil(total / pageSize) || 1);
       setTotalElements(total);

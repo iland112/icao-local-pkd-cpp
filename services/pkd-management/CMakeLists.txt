@@ -125,6 +125,12 @@ add_executable(${PROJECT_NAME}
     src/middleware/auth_middleware.cpp
     src/middleware/permission_filter.cpp
     src/handlers/auth_handler.cpp
+    src/handlers/upload_handler.cpp
+    src/handlers/upload_stats_handler.cpp
+    src/handlers/certificate_handler.cpp
+
+    # Infrastructure
+    src/infrastructure/service_container.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

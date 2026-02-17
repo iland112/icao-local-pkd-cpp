@@ -14,6 +14,7 @@
 #include <openssl/x509.h>
 #include <openssl/err.h>
 #include <unordered_map>
+#include "query_helpers.h"
 
 namespace repositories {
 
@@ -127,13 +128,9 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
         }
         if (filter.searchTerm.has_value() && !filter.searchTerm->empty()) {
             std::string term = "%" + *filter.searchTerm + "%";
-            if (dbType == "oracle") {
-                where << " AND (UPPER(subject_dn) LIKE UPPER($" << paramIdx << ")"
-                       << " OR serial_number LIKE $" << paramIdx << ")";
-            } else {
-                where << " AND (subject_dn ILIKE $" << paramIdx
-                       << " OR serial_number ILIKE $" << paramIdx << ")";
-            }
+            std::string p = "$" + std::to_string(paramIdx);
+            where << " AND (" << common::db::ilikeCond(dbType, "subject_dn", p)
+                   << " OR " << common::db::ilikeCond(dbType, "serial_number", p) << ")";
             paramIdx++;
             params.push_back(term);
         }
@@ -143,9 +140,7 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
         // Count query
         std::string countSql = "SELECT COUNT(*) FROM certificate WHERE 1=1" + whereStr;
         Json::Value countResult = queryExecutor_->executeScalar(countSql, params);
-        int total = 0;
-        if (countResult.isInt()) total = countResult.asInt();
-        else if (countResult.isString()) { try { total = std::stoi(countResult.asString()); } catch (...) {} }
+        int total = common::db::scalarToInt(countResult);
 
         // Data query
         std::ostringstream dataSql;
@@ -157,11 +152,7 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
                 << "FROM certificate WHERE 1=1" << whereStr
                 << " ORDER BY created_at DESC";
 
-        if (dbType == "oracle") {
-            dataSql << " OFFSET " << filter.offset << " ROWS FETCH NEXT " << filter.limit << " ROWS ONLY";
-        } else {
-            dataSql << " LIMIT " << filter.limit << " OFFSET " << filter.offset;
-        }
+        dataSql << common::db::paginationClause(dbType, filter.limit, filter.offset);
 
         Json::Value rows = queryExecutor_->executeQuery(dataSql.str(), params);
 
@@ -262,10 +253,7 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
         int valid = 0, expired = 0, notYetValid = 0, unknown = 0;
         for (const auto& srow : statsRows) {
             std::string vs = srow.get("validation_status", "").asString();
-            int cnt = 0;
-            auto cntVal = srow.get("cnt", 0);
-            if (cntVal.isInt()) cnt = cntVal.asInt();
-            else if (cntVal.isString()) { try { cnt = std::stoi(cntVal.asString()); } catch (...) {} }
+            int cnt = common::db::getInt(srow, "cnt");
 
             if (vs == "VALID") valid = cnt;
             else if (vs == "EXPIRED") expired = cnt;
@@ -858,7 +846,7 @@ bool CertificateRepository::updateCertificateLdapStatus(
 
         // Database-aware boolean formatting
         std::string dbType = queryExecutor_->getDatabaseType();
-        std::string storedValue = (dbType == "oracle") ? "1" : "true";
+        std::string storedValue = common::db::boolLiteral(dbType, true);
 
         std::vector<std::string> params = {storedValue, ldapDn, certificateId};
 
@@ -1039,8 +1027,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             }
 
             // Database-aware boolean formatting (dbType already retrieved above)
-            isCaStr = x509meta.isCA ? (dbType == "oracle" ? "1" : "TRUE") : (dbType == "oracle" ? "0" : "FALSE");
-            isSelfSignedStr = x509meta.isSelfSigned ? (dbType == "oracle" ? "1" : "TRUE") : (dbType == "oracle" ? "0" : "FALSE");
+            isCaStr = common::db::boolLiteral(dbType, x509meta.isCA);
+            isSelfSignedStr = common::db::boolLiteral(dbType, x509meta.isSelfSigned);
 
             pathLenStr = x509meta.pathLenConstraint.has_value() ?
                          std::to_string(x509meta.pathLenConstraint.value()) : "";
@@ -1051,8 +1039,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             spdlog::warn("[CertificateRepository] Failed to parse X509 certificate for metadata extraction");
             versionStr = "2";  // Default to v3
             std::string dbType = queryExecutor_->getDatabaseType();
-            isCaStr = dbType == "oracle" ? "0" : "FALSE";
-            isSelfSignedStr = dbType == "oracle" ? "0" : "FALSE";
+            isCaStr = common::db::boolLiteral(dbType, false);
+            isSelfSignedStr = common::db::boolLiteral(dbType, false);
             keyUsageStr = "";
             extKeyUsageStr = "";
             crlDpStr = "";
@@ -1066,7 +1054,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
         std::ostringstream hexStream;
         // PostgreSQL: \x prefix for hex bytea format (PQexecParams text mode)
         // Oracle: \\x prefix as BLOB marker detected by OracleQueryExecutor
-        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
+        hexStream << common::db::hexPrefix(dbType);
         for (size_t i = 0; i < certData.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(certData[i]);
@@ -1243,7 +1231,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
 
 void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadId, int& outTotal, int& outInLdap) {
     std::string dbType = queryExecutor_->getDatabaseType();
-    std::string boolTrue = (dbType == "oracle") ? "1" : "true";
+    std::string boolTrue = common::db::boolLiteral(dbType, true);
 
     std::string query = "SELECT COUNT(*) as total, "
                         "COALESCE(SUM(CASE WHEN stored_in_ldap = " + boolTrue + " THEN 1 ELSE 0 END), 0) as in_ldap "
@@ -1252,13 +1240,8 @@ void CertificateRepository::countLdapStatusByUploadId(const std::string& uploadI
     auto rows = queryExecutor_->executeQuery(query, {uploadId});
 
     if (!rows.empty()) {
-        auto safeInt = [](const Json::Value& v) -> int {
-            if (v.isInt()) return v.asInt();
-            if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
-            return 0;
-        };
-        outTotal = safeInt(rows[0]["total"]);
-        outInLdap = safeInt(rows[0]["in_ldap"]);
+        outTotal = common::db::getInt(rows[0], "total");
+        outInLdap = common::db::getInt(rows[0], "in_ldap");
     } else {
         outTotal = 0;
         outInLdap = 0;
@@ -1283,7 +1266,7 @@ Json::Value CertificateRepository::searchLinkCertificates(
     int limit, int offset)
 {
     std::string dbType = queryExecutor_->getDatabaseType();
-    std::string boolTrue = (dbType == "oracle") ? "1" : "true";
+    std::string boolTrue = common::db::boolLiteral(dbType, true);
 
     std::ostringstream sql;
     sql << "SELECT id, subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
@@ -1350,7 +1333,7 @@ Json::Value CertificateRepository::findLinkCertificateById(const std::string& id
 
 Json::Value CertificateRepository::findAllForExport() {
     std::string dbType = queryExecutor_->getDatabaseType();
-    std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+    std::string storedFlag = common::db::boolLiteral(dbType, true);
 
     std::string query =
         "SELECT certificate_type, country_code, subject_dn, serial_number, "

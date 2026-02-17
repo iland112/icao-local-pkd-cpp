@@ -12,9 +12,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.90.15",
     "axios": "^1.13.2",
-    "echarts": "^6.0.0",
-    "echarts-for-react": "^3.0.5",
-    "i18n-iso-countries": "^7.14.0",
+"i18n-iso-countries": "^7.14.0",
     "lucide-react": "^0.562.0",
     "preline": "^3.2.3",
     "react": "^19.2.0",

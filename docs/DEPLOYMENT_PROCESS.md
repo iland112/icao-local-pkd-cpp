@@ -1,7 +1,7 @@
 # ICAO Local PKD - Deployment Process
 
 **Last Updated**: 2026-02-17
-**Version**: 2.11.0
+**Version**: 2.12.0
 
 ---
 

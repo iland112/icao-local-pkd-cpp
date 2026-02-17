@@ -25,7 +25,7 @@ import {
   Download,
 } from 'lucide-react';
 import { uploadApi, uploadHistoryApi } from '@/services/api';
-import type { PageResponse, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
+import type { UploadedFile, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
 import { cn } from '@/utils/cn';
 import { MasterListStructure } from '@/components/MasterListStructure';
 import { LdifStructure } from '@/components/LdifStructure';
@@ -33,47 +33,6 @@ import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTre
 import { DuplicateCertificateDialog } from '@/components/DuplicateCertificateDialog';
 import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/csvExport';
 
-// Validation statistics interface
-interface ValidationStats {
-  validCount: number;
-  expiredValidCount: number;
-  invalidCount: number;
-  pendingCount: number;
-  errorCount: number;
-  trustChainValidCount: number;
-  trustChainInvalidCount: number;
-  cscaNotFoundCount: number;
-  expiredCount: number;
-  revokedCount: number;
-}
-
-// API response interface (matches actual backend response)
-interface UploadHistoryItem {
-  id: string;
-  fileName: string;
-  fileFormat: FileFormat;
-  fileSize: number;
-  status: UploadStatus;
-  cscaCount: number;
-  dscCount: number;
-  dscNcCount: number;  // Non-Conformant DSC count
-  certificateCount: number;  // Keep for backward compatibility
-  crlCount: number;
-  mlCount: number;  // Master List count
-  mlscCount?: number;  // Master List Signer Certificate count (v2.1.1)
-  errorMessage: string;
-  createdAt: string;
-  updatedAt: string;
-  validation?: ValidationStats;  // Validation statistics
-  // Collection 002 Master List extraction statistics (v2.1.1)
-  cscaExtractedFromMl?: number;  // Total certificates extracted from Master Lists (MLSC + CSCA + LC)
-  cscaDuplicates?: number;       // Duplicate certificates detected
-  // LDAP storage status (v2.0.0 - Data Consistency)
-  ldapUploadedCount?: number;    // Number of certificates stored in LDAP
-  // Processing progress (v2.9.3)
-  totalEntries?: number;         // Total entries to process
-  processedEntries?: number;     // Entries processed so far
-}
 
 // Full status step definition (for dialog detail view)
 const STATUS_STEPS: { key: UploadStatus; label: string; icon: React.ReactNode }[] = [
@@ -91,7 +50,7 @@ const STATUS_STEPS: { key: UploadStatus; label: string; icon: React.ReactNode }[
 const IN_PROGRESS_STATUSES: UploadStatus[] = ['PENDING', 'UPLOADING', 'PARSING', 'PROCESSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'];
 
 export function UploadHistory() {
-  const [uploads, setUploads] = useState<UploadHistoryItem[]>([]);
+  const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -105,7 +64,7 @@ export function UploadHistory() {
   const [dateTo, setDateTo] = useState('');
 
   // Detail dialog state
-  const [selectedUpload, setSelectedUpload] = useState<UploadHistoryItem | null>(null);
+  const [selectedUpload, setSelectedUpload] = useState<UploadedFile | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploadIssues, setUploadIssues] = useState<UploadIssues | null>(null);
   const [loadingIssues, setLoadingIssues] = useState(false);
@@ -116,7 +75,7 @@ export function UploadHistory() {
 
   // Delete confirmation dialog state
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [uploadToDelete, setUploadToDelete] = useState<UploadHistoryItem | null>(null);
+  const [uploadToDelete, setUploadToDelete] = useState<UploadedFile | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   // Tab state for detail dialog
@@ -172,8 +131,7 @@ export function UploadHistory() {
         sort: 'createdAt',
         direction: 'DESC',
       });
-      // Cast the response to our interface that matches actual API response
-      const data = response.data as unknown as PageResponse<UploadHistoryItem>;
+      const data = response.data;
       setUploads(data.content);
       setTotalPages(data.totalPages);
       setTotalElements(data.totalElements);
@@ -238,7 +196,7 @@ export function UploadHistory() {
   };
 
   // Render status badge with progress info for in-progress uploads
-  const renderStatusProgress = (upload: UploadHistoryItem) => {
+  const renderStatusProgress = (upload: UploadedFile) => {
     const { status } = upload;
 
     // 실패
@@ -314,12 +272,12 @@ export function UploadHistory() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
-  const handleViewDetail = async (upload: UploadHistoryItem) => {
+  const handleViewDetail = async (upload: UploadedFile) => {
     try {
       // Fetch full upload details including ldapUploadedCount
       const response = await uploadHistoryApi.getDetail(upload.id);
       const fullUploadData = response.data.data; // ApiResponse<UploadedFile> structure
-      setSelectedUpload(fullUploadData as UploadHistoryItem);
+      setSelectedUpload(fullUploadData ?? null);
       setActiveTab('details'); // Reset to details tab
       setDialogOpen(true);
     } catch (error) {
@@ -336,7 +294,7 @@ export function UploadHistory() {
     setSelectedUpload(null);
   };
 
-  const handleDeleteClick = (upload: UploadHistoryItem) => {
+  const handleDeleteClick = (upload: UploadedFile) => {
     setUploadToDelete(upload);
     setDeleteDialogOpen(true);
   };
@@ -658,7 +616,7 @@ export function UploadHistory() {
                       <td className="px-6 py-4">{renderStatusProgress(upload)}</td>
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1 text-xs">
-                          {(upload.cscaCount > 0 || (!upload.cscaCount && !upload.dscCount && !upload.dscNcCount && upload.certificateCount > 0)) && (
+                          {((upload.cscaCount ?? 0) > 0 || (!upload.cscaCount && !upload.dscCount && !upload.dscNcCount && (upload.certificateCount ?? 0) > 0)) && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
                               <ShieldCheck className="w-3 h-3" />
                               CSCA {upload.cscaCount || upload.certificateCount}
@@ -670,25 +628,25 @@ export function UploadHistory() {
                               MLSC {upload.mlscCount}
                             </span>
                           )}
-                          {upload.dscCount > 0 && (
+                          {(upload.dscCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                               <HardDrive className="w-3 h-3" />
                               DSC {upload.dscCount}
                             </span>
                           )}
-                          {upload.dscNcCount > 0 && (
+                          {(upload.dscNcCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
                               <HardDrive className="w-3 h-3" />
                               DSC_NC {upload.dscNcCount}
                             </span>
                           )}
-                          {upload.crlCount > 0 && (
+                          {(upload.crlCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
                               <AlertCircle className="w-3 h-3" />
                               CRL {upload.crlCount}
                             </span>
                           )}
-                          {upload.mlCount > 0 && (
+                          {(upload.mlCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-teal-100 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400">
                               <FileText className="w-3 h-3" />
                               ML {upload.mlCount}
@@ -700,7 +658,7 @@ export function UploadHistory() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
-                        {formatDate(upload.createdAt)}
+                        {formatDate(upload.createdAt ?? '')}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -955,13 +913,13 @@ export function UploadHistory() {
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">업로드</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
-                        {formatDate(selectedUpload.createdAt)}
+                        {formatDate(selectedUpload.createdAt ?? '')}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">완료</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
-                        {formatDate(selectedUpload.updatedAt)}
+                        {formatDate(selectedUpload.updatedAt ?? '')}
                       </p>
                     </div>
                   </div>
@@ -1083,7 +1041,7 @@ export function UploadHistory() {
                 </div>
 
                 {/* Right Column - Validation Statistics (Only for DSC/DSC_NC uploads) */}
-                {selectedUpload.validation && (selectedUpload.dscCount > 0 || selectedUpload.dscNcCount > 0) && (
+                {selectedUpload.validation && ((selectedUpload.dscCount ?? 0) > 0 || (selectedUpload.dscNcCount ?? 0) > 0) && (
                   <div className="w-64 flex-shrink-0">
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trust Chain 검증</h3>
                     <div className="space-y-2">

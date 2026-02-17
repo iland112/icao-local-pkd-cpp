@@ -706,3 +706,51 @@ export interface CertificatePreviewResult {
   dlCmsSignatureAlgorithm?: string;
   dlSignerDn?: string;
 }
+
+// =============================================================================
+// Backend Response Types (for type-safe API calls)
+// =============================================================================
+
+/** Backend response for GET /api/certificates/countries */
+export interface CertificateCountriesResponse {
+  success: boolean;
+  countries: string[];
+}
+
+/** Backend response for GET /api/pa/statistics (raw format) */
+export interface PAStatisticsRawResponse {
+  totalVerifications: number;
+  byStatus: Record<string, number>;
+  byCountry: Array<{ country: string; count: number }>;
+  successRate: number;
+  failedLogins?: number;
+  last24hEvents?: number;
+  topUsers?: Array<{ username: string; count: number }>;
+}
+
+/** Backend response for GET /api/pa/history */
+export interface PAHistoryListResponse {
+  success: boolean;
+  total: number;
+  page: number;
+  size: number;
+  data: PAHistoryItem[];
+}
+
+/** Backend response for POST /api/upload/certificate */
+export interface CertificateUploadResponse {
+  success: boolean;
+  message: string;
+  uploadId: string;
+  fileFormat: string;
+  status: string;
+  certificateCount: number;
+  cscaCount: number;
+  dscCount: number;
+  dscNcCount: number;
+  mlscCount: number;
+  crlCount: number;
+  ldapStoredCount: number;
+  duplicateCount: number;
+  errorMessage?: string;
+}

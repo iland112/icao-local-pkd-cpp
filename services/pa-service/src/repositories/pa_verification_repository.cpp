@@ -5,6 +5,7 @@
  */
 
 #include "pa_verification_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -12,20 +13,6 @@
 #include <map>
 
 namespace repositories {
-
-// --- Helper: Safe integer extraction from Json::Value (Oracle returns strings) ---
-
-static int safeInt(const Json::Value& val, int defaultValue = 0) {
-    if (val.isNull()) return defaultValue;
-    if (val.isInt()) return val.asInt();
-    if (val.isUInt()) return static_cast<int>(val.asUInt());
-    if (val.isString()) {
-        try { return std::stoi(val.asString()); }
-        catch (...) { return defaultValue; }
-    }
-    if (val.isDouble()) return static_cast<int>(val.asDouble());
-    return defaultValue;
-}
 
 // --- Constructor ---
 
@@ -95,14 +82,14 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
 
         // Database-aware boolean formatting (reuse dbType from line 41)
         auto boolStr = [&dbType](bool val) -> std::string {
-            return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
+            return common::db::boolLiteral(dbType, val);
         };
 
         // Convert SOD binary to hex string for BYTEA storage
         std::string sodBinaryHex;
         if (!verification.sodBinary.empty()) {
             std::ostringstream hexStream;
-            hexStream << "\\x";
+            hexStream << common::db::hexPrefix(dbType);
             for (auto b : verification.sodBinary) {
                 hexStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
             }
@@ -204,7 +191,7 @@ Json::Value PaVerificationRepository::findAll(
         }
 
         Json::Value countResult = queryExecutor_->executeScalar(countQuery.str(), params);
-        int total = safeInt(countResult);
+        int total = common::db::scalarToInt(countResult);
 
         // Data query
         std::ostringstream dataQuery;
@@ -225,11 +212,7 @@ Json::Value PaVerificationRepository::findAll(
 
         std::string dbType = queryExecutor_->getDatabaseType();
         dataQuery << " ORDER BY request_timestamp DESC";
-        if (dbType == "oracle") {
-            dataQuery << " OFFSET " << offset << " ROWS FETCH NEXT " << limit << " ROWS ONLY";
-        } else {
-            dataQuery << " LIMIT " << limit << " OFFSET " << offset;
-        }
+        dataQuery << common::db::paginationClause(dbType, limit, offset);
 
         Json::Value dataResult = queryExecutor_->executeQuery(dataQuery.str(), params);
 
@@ -269,7 +252,7 @@ Json::Value PaVerificationRepository::getStatistics() {
 
         // Total count
         const char* totalQuery = "SELECT COUNT(*) FROM pa_verification";
-        stats["totalVerifications"] = safeInt(queryExecutor_->executeScalar(totalQuery));
+        stats["totalVerifications"] = common::db::scalarToInt(queryExecutor_->executeScalar(totalQuery));
 
         // Count by status
         const char* statusQuery =
@@ -281,7 +264,7 @@ Json::Value PaVerificationRepository::getStatistics() {
         Json::Value statusCounts;
         for (const auto& row : statusResult) {
             std::string status = row["verification_status"].asString();
-            statusCounts[status] = safeInt(row["count"]);
+            statusCounts[status] = common::db::scalarToInt(row["count"]);
         }
         stats["byStatus"] = statusCounts;
 
@@ -291,18 +274,14 @@ Json::Value PaVerificationRepository::getStatistics() {
             "FROM pa_verification "
             "GROUP BY issuing_country "
             "ORDER BY count DESC ";
-        if (queryExecutor_->getDatabaseType() == "oracle") {
-            countryQuery += "FETCH FIRST 10 ROWS ONLY";
-        } else {
-            countryQuery += "LIMIT 10";
-        }
+        countryQuery += common::db::limitClause(queryExecutor_->getDatabaseType(), 10);
         Json::Value countryResult = queryExecutor_->executeQuery(countryQuery);
 
         Json::Value countryCounts = Json::arrayValue;
         for (const auto& row : countryResult) {
             Json::Value country;
             country["country"] = row["issuing_country"].asString();
-            country["count"] = safeInt(row["count"]);
+            country["count"] = common::db::scalarToInt(row["count"]);
             countryCounts.append(country);
         }
         stats["byCountry"] = countryCounts;
@@ -316,8 +295,8 @@ Json::Value PaVerificationRepository::getStatistics() {
         Json::Value successResult = queryExecutor_->executeQuery(successQuery);
 
         if (!successResult.empty()) {
-            int validCount = safeInt(successResult[0]["valid_count"]);
-            int totalCount = safeInt(successResult[0]["total_count"]);
+            int validCount = common::db::scalarToInt(successResult[0]["valid_count"]);
+            int totalCount = common::db::scalarToInt(successResult[0]["total_count"]);
             double successRate = totalCount > 0 ? (validCount * 100.0 / totalCount) : 0.0;
             stats["successRate"] = successRate;
         }
@@ -365,7 +344,7 @@ bool PaVerificationRepository::updateStatus(const std::string& id, const std::st
         std::string query =
             "UPDATE pa_verification "
             "SET verification_status = $1, completed_timestamp = " +
-            std::string(dbType == "oracle" ? "SYSTIMESTAMP" : "NOW()") +
+            common::db::currentTimestamp(dbType) +
             " WHERE id = $2";
 
         std::vector<std::string> params = {status, id};

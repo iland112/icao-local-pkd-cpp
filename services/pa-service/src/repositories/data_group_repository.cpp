@@ -5,6 +5,7 @@
  */
 
 #include "data_group_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <iomanip>
@@ -136,7 +137,7 @@ std::string DataGroupRepository::insert(
 
         // Database-aware boolean formatting
         auto boolStr = [&dbType](bool val) -> std::string {
-            return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
+            return common::db::boolLiteral(dbType, val);
         };
 
         // Prepare parameters

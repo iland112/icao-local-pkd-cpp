@@ -15,6 +15,7 @@ import axios, { type AxiosError, type AxiosResponse } from 'axios';
 import type {
   ApiResponse,
   UploadedFile,
+  CertificateUploadResponse,
   PageRequest,
   PageResponse,
   SyncStatusResponse,
@@ -125,7 +126,7 @@ export const uploadApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    return relayApi.post<ApiResponse<UploadedFile>>('/upload/certificate', formData, {
+    return relayApi.post<CertificateUploadResponse>('/upload/certificate', formData, {
       headers: { 'Content-Type': undefined },
       timeout: 120000, // 2 minutes
     });

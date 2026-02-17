@@ -1,6 +1,6 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.11.0
+**Version**: 2.12.0
 **Last Updated**: 2026-02-17
 
 ---
@@ -68,7 +68,7 @@ source scripts/helpers/db-helpers.sh && db_count_certs
 
 ## Architecture Overview
 
-### System Architecture (v2.11.0)
+### System Architecture (v2.12.0)
 
 ```
 Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LDAP

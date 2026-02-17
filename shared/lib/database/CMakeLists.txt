@@ -35,6 +35,7 @@ add_library(icao-database STATIC
     ${ORACLE_SOURCES}
     postgresql_query_executor.cpp
     query_executor_factory.cpp
+    query_helpers.cpp
 )
 
 # Include directories
@@ -86,6 +87,7 @@ set(DATABASE_HEADERS
     db_connection_pool_factory.h
     i_query_executor.h
     postgresql_query_executor.h
+    query_helpers.h
 )
 if(ENABLE_ORACLE)
     list(APPEND DATABASE_HEADERS oracle_connection_pool.h oracle_query_executor.h)

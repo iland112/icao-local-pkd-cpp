@@ -3,31 +3,15 @@
  * @brief Reconciliation repository implementation
  */
 #include "reconciliation_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <cstring>
 #include <sstream>
 
-namespace icao::relay::repositories {
+using common::db::getInt;
 
-/**
- * @brief Parse JSON value to integer with type-safe conversion
- *
- * Oracle returns all values as strings, so .asInt() fails.
- * This handles int, uint, string, double types gracefully.
- */
-static int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0) {
-    if (!json.isMember(field) || json[field].isNull()) return defaultValue;
-    const auto& v = json[field];
-    if (v.isInt()) return v.asInt();
-    if (v.isUInt()) return static_cast<int>(v.asUInt());
-    if (v.isString()) {
-        try { return std::stoi(v.asString()); }
-        catch (...) { return defaultValue; }
-    }
-    if (v.isDouble()) return static_cast<int>(v.asDouble());
-    return defaultValue;
-}
+namespace icao::relay::repositories {
 
 ReconciliationRepository::ReconciliationRepository(common::IQueryExecutor* executor)
     : queryExecutor_(executor)

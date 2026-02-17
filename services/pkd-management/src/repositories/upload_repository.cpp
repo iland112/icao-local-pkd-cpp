@@ -3,6 +3,7 @@
  */
 
 #include "upload_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <cstring>
@@ -433,7 +434,7 @@ Json::Value UploadRepository::getStatisticsSummary()
     try {
         // Get total uploads
         Json::Value totalUploadsResult = queryExecutor_->executeScalar("SELECT COUNT(*) FROM uploaded_file");
-        int totalUploads = scalarToInt(totalUploadsResult, 0);
+        int totalUploads = common::db::scalarToInt(totalUploadsResult, 0);
 
         // Get certificate counts by type from actual certificate table (not uploaded_file sums)
         // Using certificate table avoids double-counting from duplicate uploads
@@ -446,19 +447,19 @@ Json::Value UploadRepository::getStatisticsSummary()
             "FROM certificate";
 
         Json::Value certResult = queryExecutor_->executeQuery(certQuery);
-        int totalCsca = getInt(certResult[0], "total_csca", 0);
-        int totalDsc = getInt(certResult[0], "total_dsc", 0);
-        int totalDscNc = getInt(certResult[0], "total_dsc_nc", 0);
-        int totalMlsc = getInt(certResult[0], "total_mlsc", 0);
+        int totalCsca = common::db::getInt(certResult[0], "total_csca", 0);
+        int totalDsc = common::db::getInt(certResult[0], "total_dsc", 0);
+        int totalDscNc = common::db::getInt(certResult[0], "total_dsc_nc", 0);
+        int totalMlsc = common::db::getInt(certResult[0], "total_mlsc", 0);
 
         // CRL count from crl table (separate table)
         Json::Value crlCountResult = queryExecutor_->executeScalar("SELECT COUNT(*) FROM crl");
-        int totalCrl = scalarToInt(crlCountResult, 0);
+        int totalCrl = common::db::scalarToInt(crlCountResult, 0);
 
         // ML count from uploaded_file (master list count is per-upload, not deduplicated)
         Json::Value mlCountResult = queryExecutor_->executeScalar(
             "SELECT COALESCE(SUM(ml_count), 0) FROM uploaded_file");
-        int totalMl = scalarToInt(mlCountResult, 0);
+        int totalMl = common::db::scalarToInt(mlCountResult, 0);
 
         // Get uploads by status (for successfulUploads/failedUploads)
         const char* statusQuery =
@@ -469,7 +470,7 @@ Json::Value UploadRepository::getStatisticsSummary()
         int failedUploads = 0;
         for (const auto& row : statusResult) {
             std::string status = row["status"].asString();
-            int count = getInt(row, "count", 0);
+            int count = common::db::getInt(row, "count", 0);
             if (status == "COMPLETED") {
                 successfulUploads += count;
             } else if (status == "FAILED" || status == "ERROR") {
@@ -483,7 +484,7 @@ Json::Value UploadRepository::getStatisticsSummary()
             ? "SELECT COUNT(DISTINCT country_code) FROM certificate WHERE country_code IS NOT NULL"
             : "SELECT COUNT(DISTINCT country_code) FROM certificate WHERE country_code IS NOT NULL AND country_code != ''";
         Json::Value countryResult = queryExecutor_->executeScalar(countryCountQuery);
-        int countriesCount = scalarToInt(countryResult, 0);
+        int countriesCount = common::db::scalarToInt(countryResult, 0);
 
         // Get validation statistics
         // Oracle uses NUMBER(1) for booleans: 1=true, 0=false
@@ -522,16 +523,16 @@ Json::Value UploadRepository::getStatisticsSummary()
         Json::Value validationResult = queryExecutor_->executeQuery(validationQuery);
         Json::Value validation;
         if (!validationResult.empty()) {
-            validation["validCount"] = getInt(validationResult[0], "valid_count", 0);
-            validation["expiredValidCount"] = getInt(validationResult[0], "expired_valid_count", 0);
-            validation["invalidCount"] = getInt(validationResult[0], "invalid_count", 0);
-            validation["pendingCount"] = getInt(validationResult[0], "pending_count", 0);
-            validation["errorCount"] = getInt(validationResult[0], "error_count", 0);
-            validation["trustChainValidCount"] = getInt(validationResult[0], "trust_chain_valid_count", 0);
-            validation["trustChainInvalidCount"] = getInt(validationResult[0], "trust_chain_invalid_count", 0);
-            validation["cscaNotFoundCount"] = getInt(validationResult[0], "csca_not_found_count", 0);
-            validation["expiredCount"] = getInt(validationResult[0], "expired_count", 0);
-            validation["revokedCount"] = getInt(validationResult[0], "revoked_count", 0);
+            validation["validCount"] = common::db::getInt(validationResult[0], "valid_count", 0);
+            validation["expiredValidCount"] = common::db::getInt(validationResult[0], "expired_valid_count", 0);
+            validation["invalidCount"] = common::db::getInt(validationResult[0], "invalid_count", 0);
+            validation["pendingCount"] = common::db::getInt(validationResult[0], "pending_count", 0);
+            validation["errorCount"] = common::db::getInt(validationResult[0], "error_count", 0);
+            validation["trustChainValidCount"] = common::db::getInt(validationResult[0], "trust_chain_valid_count", 0);
+            validation["trustChainInvalidCount"] = common::db::getInt(validationResult[0], "trust_chain_invalid_count", 0);
+            validation["cscaNotFoundCount"] = common::db::getInt(validationResult[0], "csca_not_found_count", 0);
+            validation["expiredCount"] = common::db::getInt(validationResult[0], "expired_count", 0);
+            validation["revokedCount"] = common::db::getInt(validationResult[0], "revoked_count", 0);
         }
 
         // Get CSCA breakdown (self-signed vs link certificates)
@@ -555,8 +556,8 @@ Json::Value UploadRepository::getStatisticsSummary()
         int selfSignedCount = 0;
         int linkCertCount = 0;
         if (!cscaResult.empty()) {
-            selfSignedCount = getInt(cscaResult[0], "self_signed_count", 0);
-            linkCertCount = getInt(cscaResult[0], "link_cert_count", 0);
+            selfSignedCount = common::db::getInt(cscaResult[0], "self_signed_count", 0);
+            linkCertCount = common::db::getInt(cscaResult[0], "link_cert_count", 0);
         }
 
         // Build byType object with CSCA breakdown
@@ -603,7 +604,7 @@ Json::Value UploadRepository::getStatisticsSummary()
         for (const auto& row : sourceResult) {
             std::string sourceType = row.get("source_type", "").asString();
             if (!sourceType.empty()) {
-                bySource[sourceType] = getInt(row, "count", 0);
+                bySource[sourceType] = common::db::getInt(row, "count", 0);
             }
         }
         response["bySource"] = bySource;
@@ -656,11 +657,11 @@ Json::Value UploadRepository::getCountryStatistics(int limit)
         for (const auto& row : result) {
             Json::Value countryData;
             countryData["country"] = row["country_code"].asString();
-            countryData["csca"] = getInt(row, "csca_count", 0);
-            countryData["mlsc"] = getInt(row, "mlsc_count", 0);
-            countryData["dsc"] = getInt(row, "dsc_count", 0);
-            countryData["dscNc"] = getInt(row, "dsc_nc_count", 0);
-            countryData["total"] = getInt(row, "total_certificates", 0);
+            countryData["csca"] = common::db::getInt(row, "csca_count", 0);
+            countryData["mlsc"] = common::db::getInt(row, "mlsc_count", 0);
+            countryData["dsc"] = common::db::getInt(row, "dsc_count", 0);
+            countryData["dscNc"] = common::db::getInt(row, "dsc_nc_count", 0);
+            countryData["total"] = common::db::getInt(row, "total_certificates", 0);
             countries.append(countryData);
         }
 
@@ -729,13 +730,13 @@ Json::Value UploadRepository::getDetailedCountryStatistics(int limit)
         for (const auto& row : result) {
             Json::Value countryData;
             countryData["countryCode"] = row["country_code"].asString();
-            countryData["mlsc"] = getInt(row, "mlsc_count", 0);
-            countryData["cscaSelfSigned"] = getInt(row, "csca_self_signed_count", 0);
-            countryData["cscaLinkCert"] = getInt(row, "csca_link_cert_count", 0);
-            countryData["dsc"] = getInt(row, "dsc_count", 0);
-            countryData["dscNc"] = getInt(row, "dsc_nc_count", 0);
-            countryData["crl"] = getInt(row, "crl_count", 0);
-            countryData["totalCerts"] = getInt(row, "total_certificates", 0);
+            countryData["mlsc"] = common::db::getInt(row, "mlsc_count", 0);
+            countryData["cscaSelfSigned"] = common::db::getInt(row, "csca_self_signed_count", 0);
+            countryData["cscaLinkCert"] = common::db::getInt(row, "csca_link_cert_count", 0);
+            countryData["dsc"] = common::db::getInt(row, "dsc_count", 0);
+            countryData["dscNc"] = common::db::getInt(row, "dsc_nc_count", 0);
+            countryData["crl"] = common::db::getInt(row, "crl_count", 0);
+            countryData["totalCerts"] = common::db::getInt(row, "total_certificates", 0);
             countries.append(countryData);
         }
 
@@ -916,37 +917,37 @@ Upload UploadRepository::jsonToUpload(const Json::Value& json)
     upload.fileName = json.get("file_name", "").asString();
     upload.fileHash = json.get("file_hash", "").asString();
     upload.fileFormat = json.get("file_format", "").asString();
-    upload.fileSize = getInt(json, "file_size", 0);
+    upload.fileSize = common::db::getInt(json, "file_size", 0);
     upload.status = json.get("status", "").asString();
     upload.uploadedBy = json.get("uploaded_by", "").asString();
 
     upload.errorMessage = getOptionalString(json, "error_message");
     upload.processingMode = getOptionalString(json, "processing_mode");
 
-    upload.totalEntries = getInt(json, "total_entries", 0);
-    upload.processedEntries = getInt(json, "processed_entries", 0);
+    upload.totalEntries = common::db::getInt(json, "total_entries", 0);
+    upload.processedEntries = common::db::getInt(json, "processed_entries", 0);
 
-    upload.cscaCount = getInt(json, "csca_count", 0);
-    upload.dscCount = getInt(json, "dsc_count", 0);
-    upload.dscNcCount = getInt(json, "dsc_nc_count", 0);
-    upload.crlCount = getInt(json, "crl_count", 0);
-    upload.mlscCount = getInt(json, "mlsc_count", 0);
-    upload.mlCount = getInt(json, "ml_count", 0);
+    upload.cscaCount = common::db::getInt(json, "csca_count", 0);
+    upload.dscCount = common::db::getInt(json, "dsc_count", 0);
+    upload.dscNcCount = common::db::getInt(json, "dsc_nc_count", 0);
+    upload.crlCount = common::db::getInt(json, "crl_count", 0);
+    upload.mlscCount = common::db::getInt(json, "mlsc_count", 0);
+    upload.mlCount = common::db::getInt(json, "ml_count", 0);
 
     // Timestamps
     upload.createdAt = json.get("upload_timestamp", "").asString();
     upload.updatedAt = json.get("completed_timestamp", "").asString();
 
     // Validation statistics
-    upload.validationValidCount = getInt(json, "validation_valid_count", 0);
-    upload.validationInvalidCount = getInt(json, "validation_invalid_count", 0);
-    upload.validationPendingCount = getInt(json, "validation_pending_count", 0);
-    upload.validationErrorCount = getInt(json, "validation_error_count", 0);
-    upload.trustChainValidCount = getInt(json, "trust_chain_valid_count", 0);
-    upload.trustChainInvalidCount = getInt(json, "trust_chain_invalid_count", 0);
-    upload.cscaNotFoundCount = getInt(json, "csca_not_found_count", 0);
-    upload.expiredCount = getInt(json, "expired_count", 0);
-    upload.revokedCount = getInt(json, "revoked_count", 0);
+    upload.validationValidCount = common::db::getInt(json, "validation_valid_count", 0);
+    upload.validationInvalidCount = common::db::getInt(json, "validation_invalid_count", 0);
+    upload.validationPendingCount = common::db::getInt(json, "validation_pending_count", 0);
+    upload.validationErrorCount = common::db::getInt(json, "validation_error_count", 0);
+    upload.trustChainValidCount = common::db::getInt(json, "trust_chain_valid_count", 0);
+    upload.trustChainInvalidCount = common::db::getInt(json, "trust_chain_invalid_count", 0);
+    upload.cscaNotFoundCount = common::db::getInt(json, "csca_not_found_count", 0);
+    upload.expiredCount = common::db::getInt(json, "expired_count", 0);
+    upload.revokedCount = common::db::getInt(json, "revoked_count", 0);
 
     return upload;
 }
@@ -959,86 +960,14 @@ std::optional<std::string> UploadRepository::getOptionalString(const Json::Value
     return json[field].asString();
 }
 
-/**
- * @brief Comprehensive integer parsing helper (handles PostgreSQL and Oracle)
- *
- * PostgreSQL may return integers as int/uint types
- * Oracle may return integers as string types (e.g., "123")
- * This function handles all cases to prevent "Value is not convertible to Int" errors
- *
- * @param json JSON object containing the field
- * @param field Field name to parse
- * @param defaultValue Default value if field is missing/null
- * @return Parsed integer value
- */
-int UploadRepository::getInt(const Json::Value& json, const std::string& field, int defaultValue)
-{
-    if (!json.isMember(field) || json[field].isNull()) {
-        return defaultValue;
-    }
-
-    const Json::Value& value = json[field];
-
-    // Handle different JSON types that Oracle/PostgreSQL might return
-    if (value.isInt()) {
-        return value.asInt();
-    } else if (value.isUInt()) {
-        return static_cast<int>(value.asUInt());
-    } else if (value.isInt64()) {
-        return static_cast<int>(value.asInt64());
-    } else if (value.isUInt64()) {
-        return static_cast<int>(value.asUInt64());
-    } else if (value.isString()) {
-        // Oracle returns integers as strings
-        std::string str = value.asString();
-        if (str.empty()) {
-            return defaultValue;
-        }
-        try {
-            return std::stoi(str);
-        } catch (const std::exception& e) {
-            spdlog::warn("[UploadRepository] Failed to parse integer field '{}' with value '{}': {}",
-                         field, str, e.what());
-            return defaultValue;
-        }
-    } else if (value.isDouble()) {
-        // Handle numeric types
-        return static_cast<int>(value.asDouble());
-    }
-
-    spdlog::warn("[UploadRepository] Unexpected type for integer field '{}': {}",
-                 field, static_cast<int>(value.type()));
-    return defaultValue;
-}
+// getInt(), common::db::getInt() consolidated into common::db::getInt() (query_helpers.h)
 
 std::optional<int> UploadRepository::getOptionalInt(const Json::Value& json, const std::string& field)
 {
     if (!json.isMember(field) || json[field].isNull()) {
         return std::nullopt;
     }
-    return getInt(json, field, 0);
-}
-
-/**
- * @brief Convert executeScalar() result to int
- * Oracle returns scalar values as strings via OTL, PostgreSQL returns native ints.
- */
-int UploadRepository::scalarToInt(const Json::Value& value, int defaultValue)
-{
-    if (value.isNull()) return defaultValue;
-    if (value.isInt()) return value.asInt();
-    if (value.isUInt()) return static_cast<int>(value.asUInt());
-    if (value.isString()) {
-        std::string str = value.asString();
-        if (str.empty()) return defaultValue;
-        try {
-            return std::stoi(str);
-        } catch (...) {
-            return defaultValue;
-        }
-    }
-    if (value.isDouble()) return static_cast<int>(value.asDouble());
-    return defaultValue;
+    return common::db::getInt(json, field, 0);
 }
 
 } // namespace repositories

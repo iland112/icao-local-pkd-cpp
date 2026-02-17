@@ -322,18 +322,8 @@ private:
     std::optional<int> getOptionalInt(const Json::Value& json, const std::string& field);
 
     /**
-     * @brief Comprehensive integer parsing (handles PostgreSQL int and Oracle string)
-     * @param json JSON object
-     * @param field Field name
-     * @param defaultValue Default value if missing/null
-     * @return Parsed integer value
+     * @brief getInt(), scalarToInt() consolidated into common::db::getInt() (query_helpers.h)
      */
-    int getInt(const Json::Value& json, const std::string& field, int defaultValue = 0);
-
-    /**
-     * @brief Convert executeScalar() result to int (handles Oracle string returns)
-     */
-    int scalarToInt(const Json::Value& value, int defaultValue = 0);
 };
 
 } // namespace repositories

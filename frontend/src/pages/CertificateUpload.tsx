@@ -17,26 +17,9 @@ import {
   Lock,
 } from 'lucide-react';
 import { uploadApi } from '@/services/api';
-import type { CertificatePreviewResult, CertificatePreviewItem, DeviationPreviewItem } from '@/types';
+import type { CertificatePreviewResult, CertificatePreviewItem, DeviationPreviewItem, CertificateUploadResponse } from '@/types';
 import { cn } from '@/utils/cn';
 import { TreeViewer, type TreeNode } from '@/components/TreeViewer';
-
-interface CertificateUploadResponse {
-  success: boolean;
-  message: string;
-  uploadId: string;
-  fileFormat: string;
-  status: string;
-  certificateCount: number;
-  cscaCount: number;
-  dscCount: number;
-  dscNcCount: number;
-  mlscCount: number;
-  crlCount: number;
-  ldapStoredCount: number;
-  duplicateCount: number;
-  errorMessage?: string;
-}
 
 type PageState = 'IDLE' | 'FILE_SELECTED' | 'PREVIEWING' | 'PREVIEW_READY' | 'PREVIEW_ERROR' | 'CONFIRMING' | 'COMPLETED' | 'FAILED';
 type PreviewTab = 'certificates' | 'dl-structure' | 'crl';
@@ -396,7 +379,7 @@ export default function CertificateUpload() {
     setErrorMessage('');
     try {
       const response = await uploadApi.uploadCertificate(selectedFile);
-      const result = response.data as unknown as CertificateUploadResponse;
+      const result = response.data;
       if (result.success) {
         setUploadResult(result);
         setUploadId(result.uploadId);

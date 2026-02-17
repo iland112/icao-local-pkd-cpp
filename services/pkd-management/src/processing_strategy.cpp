@@ -8,9 +8,10 @@
 #include "common.h"
 #include "common/masterlist_processor.h"
 #include "common/progress_manager.h"
+#include "domain/models/validation_statistics.h"
+#include "infrastructure/service_container.h"
 #include "repositories/upload_repository.h"
 #include "repositories/validation_repository.h"
-#include "domain/models/validation_statistics.h"
 #include "i_query_executor.h"
 #include <drogon/HttpTypes.h>
 #include <json/json.h>
@@ -26,14 +27,8 @@ using common::CertificateMetadata;
 using common::IcaoComplianceStatus;
 using common::ProcessingStage;
 
-// Global repository declarations (defined in main.cpp)
-// Forward declare the class first
-namespace repositories {
-    class UploadRepository;
-    class ValidationRepository;
-}
-extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
-extern std::shared_ptr<repositories::ValidationRepository> validationRepository;
+// Global service container (defined in main.cpp)
+extern infrastructure::ServiceContainer* g_services;
 
 std::unique_ptr<ProcessingStrategy> ProcessingStrategyFactory::create(const std::string& mode) {
     if (mode == "AUTO") {
@@ -96,7 +91,7 @@ void AutoProcessingStrategy::processLdifEntries(
                           entries.size(), entries.size(), "");
 
     // Update validation statistics via ValidationRepository
-    if (::validationRepository) {
+    if (g_services->validationRepository()) {
         domain::models::ValidationStatistics valStats;
         valStats.validCount = stats.validCount;
         valStats.invalidCount = stats.invalidCount;
@@ -107,12 +102,12 @@ void AutoProcessingStrategy::processLdifEntries(
         valStats.cscaNotFoundCount = stats.cscaNotFoundCount;
         valStats.expiredCount = stats.expiredCount;
         valStats.revokedCount = stats.revokedCount;
-        ::validationRepository->updateStatistics(uploadId, valStats);
+        g_services->validationRepository()->updateStatistics(uploadId, valStats);
     }
 
     // Update ML and MLSC counts via repository
-    if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
-        ::uploadRepository->updateStatistics(uploadId,
+    if ((counts.mlCount > 0 || counts.mlscCount > 0) && g_services->uploadRepository()) {
+        g_services->uploadRepository()->updateStatistics(uploadId,
             counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
             counts.mlscCount, counts.mlCount);
     }
@@ -182,11 +177,11 @@ void AutoProcessingStrategy::processMasterListContent(
                           "");                          // error_message
 
     // Update all statistics via repository: csca_count, mlsc_count, ml_count, total_entries, processed_entries
-    if (::uploadRepository) {
-        ::uploadRepository->updateStatistics(uploadId,
+    if (g_services->uploadRepository()) {
+        g_services->uploadRepository()->updateStatistics(uploadId,
             stats.cscaNewCount, 0, 0, 0,
             stats.mlscCount, stats.mlCount);
-        ::uploadRepository->updateProgress(uploadId,
+        g_services->uploadRepository()->updateProgress(uploadId,
             stats.cscaExtractedCount, stats.cscaNewCount);
     }
 
@@ -376,8 +371,8 @@ void ManualProcessingStrategy::processLdifEntries(
     // Update upload status using repository
     // TODO: Need uploadRepository->updateStatusAndTotalEntries() method
     // For now, using updateStatus() and noting that total_entries update is missing
-    if (uploadRepository) {
-        uploadRepository->updateStatus(uploadId, "PENDING", "");
+    if (g_services->uploadRepository()) {
+        g_services->uploadRepository()->updateStatus(uploadId, "PENDING", "");
         spdlog::info("Updated upload status to PENDING (total_entries update pending)");
     } else {
         spdlog::error("uploadRepository is null");
@@ -397,8 +392,8 @@ void ManualProcessingStrategy::processMasterListContent(
     saveMasterListToTempFile(uploadId, content);
 
     // Update upload status using repository
-    if (uploadRepository) {
-        uploadRepository->updateStatus(uploadId, "PENDING", "");
+    if (g_services->uploadRepository()) {
+        g_services->uploadRepository()->updateStatus(uploadId, "PENDING", "");
         spdlog::info("Updated upload status to PENDING");
     } else {
         spdlog::error("uploadRepository is null");
@@ -413,7 +408,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
     spdlog::info("MANUAL mode Stage 2: Validating and saving to DB + LDAP for upload {}", uploadId);
 
     // Check upload status and file format using repository
-    auto uploadOpt = uploadRepository->findById(uploadId);
+    auto uploadOpt = g_services->uploadRepository()->findById(uploadId);
     if (!uploadOpt.has_value()) {
         throw std::runtime_error("Upload not found: " + uploadId);
     }
@@ -471,7 +466,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
                               entries.size(), entries.size(), "");
 
         // Update validation statistics via ValidationRepository
-        if (::validationRepository) {
+        if (g_services->validationRepository()) {
             domain::models::ValidationStatistics valStats;
             valStats.validCount = stats.validCount;
             valStats.invalidCount = stats.invalidCount;
@@ -482,12 +477,12 @@ void ManualProcessingStrategy::validateAndSaveToDb(
             valStats.cscaNotFoundCount = stats.cscaNotFoundCount;
             valStats.expiredCount = stats.expiredCount;
             valStats.revokedCount = stats.revokedCount;
-            ::validationRepository->updateStatistics(uploadId, valStats);
+            g_services->validationRepository()->updateStatistics(uploadId, valStats);
         }
 
         // Update ML and MLSC counts via repository
-        if ((counts.mlCount > 0 || counts.mlscCount > 0) && ::uploadRepository) {
-            ::uploadRepository->updateStatistics(uploadId,
+        if ((counts.mlCount > 0 || counts.mlscCount > 0) && g_services->uploadRepository()) {
+            g_services->uploadRepository()->updateStatistics(uploadId,
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                 counts.mlscCount, counts.mlCount);
         }
@@ -524,8 +519,8 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         processMasterListToDbAndLdap(uploadId, content, ld);
 
         // Update upload status to COMPLETED via repository
-        if (::uploadRepository) {
-            ::uploadRepository->updateStatus(uploadId, "COMPLETED", "");
+        if (g_services->uploadRepository()) {
+            g_services->uploadRepository()->updateStatus(uploadId, "COMPLETED", "");
         }
 
         spdlog::info("MANUAL mode Stage 2: Master List processing completed");
@@ -550,28 +545,27 @@ void ManualProcessingStrategy::cleanupFailedUpload(
     // Use QueryExecutor for cascading deletes (Oracle + PostgreSQL compatible)
     // Note: FK ON DELETE CASCADE on uploaded_file would handle child tables,
     // but we delete explicitly for logging counts
-    extern std::unique_ptr<common::IQueryExecutor> queryExecutor;
 
     int certsDeleted = 0;
     int crlsDeleted = 0;
     int mlsDeleted = 0;
 
     try {
-        if (queryExecutor) {
+        if (g_services->queryExecutor()) {
             // Delete certificates
-            certsDeleted = queryExecutor->executeCommand(
+            certsDeleted = g_services->queryExecutor()->executeCommand(
                 "DELETE FROM certificate WHERE upload_id = $1", {uploadId});
 
             // Delete CRLs
-            crlsDeleted = queryExecutor->executeCommand(
+            crlsDeleted = g_services->queryExecutor()->executeCommand(
                 "DELETE FROM crl WHERE upload_id = $1", {uploadId});
 
             // Delete master lists
-            mlsDeleted = queryExecutor->executeCommand(
+            mlsDeleted = g_services->queryExecutor()->executeCommand(
                 "DELETE FROM master_list WHERE upload_id = $1", {uploadId});
 
             // Delete upload record
-            queryExecutor->executeCommand(
+            g_services->queryExecutor()->executeCommand(
                 "DELETE FROM uploaded_file WHERE id = $1", {uploadId});
         } else {
             spdlog::error("queryExecutor is null, cannot cleanup upload");
@@ -642,8 +636,8 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
                           "");                        // error_message
 
     // Update MLSC and ML counts directly via repository
-    if (::uploadRepository) {
-        ::uploadRepository->updateStatistics(uploadId,
+    if (g_services->uploadRepository()) {
+        g_services->uploadRepository()->updateStatistics(uploadId,
             stats.cscaExtractedCount, 0, 0, 0,
             stats.mlscCount, stats.mlCount);
     }

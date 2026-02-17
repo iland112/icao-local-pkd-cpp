@@ -5,8 +5,8 @@
 
 #include "certificate_utils.h"
 #include "x509_metadata_extractor.h"
+#include "../infrastructure/service_container.h"
 #include "../repositories/certificate_repository.h"
-#include "../repositories/upload_repository.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
@@ -18,13 +18,8 @@
 #include <algorithm>
 #include <iomanip>
 
-// Global repository declarations (defined in main.cpp)
-namespace repositories {
-    class CertificateRepository;
-    class UploadRepository;
-}
-extern std::shared_ptr<repositories::CertificateRepository> certificateRepository;
-extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
+// Global service container (defined in main.cpp)
+extern infrastructure::ServiceContainer* g_services;
 
 namespace certificate_utils {
 
@@ -43,12 +38,12 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     const std::string& validationMessage
 ) {
     // Delegate to CertificateRepository
-    if (!certificateRepository) {
+    if (!g_services->certificateRepository()) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return std::make_pair(std::string(""), false);
     }
 
-    return certificateRepository->saveCertificateWithDuplicateCheck(
+    return g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
         uploadId, certType, countryCode, subjectDn, issuerDn,
         serialNumber, fingerprint, notBefore, notAfter, certData,
         validationStatus, validationMessage
@@ -64,12 +59,12 @@ bool trackCertificateDuplicate(
     const std::string& sourceFileName
 ) {
     // Delegate to CertificateRepository
-    if (!certificateRepository) {
+    if (!g_services->certificateRepository()) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return false;
     }
 
-    return certificateRepository->trackCertificateDuplicate(
+    return g_services->certificateRepository()->trackCertificateDuplicate(
         certificateId, uploadId, sourceType, sourceCountry,
         sourceEntryDn, sourceFileName
     );
@@ -80,12 +75,12 @@ bool incrementDuplicateCount(
     const std::string& uploadId
 ) {
     // Delegate to CertificateRepository
-    if (!certificateRepository) {
+    if (!g_services->certificateRepository()) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return false;
     }
 
-    return certificateRepository->incrementDuplicateCount(certificateId, uploadId);
+    return g_services->certificateRepository()->incrementDuplicateCount(certificateId, uploadId);
 }
 
 bool updateCscaExtractionStats(
@@ -100,7 +95,7 @@ bool updateCscaExtractionStats(
     //          csca_duplicates = csca_duplicates + duplicateCount
     //      WHERE id = uploadId
 
-    if (!uploadRepository) {
+    if (!g_services->uploadRepository()) {
         spdlog::error("[CertUtils] uploadRepository is null");
         return false;
     }
@@ -120,12 +115,12 @@ bool updateCertificateLdapStatus(
     // Delegate to CertificateRepository
     // This method updates stored_in_ldap, ldap_dn_v2, and stored_at fields
 
-    if (!certificateRepository) {
+    if (!g_services->certificateRepository()) {
         spdlog::error("[CertUtils] certificateRepository is null");
         return false;
     }
 
-    return certificateRepository->updateCertificateLdapStatus(certificateId, ldapDn);
+    return g_services->certificateRepository()->updateCertificateLdapStatus(certificateId, ldapDn);
 }
 
 std::string getSourceType(const std::string& fileFormat) {

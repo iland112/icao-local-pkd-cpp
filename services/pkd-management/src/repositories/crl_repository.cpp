@@ -3,6 +3,7 @@
  */
 
 #include "crl_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <sstream>
 #include <iomanip>
@@ -37,7 +38,7 @@ std::string CrlRepository::save(const std::string& uploadId,
         // Convert binary CRL to hex string
         // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
         std::ostringstream hexStream;
-        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
+        hexStream << common::db::hexPrefix(dbType);
         for (size_t i = 0; i < crlBinary.size(); i++) {
             hexStream << std::hex << std::setw(2) << std::setfill('0')
                      << static_cast<int>(crlBinary[i]);
@@ -130,7 +131,7 @@ void CrlRepository::updateLdapStatus(const std::string& crlId, const std::string
 
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
-        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+        std::string storedFlag = common::db::boolLiteral(dbType, true);
 
         std::string query;
         if (dbType == "oracle") {
@@ -177,21 +178,13 @@ std::string CrlRepository::generateUuid() {
 Json::Value CrlRepository::findByCountryCode(const std::string& countryCode) {
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
-        std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+        std::string storedFlag = common::db::boolLiteral(dbType, true);
 
         // Get the most recent CRL for the country (by this_update descending)
-        std::string query;
-        if (dbType == "oracle") {
-            query =
-                "SELECT crl_binary, this_update, next_update "
-                "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
-                "ORDER BY this_update DESC FETCH FIRST 1 ROWS ONLY";
-        } else {
-            query =
-                "SELECT crl_binary, this_update, next_update "
-                "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
-                "ORDER BY this_update DESC LIMIT 1";
-        }
+        std::string query =
+            "SELECT crl_binary, this_update, next_update "
+            "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
+            "ORDER BY this_update DESC" + common::db::limitClause(dbType, 1);
 
         Json::Value results = queryExecutor_->executeQuery(query, {countryCode});
         if (results.isArray() && results.size() > 0) {
@@ -208,7 +201,7 @@ Json::Value CrlRepository::findByCountryCode(const std::string& countryCode) {
 
 Json::Value CrlRepository::findAllForExport() {
     std::string dbType = queryExecutor_->getDatabaseType();
-    std::string storedFlag = (dbType == "oracle") ? "1" : "TRUE";
+    std::string storedFlag = common::db::boolLiteral(dbType, true);
 
     std::string query =
         "SELECT country_code, issuer_dn, crl_binary, fingerprint_sha256 "

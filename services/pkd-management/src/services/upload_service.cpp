@@ -3,6 +3,7 @@
  */
 
 #include "upload_service.h"
+#include "../infrastructure/service_container.h"
 #include "../repositories/crl_repository.h"
 #include <spdlog/spdlog.h>
 #include <uuid/uuid.h>
@@ -54,9 +55,8 @@ extern std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
     const std::string& issuerDn, const std::string& fingerprint,
     const std::vector<uint8_t>& crlData);
 
-// CRL Repository (DB operations in CrlRepository)
-namespace repositories { class CrlRepository; }
-extern std::shared_ptr<repositories::CrlRepository> crlRepository;
+// Global service container (defined in main.cpp)
+extern infrastructure::ServiceContainer* g_services;
 
 // Certificate save utility
 namespace certificate_utils {
@@ -1115,7 +1115,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
                 X509_CRL_get_REVOKED(crl) ? sk_X509_REVOKED_num(X509_CRL_get_REVOKED(crl)) : 0);
 
     // Save to DB via CrlRepository
-    std::string crlId = ::crlRepository->save(result.uploadId, countryCode, issuerDn,
+    std::string crlId = g_services->crlRepository()->save(result.uploadId, countryCode, issuerDn,
                                                thisUpdate, nextUpdate, crlNumber, fingerprint, derBytes);
 
     if (!crlId.empty()) {
@@ -1146,7 +1146,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
                         }
                         ASN1_ENUMERATED_free(reasonEnum);
                     }
-                    ::crlRepository->saveRevokedCertificate(crlId, serialNum, revDate, reason);
+                    g_services->crlRepository()->saveRevokedCertificate(crlId, serialNum, revDate, reason);
                 }
             }
         }
@@ -1155,7 +1155,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
         if (ld) {
             std::string ldapDn = saveCrlToLdap(ld, countryCode, issuerDn, fingerprint, derBytes);
             if (!ldapDn.empty()) {
-                ::crlRepository->updateLdapStatus(crlId, ldapDn);
+                g_services->crlRepository()->updateLdapStatus(crlId, ldapDn);
                 result.ldapStoredCount++;
             }
         }

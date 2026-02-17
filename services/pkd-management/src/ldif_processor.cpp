@@ -29,8 +29,9 @@ extern bool parseMasterListEntry(LDAP* ld, const std::string& uploadId,
 extern void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message);
 
 // For periodic DB progress updates during processing
+#include "infrastructure/service_container.h"
 #include "repositories/upload_repository.h"
-extern std::shared_ptr<repositories::UploadRepository> uploadRepository;
+extern infrastructure::ServiceContainer* g_services;
 
 // Forward declaration for sendProgressWithMetadata helper function (from main.cpp)
 extern void sendProgressWithMetadata(
@@ -108,9 +109,9 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
         processedEntries++;
 
         // Update DB progress every 500 entries (for upload history/detail page)
-        if (uploadRepository && (processedEntries % 500 == 0 || processedEntries == totalEntries)) {
-            uploadRepository->updateProgress(uploadId, totalEntries, processedEntries);
-            uploadRepository->updateStatistics(uploadId,
+        if (g_services->uploadRepository() && (processedEntries % 500 == 0 || processedEntries == totalEntries)) {
+            g_services->uploadRepository()->updateProgress(uploadId, totalEntries, processedEntries);
+            g_services->uploadRepository()->updateStatistics(uploadId,
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                 counts.mlscCount, counts.mlCount);
         }

@@ -3,6 +3,7 @@
  */
 
 #include "audit_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -44,7 +45,7 @@ bool AuditRepository::insert(
 
         // Database-aware boolean formatting
         auto boolStr = [&dbType](bool val) -> std::string {
-            return (dbType == "oracle") ? (val ? "1" : "0") : (val ? "true" : "false");
+            return common::db::boolLiteral(dbType, val);
         };
 
         std::vector<std::string> params = {
@@ -103,8 +104,8 @@ Json::Value AuditRepository::findAll(
 
         // Add success filter to SQL WHERE clause (Oracle uses 1/0, PostgreSQL uses true/false)
         if (!successFilter.empty()) {
-            std::string trueVal = (dbType == "oracle") ? "1" : "true";
-            std::string falseVal = (dbType == "oracle") ? "0" : "false";
+            std::string trueVal = common::db::boolLiteral(dbType, true);
+            std::string falseVal = common::db::boolLiteral(dbType, false);
             if (successFilter == "true" || successFilter == "1") {
                 query << " AND success = " << trueVal;
             } else if (successFilter == "false" || successFilter == "0") {
@@ -230,8 +231,8 @@ int AuditRepository::countAll(
 
         // Add success filter (Oracle uses 1/0, PostgreSQL uses true/false)
         if (!successFilter.empty()) {
-            std::string trueVal = (dbType == "oracle") ? "1" : "true";
-            std::string falseVal = (dbType == "oracle") ? "0" : "false";
+            std::string trueVal = common::db::boolLiteral(dbType, true);
+            std::string falseVal = common::db::boolLiteral(dbType, false);
             if (successFilter == "true" || successFilter == "1") {
                 query << " AND success = " << trueVal;
             } else if (successFilter == "false" || successFilter == "0") {
@@ -244,7 +245,7 @@ int AuditRepository::countAll(
             queryExecutor_->executeScalar(query.str(), params);
 
         // Oracle returns strings, PostgreSQL returns ints
-        int count = result.isString() ? std::stoi(result.asString()) : result.asInt();
+        int count = common::db::scalarToInt(result);
         spdlog::debug("[AuditRepository] Count result: {}", count);
         return count;
 
@@ -263,7 +264,7 @@ int AuditRepository::countByOperationType(const std::string& operationType)
         std::vector<std::string> params = {operationType};
 
         Json::Value result = queryExecutor_->executeScalar(query, params);
-        return result.isString() ? std::stoi(result.asString()) : result.asInt();
+        return common::db::scalarToInt(result);
 
     } catch (const std::exception& e) {
         spdlog::error("[AuditRepository] Count failed: {}", e.what());
@@ -281,19 +282,12 @@ Json::Value AuditRepository::getStatistics(const std::string& startDate, const s
         std::string dbType = queryExecutor_->getDatabaseType();
 
         // Database-aware boolean comparison values
-        std::string boolTrue = (dbType == "oracle") ? "1" : "TRUE";
-        std::string boolFalse = (dbType == "oracle") ? "0" : "FALSE";
+        std::string boolTrue = common::db::boolLiteral(dbType, true);
+        std::string boolFalse = common::db::boolLiteral(dbType, false);
 
         // Helper to parse int from Oracle string or PostgreSQL int
         auto getInt = [](const Json::Value& val, int defaultVal) -> int {
-            if (val.isNull()) return defaultVal;
-            if (val.isInt()) return val.asInt();
-            if (val.isUInt()) return static_cast<int>(val.asUInt());
-            if (val.isString()) {
-                try { return std::stoi(val.asString()); } catch (...) { return defaultVal; }
-            }
-            if (val.isDouble()) return static_cast<int>(val.asDouble());
-            return defaultVal;
+            return common::db::scalarToInt(val, defaultVal);
         };
 
         // Total operations (use non-reserved alias names for Oracle compatibility)
@@ -350,11 +344,7 @@ Json::Value AuditRepository::getStatistics(const std::string& startDate, const s
             userQuery += " WHERE created_at >= $1::timestamp AND created_at <= $2::timestamp";
         }
         userQuery += " GROUP BY username ORDER BY count DESC";
-        if (dbType == "oracle") {
-            userQuery += " FETCH FIRST 10 ROWS ONLY";
-        } else {
-            userQuery += " LIMIT 10";
-        }
+        userQuery += common::db::limitClause(dbType, 10);
 
         Json::Value userResult = params.empty() ?
             queryExecutor_->executeQuery(userQuery) :

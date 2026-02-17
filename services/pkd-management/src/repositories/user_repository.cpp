@@ -3,6 +3,7 @@
  */
 
 #include "user_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -93,23 +94,25 @@ Json::Value UserRepository::findAll(
         int paramIndex = 1;
 
         if (!usernameFilter.empty()) {
-            whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
+            whereClause += " AND " + common::db::ilikeCond(queryExecutor_->getDatabaseType(), "username", "$" + std::to_string(paramIndex++));
             params.push_back("%" + usernameFilter + "%");
         }
 
         if (!isActiveFilter.empty()) {
+            std::string dbType = queryExecutor_->getDatabaseType();
+            bool active = (isActiveFilter == "true" || isActiveFilter == "1");
             whereClause += " AND is_active = $" + std::to_string(paramIndex++);
-            params.push_back(isActiveFilter == "true" ? "true" : "false");
+            params.push_back(common::db::boolLiteral(dbType, active));
         }
 
-        // Main query (LIMIT and OFFSET as literals, not parameters)
+        // Main query with database-specific pagination
+        std::string dbType = queryExecutor_->getDatabaseType();
         std::string query =
             "SELECT id, username, email, full_name, is_admin, is_active, "
             "permissions, created_at, last_login_at, updated_at "
             "FROM users " + whereClause +
-            " ORDER BY created_at DESC "
-            "LIMIT " + std::to_string(limit) +
-            " OFFSET " + std::to_string(offset);
+            " ORDER BY created_at DESC" +
+            common::db::paginationClause(dbType, limit, offset);
 
         Json::Value result = queryExecutor_->executeQuery(query, params);
         spdlog::debug("[UserRepository] Found {} users", result.size());
@@ -136,20 +139,22 @@ int UserRepository::count(
         int paramIndex = 1;
 
         if (!usernameFilter.empty()) {
-            whereClause += " AND username ILIKE $" + std::to_string(paramIndex++);
+            whereClause += " AND " + common::db::ilikeCond(queryExecutor_->getDatabaseType(), "username", "$" + std::to_string(paramIndex++));
             params.push_back("%" + usernameFilter + "%");
         }
 
         if (!isActiveFilter.empty()) {
+            std::string dbType = queryExecutor_->getDatabaseType();
+            bool active = (isActiveFilter == "true" || isActiveFilter == "1");
             whereClause += " AND is_active = $" + std::to_string(paramIndex++);
-            params.push_back(isActiveFilter == "true" ? "true" : "false");
+            params.push_back(common::db::boolLiteral(dbType, active));
         }
 
         std::string query = "SELECT COUNT(*) FROM users " + whereClause;
 
         Json::Value result = queryExecutor_->executeScalar(query, params);
 
-        int count = result.asInt();
+        int count = common::db::scalarToInt(result);
         spdlog::debug("[UserRepository] Total users: {}", count);
 
         return count;
@@ -197,9 +202,9 @@ std::string UserRepository::create(const domain::User& user)
                 user.getPasswordHash(),
                 user.getEmail().value_or(""),
                 user.getFullName().value_or(""),
-                user.isAdmin() ? "1" : "0",
+                common::db::boolLiteral("oracle", user.isAdmin()),
                 permissionsStr,
-                user.isActive() ? "1" : "0"
+                common::db::boolLiteral("oracle", user.isActive())
             };
 
             queryExecutor_->executeCommand(query, params);
@@ -216,9 +221,9 @@ std::string UserRepository::create(const domain::User& user)
                 user.getPasswordHash(),
                 user.getEmail().value_or(""),
                 user.getFullName().value_or(""),
-                user.isAdmin() ? "true" : "false",
+                common::db::boolLiteral("postgres", user.isAdmin()),
                 permissionsStr,
-                user.isActive() ? "true" : "false"
+                common::db::boolLiteral("postgres", user.isActive())
             };
 
             Json::Value result = queryExecutor_->executeQuery(query, params);
@@ -269,7 +274,7 @@ bool UserRepository::update(
 
         if (isAdmin.has_value()) {
             setClauses.push_back("is_admin = $" + std::to_string(paramIndex++));
-            params.push_back(isAdmin.value() ? "true" : "false");
+            params.push_back(common::db::boolLiteral(queryExecutor_->getDatabaseType(), isAdmin.value()));
         }
 
         if (!permissions.empty()) {
@@ -292,7 +297,7 @@ bool UserRepository::update(
 
         if (isActive.has_value()) {
             setClauses.push_back("is_active = $" + std::to_string(paramIndex++));
-            params.push_back(isActive.value() ? "true" : "false");
+            params.push_back(common::db::boolLiteral(queryExecutor_->getDatabaseType(), isActive.value()));
         }
 
         if (setClauses.empty()) {
@@ -302,11 +307,7 @@ bool UserRepository::update(
 
         // Add updated_at timestamp
         std::string dbType = queryExecutor_->getDatabaseType();
-        if (dbType == "postgres") {
-            setClauses.push_back("updated_at = NOW()");
-        } else {
-            setClauses.push_back("updated_at = SYSTIMESTAMP");
-        }
+        setClauses.push_back("updated_at = " + common::db::currentTimestamp(dbType));
 
         // Build final query
         std::string query = "UPDATE users SET ";
@@ -383,11 +384,7 @@ bool UserRepository::updateLastLogin(const std::string& id)
         std::string dbType = queryExecutor_->getDatabaseType();
         std::string query;
 
-        if (dbType == "postgres") {
-            query = "UPDATE users SET last_login_at = NOW() WHERE id = $1";
-        } else {
-            query = "UPDATE users SET last_login_at = SYSTIMESTAMP WHERE id = :1";
-        }
+        query = "UPDATE users SET last_login_at = " + common::db::currentTimestamp(dbType) + " WHERE id = $1";
 
         std::vector<std::string> params = {id};
         int rowsAffected = queryExecutor_->executeCommand(query, params);

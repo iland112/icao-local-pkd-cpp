@@ -19,7 +19,7 @@ import {
   Award,
   AlertTriangle,
 } from 'lucide-react';
-import { paApi } from '@/services/api';
+import { paApi } from '@/services/paApi';
 import type { PAVerificationResponse, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
 

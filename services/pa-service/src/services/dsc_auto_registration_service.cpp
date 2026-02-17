@@ -4,6 +4,7 @@
  */
 
 #include "dsc_auto_registration_service.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <openssl/evp.h>
 #include <openssl/bn.h>
@@ -102,7 +103,7 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
         // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
         std::string dbType = queryExecutor_->getDatabaseType();
         std::ostringstream hexStream;
-        hexStream << (dbType == "oracle" ? "\\\\x" : "\\x");
+        hexStream << common::db::hexPrefix(dbType);
         for (auto b : derBytes) {
             hexStream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(b);
         }
@@ -195,7 +196,7 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
                 notAfter,        // $8
                 certDataHex,     // $9
                 validationStatus, // $10
-                isSelfSigned ? "1" : "0", // $11
+                common::db::boolLiteral("oracle", isSelfSigned), // $11
                 signatureAlgorithm, // $12
                 publicKeyAlgorithm, // $13
                 std::to_string(publicKeySize), // $14
@@ -235,7 +236,7 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
                 notAfter,           // $7
                 certDataHex,        // $8
                 validationStatus,   // $9
-                isSelfSigned ? "true" : "false",  // $10
+                common::db::boolLiteral("postgres", isSelfSigned),  // $10
                 signatureAlgorithm, // $11
                 publicKeyAlgorithm, // $12
                 std::to_string(publicKeySize), // $13

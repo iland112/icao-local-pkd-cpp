@@ -108,47 +108,22 @@
 #include "auth/jwt_service.h"
 #include "auth/password_hash.h"
 #include "handlers/auth_handler.h"
+#include "handlers/upload_handler.h"
+#include "handlers/upload_stats_handler.h"
+#include "handlers/certificate_handler.h"
+#include "infrastructure/service_container.h"
+#include "infrastructure/app_config.h"
 
 // Link Certificate Validation
 #include "common/lc_validator.h"
 
-// Global certificate service (initialized in main(), used by all routes)
-std::shared_ptr<services::CertificateService> certificateService;
-
-// Global ICAO handler (initialized in main())
-std::shared_ptr<handlers::IcaoHandler> icaoHandler;
-
-// Global Auth handler (initialized in main())
-std::shared_ptr<handlers::AuthHandler> authHandler;
-
-// Global Repositories and Services (Repository Pattern)
-std::shared_ptr<common::DbConnectionPool> dbPool;
-std::unique_ptr<common::IQueryExecutor> queryExecutor;
-std::shared_ptr<common::LdapConnectionPool> ldapPool;
-std::shared_ptr<repositories::UploadRepository> uploadRepository;
-std::shared_ptr<repositories::CertificateRepository> certificateRepository;
-std::shared_ptr<repositories::ValidationRepository> validationRepository;
-std::shared_ptr<repositories::AuditRepository> auditRepository;
-
-std::shared_ptr<repositories::LdifStructureRepository> ldifStructureRepository;
-std::shared_ptr<repositories::UserRepository> userRepository;
-std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;
-std::shared_ptr<repositories::CrlRepository> crlRepository;
-std::shared_ptr<repositories::DeviationListRepository> deviationListRepository;  // DL deviation data
-std::shared_ptr<services::UploadService> uploadService;
-std::shared_ptr<services::ValidationService> validationService;
-std::shared_ptr<services::AuditService> auditService;
-
-std::shared_ptr<services::LdifStructureService> ldifStructureService;
-
-// Global cache for available countries (populated on startup)
-std::set<std::string> cachedCountries;
-std::mutex countriesCacheMutex;
+// Global service container (accessed by processing functions and route handlers)
+infrastructure::ServiceContainer* g_services = nullptr;
 
 namespace {
 
-// Use global repository and connection pool from outside anonymous namespace
-// Access via :: scope resolution operator (e.g., ::certificateRepository, ::dbPool)
+// Use global service container from outside anonymous namespace
+// Access via g_services->accessor() (e.g., g_services->uploadRepository())
 
 /**
  * @brief Case-insensitive string search
@@ -171,140 +146,7 @@ bool containsIgnoreCase(const std::string& haystack, const std::string& needle) 
     return haystackLower.find(needleLower) != std::string::npos;
 }
 
-/**
- * @brief Application configuration
- */
-struct AppConfig {
-    std::string dbHost = "postgres";
-    int dbPort = 5432;
-    std::string dbName = "localpkd";
-    std::string dbUser = "localpkd";
-    std::string dbPassword;  // Must be set via environment variable
-
-    // LDAP Read: Application-level load balancing
-    // Format: "host1:port1,host2:port2,..."
-    std::string ldapReadHosts = "openldap1:389,openldap2:389";
-    std::vector<std::string> ldapReadHostList;  // Parsed from ldapReadHosts
-    // Note: ldapReadRoundRobinIndex is defined as a global variable (atomic cannot be copied)
-
-    // Legacy single host support (for backward compatibility)
-    std::string ldapHost = "openldap1";
-    int ldapPort = 389;
-
-    // LDAP Write: Direct connection to primary master (openldap1) for write operations
-    std::string ldapWriteHost = "openldap1";
-    int ldapWritePort = 389;
-    std::string ldapBindDn = "cn=admin,dc=ldap,dc=smartcoreinc,dc=com";
-    std::string ldapBindPassword;  // Must be set via environment variable
-    std::string ldapBaseDn = "dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
-
-    // LDAP Container names (configurable via environment variables)
-    std::string ldapDataContainer = "dc=data";        // For CSCA, DSC, LC, CRL
-    std::string ldapNcDataContainer = "dc=nc-data";  // For non-conformant DSC
-
-    // Trust Anchor for Master List CMS signature verification
-    std::string trustAnchorPath = "/app/data/cert/UN_CSCA_2.pem";
-
-    // ICAO Auto Sync Configuration
-    std::string icaoPortalUrl = "https://pkddownloadsg.icao.int/";
-    std::string notificationEmail = "admin@localhost";
-    bool icaoAutoNotify = true;
-    int icaoHttpTimeout = 10;  // seconds
-
-    // ICAO Scheduler Configuration
-    int icaoCheckScheduleHour = 9;   // 0-23, default 9 AM
-    bool icaoSchedulerEnabled = true;
-
-    // ASN.1 Parser Configuration
-    int asn1MaxLines = 100;  // Default max lines for Master List structure parsing
-
-    int serverPort = 8081;
-    int threadNum = 4;
-
-    static AppConfig fromEnvironment() {
-        AppConfig config;
-
-        if (auto val = std::getenv("DB_HOST")) config.dbHost = val;
-        if (auto val = std::getenv("DB_PORT")) config.dbPort = std::stoi(val);
-        if (auto val = std::getenv("DB_NAME")) config.dbName = val;
-        if (auto val = std::getenv("DB_USER")) config.dbUser = val;
-        if (auto val = std::getenv("DB_PASSWORD")) config.dbPassword = val;
-
-        // LDAP Read Hosts (Application-level load balancing)
-        if (auto val = std::getenv("LDAP_READ_HOSTS")) {
-            config.ldapReadHosts = val;
-            // Parse comma-separated host:port list
-            std::stringstream ss(config.ldapReadHosts);
-            std::string item;
-            while (std::getline(ss, item, ',')) {
-                // Trim whitespace
-                item.erase(0, item.find_first_not_of(" \t"));
-                item.erase(item.find_last_not_of(" \t") + 1);
-                if (!item.empty()) {
-                    config.ldapReadHostList.push_back(item);
-                }
-            }
-            if (config.ldapReadHostList.empty()) {
-                throw std::runtime_error("LDAP_READ_HOSTS is empty or invalid");
-            }
-            spdlog::info("LDAP Read: {} hosts configured for load balancing", config.ldapReadHostList.size());
-            for (const auto& host : config.ldapReadHostList) {
-                spdlog::info("  - {}", host);
-            }
-        } else {
-            // Fallback to single host for backward compatibility
-            if (auto val = std::getenv("LDAP_HOST")) config.ldapHost = val;
-            if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = std::stoi(val);
-            config.ldapReadHostList.push_back(config.ldapHost + ":" + std::to_string(config.ldapPort));
-            spdlog::warn("LDAP_READ_HOSTS not set, using single host: {}", config.ldapReadHostList[0]);
-        }
-
-        if (auto val = std::getenv("LDAP_WRITE_HOST")) config.ldapWriteHost = val;
-        if (auto val = std::getenv("LDAP_WRITE_PORT")) config.ldapWritePort = std::stoi(val);
-        if (auto val = std::getenv("LDAP_BIND_DN")) config.ldapBindDn = val;
-        if (auto val = std::getenv("LDAP_BIND_PASSWORD")) config.ldapBindPassword = val;
-        if (auto val = std::getenv("LDAP_BASE_DN")) config.ldapBaseDn = val;
-        if (auto val = std::getenv("LDAP_DATA_CONTAINER")) config.ldapDataContainer = val;
-        if (auto val = std::getenv("LDAP_NC_DATA_CONTAINER")) config.ldapNcDataContainer = val;
-
-        if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
-        if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
-        if (auto val = std::getenv("TRUST_ANCHOR_PATH")) config.trustAnchorPath = val;
-
-        // ICAO Auto Sync environment variables
-        if (auto val = std::getenv("ICAO_PORTAL_URL")) config.icaoPortalUrl = val;
-        if (auto val = std::getenv("ICAO_NOTIFICATION_EMAIL")) config.notificationEmail = val;
-        if (auto val = std::getenv("ICAO_AUTO_NOTIFY")) config.icaoAutoNotify = (std::string(val) == "true");
-        if (auto val = std::getenv("ICAO_HTTP_TIMEOUT")) config.icaoHttpTimeout = std::stoi(val);
-
-        // ASN.1 Parser Configuration
-        if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = std::stoi(val);
-
-        // ICAO Scheduler Configuration
-        if (auto val = std::getenv("ICAO_CHECK_SCHEDULE_HOUR")) {
-            config.icaoCheckScheduleHour = std::stoi(val);
-            if (config.icaoCheckScheduleHour < 0 || config.icaoCheckScheduleHour > 23)
-                config.icaoCheckScheduleHour = 9;
-        }
-        if (auto val = std::getenv("ICAO_SCHEDULER_ENABLED"))
-            config.icaoSchedulerEnabled = (std::string(val) == "true");
-
-        return config;
-    }
-
-    // Validate required credentials are set
-    void validateRequiredCredentials() const {
-        if (dbPassword.empty()) {
-            throw std::runtime_error("FATAL: DB_PASSWORD environment variable not set");
-        }
-        if (ldapBindPassword.empty()) {
-            throw std::runtime_error("FATAL: LDAP_BIND_PASSWORD environment variable not set");
-        }
-        spdlog::info("✅ All required credentials loaded from environment");
-    }
-};
-
-// Global configuration
+// Global configuration (AppConfig struct defined in infrastructure/app_config.h)
 AppConfig appConfig;
 
 // LDAP Read Load Balancing: Thread-safe round-robin index (global variable)
@@ -821,7 +663,7 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
     }
 
     // Step 2: Find ALL CSCAs matching issuer DN (including link certificates)
-    std::vector<X509*> allCscas = ::certificateRepository->findAllCscasBySubjectDn(issuerDn);
+    std::vector<X509*> allCscas = g_services->certificateRepository()->findAllCscasBySubjectDn(issuerDn);
 
     if (allCscas.empty()) {
         result.errorMessage = "No CSCA found for issuer: " + issuerDn.substr(0, 80);
@@ -1016,13 +858,13 @@ bool isValidP7sFile(const std::vector<uint8_t>& content) {
 Json::Value checkDuplicateFile(const std::string& fileHash) {
     Json::Value result;  // null by default
 
-    if (!::uploadRepository) {
+    if (!g_services || !g_services->uploadRepository()) {
         spdlog::warn("Duplicate check skipped: uploadRepository is null (continuing with upload)");
         return result;  // Fail open: allow upload if check fails
     }
 
     try {
-        auto uploadOpt = ::uploadRepository->findByFileHash(fileHash);
+        auto uploadOpt = g_services->uploadRepository()->findByFileHash(fileHash);
         if (uploadOpt.has_value()) {
             const auto& upload = uploadOpt.value();
             result["uploadId"] = upload.id;
@@ -1095,7 +937,7 @@ Json::Value checkDatabase() {
     Json::Value result;
     result["name"] = "database";
 
-    if (!::queryExecutor) {
+    if (!g_services || !g_services->queryExecutor()) {
         result["status"] = "DOWN";
         result["error"] = "Query executor not initialized";
         return result;
@@ -1104,12 +946,12 @@ Json::Value checkDatabase() {
     auto start = std::chrono::steady_clock::now();
 
     try {
-        std::string dbType = ::queryExecutor->getDatabaseType();
+        std::string dbType = g_services->queryExecutor()->getDatabaseType();
         std::string versionQuery = (dbType == "oracle")
             ? "SELECT banner AS version FROM v$version WHERE ROWNUM = 1"
             : "SELECT version()";
 
-        auto rows = ::queryExecutor->executeQuery(versionQuery);
+        auto rows = g_services->queryExecutor()->executeQuery(versionQuery);
 
         auto end = std::chrono::steady_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -1182,9 +1024,9 @@ std::string computeFileHash(const std::vector<uint8_t>& content) {
 
 // escapeSqlString() - removed, no longer needed with parameterized queries via QueryExecutor
 
-// saveUploadRecord() - removed, use ::uploadRepository->insert() instead
+// saveUploadRecord() - removed, use g_services->uploadRepository()->insert() instead
 
-// updateUploadStatus() - removed, use ::uploadRepository->updateStatus() instead
+// updateUploadStatus() - removed, use g_services->uploadRepository()->updateStatus() instead
 
 /**
  * @brief Send enhanced progress update with optional certificate metadata
@@ -2745,7 +2587,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
         // 3. Save validation result via ValidationRepository
         valRecord.certificateId = certId;
-        ::validationRepository->save(valRecord);
+        g_services->validationRepository()->save(valRecord);
 
         // 4. Save to LDAP
         if (ld) {
@@ -2768,7 +2610,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                                                         pkdConformanceCode, pkdConformanceText, pkdVersion);
             if (!ldapDn.empty()) {
                 // Use Repository method instead of standalone function
-                ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                g_services->certificateRepository()->updateCertificateLdapStatus(certId, ldapDn);
                 ldapStoredCount++;
                 spdlog::debug("Saved certificate to LDAP: {}", ldapDn);
             } else {
@@ -2830,7 +2672,7 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
     std::string countryCode = extractCountryCode(issuerDn);
 
     // 1. Save to DB via CrlRepository
-    std::string crlId = ::crlRepository->save(uploadId, countryCode, issuerDn,
+    std::string crlId = g_services->crlRepository()->save(uploadId, countryCode, issuerDn,
                                                thisUpdate, nextUpdate, crlNumber, fingerprint, derBytes);
 
     if (!crlId.empty()) {
@@ -2862,7 +2704,7 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
                         ASN1_ENUMERATED_free(reasonEnum);
                     }
 
-                    ::crlRepository->saveRevokedCertificate(crlId, serialNum, revDate, reason);
+                    g_services->crlRepository()->saveRevokedCertificate(crlId, serialNum, revDate, reason);
                 }
             }
             spdlog::debug("Saved CRL to DB with {} revoked certificates, issuer={}",
@@ -2873,7 +2715,7 @@ bool parseCrlEntry(LDAP* ld, const std::string& uploadId,
         if (ld) {
             std::string ldapDn = saveCrlToLdap(ld, countryCode, issuerDn, fingerprint, derBytes);
             if (!ldapDn.empty()) {
-                ::crlRepository->updateLdapStatus(crlId, ldapDn);
+                g_services->crlRepository()->updateLdapStatus(crlId, ldapDn);
                 ldapCrlStoredCount++;
                 spdlog::debug("Saved CRL to LDAP: {}", ldapDn);
             } else {
@@ -3054,16 +2896,16 @@ void updateUploadStatistics(const std::string& uploadId,
                            int dscNcCount, int crlCount, int totalEntries, int processedEntries,
                            const std::string& errorMessage) {
     // Use UploadRepository instead of direct SQL
-    if (!uploadRepository) {
+    if (!g_services || !g_services->uploadRepository()) {
         spdlog::error("[UpdateStats] uploadRepository is null");
         return;
     }
 
     // Update status
-    ::uploadRepository->updateStatus(uploadId, status, errorMessage);
+    g_services->uploadRepository()->updateStatus(uploadId, status, errorMessage);
 
     // Update certificate statistics
-    ::uploadRepository->updateStatistics(uploadId, cscaCount, dscCount, dscNcCount, crlCount);
+    g_services->uploadRepository()->updateStatistics(uploadId, cscaCount, dscCount, dscNcCount, crlCount);
 
     spdlog::debug("[UpdateStats] Updated statistics for upload: {}", uploadId);
 }
@@ -3097,7 +2939,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
         spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
 
         // Get processing_mode from upload record using Repository
-        auto uploadOpt = ::uploadRepository->findById(uploadId);
+        auto uploadOpt = g_services->uploadRepository()->findById(uploadId);
         if (!uploadOpt.has_value()) {
             spdlog::error("Upload record not found: {}", uploadId);
             cleanupGuard();
@@ -3116,7 +2958,7 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
                 spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
 
                 // Update upload status to FAILED using Repository
-                ::uploadRepository->updateStatus(uploadId, "FAILED",
+                g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
                     "LDAP connection failure - cannot ensure data consistency");
 
                 // Send failure progress
@@ -3146,9 +2988,9 @@ void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t
             spdlog::info("Parsed {} LDIF entries for upload {}", totalEntries, uploadId);
 
             // Update DB record: status = PROCESSING, total_entries populated
-            if (::uploadRepository) {
-                ::uploadRepository->updateStatus(uploadId, "PROCESSING", "");
-                ::uploadRepository->updateProgress(uploadId, totalEntries, 0);
+            if (g_services && g_services->uploadRepository()) {
+                g_services->uploadRepository()->updateStatus(uploadId, "PROCESSING", "");
+                g_services->uploadRepository()->updateProgress(uploadId, totalEntries, 0);
                 spdlog::info("Upload {} status updated to PROCESSING (total_entries={})", uploadId, totalEntries);
             }
 
@@ -3235,7 +3077,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
         spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
         // Get processing_mode from upload record using Repository
-        auto uploadOpt = ::uploadRepository->findById(uploadId);
+        auto uploadOpt = g_services->uploadRepository()->findById(uploadId);
         if (!uploadOpt.has_value()) {
             spdlog::error("Upload record not found: {}", uploadId);
             cleanupGuard();
@@ -3254,7 +3096,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
 
                 // Update upload status to FAILED using Repository
-                ::uploadRepository->updateStatus(uploadId, "FAILED",
+                g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
                     "LDAP connection failure - cannot ensure data consistency");
 
                 // Send failure progress
@@ -3285,8 +3127,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 spdlog::error("Invalid Master List: not a valid CMS structure (missing SEQUENCE tag)");
                 ProgressManager::getInstance().sendProgress(
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format", "CMS 형식 오류"));
-                ::uploadRepository->updateStatus(uploadId, "FAILED", "Invalid CMS format");
-                ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
+                g_services->uploadRepository()->updateStatus(uploadId, "FAILED", "Invalid CMS format");
+                g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                 cleanupGuard();
                 return;
@@ -3318,8 +3160,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             }
 
             // Update DB record: status = PROCESSING before certificate extraction
-            if (::uploadRepository) {
-                ::uploadRepository->updateStatus(uploadId, "PROCESSING", "");
+            if (g_services && g_services->uploadRepository()) {
+                g_services->uploadRepository()->updateStatus(uploadId, "PROCESSING", "");
                 spdlog::info("Upload {} status updated to PROCESSING (Master List)", uploadId);
             }
 
@@ -3386,12 +3228,12 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                 ProgressManager::getInstance().sendProgress(progress);
 
                                 if (totalCerts % 50 == 0) {
-                                    ::uploadRepository->updateProgress(uploadId, totalCertsInML, savedCount);
+                                    g_services->uploadRepository()->updateProgress(uploadId, totalCertsInML, savedCount);
                                 }
                             }
 
                             // Save certificate using Repository Pattern
-                            auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
+                            auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
                                 fingerprint, notBefore, notAfter, derBytes);
 
@@ -3408,7 +3250,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                                                     subjectDn, issuerDn, serialNumber,
                                                                                     fingerprint, derBytes);
                                         if (!ldapDn.empty()) {
-                                            ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                                            g_services->certificateRepository()->updateCertificateLdapStatus(certId, ldapDn);
                                             ldapStoredCount++;
                                         }
                                     }
@@ -3420,8 +3262,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                 } else {
                     spdlog::error("Failed to parse Master List: neither CMS nor PKCS7 parsing succeeded");
                     spdlog::error("OpenSSL error: {}", ERR_error_string(ERR_get_error(), nullptr));
-                    ::uploadRepository->updateStatus(uploadId, "FAILED", "CMS/PKCS7 parsing failed");
-                    ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
+                    g_services->uploadRepository()->updateStatus(uploadId, "FAILED", "CMS/PKCS7 parsing failed");
+                    g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
                     if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
                     return;
                 }
@@ -3577,12 +3419,12 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
 
                                             // Update DB progress for polling fallback
                                             if (totalCerts % 50 == 0) {
-                                                ::uploadRepository->updateProgress(uploadId, totalCertsInML, savedCount);
+                                                g_services->uploadRepository()->updateProgress(uploadId, totalCertsInML, savedCount);
                                             }
                                         }
 
                                         // Save to DB with validation status using Repository Pattern
-                                        auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
+                                        auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                             uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
                                             fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
 
@@ -3592,7 +3434,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                 spdlog::debug("Skipping duplicate CSCA from Master List: fingerprint={}", fingerprint.substr(0, 16));
 
                                                 // Track duplicate in certificate_duplicates table
-                                                ::certificateRepository->trackCertificateDuplicate(certId, uploadId, "ML_FILE", countryCode, "", "");
+                                                g_services->certificateRepository()->trackCertificateDuplicate(certId, uploadId, "ML_FILE", countryCode, "", "");
                                             } else {
                                                 // All Master List certificates are CSCA
                                                 cscaCount++;
@@ -3605,7 +3447,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                                                                 subjectDn, issuerDn, serialNumber,
                                                                                                 fingerprint, derBytes);
                                                     if (!ldapDn.empty()) {
-                                                        ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                                                        g_services->certificateRepository()->updateCertificateLdapStatus(certId, ldapDn);
                                                         ldapStoredCount++;
                                                         spdlog::debug("Saved {} from Master List to LDAP: {}", certType, ldapDn);
                                                     }
@@ -3682,12 +3524,12 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                 ProgressManager::getInstance().sendProgress(progress);
 
                                 if (totalCerts % 50 == 0) {
-                                    ::uploadRepository->updateProgress(uploadId, totalCertsInML, savedCount);
+                                    g_services->uploadRepository()->updateProgress(uploadId, totalCertsInML, savedCount);
                                 }
                             }
 
                             // Save certificate using Repository Pattern
-                            auto [certId, isDuplicate] = ::certificateRepository->saveCertificateWithDuplicateCheck(
+                            auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
                                 fingerprint, notBefore, notAfter, derBytes);
 
@@ -3704,7 +3546,7 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
                                                                                     subjectDn, issuerDn, serialNumber,
                                                                                     fingerprint, derBytes);
                                         if (!ldapDn.empty()) {
-                                            ::certificateRepository->updateCertificateLdapStatus(certId, ldapDn);
+                                            g_services->certificateRepository()->updateCertificateLdapStatus(certId, ldapDn);
                                             ldapStoredCount++;
                                         }
                                     }
@@ -3722,11 +3564,11 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             // Update statistics (Master List contains only CSCA, no DSC or DSC_NC)
             // Note: ICAO Master List (.ml) extracts individual CSCA certificates, so ml_count = 0
             // Only Country Master Lists from LDIF (pkdMasterListContent) are counted as ML
-            ::uploadRepository->updateStatus(uploadId, "COMPLETED", "");
-            ::uploadRepository->updateStatistics(uploadId, cscaCount, dscCount, 0, 0, 1, 1);
+            g_services->uploadRepository()->updateStatus(uploadId, "COMPLETED", "");
+            g_services->uploadRepository()->updateStatistics(uploadId, cscaCount, dscCount, 0, 0, 1, 1);
             // Update final progress counts for polling fallback
             int finalTotal = totalCertsInML > 0 ? totalCertsInML : totalCerts;
-            ::uploadRepository->updateProgress(uploadId, finalTotal, cscaCount + dscCount);
+            g_services->uploadRepository()->updateProgress(uploadId, finalTotal, cscaCount + dscCount);
 
             // Enhanced completion message with LDAP status
             std::string completionMsg = "처리 완료: ";
@@ -3758,8 +3600,8 @@ void processMasterListFileAsync(const std::string& uploadId, const std::vector<u
             spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));
-            ::uploadRepository->updateStatus(uploadId, "FAILED", e.what());
-            ::uploadRepository->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
+            g_services->uploadRepository()->updateStatus(uploadId, "FAILED", e.what());
+            g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
         }
 
         // Cleanup LDAP connection
@@ -3835,440 +3677,26 @@ void registerRoutes() {
     // --- Authentication Routes ---
     // Note: AuthMiddleware is applied globally via registerPreHandlingAdvice()
     // (see initialization section at end of main())
-    if (authHandler) {
-        authHandler->registerRoutes(app);
+    if (g_services && g_services->authHandler()) {
+        g_services->authHandler()->registerRoutes(app);
+    }
+
+    // --- Upload Routes (extracted to UploadHandler) ---
+    if (g_services && g_services->uploadHandler()) {
+        g_services->uploadHandler()->registerRoutes(app);
+    }
+
+    // --- Upload Stats Routes (extracted to UploadStatsHandler) ---
+    if (g_services && g_services->uploadStatsHandler()) {
+        g_services->uploadStatsHandler()->registerRoutes(app);
+    }
+
+    // --- Certificate Routes (extracted to CertificateHandler) ---
+    if (g_services && g_services->certificateHandler()) {
+        g_services->certificateHandler()->registerRoutes(app);
     }
 
     // --- API Routes ---
-
-    // Manual mode: Trigger parse endpoint
-    app.registerHandler(
-        "/api/upload/{uploadId}/parse",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("POST /api/upload/{}/parse - Trigger parsing", uploadId);
-
-            // Use QueryExecutor for Oracle support
-            if (!::queryExecutor) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Query executor not initialized";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            try {
-                // Check if upload exists and get file path (parameterized query)
-                std::string query = "SELECT id, file_path, file_format FROM uploaded_file WHERE id = $1";
-                auto rows = ::queryExecutor->executeQuery(query, {uploadId});
-
-                if (rows.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Upload not found";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k404NotFound);
-                    callback(resp);
-                    return;
-                }
-
-                // Get file path and format
-                std::string filePathStr = rows[0].get("file_path", "").asString();
-                std::string fileFormatStr = rows[0].get("file_format", "").asString();
-
-                if (filePathStr.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "File path not found. File may not have been saved.";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k404NotFound);
-                    callback(resp);
-                    return;
-                }
-
-            // Read file from disk
-            std::ifstream inFile(filePathStr, std::ios::binary | std::ios::ate);
-            if (!inFile.is_open()) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Failed to open file: " + filePathStr;
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            std::streamsize fileSize = inFile.tellg();
-            inFile.seekg(0, std::ios::beg);
-            std::vector<uint8_t> contentBytes(fileSize);
-            if (!inFile.read(reinterpret_cast<char*>(contentBytes.data()), fileSize)) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Failed to read file";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-            inFile.close();
-
-            // Trigger async processing based on file format
-            if (fileFormatStr == "LDIF") {
-                processLdifFileAsync(uploadId, contentBytes);
-            } else if (fileFormatStr == "ML") {
-                // Use Strategy Pattern for Master List processing
-                std::thread([uploadId, contentBytes]() {
-                    spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
-
-                    // Get processing mode from upload record using Repository
-                    auto uploadOpt = ::uploadRepository->findById(uploadId);
-                    if (!uploadOpt.has_value()) {
-                        spdlog::error("Upload record not found: {}", uploadId);
-                        return;
-                    }
-
-                    std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
-                    spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
-
-                    // Connect to LDAP only if AUTO mode
-                    LDAP* ld = nullptr;
-                    if (processingMode == "AUTO") {
-                        ld = getLdapWriteConnection();
-                        if (!ld) {
-                            spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
-                            spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
-
-                            // Update upload status to FAILED using Repository
-                            ::uploadRepository->updateStatus(uploadId, "FAILED",
-                                "LDAP connection failure - cannot ensure data consistency");
-
-                            // Send failure progress
-                            ProgressManager::getInstance().sendProgress(
-                                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                                    0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
-
-                            return;
-                        }
-                        spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
-                    }
-
-                    try {
-                        // Use Strategy Pattern
-                        auto strategy = ProcessingStrategyFactory::create(processingMode);
-                        strategy->processMasterListContent(uploadId, contentBytes, ld);
-
-                        // Send appropriate progress based on mode
-                        if (processingMode == "MANUAL") {
-                            // MANUAL mode: Only parsing completed, waiting for Stage 2
-                            ProgressManager::getInstance().sendProgress(
-                                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                                    100, 100, "Master List 파싱 완료 - 검증 대기"));
-                        } else {
-                            // AUTO mode: All processing completed
-                            ProgressManager::getInstance().sendProgress(
-                                ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                    100, 100, "Master List 처리 완료"));
-                        }
-
-                    } catch (const std::exception& e) {
-                        spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                                0, 0, "처리 실패", e.what()));
-                    }
-
-                    if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                    // Note: No PGconn cleanup needed - using Repository Pattern with connection pool
-                }).detach();
-            } else {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Unsupported file format: " + fileFormatStr;
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
-            }
-
-            Json::Value result;
-            result["success"] = true;
-            result["message"] = "Parse processing started";
-            result["uploadId"] = uploadId;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("POST /api/upload/{}/parse error: {}", uploadId, e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = std::string("Internal error: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // Manual mode: Trigger validate and DB save endpoint
-    // Refactored to use Repository Pattern instead of direct PostgreSQL connection
-    app.registerHandler(
-        "/api/upload/{uploadId}/validate",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("POST /api/upload/{}/validate - Trigger validation and DB save", uploadId);
-
-            // Check if upload exists using Repository Pattern
-            auto uploadOpt = ::uploadRepository->findById(uploadId);
-            if (!uploadOpt.has_value()) {
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = "Upload not found";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k404NotFound);
-                callback(resp);
-                return;
-            }
-
-            // Trigger validation and DB save in background (MANUAL mode Stage 2)
-            std::thread([uploadId]() {
-                spdlog::info("Starting DSC validation for upload: {}", uploadId);
-
-                try {
-                    // Send validation started
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
-                            0, 100, "인증서 검증 중..."));
-
-                    // MANUAL mode Stage 2: Validate and save to DB
-                    // Note: validateAndSaveToDb() uses Repository Pattern internally (no PGconn* needed)
-                    auto strategy = ProcessingStrategyFactory::create("MANUAL");
-                    strategy->validateAndSaveToDb(uploadId);
-
-                    // Send DB save completed (Stage 2 완료)
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_COMPLETED,
-                            100, 100, "DB 저장 및 검증 완료"));
-
-                    spdlog::info("MANUAL mode Stage 2 completed for upload {}", uploadId);
-                } catch (const std::exception& e) {
-                    spdlog::error("Validation failed for upload {}: {}", uploadId, e.what());
-                    ProgressManager::getInstance().sendProgress(
-                        ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                            0, 0, std::string("검증 실패: ") + e.what()));
-                }
-            }).detach();
-
-            Json::Value result;
-            result["success"] = true;
-            result["message"] = "Validation processing started";
-            result["uploadId"] = uploadId;
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Post}
-    );
-
-    // GET /api/upload/{uploadId}/validations - Get validation results for an upload
-    // Connected to ValidationService -> ValidationRepository (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/{uploadId}/validations",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-            const std::string& uploadId) {
-            try {
-                spdlog::info("GET /api/upload/{}/validations", uploadId);
-
-                // Parse query parameters
-                std::string limitStr = req->getOptionalParameter<std::string>("limit").value_or("50");
-                std::string offsetStr = req->getOptionalParameter<std::string>("offset").value_or("0");
-                std::string status = req->getOptionalParameter<std::string>("status").value_or("");
-                std::string certType = req->getOptionalParameter<std::string>("certType").value_or("");
-
-                int limit = std::stoi(limitStr);
-                int offset = std::stoi(offsetStr);
-
-                // Call ValidationService (Repository Pattern)
-                Json::Value response = validationService->getValidationsByUploadId(
-                    uploadId, limit, offset, status, certType
-                );
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Upload validations error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/upload/{uploadId}/validation-statistics - Get validation statistics for an upload
-    // Connected to ValidationService -> ValidationRepository (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/{uploadId}/validation-statistics",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            try {
-                spdlog::info("GET /api/upload/{}/validation-statistics", uploadId);
-
-                // Call ValidationService (Repository Pattern)
-                Json::Value response = validationService->getValidationStatistics(uploadId);
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Validation statistics error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/upload/{uploadId}/ldif-structure - Get LDIF file structure
-    // LDIF Structure Visualization (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/{uploadId}/ldif-structure",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            try {
-                spdlog::info("GET /api/upload/{}/ldif-structure", uploadId);
-
-                // Get maxEntries from query parameter (default: 100)
-                int maxEntries = 100;
-                if (req->getParameter("maxEntries") != "") {
-                    try {
-                        maxEntries = std::stoi(req->getParameter("maxEntries"));
-                    } catch (...) {
-                        // Invalid maxEntries, use default
-                        maxEntries = 100;
-                    }
-                }
-
-                // Call LdifStructureService (Repository Pattern)
-                Json::Value response = ldifStructureService->getLdifStructure(uploadId, maxEntries);
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("LDIF structure error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Cleanup failed upload endpoint
-    app.registerHandler(
-        "/api/upload/{uploadId}",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("DELETE /api/upload/{} - Delete upload", uploadId);
-
-            try {
-                bool deleted = uploadService->deleteUpload(uploadId);
-
-                if (!deleted) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Upload not found or deletion failed";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k404NotFound);
-                    callback(resp);
-                    return;
-                }
-
-                Json::Value result;
-                result["success"] = true;
-                result["message"] = "Upload deleted successfully";
-                result["uploadId"] = uploadId;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-                // Audit logging - UPLOAD_DELETE success
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId, username] = extractUserFromRequest(req);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
-                    auditEntry.operationType = OperationType::UPLOAD_DELETE;
-                    auditEntry.operationSubtype = "UPLOAD";
-                    auditEntry.resourceId = uploadId;
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "DELETE";
-                    auditEntry.requestPath = "/api/upload/" + uploadId;
-                    auditEntry.success = true;
-                    Json::Value metadata;
-                    metadata["uploadId"] = uploadId;
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-            } catch (const std::exception& e) {
-                spdlog::error("Failed to delete upload {}: {}", uploadId, e.what());
-
-                // Audit logging - UPLOAD_DELETE failed
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId, username] = extractUserFromRequest(req);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
-                    auditEntry.operationType = OperationType::UPLOAD_DELETE;
-                    auditEntry.operationSubtype = "UPLOAD";
-                    auditEntry.resourceId = uploadId;
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "DELETE";
-                    auditEntry.requestPath = "/api/upload/" + uploadId;
-                    auditEntry.success = false;
-                    auditEntry.errorMessage = e.what();
-                    Json::Value metadata;
-                    metadata["uploadId"] = uploadId;
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = std::string("Delete failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Delete}
-    );
 
     // --- Audit Log API Endpoints ---
 
@@ -4290,7 +3718,7 @@ void registerRoutes() {
                 filter.success = req->getOptionalParameter<std::string>("success").value_or("");
 
                 // Call AuditService (Repository Pattern)
-                Json::Value result = auditService->getOperationLogs(filter);
+                Json::Value result = g_services->auditService()->getOperationLogs(filter);
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 if (!result.get("success", false).asBool()) {
@@ -4321,7 +3749,7 @@ void registerRoutes() {
 
             try {
                 // Call AuditService (Repository Pattern)
-                Json::Value result = auditService->getOperationStatistics();
+                Json::Value result = g_services->auditService()->getOperationStatistics();
 
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
                 if (!result.get("success", false).asBool()) {
@@ -4401,7 +3829,7 @@ void registerRoutes() {
                 spdlog::info("POST /api/validation/revalidate - Re-validate DSC certificates");
 
                 // Call ValidationService (Repository Pattern)
-                auto result = validationService->revalidateDscCertificates();
+                auto result = g_services->validationService()->revalidateDscCertificates();
 
                 // Build response
                 Json::Value response;
@@ -4429,1379 +3857,6 @@ void registerRoutes() {
             }
         },
         {drogon::Post, drogon::Get}
-    );
-
-    // Upload LDIF file endpoint
-    app.registerHandler(
-        "/api/upload/ldif",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/upload/ldif - LDIF file upload");
-
-            try {
-                // Parse multipart form data
-                drogon::MultiPartParser parser;
-                if (parser.parse(req) != 0) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Invalid multipart form data";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& files = parser.getFiles();
-                if (files.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "No file uploaded";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& file = files[0];
-                std::string originalFileName = file.getFileName();
-
-                // Sanitize filename to prevent path traversal attacks
-                std::string fileName;
-                try {
-                    fileName = sanitizeFilename(originalFileName);
-                } catch (const std::exception& e) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = std::string("Invalid filename: ") + e.what();
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                std::string content = std::string(file.fileData(), file.fileLength());
-                std::vector<uint8_t> contentBytes(content.begin(), content.end());
-                int64_t fileSize = static_cast<int64_t>(content.size());
-
-                // Validate LDIF file format
-                if (!isValidLdifFile(content)) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Invalid LDIF file format. File must contain valid LDIF entries (dn: or version:).";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    spdlog::warn("Invalid LDIF file rejected: {}", originalFileName);
-                    return;
-                }
-
-                // Get processing mode from form data
-                std::string processingMode = "AUTO";  // default
-                auto& params = parser.getParameters();
-                for (const auto& param : params) {
-                    if (param.first == "processingMode") {
-                        processingMode = param.second;
-                        break;
-                    }
-                }
-
-                // Get username from session
-                std::string username = "anonymous";
-                auto session = req->getSession();
-                if (session) {
-                    auto [userId, sessionUsername] = extractUserFromRequest(req);
-                    username = sessionUsername.value_or("anonymous");
-                }
-
-                // Call UploadService to handle upload
-                auto result = uploadService->uploadLdif(fileName, contentBytes, processingMode, username);
-
-                // Handle duplicate file
-                if (result.status == "DUPLICATE") {
-                    // Audit logging - FILE_UPLOAD failed (duplicate)
-                    {
-                        AuditLogEntry auditEntry;
-                        auto [userId2, sessionUsername2] = extractUserFromRequest(req);
-                        auditEntry.userId = userId2;
-                        auditEntry.username = sessionUsername2;
-                        auditEntry.operationType = OperationType::FILE_UPLOAD;
-                        auditEntry.operationSubtype = "LDIF";
-                        auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = extractIpAddress(req);
-                        auditEntry.userAgent = req->getHeader("User-Agent");
-                        auditEntry.requestMethod = "POST";
-                        auditEntry.requestPath = "/api/upload/ldif";
-                        auditEntry.success = false;
-                        auditEntry.errorMessage = "Duplicate file detected";
-                        Json::Value metadata;
-                        metadata["fileName"] = fileName;
-                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                        metadata["existingUploadId"] = result.uploadId;
-                        auditEntry.metadata = metadata;
-                        logOperation(::queryExecutor.get(), auditEntry);
-                    }
-
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = result.message.empty() ? "Duplicate file detected. This file has already been uploaded." : result.message;
-
-                    Json::Value errorDetail;
-                    errorDetail["code"] = "DUPLICATE_FILE";
-                    errorDetail["detail"] = "A file with the same content (SHA-256 hash) already exists in the system.";
-                    error["error"] = errorDetail;
-
-                    Json::Value existingUpload;
-                    existingUpload["uploadId"] = result.uploadId;
-                    error["existingUpload"] = existingUpload;
-
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k409Conflict);
-                    callback(resp);
-
-                    spdlog::warn("Duplicate LDIF file upload rejected: existing_upload_id={}", result.uploadId);
-                    return;
-                }
-
-                // Handle upload failure
-                if (!result.success) {
-                    // Audit logging - FILE_UPLOAD failed
-                    {
-                        AuditLogEntry auditEntry;
-                        auto [userId3, sessionUsername3] = extractUserFromRequest(req);
-                        auditEntry.userId = userId3;
-                        auditEntry.username = sessionUsername3;
-                        auditEntry.operationType = OperationType::FILE_UPLOAD;
-                        auditEntry.operationSubtype = "LDIF";
-                        auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = extractIpAddress(req);
-                        auditEntry.userAgent = req->getHeader("User-Agent");
-                        auditEntry.requestMethod = "POST";
-                        auditEntry.requestPath = "/api/upload/ldif";
-                        auditEntry.success = false;
-                        auditEntry.errorMessage = result.errorMessage;
-                        Json::Value metadata;
-                        metadata["fileName"] = fileName;
-                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                        auditEntry.metadata = metadata;
-                        logOperation(::queryExecutor.get(), auditEntry);
-                    }
-
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = result.errorMessage.empty() ? "Upload failed" : result.errorMessage;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Success - Start async processing
-                // MANUAL mode: Stage 1 (parsing) runs automatically
-                // AUTO mode: All stages run automatically
-                processLdifFileAsync(result.uploadId, contentBytes);
-
-                // Return success response
-                Json::Value response;
-                response["success"] = true;
-                if (processingMode == "MANUAL" || processingMode == "manual") {
-                    response["message"] = "LDIF file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
-                } else {
-                    response["message"] = result.message.empty() ? "LDIF file uploaded successfully. Processing started." : result.message;
-                }
-
-                Json::Value data;
-                data["uploadId"] = result.uploadId;
-                data["fileName"] = fileName;
-                data["fileSize"] = static_cast<Json::Int64>(fileSize);
-                data["status"] = result.status;
-                data["createdAt"] = trantor::Date::now().toFormattedString(false);
-
-                response["data"] = data;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                resp->setStatusCode(drogon::k201Created);
-                callback(resp);
-
-                // Audit logging - FILE_UPLOAD success
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId4, sessionUsername4] = extractUserFromRequest(req);
-                    auditEntry.userId = userId4;
-                    auditEntry.username = sessionUsername4;
-                    auditEntry.operationType = OperationType::FILE_UPLOAD;
-                    auditEntry.operationSubtype = "LDIF";
-                    auditEntry.resourceId = result.uploadId;
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/upload/ldif";
-                    auditEntry.success = true;
-                    Json::Value metadata;
-                    metadata["fileName"] = fileName;
-                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                    metadata["processingMode"] = processingMode;
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-            } catch (const std::exception& e) {
-                spdlog::error("LDIF upload failed: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = std::string("Upload failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // Upload Master List file endpoint
-    app.registerHandler(
-        "/api/upload/masterlist",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/upload/masterlist - Master List file upload");
-
-            try {
-                // Parse multipart form data
-                drogon::MultiPartParser parser;
-                if (parser.parse(req) != 0) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Invalid multipart form data";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& files = parser.getFiles();
-                if (files.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "No file uploaded";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& file = files[0];
-                std::string originalFileName = file.getFileName();
-
-                // Sanitize filename to prevent path traversal attacks
-                std::string fileName;
-                try {
-                    fileName = sanitizeFilename(originalFileName);
-                } catch (const std::exception& e) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = std::string("Invalid filename: ") + e.what();
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                std::string content = std::string(file.fileData(), file.fileLength());
-                std::vector<uint8_t> contentBytes(content.begin(), content.end());
-                int64_t fileSize = static_cast<int64_t>(content.size());
-
-                // Validate PKCS#7/Master List file format
-                if (!isValidP7sFile(contentBytes)) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Invalid Master List file format. File must be a valid PKCS#7/CMS structure.";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    spdlog::warn("Invalid Master List file rejected: {}", originalFileName);
-                    return;
-                }
-
-                // Get processing mode from form data
-                std::string processingMode = "AUTO";  // default
-                auto& params = parser.getParameters();
-                for (const auto& param : params) {
-                    if (param.first == "processingMode") {
-                        processingMode = param.second;
-                        break;
-                    }
-                }
-
-                // Get username from session
-                std::string username = "anonymous";
-                auto session = req->getSession();
-                if (session) {
-                    auto [userId, sessionUsername] = extractUserFromRequest(req);
-                    username = sessionUsername.value_or("anonymous");
-                }
-
-                // Call UploadService to handle upload
-                auto uploadResult = uploadService->uploadMasterList(fileName, contentBytes, processingMode, username);
-
-                // Handle duplicate file
-                if (uploadResult.status == "DUPLICATE") {
-                    // Audit logging - FILE_UPLOAD failed (duplicate)
-                    {
-                        AuditLogEntry auditEntry;
-                        auto [userId5, sessionUsername5] = extractUserFromRequest(req);
-                        auditEntry.userId = userId5;
-                        auditEntry.username = sessionUsername5;
-                        auditEntry.operationType = OperationType::FILE_UPLOAD;
-                        auditEntry.operationSubtype = "MASTER_LIST";
-                        auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = extractIpAddress(req);
-                        auditEntry.userAgent = req->getHeader("User-Agent");
-                        auditEntry.requestMethod = "POST";
-                        auditEntry.requestPath = "/api/upload/masterlist";
-                        auditEntry.success = false;
-                        auditEntry.errorMessage = "Duplicate file detected";
-                        Json::Value metadata;
-                        metadata["fileName"] = fileName;
-                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                        metadata["existingUploadId"] = uploadResult.uploadId;
-                        auditEntry.metadata = metadata;
-                        logOperation(::queryExecutor.get(), auditEntry);
-                    }
-
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = uploadResult.message.empty() ? "Duplicate file detected. This file has already been uploaded." : uploadResult.message;
-
-                    Json::Value errorDetail;
-                    errorDetail["code"] = "DUPLICATE_FILE";
-                    errorDetail["detail"] = "A file with the same content (SHA-256 hash) already exists in the system.";
-                    error["error"] = errorDetail;
-
-                    Json::Value existingUpload;
-                    existingUpload["uploadId"] = uploadResult.uploadId;
-                    error["existingUpload"] = existingUpload;
-
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k409Conflict);
-                    callback(resp);
-
-                    spdlog::warn("Duplicate Master List file upload rejected: existing_upload_id={}", uploadResult.uploadId);
-                    return;
-                }
-
-                // Handle upload failure
-                if (!uploadResult.success) {
-                    // Audit logging - FILE_UPLOAD failed
-                    {
-                        AuditLogEntry auditEntry;
-                        auto [userId6, sessionUsername6] = extractUserFromRequest(req);
-                        auditEntry.userId = userId6;
-                        auditEntry.username = sessionUsername6;
-                        auditEntry.operationType = OperationType::FILE_UPLOAD;
-                        auditEntry.operationSubtype = "MASTER_LIST";
-                        auditEntry.resourceType = "UPLOADED_FILE";
-                        auditEntry.ipAddress = extractIpAddress(req);
-                        auditEntry.userAgent = req->getHeader("User-Agent");
-                        auditEntry.requestMethod = "POST";
-                        auditEntry.requestPath = "/api/upload/masterlist";
-                        auditEntry.success = false;
-                        auditEntry.errorMessage = uploadResult.errorMessage;
-                        Json::Value metadata;
-                        metadata["fileName"] = fileName;
-                        metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                        auditEntry.metadata = metadata;
-                        logOperation(::queryExecutor.get(), auditEntry);
-                    }
-
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = uploadResult.errorMessage.empty() ? "Upload failed" : uploadResult.errorMessage;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Success - Get upload ID from Service result
-                std::string uploadId = uploadResult.uploadId;
-
-                // Start async processing for both AUTO and MANUAL modes using Strategy Pattern
-                // MANUAL mode: Stage 1 (parsing) runs automatically
-                // AUTO mode: All stages run automatically
-                std::thread([uploadId, contentBytes]() {
-                        spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
-
-                        // Use QueryExecutor (Oracle/PostgreSQL agnostic) instead of PGconn
-                        if (!::queryExecutor) {
-                            spdlog::error("QueryExecutor is null for async processing");
-                            return;
-                        }
-
-                        // Get processing mode via UploadRepository
-                        std::string processingMode = "AUTO";
-                        try {
-                            auto uploadOpt = ::uploadRepository->findById(uploadId);
-                            if (uploadOpt.has_value() && uploadOpt->processingMode.has_value()) {
-                                processingMode = uploadOpt->processingMode.value();
-                            }
-                        } catch (const std::exception& e) {
-                            spdlog::warn("Failed to get processing mode, defaulting to AUTO: {}", e.what());
-                        }
-
-                        spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
-
-                        // Connect to LDAP only if AUTO mode
-                        LDAP* ld = nullptr;
-                        if (processingMode == "AUTO") {
-                            ld = getLdapWriteConnection();
-                            if (!ld) {
-                                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for upload {}", uploadId);
-                                spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
-
-                                // Update upload status to FAILED via Repository
-                                if (::uploadRepository) {
-                                    ::uploadRepository->updateStatus(uploadId, "FAILED",
-                                        "LDAP connection failure - cannot ensure data consistency");
-                                }
-
-                                // Send failure progress
-                                ProgressManager::getInstance().sendProgress(
-                                    ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                                        0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
-
-                                return;
-                            }
-                            spdlog::info("LDAP write connection established successfully for AUTO mode");
-                        }
-
-                        try {
-                            // Use Strategy Pattern
-                            auto strategy = ProcessingStrategyFactory::create(processingMode);
-                            strategy->processMasterListContent(uploadId, contentBytes, ld);
-
-                            // Query statistics from database via UploadRepository
-                            int cscaCount = 0, totalEntries = 0, processedEntries = 0, mlscCount = 0;
-                            try {
-                                auto uploadOpt = ::uploadRepository->findById(uploadId);
-                                if (uploadOpt.has_value()) {
-                                    cscaCount = uploadOpt->cscaCount;
-                                    totalEntries = uploadOpt->totalEntries;
-                                    processedEntries = uploadOpt->processedEntries;
-                                    mlscCount = uploadOpt->mlscCount;
-                                }
-                            } catch (const std::exception& e) {
-                                spdlog::warn("Failed to query stats for completion message: {}", e.what());
-                            }
-
-                            int dupCount = totalEntries - processedEntries;
-                            int totalCount = processedEntries + mlscCount;
-
-                            spdlog::info("Master List processing completed - csca_count: {}, total_entries: {}, processed_entries: {}, mlsc_count: {}, dupCount: {}",
-                                        cscaCount, totalEntries, processedEntries, mlscCount, dupCount);
-
-                            // Build detailed completion message
-                            std::string completionMsg;
-                            if (processingMode == "MANUAL") {
-                                completionMsg = "Master List 파싱 완료 - 검증 대기";
-                            } else {
-                                completionMsg = "처리 완료: CSCA " + std::to_string(processedEntries);
-                                if (dupCount > 0) {
-                                    completionMsg += " (중복 " + std::to_string(dupCount) + "개 건너뜀)";
-                                }
-                                if (mlscCount > 0) {
-                                    completionMsg += ", MLSC " + std::to_string(mlscCount);
-                                }
-                            }
-
-                            // Send appropriate progress based on mode
-                            if (processingMode == "MANUAL") {
-                                ProgressManager::getInstance().sendProgress(
-                                    ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                                        totalCount, totalCount, completionMsg));
-                            } else {
-                                ProgressManager::getInstance().sendProgress(
-                                    ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                        totalCount, totalCount, completionMsg));
-                            }
-
-                        } catch (const std::exception& e) {
-                            spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
-                            ProgressManager::getInstance().sendProgress(
-                                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                                    0, 0, "처리 실패", e.what()));
-                        }
-
-                        if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                }).detach();
-
-                // Return success response
-                Json::Value result;
-                result["success"] = true;
-                if (processingMode == "MANUAL" || processingMode == "manual") {
-                    result["message"] = "Master List file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
-                } else {
-                    result["message"] = "Master List file uploaded successfully. Processing started.";
-                }
-
-                Json::Value data;
-                data["uploadId"] = uploadId;
-                data["fileName"] = fileName;
-                data["fileSize"] = static_cast<Json::Int64>(fileSize);
-                data["status"] = "PROCESSING";
-                data["createdAt"] = trantor::Date::now().toFormattedString(false);
-
-                result["data"] = data;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                resp->setStatusCode(drogon::k201Created);
-                callback(resp);
-
-                // Audit logging - FILE_UPLOAD success
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId7, username7] = extractUserFromRequest(req);
-                    auditEntry.userId = userId7;
-                    auditEntry.username = username7;
-                    auditEntry.operationType = OperationType::FILE_UPLOAD;
-                    auditEntry.operationSubtype = "MASTER_LIST";
-                    auditEntry.resourceId = uploadId;
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/upload/masterlist";
-                    auditEntry.success = true;
-                    Json::Value metadata;
-                    metadata["fileName"] = fileName;
-                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                    metadata["processingMode"] = processingMode;
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-            } catch (const std::exception& e) {
-                spdlog::error("Master List upload failed: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = std::string("Upload failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // Upload individual certificate file endpoint (PEM, DER, CER, P7B, CRL)
-    app.registerHandler(
-        "/api/upload/certificate",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/upload/certificate - Individual certificate file upload");
-
-            try {
-                drogon::MultiPartParser fileParser;
-                if (fileParser.parse(req) != 0) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Invalid multipart form data";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& files = fileParser.getFiles();
-                if (files.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "No file uploaded";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& file = files[0];
-                std::string fileName = file.getFileName();
-                auto fileContent = file.fileContent();
-                size_t fileSize = file.fileLength();
-
-                spdlog::info("Certificate file: name={}, size={}", fileName, fileSize);
-
-                // Validate file size (max 10MB for individual cert files)
-                if (fileSize > 10 * 1024 * 1024) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "File too large. Maximum size is 10MB for certificate files.";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                // Extract username from JWT
-                std::string uploadedBy = "unknown";
-                auto jwtPayload = req->getAttributes()->get<Json::Value>("jwt_payload");
-                if (jwtPayload.isMember("username")) {
-                    uploadedBy = jwtPayload["username"].asString();
-                }
-
-                // Convert to bytes
-                std::vector<uint8_t> contentBytes(fileContent.begin(), fileContent.end());
-
-                // Call UploadService
-                auto result = uploadService->uploadCertificate(fileName, contentBytes, uploadedBy);
-
-                Json::Value response;
-                response["success"] = result.success;
-                response["message"] = result.message;
-                response["uploadId"] = result.uploadId;
-                response["fileFormat"] = result.fileFormat;
-                response["status"] = result.status;
-                response["certificateCount"] = result.certificateCount;
-                response["cscaCount"] = result.cscaCount;
-                response["dscCount"] = result.dscCount;
-                response["dscNcCount"] = result.dscNcCount;
-                response["mlscCount"] = result.mlscCount;
-                response["crlCount"] = result.crlCount;
-                response["ldapStoredCount"] = result.ldapStoredCount;
-                response["duplicateCount"] = result.duplicateCount;
-                if (!result.errorMessage.empty()) {
-                    response["errorMessage"] = result.errorMessage;
-                }
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                if (result.success) {
-                    resp->setStatusCode(drogon::k200OK);
-                } else if (result.status == "DUPLICATE") {
-                    resp->setStatusCode(drogon::k409Conflict);
-                } else {
-                    resp->setStatusCode(drogon::k400BadRequest);
-                }
-
-                // Audit log
-                if (::queryExecutor) {
-                    AuditLogEntry auditEntry;
-                    auditEntry.username = uploadedBy;
-                    auditEntry.operationType = OperationType::FILE_UPLOAD;
-                    auditEntry.operationSubtype = "CERTIFICATE_" + result.fileFormat;
-                    auditEntry.resourceId = result.uploadId;
-                    auditEntry.resourceType = "UPLOADED_FILE";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "POST";
-                    auditEntry.requestPath = "/api/upload/certificate";
-                    auditEntry.success = result.success;
-                    Json::Value metadata;
-                    metadata["fileName"] = fileName;
-                    metadata["fileSize"] = static_cast<Json::Int64>(fileSize);
-                    metadata["fileFormat"] = result.fileFormat;
-                    metadata["certificateCount"] = result.certificateCount;
-                    metadata["crlCount"] = result.crlCount;
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate upload failed: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = std::string("Upload failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // Preview certificate file endpoint (parse only, no DB/LDAP save)
-    app.registerHandler(
-        "/api/upload/certificate/preview",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/upload/certificate/preview - Certificate file preview");
-
-            try {
-                drogon::MultiPartParser fileParser;
-                if (fileParser.parse(req) != 0) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "Invalid multipart form data";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& files = fileParser.getFiles();
-                if (files.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "No file uploaded";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                auto& file = files[0];
-                std::string fileName = file.getFileName();
-                auto fileContent = file.fileContent();
-                size_t fileSize = file.fileLength();
-
-                // Validate file size (max 10MB)
-                if (fileSize > 10 * 1024 * 1024) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["message"] = "File too large. Maximum size is 10MB for certificate files.";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                std::vector<uint8_t> contentBytes(fileContent.begin(), fileContent.end());
-
-                auto result = uploadService->previewCertificate(fileName, contentBytes);
-
-                Json::Value response;
-                response["success"] = result.success;
-                response["fileFormat"] = result.fileFormat;
-                response["isDuplicate"] = result.isDuplicate;
-                if (!result.duplicateUploadId.empty()) {
-                    response["duplicateUploadId"] = result.duplicateUploadId;
-                }
-                if (!result.message.empty()) {
-                    response["message"] = result.message;
-                }
-                if (!result.errorMessage.empty()) {
-                    response["errorMessage"] = result.errorMessage;
-                }
-
-                // Certificates array
-                Json::Value certsArray(Json::arrayValue);
-                for (const auto& cert : result.certificates) {
-                    Json::Value certJson;
-                    certJson["subjectDn"] = cert.subjectDn;
-                    certJson["issuerDn"] = cert.issuerDn;
-                    certJson["serialNumber"] = cert.serialNumber;
-                    certJson["countryCode"] = cert.countryCode;
-                    certJson["certificateType"] = cert.certificateType;
-                    certJson["isSelfSigned"] = cert.isSelfSigned;
-                    certJson["isLinkCertificate"] = cert.isLinkCertificate;
-                    certJson["notBefore"] = cert.notBefore;
-                    certJson["notAfter"] = cert.notAfter;
-                    certJson["isExpired"] = cert.isExpired;
-                    certJson["signatureAlgorithm"] = cert.signatureAlgorithm;
-                    certJson["publicKeyAlgorithm"] = cert.publicKeyAlgorithm;
-                    certJson["keySize"] = cert.keySize;
-                    certJson["fingerprintSha256"] = cert.fingerprintSha256;
-                    certsArray.append(certJson);
-                }
-                response["certificates"] = certsArray;
-
-                // Deviations array (DL files)
-                if (!result.deviations.empty()) {
-                    Json::Value devsArray(Json::arrayValue);
-                    for (const auto& dev : result.deviations) {
-                        Json::Value devJson;
-                        devJson["certificateIssuerDn"] = dev.certificateIssuerDn;
-                        devJson["certificateSerialNumber"] = dev.certificateSerialNumber;
-                        devJson["defectDescription"] = dev.defectDescription;
-                        devJson["defectTypeOid"] = dev.defectTypeOid;
-                        devJson["defectCategory"] = dev.defectCategory;
-                        devsArray.append(devJson);
-                    }
-                    response["deviations"] = devsArray;
-                    response["dlIssuerCountry"] = result.dlIssuerCountry;
-                    response["dlVersion"] = result.dlVersion;
-                    response["dlHashAlgorithm"] = result.dlHashAlgorithm;
-                    response["dlSignatureValid"] = result.dlSignatureValid;
-                    response["dlSigningTime"] = result.dlSigningTime;
-                    response["dlEContentType"] = result.dlEContentType;
-                    response["dlCmsDigestAlgorithm"] = result.dlCmsDigestAlgorithm;
-                    response["dlCmsSignatureAlgorithm"] = result.dlCmsSignatureAlgorithm;
-                    response["dlSignerDn"] = result.dlSignerDn;
-                }
-
-                // CRL info
-                if (result.hasCrlInfo) {
-                    Json::Value crlJson;
-                    crlJson["issuerDn"] = result.crlInfo.issuerDn;
-                    crlJson["countryCode"] = result.crlInfo.countryCode;
-                    crlJson["thisUpdate"] = result.crlInfo.thisUpdate;
-                    crlJson["nextUpdate"] = result.crlInfo.nextUpdate;
-                    crlJson["crlNumber"] = result.crlInfo.crlNumber;
-                    crlJson["revokedCount"] = result.crlInfo.revokedCount;
-                    response["crlInfo"] = crlJson;
-                }
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                resp->setStatusCode(drogon::k200OK);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate preview failed: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["message"] = std::string("Preview failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // Upload statistics endpoint - returns UploadStatisticsOverview format
-    // Connected to UploadService (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/statistics",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/upload/statistics");
-
-            try {
-                Json::Value result = uploadService->getUploadStatistics();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/statistics failed: {}", e.what());
-                Json::Value error;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Validation reason breakdown endpoint
-    app.registerHandler(
-        "/api/upload/statistics/validation-reasons",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/upload/statistics/validation-reasons");
-
-            try {
-                Json::Value result = validationRepository->getReasonBreakdown();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/statistics/validation-reasons failed: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Upload history endpoint - returns PageResponse format
-    // Connected to UploadService (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/history",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/upload/history");
-
-            try {
-                // Parse query parameters
-                services::UploadService::UploadHistoryFilter filter;
-                filter.page = 0;
-                filter.size = 20;
-                filter.sort = "created_at";
-                filter.direction = "DESC";
-
-                if (auto p = req->getParameter("page"); !p.empty()) {
-                    filter.page = std::stoi(p);
-                }
-                if (auto s = req->getParameter("size"); !s.empty()) {
-                    filter.size = std::stoi(s);
-                }
-                if (auto sort = req->getParameter("sort"); !sort.empty()) {
-                    filter.sort = sort;
-                }
-                if (auto dir = req->getParameter("direction"); !dir.empty()) {
-                    filter.direction = dir;
-                }
-
-                // Call Service method (uses Repository)
-                Json::Value result = uploadService->getUploadHistory(filter);
-
-                // Add PageResponse format compatibility fields
-                if (result.isMember("totalElements")) {
-                    int totalElements = result["totalElements"].asInt();
-                    int size = result["size"].asInt();
-                    int page = result["number"].asInt();
-                    result["page"] = page;
-                    result["totalPages"] = (totalElements + size - 1) / size;
-                    result["first"] = (page == 0);
-                    result["last"] = (page >= result["totalPages"].asInt() - 1);
-                }
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/history error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Get individual upload status - GET /api/upload/detail/{uploadId}
-    // Connected to UploadService (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/detail/{uploadId}",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("GET /api/upload/detail/{}", uploadId);
-
-            try {
-                // Call Service method (uses Repository)
-                Json::Value uploadData = uploadService->getUploadDetail(uploadId);
-
-                if (uploadData.isMember("error")) {
-                    // Upload not found
-                    Json::Value result;
-                    result["success"] = false;
-                    result["error"] = uploadData["error"].asString();
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                    resp->setStatusCode(drogon::k404NotFound);
-                    callback(resp);
-                    return;
-                }
-
-                // LDAP status count via CertificateRepository
-                if (::certificateRepository) {
-                    try {
-                        int totalCerts = 0, ldapCerts = 0;
-                        ::certificateRepository->countLdapStatusByUploadId(uploadId, totalCerts, ldapCerts);
-                        uploadData["ldapUploadedCount"] = ldapCerts;
-                        uploadData["ldapPendingCount"] = totalCerts - ldapCerts;
-                    } catch (const std::exception& e) {
-                        spdlog::warn("LDAP status query failed: {}", e.what());
-                        uploadData["ldapUploadedCount"] = 0;
-                        uploadData["ldapPendingCount"] = 0;
-                    }
-                } else {
-                    uploadData["ldapUploadedCount"] = 0;
-                    uploadData["ldapPendingCount"] = 0;
-                }
-
-                Json::Value result;
-                result["success"] = true;
-                result["data"] = uploadData;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/detail/{} error: {}", uploadId, e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Upload issues endpoint - GET /api/upload/{uploadId}/issues
-    // Returns duplicate certificates detected during upload
-    app.registerHandler(
-        "/api/upload/{uploadId}/issues",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("GET /api/upload/{}/issues", uploadId);
-
-            try {
-                Json::Value result = uploadService->getUploadIssues(uploadId);
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/{}/issues error: {}", uploadId, e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Master List ASN.1 structure endpoint - GET /api/upload/{uploadId}/masterlist-structure
-    // Returns ASN.1 tree structure with TLV information for Master List files
-    app.registerHandler(
-        "/api/upload/{uploadId}/masterlist-structure",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("GET /api/upload/{}/masterlist-structure", uploadId);
-
-            Json::Value result;
-            result["success"] = false;
-
-            try {
-                // Uses QueryExecutor for Oracle support
-                if (!::queryExecutor) {
-                    throw std::runtime_error("Query executor not initialized");
-                }
-
-                // Query upload file information (no $1::uuid cast for Oracle compatibility)
-                std::string query =
-                    "SELECT file_name, original_file_name, file_format, file_size, file_path "
-                    "FROM uploaded_file "
-                    "WHERE id = $1";
-
-                auto rows = ::queryExecutor->executeQuery(query, {uploadId});
-
-                if (rows.empty()) {
-                    result["error"] = "Upload not found";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                    resp->setStatusCode(drogon::k404NotFound);
-                    callback(resp);
-                    return;
-                }
-
-                std::string fileName = rows[0].get("file_name", "").asString();
-                std::string origFileName = rows[0].get("original_file_name", "").asString();
-                std::string displayName = origFileName.empty() ? fileName : origFileName;
-                std::string fileFormat = rows[0].get("file_format", "").asString();
-                std::string fileSizeStr = rows[0].get("file_size", "0").asString();
-                std::string filePath = rows[0].get("file_path", "").asString();
-
-                // Check if this is a Master List file
-                if (fileFormat != "ML" && fileFormat != "MASTER_LIST") {
-                    result["error"] = "Not a Master List file (format: " + fileFormat + ")";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                // If file_path is empty, construct it from upload directory + uploadId
-                // Files are stored as {uploadId}.ml in /app/uploads/
-                if (filePath.empty()) {
-                    filePath = "/app/uploads/" + uploadId + ".ml";
-                    spdlog::debug("file_path is NULL, using constructed path: {}", filePath);
-                }
-
-                // Get maxLines parameter (default from config, 0 = unlimited)
-                int maxLines = appConfig.asn1MaxLines;
-                if (auto ml = req->getParameter("maxLines"); !ml.empty()) {
-                    try {
-                        maxLines = std::stoi(ml);
-                        if (maxLines < 0) maxLines = appConfig.asn1MaxLines;
-                    } catch (...) {
-                        maxLines = appConfig.asn1MaxLines;
-                    }
-                }
-
-                // Parse ASN.1 structure with line limit
-                Json::Value asn1Result = icao::asn1::parseAsn1Structure(filePath, maxLines);
-
-                if (!asn1Result["success"].asBool()) {
-                    result["error"] = asn1Result["error"].asString();
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Build response
-                result["success"] = true;
-                result["fileName"] = displayName;
-                try { result["fileSize"] = std::stoi(fileSizeStr); } catch (...) { result["fileSize"] = 0; }
-                result["asn1Tree"] = asn1Result["tree"];
-                result["statistics"] = asn1Result["statistics"];
-                result["maxLines"] = asn1Result["maxLines"];
-                result["truncated"] = asn1Result["truncated"];
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/{}/masterlist-structure error: {}", uploadId, e.what());
-                result["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Upload changes endpoint - GET /api/upload/changes
-    app.registerHandler(
-        "/api/upload/changes",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/upload/changes - Calculate upload deltas");
-
-            // Get optional limit parameter (default: 10)
-            int limit = 10;
-            if (auto l = req->getParameter("limit"); !l.empty()) {
-                try {
-                    limit = std::stoi(l);
-                    if (limit <= 0 || limit > 100) limit = 10;
-                } catch (...) {
-                    limit = 10;
-                }
-            }
-
-            // Uses QueryExecutor for Oracle support
-            Json::Value result;
-            result["success"] = false;
-
-            if (!::uploadRepository) {
-                result["error"] = "Upload repository not initialized";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            try {
-                auto rows = ::uploadRepository->getChangeHistory(limit);
-
-                // Oracle safeInt helper: Oracle returns all values as strings
-                auto safeInt = [](const Json::Value& v) -> int {
-                    if (v.isInt()) return v.asInt();
-                    if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
-                    return 0;
-                };
-
-                result["success"] = true;
-                result["count"] = static_cast<int>(rows.size());
-
-                Json::Value changes(Json::arrayValue);
-                for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
-                    const auto& row = rows[i];
-                    Json::Value change;
-                    change["uploadId"] = row.get("id", "").asString();
-                    change["fileName"] = row.get("original_file_name", "").asString();
-                    change["collectionNumber"] = row.get("collection_number", "N/A").asString();
-                    change["uploadTime"] = row.get("upload_time", "").asString();
-
-                    // Current counts
-                    Json::Value counts;
-                    counts["csca"] = safeInt(row["csca_count"]);
-                    counts["dsc"] = safeInt(row["dsc_count"]);
-                    counts["dscNc"] = safeInt(row["dsc_nc_count"]);
-                    counts["crl"] = safeInt(row["crl_count"]);
-                    counts["ml"] = safeInt(row["ml_count"]);
-                    counts["mlsc"] = safeInt(row["mlsc_count"]);
-                    change["counts"] = counts;
-
-                    // Changes (deltas)
-                    Json::Value deltas;
-                    deltas["csca"] = safeInt(row["csca_change"]);
-                    deltas["dsc"] = safeInt(row["dsc_change"]);
-                    deltas["dscNc"] = safeInt(row["dsc_nc_change"]);
-                    deltas["crl"] = safeInt(row["crl_change"]);
-                    deltas["ml"] = safeInt(row["ml_change"]);
-                    deltas["mlsc"] = safeInt(row["mlsc_change"]);
-                    change["changes"] = deltas;
-
-                    // Calculate total change
-                    int totalChange = std::abs(safeInt(row["csca_change"])) +
-                                    std::abs(safeInt(row["dsc_change"])) +
-                                    std::abs(safeInt(row["dsc_nc_change"])) +
-                                    std::abs(safeInt(row["crl_change"])) +
-                                    std::abs(safeInt(row["ml_change"])) +
-                                    std::abs(safeInt(row["mlsc_change"]));
-                    change["totalChange"] = totalChange;
-
-                    // Previous upload info (if exists)
-                    std::string prevFile = row.get("previous_file", "").asString();
-                    if (!prevFile.empty()) {
-                        Json::Value previous;
-                        previous["fileName"] = prevFile;
-                        previous["uploadTime"] = row.get("previous_upload_time", "").asString();
-                        change["previousUpload"] = previous;
-                    } else {
-                        change["previousUpload"] = Json::Value::null;
-                    }
-
-                    changes.append(change);
-                }
-                result["changes"] = changes;
-
-            } catch (const std::exception& e) {
-                result["error"] = std::string("Query failed: ") + e.what();
-                spdlog::error("[UploadChanges] Query failed: {}", e.what());
-            }
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
-    // Country statistics endpoint - GET /api/upload/countries
-    // Connected to UploadService (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/countries",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/upload/countries");
-
-            try {
-                // Get query parameter for limit (default 20)
-                int limit = 20;
-                if (auto l = req->getParameter("limit"); !l.empty()) {
-                    limit = std::stoi(l);
-                }
-
-                Json::Value result = uploadService->getCountryStatistics(limit);
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/countries failed: {}", e.what());
-                Json::Value error;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Detailed country statistics endpoint - GET /api/upload/countries/detailed
-    // Connected to UploadService (Repository Pattern)
-    app.registerHandler(
-        "/api/upload/countries/detailed",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/upload/countries/detailed");
-
-            try {
-                // Get query parameters for limit (default ALL countries)
-                int limit = 0;  // 0 = no limit
-                if (auto l = req->getParameter("limit"); !l.empty()) {
-                    limit = std::stoi(l);
-                }
-
-                Json::Value result = uploadService->getDetailedCountryStatistics(limit);
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("GET /api/upload/countries/detailed failed: {}", e.what());
-                Json::Value error;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // SSE Progress stream endpoint - GET /api/progress/stream/{uploadId}
-    app.registerHandler(
-        "/api/progress/stream/{uploadId}",
-        [](const drogon::HttpRequestPtr& /* req */,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("GET /api/progress/stream/{} - SSE progress stream", uploadId);
-
-            // Create SSE response with chunked encoding
-            // Use shared_ptr wrapper since ResponseStreamPtr is unique_ptr (non-copyable)
-            auto resp = drogon::HttpResponse::newAsyncStreamResponse(
-                [uploadIdCopy = uploadId](drogon::ResponseStreamPtr streamPtr) {
-                    // Convert unique_ptr to shared_ptr for lambda capture
-                    auto stream = std::shared_ptr<drogon::ResponseStream>(streamPtr.release());
-
-                    // Send initial connection event
-                    std::string connectedEvent = "event: connected\ndata: {\"message\":\"SSE connection established for " + uploadIdCopy + "\"}\n\n";
-                    stream->send(connectedEvent);
-
-                    // Register callback for progress updates
-                    ProgressManager::getInstance().registerSseCallback(uploadIdCopy,
-                        [stream, uploadIdCopy](const std::string& data) {
-                            try {
-                                stream->send(data);
-                            } catch (...) {
-                                ProgressManager::getInstance().unregisterSseCallback(uploadIdCopy);
-                            }
-                        });
-
-                    // Send cached progress if available
-                    auto progress = ProgressManager::getInstance().getProgress(uploadIdCopy);
-                    if (progress) {
-                        std::string sseData = "event: progress\ndata: " + progress->toJson() + "\n\n";
-                        stream->send(sseData);
-                    }
-                });
-
-            // Use setContentTypeString to properly set SSE content type
-            // This replaces the default text/plain set by newAsyncStreamResponse
-            resp->setContentTypeString("text/event-stream; charset=utf-8");
-            resp->addHeader("Cache-Control", "no-cache");
-            resp->addHeader("Connection", "keep-alive");
-            resp->addHeader("Access-Control-Allow-Origin", "*");
-
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
-    // Progress status endpoint - GET /api/progress/status/{uploadId}
-    app.registerHandler(
-        "/api/progress/status/{uploadId}",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& uploadId) {
-            spdlog::info("GET /api/progress/status/{}", uploadId);
-
-            auto progress = ProgressManager::getInstance().getProgress(uploadId);
-
-            Json::Value result;
-            if (progress) {
-                result["exists"] = true;
-                result["uploadId"] = progress->uploadId;
-                result["stage"] = stageToString(progress->stage);
-                result["stageName"] = stageToKorean(progress->stage);
-                result["percentage"] = progress->percentage;
-                result["processedCount"] = progress->processedCount;
-                result["totalCount"] = progress->totalCount;
-                result["message"] = progress->message;
-                result["errorMessage"] = progress->errorMessage;
-            } else {
-                result["exists"] = false;
-            }
-
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-            callback(resp);
-        },
-        {drogon::Get}
     );
 
     // PA statistics endpoint - returns PAStatisticsOverview format
@@ -6229,1267 +4284,10 @@ paths:
         {drogon::Get}
     );
 
-    // --- Certificate Search APIs ---
-
-    // GET /api/certificates/search - Search certificates from LDAP
-    app.registerHandler(
-        "/api/certificates/search",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                // Parse query parameters
-                std::string country = req->getOptionalParameter<std::string>("country").value_or("");
-                std::string certTypeStr = req->getOptionalParameter<std::string>("certType").value_or("");
-                std::string validityStr = req->getOptionalParameter<std::string>("validity").value_or("all");
-                std::string searchTerm = req->getOptionalParameter<std::string>("searchTerm").value_or("");
-                std::string sourceFilter = req->getOptionalParameter<std::string>("source").value_or("");
-                int limit = req->getOptionalParameter<int>("limit").value_or(50);
-                int offset = req->getOptionalParameter<int>("offset").value_or(0);
-
-                // Validate limit (max 200)
-                if (limit > 200) limit = 200;
-                if (limit < 1) limit = 50;
-                if (offset < 0) offset = 0;
-
-                spdlog::info("Certificate search: country={}, certType={}, validity={}, source={}, search={}, limit={}, offset={}",
-                            country, certTypeStr, validityStr, sourceFilter, searchTerm, limit, offset);
-
-                // When source filter is specified, use DB-based search
-                if (!sourceFilter.empty()) {
-                    repositories::CertificateSearchFilter filter;
-                    if (!country.empty()) filter.countryCode = country;
-                    if (!certTypeStr.empty()) filter.certificateType = certTypeStr;
-                    filter.sourceType = sourceFilter;
-                    if (!searchTerm.empty()) filter.searchTerm = searchTerm;
-                    filter.limit = limit;
-                    filter.offset = offset;
-
-                    Json::Value dbResult = ::certificateRepository->search(filter);
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(dbResult);
-                    callback(resp);
-                    return;
-                }
-
-                // Default: LDAP-based search (existing behavior)
-                // Build search criteria
-                domain::models::CertificateSearchCriteria criteria;
-                if (!country.empty()) criteria.country = country;
-                if (!searchTerm.empty()) criteria.searchTerm = searchTerm;
-                criteria.limit = limit;
-                criteria.offset = offset;
-
-                // Parse certificate type
-                if (!certTypeStr.empty()) {
-                    if (certTypeStr == "CSCA") criteria.certType = domain::models::CertificateType::CSCA;
-                    else if (certTypeStr == "MLSC") criteria.certType = domain::models::CertificateType::MLSC;
-                    else if (certTypeStr == "DSC") criteria.certType = domain::models::CertificateType::DSC;
-                    else if (certTypeStr == "DSC_NC") criteria.certType = domain::models::CertificateType::DSC_NC;
-                    else if (certTypeStr == "CRL") criteria.certType = domain::models::CertificateType::CRL;
-                    else if (certTypeStr == "ML") criteria.certType = domain::models::CertificateType::ML;
-                }
-
-                // Parse validity status
-                if (validityStr != "all") {
-                    if (validityStr == "VALID") criteria.validity = domain::models::ValidityStatus::VALID;
-                    else if (validityStr == "EXPIRED") criteria.validity = domain::models::ValidityStatus::EXPIRED;
-                    else if (validityStr == "NOT_YET_VALID") criteria.validity = domain::models::ValidityStatus::NOT_YET_VALID;
-                }
-
-                // Execute LDAP search
-                auto result = ::certificateService->searchCertificates(criteria);
-
-                // Build JSON response
-                Json::Value response;
-                response["success"] = true;
-                response["total"] = result.total;
-                response["limit"] = result.limit;
-                response["offset"] = result.offset;
-
-                Json::Value certs(Json::arrayValue);
-                for (const auto& cert : result.certificates) {
-                    Json::Value certJson;
-                    certJson["dn"] = cert.getDn();
-                    certJson["cn"] = cert.getCn();
-                    certJson["sn"] = cert.getSn();
-                    certJson["country"] = cert.getCountry();
-                    certJson["type"] = cert.getCertTypeString();  // Changed from certType to type for frontend compatibility
-                    certJson["subjectDn"] = cert.getSubjectDn();
-                    certJson["issuerDn"] = cert.getIssuerDn();
-                    certJson["fingerprint"] = cert.getFingerprint();
-                    certJson["isSelfSigned"] = cert.isSelfSigned();
-
-                    // Convert time_point to ISO 8601 string
-                    auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
-                    auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
-                    char timeBuf[32];
-                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
-                    certJson["validFrom"] = timeBuf;
-                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
-                    certJson["validTo"] = timeBuf;
-
-                    // Validity status
-                    auto status = cert.getValidityStatus();
-                    if (status == domain::models::ValidityStatus::VALID) certJson["validity"] = "VALID";
-                    else if (status == domain::models::ValidityStatus::EXPIRED) certJson["validity"] = "EXPIRED";
-                    else if (status == domain::models::ValidityStatus::NOT_YET_VALID) certJson["validity"] = "NOT_YET_VALID";
-                    else certJson["validity"] = "UNKNOWN";
-
-                    // DSC_NC specific attributes (optional)
-                    if (cert.getPkdConformanceCode().has_value()) {
-                        certJson["pkdConformanceCode"] = *cert.getPkdConformanceCode();
-                    }
-                    if (cert.getPkdConformanceText().has_value()) {
-                        certJson["pkdConformanceText"] = *cert.getPkdConformanceText();
-                    }
-                    if (cert.getPkdVersion().has_value()) {
-                        certJson["pkdVersion"] = *cert.getPkdVersion();
-                    }
-
-                    // X.509 Metadata - 15 fields
-                    certJson["version"] = cert.getVersion();
-                    if (cert.getSignatureAlgorithm().has_value()) {
-                        certJson["signatureAlgorithm"] = *cert.getSignatureAlgorithm();
-                    }
-                    if (cert.getSignatureHashAlgorithm().has_value()) {
-                        certJson["signatureHashAlgorithm"] = *cert.getSignatureHashAlgorithm();
-                    }
-                    if (cert.getPublicKeyAlgorithm().has_value()) {
-                        certJson["publicKeyAlgorithm"] = *cert.getPublicKeyAlgorithm();
-                    }
-                    if (cert.getPublicKeySize().has_value()) {
-                        certJson["publicKeySize"] = *cert.getPublicKeySize();
-                    }
-                    if (cert.getPublicKeyCurve().has_value()) {
-                        certJson["publicKeyCurve"] = *cert.getPublicKeyCurve();
-                    }
-                    if (!cert.getKeyUsage().empty()) {
-                        Json::Value keyUsageArray(Json::arrayValue);
-                        for (const auto& usage : cert.getKeyUsage()) {
-                            keyUsageArray.append(usage);
-                        }
-                        certJson["keyUsage"] = keyUsageArray;
-                    }
-                    if (!cert.getExtendedKeyUsage().empty()) {
-                        Json::Value extKeyUsageArray(Json::arrayValue);
-                        for (const auto& usage : cert.getExtendedKeyUsage()) {
-                            extKeyUsageArray.append(usage);
-                        }
-                        certJson["extendedKeyUsage"] = extKeyUsageArray;
-                    }
-                    if (cert.getIsCA().has_value()) {
-                        certJson["isCA"] = *cert.getIsCA();
-                    }
-                    if (cert.getPathLenConstraint().has_value()) {
-                        certJson["pathLenConstraint"] = *cert.getPathLenConstraint();
-                    }
-                    if (cert.getSubjectKeyIdentifier().has_value()) {
-                        certJson["subjectKeyIdentifier"] = *cert.getSubjectKeyIdentifier();
-                    }
-                    if (cert.getAuthorityKeyIdentifier().has_value()) {
-                        certJson["authorityKeyIdentifier"] = *cert.getAuthorityKeyIdentifier();
-                    }
-                    if (!cert.getCrlDistributionPoints().empty()) {
-                        Json::Value crlDpArray(Json::arrayValue);
-                        for (const auto& url : cert.getCrlDistributionPoints()) {
-                            crlDpArray.append(url);
-                        }
-                        certJson["crlDistributionPoints"] = crlDpArray;
-                    }
-                    if (cert.getOcspResponderUrl().has_value()) {
-                        certJson["ocspResponderUrl"] = *cert.getOcspResponderUrl();
-                    }
-                    if (cert.getIsCertSelfSigned().has_value()) {
-                        certJson["isCertSelfSigned"] = *cert.getIsCertSelfSigned();
-                    }
-
-                    // DN Components (shared library) - for clean UI display
-                    if (cert.getSubjectDnComponents().has_value()) {
-                        const auto& subjectDnComp = *cert.getSubjectDnComponents();
-                        Json::Value subjectDnJson;
-                        if (subjectDnComp.commonName.has_value()) subjectDnJson["commonName"] = *subjectDnComp.commonName;
-                        if (subjectDnComp.organization.has_value()) subjectDnJson["organization"] = *subjectDnComp.organization;
-                        if (subjectDnComp.organizationalUnit.has_value()) subjectDnJson["organizationalUnit"] = *subjectDnComp.organizationalUnit;
-                        if (subjectDnComp.locality.has_value()) subjectDnJson["locality"] = *subjectDnComp.locality;
-                        if (subjectDnComp.stateOrProvince.has_value()) subjectDnJson["stateOrProvince"] = *subjectDnComp.stateOrProvince;
-                        if (subjectDnComp.country.has_value()) subjectDnJson["country"] = *subjectDnComp.country;
-                        if (subjectDnComp.email.has_value()) subjectDnJson["email"] = *subjectDnComp.email;
-                        if (subjectDnComp.serialNumber.has_value()) subjectDnJson["serialNumber"] = *subjectDnComp.serialNumber;
-                        certJson["subjectDnComponents"] = subjectDnJson;
-                    }
-                    if (cert.getIssuerDnComponents().has_value()) {
-                        const auto& issuerDnComp = *cert.getIssuerDnComponents();
-                        Json::Value issuerDnJson;
-                        if (issuerDnComp.commonName.has_value()) issuerDnJson["commonName"] = *issuerDnComp.commonName;
-                        if (issuerDnComp.organization.has_value()) issuerDnJson["organization"] = *issuerDnComp.organization;
-                        if (issuerDnComp.organizationalUnit.has_value()) issuerDnJson["organizationalUnit"] = *issuerDnComp.organizationalUnit;
-                        if (issuerDnComp.locality.has_value()) issuerDnJson["locality"] = *issuerDnComp.locality;
-                        if (issuerDnComp.stateOrProvince.has_value()) issuerDnJson["stateOrProvince"] = *issuerDnComp.stateOrProvince;
-                        if (issuerDnComp.country.has_value()) issuerDnJson["country"] = *issuerDnComp.country;
-                        if (issuerDnComp.email.has_value()) issuerDnJson["email"] = *issuerDnComp.email;
-                        if (issuerDnComp.serialNumber.has_value()) issuerDnJson["serialNumber"] = *issuerDnComp.serialNumber;
-                        certJson["issuerDnComponents"] = issuerDnJson;
-                    }
-
-                    certs.append(certJson);
-                }
-                response["certificates"] = certs;
-
-                // Add statistics
-                Json::Value stats;
-                stats["total"] = result.stats.total;
-                stats["valid"] = result.stats.valid;
-                stats["expired"] = result.stats.expired;
-                stats["notYetValid"] = result.stats.notYetValid;
-                stats["unknown"] = result.stats.unknown;
-                response["stats"] = stats;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate search error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/certificates/detail - Get certificate details
-    app.registerHandler(
-        "/api/certificates/detail",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                std::string dn = req->getOptionalParameter<std::string>("dn").value_or("");
-
-                if (dn.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "DN parameter is required";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                spdlog::info("Certificate detail request: dn={}", dn);
-
-                // Get certificate details
-                auto cert = ::certificateService->getCertificateDetail(dn);
-
-                // Build JSON response
-                Json::Value response;
-                response["success"] = true;
-                response["dn"] = cert.getDn();
-                response["cn"] = cert.getCn();
-                response["sn"] = cert.getSn();
-                response["country"] = cert.getCountry();
-                response["certType"] = cert.getCertTypeString();
-                response["subjectDn"] = cert.getSubjectDn();
-                response["issuerDn"] = cert.getIssuerDn();
-                response["fingerprint"] = cert.getFingerprint();
-                response["isSelfSigned"] = cert.isSelfSigned();
-
-                // Convert time_point to ISO 8601 string
-                auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
-                auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
-                char timeBuf[32];
-                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
-                response["validFrom"] = timeBuf;
-                std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
-                response["validTo"] = timeBuf;
-
-                // Validity status
-                auto status = cert.getValidityStatus();
-                if (status == domain::models::ValidityStatus::VALID) response["validity"] = "VALID";
-                else if (status == domain::models::ValidityStatus::EXPIRED) response["validity"] = "EXPIRED";
-                else if (status == domain::models::ValidityStatus::NOT_YET_VALID) response["validity"] = "NOT_YET_VALID";
-                else response["validity"] = "UNKNOWN";
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate detail error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/certificates/validation - Get validation result by fingerprint
-    // Connected to ValidationService (Repository Pattern)
-    app.registerHandler(
-        "/api/certificates/validation",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                std::string fingerprint = req->getOptionalParameter<std::string>("fingerprint").value_or("");
-
-                if (fingerprint.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "fingerprint parameter is required";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                spdlog::info("GET /api/certificates/validation - fingerprint: {}", fingerprint.substr(0, 16) + "...");
-
-                Json::Value response = validationService->getValidationByFingerprint(fingerprint);
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate validation error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // POST /api/certificates/pa-lookup - Lightweight PA lookup by subject DN or fingerprint
-    app.registerHandler(
-        "/api/certificates/pa-lookup",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                auto jsonBody = req->getJsonObject();
-                if (!jsonBody) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "JSON body is required";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                std::string subjectDn = (*jsonBody).get("subjectDn", "").asString();
-                std::string fingerprint = (*jsonBody).get("fingerprint", "").asString();
-
-                if (subjectDn.empty() && fingerprint.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "Either subjectDn or fingerprint parameter is required";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                Json::Value response;
-                if (!subjectDn.empty()) {
-                    spdlog::info("POST /api/certificates/pa-lookup - subjectDn: {}", subjectDn.substr(0, 60));
-                    response = validationService->getValidationBySubjectDn(subjectDn);
-                } else {
-                    spdlog::info("POST /api/certificates/pa-lookup - fingerprint: {}", fingerprint.substr(0, 16));
-                    response = validationService->getValidationByFingerprint(fingerprint);
-                }
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("PA lookup error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // GET /api/certificates/export/file - Export single certificate file
-    app.registerHandler(
-        "/api/certificates/export/file",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                std::string dn = req->getOptionalParameter<std::string>("dn").value_or("");
-                std::string format = req->getOptionalParameter<std::string>("format").value_or("pem");
-
-                if (dn.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "DN parameter is required";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                if (format != "der" && format != "pem") {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "Invalid format. Use 'der' or 'pem'";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                spdlog::info("Certificate export file: dn={}, format={}", dn, format);
-
-                // Export certificate
-                services::ExportFormat exportFormat = (format == "der") ?
-                    services::ExportFormat::DER : services::ExportFormat::PEM;
-
-                auto result = ::certificateService->exportCertificateFile(dn, exportFormat);
-
-                if (!result.success) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = result.errorMessage;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Return binary file
-                auto resp = drogon::HttpResponse::newHttpResponse();
-                resp->setBody(std::string(result.data.begin(), result.data.end()));
-                resp->setContentTypeCode(drogon::CT_NONE);
-                resp->addHeader("Content-Type", result.contentType);
-                resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
-                callback(resp);
-
-                // Audit logging - CERT_EXPORT success (single file)
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId8, username8] = extractUserFromRequest(req);
-                    auditEntry.userId = userId8;
-                    auditEntry.username = username8;
-                    auditEntry.operationType = OperationType::CERT_EXPORT;
-                    auditEntry.operationSubtype = "SINGLE_CERT";
-                    auditEntry.resourceId = dn;
-                    auditEntry.resourceType = "CERTIFICATE";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "GET";
-                    auditEntry.requestPath = "/api/certificates/export/file";
-                    auditEntry.success = true;
-                    Json::Value metadata;
-                    metadata["format"] = format;
-                    metadata["fileName"] = result.filename;
-                    metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate export file error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/certificates/export/country - Export all certificates by country (ZIP)
-    app.registerHandler(
-        "/api/certificates/export/country",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                std::string country = req->getOptionalParameter<std::string>("country").value_or("");
-                std::string format = req->getOptionalParameter<std::string>("format").value_or("pem");
-
-                if (country.empty()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "Country parameter is required";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k400BadRequest);
-                    callback(resp);
-                    return;
-                }
-
-                spdlog::info("Certificate export country: country={}, format={}", country, format);
-
-                // Export all certificates for country
-                services::ExportFormat exportFormat = (format == "der") ?
-                    services::ExportFormat::DER : services::ExportFormat::PEM;
-
-                auto result = ::certificateService->exportCountryCertificates(country, exportFormat);
-
-                if (!result.success) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = result.errorMessage;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Return ZIP file
-                auto resp = drogon::HttpResponse::newHttpResponse();
-                resp->setBody(std::string(result.data.begin(), result.data.end()));
-                resp->setContentTypeCode(drogon::CT_NONE);
-                resp->addHeader("Content-Type", result.contentType);
-                resp->addHeader("Content-Disposition", "attachment; filename=\"" + result.filename + "\"");
-                callback(resp);
-
-                // Audit logging - CERT_EXPORT success (country ZIP)
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId, username] = extractUserFromRequest(req);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
-                    auditEntry.operationType = OperationType::CERT_EXPORT;
-                    auditEntry.operationSubtype = "COUNTRY_ZIP";
-                    auditEntry.resourceId = country;
-                    auditEntry.resourceType = "CERTIFICATE_COLLECTION";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "GET";
-                    auditEntry.requestPath = "/api/certificates/export/country";
-                    auditEntry.success = true;
-                    Json::Value metadata;
-                    metadata["country"] = country;
-                    metadata["format"] = format;
-                    metadata["fileName"] = result.filename;
-                    metadata["fileSize"] = static_cast<Json::Int64>(result.data.size());
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-            } catch (const std::exception& e) {
-                spdlog::error("Certificate export country error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/certificates/export/all - Export all LDAP-stored data as DIT-structured ZIP
-    app.registerHandler(
-        "/api/certificates/export/all",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                std::string format = req->getOptionalParameter<std::string>("format").value_or("pem");
-
-                spdlog::info("Full PKD export requested: format={}", format);
-
-                services::ExportFormat exportFormat = (format == "der") ?
-                    services::ExportFormat::DER : services::ExportFormat::PEM;
-
-                auto exportResult = services::exportAllCertificatesFromDb(
-                    ::certificateRepository.get(),
-                    ::crlRepository.get(),
-                    ::queryExecutor.get(),
-                    exportFormat,
-                    ::ldapPool.get()
-                );
-
-                if (!exportResult.success) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = exportResult.errorMessage;
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k500InternalServerError);
-                    callback(resp);
-                    return;
-                }
-
-                // Return ZIP binary
-                auto resp = drogon::HttpResponse::newHttpResponse();
-                resp->setStatusCode(drogon::k200OK);
-                resp->setContentTypeString("application/zip");
-                resp->addHeader("Content-Disposition",
-                    "attachment; filename=\"" + exportResult.filename + "\"");
-                resp->setBody(std::string(
-                    reinterpret_cast<const char*>(exportResult.data.data()),
-                    exportResult.data.size()));
-                callback(resp);
-
-                // Audit log
-                {
-                    AuditLogEntry auditEntry;
-                    auto [userId, username] = extractUserFromRequest(req);
-                    auditEntry.userId = userId;
-                    auditEntry.username = username;
-                    auditEntry.operationType = OperationType::CERT_EXPORT;
-                    auditEntry.operationSubtype = "ALL_ZIP";
-                    auditEntry.resourceType = "CERTIFICATE_COLLECTION";
-                    auditEntry.ipAddress = extractIpAddress(req);
-                    auditEntry.userAgent = req->getHeader("User-Agent");
-                    auditEntry.requestMethod = "GET";
-                    auditEntry.requestPath = "/api/certificates/export/all";
-                    auditEntry.success = true;
-                    Json::Value metadata;
-                    metadata["format"] = format;
-                    metadata["fileName"] = exportResult.filename;
-                    metadata["fileSize"] = static_cast<Json::Int64>(exportResult.data.size());
-                    auditEntry.metadata = metadata;
-                    logOperation(::queryExecutor.get(), auditEntry);
-                }
-
-            } catch (const std::exception& e) {
-                spdlog::error("Full PKD export error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/certificates/countries - Get list of available countries
-    app.registerHandler(
-        "/api/certificates/countries",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                spdlog::debug("Fetching list of available countries");
-
-                if (!::certificateRepository) {
-                    throw std::runtime_error("Certificate repository not initialized");
-                }
-
-                auto rows = ::certificateRepository->getDistinctCountries();
-
-                Json::Value response;
-                response["success"] = true;
-                response["count"] = static_cast<int>(rows.size());
-
-                Json::Value countryList(Json::arrayValue);
-                for (const auto& row : rows) {
-                    countryList.append(row["country_code"].asString());
-                }
-                response["countries"] = countryList;
-
-                spdlog::info("Countries list fetched: {} countries", rows.size());
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("Error fetching countries: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/certificates/dsc-nc/report - DSC_NC Non-Conformant Certificate Report
-    app.registerHandler(
-        "/api/certificates/dsc-nc/report",
-        [&](const drogon::HttpRequestPtr& req,
-            std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            try {
-                // Parse query parameters
-                std::string countryFilter = req->getOptionalParameter<std::string>("country").value_or("");
-                std::string codeFilter = req->getOptionalParameter<std::string>("conformanceCode").value_or("");
-                int page = req->getOptionalParameter<int>("page").value_or(1);
-                int size = req->getOptionalParameter<int>("size").value_or(50);
-                if (page < 1) page = 1;
-                if (size < 1) size = 50;
-                if (size > 200) size = 200;
-
-                spdlog::info("DSC_NC report: country={}, code={}, page={}, size={}", countryFilter, codeFilter, page, size);
-
-                // Fetch all DSC_NC certificates from LDAP (batch 200 at a time)
-                domain::models::CertificateSearchResult result;
-                result.total = 0;
-                result.limit = 200;
-                result.offset = 0;
-                {
-                    int batchOffset = 0;
-                    const int batchSize = 200;
-                    while (true) {
-                        domain::models::CertificateSearchCriteria criteria;
-                        criteria.certType = domain::models::CertificateType::DSC_NC;
-                        criteria.limit = batchSize;
-                        criteria.offset = batchOffset;
-                        auto batch = ::certificateService->searchCertificates(criteria);
-                        for (auto& cert : batch.certificates) {
-                            result.certificates.push_back(std::move(cert));
-                        }
-                        result.total = batch.total;
-                        if (static_cast<int>(batch.certificates.size()) < batchSize) break;
-                        batchOffset += batchSize;
-                        if (batchOffset >= batch.total) break;
-                    }
-                }
-
-                // Single-pass aggregation
-                std::map<std::string, std::pair<std::string, int>> conformanceCodeMap; // code -> {description, count}
-                std::map<std::string, std::tuple<int, int, int>> countryMap; // country -> {total, valid, expired}
-                std::map<int, int> yearMap; // year -> count
-                std::map<std::string, int> sigAlgMap; // algorithm -> count
-                std::map<std::string, int> pubKeyAlgMap; // algorithm -> count
-                int validCount = 0, expiredCount = 0, notYetValidCount = 0, unknownCount = 0;
-
-                // Filtered certificates for table
-                std::vector<const domain::models::Certificate*> filteredCerts;
-
-                for (const auto& cert : result.certificates) {
-                    // Aggregation (always, before filtering)
-                    std::string code = cert.getPkdConformanceCode().value_or("UNKNOWN");
-                    std::string desc = cert.getPkdConformanceText().value_or("");
-                    conformanceCodeMap[code].first = desc;
-                    conformanceCodeMap[code].second++;
-
-                    std::string country = cert.getCountry();
-                    auto status = cert.getValidityStatus();
-                    auto& countryEntry = countryMap[country];
-                    std::get<0>(countryEntry)++;
-                    if (status == domain::models::ValidityStatus::VALID) {
-                        std::get<1>(countryEntry)++;
-                        validCount++;
-                    } else if (status == domain::models::ValidityStatus::EXPIRED) {
-                        std::get<2>(countryEntry)++;
-                        expiredCount++;
-                    } else if (status == domain::models::ValidityStatus::NOT_YET_VALID) {
-                        notYetValidCount++;
-                    } else {
-                        unknownCount++;
-                    }
-
-                    // Year from notBefore
-                    auto notBefore = std::chrono::system_clock::to_time_t(cert.getValidFrom());
-                    struct tm tmBuf;
-                    gmtime_r(&notBefore, &tmBuf);
-                    yearMap[tmBuf.tm_year + 1900]++;
-
-                    // Algorithms
-                    std::string sigAlg = cert.getSignatureAlgorithm().value_or("Unknown");
-                    sigAlgMap[sigAlg]++;
-                    std::string pubKeyAlg = cert.getPublicKeyAlgorithm().value_or("Unknown");
-                    pubKeyAlgMap[pubKeyAlg]++;
-
-                    // Apply filters for table
-                    bool passCountry = countryFilter.empty() || cert.getCountry() == countryFilter;
-                    bool passCode = codeFilter.empty() || code.find(codeFilter) == 0; // prefix match
-                    if (passCountry && passCode) {
-                        filteredCerts.push_back(&cert);
-                    }
-                }
-
-                // Build JSON response
-                Json::Value response;
-                response["success"] = true;
-
-                // Summary
-                Json::Value summary;
-                summary["totalDscNc"] = static_cast<int>(result.certificates.size());
-                summary["countryCount"] = static_cast<int>(countryMap.size());
-                summary["conformanceCodeCount"] = static_cast<int>(conformanceCodeMap.size());
-                Json::Value validityBreakdown;
-                validityBreakdown["VALID"] = validCount;
-                validityBreakdown["EXPIRED"] = expiredCount;
-                validityBreakdown["NOT_YET_VALID"] = notYetValidCount;
-                validityBreakdown["UNKNOWN"] = unknownCount;
-                summary["validityBreakdown"] = validityBreakdown;
-                response["summary"] = summary;
-
-                // Conformance codes (sorted by count desc)
-                std::vector<std::pair<std::string, std::pair<std::string, int>>> codeVec(conformanceCodeMap.begin(), conformanceCodeMap.end());
-                std::sort(codeVec.begin(), codeVec.end(), [](const auto& a, const auto& b) { return a.second.second > b.second.second; });
-                Json::Value codesArray(Json::arrayValue);
-                for (const auto& [code, descCount] : codeVec) {
-                    Json::Value item;
-                    item["code"] = code;
-                    item["description"] = descCount.first;
-                    item["count"] = descCount.second;
-                    codesArray.append(item);
-                }
-                response["conformanceCodes"] = codesArray;
-
-                // By country (sorted by count desc)
-                std::vector<std::pair<std::string, std::tuple<int, int, int>>> countryVec(countryMap.begin(), countryMap.end());
-                std::sort(countryVec.begin(), countryVec.end(), [](const auto& a, const auto& b) { return std::get<0>(a.second) > std::get<0>(b.second); });
-                Json::Value countryArray(Json::arrayValue);
-                for (const auto& [cc, counts] : countryVec) {
-                    Json::Value item;
-                    item["countryCode"] = cc;
-                    item["count"] = std::get<0>(counts);
-                    item["validCount"] = std::get<1>(counts);
-                    item["expiredCount"] = std::get<2>(counts);
-                    countryArray.append(item);
-                }
-                response["byCountry"] = countryArray;
-
-                // By year (sorted by year asc)
-                Json::Value yearArray(Json::arrayValue);
-                for (const auto& [year, count] : yearMap) {
-                    Json::Value item;
-                    item["year"] = year;
-                    item["count"] = count;
-                    yearArray.append(item);
-                }
-                response["byYear"] = yearArray;
-
-                // By signature algorithm
-                Json::Value sigAlgArray(Json::arrayValue);
-                for (const auto& [alg, count] : sigAlgMap) {
-                    Json::Value item;
-                    item["algorithm"] = alg;
-                    item["count"] = count;
-                    sigAlgArray.append(item);
-                }
-                response["bySignatureAlgorithm"] = sigAlgArray;
-
-                // By public key algorithm
-                Json::Value pubKeyAlgArray(Json::arrayValue);
-                for (const auto& [alg, count] : pubKeyAlgMap) {
-                    Json::Value item;
-                    item["algorithm"] = alg;
-                    item["count"] = count;
-                    pubKeyAlgArray.append(item);
-                }
-                response["byPublicKeyAlgorithm"] = pubKeyAlgArray;
-
-                // Certificates table (paginated)
-                int totalFiltered = static_cast<int>(filteredCerts.size());
-                int startIdx = (page - 1) * size;
-                int endIdx = std::min(startIdx + size, totalFiltered);
-
-                Json::Value certsObj;
-                certsObj["total"] = totalFiltered;
-                certsObj["page"] = page;
-                certsObj["size"] = size;
-
-                Json::Value items(Json::arrayValue);
-                for (int i = startIdx; i < endIdx; i++) {
-                    const auto& cert = *filteredCerts[i];
-                    Json::Value certJson;
-                    certJson["fingerprint"] = cert.getFingerprint();
-                    certJson["countryCode"] = cert.getCountry();
-                    certJson["subjectDn"] = cert.getSubjectDn();
-                    certJson["issuerDn"] = cert.getIssuerDn();
-                    certJson["serialNumber"] = cert.getSn();
-
-                    // Dates
-                    char timeBuf[32];
-                    auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
-                    auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
-                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
-                    certJson["notBefore"] = timeBuf;
-                    std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
-                    certJson["notAfter"] = timeBuf;
-
-                    // Validity
-                    auto status = cert.getValidityStatus();
-                    if (status == domain::models::ValidityStatus::VALID) certJson["validity"] = "VALID";
-                    else if (status == domain::models::ValidityStatus::EXPIRED) certJson["validity"] = "EXPIRED";
-                    else if (status == domain::models::ValidityStatus::NOT_YET_VALID) certJson["validity"] = "NOT_YET_VALID";
-                    else certJson["validity"] = "UNKNOWN";
-
-                    // Algorithms
-                    if (cert.getSignatureAlgorithm().has_value()) certJson["signatureAlgorithm"] = *cert.getSignatureAlgorithm();
-                    if (cert.getPublicKeyAlgorithm().has_value()) certJson["publicKeyAlgorithm"] = *cert.getPublicKeyAlgorithm();
-                    if (cert.getPublicKeySize().has_value()) certJson["publicKeySize"] = *cert.getPublicKeySize();
-
-                    // Conformance data
-                    if (cert.getPkdConformanceCode().has_value()) certJson["pkdConformanceCode"] = *cert.getPkdConformanceCode();
-                    if (cert.getPkdConformanceText().has_value()) certJson["pkdConformanceText"] = *cert.getPkdConformanceText();
-                    if (cert.getPkdVersion().has_value()) certJson["pkdVersion"] = *cert.getPkdVersion();
-
-                    items.append(certJson);
-                }
-                certsObj["items"] = items;
-                response["certificates"] = certsObj;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                spdlog::error("DSC_NC report error: {}", e.what());
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // Swagger UI redirect
-    app.registerHandler(
-        "/api/docs",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            auto resp = drogon::HttpResponse::newRedirectionResponse("/swagger-ui/index.html");
-            callback(resp);
-        },
-        {drogon::Get}
-    );
-
-    // Register ICAO Auto Sync routes
-    if (icaoHandler) {
-        icaoHandler->registerRoutes(app);
-        spdlog::info("ICAO Auto Sync routes registered");
+    // --- ICAO Routes ---
+    if (g_services && g_services->icaoHandler()) {
+        g_services->icaoHandler()->registerRoutes(app);
     }
-
-    // --- Link Certificate Validation API ---
-
-    // POST /api/validate/link-cert - Validate Link Certificate trust chain
-    app.registerHandler(
-        "/api/validate/link-cert",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("POST /api/validate/link-cert - Link Certificate validation");
-
-            // Parse JSON request body
-            auto json = req->getJsonObject();
-            if (!json) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Invalid JSON body";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
-            }
-
-            // Get certificate binary (base64 encoded)
-            std::string certBase64 = (*json).get("certificateBinary", "").asString();
-            if (certBase64.empty()) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Missing certificateBinary field";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
-            }
-
-            // Decode base64
-            std::vector<uint8_t> certBinary;
-            try {
-                std::string decoded = drogon::utils::base64Decode(certBase64);
-                certBinary.assign(decoded.begin(), decoded.end());
-            } catch (const std::exception& e) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = std::string("Base64 decode failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
-            }
-
-            // Use QueryExecutor for Oracle support
-            if (!::queryExecutor) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Query executor not initialized";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            try {
-                // Create LC validator with QueryExecutor (Oracle/PostgreSQL agnostic)
-                lc::LcValidator validator(::queryExecutor.get());
-
-                // Validate Link Certificate
-                auto result = validator.validateLinkCertificate(certBinary);
-
-                // Build JSON response
-                Json::Value response;
-                response["success"] = true;
-                response["trustChainValid"] = result.trustChainValid;
-                response["validationMessage"] = result.validationMessage;
-
-                // Signature validation
-                Json::Value signatures;
-                signatures["oldCscaSignatureValid"] = result.oldCscaSignatureValid;
-                signatures["oldCscaSubjectDn"] = result.oldCscaSubjectDn;
-                signatures["oldCscaFingerprint"] = result.oldCscaFingerprint;
-                signatures["newCscaSignatureValid"] = result.newCscaSignatureValid;
-                signatures["newCscaSubjectDn"] = result.newCscaSubjectDn;
-                signatures["newCscaFingerprint"] = result.newCscaFingerprint;
-                response["signatures"] = signatures;
-
-                // Certificate properties
-                Json::Value properties;
-                properties["validityPeriodValid"] = result.validityPeriodValid;
-                properties["notBefore"] = result.notBefore;
-                properties["notAfter"] = result.notAfter;
-                properties["extensionsValid"] = result.extensionsValid;
-                response["properties"] = properties;
-
-                // Extensions details
-                Json::Value extensions;
-                extensions["basicConstraintsCa"] = result.basicConstraintsCa;
-                extensions["basicConstraintsPathlen"] = result.basicConstraintsPathlen;
-                extensions["keyUsage"] = result.keyUsage;
-                extensions["extendedKeyUsage"] = result.extendedKeyUsage;
-                response["extensions"] = extensions;
-
-                // Revocation status
-                Json::Value revocation;
-                revocation["status"] = crl::revocationStatusToString(result.revocationStatus);
-                revocation["message"] = result.revocationMessage;
-                response["revocation"] = revocation;
-
-                // Metadata
-                response["validationDurationMs"] = result.validationDurationMs;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-                // dbConn RAII: connection auto-released here
-
-            } catch (const std::exception& e) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = std::string("Validation failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Post}
-    );
-
-    // GET /api/link-certs/search - Search Link Certificates
-    app.registerHandler(
-        "/api/link-certs/search",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
-            spdlog::info("GET /api/link-certs/search - Search Link Certificates");
-
-            // Parse query parameters
-            std::string country = req->getParameter("country");
-            std::string validOnlyStr = req->getParameter("validOnly");
-            std::string limitStr = req->getParameter("limit");
-            std::string offsetStr = req->getParameter("offset");
-
-            bool validOnly = (validOnlyStr == "true");
-            int limit = limitStr.empty() ? 50 : std::stoi(limitStr);
-            int offset = offsetStr.empty() ? 0 : std::stoi(offsetStr);
-
-            // Validate parameters
-            if (limit <= 0 || limit > 1000) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Invalid limit (must be 1-1000)";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k400BadRequest);
-                callback(resp);
-                return;
-            }
-
-            if (!::certificateRepository) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Certificate repository not initialized";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            try {
-                std::string validFilter = validOnly ? "true" : "";
-                auto rows = ::certificateRepository->searchLinkCertificates(country, validFilter, limit, offset);
-
-                // Helper for Oracle boolean values
-                std::string dbType = ::queryExecutor ? ::queryExecutor->getDatabaseType() : "postgres";
-                auto parseBool = [&dbType](const Json::Value& v) -> bool {
-                    if (v.isBool()) return v.asBool();
-                    std::string s = v.asString();
-                    return (s == "t" || s == "true" || s == "1" || s == "TRUE");
-                };
-
-                // Build JSON response
-                Json::Value response;
-                response["success"] = true;
-                response["total"] = static_cast<int>(rows.size());
-                response["limit"] = limit;
-                response["offset"] = offset;
-
-                Json::Value certificates(Json::arrayValue);
-                for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
-                    const auto& row = rows[i];
-                    Json::Value cert;
-                    cert["id"] = row.get("id", "").asString();
-                    cert["subjectDn"] = row.get("subject_dn", "").asString();
-                    cert["issuerDn"] = row.get("issuer_dn", "").asString();
-                    cert["serialNumber"] = row.get("serial_number", "").asString();
-                    cert["fingerprint"] = row.get("fingerprint_sha256", "").asString();
-                    cert["oldCscaSubjectDn"] = row.get("old_csca_subject_dn", "").asString();
-                    cert["newCscaSubjectDn"] = row.get("new_csca_subject_dn", "").asString();
-                    cert["trustChainValid"] = parseBool(row["trust_chain_valid"]);
-                    cert["createdAt"] = row.get("created_at", "").asString();
-                    cert["countryCode"] = row.get("country_code", "").asString();
-
-                    certificates.append(cert);
-                }
-
-                response["certificates"] = certificates;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = std::string("Search failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
-
-    // GET /api/link-certs/{id} - Get Link Certificate details by ID
-    app.registerHandler(
-        "/api/link-certs/{id}",
-        [](const drogon::HttpRequestPtr& req,
-           std::function<void(const drogon::HttpResponsePtr&)>&& callback,
-           const std::string& id) {
-            spdlog::info("GET /api/link-certs/{} - Get Link Certificate details", id);
-
-            if (!::certificateRepository) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = "Certificate repository not initialized";
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-                return;
-            }
-
-            try {
-                std::string dbType = ::queryExecutor ? ::queryExecutor->getDatabaseType() : "postgres";
-
-                // Helper for Oracle boolean values
-                auto parseBool = [&dbType](const Json::Value& v) -> bool {
-                    if (v.isBool()) return v.asBool();
-                    std::string s = v.asString();
-                    return (s == "t" || s == "true" || s == "1" || s == "TRUE");
-                };
-
-                auto safeInt = [](const Json::Value& v) -> int {
-                    if (v.isInt()) return v.asInt();
-                    if (v.isString()) { try { return std::stoi(v.asString()); } catch (...) { return 0; } }
-                    return 0;
-                };
-
-                // Query LC by ID via CertificateRepository
-                Json::Value rowValue = ::certificateRepository->findLinkCertificateById(id);
-
-                if (rowValue.isNull()) {
-                    Json::Value error;
-                    error["success"] = false;
-                    error["error"] = "Link Certificate not found";
-                    auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                    resp->setStatusCode(drogon::k404NotFound);
-                    callback(resp);
-                    return;
-                }
-
-                const auto& row = rowValue;
-
-                // Build JSON response
-                Json::Value response;
-                response["success"] = true;
-
-                Json::Value cert;
-                cert["id"] = row.get("id", "").asString();
-                cert["subjectDn"] = row.get("subject_dn", "").asString();
-                cert["issuerDn"] = row.get("issuer_dn", "").asString();
-                cert["serialNumber"] = row.get("serial_number", "").asString();
-                cert["fingerprint"] = row.get("fingerprint_sha256", "").asString();
-
-                Json::Value signatures;
-                signatures["oldCscaSubjectDn"] = row.get("old_csca_subject_dn", "").asString();
-                signatures["oldCscaFingerprint"] = row.get("old_csca_fingerprint", "").asString();
-                signatures["newCscaSubjectDn"] = row.get("new_csca_subject_dn", "").asString();
-                signatures["newCscaFingerprint"] = row.get("new_csca_fingerprint", "").asString();
-                signatures["trustChainValid"] = parseBool(row["trust_chain_valid"]);
-                signatures["oldCscaSignatureValid"] = parseBool(row["old_csca_signature_valid"]);
-                signatures["newCscaSignatureValid"] = parseBool(row["new_csca_signature_valid"]);
-                cert["signatures"] = signatures;
-
-                Json::Value properties;
-                properties["validityPeriodValid"] = parseBool(row["validity_period_valid"]);
-                properties["notBefore"] = row.get("not_before", "").asString();
-                properties["notAfter"] = row.get("not_after", "").asString();
-                properties["extensionsValid"] = parseBool(row["extensions_valid"]);
-                cert["properties"] = properties;
-
-                Json::Value extensions;
-                extensions["basicConstraintsCa"] = parseBool(row["basic_constraints_ca"]);
-                extensions["basicConstraintsPathlen"] = safeInt(row["basic_constraints_pathlen"]);
-                extensions["keyUsage"] = row.get("key_usage", "").asString();
-                extensions["extendedKeyUsage"] = row.get("extended_key_usage", "").asString();
-                cert["extensions"] = extensions;
-
-                Json::Value revocation;
-                revocation["status"] = row.get("revocation_status", "").asString();
-                revocation["message"] = row.get("revocation_message", "").asString();
-                cert["revocation"] = revocation;
-
-                cert["ldapDn"] = row.get("ldap_dn_v2", "").asString();
-                cert["storedInLdap"] = parseBool(row["stored_in_ldap"]);
-                cert["createdAt"] = row.get("created_at", "").asString();
-                cert["countryCode"] = row.get("country_code", "").asString();
-
-                response["certificate"] = cert;
-
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-                callback(resp);
-
-            } catch (const std::exception& e) {
-                Json::Value error;
-                error["success"] = false;
-                error["error"] = std::string("Query failed: ") + e.what();
-                auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-                resp->setStatusCode(drogon::k500InternalServerError);
-                callback(resp);
-            }
-        },
-        {drogon::Get}
-    );
 
     // --- LDAP DN Migration API (Internal) ---
 
@@ -7542,17 +4340,18 @@ paths:
             // NOTE: This endpoint uses PQunescapeBytea for certificate_data (BYTEA column).
             // For PostgreSQL, we use the connection pool. For Oracle, this internal migration
             // endpoint is not applicable (Oracle uses a different DN migration approach).
-            if (!::dbPool) {
+            auto* pgPool = dynamic_cast<common::DbConnectionPool*>(g_services->dbPool());
+            if (!pgPool) {
                 Json::Value error;
                 error["success"] = false;
-                error["error"] = "Database connection pool not initialized (PostgreSQL only endpoint)";
+                error["error"] = "Database connection pool not available (PostgreSQL only endpoint)";
                 auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
                 resp->setStatusCode(drogon::k500InternalServerError);
                 callback(resp);
                 return;
             }
 
-            common::DbConnection dbConn = ::dbPool->acquire();
+            common::DbConnection dbConn = pgPool->acquire();
             PGconn* conn = dbConn.get();
             if (!conn) {
                 Json::Value error;
@@ -7686,7 +4485,7 @@ paths:
                 // Update database with new DN using QueryExecutor
                 if (ldapSuccess || mode == "test") {
                     try {
-                        ::queryExecutor->executeCommand(
+                        g_services->queryExecutor()->executeCommand(
                             "UPDATE certificate SET ldap_dn_v2 = $1 WHERE id = $2",
                             {newDn, certId});
                         successCount++;
@@ -7703,9 +4502,9 @@ paths:
             if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
 
             // Update migration status using QueryExecutor
-            if (::queryExecutor) {
+            if (g_services && g_services->queryExecutor()) {
                 try {
-                    std::string dbType = ::queryExecutor->getDatabaseType();
+                    std::string dbType = g_services->queryExecutor()->getDatabaseType();
                     std::string nowFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
                     std::string statusQuery =
                         "UPDATE ldap_migration_status "
@@ -7715,7 +4514,7 @@ paths:
                         "WHERE table_name = 'certificate' "
                         "  AND status = 'IN_PROGRESS'";
 
-                    ::queryExecutor->executeCommand(statusQuery,
+                    g_services->queryExecutor()->executeCommand(statusQuery,
                         {std::to_string(successCount), std::to_string(failedCount)});
                 } catch (const std::exception& e) {
                     spdlog::warn("Failed to update migration status: {}", e.what());
@@ -7769,159 +4568,16 @@ int main(int argc, char* argv[]) {
     spdlog::info("Database: {}:{}/{}", appConfig.dbHost, appConfig.dbPort, appConfig.dbName);
     spdlog::info("LDAP: {}:{}", appConfig.ldapHost, appConfig.ldapPort);
 
-    // Create LDAP connection pool FIRST (Thread-safe LDAP connection management)
-    // Note: Using write host for upload operations
-    try {
-        std::string ldapWriteUri = "ldap://" + appConfig.ldapWriteHost + ":" + std::to_string(appConfig.ldapWritePort);
-
-        ldapPool = std::make_shared<common::LdapConnectionPool>(
-            ldapWriteUri,                    // LDAP URI
-            appConfig.ldapBindDn,            // Bind DN
-            appConfig.ldapBindPassword,      // Bind Password
-            2,   // minConnections
-            10,  // maxConnections
-            5    // acquireTimeoutSec
-        );
-
-        spdlog::info("LDAP connection pool initialized (min=2, max=10, host={})", ldapWriteUri);
-    } catch (const std::exception& e) {
-        spdlog::critical("Failed to initialize LDAP connection pool: {}", e.what());
+    // Initialize ServiceContainer (all pools, repos, services, handlers)
+    g_services = new infrastructure::ServiceContainer();
+    if (!g_services->initialize(appConfig)) {
+        spdlog::critical("ServiceContainer initialization failed");
+        delete g_services;
+        g_services = nullptr;
         return 1;
     }
 
     try {
-        // Initialize Certificate Service (Clean Architecture) - Using LDAP connection pool
-        // Certificate search base DN: dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
-        // Note: Repository will prepend dc=data,dc=download based on search criteria
-        std::string certSearchBaseDn = appConfig.ldapBaseDn;
-
-        auto repository = std::make_shared<repositories::LdapCertificateRepository>(
-            ldapPool.get(),
-            certSearchBaseDn
-        );
-        certificateService = std::make_shared<services::CertificateService>(repository);
-        spdlog::info("Certificate service initialized with LDAP connection pool (baseDN: {})", certSearchBaseDn);
-
-        spdlog::info("Countries API configured (PostgreSQL query, ~70ms response time)");
-
-        // ICAO Auto Sync Module initialization deferred to after QueryExecutor init
-        // IcaoVersionRepository now uses IQueryExecutor instead of PGconn
-
-        // Initialize Repository Pattern - Repositories and Services
-        spdlog::info("Initializing Repository Pattern...");
-
-        // Create database connection pool for Repositories (Factory Pattern with Oracle support)
-        std::shared_ptr<common::IDbConnectionPool> genericPool;
-
-        try {
-            // Use Factory Pattern to create pool based on DB_TYPE environment variable
-            // Supports both PostgreSQL (production) and Oracle (development)
-            genericPool = common::DbConnectionPoolFactory::createFromEnv();
-
-            if (!genericPool) {
-                spdlog::critical("Failed to create database connection pool from environment");
-                ldapPool.reset();  // Release LDAP pool
-                return 1;
-            }
-
-            // Initialize the connection pool
-            if (!genericPool->initialize()) {
-                spdlog::critical("Failed to initialize database connection pool");
-                ldapPool.reset();  // Release LDAP pool
-                return 1;
-            }
-
-            std::string dbType = genericPool->getDatabaseType();
-            spdlog::info("✅ Database connection pool initialized (type={})", dbType);
-
-            // Query Executor Pattern supports both PostgreSQL and Oracle
-            // Repositories work with any database through IQueryExecutor interface
-            spdlog::info("Repository Pattern initialization complete - Ready for {} database", dbType);
-
-        } catch (const std::exception& e) {
-            spdlog::critical("Failed to initialize database connection pool: {}", e.what());
-            ldapPool.reset();  // Release LDAP pool
-            return 1;
-        }
-
-        // Initialize Query Executor (Database-agnostic query execution)
-        queryExecutor = common::createQueryExecutor(genericPool.get());
-        spdlog::info("Query Executor initialized (DB type: {})", queryExecutor->getDatabaseType());
-
-        // Initialize Repositories with Query Executor (Database-agnostic)
-        uploadRepository = std::make_shared<repositories::UploadRepository>(queryExecutor.get());
-        certificateRepository = std::make_shared<repositories::CertificateRepository>(queryExecutor.get());
-        validationRepository = std::make_shared<repositories::ValidationRepository>(queryExecutor.get(), ldapPool, appConfig.ldapBaseDn);
-        auditRepository = std::make_shared<repositories::AuditRepository>(queryExecutor.get());
-        userRepository = std::make_shared<repositories::UserRepository>(queryExecutor.get());
-        authAuditRepository = std::make_shared<repositories::AuthAuditRepository>(queryExecutor.get());
-        crlRepository = std::make_shared<repositories::CrlRepository>(queryExecutor.get());
-        deviationListRepository = std::make_shared<repositories::DeviationListRepository>(queryExecutor.get());
-        spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL: Query Executor)");
-        ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(uploadRepository.get());
-
-        // Initialize ICAO Auto Sync Module
-        spdlog::info("Initializing ICAO Auto Sync module...");
-
-        auto icaoRepo = std::make_shared<repositories::IcaoVersionRepository>(queryExecutor.get());
-        auto httpClient = std::make_shared<infrastructure::http::HttpClient>();
-
-        infrastructure::notification::EmailSender::EmailConfig emailConfig;
-        emailConfig.smtpHost = "localhost";
-        emailConfig.smtpPort = 25;
-        emailConfig.fromAddress = appConfig.notificationEmail;
-        emailConfig.useTls = false;
-        auto emailSender = std::make_shared<infrastructure::notification::EmailSender>(emailConfig);
-
-        services::IcaoSyncService::Config icaoConfig;
-        icaoConfig.icaoPortalUrl = appConfig.icaoPortalUrl;
-        icaoConfig.notificationEmail = appConfig.notificationEmail;
-        icaoConfig.autoNotify = appConfig.icaoAutoNotify;
-        icaoConfig.httpTimeoutSeconds = appConfig.icaoHttpTimeout;
-
-        auto icaoService = std::make_shared<services::IcaoSyncService>(
-            icaoRepo, httpClient, emailSender, icaoConfig
-        );
-
-        icaoHandler = std::make_shared<handlers::IcaoHandler>(icaoService);
-        spdlog::info("ICAO Auto Sync module initialized (Portal: {}, Notify: {})",
-                    appConfig.icaoPortalUrl,
-                    appConfig.icaoAutoNotify ? "enabled" : "disabled");
-
-        // Initialize Services with Repository dependencies
-        uploadService = std::make_shared<services::UploadService>(
-            uploadRepository.get(),
-            certificateRepository.get(),
-            ldapPool.get(),
-            deviationListRepository.get()  // DL deviation data storage
-        );
-
-        validationService = std::make_shared<services::ValidationService>(
-            validationRepository.get(),
-            certificateRepository.get(),
-            crlRepository.get()
-        );
-
-        auditService = std::make_shared<services::AuditService>(
-            auditRepository.get()
-        );
-
-        ldifStructureService = std::make_shared<services::LdifStructureService>(
-            ldifStructureRepository.get()
-        );
-
-        spdlog::info("Services initialized with Repository dependencies (Upload, Validation, Audit, LdifStructure)");
-
-        // Initialize Authentication Handler with Repository Pattern
-        spdlog::info("Initializing Authentication module with Repository Pattern...");
-        authHandler = std::make_shared<handlers::AuthHandler>(
-            userRepository.get(),
-            authAuditRepository.get()
-        );
-        spdlog::info("Authentication module initialized (UserRepository, AuthAuditRepository)");
-
-        spdlog::info("Repository Pattern initialization complete - Ready for Oracle migration");
-
         auto& app = drogon::app();
 
         // Server settings
@@ -8007,13 +4663,13 @@ int main(int argc, char* argv[]) {
             spdlog::info("[IcaoScheduler] First check scheduled in {} seconds ({:.1f} hours)",
                         delaySeconds, delaySeconds / 3600.0);
 
-            // Capture icaoService by shared_ptr for safe timer callback
-            auto scheduledIcaoService = icaoService;
+            // Capture raw pointer - ServiceContainer outlives all timers
+            auto* scheduledIcaoSvc = g_services->icaoSyncService();
 
-            app.getLoop()->runAfter(static_cast<double>(delaySeconds), [scheduledIcaoService, &app]() {
+            app.getLoop()->runAfter(static_cast<double>(delaySeconds), [scheduledIcaoSvc, &app]() {
                 spdlog::info("[IcaoScheduler] Running scheduled ICAO version check");
                 try {
-                    auto result = scheduledIcaoService->checkForUpdates();
+                    auto result = scheduledIcaoSvc->checkForUpdates();
                     spdlog::info("[IcaoScheduler] Check complete: {} (new versions: {})",
                                 result.message, result.newVersionCount);
                 } catch (const std::exception& e) {
@@ -8021,10 +4677,10 @@ int main(int argc, char* argv[]) {
                 }
 
                 // Register recurring 24-hour timer
-                app.getLoop()->runEvery(86400.0, [scheduledIcaoService]() {
+                app.getLoop()->runEvery(86400.0, [scheduledIcaoSvc]() {
                     spdlog::info("[IcaoScheduler] Running daily ICAO version check");
                     try {
-                        auto result = scheduledIcaoService->checkForUpdates();
+                        auto result = scheduledIcaoSvc->checkForUpdates();
                         spdlog::info("[IcaoScheduler] Check complete: {} (new versions: {})",
                                     result.message, result.newVersionCount);
                     } catch (const std::exception& e) {
@@ -8045,17 +4701,18 @@ int main(int argc, char* argv[]) {
         // Run the server
         app.run();
 
-        // Cleanup - Close LDAP connections (Database connection pool auto-cleanup via shared_ptr)
-        spdlog::info("Shutting down Repository Pattern resources...");
-        dbPool.reset();  // Explicitly release connection pool
-        spdlog::info("Database connection pool closed");
-        spdlog::info("Repository Pattern resources cleaned up");
+        // Cleanup - Release all resources via ServiceContainer
+        spdlog::info("Shutting down ServiceContainer resources...");
+        delete g_services;
+        g_services = nullptr;
+        spdlog::info("ServiceContainer resources cleaned up");
 
     } catch (const std::exception& e) {
         spdlog::error("Application error: {}", e.what());
 
-        // Cleanup on error (Connection pool auto-cleanup via shared_ptr)
-        dbPool.reset();
+        // Cleanup on error
+        delete g_services;
+        g_services = nullptr;
 
         return 1;
     }

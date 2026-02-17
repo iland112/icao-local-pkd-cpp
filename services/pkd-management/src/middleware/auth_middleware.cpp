@@ -4,12 +4,13 @@
 
 #include "auth_middleware.h"
 #include "../repositories/auth_audit_repository.h"
+#include "../infrastructure/service_container.h"
 #include <spdlog/spdlog.h>
 #include <cstdlib>
 #include <regex>
 
-// Global authAuditRepository (defined in main.cpp)
-extern std::shared_ptr<repositories::AuthAuditRepository> authAuditRepository;
+// Global service container (defined in main.cpp)
+extern infrastructure::ServiceContainer* g_services;
 
 namespace middleware {
 
@@ -275,14 +276,14 @@ void AuthMiddleware::logAuthEvent(
     const std::string& userAgent,
     const std::string& errorMessage) {
 
-    // Use global AuthAuditRepository (supports both PostgreSQL and Oracle)
-    if (!::authAuditRepository) {
+    // Use ServiceContainer's AuthAuditRepository (supports both PostgreSQL and Oracle)
+    if (!g_services || !g_services->authAuditRepository()) {
         spdlog::warn("[AuthMiddleware] authAuditRepository not available, skipping audit log");
         return;
     }
 
     try {
-        ::authAuditRepository->insert(
+        g_services->authAuditRepository()->insert(
             std::nullopt,  // userId (not available at middleware level)
             username.empty() ? "anonymous" : username,
             eventType,

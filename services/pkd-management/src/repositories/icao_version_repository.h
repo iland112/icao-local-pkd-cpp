@@ -98,11 +98,6 @@ private:
      * @brief Helper to get optional int from JSON value
      */
     std::optional<int> getOptionalInt(const Json::Value& val);
-
-    /**
-     * @brief Helper to parse int from JSON value (handles Oracle string returns)
-     */
-    int getInt(const Json::Value& val, int defaultVal = 0);
 };
 
 } // namespace repositories

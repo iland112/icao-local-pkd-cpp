@@ -3,6 +3,7 @@
  */
 
 #include "icao_version_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -93,7 +94,7 @@ bool IcaoVersionRepository::markNotificationSent(const std::string& fileName) {
         std::string dbType = executor_->getDatabaseType();
 
         // Oracle uses NUMBER(1) for booleans, PostgreSQL uses BOOLEAN
-        std::string trueVal = (dbType == "oracle") ? "1" : "TRUE";
+        std::string trueVal = common::db::boolLiteral(dbType, true);
 
         std::string query =
             "UPDATE icao_pkd_versions "
@@ -166,7 +167,7 @@ bool IcaoVersionRepository::exists(const std::string& collectionType,
         };
 
         Json::Value result = executor_->executeScalar(query, params);
-        int count = getInt(result, 0);
+        int count = common::db::scalarToInt(result);
         return (count > 0);
 
     } catch (const std::exception& e) {
@@ -324,7 +325,7 @@ domain::models::IcaoVersion IcaoVersionRepository::jsonToVersion(const Json::Val
     version.id = row.get("id", "").asString();
     version.collectionType = row.get("collection_type", "").asString();
     version.fileName = row.get("file_name", "").asString();
-    version.fileVersion = getInt(row.get("file_version", 0));
+    version.fileVersion = common::db::scalarToInt(row.get("file_version", 0));
     version.detectedAt = row.get("detected_at", "").asString();
     version.downloadedAt = getOptionalString(row.get("downloaded_at", Json::nullValue));
     version.importedAt = getOptionalString(row.get("imported_at", Json::nullValue));
@@ -362,18 +363,7 @@ std::optional<int> IcaoVersionRepository::getOptionalInt(const Json::Value& val)
     if (val.isNull()) {
         return std::nullopt;
     }
-    return getInt(val, 0);
-}
-
-int IcaoVersionRepository::getInt(const Json::Value& val, int defaultVal) {
-    if (val.isNull()) return defaultVal;
-    if (val.isInt()) return val.asInt();
-    if (val.isUInt()) return static_cast<int>(val.asUInt());
-    if (val.isString()) {
-        try { return std::stoi(val.asString()); } catch (...) { return defaultVal; }
-    }
-    if (val.isDouble()) return static_cast<int>(val.asDouble());
-    return defaultVal;
+    return common::db::scalarToInt(val);
 }
 
 std::vector<std::tuple<std::string, int, int, std::string>>
@@ -471,8 +461,8 @@ IcaoVersionRepository::getVersionComparison() {
 
             for (const auto& row : result) {
                 std::string collectionType = row.get("collection_type", "").asString();
-                int detectedVersion = getInt(row.get("detected_version", 0));
-                int uploadedVersion = getInt(row.get("uploaded_version", 0));
+                int detectedVersion = common::db::scalarToInt(row.get("detected_version", 0));
+                int uploadedVersion = common::db::scalarToInt(row.get("uploaded_version", 0));
                 std::string uploadTimestamp = row.get("upload_timestamp", "N/A").asString();
 
                 comparisons.push_back(std::make_tuple(

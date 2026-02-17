@@ -22,6 +22,7 @@ import type {
   PageRequest,
   PageResponse,
   LdifStructureData,
+  CertificateCountriesResponse,
 } from '@/types';
 
 // --- Axios Instance ---
@@ -135,7 +136,7 @@ export const certificateApi = {
    * Get list of available countries
    * @returns Array of country codes that have certificates
    */
-  getCountries: () => pkdApi.get<string[]>('/certificates/countries'),
+  getCountries: () => pkdApi.get<CertificateCountriesResponse>('/certificates/countries'),
 
   /**
    * Get certificate details by DN

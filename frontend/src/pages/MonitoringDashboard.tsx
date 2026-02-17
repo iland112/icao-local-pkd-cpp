@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, CheckCircle2, XCircle, Clock, RefreshCw, Loader2, Gauge } from 'lucide-react';
-import { monitoringServiceApi, type SystemMetrics, type ServiceHealth } from '@/services/api';
+import { monitoringServiceApi, type SystemMetrics, type ServiceHealth } from '@/services/monitoringApi';
 import { cn } from '@/utils/cn';
 
 export default function MonitoringDashboard() {

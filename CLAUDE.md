@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.11.0
-**Last Updated**: 2026-02-16
+**Current Version**: v2.12.0
+**Last Updated**: 2026-02-17
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -81,6 +81,9 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
 |---------|-------|
 | **Repository Pattern** | 100% SQL abstraction - zero SQL in controllers |
 | **Query Executor Pattern** | Database-agnostic query execution (IQueryExecutor) |
+| **Query Helpers** | `common::db::` utilities — boolLiteral, paginationClause, scalarToInt, hexPrefix |
+| **Service Container** | Centralized DI — `ServiceContainer` owns all repos/services/handlers (pimpl) |
+| **Handler Pattern** | Route handlers extracted from main.cpp — `registerRoutes(HttpAppFramework&)` |
 | **Factory Pattern** | Runtime database selection via DB_TYPE |
 | **Strategy Pattern** | Processing strategies (AUTO/MANUAL upload modes) |
 | **RAII** | Connection pooling (DB and LDAP) |
@@ -117,7 +120,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.7.0)
+## Current Features (v2.12.0)
 
 ### Core Functionality
 
@@ -152,6 +155,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - File upload validation (MIME type, path sanitization)
 - Dual audit logging: `auth_audit_log` (authentication events) + `operation_audit_log` (operations)
 - IP tracking and User-Agent logging
+- Content-Security-Policy (CSP) header via nginx (XSS defense)
 
 ### Multi-DBMS Support
 
@@ -269,6 +273,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 | Component | Purpose |
 |-----------|---------|
+| ErrorBoundary | Global error boundary with recovery UI |
 | TreeViewer | Reusable tree visualization (react-arborist) |
 | CountryStatisticsDialog | Country-level certificate breakdown |
 | TrustChainVisualization | Trust chain path display |
@@ -278,10 +283,15 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | ProcessingErrorsPanel | Upload processing error summary and details |
 | RealTimeStatisticsPanel | Live validation statistics during upload |
 | CurrentCertificateCard | Currently processing certificate metadata |
+| QuickLookupPanel | PA quick lookup by subject DN or fingerprint |
+| VerificationStepsPanel | 8-step ICAO verification process display |
+| VerificationResultCard | PA verification result summary card |
+| CertificateDetailDialog | Certificate detail modal (2-tab: General/Details) |
+| CertificateSearchFilters | Certificate search filter card with export buttons |
 
 ### Dependencies
 
-React 19, TypeScript, Vite, Tailwind CSS 4, React Router 7, Axios, Zustand, TanStack Query, ECharts, Recharts, Lucide Icons, i18n-iso-countries
+React 19, TypeScript, Vite, Tailwind CSS 4, React Router 7, Axios, Zustand, TanStack Query, Recharts, Lucide Icons, i18n-iso-countries
 
 ---
 
@@ -419,7 +429,7 @@ scripts/
 
 ### Oracle "Value is not convertible to Int"
 **Problem**: Oracle returns all values as strings
-**Solution**: Use `getInt()` helper for integer fields, check `getDatabaseType()` for boolean formatting
+**Solution**: Use `common::db::scalarToInt()` / `common::db::boolLiteral()` from `query_helpers.h`
 
 ### Oracle empty string = NULL
 **Problem**: `WHERE column != ''` fails on Oracle
@@ -479,6 +489,31 @@ scripts/
 ---
 
 ## Version History
+
+### v2.12.0 (2026-02-17) - Architecture Rewrite: ServiceContainer, Handler Extraction, Frontend Decomposition
+- **Backend main.cpp**: 8,095 → 4,722 lines (-41.7%) through handler extraction + ServiceContainer
+- **ServiceContainer** (`infrastructure/service_container.h/.cpp`): Centralized DI replacing 17 global shared_ptr variables
+  - Pimpl pattern, 7-phase initialization order, `AppConfig` struct extracted from main.cpp
+  - Non-owning pointer accessors: 9 repositories, 6 services, 5 handlers
+  - All extern globals across 5 files (processing_strategy, ldif_processor, certificate_utils, upload_service, auth_middleware) migrated to `g_services->` pattern
+- **Handler extraction**: 3 handler classes extracted from main.cpp (~3,400 lines moved)
+  - `UploadHandler` (10 endpoints): LDIF/ML/Certificate upload, parse, validate, delete
+  - `UploadStatsHandler` (11 endpoints): statistics, history, detail, countries, progress stream
+  - `CertificateHandler` (12 endpoints): search, export, validation, pa-lookup, dsc-nc report, link-certs
+- **Query Helpers** (`shared/lib/database/query_helpers.h/.cpp`): `common::db::` namespace utilities
+  - `boolLiteral()`, `paginationClause()`, `scalarToInt()`, `hexPrefix()`, `currentTimestamp()`, `ilikeCond()`, `limitClause()`
+  - 15 repositories across 3 services migrated (204 inline DB branches eliminated)
+- **Frontend page decomposition**: PAVerify 1,927→917 (-52%), CertificateSearch 1,733→771 (-55%)
+  - PA components: `QuickLookupPanel`, `VerificationStepsPanel`, `VerificationResultCard`
+  - Certificate components: `CertificateDetailDialog`, `CertificateSearchFilters`
+- **Chart library unified**: echarts-for-react → recharts (~500KB bundle reduction)
+  - PADashboard donut chart + area chart reimplemented with recharts
+- **ErrorBoundary** component added (App.tsx global wrapper, React class component)
+- **API module separation**: `paApi.ts`, `monitoringApi.ts` extracted from monolithic `api.ts`
+- **Type cast safety**: 6 `as unknown as` double-casts eliminated with proper generic types
+- **nginx CSP headers**: Content-Security-Policy added to both api-gateway configs
+- All changes verified: Docker build (pkd-management) + frontend build (`npm run build`) pass
+- Zero breaking changes to public API
 
 ### v2.11.0 (2026-02-16) - Validation Library Extraction (icao::validation)
 - New shared library: `icao::validation` — idempotent ICAO 9303 certificate validation functions extracted from both services
