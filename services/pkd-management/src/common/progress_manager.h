@@ -476,4 +476,60 @@ CertificateMetadata extractCertificateMetadataForProgress(
     bool includeAsn1Text = false
 );
 
+/**
+ * @brief Send enhanced progress update with optional certificate metadata
+ *
+ * Helper function for sending progress updates with
+ * certificate metadata, ICAO compliance status, and validation statistics.
+ *
+ * @param uploadId Upload UUID
+ * @param stage Current processing stage
+ * @param processedCount Number of items processed
+ * @param totalCount Total number of items
+ * @param message User-facing progress message
+ * @param metadata Optional certificate metadata
+ * @param compliance Optional ICAO compliance status
+ * @param stats Optional validation statistics
+ */
+void sendProgressWithMetadata(
+    const std::string& uploadId,
+    ProcessingStage stage,
+    int processedCount,
+    int totalCount,
+    const std::string& message,
+    const std::optional<CertificateMetadata>& metadata = std::nullopt,
+    const std::optional<IcaoComplianceStatus>& compliance = std::nullopt,
+    const std::optional<ValidationStatistics>& stats = std::nullopt
+);
+
+/**
+ * @brief Send DB saving progress update (convenience wrapper)
+ */
+void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message);
+
+/**
+ * @brief Send completion progress update (convenience wrapper)
+ */
+void sendCompletionProgress(const std::string& uploadId, int totalItems, const std::string& message);
+
+/**
+ * @brief Update uploaded_file with parsing statistics
+ *
+ * Wraps UploadRepository calls to update status and certificate statistics.
+ *
+ * @param uploadId Upload UUID
+ * @param status New status (e.g., "COMPLETED", "FAILED")
+ * @param cscaCount Number of CSCA certificates
+ * @param dscCount Number of DSC certificates
+ * @param dscNcCount Number of DSC_NC certificates
+ * @param crlCount Number of CRLs
+ * @param totalEntries Total entries in file
+ * @param processedEntries Number of processed entries
+ * @param errorMessage Error message (empty on success)
+ */
+void updateUploadStatistics(const std::string& uploadId,
+                           const std::string& status, int cscaCount, int dscCount,
+                           int dscNcCount, int crlCount, int totalEntries, int processedEntries,
+                           const std::string& errorMessage);
+
 } // namespace common

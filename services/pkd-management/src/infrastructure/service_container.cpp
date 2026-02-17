@@ -37,6 +37,7 @@
 #include "../services/ldif_structure_service.h"
 #include "../services/certificate_service.h"
 #include "../services/icao_sync_service.h"
+#include "../services/ldap_storage_service.h"
 
 // Handlers
 #include "../handlers/icao_handler.h"
@@ -79,6 +80,7 @@ struct ServiceContainer::Impl {
     std::shared_ptr<services::LdifStructureService> ldifStructureService;
     std::shared_ptr<services::CertificateService> certificateService;
     std::shared_ptr<services::IcaoSyncService> icaoSyncService;
+    std::shared_ptr<services::LdapStorageService> ldapStorageService;
 
     // Handlers
     std::shared_ptr<handlers::IcaoHandler> icaoHandler;
@@ -104,6 +106,7 @@ void ServiceContainer::shutdown() {
     impl_->authHandler.reset();
     impl_->icaoHandler.reset();
 
+    impl_->ldapStorageService.reset();
     impl_->icaoSyncService.reset();
     impl_->ldifStructureService.reset();
     impl_->auditService.reset();
@@ -205,6 +208,10 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     impl_->icaoVersionRepository = std::make_shared<repositories::IcaoVersionRepository>(impl_->queryExecutor.get());
     spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion)");
 
+    // --- Phase 4.5: LDAP Storage Service ---
+    impl_->ldapStorageService = std::make_shared<services::LdapStorageService>(config);
+    spdlog::info("LDAP Storage Service initialized");
+
     // --- Phase 5: ICAO Sync Module ---
     spdlog::info("Initializing ICAO Auto Sync module...");
 
@@ -268,6 +275,7 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     ldapCfg.bindDn = config.ldapBindDn;
     ldapCfg.bindPassword = config.ldapBindPassword;
     ldapCfg.baseDn = config.ldapBaseDn;
+    ldapCfg.trustAnchorPath = config.trustAnchorPath;
 
     impl_->uploadHandler = std::make_shared<handlers::UploadHandler>(
         impl_->uploadService.get(),
@@ -328,6 +336,7 @@ services::AuditService* ServiceContainer::auditService() const { return impl_->a
 services::LdifStructureService* ServiceContainer::ldifStructureService() const { return impl_->ldifStructureService.get(); }
 services::CertificateService* ServiceContainer::certificateService() const { return impl_->certificateService.get(); }
 services::IcaoSyncService* ServiceContainer::icaoSyncService() const { return impl_->icaoSyncService.get(); }
+services::LdapStorageService* ServiceContainer::ldapStorageService() const { return impl_->ldapStorageService.get(); }
 
 // --- Handler Accessors ---
 handlers::IcaoHandler* ServiceContainer::icaoHandler() const { return impl_->icaoHandler.get(); }

@@ -87,7 +87,7 @@ services/
 ```
 services/pkd-management/src/
 │
-├── infrastructure/               # 인프라 레이어 (v2.12.0)
+├── infrastructure/               # 인프라 레이어 (v2.13.0)
 │   ├── service_container.h/.cpp  # ServiceContainer — 중앙 DI (pimpl 패턴)
 │   ├── app_config.h              # AppConfig — 환경변수 파싱
 │   ├── http/http_client.h        # HTTP 클라이언트
@@ -98,7 +98,8 @@ services/pkd-management/src/
 │   ├── upload_stats_handler.h/.cpp # 통계/이력 API (11 endpoints)
 │   ├── certificate_handler.h/.cpp  # 인증서 API (12 endpoints)
 │   ├── auth_handler.h/.cpp       # 인증 API
-│   └── icao_handler.h/.cpp       # ICAO 동기화 API
+│   ├── icao_handler.h/.cpp       # ICAO 동기화 API
+│   └── misc_handler.h/.cpp       # Health, Audit, Validation, PA proxy, Info
 │
 ├── repositories/                 # 저장소 레이어 (10개 리포지토리)
 │   ├── upload_repository.h/.cpp
@@ -112,7 +113,8 @@ services/pkd-management/src/
 │   ├── upload_service.h/.cpp
 │   ├── validation_service.h/.cpp
 │   ├── certificate_service.h/.cpp
-│   └── icao_sync_service.h/.cpp
+│   ├── icao_sync_service.h/.cpp
+│   └── ldap_storage_service.h/.cpp  # LDAP 저장 (인증서/CRL/ML)
 │
 ├── adapters/                     # icao::validation 어댑터
 │   ├── db_csca_provider.cpp
@@ -657,7 +659,7 @@ ICAO 9303 인증서 검증 로직을 공유 라이브러리로 추출한 패턴 
 
 ## 참고 문서
 
-- **[CLAUDE.md](../CLAUDE.md)** - 프로젝트 개요 및 현재 버전 (v2.12.0)
+- **[CLAUDE.md](../CLAUDE.md)** - 프로젝트 개요 및 현재 버전 (v2.13.0)
 - **[SOFTWARE_ARCHITECTURE.md](SOFTWARE_ARCHITECTURE.md)** - 시스템 아키텍처
 - **[SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)** - 보안 감사 보고서
 - **[DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md)** - 개발 가이드

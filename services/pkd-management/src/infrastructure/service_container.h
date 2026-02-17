@@ -45,6 +45,7 @@ namespace services {
     class LdifStructureService;
     class CertificateService;
     class IcaoSyncService;
+    class LdapStorageService;
 }
 
 // Forward declarations - Handlers
@@ -114,6 +115,7 @@ public:
     services::LdifStructureService* ldifStructureService() const;
     services::CertificateService* certificateService() const;
     services::IcaoSyncService* icaoSyncService() const;
+    services::LdapStorageService* ldapStorageService() const;
 
     // --- Handler Accessors ---
     handlers::IcaoHandler* icaoHandler() const;

@@ -211,7 +211,7 @@ std::string extractCountryCode(const std::string& dn) {
         std::transform(country.begin(), country.end(), country.begin(), ::toupper);
         return country;
     }
-    return "";
+    return "XX";  // Default unknown country
 }
 
 std::string computeSha256Fingerprint(X509* cert) {

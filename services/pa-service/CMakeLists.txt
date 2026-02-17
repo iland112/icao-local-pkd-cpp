@@ -99,12 +99,24 @@ set(COMMON_SRC
 # =============================================================================
 # Main Application
 # =============================================================================
+set(HANDLERS_SRC
+    src/handlers/health_handler.cpp
+    src/handlers/pa_handler.cpp
+    src/handlers/info_handler.cpp
+)
+
+set(INFRASTRUCTURE_SRC
+    src/infrastructure/service_container.cpp
+)
+
 add_executable(${PROJECT_NAME}
     src/main.cpp
     ${DOMAIN_MODELS_SRC}
     ${REPOSITORIES_SRC}
     ${SERVICES_SRC}
     ${COMMON_SRC}
+    ${HANDLERS_SRC}
+    ${INFRASTRUCTURE_SRC}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

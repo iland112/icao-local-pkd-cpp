@@ -4,6 +4,7 @@
 
 #include "upload_service.h"
 #include "../infrastructure/service_container.h"
+#include "../handlers/upload_handler.h"
 #include "../repositories/crl_repository.h"
 #include <spdlog/spdlog.h>
 #include <uuid/uuid.h>
@@ -25,35 +26,14 @@
 #include <icao/x509/certificate_parser.h>
 #include <dl_parser.h>
 
-// --- External Declarations for Processing Functions in main.cpp ---
+// processLdifFileAsync() moved to UploadHandler (Phase D3)
+// Called via g_services->uploadHandler()->processLdifFileAsync()
 
-// These async processing functions are currently in main.cpp.
-// Full migration to UploadService requires extracting:
-// - ProgressManager (SSE progress tracking singleton)
-// - ProcessingStrategy (AUTO/MANUAL mode pattern)
-// - Helper functions (parseCertificateEntry, parseCrlEntry, etc.)
-// - Shared types (ProcessingProgress, ProcessingStage enum)
+// Utility functions (moved to main_utils.cpp)
+#include "../common/main_utils.h"
 
-extern void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
-
-// Utility functions from main.cpp needed for certificate processing
-extern std::string x509NameToString(X509_NAME* name);
-extern std::string asn1IntegerToHex(const ASN1_INTEGER* asn1Int);
-extern std::string asn1TimeToIso8601(const ASN1_TIME* asn1Time);
-extern std::string extractCountryCode(const std::string& dn);
-
-// LDAP save functions from main.cpp
-extern std::string saveCertificateToLdap(LDAP* ld, const std::string& certType,
-    const std::string& countryCode, const std::string& subjectDn,
-    const std::string& issuerDn, const std::string& serialNumber,
-    const std::string& fingerprint, const std::vector<uint8_t>& certData,
-    const std::string& pkdConformanceCode, const std::string& pkdConformanceText,
-    const std::string& pkdVersion, bool useLegacyDn);
-
-// CRL LDAP function from main.cpp (LDAP logic stays in main.cpp)
-extern std::string saveCrlToLdap(LDAP* ld, const std::string& countryCode,
-    const std::string& issuerDn, const std::string& fingerprint,
-    const std::vector<uint8_t>& crlData);
+// LDAP save functions (v2.13.0: migrated to LdapStorageService)
+#include "ldap_storage_service.h"
 
 // Global service container (defined in main.cpp)
 extern infrastructure::ServiceContainer* g_services;
@@ -1050,7 +1030,8 @@ void UploadService::processSingleCertificate(CertificateUploadResult& result, X5
             ldapCertType = "LC";
         }
 
-        std::string ldapDn = saveCertificateToLdap(ld, ldapCertType, countryCode,
+        std::string ldapDn = g_services->ldapStorageService()->saveCertificateToLdap(
+                                                    ld, ldapCertType, countryCode,
                                                     subjectDn, issuerDn, serialNumber,
                                                     fingerprint, derBytes, "", "", "", false);
         if (!ldapDn.empty()) {
@@ -1153,7 +1134,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
 
         // Save to LDAP
         if (ld) {
-            std::string ldapDn = saveCrlToLdap(ld, countryCode, issuerDn, fingerprint, derBytes);
+            std::string ldapDn = g_services->ldapStorageService()->saveCrlToLdap(ld, countryCode, issuerDn, fingerprint, derBytes);
             if (!ldapDn.empty()) {
                 g_services->crlRepository()->updateLdapStatus(crlId, ldapDn);
                 result.ldapStoredCount++;
@@ -1254,16 +1235,13 @@ void UploadService::processDlFile(CertificateUploadResult& result,
 
 void UploadService::processLdifAsync(const std::string& uploadId, const std::vector<uint8_t>& content)
 {
-    // Currently delegates to main.cpp implementation
-    // Full migration to UploadService requires:
-    // 1. Extracting ProgressManager to shared header (currently in main.cpp)
-    // 2. Extracting ProcessingStrategy to separate compilation unit
-    // 3. Migrating all helper functions (parseCertificateEntry, etc.)
-    // This delegation approach allows UploadService to be the integration point
-    // while the actual processing logic remains in main.cpp temporarily
-
-    spdlog::info("[UploadService] Delegating LDIF async processing to main.cpp implementation");
-    processLdifFileAsync(uploadId, content);
+    // Delegates to UploadHandler::processLdifFileAsync() via g_services (Phase D3)
+    spdlog::info("[UploadService] Delegating LDIF async processing to UploadHandler");
+    if (g_services && g_services->uploadHandler()) {
+        g_services->uploadHandler()->processLdifFileAsync(uploadId, content);
+    } else {
+        spdlog::error("[UploadService] Cannot process LDIF: g_services or uploadHandler not available");
+    }
 }
 
 } // namespace services

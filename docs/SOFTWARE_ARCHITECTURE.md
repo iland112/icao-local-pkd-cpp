@@ -1,6 +1,6 @@
 # ICAO Local PKD - Software Architecture
 
-**Version**: 2.12.0
+**Version**: 2.13.0
 **Last Updated**: 2026-02-17
 **Status**: Production Ready (Multi-DBMS: PostgreSQL + Oracle)
 
@@ -39,7 +39,7 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ## Technical Architecture Diagram
 
-### System Overview (v2.12.0)
+### System Overview (v2.13.0)
 
 ```mermaid
 graph TB
@@ -262,7 +262,7 @@ flowchart LR
 
 **Key Features**:
 - Clean Architecture (6 Layers) with ServiceContainer (centralized DI, pimpl pattern)
-- Handler Pattern: UploadHandler (10), UploadStatsHandler (11), CertificateHandler (12), AuthHandler, IcaoHandler
+- Handler Pattern: UploadHandler (10), UploadStatsHandler (11), CertificateHandler (12), AuthHandler, IcaoHandler, MiscHandler (health, audit, validation, PA proxy, info, ICAO)
 - Strategy Pattern (AUTO/MANUAL Mode)
 - Query Helpers (`common::db::`) — database-agnostic utility functions across 15 repositories
 - ICAO Auto Sync with Daily Scheduler
@@ -345,6 +345,7 @@ flowchart LR
 - DSC Auto-Registration (PA_EXTRACTED source type)
 - DSC Non-Conformant (nc-data) Support
 - MRZ Parsing (TD1/TD2/TD3) + Face Image Extraction (JPEG2000 conversion)
+- ServiceContainer (pImpl DI), Handler Pattern: PaHandler (9), HealthHandler (3), InfoHandler (4)
 - Multi-DBMS (PostgreSQL + Oracle)
 
 ---
@@ -421,6 +422,8 @@ flowchart LR
 - HTML Scraping (Table + Link Fallback)
 - DB-LDAP Reconciliation (CSCA, DSC, CRL)
 - Daily Auto Version Check Scheduler
+- ServiceContainer (pImpl DI), Handler Pattern: SyncHandler (10), ReconciliationHandler (4), HealthHandler (1)
+- SyncScheduler with callback-based DI
 - Clean Architecture (4 Layers)
 - Multi-DBMS (PostgreSQL + Oracle)
 
@@ -432,6 +435,7 @@ flowchart LR
 - System Resource Monitoring (CPU, Memory, Disk, Network)
 - Service Health Checks (HTTP Probes to all backend services)
 - DB-Independent Architecture (no PostgreSQL/Oracle dependency)
+- Handler Pattern: MonitoringHandler (3 endpoints + SystemMetricsCollector + ServiceHealthChecker)
 - JSON Metrics API
 
 ---
@@ -1512,7 +1516,7 @@ graph LR
 
 ## Conclusion
 
-ICAO Local PKD v2.12.0은 **마이크로서비스 아키텍처**, **Multi-DBMS**, **ICAO 9303 완전 준수**를 통해 높은 성능, 확장성, 보안성을 제공합니다.
+ICAO Local PKD v2.13.0은 **마이크로서비스 아키텍처**, **Multi-DBMS**, **ICAO 9303 완전 준수**를 통해 높은 성능, 확장성, 보안성을 제공합니다.
 
 **핵심 강점**:
 - ✅ 4개 독립 마이크로서비스 (PKD Management, PA, Relay, Monitoring)

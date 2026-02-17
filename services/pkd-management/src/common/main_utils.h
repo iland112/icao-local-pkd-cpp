@@ -2,8 +2,8 @@
  * @file main_utils.h
  * @brief External utility function declarations from main.cpp
  *
- * This header provides declarations for utility functions defined in main.cpp
- * that are needed by other modules (e.g., masterlist_processor).
+ * This header provides declarations for utility functions defined in main_utils.cpp
+ * that are needed by other modules (e.g., masterlist_processor, upload_handler).
  *
  * Security Note: All functions handle sensitive data (certificates, LDAP credentials).
  * Ensure proper input validation and error handling when using these functions.
@@ -14,8 +14,9 @@
 #include <string>
 #include <vector>
 #include <cstdint>
-#include <libpq-fe.h>
-#include <ldap.h>
+
+// OpenSSL types (needed for x509NameToString, asn1IntegerToHex, asn1TimeToIso8601)
+#include <openssl/types.h>
 
 /**
  * @brief Decode Base64 encoded string to binary data
@@ -104,30 +105,7 @@ std::string saveMasterList(
     const std::vector<uint8_t>& mlData
 );
 
-/**
- * @brief Save Master List to LDAP (o=ml branch)
- *
- * Stores Master List CMS binary in LDAP for backup purposes.
- * DN format: cn={fingerprint},o=ml,c={country},dc=data,dc=download,dc=pkd,...
- *
- * @param ld LDAP connection (must be authenticated and connected)
- * @param countryCode ISO 3166-1 country code
- * @param signerDn Signer certificate Subject DN
- * @param fingerprint SHA-256 fingerprint of Master List CMS
- * @param mlBinary Master List binary data (CMS/PKCS#7)
- * @return std::string LDAP DN of created entry, or empty on failure
- *
- * @warning Requires write permission to LDAP
- * @note NOT thread-safe (requires exclusive LDAP connection)
- * @note Uses userCertificate;binary attribute for storage
- */
-std::string saveMasterListToLdap(
-    LDAP* ld,
-    const std::string& countryCode,
-    const std::string& signerDn,
-    const std::string& fingerprint,
-    const std::vector<uint8_t>& mlBinary
-);
+// saveMasterListToLdap() moved to services::LdapStorageService (v2.13.0)
 
 /**
  * @brief Update Master List LDAP storage status in database
@@ -145,42 +123,52 @@ void updateMasterListLdapStatus(
     const std::string& ldapDn
 );
 
+// saveCertificateToLdap() moved to services::LdapStorageService (v2.13.0)
+
 /**
- * @brief Save certificate to LDAP (o=csca, o=dsc, o=lc, or o=crl branch)
- *
- * Stores X.509 certificate in LDAP for primary storage.
- * DN format: cn={fingerprint},o={type},c={country},dc=data,dc=download,dc=pkd,...
- *
- * @param ld LDAP connection (must be authenticated and connected)
- * @param certType Certificate type (CSCA, DSC, DSC_NC, LC)
- * @param countryCode ISO 3166-1 country code
- * @param subjectDn X.509 Subject DN
- * @param issuerDn X.509 Issuer DN
- * @param serialNumber Certificate serial number (hex)
- * @param fingerprint SHA-256 fingerprint (hex, used in DN)
- * @param certBinary Certificate DER binary data
- * @param pkdConformanceCode PKD conformance code (optional, default empty)
- * @param pkdConformanceText PKD conformance text (optional, default empty)
- * @param pkdVersion PKD version (optional, default empty)
- * @return std::string LDAP DN of created entry, or empty on failure
- *
- * @warning Requires write permission to LDAP
- * @warning certBinary must be valid X.509 DER format
- * @note NOT thread-safe (requires exclusive LDAP connection)
- * @note Uses userCertificate;binary attribute for storage
- * @note Link Certificates (LC) are Cross-signed CSCAs (subject_dn != issuer_dn) stored in o=lc
+ * @brief Convert X509_NAME to RFC 2253 string
  */
-std::string saveCertificateToLdap(
-    LDAP* ld,
-    const std::string& certType,
-    const std::string& countryCode,
-    const std::string& subjectDn,
-    const std::string& issuerDn,
-    const std::string& serialNumber,
-    const std::string& fingerprint,
-    const std::vector<uint8_t>& certBinary,
-    const std::string& pkdConformanceCode = "",
-    const std::string& pkdConformanceText = "",
-    const std::string& pkdVersion = "",
-    bool useLegacyDn = true
-);
+std::string x509NameToString(X509_NAME* name);
+
+/**
+ * @brief Convert ASN1_INTEGER to hex string
+ */
+std::string asn1IntegerToHex(const ASN1_INTEGER* asn1Int);
+
+/**
+ * @brief Convert ASN1_TIME to ISO 8601 string
+ */
+std::string asn1TimeToIso8601(const ASN1_TIME* asn1Time);
+
+/**
+ * @brief Sanitize filename to prevent path traversal attacks
+ *
+ * @param filename Original filename from upload
+ * @return Sanitized filename (alphanumeric, dash, underscore, dot only)
+ *
+ * @throws std::runtime_error if filename contains '..' or is empty after sanitization
+ */
+std::string sanitizeFilename(const std::string& filename);
+
+/**
+ * @brief Validate LDIF file format
+ *
+ * @param content File content as string
+ * @return true if valid LDIF format
+ */
+bool isValidLdifFile(const std::string& content);
+
+/**
+ * @brief Validate PKCS#7 (Master List) file format
+ *
+ * @param content File content as binary vector
+ * @return true if valid PKCS#7 DER format
+ */
+bool isValidP7sFile(const std::vector<uint8_t>& content);
+
+/**
+ * @brief Generate UUID v4
+ *
+ * @return std::string UUID v4 string (e.g., "550e8400-e29b-41d4-a716-446655440000")
+ */
+std::string generateUuid();

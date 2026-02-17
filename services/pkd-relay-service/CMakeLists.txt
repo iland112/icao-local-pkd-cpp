@@ -57,6 +57,14 @@ set(SOURCE_FILES
     src/main.cpp
     src/relay/sync/ldap_operations.cpp
     src/relay/sync/reconciliation_engine.cpp
+    # Infrastructure
+    src/infrastructure/service_container.cpp
+    src/infrastructure/sync_scheduler.cpp
+    src/infrastructure/relay_operations.cpp
+    # Handlers
+    src/handlers/health_handler.cpp
+    src/handlers/sync_handler.cpp
+    src/handlers/reconciliation_handler.cpp
     # Repository Pattern - Domain Models
     src/domain/models/validation_result.cpp
     # Repository Pattern - Repositories
@@ -76,6 +84,14 @@ set(HEADER_FILES
     src/relay/sync/common/config.h
     src/relay/sync/ldap_operations.h
     src/relay/sync/reconciliation_engine.h
+    # Infrastructure
+    src/infrastructure/service_container.h
+    src/infrastructure/sync_scheduler.h
+    src/infrastructure/relay_operations.h
+    # Handlers
+    src/handlers/health_handler.h
+    src/handlers/sync_handler.h
+    src/handlers/reconciliation_handler.h
     # Repository Pattern - Domain Models
     src/domain/models/sync_status.h
     src/domain/models/reconciliation_summary.h

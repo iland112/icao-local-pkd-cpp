@@ -69,6 +69,7 @@ public:
         std::string bindDn;
         std::string bindPassword;
         std::string baseDn;
+        std::string trustAnchorPath;  // Path to UN_CSCA trust anchor PEM file
     };
 
     /**
@@ -105,6 +106,30 @@ public:
      * @param app Drogon application instance
      */
     void registerRoutes(drogon::HttpAppFramework& app);
+
+    /**
+     * @brief Process LDIF file asynchronously with full parsing (DB + LDAP)
+     *
+     * Spawns a detached thread for async processing.
+     * Guards against duplicate processing via s_processingMutex/s_processingUploads.
+     * Called from UploadService::processLdifAsync() via g_services.
+     *
+     * @param uploadId Upload record UUID
+     * @param content Raw LDIF file content
+     */
+    void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
+
+    /**
+     * @brief Process Master List file asynchronously (CMS parsing + DB + LDAP)
+     *
+     * Spawns a detached thread for async processing.
+     * Guards against duplicate processing via s_processingMutex/s_processingUploads.
+     * Called from UploadHandler::handleUploadMasterList() route handler.
+     *
+     * @param uploadId Upload record UUID
+     * @param content Raw Master List file content
+     */
+    void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 
 private:
     // --- Dependencies (non-owning pointers) ---
@@ -237,28 +262,6 @@ private:
      * @return LDAP connection pointer or nullptr on failure
      */
     LDAP* getLdapWriteConnection();
-
-    /**
-     * @brief Process LDIF file asynchronously with full parsing (DB + LDAP)
-     *
-     * Spawns a detached thread for async processing.
-     * Guards against duplicate processing via s_processingMutex/s_processingUploads.
-     *
-     * @param uploadId Upload record UUID
-     * @param content Raw LDIF file content
-     */
-    void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
-
-    /**
-     * @brief Process Master List file asynchronously (CMS parsing + DB + LDAP)
-     *
-     * Spawns a detached thread for async processing.
-     * Guards against duplicate processing via s_processingMutex/s_processingUploads.
-     *
-     * @param uploadId Upload record UUID
-     * @param content Raw Master List file content
-     */
-    void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
 };
 
 } // namespace handlers

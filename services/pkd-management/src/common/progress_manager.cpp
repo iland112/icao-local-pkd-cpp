@@ -6,6 +6,8 @@
 #include "progress_manager.h"
 #include "certificate_utils.h"
 #include "x509_metadata_extractor.h"
+#include "../infrastructure/service_container.h"
+#include "../repositories/upload_repository.h"
 #include <spdlog/spdlog.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -13,6 +15,9 @@
 #include <iomanip>
 #include <algorithm>
 #include <ctime>
+
+// Global service container (defined in main.cpp)
+extern infrastructure::ServiceContainer* g_services;
 
 namespace common {
 
@@ -831,6 +836,67 @@ CertificateMetadata extractCertificateMetadataForProgress(X509* cert, bool inclu
     }
 
     return metadata;
+}
+
+// --- Convenience Progress Functions ---
+
+void sendProgressWithMetadata(
+    const std::string& uploadId,
+    ProcessingStage stage,
+    int processedCount,
+    int totalCount,
+    const std::string& message,
+    const std::optional<CertificateMetadata>& metadata,
+    const std::optional<IcaoComplianceStatus>& compliance,
+    const std::optional<ValidationStatistics>& stats
+) {
+    ProcessingProgress progress;
+
+    if (metadata.has_value()) {
+        progress = ProcessingProgress::createWithMetadata(
+            uploadId, stage, processedCount, totalCount, message,
+            metadata.value(), compliance, stats
+        );
+    } else {
+        progress = ProcessingProgress::create(
+            uploadId, stage, processedCount, totalCount, message
+        );
+    }
+
+    ProgressManager::getInstance().sendProgress(progress);
+}
+
+void sendDbSavingProgress(const std::string& uploadId, int processedCount, int totalCount, const std::string& message) {
+    ProgressManager::getInstance().sendProgress(
+        ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_IN_PROGRESS,
+            processedCount, totalCount, message));
+}
+
+void sendCompletionProgress(const std::string& uploadId, int totalItems, const std::string& message) {
+    ProgressManager::getInstance().sendProgress(
+        ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+            totalItems, totalItems, message));
+}
+
+// --- Upload Statistics Update ---
+
+void updateUploadStatistics(const std::string& uploadId,
+                           const std::string& status, int cscaCount, int dscCount,
+                           int dscNcCount, int crlCount, int totalEntries, int processedEntries,
+                           const std::string& errorMessage) {
+    // Use UploadRepository instead of direct SQL
+    if (!g_services || !g_services->uploadRepository()) {
+        spdlog::error("[UpdateStats] uploadRepository is null");
+        return;
+    }
+
+    // Update status
+    g_services->uploadRepository()->updateStatus(uploadId, status, errorMessage);
+
+    // Update certificate statistics
+    g_services->uploadRepository()->updateStatistics(uploadId, cscaCount, dscCount, dscNcCount, crlCount);
+
+    spdlog::debug("[UpdateStats] Updated statistics for upload: {}", uploadId);
 }
 
 } // namespace common

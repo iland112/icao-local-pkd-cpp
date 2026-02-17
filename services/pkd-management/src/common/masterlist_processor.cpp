@@ -7,7 +7,12 @@
 #include "certificate_utils.h"
 #include "main_utils.h"
 #include "../common.h"  // For LdifEntry structure
+#include "../infrastructure/service_container.h"
+#include "../services/ldap_storage_service.h"
 #include <spdlog/spdlog.h>
+
+// Global service container (defined in main.cpp)
+extern infrastructure::ServiceContainer* g_services;
 #include <openssl/cms.h>
 #include <openssl/pkcs7.h>
 #include <openssl/bio.h>
@@ -273,7 +278,7 @@ bool parseMasterListEntryV2(
 
                     // Save MLSC to LDAP (o=mlsc)
                     if (ld) {
-                        std::string ldapDn = saveCertificateToLdap(
+                        std::string ldapDn = g_services->ldapStorageService()->saveCertificateToLdap(
                             ld, "MLSC", certCountryCode,
                             meta.subjectDn, meta.issuerDn, meta.serialNumber,
                             meta.fingerprint, meta.derData,
@@ -443,7 +448,7 @@ bool parseMasterListEntryV2(
 
                 // Save to LDAP
                 if (ld) {
-                    std::string ldapDn = saveCertificateToLdap(
+                    std::string ldapDn = g_services->ldapStorageService()->saveCertificateToLdap(
                         ld, ldapCertType, certCountryCode,
                         meta.subjectDn, meta.issuerDn, meta.serialNumber,
                         meta.fingerprint, meta.derData,
@@ -495,7 +500,7 @@ bool parseMasterListEntryV2(
 
         // Save to LDAP o=ml (backup)
         if (ld) {
-            std::string ldapDn = saveMasterListToLdap(ld, countryCode, signerDn,
+            std::string ldapDn = g_services->ldapStorageService()->saveMasterListToLdap(ld, countryCode, signerDn,
                                                      mlFingerprint, mlBytes);
             if (!ldapDn.empty()) {
                 updateMasterListLdapStatus(mlId, ldapDn);
@@ -664,7 +669,7 @@ bool processMasterListFile(
 
                         // Save MLSC to LDAP (o=mlsc,c=UN)
                         if (ld) {
-                            std::string ldapDn = saveCertificateToLdap(
+                            std::string ldapDn = g_services->ldapStorageService()->saveCertificateToLdap(
                                 ld, "MLSC", countryCode,
                                 meta.subjectDn, meta.issuerDn, meta.serialNumber,
                                 meta.fingerprint, meta.derData,
@@ -835,7 +840,7 @@ bool processMasterListFile(
 
                 // Save to LDAP
                 if (ld) {
-                    std::string ldapDn = saveCertificateToLdap(
+                    std::string ldapDn = g_services->ldapStorageService()->saveCertificateToLdap(
                         ld, ldapCertType, certCountryCode,
                         meta.subjectDn, meta.issuerDn, meta.serialNumber,
                         meta.fingerprint, meta.derData,

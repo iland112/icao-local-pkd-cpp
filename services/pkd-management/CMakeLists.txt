@@ -72,6 +72,7 @@ add_executable(${PROJECT_NAME}
     src/ldif_processor.cpp
 
     # Common Utilities (NEW - v2.0.0)
+    src/common/main_utils.cpp         # Utility functions (crypto, file validation, X.509 helpers)
     src/common/certificate_utils.cpp
     src/common/masterlist_processor.cpp
     src/common/x509_metadata_extractor.cpp
@@ -110,6 +111,7 @@ add_executable(${PROJECT_NAME}
     src/adapters/db_crl_provider.cpp
 
     src/services/ldif_structure_service.cpp  # v2.2.2: LDIF structure visualization
+    src/services/ldap_storage_service.cpp   # v2.13.0: LDAP storage operations
 
     # ICAO Auto Sync Module (NEW - v1.7.0)
     src/infrastructure/http/http_client.cpp
@@ -128,6 +130,7 @@ add_executable(${PROJECT_NAME}
     src/handlers/upload_handler.cpp
     src/handlers/upload_stats_handler.cpp
     src/handlers/certificate_handler.cpp
+    src/handlers/misc_handler.cpp
 
     # Infrastructure
     src/infrastructure/service_container.cpp

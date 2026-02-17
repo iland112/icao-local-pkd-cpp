@@ -1,6 +1,6 @@
 # ICAO Local PKD - Documentation
 
-**Version**: v2.12.0
+**Version**: v2.13.0
 **Last Updated**: 2026-02-17
 
 ---
@@ -158,6 +158,6 @@ docs/
 - **Run unit tests**: [DEVELOPMENT_GUIDE.md](DEVELOPMENT_GUIDE.md#unit-tests)
 
 ### Related
-- **[../CLAUDE.md](../CLAUDE.md)** - Project quick reference (v2.12.0)
+- **[../CLAUDE.md](../CLAUDE.md)** - Project quick reference (v2.13.0)
   - Architecture overview, API endpoints, version history
   - Helper scripts, common issues, key decisions

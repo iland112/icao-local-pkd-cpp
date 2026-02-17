@@ -14,6 +14,7 @@ find_package(CURL REQUIRED)
 # Source files
 set(SOURCES
     src/main.cpp
+    src/handlers/monitoring_handler.cpp
 )
 
 # Create executable

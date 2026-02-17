@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.12.0
+**Current Version**: v2.13.0
 **Last Updated**: 2026-02-17
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -120,7 +120,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.12.0)
+## Current Features (v2.13.0)
 
 ### Core Functionality
 
@@ -489,6 +489,31 @@ scripts/
 ---
 
 ## Version History
+
+### v2.13.0 (2026-02-17) - main.cpp Minimization: 9,752 → 1,261 lines (-87.1%)
+- **All 4 services** main.cpp reduced to minimal orchestration layers (config → DI → routes → run)
+  - PKD Management: 4,722 → 430 lines (-90.9%)
+  - PA Service: 2,800 → 281 lines (-90.0%)
+  - PKD Relay: 1,644 → 457 lines (-72.2%)
+  - Monitoring: 586 → 93 lines (-84.1%)
+- **PA Service dead code removal** (~1,085 lines): removed legacy functions wrapped in `#pragma GCC diagnostic ignored "-Wunused-function"` — SOD parsing, LDAP search, validation, DB save functions already migrated to service layer
+- **PKD Management validation deduplication** (~449 lines): local `validateCscaCertificate()`, `validateDscCertificate()`, `buildTrustChain()`, `validateTrustChain()` replaced with `icao::validation` library calls
+- **Handler extraction** (4 services, ~2,350 lines moved):
+  - PKD Management: `MiscHandler` (health, audit, validation, PA proxy, info, ICAO endpoints)
+  - PA Service: `PaHandler` (9 endpoints), `HealthHandler` (3 endpoints), `InfoHandler` (4 endpoints)
+  - PKD Relay: `SyncHandler` (10 endpoints), `ReconciliationHandler` (4 endpoints), `HealthHandler` (1 endpoint)
+  - Monitoring: `MonitoringHandler` (3 endpoints + SystemMetricsCollector + ServiceHealthChecker)
+- **PKD Management DN Migration endpoint removed** (~500 lines): one-time PostgreSQL-only utility (PGconn, Multi-DBMS incompatible)
+- **LdapStorageService** extracted (~886 lines): LDAP write operations (saveCertificateToLdap, saveCrlToLdap, ensureCountryOuExists, DN builders)
+- **LDIF/ML processing extracted** (~1,500 lines): `parseCertificateEntry()` → `ldif_processor.cpp`, `processLdifFileAsync()`/`processMasterListFileAsync()` → handlers, utility functions → `main_utils.cpp`
+- **ServiceContainer** extended to PA Service and PKD Relay (pImpl pattern, non-owning pointer accessors):
+  - PA Service: `AppConfig` struct, `ServiceContainer` owns DB pool + LDAP conn + 4 repos + 2 parsers + 3 services
+  - PKD Relay: `ServiceContainer` owns DB pool + LDAP pool + 5 repos + 3 services; `SyncScheduler` extracted with callback-based DI
+  - PKD Management: `LdapStorageService` + `ProgressManager` added to existing container
+- **Infrastructure modules** (PKD Relay): `relay_operations.h/.cpp` (getDbStats, getLdapStats, performSyncCheck, saveSyncStatus)
+- 20 files changed, +2,223 insertions, -9,135 deletions (net -6,912 lines)
+- All 4 services Docker build verified
+- Zero breaking changes to public API
 
 ### v2.12.0 (2026-02-17) - Architecture Rewrite: ServiceContainer, Handler Extraction, Frontend Decomposition
 - **Backend main.cpp**: 8,095 → 4,722 lines (-41.7%) through handler extraction + ServiceContainer

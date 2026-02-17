@@ -10,6 +10,7 @@
 #include "common/progress_manager.h"
 #include "domain/models/validation_statistics.h"
 #include "infrastructure/service_container.h"
+#include "services/ldap_storage_service.h"
 #include "repositories/upload_repository.h"
 #include "repositories/validation_repository.h"
 #include "i_query_executor.h"
@@ -42,13 +43,8 @@ std::unique_ptr<ProcessingStrategy> ProcessingStrategyFactory::create(const std:
 
 // --- AutoProcessingStrategy - Process in one go ---
 
-// Forward declarations for functions still in main.cpp
-extern void updateUploadStatistics(const std::string& uploadId,
-                                   const std::string& status, int cscaCount,
-                                   int dscCount, int dscNcCount, int crlCount,
-                                   int totalEntries, int processedEntries,
-                                   const std::string& errorMessage);
-extern void sendCompletionProgress(const std::string& uploadId, int totalItems, const std::string& message);
+// updateUploadStatistics and sendCompletionProgress are now in common namespace
+// (common/progress_manager.h, included above)
 
 // processMasterListContentCore is now declared in common.h
 
@@ -86,7 +82,7 @@ void AutoProcessingStrategy::processLdifEntries(
 
     // Update database statistics
     int totalItems = counts.cscaCount + counts.dscCount + counts.dscNcCount + counts.crlCount + counts.mlCount;
-    updateUploadStatistics(uploadId, "COMPLETED",
+    common::updateUploadStatistics(uploadId, "COMPLETED",
                           counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                           entries.size(), entries.size(), "");
 
@@ -136,7 +132,7 @@ void AutoProcessingStrategy::processLdifEntries(
                     std::to_string(stats.invalidCount) + " 실패, " +
                     std::to_string(stats.pendingCount) + " 보류)";
 
-    sendCompletionProgress(uploadId, totalItems, completionMsg);
+    common::sendCompletionProgress(uploadId, totalItems, completionMsg);
 }
 
 void AutoProcessingStrategy::processMasterListContent(
@@ -167,7 +163,7 @@ void AutoProcessingStrategy::processMasterListContent(
                 stats.mlCount, stats.cscaExtractedCount, stats.cscaNewCount, stats.cscaDuplicateCount);
 
     // Update uploaded_file table with final statistics
-    updateUploadStatistics(uploadId, "COMPLETED",
+    common::updateUploadStatistics(uploadId, "COMPLETED",
                           stats.cscaNewCount,          // csca_count (newly inserted only)
                           0,                            // dsc_count (Master Lists don't contain DSC)
                           0,                            // dsc_nc_count
@@ -423,7 +419,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
     }
 
     // Connect to LDAP for write operations
-    LDAP* ld = getLdapWriteConnection();
+    LDAP* ld = g_services->ldapStorageService()->getLdapWriteConnection();
     if (!ld) {
         throw std::runtime_error("LDAP write connection failed");
     }
@@ -461,7 +457,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         auto counts = LdifProcessor::processEntries(uploadId, entries, ld, stats, enhancedStats, &totalCounts);
 
         // Update database statistics
-        updateUploadStatistics(uploadId, "COMPLETED",
+        common::updateUploadStatistics(uploadId, "COMPLETED",
                               counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                               entries.size(), entries.size(), "");
 
@@ -508,7 +504,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
 
         int totalItems = counts.cscaCount + counts.dscCount + counts.dscNcCount + counts.crlCount + counts.mlCount;
         // Call helper function from main.cpp to send completion progress
-        sendCompletionProgress(uploadId, totalItems, completionMsg);
+        common::sendCompletionProgress(uploadId, totalItems, completionMsg);
 
     } else if (fileFormat == "ML") {
         // Load Master List from temp file
@@ -626,7 +622,7 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
                 stats.mlCount, stats.cscaExtractedCount);
 
     // Update uploaded_file table with final statistics
-    updateUploadStatistics(uploadId, "COMPLETED",
+    common::updateUploadStatistics(uploadId, "COMPLETED",
                           stats.cscaExtractedCount,  // csca_count
                           0,                          // dsc_count
                           0,                          // dsc_nc_count
