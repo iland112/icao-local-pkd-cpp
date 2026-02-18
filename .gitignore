@@ -74,3 +74,6 @@ backups/
 
 # github artifacts
 github-artifacts/
+
+# Claude Code
+.claude/
