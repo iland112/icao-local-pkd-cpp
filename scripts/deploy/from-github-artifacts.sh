@@ -4,7 +4,7 @@
 
 set -e
 
-LUCKFOX_HOST="192.168.100.11"
+LUCKFOX_HOST="${LUCKFOX_HOST:-192.168.100.10}"
 LUCKFOX_USER="luckfox"
 LUCKFOX_PASS="luckfox"
 LUCKFOX_DIR="/home/luckfox/icao-local-pkd-cpp-v2"
