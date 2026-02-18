@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.14.0
+**Current Version**: v2.14.1
 **Last Updated**: 2026-02-18
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -491,6 +491,14 @@ scripts/
 ---
 
 ## Version History
+
+### v2.14.1 (2026-02-18) - Trust Chain Success Rate Fix + Upload History Duplicate Flow
+- **Trust chain success rate fix**: `cscaNotFoundCount` included in denominator (was excluded, causing 100% rate when only CSCA-not-found failures)
+- Formula changed from `valid / (valid + invalid)` to `valid / (valid + invalid + cscaNotFound)` in `ValidationSummaryPanel`
+- **Upload history detail dialog**: duplicate flow (3-card funnel) now displayed via `duplicateCount`, `totalCertificates`, `processedCount` props
+- `uploadIssues.totalDuplicates` from `certificate_duplicates` table passed to shared `ValidationSummaryPanel`
+- Playwright MCP files removed (`.playwright-mcp/` directory, `.gitignore` entry)
+- 3 files changed
 
 ### v2.14.0 (2026-02-18) - Per-Certificate ICAO Compliance DB Storage + SSE Validation Enhancements
 - **Per-certificate ICAO 9303 compliance DB persistence**: 8 columns added to `validation_result` table (`icao_compliant`, `icao_compliance_level`, `icao_violations`, `icao_key_usage_compliant`, `icao_algorithm_compliant`, `icao_key_size_compliant`, `icao_validity_period_compliant`, `icao_extensions_compliant`)

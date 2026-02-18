@@ -981,6 +981,9 @@ export function UploadHistory() {
                         icaoCompliantCount: selectedUpload.validation.icaoCompliantCount,
                         icaoNonCompliantCount: selectedUpload.validation.icaoNonCompliantCount,
                         icaoWarningCount: selectedUpload.validation.icaoWarningCount,
+                        duplicateCount: uploadIssues?.totalDuplicates,
+                        totalCertificates: selectedUpload.totalEntries,
+                        processedCount: selectedUpload.processedEntries,
                       }}
                     />
                   )}

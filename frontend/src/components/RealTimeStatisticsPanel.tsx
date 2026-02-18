@@ -19,6 +19,7 @@ export function RealTimeStatisticsPanel({ statistics, isProcessing }: RealTimeSt
     expiredValidCount: statistics.expiredValidCount,
     totalCertificates: statistics.totalCertificates,
     processedCount: statistics.processedCount,
+    duplicateCount: statistics.duplicateCount,
     trustChainValidCount: statistics.trustChainValidCount,
     trustChainInvalidCount: statistics.trustChainInvalidCount,
     cscaNotFoundCount: statistics.cscaNotFoundCount,

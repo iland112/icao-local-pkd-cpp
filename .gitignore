@@ -68,9 +68,6 @@ uploads/
 *.bak
 backups/
 
-# Playwright MCP screenshots
-.playwright-mcp/
-
 # Tool cache and memory
 .cache/
 .serena/
