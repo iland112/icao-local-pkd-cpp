@@ -105,9 +105,14 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                 "signature_valid, signature_algorithm, "
                 "validity_period_valid, not_before, not_after, "
                 "crl_checked, revocation_status, "
-                "validation_status"
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, "
+                "$21, $22, $23, $24, $25, $26, $27, $28"
                 ")";
 
             params = {
@@ -130,7 +135,15 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                 result.notAfter,
                 crlCheckedStr,
                 revocationStatus,
-                result.validationStatus
+                result.validationStatus,
+                boolStr(result.icaoCompliant),
+                result.icaoComplianceLevel,
+                result.icaoViolations,
+                boolStr(result.icaoKeyUsageCompliant),
+                boolStr(result.icaoAlgorithmCompliant),
+                boolStr(result.icaoKeySizeCompliant),
+                boolStr(result.icaoValidityPeriodCompliant),
+                boolStr(result.icaoExtensionsCompliant)
             };
         } else {
             // PostgreSQL schema: column names must match actual table definition
@@ -146,9 +159,14 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                 "signature_valid, signature_algorithm, "
                 "validity_period_valid, not_before, not_after, "
                 "crl_checked, revocation_status, "
-                "validation_status"
+                "validation_status, "
+                "icao_compliant, icao_compliance_level, icao_violations, "
+                "icao_key_usage_compliant, icao_algorithm_compliant, "
+                "icao_key_size_compliant, icao_validity_period_compliant, "
+                "icao_extensions_compliant"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19"
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, "
+                "$20, $21, $22, $23, $24, $25, $26, $27"
                 ")";
 
             params = {
@@ -170,7 +188,15 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                 result.notAfter,                                          // $16
                 crlCheckedStr,                                            // $17
                 revocationStatus,                                         // $18
-                result.validationStatus                                   // $19
+                result.validationStatus,                                  // $19
+                boolStr(result.icaoCompliant),                            // $20
+                result.icaoComplianceLevel,                               // $21
+                result.icaoViolations,                                    // $22
+                boolStr(result.icaoKeyUsageCompliant),                    // $23
+                boolStr(result.icaoAlgorithmCompliant),                   // $24
+                boolStr(result.icaoKeySizeCompliant),                     // $25
+                boolStr(result.icaoValidityPeriodCompliant),              // $26
+                boolStr(result.icaoExtensionsCompliant)                   // $27
             };
         }
 
@@ -231,7 +257,7 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
                   uploadId.substr(0, 8));
 
     try {
-        // Parameterized UPDATE query for uploaded_file table (10 parameters)
+        // Parameterized UPDATE query for uploaded_file table (14 parameters)
         const char* query =
             "UPDATE uploaded_file SET "
             "validation_valid_count = $1, "
@@ -242,8 +268,12 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
             "trust_chain_invalid_count = $6, "
             "csca_not_found_count = $7, "
             "expired_count = $8, "
-            "revoked_count = $9 "
-            "WHERE id = $10";
+            "valid_period_count = $9, "
+            "revoked_count = $10, "
+            "icao_compliant_count = $11, "
+            "icao_non_compliant_count = $12, "
+            "icao_warning_count = $13 "
+            "WHERE id = $14";
 
         std::vector<std::string> params = {
             std::to_string(stats.validCount),
@@ -254,7 +284,11 @@ bool ValidationRepository::updateStatistics(const std::string& uploadId,
             std::to_string(stats.trustChainInvalidCount),
             std::to_string(stats.cscaNotFoundCount),
             std::to_string(stats.expiredCount),
+            std::to_string(stats.validPeriodCount),
             std::to_string(stats.revokedCount),
+            std::to_string(stats.icaoCompliantCount),
+            std::to_string(stats.icaoNonCompliantCount),
+            std::to_string(stats.icaoWarningCount),
             uploadId
         };
 
@@ -289,6 +323,10 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
                 "       vr.signature_valid, vr.signature_algorithm, "
                 "       vr.validity_period_valid, vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
+                "       vr.icao_compliant, vr.icao_compliance_level, vr.icao_violations, "
+                "       vr.icao_key_usage_compliant, vr.icao_algorithm_compliant, "
+                "       vr.icao_key_size_compliant, vr.icao_validity_period_compliant, "
+                "       vr.icao_extensions_compliant, "
                 "       vr.validation_timestamp, "
                 "       vr.certificate_id AS fingerprint_sha256 "
                 "FROM validation_result vr "
@@ -304,6 +342,10 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
                 "       vr.signature_valid, vr.signature_algorithm, "
                 "       vr.validity_period_valid, vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
+                "       vr.icao_compliant, vr.icao_compliance_level, vr.icao_violations, "
+                "       vr.icao_key_usage_compliant, vr.icao_algorithm_compliant, "
+                "       vr.icao_key_size_compliant, vr.icao_validity_period_compliant, "
+                "       vr.icao_extensions_compliant, "
                 "       vr.validation_timestamp, c.fingerprint_sha256 "
                 "FROM validation_result vr "
                 "LEFT JOIN certificate c ON vr.certificate_id = c.id "
@@ -431,6 +473,22 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
         result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
         result["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
 
+        // ICAO 9303 compliance fields
+        auto parseBoolField = [](const Json::Value& val) -> bool {
+            if (val.isBool()) return val.asBool();
+            if (val.isString()) { std::string s = val.asString(); return (s == "t" || s == "true" || s == "1"); }
+            if (val.isInt()) return val.asInt() != 0;
+            return false;
+        };
+        result["icaoCompliant"] = parseBoolField(row.get("icao_compliant", false));
+        result["icaoComplianceLevel"] = row.get("icao_compliance_level", "").asString();
+        result["icaoViolations"] = row.get("icao_violations", "").asString();
+        result["icaoKeyUsageCompliant"] = parseBoolField(row.get("icao_key_usage_compliant", false));
+        result["icaoAlgorithmCompliant"] = parseBoolField(row.get("icao_algorithm_compliant", false));
+        result["icaoKeySizeCompliant"] = parseBoolField(row.get("icao_key_size_compliant", false));
+        result["icaoValidityPeriodCompliant"] = parseBoolField(row.get("icao_validity_period_compliant", false));
+        result["icaoExtensionsCompliant"] = parseBoolField(row.get("icao_extensions_compliant", false));
+
         // Enrich DSC_NC with conformance data from LDAP
         enrichWithConformanceData(result);
 
@@ -501,6 +559,10 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
                 "       vr.signature_valid, vr.signature_algorithm, "
                 "       vr.validity_period_valid, vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
+                "       vr.icao_compliant, vr.icao_compliance_level, vr.icao_violations, "
+                "       vr.icao_key_usage_compliant, vr.icao_algorithm_compliant, "
+                "       vr.icao_key_size_compliant, vr.icao_validity_period_compliant, "
+                "       vr.icao_extensions_compliant, "
                 "       vr.validation_timestamp, "
                 "       vr.certificate_id AS fingerprint_sha256 "
                 "FROM validation_result vr "
@@ -518,6 +580,10 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
                 "       vr.signature_valid, vr.signature_algorithm, "
                 "       vr.validity_period_valid, vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
+                "       vr.icao_compliant, vr.icao_compliance_level, vr.icao_violations, "
+                "       vr.icao_key_usage_compliant, vr.icao_algorithm_compliant, "
+                "       vr.icao_key_size_compliant, vr.icao_validity_period_compliant, "
+                "       vr.icao_extensions_compliant, "
                 "       vr.validation_timestamp, c.fingerprint_sha256 "
                 "FROM validation_result vr "
                 "LEFT JOIN certificate c ON vr.certificate_id = c.id "
@@ -615,6 +681,22 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
         result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
         result["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
 
+        // ICAO 9303 compliance fields
+        auto parseBoolField = [](const Json::Value& val) -> bool {
+            if (val.isBool()) return val.asBool();
+            if (val.isString()) { std::string s = val.asString(); return (s == "t" || s == "true" || s == "1"); }
+            if (val.isInt()) return val.asInt() != 0;
+            return false;
+        };
+        result["icaoCompliant"] = parseBoolField(row.get("icao_compliant", false));
+        result["icaoComplianceLevel"] = row.get("icao_compliance_level", "").asString();
+        result["icaoViolations"] = row.get("icao_violations", "").asString();
+        result["icaoKeyUsageCompliant"] = parseBoolField(row.get("icao_key_usage_compliant", false));
+        result["icaoAlgorithmCompliant"] = parseBoolField(row.get("icao_algorithm_compliant", false));
+        result["icaoKeySizeCompliant"] = parseBoolField(row.get("icao_key_size_compliant", false));
+        result["icaoValidityPeriodCompliant"] = parseBoolField(row.get("icao_validity_period_compliant", false));
+        result["icaoExtensionsCompliant"] = parseBoolField(row.get("icao_extensions_compliant", false));
+
         // Enrich DSC_NC with conformance data from LDAP
         enrichWithConformanceData(result);
 
@@ -681,6 +763,10 @@ Json::Value ValidationRepository::findByUploadId(
                 "       vr.validity_period_valid, "
                 "       vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
+                "       vr.icao_compliant, vr.icao_compliance_level, vr.icao_violations, "
+                "       vr.icao_key_usage_compliant, vr.icao_algorithm_compliant, "
+                "       vr.icao_key_size_compliant, vr.icao_validity_period_compliant, "
+                "       vr.icao_extensions_compliant, "
                 "       vr.validation_timestamp, "
                 "       vr.certificate_id AS fingerprint_sha256 "
                 "FROM validation_result vr "
@@ -699,6 +785,10 @@ Json::Value ValidationRepository::findByUploadId(
                 "       vr.validity_period_valid, "
                 "       vr.not_before, vr.not_after, "
                 "       vr.revocation_status, vr.crl_checked, "
+                "       vr.icao_compliant, vr.icao_compliance_level, vr.icao_violations, "
+                "       vr.icao_key_usage_compliant, vr.icao_algorithm_compliant, "
+                "       vr.icao_key_size_compliant, vr.icao_validity_period_compliant, "
+                "       vr.icao_extensions_compliant, "
                 "       vr.validation_timestamp, c.fingerprint_sha256 "
                 "FROM validation_result vr "
                 "LEFT JOIN certificate c ON vr.certificate_id = c.id "
@@ -849,6 +939,22 @@ Json::Value ValidationRepository::findByUploadId(
             v["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
             v["fingerprint"] = row.get("fingerprint_sha256", Json::nullValue);
 
+            // ICAO 9303 compliance fields
+            auto parseBoolField = [](const Json::Value& val) -> bool {
+                if (val.isBool()) return val.asBool();
+                if (val.isString()) { std::string s = val.asString(); return (s == "t" || s == "true" || s == "1"); }
+                if (val.isInt()) return val.asInt() != 0;
+                return false;
+            };
+            v["icaoCompliant"] = parseBoolField(row.get("icao_compliant", false));
+            v["icaoComplianceLevel"] = row.get("icao_compliance_level", "").asString();
+            v["icaoViolations"] = row.get("icao_violations", "").asString();
+            v["icaoKeyUsageCompliant"] = parseBoolField(row.get("icao_key_usage_compliant", false));
+            v["icaoAlgorithmCompliant"] = parseBoolField(row.get("icao_algorithm_compliant", false));
+            v["icaoKeySizeCompliant"] = parseBoolField(row.get("icao_key_size_compliant", false));
+            v["icaoValidityPeriodCompliant"] = parseBoolField(row.get("icao_validity_period_compliant", false));
+            v["icaoExtensionsCompliant"] = parseBoolField(row.get("icao_extensions_compliant", false));
+
             validations.append(v);
         }
 
@@ -919,7 +1025,9 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
             "  SUM(CASE WHEN validation_status = 'PENDING' THEN 1 ELSE 0 END) as pending_count, "
             "  SUM(CASE WHEN validation_status = 'ERROR' THEN 1 ELSE 0 END) as error_count, "
             "  SUM(CASE WHEN trust_chain_valid " + trueCheck + " THEN 1 ELSE 0 END) as trust_chain_valid_count, "
-            "  SUM(CASE WHEN trust_chain_valid " + falseCheck + " THEN 1 ELSE 0 END) as trust_chain_invalid_count "
+            "  SUM(CASE WHEN trust_chain_valid " + falseCheck + " THEN 1 ELSE 0 END) as trust_chain_invalid_count, "
+            "  SUM(CASE WHEN icao_compliant " + trueCheck + " THEN 1 ELSE 0 END) as icao_compliant_count, "
+            "  SUM(CASE WHEN icao_compliant " + falseCheck + " THEN 1 ELSE 0 END) as icao_non_compliant_count "
             "FROM validation_result "
             "WHERE upload_id = $1";
 
@@ -935,6 +1043,8 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
             int errorCount = safeInt(result[0].get("error_count", 0));
             int trustChainValidCount = safeInt(result[0].get("trust_chain_valid_count", 0));
             int trustChainInvalidCount = safeInt(result[0].get("trust_chain_invalid_count", 0));
+            int icaoCompliantCount = safeInt(result[0].get("icao_compliant_count", 0));
+            int icaoNonCompliantCount = safeInt(result[0].get("icao_non_compliant_count", 0));
 
             // Calculate trust chain success rate
             double trustChainSuccessRate = 0.0;
@@ -951,6 +1061,8 @@ Json::Value ValidationRepository::getStatisticsByUploadId(const std::string& upl
             stats["trustChainValidCount"] = trustChainValidCount;
             stats["trustChainInvalidCount"] = trustChainInvalidCount;
             stats["trustChainSuccessRate"] = trustChainSuccessRate;
+            stats["icaoCompliantCount"] = icaoCompliantCount;
+            stats["icaoNonCompliantCount"] = icaoNonCompliantCount;
 
             spdlog::debug("[ValidationRepository] Statistics: total={}, valid={}, invalid={}, pending={}, error={}",
                 totalCount, validCount, invalidCount, pendingCount, errorCount);

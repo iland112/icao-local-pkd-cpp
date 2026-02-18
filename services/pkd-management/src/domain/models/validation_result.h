@@ -62,6 +62,16 @@ struct ValidationResult {
     std::string crlCheckStatus = "NOT_CHECKED"; // NOT_CHECKED, REVOKED, NOT_REVOKED, ERROR
     std::string crlCheckMessage;                 // Detailed CRL check message
 
+    // ICAO 9303 compliance (per-certificate)
+    bool icaoCompliant = false;                  // Overall ICAO compliance
+    std::string icaoComplianceLevel;             // CONFORMANT, NON_CONFORMANT, WARNING
+    std::string icaoViolations;                  // Pipe-separated violations: "algorithm|keySize"
+    bool icaoKeyUsageCompliant = true;           // Key usage flags correct for cert type
+    bool icaoAlgorithmCompliant = true;          // Approved signature algorithm
+    bool icaoKeySizeCompliant = true;            // Minimum key size met
+    bool icaoValidityPeriodCompliant = true;     // Validity period within limits
+    bool icaoExtensionsCompliant = true;         // Required extensions present
+
     // Error information
     std::string errorCode;            // Error code if validation failed
     std::string errorMessage;         // Error message if validation failed

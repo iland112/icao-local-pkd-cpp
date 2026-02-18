@@ -738,7 +738,11 @@ Json::Value UploadService::getUploadHistory(const UploadHistoryFilter& filter)
             validation["trustChainInvalidCount"] = upload.trustChainInvalidCount;
             validation["cscaNotFoundCount"] = upload.cscaNotFoundCount;
             validation["expiredCount"] = upload.expiredCount;
+            validation["validPeriodCount"] = upload.validPeriodCount;
             validation["revokedCount"] = upload.revokedCount;
+            validation["icaoCompliantCount"] = upload.icaoCompliantCount;
+            validation["icaoNonCompliantCount"] = upload.icaoNonCompliantCount;
+            validation["icaoWarningCount"] = upload.icaoWarningCount;
             item["validation"] = validation;
 
             item["createdAt"] = upload.createdAt;
@@ -808,7 +812,11 @@ Json::Value UploadService::getUploadDetail(const std::string& uploadId)
         validation["trustChainInvalidCount"] = upload.trustChainInvalidCount;
         validation["cscaNotFoundCount"] = upload.cscaNotFoundCount;
         validation["expiredCount"] = upload.expiredCount;
+        validation["validPeriodCount"] = upload.validPeriodCount;
         validation["revokedCount"] = upload.revokedCount;
+        validation["icaoCompliantCount"] = upload.icaoCompliantCount;
+        validation["icaoNonCompliantCount"] = upload.icaoNonCompliantCount;
+        validation["icaoWarningCount"] = upload.icaoWarningCount;
         response["validation"] = validation;
 
         response["createdAt"] = upload.createdAt;

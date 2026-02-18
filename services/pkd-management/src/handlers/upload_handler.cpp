@@ -539,6 +539,15 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             int totalCerts = 0;
             int totalCertsInML = 0;  // Pre-counted total for progress percentage
 
+            // Validation statistics counters
+            int validCount = 0;
+            int invalidCount = 0;
+            int validPeriodCount = 0;
+            int expiredCount = 0;
+            int icaoCompliantCount = 0;
+            int icaoNonCompliantCount = 0;
+            int icaoWarningCount = 0;
+
             // Send initial progress
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED, 0, 0, "CMS 파싱 시작"));
@@ -627,9 +636,43 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
 
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
                             std::string certType = "CSCA";
+                            std::string validationStatus = "VALID";
+                            std::string validationMessage = "";
+
+                            if (subjectDn == issuerDn) {
+                                bool sigValid = icao::validation::verifyCertificateSignature(cert, cert);
+                                if (sigValid) {
+                                    validationStatus = "VALID";
+                                } else {
+                                    validationStatus = "INVALID";
+                                    validationMessage = "Self-signature verification failed";
+                                }
+                            }
+
+                            // Track validation counts
+                            if (validationStatus == "VALID") validCount++;
+                            else if (validationStatus == "INVALID") invalidCount++;
 
                             // Check ICAO 9303 compliance
                             common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                            if (icaoCompliance.isCompliant) {
+                                icaoCompliantCount++;
+                            } else {
+                                icaoNonCompliantCount++;
+                            }
+
+                            // Check validity period
+                            {
+                                const ASN1_TIME* naTime = X509_get0_notAfter(cert);
+                                const ASN1_TIME* nbTime = X509_get0_notBefore(cert);
+                                if (naTime && X509_cmp_current_time(naTime) < 0) {
+                                    expiredCount++;
+                                } else if (nbTime && X509_cmp_current_time(nbTime) > 0) {
+                                    // not yet valid - skip
+                                } else {
+                                    validPeriodCount++;
+                                }
+                            }
 
                             totalCerts++;
 
@@ -651,7 +694,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                             // Save certificate using Repository Pattern
                             auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
-                                fingerprint, notBefore, notAfter, derBytes);
+                                fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
 
                             if (!certId.empty()) {
                                 if (isDuplicate) {
@@ -804,8 +847,30 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                                                          subjectDn.substr(0, 50), issuerDn.substr(0, 50));
                                         }
 
+                                        // Track validation counts
+                                        if (validationStatus == "VALID") validCount++;
+                                        else if (validationStatus == "INVALID") invalidCount++;
+
                                         // Check ICAO 9303 compliance
                                         common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                                        if (icaoCompliance.isCompliant) {
+                                            icaoCompliantCount++;
+                                        } else {
+                                            icaoNonCompliantCount++;
+                                        }
+
+                                        // Check validity period
+                                        {
+                                            const ASN1_TIME* naTime = X509_get0_notAfter(cert);
+                                            const ASN1_TIME* nbTime = X509_get0_notBefore(cert);
+                                            if (naTime && X509_cmp_current_time(naTime) < 0) {
+                                                expiredCount++;
+                                            } else if (nbTime && X509_cmp_current_time(nbTime) > 0) {
+                                                // not yet valid - skip
+                                            } else {
+                                                validPeriodCount++;
+                                            }
+                                        }
 
                                         totalCerts++;
 
@@ -902,9 +967,43 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
 
                             // Master List contains ONLY CSCA certificates (per ICAO Doc 9303)
                             std::string certType = "CSCA";
+                            std::string validationStatus = "VALID";
+                            std::string validationMessage = "";
+
+                            if (subjectDn == issuerDn) {
+                                bool sigValid = icao::validation::verifyCertificateSignature(cert, cert);
+                                if (sigValid) {
+                                    validationStatus = "VALID";
+                                } else {
+                                    validationStatus = "INVALID";
+                                    validationMessage = "Self-signature verification failed";
+                                }
+                            }
+
+                            // Track validation counts
+                            if (validationStatus == "VALID") validCount++;
+                            else if (validationStatus == "INVALID") invalidCount++;
 
                             // Check ICAO 9303 compliance
                             common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                            if (icaoCompliance.isCompliant) {
+                                icaoCompliantCount++;
+                            } else {
+                                icaoNonCompliantCount++;
+                            }
+
+                            // Check validity period
+                            {
+                                const ASN1_TIME* naTime = X509_get0_notAfter(cert);
+                                const ASN1_TIME* nbTime = X509_get0_notBefore(cert);
+                                if (naTime && X509_cmp_current_time(naTime) < 0) {
+                                    expiredCount++;
+                                } else if (nbTime && X509_cmp_current_time(nbTime) > 0) {
+                                    // not yet valid - skip
+                                } else {
+                                    validPeriodCount++;
+                                }
+                            }
 
                             totalCerts++;
 
@@ -926,7 +1025,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                             // Save certificate using Repository Pattern
                             auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
-                                fingerprint, notBefore, notAfter, derBytes);
+                                fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
 
                             if (!certId.empty()) {
                                 if (isDuplicate) {
@@ -961,6 +1060,21 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             g_services->uploadRepository()->updateStatistics(uploadId, cscaCount, dscCount, 0, 0, 1, 1);
             int finalTotal = totalCertsInML > 0 ? totalCertsInML : totalCerts;
             g_services->uploadRepository()->updateProgress(uploadId, finalTotal, cscaCount + dscCount);
+
+            // Save validation statistics to DB
+            if (g_services->validationRepository()) {
+                domain::models::ValidationStatistics valStats;
+                valStats.validCount = validCount;
+                valStats.invalidCount = invalidCount;
+                valStats.validPeriodCount = validPeriodCount;
+                valStats.expiredCount = expiredCount;
+                valStats.icaoCompliantCount = icaoCompliantCount;
+                valStats.icaoNonCompliantCount = icaoNonCompliantCount;
+                valStats.icaoWarningCount = icaoWarningCount;
+                g_services->validationRepository()->updateStatistics(uploadId, valStats);
+                spdlog::info("Validation statistics saved for ML upload {}: valid={}, invalid={}, validPeriod={}, expired={}, icaoCompliant={}, icaoNonCompliant={}",
+                            uploadId, validCount, invalidCount, validPeriodCount, expiredCount, icaoCompliantCount, icaoNonCompliantCount);
+            }
 
             // Enhanced completion message with LDAP status
             std::string completionMsg = "처리 완료: ";

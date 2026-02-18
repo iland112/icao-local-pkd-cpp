@@ -9,7 +9,6 @@
 #include <memory>
 #include <stdexcept>
 #include <sstream>
-#include <regex>
 #include <array>
 #include <fstream>
 #include <openssl/asn1.h>
@@ -82,31 +81,78 @@ Json::Value parseAsn1Output(const std::string& asn1ParseOutput) {
     std::istringstream stream(asn1ParseOutput);
     std::string line;
 
-    // Regex to parse OpenSSL asn1parse output format:
+    // Manual parsing of OpenSSL asn1parse output format (no std::regex - avoids SEGFAULT):
     // Example: "    0:d=0  hl=4 l=8192 cons: SEQUENCE"
-    // Groups: offset, depth, headerLength, length, constructType, tag, value
-    std::regex lineRegex(R"(^\s*(\d+):d=(\d+)\s+hl=(\d+)\s+l=\s*(\d+)\s+(cons|prim):\s+(.+?)(?:\s*:\s*(.*))?$)");
-
-    std::vector<Json::Value*> stack;  // Stack for tracking parent nodes at each depth
-    stack.resize(100, nullptr);       // Pre-allocate for depths 0-99
+    // Example: "    4:d=1  hl=2 l=   3 prim: OBJECT            :sha256WithRSAEncryption"
 
     int lineNum = 0;
     while (std::getline(stream, line)) {
         lineNum++;
-        std::smatch match;
 
-        if (!std::regex_match(line, match, lineRegex)) {
-            // Skip lines that don't match expected format
+        // Find offset: skip leading spaces, read digits before ':'
+        size_t pos = 0;
+        while (pos < line.size() && line[pos] == ' ') pos++;
+        size_t digitStart = pos;
+        while (pos < line.size() && std::isdigit(line[pos])) pos++;
+        if (pos == digitStart || pos >= line.size() || line[pos] != ':') continue;
+        int offset = 0;
+        try { offset = std::stoi(line.substr(digitStart, pos - digitStart)); } catch (...) { continue; }
+        pos++; // skip ':'
+
+        // Find d=N
+        auto findField = [&](const std::string& prefix) -> int {
+            size_t fpos = line.find(prefix, pos);
+            if (fpos == std::string::npos) return -1;
+            fpos += prefix.size();
+            size_t numStart = fpos;
+            while (fpos < line.size() && (std::isdigit(line[fpos]) || line[fpos] == ' ')) fpos++;
+            std::string numStr = line.substr(numStart, fpos - numStart);
+            // Remove leading/trailing spaces from number
+            size_t ns = numStr.find_first_not_of(' ');
+            if (ns == std::string::npos) return -1;
+            numStr = numStr.substr(ns);
+            size_t ne = numStr.find_first_not_of("0123456789");
+            if (ne != std::string::npos) numStr = numStr.substr(0, ne);
+            try { return std::stoi(numStr); } catch (...) { return -1; }
+        };
+
+        int depth = findField("d=");
+        int headerLength = findField("hl=");
+        int length = findField("l=");
+        if (depth < 0 || headerLength < 0 || length < 0) continue;
+
+        // Find cons/prim
+        std::string constructType;
+        size_t consPos = line.find("cons:", pos);
+        size_t primPos = line.find("prim:", pos);
+        size_t tagStart;
+        if (consPos != std::string::npos && (primPos == std::string::npos || consPos < primPos)) {
+            constructType = "cons";
+            tagStart = consPos + 5;
+        } else if (primPos != std::string::npos) {
+            constructType = "prim";
+            tagStart = primPos + 5;
+        } else {
             continue;
         }
 
-        int offset = std::stoi(match[1].str());
-        int depth = std::stoi(match[2].str());
-        int headerLength = std::stoi(match[3].str());
-        int length = std::stoi(match[4].str());
-        std::string constructType = match[5].str();
-        std::string tag = match[6].str();
-        std::string value = match.size() > 7 ? match[7].str() : "";
+        // Extract tag and optional value (separated by ':')
+        while (tagStart < line.size() && line[tagStart] == ' ') tagStart++;
+        std::string tag, value;
+        size_t colonPos = line.find(':', tagStart);
+        if (colonPos != std::string::npos) {
+            tag = line.substr(tagStart, colonPos - tagStart);
+            // Trim trailing spaces from tag
+            while (!tag.empty() && tag.back() == ' ') tag.pop_back();
+            value = line.substr(colonPos + 1);
+            // Trim leading spaces from value
+            size_t vs = value.find_first_not_of(' ');
+            if (vs != std::string::npos) value = value.substr(vs);
+            else value.clear();
+        } else {
+            tag = line.substr(tagStart);
+            while (!tag.empty() && (tag.back() == ' ' || tag.back() == '\n' || tag.back() == '\r')) tag.pop_back();
+        }
 
         // Create node
         Json::Value node;
@@ -121,24 +167,33 @@ Json::Value parseAsn1Output(const std::string& asn1ParseOutput) {
         }
         node["children"] = Json::Value(Json::arrayValue);
 
-        // Add to tree structure
+        // Add to tree: navigate from root each time to avoid storing pointers
+        // (Json::Value::append() may invalidate previously stored pointers)
         if (depth == 0) {
-            // Root level node
             root.append(node);
-            stack[0] = &root[root.size() - 1];
-        } else {
-            // Child node - find parent at depth-1
-            if (depth > 0 && depth < 100 && stack[depth - 1] != nullptr) {
-                Json::Value* parent = stack[depth - 1];
-                (*parent)["children"].append(node);
-                stack[depth] = &((*parent)["children"][(*parent)["children"].size() - 1]);
-            } else {
-                spdlog::warn("[ASN1Parser] Invalid depth {} at line {}", depth, lineNum);
+        } else if (depth > 0 && depth < 100) {
+            // Walk from root following the last child at each depth level
+            Json::Value* container = &root;
+            bool attached = false;
+            for (int d = 0; d < depth; d++) {
+                if (container->empty()) break;
+                Json::Value& lastNode = (*container)[container->size() - 1];
+                if (d == depth - 1) {
+                    lastNode["children"].append(node);
+                    attached = true;
+                    break;
+                }
+                container = &(lastNode["children"]);
             }
+            if (!attached) {
+                spdlog::warn("[ASN1Parser] Could not attach node at depth {} (line {})", depth, lineNum);
+            }
+        } else {
+            spdlog::warn("[ASN1Parser] Invalid depth {} at line {}", depth, lineNum);
         }
     }
 
-    spdlog::debug("[ASN1Parser] Parsed {} ASN.1 nodes", root.size());
+    spdlog::debug("[ASN1Parser] Parsed {} root-level ASN.1 nodes", root.size());
     return root;
 }
 

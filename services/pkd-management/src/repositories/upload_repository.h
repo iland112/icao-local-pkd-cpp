@@ -58,7 +58,11 @@ struct Upload {
     int trustChainInvalidCount = 0;
     int cscaNotFoundCount = 0;
     int expiredCount = 0;
+    int validPeriodCount = 0;
     int revokedCount = 0;
+    int icaoCompliantCount = 0;
+    int icaoNonCompliantCount = 0;
+    int icaoWarningCount = 0;
 
     std::string createdAt;
     std::string updatedAt;

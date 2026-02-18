@@ -6,6 +6,7 @@
 #include "masterlist_processor.h"
 #include "certificate_utils.h"
 #include "main_utils.h"
+#include "progress_manager.h"
 #include "../common.h"  // For LdifEntry structure
 #include "../infrastructure/service_container.h"
 #include "../services/ldap_storage_service.h"
@@ -440,6 +441,9 @@ bool parseMasterListEntryV2(
                 std::string certTypeLabel = isLinkCertificate ? "LC" : "CSCA";
                 spdlog::debug("[ML-LDIF] {} {} - DUPLICATE - fingerprint: {}, cert_id: {}, reason: Already exists in DB",
                             certTypeLabel, totalCerts, meta.fingerprint.substr(0, 16) + "...", certId);
+                if (enhancedStats) {
+                    enhancedStats->duplicateCount++;
+                }
             } else {
                 newCount++;
                 std::string certTypeLabel = isLinkCertificate ? "LC (Link Certificate)" : "CSCA (Self-signed)";
@@ -467,6 +471,59 @@ bool parseMasterListEntryV2(
                             entry.dn, meta.subjectDn, certCountryCode, certType,
                             certTypeLabel + " LDAP save failed");
                     }
+                }
+            }
+
+            // Per-certificate validation log and statistics for EventLog display
+            if (enhancedStats) {
+                std::string logCertType = isLinkCertificate ? "LINK_CERT" : "CSCA";
+                std::string status = isDuplicate ? "DUPLICATE" : "VALID";
+                std::string message = isDuplicate
+                    ? "Duplicate — already exists in DB"
+                    : (isLinkCertificate ? "Extracted from Master List (Link Certificate)" : "Extracted from Master List (self-signed)");
+                common::addValidationLog(*enhancedStats,
+                    logCertType, certCountryCode, meta.subjectDn, meta.issuerDn,
+                    status, message, "", "", meta.fingerprint);
+                enhancedStats->totalCertificates++;
+                enhancedStats->processedCount++;
+                enhancedStats->certificateTypes[logCertType]++;
+                if (!isDuplicate) {
+                    enhancedStats->validCount++;
+                    enhancedStats->validationReasons["VALID"]++;
+                }
+
+                // ICAO 9303 compliance check
+                common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                if (icaoCompliance.isCompliant) {
+                    enhancedStats->icaoCompliantCount++;
+                } else {
+                    enhancedStats->icaoNonCompliantCount++;
+                }
+                if (!icaoCompliance.keyUsageCompliant) enhancedStats->complianceViolations["keyUsage"]++;
+                if (!icaoCompliance.algorithmCompliant) enhancedStats->complianceViolations["algorithm"]++;
+                if (!icaoCompliance.keySizeCompliant) enhancedStats->complianceViolations["keySize"]++;
+                if (!icaoCompliance.validityPeriodCompliant) enhancedStats->complianceViolations["validityPeriod"]++;
+                if (!icaoCompliance.dnFormatCompliant) enhancedStats->complianceViolations["dnFormat"]++;
+                if (!icaoCompliance.extensionsCompliant) enhancedStats->complianceViolations["extensions"]++;
+
+                // Signature algorithm and key size distribution
+                common::CertificateMetadata certMeta = common::extractCertificateMetadataForProgress(cert, false);
+                if (!certMeta.signatureAlgorithm.empty()) {
+                    enhancedStats->signatureAlgorithms[certMeta.signatureAlgorithm]++;
+                }
+                if (certMeta.keySize > 0) {
+                    enhancedStats->keySizes[certMeta.keySize]++;
+                }
+
+                // Expiration status
+                const ASN1_TIME* notAfterTime = X509_get0_notAfter(cert);
+                const ASN1_TIME* notBeforeTime = X509_get0_notBefore(cert);
+                if (notAfterTime && X509_cmp_current_time(notAfterTime) < 0) {
+                    enhancedStats->expiredCount++;
+                } else if (notBeforeTime && X509_cmp_current_time(notBeforeTime) > 0) {
+                    enhancedStats->notYetValidCount++;
+                } else {
+                    enhancedStats->validPeriodCount++;
                 }
             }
 
@@ -855,7 +912,91 @@ bool processMasterListFile(
                 }
             }
 
+            // Per-certificate validation log and statistics for EventLog display
+            if (enhancedStats) {
+                std::string logCertType = isLinkCertificate ? "LINK_CERT" : "CSCA";
+                std::string status = isDuplicate ? "DUPLICATE" : "VALID";
+                std::string message = isDuplicate
+                    ? "Duplicate — already exists in DB"
+                    : (isLinkCertificate ? "Extracted from Master List (Link Certificate)" : "Extracted from Master List (self-signed)");
+                common::addValidationLog(*enhancedStats,
+                    logCertType, certCountryCode, meta.subjectDn, meta.issuerDn,
+                    status, message, "", "", meta.fingerprint);
+                enhancedStats->totalCertificates++;
+                enhancedStats->processedCount++;
+                enhancedStats->certificateTypes[logCertType]++;
+                if (!isDuplicate) {
+                    enhancedStats->validCount++;
+                    enhancedStats->validationReasons["VALID"]++;
+                } else {
+                    enhancedStats->duplicateCount++;
+                }
+
+                // ICAO 9303 compliance check
+                common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
+                if (icaoCompliance.isCompliant) {
+                    enhancedStats->icaoCompliantCount++;
+                } else {
+                    enhancedStats->icaoNonCompliantCount++;
+                }
+                if (!icaoCompliance.keyUsageCompliant) enhancedStats->complianceViolations["keyUsage"]++;
+                if (!icaoCompliance.algorithmCompliant) enhancedStats->complianceViolations["algorithm"]++;
+                if (!icaoCompliance.keySizeCompliant) enhancedStats->complianceViolations["keySize"]++;
+                if (!icaoCompliance.validityPeriodCompliant) enhancedStats->complianceViolations["validityPeriod"]++;
+                if (!icaoCompliance.dnFormatCompliant) enhancedStats->complianceViolations["dnFormat"]++;
+                if (!icaoCompliance.extensionsCompliant) enhancedStats->complianceViolations["extensions"]++;
+
+                // Signature algorithm and key size distribution
+                common::CertificateMetadata certMeta = common::extractCertificateMetadataForProgress(cert, false);
+                if (!certMeta.signatureAlgorithm.empty()) {
+                    enhancedStats->signatureAlgorithms[certMeta.signatureAlgorithm]++;
+                }
+                if (certMeta.keySize > 0) {
+                    enhancedStats->keySizes[certMeta.keySize]++;
+                }
+
+                // Expiration status
+                const ASN1_TIME* notAfterTime = X509_get0_notAfter(cert);
+                const ASN1_TIME* notBeforeTime = X509_get0_notBefore(cert);
+                if (notAfterTime && X509_cmp_current_time(notAfterTime) < 0) {
+                    enhancedStats->expiredCount++;
+                } else if (notBeforeTime && X509_cmp_current_time(notBeforeTime) > 0) {
+                    enhancedStats->notYetValidCount++;
+                } else {
+                    enhancedStats->validPeriodCount++;
+                }
+
+                // Send SSE progress with validation statistics every 10 certificates
+                if (totalCerts % 10 == 0) {
+                    std::string progressMsg = "ML 인증서 추출 중: " + std::to_string(totalCerts) + "개";
+                    common::sendProgressWithMetadata(
+                        uploadId,
+                        common::ProcessingStage::VALIDATION_IN_PROGRESS,
+                        totalCerts, 0,
+                        progressMsg,
+                        std::nullopt,
+                        std::nullopt,
+                        *enhancedStats
+                    );
+                }
+            }
+
             X509_free(cert);
+        }
+
+        // Send final progress with complete statistics
+        if (enhancedStats) {
+            std::string finalMsg = "ML 인증서 추출 완료: " + std::to_string(totalCerts) + "개 ("
+                + std::to_string(newCount) + " 신규, " + std::to_string(dupCount) + " 중복)";
+            common::sendProgressWithMetadata(
+                uploadId,
+                common::ProcessingStage::VALIDATION_COMPLETED,
+                totalCerts, totalCerts,
+                finalMsg,
+                std::nullopt,
+                std::nullopt,
+                *enhancedStats
+            );
         }
 
         spdlog::info("[ML-FILE] Extracted {} CSCA/LC certificates: {} new, {} duplicates",

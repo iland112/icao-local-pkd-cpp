@@ -82,7 +82,11 @@ std::optional<Upload> UploadRepository::findById(const std::string& uploadId)
             "COALESCE(trust_chain_invalid_count, 0) AS trust_chain_invalid_count, "
             "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
             "COALESCE(expired_count, 0) AS expired_count, "
-            "COALESCE(revoked_count, 0) AS revoked_count "
+            "COALESCE(valid_period_count, 0) AS valid_period_count, "
+            "COALESCE(revoked_count, 0) AS revoked_count, "
+            "COALESCE(icao_compliant_count, 0) AS icao_compliant_count, "
+            "COALESCE(icao_non_compliant_count, 0) AS icao_non_compliant_count, "
+            "COALESCE(icao_warning_count, 0) AS icao_warning_count "
             "FROM uploaded_file WHERE id = $1";
 
         std::vector<std::string> params = {uploadId};
@@ -150,7 +154,11 @@ std::vector<Upload> UploadRepository::findAll(
               << "COALESCE(trust_chain_invalid_count, 0) AS trust_chain_invalid_count, "
               << "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
               << "COALESCE(expired_count, 0) AS expired_count, "
-              << "COALESCE(revoked_count, 0) AS revoked_count "
+              << "COALESCE(revoked_count, 0) AS revoked_count, "
+              << "COALESCE(valid_period_count, 0) AS valid_period_count, "
+              << "COALESCE(icao_compliant_count, 0) AS icao_compliant_count, "
+              << "COALESCE(icao_non_compliant_count, 0) AS icao_non_compliant_count, "
+              << "COALESCE(icao_warning_count, 0) AS icao_warning_count "
               << "FROM uploaded_file "
               << "ORDER BY " << dbSortBy << " " << safeDirection << " "
               << "OFFSET " << offset << " ROWS FETCH NEXT " << limit << " ROWS ONLY";
@@ -350,7 +358,11 @@ std::optional<Upload> UploadRepository::findByFileHash(const std::string& fileHa
             "COALESCE(trust_chain_invalid_count, 0) AS trust_chain_invalid_count, "
             "COALESCE(csca_not_found_count, 0) AS csca_not_found_count, "
             "COALESCE(expired_count, 0) AS expired_count, "
-            "COALESCE(revoked_count, 0) AS revoked_count "
+            "COALESCE(valid_period_count, 0) AS valid_period_count, "
+            "COALESCE(revoked_count, 0) AS revoked_count, "
+            "COALESCE(icao_compliant_count, 0) AS icao_compliant_count, "
+            "COALESCE(icao_non_compliant_count, 0) AS icao_non_compliant_count, "
+            "COALESCE(icao_warning_count, 0) AS icao_warning_count "
             "FROM uploaded_file WHERE file_hash = $1 "
             "FETCH FIRST 1 ROWS ONLY";
 
@@ -947,7 +959,11 @@ Upload UploadRepository::jsonToUpload(const Json::Value& json)
     upload.trustChainInvalidCount = common::db::getInt(json, "trust_chain_invalid_count", 0);
     upload.cscaNotFoundCount = common::db::getInt(json, "csca_not_found_count", 0);
     upload.expiredCount = common::db::getInt(json, "expired_count", 0);
+    upload.validPeriodCount = common::db::getInt(json, "valid_period_count", 0);
     upload.revokedCount = common::db::getInt(json, "revoked_count", 0);
+    upload.icaoCompliantCount = common::db::getInt(json, "icao_compliant_count", 0);
+    upload.icaoNonCompliantCount = common::db::getInt(json, "icao_non_compliant_count", 0);
+    upload.icaoWarningCount = common::db::getInt(json, "icao_warning_count", 0);
 
     return upload;
 }

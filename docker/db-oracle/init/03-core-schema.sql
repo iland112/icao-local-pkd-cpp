@@ -66,7 +66,11 @@ CREATE TABLE uploaded_file (
     trust_chain_invalid_count NUMBER(10) DEFAULT 0,
     csca_not_found_count NUMBER(10) DEFAULT 0,
     expired_count NUMBER(10) DEFAULT 0,
+    valid_period_count NUMBER(10) DEFAULT 0,
     revoked_count NUMBER(10) DEFAULT 0,
+    icao_compliant_count NUMBER(10) DEFAULT 0,
+    icao_non_compliant_count NUMBER(10) DEFAULT 0,
+    icao_warning_count NUMBER(10) DEFAULT 0,
     csca_extracted_from_ml NUMBER(10) DEFAULT 0 NOT NULL,
     csca_duplicates NUMBER(10) DEFAULT 0 NOT NULL,
 
@@ -137,7 +141,7 @@ CREATE TABLE certificate (
     CONSTRAINT fk_cert_first_upload FOREIGN KEY (first_upload_id) REFERENCES uploaded_file(id),
     CONSTRAINT fk_cert_last_upload FOREIGN KEY (last_seen_upload_id) REFERENCES uploaded_file(id),
     CONSTRAINT chk_cert_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
-    CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'REVOKED', 'UNKNOWN'))
+    CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'EXPIRED_VALID', 'REVOKED', 'UNKNOWN'))
 );
 
 CREATE INDEX idx_cert_upload_id ON certificate(upload_id);
@@ -331,6 +335,16 @@ CREATE TABLE validation_result (
     crl_checked NUMBER(1) DEFAULT 0,
     ocsp_checked NUMBER(1) DEFAULT 0,
 
+    -- ICAO 9303 compliance (per-certificate)
+    icao_compliant NUMBER(1) DEFAULT NULL,
+    icao_compliance_level VARCHAR2(20),
+    icao_violations CLOB,
+    icao_key_usage_compliant NUMBER(1) DEFAULT NULL,
+    icao_algorithm_compliant NUMBER(1) DEFAULT NULL,
+    icao_key_size_compliant NUMBER(1) DEFAULT NULL,
+    icao_validity_period_compliant NUMBER(1) DEFAULT NULL,
+    icao_extensions_compliant NUMBER(1) DEFAULT NULL,
+
     validation_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
 
     -- Note: certificate_id stores fingerprint, not FK to certificate.id
@@ -343,6 +357,7 @@ CREATE INDEX idx_validation_upload ON validation_result(upload_id);
 CREATE INDEX idx_validation_status ON validation_result(validation_status);
 CREATE INDEX idx_validation_trust_chain ON validation_result(trust_chain_valid);
 CREATE INDEX idx_validation_timestamp ON validation_result(validation_timestamp);
+CREATE INDEX idx_validation_icao ON validation_result(icao_compliant);
 
 -- =============================================================================
 -- Certificate Duplicate Tracking

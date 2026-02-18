@@ -31,6 +31,7 @@ import { MasterListStructure } from '@/components/MasterListStructure';
 import { LdifStructure } from '@/components/LdifStructure';
 import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTree';
 import { DuplicateCertificateDialog } from '@/components/DuplicateCertificateDialog';
+import { ValidationSummaryPanel } from '@/components/ValidationSummaryPanel';
 import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/csvExport';
 
 
@@ -726,7 +727,7 @@ export function UploadHistory() {
           />
 
           {/* Dialog Content - Wide layout without vertical scroll */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-5xl mx-4">
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[85vh] flex flex-col">
             {/* Header */}
             <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-3">
@@ -800,13 +801,11 @@ export function UploadHistory() {
               )}
             </div>
 
-            {/* Body - Horizontal two-column layout */}
-            <div className="p-5">
+            {/* Body */}
+            <div className="p-5 flex-1 min-h-0 overflow-y-auto">
               {/* Details Tab */}
               {activeTab === 'details' && (
-              <div className="flex gap-5">
-                {/* Left Column - Status Progress & Certificate Counts */}
-                <div className="flex-1 space-y-4">
+              <div className="space-y-4">
                   {/* Status Progress - Compact horizontal */}
                   <div>
                     <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">진행 상태</h3>
@@ -964,6 +963,28 @@ export function UploadHistory() {
                     </div>
                   </div>
 
+                  {/* Validation Statistics — shared component */}
+                  {selectedUpload.validation && (
+                    <ValidationSummaryPanel
+                      data={{
+                        validCount: selectedUpload.validation.validCount,
+                        invalidCount: selectedUpload.validation.invalidCount,
+                        pendingCount: selectedUpload.validation.pendingCount,
+                        expiredValidCount: selectedUpload.validation.expiredValidCount,
+                        errorCount: selectedUpload.validation.errorCount,
+                        trustChainValidCount: selectedUpload.validation.trustChainValidCount,
+                        trustChainInvalidCount: selectedUpload.validation.trustChainInvalidCount,
+                        cscaNotFoundCount: selectedUpload.validation.cscaNotFoundCount,
+                        expiredCount: selectedUpload.validation.expiredCount,
+                        validPeriodCount: selectedUpload.validation.validPeriodCount,
+                        revokedCount: selectedUpload.validation.revokedCount,
+                        icaoCompliantCount: selectedUpload.validation.icaoCompliantCount,
+                        icaoNonCompliantCount: selectedUpload.validation.icaoNonCompliantCount,
+                        icaoWarningCount: selectedUpload.validation.icaoWarningCount,
+                      }}
+                    />
+                  )}
+
                   {/* Master List Extraction Statistics (v2.1.1) */}
                   {(selectedUpload.cscaExtractedFromMl || selectedUpload.cscaDuplicates) && (
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
@@ -1038,70 +1059,6 @@ export function UploadHistory() {
                       {selectedUpload.id}
                     </p>
                   </div>
-                </div>
-
-                {/* Right Column - Validation Statistics (Only for DSC/DSC_NC uploads) */}
-                {selectedUpload.validation && ((selectedUpload.dscCount ?? 0) > 0 || (selectedUpload.dscNcCount ?? 0) > 0) && (
-                  <div className="w-64 flex-shrink-0">
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Trust Chain 검증</h3>
-                    <div className="space-y-2">
-                      {/* Main Validation Stats */}
-                      <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-                          {selectedUpload.validation.validCount}
-                        </p>
-                        <span className="text-xs text-green-700 dark:text-green-300">검증 성공</span>
-                        {(selectedUpload.validation.expiredValidCount ?? 0) > 0 && (
-                          <span className="block text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                            (만료-유효: {selectedUpload.validation.expiredValidCount})
-                          </span>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 text-center">
-                          <p className="text-lg font-bold text-red-600 dark:text-red-400">
-                            {selectedUpload.validation.invalidCount}
-                          </p>
-                          <span className="text-xs text-red-700 dark:text-red-300">실패</span>
-                        </div>
-                        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-2 text-center">
-                          <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">
-                            {selectedUpload.validation.pendingCount}
-                          </p>
-                          <span className="text-xs text-yellow-700 dark:text-yellow-300">보류</span>
-                        </div>
-                      </div>
-
-                      {/* Detailed Stats - Compact list */}
-                      <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2 space-y-1">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-600 dark:text-gray-400">Trust Chain 성공</span>
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            {selectedUpload.validation.trustChainValidCount}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-600 dark:text-gray-400">Trust Chain 실패</span>
-                          <span className="font-medium text-red-600 dark:text-red-400">
-                            {selectedUpload.validation.trustChainInvalidCount}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-600 dark:text-gray-400">CSCA 미발견</span>
-                          <span className="font-medium text-yellow-600 dark:text-yellow-400">
-                            {selectedUpload.validation.cscaNotFoundCount}
-                          </span>
-                        </div>
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="text-gray-600 dark:text-gray-400">만료됨</span>
-                          <span className="font-medium text-orange-600 dark:text-orange-400">
-                            {selectedUpload.validation.expiredCount}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
               )}
 

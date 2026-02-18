@@ -63,6 +63,10 @@ export interface UploadedFile {
     cscaNotFoundCount: number;
     expiredCount: number;
     revokedCount: number;
+    validPeriodCount?: number;
+    icaoCompliantCount?: number;
+    icaoNonCompliantCount?: number;
+    icaoWarningCount?: number;
   };
   // LDAP upload status
   ldapUploadedCount?: number;
@@ -207,12 +211,29 @@ export interface ValidationStatistics {
   validationReasons?: Record<string, number>;
   expiredValidCount?: number;
 
+  // Per-certificate validation logs
+  totalValidationLogCount?: number;
+  recentValidationLogs?: ValidationLogEntry[];
+
   // Processing error tracking
   totalErrorCount?: number;
   parseErrorCount?: number;
   dbSaveErrorCount?: number;
   ldapSaveErrorCount?: number;
   recentErrors?: ProcessingError[];
+}
+
+export interface ValidationLogEntry {
+  timestamp: string;
+  certificateType: string;
+  countryCode: string;
+  subjectDn: string;
+  issuerDn: string;
+  validationStatus: string;
+  trustChainMessage: string;
+  trustChainPath: string;
+  errorCode: string;
+  fingerprintSha256: string;
 }
 
 export interface ProcessingError {
@@ -474,7 +495,11 @@ export interface ValidationStats {
   trustChainInvalidCount: number;
   cscaNotFoundCount: number;
   expiredCount: number;
+  validPeriodCount?: number;
   revokedCount: number;
+  icaoCompliantCount?: number;
+  icaoNonCompliantCount?: number;
+  icaoWarningCount?: number;
 }
 
 // Statistics

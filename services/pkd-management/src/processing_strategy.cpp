@@ -87,17 +87,23 @@ void AutoProcessingStrategy::processLdifEntries(
                           entries.size(), entries.size(), "");
 
     // Update validation statistics via ValidationRepository
+    // Use enhancedStats which aggregates both direct certificates AND ML-extracted certificates
     if (g_services->validationRepository()) {
         domain::models::ValidationStatistics valStats;
-        valStats.validCount = stats.validCount;
-        valStats.invalidCount = stats.invalidCount;
-        valStats.pendingCount = stats.pendingCount;
-        valStats.errorCount = stats.errorCount;
-        valStats.trustChainValidCount = stats.trustChainValidCount;
-        valStats.trustChainInvalidCount = stats.trustChainInvalidCount;
-        valStats.cscaNotFoundCount = stats.cscaNotFoundCount;
-        valStats.expiredCount = stats.expiredCount;
-        valStats.revokedCount = stats.revokedCount;
+        valStats.validCount = enhancedStats.validCount;
+        valStats.invalidCount = enhancedStats.invalidCount;
+        valStats.pendingCount = enhancedStats.pendingCount;
+        valStats.errorCount = enhancedStats.totalErrorCount;
+        valStats.trustChainValidCount = enhancedStats.trustChainValidCount;
+        valStats.trustChainInvalidCount = enhancedStats.trustChainInvalidCount;
+        valStats.cscaNotFoundCount = enhancedStats.cscaNotFoundCount;
+        valStats.expiredCount = enhancedStats.expiredCount;
+        valStats.validPeriodCount = enhancedStats.validPeriodCount;
+        valStats.revokedCount = enhancedStats.revokedCount;
+        valStats.expiredValidCount = enhancedStats.expiredValidCount;
+        valStats.icaoCompliantCount = enhancedStats.icaoCompliantCount;
+        valStats.icaoNonCompliantCount = enhancedStats.icaoNonCompliantCount;
+        valStats.icaoWarningCount = enhancedStats.icaoWarningCount;
         g_services->validationRepository()->updateStatistics(uploadId, valStats);
     }
 
@@ -112,7 +118,7 @@ void AutoProcessingStrategy::processLdifEntries(
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount, counts.mlscCount,
                 counts.ldapCertStoredCount, counts.ldapCrlStoredCount, counts.ldapMlStoredCount);
     spdlog::info("AUTO mode: Validation - {} valid, {} invalid, {} pending, {} CSCA not found, {} expired",
-                stats.validCount, stats.invalidCount, stats.pendingCount, stats.cscaNotFoundCount, stats.expiredCount);
+                enhancedStats.validCount, enhancedStats.invalidCount, enhancedStats.pendingCount, enhancedStats.cscaNotFoundCount, enhancedStats.expiredCount);
 
     // Send completion progress to frontend
     std::string completionMsg = "처리 완료: ";
@@ -181,8 +187,30 @@ void AutoProcessingStrategy::processMasterListContent(
             stats.cscaExtractedCount, stats.cscaNewCount);
     }
 
+    // Save validation statistics from enhancedStats (includes CSCA validation results)
+    if (g_services->validationRepository()) {
+        domain::models::ValidationStatistics valStats;
+        valStats.validCount = enhancedStats.validCount;
+        valStats.invalidCount = enhancedStats.invalidCount;
+        valStats.pendingCount = enhancedStats.pendingCount;
+        valStats.errorCount = enhancedStats.totalErrorCount;
+        valStats.trustChainValidCount = enhancedStats.trustChainValidCount;
+        valStats.trustChainInvalidCount = enhancedStats.trustChainInvalidCount;
+        valStats.cscaNotFoundCount = enhancedStats.cscaNotFoundCount;
+        valStats.expiredCount = enhancedStats.expiredCount;
+        valStats.validPeriodCount = enhancedStats.validPeriodCount;
+        valStats.revokedCount = enhancedStats.revokedCount;
+        valStats.expiredValidCount = enhancedStats.expiredValidCount;
+        valStats.icaoCompliantCount = enhancedStats.icaoCompliantCount;
+        valStats.icaoNonCompliantCount = enhancedStats.icaoNonCompliantCount;
+        valStats.icaoWarningCount = enhancedStats.icaoWarningCount;
+        g_services->validationRepository()->updateStatistics(uploadId, valStats);
+    }
+
     spdlog::info("AUTO mode: Statistics updated - status=COMPLETED, csca_count={}, mlsc_count={}, total_entries={}, processed_entries={}",
                 stats.cscaNewCount, stats.mlscCount, stats.cscaExtractedCount, stats.cscaNewCount);
+    spdlog::info("AUTO mode: Validation - {} valid, {} invalid, {} pending, {} expired",
+                enhancedStats.validCount, enhancedStats.invalidCount, enhancedStats.pendingCount, enhancedStats.expiredCount);
 }
 
 void AutoProcessingStrategy::validateAndSaveToDb(
@@ -464,15 +492,20 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         // Update validation statistics via ValidationRepository
         if (g_services->validationRepository()) {
             domain::models::ValidationStatistics valStats;
-            valStats.validCount = stats.validCount;
-            valStats.invalidCount = stats.invalidCount;
-            valStats.pendingCount = stats.pendingCount;
-            valStats.errorCount = stats.errorCount;
-            valStats.trustChainValidCount = stats.trustChainValidCount;
-            valStats.trustChainInvalidCount = stats.trustChainInvalidCount;
-            valStats.cscaNotFoundCount = stats.cscaNotFoundCount;
-            valStats.expiredCount = stats.expiredCount;
-            valStats.revokedCount = stats.revokedCount;
+            valStats.validCount = enhancedStats.validCount;
+            valStats.invalidCount = enhancedStats.invalidCount;
+            valStats.pendingCount = enhancedStats.pendingCount;
+            valStats.errorCount = enhancedStats.totalErrorCount;
+            valStats.trustChainValidCount = enhancedStats.trustChainValidCount;
+            valStats.trustChainInvalidCount = enhancedStats.trustChainInvalidCount;
+            valStats.cscaNotFoundCount = enhancedStats.cscaNotFoundCount;
+            valStats.expiredCount = enhancedStats.expiredCount;
+            valStats.revokedCount = enhancedStats.revokedCount;
+            valStats.expiredValidCount = enhancedStats.expiredValidCount;
+            valStats.validPeriodCount = enhancedStats.validPeriodCount;
+            valStats.icaoCompliantCount = enhancedStats.icaoCompliantCount;
+            valStats.icaoNonCompliantCount = enhancedStats.icaoNonCompliantCount;
+            valStats.icaoWarningCount = enhancedStats.icaoWarningCount;
             g_services->validationRepository()->updateStatistics(uploadId, valStats);
         }
 
@@ -486,7 +519,7 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         spdlog::info("MANUAL mode Stage 2: Processed {} LDIF entries - CSCA: {}, DSC: {}, DSC_NC: {}, CRL: {}, ML: {}, MLSC: {}",
                     entries.size(), counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount, counts.mlscCount);
         spdlog::info("MANUAL mode Stage 2: Validation - {} valid, {} invalid, {} pending",
-                    stats.validCount, stats.invalidCount, stats.pendingCount);
+                    enhancedStats.validCount, enhancedStats.invalidCount, enhancedStats.pendingCount);
 
         // Send completion progress to frontend
         std::string completionMsg = "처리 완료: ";
@@ -636,6 +669,26 @@ void ManualProcessingStrategy::processMasterListToDbAndLdap(
         g_services->uploadRepository()->updateStatistics(uploadId,
             stats.cscaExtractedCount, 0, 0, 0,
             stats.mlscCount, stats.mlCount);
+    }
+
+    // Save validation statistics from enhancedStats
+    if (g_services->validationRepository()) {
+        domain::models::ValidationStatistics valStats;
+        valStats.validCount = enhancedStats.validCount;
+        valStats.invalidCount = enhancedStats.invalidCount;
+        valStats.pendingCount = enhancedStats.pendingCount;
+        valStats.errorCount = enhancedStats.totalErrorCount;
+        valStats.trustChainValidCount = enhancedStats.trustChainValidCount;
+        valStats.trustChainInvalidCount = enhancedStats.trustChainInvalidCount;
+        valStats.cscaNotFoundCount = enhancedStats.cscaNotFoundCount;
+        valStats.expiredCount = enhancedStats.expiredCount;
+        valStats.validPeriodCount = enhancedStats.validPeriodCount;
+        valStats.revokedCount = enhancedStats.revokedCount;
+        valStats.expiredValidCount = enhancedStats.expiredValidCount;
+        valStats.icaoCompliantCount = enhancedStats.icaoCompliantCount;
+        valStats.icaoNonCompliantCount = enhancedStats.icaoNonCompliantCount;
+        valStats.icaoWarningCount = enhancedStats.icaoWarningCount;
+        g_services->validationRepository()->updateStatistics(uploadId, valStats);
     }
 
     spdlog::info("MANUAL mode Stage 2: Statistics updated - mlsc_count={}, csca_count={}",

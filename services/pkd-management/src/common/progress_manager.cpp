@@ -192,6 +192,23 @@ Json::Value IcaoComplianceStatus::toJson() const {
     return json;
 }
 
+// --- ValidationLogEntry Implementation ---
+
+Json::Value ValidationLogEntry::toJson() const {
+    Json::Value json;
+    json["timestamp"] = timestamp;
+    json["certificateType"] = certificateType;
+    json["countryCode"] = countryCode;
+    json["subjectDn"] = subjectDn;
+    json["issuerDn"] = issuerDn;
+    json["validationStatus"] = validationStatus;
+    json["trustChainMessage"] = trustChainMessage;
+    json["trustChainPath"] = trustChainPath;
+    json["errorCode"] = errorCode;
+    json["fingerprintSha256"] = fingerprintSha256;
+    return json;
+}
+
 // --- ProcessingError Implementation ---
 
 Json::Value ProcessingError::toJson() const {
@@ -250,6 +267,44 @@ void addProcessingError(
         stats.recentErrors.erase(stats.recentErrors.begin());
     }
     stats.recentErrors.push_back(std::move(error));
+}
+
+void addValidationLog(
+    ValidationStatistics& stats,
+    const std::string& certificateType,
+    const std::string& countryCode,
+    const std::string& subjectDn,
+    const std::string& issuerDn,
+    const std::string& validationStatus,
+    const std::string& trustChainMessage,
+    const std::string& trustChainPath,
+    const std::string& errorCode,
+    const std::string& fingerprintSha256
+) {
+    ValidationLogEntry entry;
+    auto now = std::chrono::system_clock::now();
+    auto time = std::chrono::system_clock::to_time_t(now);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
+    entry.timestamp = ss.str();
+    entry.certificateType = certificateType;
+    entry.countryCode = countryCode;
+    entry.subjectDn = subjectDn;
+    entry.issuerDn = issuerDn;
+    entry.validationStatus = validationStatus;
+    entry.trustChainMessage = trustChainMessage;
+    entry.trustChainPath = trustChainPath;
+    entry.errorCode = errorCode;
+    entry.fingerprintSha256 = fingerprintSha256;
+
+    // Increment monotonic counter
+    stats.totalValidationLogCount++;
+
+    // Append to bounded list
+    if (static_cast<int>(stats.recentValidationLogs.size()) >= ValidationStatistics::MAX_RECENT_VALIDATION_LOGS) {
+        stats.recentValidationLogs.erase(stats.recentValidationLogs.begin());
+    }
+    stats.recentValidationLogs.push_back(std::move(entry));
 }
 
 // --- ValidationStatistics Implementation ---
@@ -321,6 +376,14 @@ Json::Value ValidationStatistics::toJson() const {
     }
     json["validationReasons"] = reasonsJson;
     json["expiredValidCount"] = expiredValidCount;
+
+    // Per-certificate validation logs
+    json["totalValidationLogCount"] = totalValidationLogCount;
+    Json::Value validationLogsArray(Json::arrayValue);
+    for (const auto& log : recentValidationLogs) {
+        validationLogsArray.append(log.toJson());
+    }
+    json["recentValidationLogs"] = validationLogsArray;
 
     // Error tracking
     json["totalErrorCount"] = totalErrorCount;
@@ -861,6 +924,10 @@ void sendProgressWithMetadata(
         progress = ProcessingProgress::create(
             uploadId, stage, processedCount, totalCount, message
         );
+        // Always pass statistics through, even without certificate metadata
+        if (stats.has_value()) {
+            progress.statistics = stats;
+        }
     }
 
     ProgressManager::getInstance().sendProgress(progress);

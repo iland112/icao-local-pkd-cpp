@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.13.0
-**Last Updated**: 2026-02-17
+**Current Version**: v2.14.0
+**Last Updated**: 2026-02-18
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -120,7 +120,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.13.0)
+## Current Features (v2.14.0)
 
 ### Core Functionality
 
@@ -144,7 +144,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Real-time upload statistics streaming (SSE) with Event Log panel
 - Real-time upload processing status (PROCESSING state with periodic DB updates)
 - X.509 metadata extraction (22 fields per certificate)
-- ICAO 9303 compliance checking (6 validation categories)
+- ICAO 9303 compliance checking (6 validation categories) with per-certificate DB persistence
+- Per-certificate validation log streaming (SSE) for real-time EventLog display
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
 
 ### Security
@@ -281,7 +282,8 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | LdifStructure / MasterListStructure | File structure visualization |
 | EventLog | Scrollable SSE event log with auto-scroll and timestamps |
 | ProcessingErrorsPanel | Upload processing error summary and details |
-| RealTimeStatisticsPanel | Live validation statistics during upload |
+| ValidationSummaryPanel | Shared validation statistics card (SSE + post-upload) |
+| RealTimeStatisticsPanel | Thin wrapper mapping SSE stats to ValidationSummaryPanel |
 | CurrentCertificateCard | Currently processing certificate metadata |
 | QuickLookupPanel | PA quick lookup by subject DN or fingerprint |
 | VerificationStepsPanel | 8-step ICAO verification process display |
@@ -489,6 +491,29 @@ scripts/
 ---
 
 ## Version History
+
+### v2.14.0 (2026-02-18) - Per-Certificate ICAO Compliance DB Storage + SSE Validation Enhancements
+- **Per-certificate ICAO 9303 compliance DB persistence**: 8 columns added to `validation_result` table (`icao_compliant`, `icao_compliance_level`, `icao_violations`, `icao_key_usage_compliant`, `icao_algorithm_compliant`, `icao_key_size_compliant`, `icao_validity_period_compliant`, `icao_extensions_compliant`)
+- `checkIcaoCompliance()` results now written to `ValidationResult` domain model → `ValidationRepository::save()` → DB (previously discarded after SSE streaming)
+- ICAO compliance fields returned in all validation query APIs: `findByFingerprint()`, `findBySubjectDn()`, `findByUploadId()`, `getStatisticsByUploadId()`
+- **Validation statistics expansion**: `uploaded_file` table gains 4 new columns (`valid_period_count`, `icao_compliant_count`, `icao_non_compliant_count`, `icao_warning_count`)
+- `ValidationStatistics` domain model: added `validPeriodCount`, `expiredValidCount`, `icaoCompliantCount`, `icaoNonCompliantCount`, `icaoWarningCount`
+- Statistics source switched from basic `stats` to `enhancedStats` in `processing_strategy.cpp` (AUTO/MANUAL modes) for accurate aggregate counts
+- **Per-certificate validation log streaming**: `ValidationLogEntry` struct + `addValidationLog()` for real-time EventLog display
+- SSE statistics now include `recentValidationLogs` (bounded to last 200 entries) + `totalValidationLogCount`
+- Master List processing: per-certificate validation logs, ICAO compliance checks, signature algorithm/key size distribution, expiration status tracking
+- LDIF processing: trust chain counters, CSCA not found tracking, expiration status counters, per-category ICAO violation counts (`complianceViolations` map)
+- **Frontend ValidationSummaryPanel componentization**: `RealTimeStatisticsPanel` (302→44 lines) refactored to thin wrapper → shared `ValidationSummaryPanel`
+- `ValidationSummaryPanel` reused by both `FileUpload.tsx` (real-time SSE) and `UploadHistory.tsx` (post-upload detail dialog)
+- UploadHistory detail dialog: wider layout (max-w-5xl→max-w-6xl), scrollable body, validation summary panel integration
+- Frontend types: `ValidationLogEntry`, `ValidationSummaryData` interfaces, `validPeriodCount`/`icaoCompliantCount`/`icaoNonCompliantCount`/`icaoWarningCount` fields
+- **ASN.1 parser SEGFAULT fix**: replaced `std::regex` with manual string parsing in `parseAsn1Output()` (avoids stack overflow on large ASN.1 structures)
+- **Master List processing**: CSCA self-signature verification via `icao::validation::verifyCertificateSignature()`, `validationStatus`/`validationMessage` tracking
+- Upload handler: ML certificate validation counts (valid/invalid/expired/ICAO compliant) tracked and saved to DB
+- `EXPIRED_VALID` status added to certificate validation constraint (PostgreSQL + Oracle)
+- `certificate_id` column constraint relaxed to `VARCHAR2(128)` for fingerprint storage (Oracle)
+- Both PostgreSQL and Oracle schemas updated (init scripts + ALTER TABLE compatible)
+- 20 files changed, +1,032 insertions, -564 deletions
 
 ### v2.13.0 (2026-02-17) - main.cpp Minimization: 9,752 → 1,261 lines (-87.1%)
 - **All 4 services** main.cpp reduced to minimal orchestration layers (config → DI → routes → run)

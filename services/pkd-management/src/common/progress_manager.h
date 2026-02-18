@@ -157,6 +157,29 @@ struct IcaoComplianceStatus {
     Json::Value toJson() const;
 };
 
+/// @name Per-Certificate Validation Log
+
+/**
+ * @brief Per-certificate validation log entry
+ *
+ * Records the validation result for each individual certificate during
+ * batch upload processing, for real-time display in frontend EventLog.
+ */
+struct ValidationLogEntry {
+    std::string timestamp;          // ISO 8601
+    std::string certificateType;    // CSCA, DSC, DSC_NC, CRL, LINK_CERT
+    std::string countryCode;
+    std::string subjectDn;
+    std::string issuerDn;
+    std::string validationStatus;   // VALID, INVALID, PENDING, EXPIRED_VALID
+    std::string trustChainMessage;  // "Trust chain verified: DSC signed by CSCA"
+    std::string trustChainPath;     // "DSC → CN=Korea_CSCA"
+    std::string errorCode;          // CSCA_NOT_FOUND, etc.
+    std::string fingerprintSha256;
+
+    Json::Value toJson() const;
+};
+
 /// @name Processing Error Tracking
 
 /**
@@ -232,6 +255,11 @@ struct ValidationStatistics {
     std::map<std::string, int> validationReasons;
     int expiredValidCount = 0;
 
+    // Per-certificate validation logs (for real-time EventLog display)
+    int totalValidationLogCount = 0;  // Monotonically increasing counter
+    std::vector<ValidationLogEntry> recentValidationLogs;  // Last N logs (bounded)
+    static constexpr int MAX_RECENT_VALIDATION_LOGS = 200;
+
     // Error tracking (processing failures only, not validation outcomes)
     int totalErrorCount = 0;
     int parseErrorCount = 0;       // BASE64_DECODE_FAILED + CERT_PARSE_FAILED + CRL_PARSE_FAILED + ML_PARSE_FAILED
@@ -260,6 +288,25 @@ void addProcessingError(
     const std::string& countryCode,
     const std::string& certificateType,
     const std::string& message
+);
+
+/**
+ * @brief Add a per-certificate validation log entry to statistics
+ *
+ * Thread-safe note: Only called from the sequential processing loop,
+ * no additional synchronization needed.
+ */
+void addValidationLog(
+    ValidationStatistics& stats,
+    const std::string& certificateType,
+    const std::string& countryCode,
+    const std::string& subjectDn,
+    const std::string& issuerDn,
+    const std::string& validationStatus,
+    const std::string& trustChainMessage,
+    const std::string& trustChainPath,
+    const std::string& errorCode,
+    const std::string& fingerprintSha256
 );
 
 /// @name Processing Progress

@@ -28,7 +28,14 @@ struct ValidationStatistics {
     // Specific validation failure counts
     int cscaNotFoundCount = 0;   // Number where CSCA was not found
     int expiredCount = 0;        // Number of expired certificates
+    int validPeriodCount = 0;    // Number of valid-period certificates
     int revokedCount = 0;        // Number of revoked certificates
+    int expiredValidCount = 0;   // EXPIRED_VALID certificates
+
+    // ICAO 9303 compliance counts
+    int icaoCompliantCount = 0;
+    int icaoNonCompliantCount = 0;
+    int icaoWarningCount = 0;
 };
 
 } // namespace models

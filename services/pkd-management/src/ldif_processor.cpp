@@ -470,6 +470,23 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     spdlog::debug("ICAO compliance for {} cert: isCompliant={}, level={}",
                   certType, icaoCompliance.isCompliant, icaoCompliance.complianceLevel);
 
+    // Persist ICAO compliance details to validation record (saved to DB)
+    valRecord.icaoCompliant = icaoCompliance.isCompliant;
+    valRecord.icaoComplianceLevel = icaoCompliance.complianceLevel;
+    valRecord.icaoKeyUsageCompliant = icaoCompliance.keyUsageCompliant;
+    valRecord.icaoAlgorithmCompliant = icaoCompliance.algorithmCompliant;
+    valRecord.icaoKeySizeCompliant = icaoCompliance.keySizeCompliant;
+    valRecord.icaoValidityPeriodCompliant = icaoCompliance.validityPeriodCompliant;
+    valRecord.icaoExtensionsCompliant = icaoCompliance.extensionsCompliant;
+    {
+        std::string violations;
+        for (const auto& v : icaoCompliance.violations) {
+            if (!violations.empty()) violations += "|";
+            violations += v;
+        }
+        valRecord.icaoViolations = violations;
+    }
+
     // Update enhanced statistics (ValidationStatistics)
     enhancedStats.totalCertificates++;
     enhancedStats.certificateTypes[certType]++;
@@ -482,6 +499,13 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     } else {
         enhancedStats.icaoNonCompliantCount++;
     }
+    // Track per-category violation counts
+    if (!icaoCompliance.keyUsageCompliant) enhancedStats.complianceViolations["keyUsage"]++;
+    if (!icaoCompliance.algorithmCompliant) enhancedStats.complianceViolations["algorithm"]++;
+    if (!icaoCompliance.keySizeCompliant) enhancedStats.complianceViolations["keySize"]++;
+    if (!icaoCompliance.validityPeriodCompliant) enhancedStats.complianceViolations["validityPeriod"]++;
+    if (!icaoCompliance.dnFormatCompliant) enhancedStats.complianceViolations["dnFormat"]++;
+    if (!icaoCompliance.extensionsCompliant) enhancedStats.complianceViolations["extensions"]++;
 
     // Update validation status counts and reason tracking
     if (validationStatus == "VALID") {
@@ -497,6 +521,34 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         enhancedStats.pendingCount++;
         enhancedStats.validationReasons["PENDING: " + valRecord.trustChainMessage]++;
     }
+
+    // Update trust chain counters on enhancedStats (SSE-streamed)
+    if (valRecord.trustChainValid) {
+        enhancedStats.trustChainValidCount++;
+    } else if (validationStatus == "INVALID") {
+        enhancedStats.trustChainInvalidCount++;
+    }
+    if (validationStatus == "PENDING" && valRecord.errorCode == "CSCA_NOT_FOUND") {
+        enhancedStats.cscaNotFoundCount++;
+    }
+
+    // Update expiration status counters on enhancedStats
+    if (valRecord.isExpired) {
+        enhancedStats.expiredCount++;
+    } else if (validationStatus == "VALID" || validationStatus == "EXPIRED_VALID") {
+        enhancedStats.validPeriodCount++;
+    }
+
+    // Per-certificate validation log for real-time EventLog display
+    common::addValidationLog(
+        enhancedStats,
+        certType, countryCode, subjectDn, issuerDn,
+        validationStatus,
+        valRecord.trustChainMessage,
+        valRecord.trustChainPath,
+        valRecord.errorCode,
+        fingerprint
+    );
 
     spdlog::debug("Updated statistics - total={}, type={}, sigAlg={}, keySize={}, icaoCompliant={}",
                   enhancedStats.totalCertificates, certType, certMetadata.signatureAlgorithm,

@@ -81,6 +81,7 @@ export function FileUpload() {
   const lastDuplicateCountRef = useRef(0);
   const lastValidationReasonsRef = useRef<Record<string, number>>({});
   const lastMilestoneRef = useRef(0);
+  const lastValidationLogCountRef = useRef(0);
 
   // Restore upload state on page load (for MANUAL mode)
   useEffect(() => {
@@ -314,6 +315,7 @@ export function FileUpload() {
     lastDuplicateCountRef.current = 0;
     lastValidationReasonsRef.current = {};
     lastMilestoneRef.current = 0;
+    lastValidationLogCountRef.current = 0;
   };
 
   const handleUpload = async () => {
@@ -666,6 +668,31 @@ export function FileUpload() {
         }
         lastValidationReasonsRef.current = { ...reasons };
       }
+
+      // 7) Per-certificate validation logs (real-time detail)
+      if (progress.statistics?.recentValidationLogs) {
+        const logs = progress.statistics.recentValidationLogs;
+        const totalCount2 = progress.statistics.totalValidationLogCount ?? 0;
+        if (totalCount2 > lastValidationLogCountRef.current) {
+          // Use cumulative counter to determine how many new logs were added
+          const addedCount = totalCount2 - lastValidationLogCountRef.current;
+          const newLogs = logs.slice(-addedCount);
+          for (const log of newLogs) {
+            const statusIcon = log.validationStatus === 'VALID' ? '✓'
+              : log.validationStatus === 'EXPIRED_VALID' ? '⚠'
+              : log.validationStatus === 'INVALID' ? '✗'
+              : log.validationStatus === 'PENDING' ? '?'
+              : log.validationStatus === 'DUPLICATE' ? '↔' : '';
+            const detail = `[${log.countryCode}] ${log.certificateType} ${statusIcon} ${log.validationStatus} — ${log.trustChainMessage || log.errorCode || ''}`;
+            const status: EventLogEntry['status'] = log.validationStatus === 'VALID' ? 'success'
+              : log.validationStatus === 'INVALID' ? 'fail'
+              : log.validationStatus === 'DUPLICATE' ? 'info'
+              : 'warning';
+            addEntry('검증', detail, status);
+          }
+          lastValidationLogCountRef.current = totalCount2;
+        }
+      }
     }
 
     // Phase 4.4: Extract enhanced metadata fields
@@ -883,6 +910,108 @@ export function FileUpload() {
         </div>
       </div>
 
+      {/* Row 1: Upload Result Card — hidden until upload completes */}
+      {overallStatus === 'FINALIZED' && (
+        <div className="mb-6 rounded-2xl bg-white dark:bg-gray-800 shadow-lg border border-teal-200 dark:border-teal-800 overflow-hidden">
+          {/* Success Header */}
+          <div className="bg-gradient-to-r from-teal-500 to-emerald-500 px-6 py-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-white/20">
+                <CheckCircle className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-base font-bold text-white">업로드 처리 결과</h3>
+                <p className="text-sm text-teal-100">{overallMessage}</p>
+              </div>
+              <button
+                onClick={() => navigate('/upload-history')}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-teal-700 bg-white/90 hover:bg-white transition-colors shrink-0"
+              >
+                업로드 이력 보기
+              </button>
+            </div>
+          </div>
+
+          {/* Statistics + Validation Reasons */}
+          <div className="p-5 space-y-4">
+            {statistics && (
+              <RealTimeStatisticsPanel
+                statistics={statistics}
+                isProcessing={false}
+              />
+            )}
+
+            {/* Validation Reasons Summary */}
+            {statistics?.validationReasons && Object.keys(statistics.validationReasons).length > 0 && (() => {
+              const reasons = statistics.validationReasons!;
+              const validCount = reasons['VALID'] ?? 0;
+              const expiredValid = statistics.expiredValidCount ?? 0;
+              const invalidReasons: [string, number][] = [];
+              const pendingReasons: [string, number][] = [];
+              let invalidTotal = 0;
+              let pendingTotal = 0;
+              for (const [key, count] of Object.entries(reasons)) {
+                if (key.startsWith('INVALID:')) {
+                  const reason = key.replace('INVALID: ', '');
+                  invalidReasons.push([translateReason(reason), count]);
+                  invalidTotal += count;
+                } else if (key.startsWith('PENDING:')) {
+                  const reason = key.replace('PENDING: ', '');
+                  pendingReasons.push([translateReason(reason), count]);
+                  pendingTotal += count;
+                }
+              }
+              if (invalidTotal === 0 && pendingTotal === 0 && expiredValid === 0) return null;
+              return (
+                <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">검증 사유별 상세</h4>
+                  <div className="space-y-1 text-sm">
+                    <div className="flex justify-between text-green-600 dark:text-green-400">
+                      <span>✓ 성공 (VALID)</span>
+                      <span className="font-medium">{validCount.toLocaleString()}건</span>
+                    </div>
+                    {expiredValid > 0 && (
+                      <div className="flex justify-between text-amber-600 dark:text-amber-400">
+                        <span>✓ 만료-유효 (EXPIRED_VALID)</span>
+                        <span className="font-medium">{expiredValid.toLocaleString()}건</span>
+                      </div>
+                    )}
+                    {invalidTotal > 0 && (
+                      <>
+                        <div className="flex justify-between text-red-600 dark:text-red-400">
+                          <span>✗ 실패 (INVALID)</span>
+                          <span className="font-medium">{invalidTotal.toLocaleString()}건</span>
+                        </div>
+                        {invalidReasons.map(([reason, count]) => (
+                          <div key={reason} className="flex justify-between text-red-500 dark:text-red-500 pl-4">
+                            <span className="text-xs">· {reason}</span>
+                            <span className="text-xs font-medium">{count.toLocaleString()}건</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                    {pendingTotal > 0 && (
+                      <>
+                        <div className="flex justify-between text-gray-500 dark:text-gray-400">
+                          <span>○ 보류 (PENDING)</span>
+                          <span className="font-medium">{pendingTotal.toLocaleString()}건</span>
+                        </div>
+                        {pendingReasons.map(([reason, count]) => (
+                          <div key={reason} className="flex justify-between text-gray-400 dark:text-gray-500 pl-4">
+                            <span className="text-xs">· {reason}</span>
+                            <span className="text-xs font-medium">{count.toLocaleString()}건</span>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Left Column: Upload Form */}
         <div className="col-span-1">
@@ -1091,17 +1220,7 @@ export function FileUpload() {
                 />
               </div>
 
-              {/* Event Log */}
-              {(eventLogEntries.length > 0 || overallStatus === 'PROCESSING') && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <EventLog
-                    events={eventLogEntries}
-                    onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; lastStageRef.current = ''; lastErrorCountRef.current = 0; lastDuplicateCountRef.current = 0; lastValidationReasonsRef.current = {}; lastMilestoneRef.current = 0; }}
-                  />
-                </div>
-              )}
-
-              {/* Phase 4.4: Currently Processing Certificate */}
+              {/* Currently Processing Certificate (inline in progress card) */}
               {currentCertificate && (overallStatus === 'PROCESSING' || dbSaveStage.status === 'IN_PROGRESS') && (
                 <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                   <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">처리 중인 인증서</h4>
@@ -1109,30 +1228,6 @@ export function FileUpload() {
                     certificate={currentCertificate}
                     compliance={currentCompliance || undefined}
                     compact={true}
-                  />
-                </div>
-              )}
-
-              {/* Phase 4.4: Real-time Statistics */}
-              {statistics && (overallStatus === 'PROCESSING' || overallStatus === 'FINALIZED') && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <RealTimeStatisticsPanel
-                    statistics={statistics}
-                    isProcessing={overallStatus === 'PROCESSING'}
-                  />
-                </div>
-              )}
-
-              {/* Processing Errors Panel */}
-              {errorCounts.total > 0 && (
-                <div className="mt-4">
-                  <ProcessingErrorsPanel
-                    errors={processingErrors}
-                    totalErrorCount={errorCounts.total}
-                    parseErrorCount={errorCounts.parse}
-                    dbSaveErrorCount={errorCounts.db}
-                    ldapSaveErrorCount={errorCounts.ldap}
-                    isProcessing={overallStatus === 'PROCESSING'}
                   />
                 </div>
               )}
@@ -1187,115 +1282,19 @@ export function FileUpload() {
                 </div>
               )}
 
-              {/* Final Status */}
-              {(overallStatus === 'FINALIZED' || overallStatus === 'FAILED') && (
-                <div
-                  className={cn(
-                    'mt-4 p-4 rounded-xl flex items-start gap-3',
-                    overallStatus === 'FINALIZED'
-                      ? 'bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-900/20 dark:to-emerald-900/20 border border-teal-200 dark:border-teal-800'
-                      : 'bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800'
-                  )}
-                >
-                  <div className={cn(
-                    'p-2 rounded-lg shrink-0',
-                    overallStatus === 'FINALIZED' ? 'bg-teal-100 dark:bg-teal-900/40' : 'bg-red-100 dark:bg-red-900/40'
-                  )}>
-                    {overallStatus === 'FINALIZED' ? (
-                      <CheckCircle className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                    ) : (
-                      <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                    )}
+              {/* Final Status — FAILED only (FINALIZED shown in top summary card) */}
+              {overallStatus === 'FAILED' && (
+                <div className="mt-4 p-4 rounded-xl flex items-start gap-3 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
+                  <div className="p-2 rounded-lg shrink-0 bg-red-100 dark:bg-red-900/40">
+                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
                   </div>
                   <div>
-                    <h4 className={cn(
-                      'font-semibold text-sm',
-                      overallStatus === 'FINALIZED'
-                        ? 'text-teal-700 dark:text-teal-400'
-                        : 'text-red-700 dark:text-red-400'
-                    )}>
-                      {overallStatus === 'FINALIZED' ? '처리 완료' : '처리 실패'}
-                    </h4>
-                    <p className={cn(
-                      'text-sm mt-0.5',
-                      overallStatus === 'FINALIZED'
-                        ? 'text-teal-600 dark:text-teal-500'
-                        : 'text-red-600 dark:text-red-500'
-                    )}>
-                      {overallMessage}
-                    </p>
+                    <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">처리 실패</h4>
+                    <p className="text-sm mt-0.5 text-red-600 dark:text-red-500">{overallMessage}</p>
                   </div>
                 </div>
               )}
 
-              {/* Validation Result Summary */}
-              {overallStatus === 'FINALIZED' && statistics?.validationReasons && Object.keys(statistics.validationReasons).length > 0 && (() => {
-                const reasons = statistics.validationReasons!;
-                const validCount = reasons['VALID'] ?? 0;
-                const expiredValid = statistics.expiredValidCount ?? 0;
-                // Group INVALID and PENDING reasons
-                const invalidReasons: [string, number][] = [];
-                const pendingReasons: [string, number][] = [];
-                let invalidTotal = 0;
-                let pendingTotal = 0;
-                for (const [key, count] of Object.entries(reasons)) {
-                  if (key.startsWith('INVALID:')) {
-                    const reason = key.replace('INVALID: ', '');
-                    invalidReasons.push([translateReason(reason), count]);
-                    invalidTotal += count;
-                  } else if (key.startsWith('PENDING:')) {
-                    const reason = key.replace('PENDING: ', '');
-                    pendingReasons.push([translateReason(reason), count]);
-                    pendingTotal += count;
-                  }
-                }
-                if (invalidTotal === 0 && pendingTotal === 0 && expiredValid === 0) return null;
-                return (
-                  <div className="mt-3 p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-                    <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">검증 결과 요약</h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between text-green-600 dark:text-green-400">
-                        <span>✓ 성공 (VALID)</span>
-                        <span className="font-medium">{validCount.toLocaleString()}건</span>
-                      </div>
-                      {expiredValid > 0 && (
-                        <div className="flex justify-between text-amber-600 dark:text-amber-400">
-                          <span>✓ 만료-유효 (EXPIRED_VALID)</span>
-                          <span className="font-medium">{expiredValid.toLocaleString()}건</span>
-                        </div>
-                      )}
-                      {invalidTotal > 0 && (
-                        <>
-                          <div className="flex justify-between text-red-600 dark:text-red-400">
-                            <span>✗ 실패 (INVALID)</span>
-                            <span className="font-medium">{invalidTotal.toLocaleString()}건</span>
-                          </div>
-                          {invalidReasons.map(([reason, count]) => (
-                            <div key={reason} className="flex justify-between text-red-500 dark:text-red-500 pl-4">
-                              <span className="text-xs">· {reason}</span>
-                              <span className="text-xs font-medium">{count.toLocaleString()}건</span>
-                            </div>
-                          ))}
-                        </>
-                      )}
-                      {pendingTotal > 0 && (
-                        <>
-                          <div className="flex justify-between text-gray-500 dark:text-gray-400">
-                            <span>○ 보류 (PENDING)</span>
-                            <span className="font-medium">{pendingTotal.toLocaleString()}건</span>
-                          </div>
-                          {pendingReasons.map(([reason, count]) => (
-                            <div key={reason} className="flex justify-between text-gray-400 dark:text-gray-500 pl-4">
-                              <span className="text-xs">· {reason}</span>
-                              <span className="text-xs font-medium">{count.toLocaleString()}건</span>
-                            </div>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
 
               {/* LDAP Connection Failure Warning (v2.0.0 - Data Consistency Protection) */}
               {overallStatus === 'FAILED' && overallMessage &&
@@ -1360,6 +1359,35 @@ export function FileUpload() {
           </div>
         </div>
       </div>
+
+      {/* Row 3: Event Log + Error Log (full width) */}
+      {(eventLogEntries.length > 0 || overallStatus === 'PROCESSING' || overallStatus === 'FINALIZED') && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          {/* Event Log (2/3 width) */}
+          <div className="lg:col-span-2">
+            <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
+              <EventLog
+                events={eventLogEntries}
+                onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; lastStageRef.current = ''; lastErrorCountRef.current = 0; lastDuplicateCountRef.current = 0; lastValidationReasonsRef.current = {}; lastMilestoneRef.current = 0; lastValidationLogCountRef.current = 0; }}
+              />
+            </div>
+          </div>
+
+          {/* Error Log (1/3 width) */}
+          {errorCounts.total > 0 && (
+            <div className="lg:col-span-1">
+              <ProcessingErrorsPanel
+                errors={processingErrors}
+                totalErrorCount={errorCounts.total}
+                parseErrorCount={errorCounts.parse}
+                dbSaveErrorCount={errorCounts.db}
+                ldapSaveErrorCount={errorCounts.ldap}
+                isProcessing={overallStatus === 'PROCESSING'}
+              />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
