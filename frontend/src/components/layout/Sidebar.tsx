@@ -29,6 +29,7 @@ import {
   Activity,
   Microscope,
   ShieldX,
+  FileWarning,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -75,6 +76,7 @@ const navSections: NavSection[] = [
       { path: '/upload/certificate', label: '인증서 업로드', icon: <FileText className="w-4 h-4" /> },
       { path: '/pkd/certificates', label: '인증서 조회', icon: <Key className="w-4 h-4" /> },
       { path: '/pkd/dsc-nc', label: 'DSC_NC 보고서', icon: <ShieldX className="w-4 h-4" /> },
+          { path: '/pkd/crl', label: 'CRL 보고서', icon: <FileWarning className="w-4 h-4" /> },
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" /> },
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
       { path: '/upload-dashboard', label: '통계 대시보드', icon: <BarChart3 className="w-4 h-4" /> },

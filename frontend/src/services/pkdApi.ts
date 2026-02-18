@@ -189,6 +189,12 @@ export const certificateApi = {
    */
   getDscNcReport: (params?: { country?: string; conformanceCode?: string; page?: number; size?: number }) =>
     pkdApi.get('/certificates/dsc-nc/report', { params }),
+
+  getCrlReport: (params?: { country?: string; status?: string; page?: number; size?: number }) =>
+    pkdApi.get('/certificates/crl/report', { params }),
+
+  getCrlDetail: (id: string) =>
+    pkdApi.get(`/certificates/crl/${id}`),
 };
 
 // --- Upload History & Statistics (Read-Only) ---

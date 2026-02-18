@@ -62,6 +62,25 @@ public:
      */
     Json::Value findAllForExport();
 
+    /**
+     * @brief Find all CRLs with metadata (paginated, filtered)
+     */
+    Json::Value findAll(const std::string& countryFilter = "",
+                        const std::string& statusFilter = "",
+                        int limit = 100,
+                        int offset = 0);
+
+    /**
+     * @brief Count total CRLs matching filters
+     */
+    int countAll(const std::string& countryFilter = "",
+                 const std::string& statusFilter = "");
+
+    /**
+     * @brief Find CRL by ID (includes crl_binary for detail parsing)
+     */
+    Json::Value findById(const std::string& crlId);
+
 private:
     common::IQueryExecutor* queryExecutor_;
 

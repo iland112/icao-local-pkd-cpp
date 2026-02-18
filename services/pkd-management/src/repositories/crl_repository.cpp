@@ -211,4 +211,118 @@ Json::Value CrlRepository::findAllForExport() {
     return queryExecutor_->executeQuery(query);
 }
 
+
+// --- Find All CRLs (Paginated, Filtered) ---
+
+Json::Value CrlRepository::findAll(const std::string& countryFilter,
+                                    const std::string& statusFilter,
+                                    int limit,
+                                    int offset) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string tsNow = common::db::currentTimestamp(dbType);
+
+        std::string query = "SELECT id, country_code, issuer_dn, this_update, next_update, "
+                            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, crl_binary "
+                            "FROM crl";
+
+        std::vector<std::string> params;
+        std::vector<std::string> conditions;
+        int paramIdx = 1;
+
+        if (!countryFilter.empty()) {
+            conditions.push_back("country_code = $" + std::to_string(paramIdx));
+            params.push_back(countryFilter);
+            paramIdx++;
+        }
+
+        if (statusFilter == "valid") {
+            conditions.push_back("next_update >= " + tsNow);
+        } else if (statusFilter == "expired") {
+            conditions.push_back("(next_update < " + tsNow + " OR next_update IS NULL)");
+        }
+
+        if (!conditions.empty()) {
+            query += " WHERE ";
+            for (size_t i = 0; i < conditions.size(); i++) {
+                if (i > 0) query += " AND ";
+                query += conditions[i];
+            }
+        }
+
+        query += " ORDER BY country_code ASC, this_update DESC";
+        query += common::db::paginationClause(dbType, limit, offset);
+
+        return queryExecutor_->executeQuery(query, params);
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findAll failed: {}", e.what());
+        return Json::Value(Json::arrayValue);
+    }
+}
+
+// --- Count All CRLs (Filtered) ---
+
+int CrlRepository::countAll(const std::string& countryFilter,
+                             const std::string& statusFilter) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string tsNow = common::db::currentTimestamp(dbType);
+
+        std::string query = "SELECT COUNT(*) AS cnt FROM crl";
+
+        std::vector<std::string> params;
+        std::vector<std::string> conditions;
+        int paramIdx = 1;
+
+        if (!countryFilter.empty()) {
+            conditions.push_back("country_code = $" + std::to_string(paramIdx));
+            params.push_back(countryFilter);
+            paramIdx++;
+        }
+
+        if (statusFilter == "valid") {
+            conditions.push_back("next_update >= " + tsNow);
+        } else if (statusFilter == "expired") {
+            conditions.push_back("(next_update < " + tsNow + " OR next_update IS NULL)");
+        }
+
+        if (!conditions.empty()) {
+            query += " WHERE ";
+            for (size_t i = 0; i < conditions.size(); i++) {
+                if (i > 0) query += " AND ";
+                query += conditions[i];
+            }
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+        if (result.isArray() && result.size() > 0) {
+            return common::db::scalarToInt(result[0]["cnt"]);
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] countAll failed: {}", e.what());
+        return 0;
+    }
+}
+
+// --- Find CRL by ID ---
+
+Json::Value CrlRepository::findById(const std::string& crlId) {
+    try {
+        std::string query =
+            "SELECT id, country_code, issuer_dn, this_update, next_update, "
+            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, crl_binary "
+            "FROM crl WHERE id = $1";
+
+        Json::Value rows = queryExecutor_->executeQuery(query, {crlId});
+        if (rows.isArray() && rows.size() > 0) {
+            return rows[0];
+        }
+        return Json::nullValue;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findById failed for {}: {}", crlId, e.what());
+        return Json::nullValue;
+    }
+}
+
 } // namespace repositories

@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.14.1
+**Current Version**: v2.15.0
 **Last Updated**: 2026-02-18
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -147,6 +147,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ICAO 9303 compliance checking (6 validation categories) with per-certificate DB persistence
 - Per-certificate validation log streaming (SSE) for real-time EventLog display
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
+- CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export)
 
 ### Security
 
@@ -195,6 +196,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/certificates/validation` - Validation result by fingerprint
 - `POST /api/certificates/pa-lookup` - Lightweight PA lookup by subject DN or fingerprint
 - `GET /api/certificates/dsc-nc/report` - DSC_NC non-conformant certificate report (charts + table)
+- `GET /api/certificates/crl/report` - CRL report with statistics, charts, and paginated CRL list
+- `GET /api/certificates/crl/{id}` - CRL detail with parsed revoked certificate list
 - `GET /api/certificates/export/{format}` - Certificate export
 - `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
@@ -248,7 +251,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 ## Frontend
 
-### Pages (21 total)
+### Pages (22 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -257,6 +260,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | CertificateUpload | `/upload/certificate` | Individual certificate upload (preview-before-save) |
 | CertificateSearch | `/pkd/certificates` | Certificate search & detail |
 | DscNcReport | `/pkd/dsc-nc` | DSC_NC non-conformant certificate report |
+| CrlReport | `/pkd/crl` | CRL report & revoked certificate analysis |
 | UploadHistory | `/upload-history` | Upload management |
 | UploadDetail | `/upload/:uploadId` | Upload detail & structure |
 | PAVerify | `/pa/verify` | PA verification |
@@ -491,6 +495,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.15.0 (2026-02-18) - CRL Report Page
+- New page: CRL Report (`/pkd/crl`) — full analysis dashboard for Certificate Revocation Lists
+- Backend: `crl_parser.h/.cpp` — standalone CRL binary parser using OpenSSL (`d2i_X509_CRL`, `X509_CRL_get_REVOKED`, revocation reason extraction)
+- Backend: `CrlRepository::findAll()`, `countAll()`, `findById()` — paginated, filtered queries (PostgreSQL + Oracle)
+- Backend: `CertificateHandler::handleCrlReport()` — aggregation endpoint (byCountry, bySignatureAlgorithm, byRevocationReason, summary)
+- Backend: `CertificateHandler::handleCrlDetail()` — CRL detail with full revoked certificate list (serial, date, reason)
+- Endpoints: `GET /api/certificates/crl/report`, `GET /api/certificates/crl/{id}` (public, no JWT required)
+- Frontend: Summary cards (total CRLs, countries, valid/expired, total revoked certificates)
+- Frontend: Status bar (proportional VALID/EXPIRED), country distribution bar chart, revocation reason bar chart, signature algorithm pie chart
+- Frontend: Filters (country dropdown, status dropdown), paginated CRL table, row-click detail dialog
+- Frontend: Detail dialog with CRL metadata card + revoked certificates table (serial number, revocation date, reason)
+- Frontend: Korean translations for 11 RFC 5280 revocation reason codes
+- Frontend: CSV export (`exportCrlReportToCsv`, 11 columns, BOM for Excel UTF-8)
+- All CRL data parsed at runtime from binary (69 CRLs, consistent across PostgreSQL/Oracle)
+- 13 files changed (5 new, 8 modified)
 
 ### v2.14.1 (2026-02-18) - Trust Chain Success Rate Fix + Upload History Duplicate Flow
 - **Trust chain success rate fix**: `cscaNotFoundCount` included in denominator (was excluded, causing 100% rate when only CSCA-not-found failures)

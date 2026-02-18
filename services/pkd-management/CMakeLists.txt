@@ -83,6 +83,7 @@ add_executable(${PROJECT_NAME}
 
     # Sprint 2: Link Certificate Validation (NEW)
     src/common/crl_validator.cpp
+    src/common/crl_parser.cpp
     src/common/lc_validator.cpp
 
     # Clean Architecture Layers (Existing)
@@ -197,6 +198,7 @@ add_test(NAME ldap_dn_test COMMAND test_ldap_dn)
 add_executable(test_crl_validator
     tests/crl_validator_test.cpp
     src/common/crl_validator.cpp
+    src/common/crl_parser.cpp
 )
 
 target_include_directories(test_crl_validator PRIVATE

@@ -213,6 +213,23 @@ private:
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& id);
+
+    /**
+     * @brief GET /api/certificates/crl/report
+     * CRL report with aggregation and per-CRL revoked certificate parsing.
+     */
+    void handleCrlReport(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /**
+     * @brief GET /api/certificates/crl/{id}
+     * CRL detail including parsed revoked certificate list.
+     */
+    void handleCrlDetail(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+        const std::string& id);
 };
 
 } // namespace handlers

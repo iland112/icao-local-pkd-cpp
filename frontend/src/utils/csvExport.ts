@@ -224,3 +224,50 @@ export const exportDuplicateStatisticsToCsv = (
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 };
+
+
+export const exportCrlReportToCsv = (
+  crls: Array<{
+    countryCode: string;
+    issuerDn: string;
+    thisUpdate: string;
+    nextUpdate: string;
+    crlNumber: string;
+    status: string;
+    revokedCount: number;
+    signatureAlgorithm: string;
+    fingerprint: string;
+    storedInLdap: boolean;
+    createdAt: string;
+  }>,
+  filename: string = 'crl-report.csv'
+) => {
+  const BOM = '\uFEFF';
+  const headers = [
+    'Country', 'Issuer DN', 'This Update', 'Next Update',
+    'CRL Number', 'Status', 'Revoked Count', 'Signature Algorithm',
+    'Fingerprint (SHA-256)', 'Stored in LDAP', 'Created At'
+  ];
+
+  const rows = crls.map(crl => [
+    crl.countryCode,
+    `"${(crl.issuerDn || '').replace(/"/g, '""')}"`,
+    crl.thisUpdate,
+    crl.nextUpdate || '',
+    crl.crlNumber || '',
+    crl.status,
+    crl.revokedCount.toString(),
+    crl.signatureAlgorithm || '',
+    crl.fingerprint,
+    crl.storedInLdap ? 'Yes' : 'No',
+    crl.createdAt
+  ]);
+
+  const csvContent = BOM + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};

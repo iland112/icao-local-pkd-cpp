@@ -47,7 +47,9 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/certificates/validation.*", // Certificate validation results (trust chain)
     "^/api/certificates/pa-lookup$",   // PA lightweight lookup (subject DN / fingerprint)
     "^/api/certificates/export/.*",  // Certificate export endpoints
-    "^/api/certificates/dsc-nc/report$", // DSC_NC non-conformant report
+    "^/api/certificates/dsc-nc/report$",           // DSC_NC non-conformant report
+    "^/api/certificates/crl/report$",              // CRL report
+    "^/api/certificates/crl/[a-f0-9\\-]+$",       // CRL detail by ID // DSC_NC non-conformant report
 
     // --- ICAO PKD Version Monitoring (Read-only public information) ---
     "^/api/icao/status$",          // ICAO version status comparison
