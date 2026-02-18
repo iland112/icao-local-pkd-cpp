@@ -1174,220 +1174,212 @@ export function FileUpload() {
                   업로드
                 </button>
               </div>
+
+              {/* ── Processing Progress ── */}
+              <div className="mt-5 pt-5 border-t border-gray-200 dark:border-gray-700">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
+                    <FileText className="w-5 h-5 text-cyan-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">처리 진행 상황</h3>
+                    {selectedFile && (
+                      <p className="font-mono text-xs text-gray-500 dark:text-gray-400 truncate">
+                        {selectedFile.name}
+                      </p>
+                    )}
+                  </div>
+                  {/* Status Badge */}
+                  {overallStatus !== 'IDLE' && (
+                    <span className={cn(
+                      'px-2.5 py-1 rounded-full text-xs font-semibold',
+                      overallStatus === 'PROCESSING' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+                      overallStatus === 'FINALIZED' && 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
+                      overallStatus === 'FAILED' && 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+                    )}>
+                      {overallStatus === 'PROCESSING' && '처리 중'}
+                      {overallStatus === 'FINALIZED' && '완료'}
+                      {overallStatus === 'FAILED' && '실패'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Horizontal Stepper */}
+                <div className="py-2">
+                  <Stepper
+                    steps={steps}
+                    orientation="horizontal"
+                    size="md"
+                    showProgress={true}
+                  />
+                </div>
+
+                {/* Currently Processing Certificate (inline in progress card) */}
+                {currentCertificate && (overallStatus === 'PROCESSING' || dbSaveStage.status === 'IN_PROGRESS') && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">처리 중인 인증서</h4>
+                    <CurrentCertificateCard
+                      certificate={currentCertificate}
+                      compliance={currentCompliance || undefined}
+                      compact={true}
+                    />
+                  </div>
+                )}
+
+                {/* Manual Mode Controls */}
+                {processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED' && (
+                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">수동 처리 제어</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        onClick={triggerParse}
+                        disabled={parseStage.status === 'COMPLETED' || parseStage.status === 'IN_PROGRESS'}
+                        className={cn(
+                          'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
+                          parseStage.status === 'COMPLETED'
+                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
+                          'disabled:opacity-50'
+                        )}
+                      >
+                        {parseStage.status === 'IN_PROGRESS' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : parseStage.status === 'COMPLETED' ? (
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5" />
+                        )}
+                        {parseStage.status === 'COMPLETED' ? '파싱 완료' : '1. 파싱'}
+                      </button>
+
+                      <button
+                        onClick={triggerValidate}
+                        disabled={parseStage.status !== 'COMPLETED' || dbSaveStage.status === 'COMPLETED' || dbSaveStage.status === 'IN_PROGRESS'}
+                        className={cn(
+                          'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
+                          dbSaveStage.status === 'COMPLETED'
+                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
+                          'disabled:opacity-50'
+                        )}
+                      >
+                        {dbSaveStage.status === 'IN_PROGRESS' ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : dbSaveStage.status === 'COMPLETED' ? (
+                          <CheckCircle className="w-3.5 h-3.5" />
+                        ) : (
+                          <Play className="w-3.5 h-3.5" />
+                        )}
+                        {dbSaveStage.status === 'COMPLETED' ? '저장 완료' : '2. 저장 (DB+LDAP)'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Final Status — FAILED only (FINALIZED shown in top summary card) */}
+                {overallStatus === 'FAILED' && (
+                  <div className="mt-4 p-4 rounded-xl flex items-start gap-3 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
+                    <div className="p-2 rounded-lg shrink-0 bg-red-100 dark:bg-red-900/40">
+                      <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    </div>
+                    <div>
+                      <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">처리 실패</h4>
+                      <p className="text-sm mt-0.5 text-red-600 dark:text-red-500">{overallMessage}</p>
+                    </div>
+                  </div>
+                )}
+
+
+                {/* LDAP Connection Failure Warning (v2.0.0 - Data Consistency Protection) */}
+                {overallStatus === 'FAILED' && overallMessage &&
+                 (overallMessage.includes('LDAP 연결') || overallMessage.includes('LDAP connection') ||
+                  overallMessage.includes('데이터 일관성')) && (
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="w-6 h-6 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1">
+                        <h4 className="font-bold text-base text-red-800 dark:text-red-300 mb-2">
+                          ⚠️ LDAP 연결 실패 - 데이터 일관성 보장 불가
+                        </h4>
+                        <p className="text-sm text-red-700 dark:text-red-400 mb-2">
+                          {overallMessage}
+                        </p>
+                        <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3 mt-3">
+                          <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">
+                            💡 해결 방법:
+                          </p>
+                          <ul className="text-sm text-red-700 dark:text-red-400 space-y-1.5">
+                            <li className="flex items-start gap-2">
+                              <span className="text-red-500 mt-1">1.</span>
+                              <span>LDAP 서버 상태를 확인하세요 (시스템 정보 &gt; LDAP 연결 테스트)</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-red-500 mt-1">2.</span>
+                              <span>LDAP 서버가 정상이면 이 파일을 다시 업로드하세요</span>
+                            </li>
+                            <li className="flex items-start gap-2">
+                              <span className="text-red-500 mt-1">3.</span>
+                              <span>문제가 계속되면 관리자에게 문의하세요</span>
+                            </li>
+                          </ul>
+                        </div>
+                        <p className="text-xs text-red-600 dark:text-red-500 mt-3 font-medium">
+                          ℹ️ 참고: 이 오류는 v2.0.0부터 데이터 일관성을 보장하기 위해 도입되었습니다.
+                          LDAP 저장 실패 시 자동으로 업로드가 중단되어 PostgreSQL과 LDAP 간 데이터 불일치를 방지합니다.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* General Error Messages */}
+                {errorMessages.length > 0 && (
+                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                    <h4 className="font-bold text-sm text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
+                      <XCircle className="w-4 h-4" />
+                      오류 상세
+                    </h4>
+                    <ul className="text-sm text-red-600 dark:text-red-300 space-y-1">
+                      {errorMessages.map((msg, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <span className="text-red-400 mt-1">•</span>
+                          <span>{msg}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Right Column: Progress & Results */}
+        {/* Right Column: Event Log */}
         <div className="col-span-1">
-          <div className="rounded-2xl transition-all duration-300 bg-white dark:bg-gray-800 shadow-lg">
-            <div className="flex flex-col p-6">
-              {/* Header */}
-              <div className="flex items-center gap-3 mb-5">
-                <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
-                  <FileText className="w-5 h-5 text-cyan-500" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">처리 진행 상황</h3>
-                  {selectedFile && (
-                    <p className="font-mono text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {selectedFile.name}
-                    </p>
-                  )}
-                </div>
-                {/* Status Badge */}
-                {overallStatus !== 'IDLE' && (
-                  <span className={cn(
-                    'px-2.5 py-1 rounded-full text-xs font-semibold',
-                    overallStatus === 'PROCESSING' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-                    overallStatus === 'FINALIZED' && 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
-                    overallStatus === 'FAILED' && 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
-                  )}>
-                    {overallStatus === 'PROCESSING' && '처리 중'}
-                    {overallStatus === 'FINALIZED' && '완료'}
-                    {overallStatus === 'FAILED' && '실패'}
-                  </span>
-                )}
-              </div>
-
-              {/* Horizontal Stepper */}
-              <div className="py-2">
-                <Stepper
-                  steps={steps}
-                  orientation="horizontal"
-                  size="md"
-                  showProgress={true}
+          {(eventLogEntries.length > 0 || overallStatus === 'PROCESSING' || overallStatus === 'FINALIZED') && (
+            <div className="space-y-6">
+              <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
+                <EventLog
+                  events={eventLogEntries}
+                  onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; lastStageRef.current = ''; lastErrorCountRef.current = 0; lastDuplicateCountRef.current = 0; lastValidationReasonsRef.current = {}; lastMilestoneRef.current = 0; lastValidationLogCountRef.current = 0; }}
                 />
               </div>
 
-              {/* Currently Processing Certificate (inline in progress card) */}
-              {currentCertificate && (overallStatus === 'PROCESSING' || dbSaveStage.status === 'IN_PROGRESS') && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">처리 중인 인증서</h4>
-                  <CurrentCertificateCard
-                    certificate={currentCertificate}
-                    compliance={currentCompliance || undefined}
-                    compact={true}
-                  />
-                </div>
+              {errorCounts.total > 0 && (
+                <ProcessingErrorsPanel
+                  errors={processingErrors}
+                  totalErrorCount={errorCounts.total}
+                  parseErrorCount={errorCounts.parse}
+                  dbSaveErrorCount={errorCounts.db}
+                  ldapSaveErrorCount={errorCounts.ldap}
+                  isProcessing={overallStatus === 'PROCESSING'}
+                />
               )}
-
-              {/* Manual Mode Controls */}
-              {processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED' && (
-                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">수동 처리 제어</h4>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      onClick={triggerParse}
-                      disabled={parseStage.status === 'COMPLETED' || parseStage.status === 'IN_PROGRESS'}
-                      className={cn(
-                        'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
-                        parseStage.status === 'COMPLETED'
-                          ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
-                        'disabled:opacity-50'
-                      )}
-                    >
-                      {parseStage.status === 'IN_PROGRESS' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : parseStage.status === 'COMPLETED' ? (
-                        <CheckCircle className="w-3.5 h-3.5" />
-                      ) : (
-                        <Play className="w-3.5 h-3.5" />
-                      )}
-                      {parseStage.status === 'COMPLETED' ? '파싱 완료' : '1. 파싱'}
-                    </button>
-
-                    <button
-                      onClick={triggerValidate}
-                      disabled={parseStage.status !== 'COMPLETED' || dbSaveStage.status === 'COMPLETED' || dbSaveStage.status === 'IN_PROGRESS'}
-                      className={cn(
-                        'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
-                        dbSaveStage.status === 'COMPLETED'
-                          ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
-                        'disabled:opacity-50'
-                      )}
-                    >
-                      {dbSaveStage.status === 'IN_PROGRESS' ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : dbSaveStage.status === 'COMPLETED' ? (
-                        <CheckCircle className="w-3.5 h-3.5" />
-                      ) : (
-                        <Play className="w-3.5 h-3.5" />
-                      )}
-                      {dbSaveStage.status === 'COMPLETED' ? '저장 완료' : '2. 저장 (DB+LDAP)'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Final Status — FAILED only (FINALIZED shown in top summary card) */}
-              {overallStatus === 'FAILED' && (
-                <div className="mt-4 p-4 rounded-xl flex items-start gap-3 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
-                  <div className="p-2 rounded-lg shrink-0 bg-red-100 dark:bg-red-900/40">
-                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  </div>
-                  <div>
-                    <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">처리 실패</h4>
-                    <p className="text-sm mt-0.5 text-red-600 dark:text-red-500">{overallMessage}</p>
-                  </div>
-                </div>
-              )}
-
-
-              {/* LDAP Connection Failure Warning (v2.0.0 - Data Consistency Protection) */}
-              {overallStatus === 'FAILED' && overallMessage &&
-               (overallMessage.includes('LDAP 연결') || overallMessage.includes('LDAP connection') ||
-                overallMessage.includes('데이터 일관성')) && (
-                <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl">
-                  <div className="flex items-start gap-3">
-                    <AlertTriangle className="w-6 h-6 text-red-500 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1">
-                      <h4 className="font-bold text-base text-red-800 dark:text-red-300 mb-2">
-                        ⚠️ LDAP 연결 실패 - 데이터 일관성 보장 불가
-                      </h4>
-                      <p className="text-sm text-red-700 dark:text-red-400 mb-2">
-                        {overallMessage}
-                      </p>
-                      <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3 mt-3">
-                        <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">
-                          💡 해결 방법:
-                        </p>
-                        <ul className="text-sm text-red-700 dark:text-red-400 space-y-1.5">
-                          <li className="flex items-start gap-2">
-                            <span className="text-red-500 mt-1">1.</span>
-                            <span>LDAP 서버 상태를 확인하세요 (시스템 정보 &gt; LDAP 연결 테스트)</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-red-500 mt-1">2.</span>
-                            <span>LDAP 서버가 정상이면 이 파일을 다시 업로드하세요</span>
-                          </li>
-                          <li className="flex items-start gap-2">
-                            <span className="text-red-500 mt-1">3.</span>
-                            <span>문제가 계속되면 관리자에게 문의하세요</span>
-                          </li>
-                        </ul>
-                      </div>
-                      <p className="text-xs text-red-600 dark:text-red-500 mt-3 font-medium">
-                        ℹ️ 참고: 이 오류는 v2.0.0부터 데이터 일관성을 보장하기 위해 도입되었습니다.
-                        LDAP 저장 실패 시 자동으로 업로드가 중단되어 PostgreSQL과 LDAP 간 데이터 불일치를 방지합니다.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* General Error Messages */}
-              {errorMessages.length > 0 && (
-                <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
-                  <h4 className="font-bold text-sm text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
-                    <XCircle className="w-4 h-4" />
-                    오류 상세
-                  </h4>
-                  <ul className="text-sm text-red-600 dark:text-red-300 space-y-1">
-                    {errorMessages.map((msg, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-red-400 mt-1">•</span>
-                        <span>{msg}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 3: Event Log + Error Log (full width) */}
-      {(eventLogEntries.length > 0 || overallStatus === 'PROCESSING' || overallStatus === 'FINALIZED') && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-          {/* Event Log (2/3 width) */}
-          <div className="lg:col-span-2">
-            <div className="rounded-2xl bg-white dark:bg-gray-800 shadow-lg p-4">
-              <EventLog
-                events={eventLogEntries}
-                onClear={() => { setEventLogEntries([]); eventIdRef.current = 0; lastStageRef.current = ''; lastErrorCountRef.current = 0; lastDuplicateCountRef.current = 0; lastValidationReasonsRef.current = {}; lastMilestoneRef.current = 0; lastValidationLogCountRef.current = 0; }}
-              />
-            </div>
-          </div>
-
-          {/* Error Log (1/3 width) */}
-          {errorCounts.total > 0 && (
-            <div className="lg:col-span-1">
-              <ProcessingErrorsPanel
-                errors={processingErrors}
-                totalErrorCount={errorCounts.total}
-                parseErrorCount={errorCounts.parse}
-                dbSaveErrorCount={errorCounts.db}
-                ldapSaveErrorCount={errorCounts.ldap}
-                isProcessing={overallStatus === 'PROCESSING'}
-              />
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
