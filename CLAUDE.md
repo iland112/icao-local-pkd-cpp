@@ -148,7 +148,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Per-certificate validation log streaming (SSE) for real-time EventLog display
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
 - CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export, CRL file download)
-- Trust Chain demo page (validation statistics, chain distribution, sample certificate lookup, QuickLookupPanel integration)
+- DSC Trust Chain report page (validation statistics, chain distribution, sample certificate lookup, QuickLookupPanel integration)
 
 ### Security
 
@@ -275,7 +275,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | UserManagement | `/admin/users` | User administration |
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
-| ValidationDemo | `/validation-demo` | Trust Chain verification demo |
+| ValidationDemo | `/pkd/trust-chain` | DSC Trust Chain report |
 
 ### Key Components
 
@@ -518,6 +518,9 @@ scripts/
 - Oracle: Timestamp `T` separator replaced with space for TO_TIMESTAMP compatibility (4 repositories)
 - Oracle: `DBMS_LOB.SUBSTR` for CLOB GROUP BY in validation reason breakdown
 - Oracle: `icao_pkd_versions`, `link_certificate`, `link_certificate_issuers` tables added to init schema
+- Sidebar: collapsible "보고서" submenu group (NavGroupItem type, ChevronDown/Right toggle, auto-expand on active child)
+- Sidebar: "Trust Chain 데모" renamed to "DSC Trust Chain 보고서", "DSC_NC 보고서" renamed to "표준 부적합 DSC 보고서"
+- Route: `/validation-demo` changed to `/pkd/trust-chain`
 - Cleanup: Preline UI initializer removed (unused), `usePreline` console output suppressed, Login autocomplete attributes
 - Docker: Frontend port changed from 3000 to 3080
 - 27 files changed (1 new, 26 modified)

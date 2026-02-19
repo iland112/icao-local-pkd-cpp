@@ -184,10 +184,10 @@ export function ValidationDemo() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Trust Chain 검증 데모
+              DSC Trust Chain 보고서
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              DSC 인증서의 Trust Chain 검증 결과를 조회하고, 신뢰 체인 구조를 확인합니다.
+              DSC 인증서의 Trust Chain 검증 결과 통계 및 샘플 인증서 조회
             </p>
           </div>
         </div>

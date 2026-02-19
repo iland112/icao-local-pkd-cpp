@@ -12,6 +12,8 @@ import {
   HelpCircle,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  ClipboardList,
   Sun,
   Moon,
   Database,
@@ -37,12 +39,22 @@ import { cn } from '@/utils/cn';
 import { Dialog } from '@/components/common';
 import { healthApi, ldapApi } from '@/services/api';
 
-interface NavItem {
+interface NavLeafItem {
   path: string;
   label: string;
   icon: React.ReactNode;
-  external?: boolean; // For external links that open in new tab
+  external?: boolean;
 }
+
+interface NavGroupItem {
+  label: string;
+  icon: React.ReactNode;
+  children: NavLeafItem[];
+}
+
+type NavItem = NavLeafItem | NavGroupItem;
+
+const isGroupItem = (item: NavItem): item is NavGroupItem => 'children' in item;
 
 interface NavSection {
   title: string;
@@ -75,12 +87,18 @@ const navSections: NavSection[] = [
       { path: '/upload', label: '파일 업로드', icon: <Upload className="w-4 h-4" /> },
       { path: '/upload/certificate', label: '인증서 업로드', icon: <FileText className="w-4 h-4" /> },
       { path: '/pkd/certificates', label: '인증서 조회', icon: <Key className="w-4 h-4" /> },
-      { path: '/pkd/dsc-nc', label: 'DSC_NC 보고서', icon: <ShieldX className="w-4 h-4" /> },
+      {
+        label: '보고서',
+        icon: <ClipboardList className="w-4 h-4" />,
+        children: [
+          { path: '/pkd/trust-chain', label: 'DSC Trust Chain 보고서', icon: <Link2 className="w-4 h-4" /> },
           { path: '/pkd/crl', label: 'CRL 보고서', icon: <FileWarning className="w-4 h-4" /> },
+          { path: '/pkd/dsc-nc', label: '표준 부적합 DSC 보고서', icon: <ShieldX className="w-4 h-4" /> },
+        ],
+      },
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" /> },
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
       { path: '/upload-dashboard', label: '통계 대시보드', icon: <BarChart3 className="w-4 h-4" /> },
-      { path: '/validation-demo', label: 'Trust Chain 데모', icon: <Link2 className="w-4 h-4" /> },
     ],
   },
   {
@@ -130,6 +148,35 @@ export function Sidebar() {
   });
 
   const isActive = (path: string) => location.pathname === path;
+
+  // Collapsible group state
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const hasActiveChild = (item: NavGroupItem): boolean =>
+    item.children.some((child) => location.pathname === child.path);
+
+  // Auto-expand groups with active children
+  useEffect(() => {
+    navSections.forEach((section) => {
+      section.items.forEach((item) => {
+        if (isGroupItem(item) && hasActiveChild(item)) {
+          setExpandedGroups((prev) => {
+            if (prev.has(item.label)) return prev;
+            return new Set(prev).add(item.label);
+          });
+        }
+      });
+    });
+  }, [location.pathname]);
 
   // Check system status when dialog opens
   useEffect(() => {
@@ -285,8 +332,57 @@ export function Sidebar() {
                   {/* Section Items */}
                   <ul className="space-y-1">
                     {section.items.map((item) => (
-                      <li key={item.path}>
-                        {item.external ? (
+                      <li key={isGroupItem(item) ? item.label : item.path}>
+                        {isGroupItem(item) ? (
+                          /* Group with collapsible children */
+                          <>
+                            <button
+                              onClick={() => {
+                                if (!expanded) toggleExpanded();
+                                toggleGroup(item.label);
+                              }}
+                              className={cn(
+                                'w-full flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
+                                hasActiveChild(item)
+                                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+                                !expanded && 'lg:justify-center lg:px-2'
+                              )}
+                              title={!expanded ? item.label : undefined}
+                            >
+                              {item.icon}
+                              {expanded && (
+                                <>
+                                  <span className="flex-1 text-left">{item.label}</span>
+                                  {expandedGroups.has(item.label)
+                                    ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                                    : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                                  }
+                                </>
+                              )}
+                            </button>
+                            {expanded && expandedGroups.has(item.label) && (
+                              <ul className="mt-1 ml-4 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                                {item.children.map((child) => (
+                                  <li key={child.path}>
+                                    <Link
+                                      to={child.path}
+                                      className={cn(
+                                        'flex items-center gap-x-2.5 py-1.5 px-2.5 text-sm rounded-lg transition-colors',
+                                        isActive(child.path)
+                                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                                      )}
+                                    >
+                                      {child.icon}
+                                      <span>{child.label}</span>
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                          </>
+                        ) : item.external ? (
                           <a
                             href={item.path}
                             target="_blank"

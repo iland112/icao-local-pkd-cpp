@@ -44,7 +44,7 @@ function App() {
             <Route path="upload-history" element={<UploadHistory />} />
             <Route path="upload/:uploadId" element={<UploadDetail />} />
             <Route path="upload-dashboard" element={<UploadDashboard />} />
-            <Route path="validation-demo" element={<ValidationDemo />} />
+            <Route path="pkd/trust-chain" element={<ValidationDemo />} />
             <Route path="pa/verify" element={<PAVerify />} />
             <Route path="pa/history" element={<PAHistory />} />
             <Route path="pa/:paId" element={<PADetail />} />
