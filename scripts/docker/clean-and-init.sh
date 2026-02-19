@@ -332,9 +332,9 @@ echo ""
 echo -e "${GREEN}✓ System is ready for use (DB_TYPE=$DB_TYPE)${NC}"
 echo ""
 echo "Access URLs:"
-echo "  - Frontend: http://localhost:3000"
-echo "  - API Gateway: http://localhost:8080/api"
-echo "  - API Documentation: http://localhost:8090"
+echo "  - Frontend: http://localhost:13080"
+echo "  - API Gateway: http://localhost:18080/api"
+echo "  - API Documentation: http://localhost:18090"
 if [ "$DB_TYPE" = "oracle" ]; then
     echo "  - Oracle: localhost:11521 (SYS/SYSTEM)"
 fi

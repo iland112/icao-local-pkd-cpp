@@ -5,8 +5,8 @@
 # Data Directory: .docker-data/ (bind mount for easy management)
 # To reset: rm -rf .docker-data && docker compose up -d
 # =============================================================================
-# API Gateway: http://localhost:8080/api/* (unified API entry point)
-# Frontend:    http://localhost:3000 (React SPA)
+# API Gateway: http://localhost:18080/api/* (unified API entry point)
+# Frontend:    http://localhost:13080 (React SPA)
 # =============================================================================
 
 services:
@@ -29,7 +29,7 @@ services:
     image: nginx:alpine
     container_name: icao-local-pkd-api-gateway
     ports:
-      - "8080:8080"
+      - "18080:8080"
     volumes:
       - ../nginx/api-gateway.conf:/etc/nginx/nginx.conf:ro
       - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
@@ -63,7 +63,7 @@ services:
       dockerfile: Dockerfile
     container_name: icao-local-pkd-frontend
     ports:
-      - "3080:80"
+      - "13080:80"
     environment:
       - TZ=Asia/Seoul
     depends_on:
@@ -301,7 +301,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: icao-local-pkd-app
     ports:
-      - "8080:8081"
+      - "18080:8081"
     environment:
       - TZ=Asia/Seoul
       - DB_HOST=postgres
@@ -428,7 +428,7 @@ services:
     hostname: openldap1
     command: --copy-service
     ports:
-      - "3891:389"
+      - "13891:389"
     environment:
       - LDAP_ORGANISATION=SmartCore Inc
       - LDAP_DOMAIN=ldap.smartcoreinc.com
@@ -459,7 +459,7 @@ services:
     hostname: openldap2
     command: --copy-service
     ports:
-      - "3892:389"
+      - "13892:389"
     environment:
       - LDAP_ORGANISATION=SmartCore Inc
       - LDAP_DOMAIN=ldap.smartcoreinc.com
@@ -621,7 +621,7 @@ services:
     image: swaggerapi/swagger-ui:latest
     container_name: icao-local-pkd-swagger
     ports:
-      - "8090:8080"
+      - "18090:8080"
     environment:
       - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v2.9.1"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v2.1.1"},{"url":"/api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.0.0"},{"url":"/api/docs/monitoring-service.yaml","name":"Monitoring Service API v1.1.0"}]
       - URLS_PRIMARY_NAME=PKD Management API v2.9.1

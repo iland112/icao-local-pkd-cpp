@@ -135,14 +135,14 @@ if [ "$DB_TYPE" = "oracle" ]; then
     echo "   - Oracle:        localhost:11521 (XEPDB1)"
 fi
 if [ -z "$SKIP_LDAP" ]; then
-    echo "   - OpenLDAP 1:    ldap://localhost:3891 (직접 연결)"
-    echo "   - OpenLDAP 2:    ldap://localhost:3892 (직접 연결)"
+    echo "   - OpenLDAP 1:    ldap://localhost:13891 (직접 연결)"
+    echo "   - OpenLDAP 2:    ldap://localhost:13892 (직접 연결)"
     echo "   Note: Application uses direct connections to both LDAP servers"
 fi
 if [ -z "$SKIP_APP" ]; then
-    echo "   - Frontend:      http://localhost:3000"
-    echo "   - API Gateway:   http://localhost:8080/api"
-    echo "   - Swagger UI:    http://localhost:8090"
+    echo "   - Frontend:      http://localhost:13080"
+    echo "   - API Gateway:   http://localhost:18080/api"
+    echo "   - Swagger UI:    http://localhost:18090"
 fi
 echo ""
 echo "🔍 로그 확인: ./docker-logs.sh [서비스명]"

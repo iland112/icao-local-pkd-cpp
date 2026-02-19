@@ -10,6 +10,7 @@ import {
 import type { PAVerificationResponse } from '@/types';
 import { cn } from '@/utils/cn';
 import { Link } from 'react-router-dom';
+import { getFlagSvgPath } from '@/utils/countryCode';
 
 // DG1 MRZ 파싱 결과 타입
 export interface DG1ParseResult {
@@ -89,7 +90,19 @@ export function VerificationResultCard({
             </span>
             {result.issuingCountry && (
               <span className="flex items-center gap-1">
-                <Globe className="w-3.5 h-3.5" />
+                {getFlagSvgPath(result.issuingCountry) ? (
+                  <img
+                    src={getFlagSvgPath(result.issuingCountry)}
+                    alt={result.issuingCountry}
+                    className="w-5 h-3.5 object-cover rounded-sm border border-white/30"
+                    onError={(e) => {
+                      const img = e.target as HTMLImageElement;
+                      img.style.display = 'none';
+                      img.nextElementSibling?.classList.remove('hidden');
+                    }}
+                  />
+                ) : null}
+                <Globe className={`w-3.5 h-3.5 ${getFlagSvgPath(result.issuingCountry) ? 'hidden' : ''}`} />
                 {result.issuingCountry}
               </span>
             )}

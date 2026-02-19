@@ -106,9 +106,9 @@ fi
 # PKD Management API 체크 (via API Gateway)
 echo ""
 echo "🔧 PKD Management Service:"
-if curl -sf http://localhost:8080/api/health > /dev/null 2>&1; then
-    HEALTH=$(curl -s http://localhost:8080/api/health 2>/dev/null)
-    echo "  ✅ 정상 (via API Gateway :8080)"
+if curl -sf http://localhost:18080/api/health > /dev/null 2>&1; then
+    HEALTH=$(curl -s http://localhost:18080/api/health 2>/dev/null)
+    echo "  ✅ 정상 (via API Gateway :18080)"
     echo "     $HEALTH"
 else
     if docker exec icao-local-pkd-management curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
@@ -145,8 +145,8 @@ fi
 # API Gateway 체크
 echo ""
 echo "🌐 API Gateway:"
-if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
-    echo "  ✅ 정상 (http://localhost:8080)"
+if curl -sf http://localhost:18080/health > /dev/null 2>&1; then
+    echo "  ✅ 정상 (http://localhost:18080)"
 else
     echo "  ❌ 오류 (not responding)"
 fi
@@ -154,8 +154,8 @@ fi
 # Frontend 체크
 echo ""
 echo "🖥️  Frontend:"
-if curl -sf http://localhost:3000 > /dev/null 2>&1; then
-    echo "  ✅ 정상 (http://localhost:3000)"
+if curl -sf http://localhost:13080 > /dev/null 2>&1; then
+    echo "  ✅ 정상 (http://localhost:13080)"
 else
     echo "  ❌ 오류 (not responding)"
 fi
