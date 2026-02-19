@@ -570,13 +570,21 @@ export function PAVerify() {
         }))
       );
 
-      // Get current user from localStorage for requestedBy
+      // Get current user for requestedBy
       let requestedBy = 'anonymous';
       try {
         const userStr = localStorage.getItem('user');
         if (userStr) {
           const user = JSON.parse(userStr);
-          requestedBy = user.username || user.name || 'anonymous';
+          requestedBy = user.username || user.full_name || 'anonymous';
+        }
+        // Fallback: decode username from JWT token
+        if (requestedBy === 'anonymous') {
+          const token = localStorage.getItem('access_token');
+          if (token) {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            requestedBy = payload.username || payload.sub || 'anonymous';
+          }
         }
       } catch { /* ignore */ }
 

@@ -55,7 +55,7 @@ interface ValidationStats {
   cscaNotFoundCount: number;
 }
 
-export function ValidationDemo() {
+export function TrustChainValidationReport() {
   // Statistics
   const [stats, setStats] = useState<ValidationStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -380,4 +380,4 @@ function StatCard({ icon, label, value, sub, borderColor }: {
   );
 }
 
-export default ValidationDemo;
+export default TrustChainValidationReport;

@@ -10,7 +10,7 @@ import { OperationAuditLog } from '@/pages/OperationAuditLog';
 
 import DscNcReport from '@/pages/DscNcReport';
 import CrlReport from '@/pages/CrlReport';
-import { ValidationDemo } from '@/pages/ValidationDemo';
+import { TrustChainValidationReport } from '@/pages/TrustChainValidationReport';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,7 +44,7 @@ function App() {
             <Route path="upload-history" element={<UploadHistory />} />
             <Route path="upload/:uploadId" element={<UploadDetail />} />
             <Route path="upload-dashboard" element={<UploadDashboard />} />
-            <Route path="pkd/trust-chain" element={<ValidationDemo />} />
+            <Route path="pkd/trust-chain" element={<TrustChainValidationReport />} />
             <Route path="pa/verify" element={<PAVerify />} />
             <Route path="pa/history" element={<PAHistory />} />
             <Route path="pa/:paId" element={<PADetail />} />

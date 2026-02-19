@@ -14,4 +14,4 @@ export { AuditLog } from './AuditLog';
 export { OperationAuditLog } from './OperationAuditLog';
 export { UserManagement } from './UserManagement';
 export { default as CertificateUpload } from './CertificateUpload';
-export { ValidationDemo } from './ValidationDemo';
+export { TrustChainValidationReport } from './TrustChainValidationReport';
