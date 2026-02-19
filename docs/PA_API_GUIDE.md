@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.4
-**Last Updated**: 2026-02-14
+**Version**: 2.1.6
+**Last Updated**: 2026-02-19
 **API Gateway Port**: 8080
 
 ---
@@ -80,7 +80,8 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
     "14": "<Base64 encoded DG14 (optional)>"
   },
   "issuingCountry": "KR",
-  "documentNumber": "M12345678"
+  "documentNumber": "M12345678",
+  "requestedBy": "admin"
 }
 ```
 
@@ -88,8 +89,9 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 |-------|------|----------|-------------|
 | sod | string | **필수** | Base64 인코딩된 SOD (Security Object Document) |
 | dataGroups | object | **필수** | DG 번호를 키로, Base64 인코딩된 데이터를 값으로 하는 객체 |
-| issuingCountry | string | 선택 | 국가 코드 (SOD DSC에서 자동 추출 가능) |
+| issuingCountry | string | 선택 | 국가 코드 (DSC `C=` → DG1 MRZ 순으로 자동 추출) |
 | documentNumber | string | 선택 | 여권 번호 (DG1 MRZ에서 자동 추출 가능) |
+| requestedBy | string | 선택 | 요청자 사용자명 (프론트엔드에서 로그인 사용자 자동 전달, 미전달 시 `anonymous`) |
 
 > **dataGroups 형식**: 키는 `"1"`, `"2"`, `"14"` (숫자 문자열) 또는 `"DG1"`, `"DG2"`, `"DG14"` 형식 모두 지원됩니다. 배열 형식 `[{"number":"DG1","data":"..."}]`도 지원됩니다.
 
@@ -218,7 +220,7 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 | dscSerialNumber | string | DSC 인증서 시리얼 번호 |
 | cscaSubject | string | CSCA 인증서 Subject DN |
 | cscaFingerprint | string | CSCA 인증서 SHA256 지문 |
-| countryCode | string | DSC에서 추출한 국가 코드 |
+| countryCode | string | 국가 코드 (추출 우선순위: 요청 파라미터 → DG1 MRZ → DSC issuer `C=` → `"XX"`) |
 | notBefore | string | DSC 인증서 유효 시작일 |
 | notAfter | string | DSC 인증서 유효 종료일 |
 | crlStatus | string | CRL 상태: `NOT_REVOKED`, `REVOKED`, `CRL_EXPIRED`, `UNKNOWN` |
@@ -1080,8 +1082,8 @@ curl http://localhost:8080/api/health | jq .
 ## OpenAPI Specification
 
 전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:
-- **Swagger UI (PA Service)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.2`
-- **Swagger UI (PKD Management)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.10.2`
+- **Swagger UI (PA Service)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.6`
+- **Swagger UI (PKD Management)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.15.1`
 - **OpenAPI YAML (PA)**: `http://<server-host>:8080/api/docs/pa-service.yaml`
 - **OpenAPI YAML (PKD Mgmt)**: `http://<server-host>:8080/api/docs/pkd-management.yaml`
 
@@ -1114,6 +1116,22 @@ curl http://localhost:8080/api/health | jq .
 ---
 
 ## Changelog
+
+### v2.1.6 (2026-02-19)
+
+**국가 코드 DG1 MRZ Fallback + requestedBy 필드**:
+- PA Verify 시 국가 코드 추출 우선순위 변경: 요청 파라미터 `issuingCountry` → DG1 MRZ issuing country (line1[2:5]) → DSC issuer `C=` → `"XX"`
+- DG1 MRZ에서 3자리 alpha-3 국가 코드 추출 후 `normalizeCountryCodeToAlpha2()`로 alpha-2 변환 (예: `CAN` → `CA`)
+- DSC 인증서에 `C=` 필드가 없는 테스트 인증서에서도 MRZ 데이터로 정확한 국가 코드 표시
+- `requestedBy` 필드 추가: 로그인 사용자명이 PA 검증 기록에 저장됨 (프론트엔드에서 localStorage user 또는 JWT 토큰에서 추출)
+- PA History 응답에 `requestedBy` 필드 포함
+
+### v2.1.5 (2026-02-19)
+
+**PA 검증 DB 필드 확장**:
+- `pkdConformanceText` 필드 DB 저장 (PostgreSQL + Oracle)
+- `requestedBy`, `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` 검증 시 DB 저장
+- PA History 응답에 `requestedBy`, `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` 필드 추가
 
 ### v2.1.4 (2026-02-14)
 
