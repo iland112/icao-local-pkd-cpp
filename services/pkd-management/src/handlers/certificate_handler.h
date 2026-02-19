@@ -230,6 +230,11 @@ private:
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& id);
+
+    void handleCrlDownload(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+        const std::string& id);
 };
 
 } // namespace handlers

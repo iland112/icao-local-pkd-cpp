@@ -1,6 +1,5 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import { Layout } from '@/components/layout';
 import { ToastContainer, PrivateRoute, ErrorBoundary } from '@/components/common';
 import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login, Profile, AuditLog, UserManagement, CertificateUpload } from '@/pages';
@@ -11,6 +10,7 @@ import { OperationAuditLog } from '@/pages/OperationAuditLog';
 
 import DscNcReport from '@/pages/DscNcReport';
 import CrlReport from '@/pages/CrlReport';
+import { ValidationDemo } from '@/pages/ValidationDemo';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,28 +22,13 @@ const queryClient = new QueryClient({
   },
 });
 
-// Preline UI initializer component
-function PrelineInitializer() {
-  const location = useLocation();
-
-  useEffect(() => {
-    // Initialize Preline components on route change
-    if (typeof window !== 'undefined' && (window as any).HSStaticMethods) {
-      setTimeout(() => {
-        (window as any).HSStaticMethods.autoInit();
-      }, 100);
-    }
-  }, [location.pathname]);
-
-  return null;
-}
+// Preline UI initializer removed — no data-hs-* components used in this app
 
 function App() {
   return (
     <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <PrelineInitializer />
         <Routes>
           {/* Public Route - Login */}
           <Route path="/login" element={<Login />} />
@@ -59,6 +44,7 @@ function App() {
             <Route path="upload-history" element={<UploadHistory />} />
             <Route path="upload/:uploadId" element={<UploadDetail />} />
             <Route path="upload-dashboard" element={<UploadDashboard />} />
+            <Route path="validation-demo" element={<ValidationDemo />} />
             <Route path="pa/verify" element={<PAVerify />} />
             <Route path="pa/history" element={<PAHistory />} />
             <Route path="pa/:paId" element={<PADetail />} />

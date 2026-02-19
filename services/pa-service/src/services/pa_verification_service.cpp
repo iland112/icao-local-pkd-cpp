@@ -39,7 +39,10 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
     const std::vector<uint8_t>& sodData,
     const std::map<std::string, std::vector<uint8_t>>& dataGroups,
     const std::string& documentNumber,
-    const std::string& countryCode)
+    const std::string& countryCode,
+    const std::string& clientIp,
+    const std::string& userAgent,
+    const std::string& requestedBy)
 {
     spdlog::info("Starting PA verification for document: {}, country: {}", documentNumber, countryCode);
 
@@ -95,7 +98,9 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         domain::models::PaVerification verification;
         verification.documentNumber = documentNumber;
         // Use country code extracted from DSC issuer if not provided in request
-        verification.countryCode = countryCode.empty() ? certValidation.countryCode : countryCode;
+        // Fallback to "XX" if neither source provides a country code (e.g., test certificates without C= field)
+        std::string effectiveCountry = countryCode.empty() ? certValidation.countryCode : countryCode;
+        verification.countryCode = effectiveCountry.empty() ? "XX" : effectiveCountry;
         verification.verificationStatus = (certValidation.valid && sodSignatureValid && dataGroupsValid) ? "VALID" : "INVALID";
 
         verification.dscSubject = certValidation.dscSubject;
@@ -132,6 +137,16 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
             }
             verification.sodHash = hashStream.str();
         }
+
+        // Client metadata (from handler)
+        verification.ipAddress = clientIp;
+        verification.userAgent = userAgent;
+        verification.requestedBy = requestedBy;
+
+        // DSC conformance data (from certificate validation)
+        verification.dscNonConformant = certValidation.dscNonConformant;
+        verification.pkdConformanceCode = certValidation.pkdConformanceCode;
+        verification.pkdConformanceText = certValidation.pkdConformanceText;
 
         // Save to database
         std::string verificationId = paRepo_->insert(verification);

@@ -63,7 +63,9 @@ std::string CrlRepository::save(const std::string& uploadId,
             // Strip timezone suffix (+00) from date strings for Oracle TO_TIMESTAMP
             auto stripTz = [](const std::string& ts) -> std::string {
                 if (ts.empty()) return "";
-                return ts.length() > 19 ? ts.substr(0, 19) : ts;
+                std::string result = ts.length() > 19 ? ts.substr(0, 19) : ts;
+                if (result.length() > 10 && result[10] == 'T') result[10] = ' ';
+                return result;
             };
 
             params = {

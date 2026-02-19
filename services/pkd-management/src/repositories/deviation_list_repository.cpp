@@ -49,7 +49,9 @@ std::string DeviationListRepository::save(const std::string& uploadId,
         // Strip timezone for Oracle timestamps
         auto stripTz = [](const std::string& ts) -> std::string {
             if (ts.empty()) return "";
-            return ts.length() > 19 ? ts.substr(0, 19) : ts;
+            std::string result = ts.length() > 19 ? ts.substr(0, 19) : ts;
+            if (result.length() > 10 && result[10] == 'T') result[10] = ' ';
+            return result;
         };
 
         std::string sigValidStr = signatureValid ? "1" : "0";

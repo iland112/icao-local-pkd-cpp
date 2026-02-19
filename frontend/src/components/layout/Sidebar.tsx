@@ -27,9 +27,9 @@ import {
   Zap,
   BookOpen,
   Activity,
-  Microscope,
   ShieldX,
   FileWarning,
+  Link2,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -80,7 +80,7 @@ const navSections: NavSection[] = [
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" /> },
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" /> },
       { path: '/upload-dashboard', label: '통계 대시보드', icon: <BarChart3 className="w-4 h-4" /> },
-      { path: '/validation-demo', label: 'Trust Chain 데모', icon: <Microscope className="w-4 h-4" /> },
+      { path: '/validation-demo', label: 'Trust Chain 데모', icon: <Link2 className="w-4 h-4" /> },
     ],
   },
   {

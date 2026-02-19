@@ -63,7 +63,7 @@ services:
       dockerfile: Dockerfile
     container_name: icao-local-pkd-frontend
     ports:
-      - "3000:80"
+      - "3080:80"
     environment:
       - TZ=Asia/Seoul
     depends_on:

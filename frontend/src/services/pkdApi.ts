@@ -195,6 +195,9 @@ export const certificateApi = {
 
   getCrlDetail: (id: string) =>
     pkdApi.get(`/certificates/crl/${id}`),
+
+  downloadCrl: (id: string) =>
+    pkdApi.get(`/certificates/crl/${id}/download`, { responseType: 'blob' }),
 };
 
 // --- Upload History & Statistics (Read-Only) ---

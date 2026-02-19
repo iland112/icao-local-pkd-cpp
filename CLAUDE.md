@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.15.0
-**Last Updated**: 2026-02-18
+**Current Version**: v2.15.1
+**Last Updated**: 2026-02-19
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -147,7 +147,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - ICAO 9303 compliance checking (6 validation categories) with per-certificate DB persistence
 - Per-certificate validation log streaming (SSE) for real-time EventLog display
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
-- CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export)
+- CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export, CRL file download)
+- Trust Chain demo page (validation statistics, chain distribution, sample certificate lookup, QuickLookupPanel integration)
 
 ### Security
 
@@ -198,6 +199,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/certificates/dsc-nc/report` - DSC_NC non-conformant certificate report (charts + table)
 - `GET /api/certificates/crl/report` - CRL report with statistics, charts, and paginated CRL list
 - `GET /api/certificates/crl/{id}` - CRL detail with parsed revoked certificate list
+- `GET /api/certificates/crl/{id}/download` - CRL binary file download (.crl)
 - `GET /api/certificates/export/{format}` - Certificate export
 - `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
@@ -244,14 +246,14 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, DSC_NC report, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
+- **Public**: Health checks, Dashboard statistics, Certificate search, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
 - **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion
 
 ---
 
 ## Frontend
 
-### Pages (22 total)
+### Pages (23 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -273,6 +275,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | UserManagement | `/admin/users` | User administration |
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
+| ValidationDemo | `/validation-demo` | Trust Chain verification demo |
 
 ### Key Components
 
@@ -495,6 +498,29 @@ scripts/
 ---
 
 ## Version History
+
+### v2.15.1 (2026-02-19) - Trust Chain Demo + CRL Download + PA Conformance
+- New page: Trust Chain Demo (`/validation-demo`) - validation statistics dashboard with sample certificate lookup
+- Frontend: Statistics cards (total validated, VALID, EXPIRED_VALID, PENDING), Trust Chain distribution bar, status proportional bar
+- Frontend: Sample certificate buttons (5 countries, auto-lookup on click), QuickLookupPanel integration
+- Backend: `GET /api/certificates/crl/{id}/download` - CRL binary file download (.crl, DER format)
+- Backend: hex-to-binary CRL conversion, `application/pkix-crl` content type, public endpoint (no JWT)
+- PA Service: `pkdConformanceText` field added to `pa_verification` table (PostgreSQL + Oracle schemas)
+- PA Service: `requestedBy`, `dscNonConformant`, `pkdConformanceCode`, `pkdConformanceText` persisted in DB
+- PA Service: Country code "XX" fallback for certificates without C= field (Oracle NOT NULL fix)
+- PA Service: Client metadata (IP, User-Agent, requestedBy) passed from handler to service layer
+- Frontend: PA History non-conformant DSC warning banner with conformance code + text
+- Frontend: PA Verify `requestedBy` field populated from logged-in user
+- Frontend: CRL Report chart layout restructured (country chart full-width row, sig algo pie + revocation reason 1:1 row)
+- Frontend: CRL table Korean column headers, CN-only issuer display, detail link + .crl download buttons
+- Frontend: CRL detail dialog .crl download button
+- Oracle: `stored_in_ldap` boolean string handling in CRL report/detail
+- Oracle: Timestamp `T` separator replaced with space for TO_TIMESTAMP compatibility (4 repositories)
+- Oracle: `DBMS_LOB.SUBSTR` for CLOB GROUP BY in validation reason breakdown
+- Oracle: `icao_pkd_versions`, `link_certificate`, `link_certificate_issuers` tables added to init schema
+- Cleanup: Preline UI initializer removed (unused), `usePreline` console output suppressed, Login autocomplete attributes
+- Docker: Frontend port changed from 3000 to 3080
+- 27 files changed (1 new, 26 modified)
 
 ### v2.15.0 (2026-02-18) - CRL Report Page
 - New page: CRL Report (`/pkd/crl`) — full analysis dashboard for Certificate Revocation Lists

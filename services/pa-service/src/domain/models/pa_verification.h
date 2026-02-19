@@ -84,6 +84,12 @@ struct PaVerification {
     // Client information (audit)
     std::optional<std::string> ipAddress;
     std::optional<std::string> userAgent;
+    std::string requestedBy;
+
+    // DSC conformance (ICAO PKD nc-data)
+    bool dscNonConformant = false;
+    std::string pkdConformanceCode;
+    std::string pkdConformanceText;
 
     /**
      * @brief Convert to JSON for API response

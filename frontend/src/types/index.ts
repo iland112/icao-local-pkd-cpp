@@ -292,6 +292,7 @@ export interface PAVerificationRequest {
   sod: string; // base64 encoded
   dataGroups: DataGroupInput[];
   mrzData?: MRZData;
+  requestedBy?: string;
 }
 
 export interface DataGroupInput {
@@ -445,6 +446,10 @@ export interface PAHistoryItem {
   dscIssuerDn?: string;
   cscaSubjectDn?: string;
   verificationMessage?: string;
+  // DSC conformance (ICAO PKD nc-data)
+  dscNonConformant?: boolean;
+  pkdConformanceCode?: string;
+  pkdConformanceText?: string;
 }
 
 // Upload history item

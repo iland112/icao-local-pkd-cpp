@@ -66,7 +66,8 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             "dg_hashes_valid, dg_hashes_message, "
             "crl_status, crl_message, "
             "verification_message, "
-            "client_ip, user_agent"
+            "client_ip, user_agent, requested_by, "
+            "dsc_non_conformant, pkd_conformance_code, pkd_conformance_text"
             ") VALUES ("
             "$1, "  // id value
             "$2, $3, $4, $5, $6, "
@@ -77,7 +78,8 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             "$17, $18, "
             "$19, $20, "
             "$21, "
-            "$22, $23"
+            "$22, $23, $24, "
+            "$25, $26, $27"
             ")";
 
         // Database-aware boolean formatting (reuse dbType from line 41)
@@ -119,7 +121,11 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             verification.crlMessage.value_or(""),                            // $20
             verification.validationErrors.value_or(""),                      // $21
             verification.ipAddress.value_or(""),                             // $22
-            verification.userAgent.value_or("")                              // $23
+            verification.userAgent.value_or(""),                             // $23
+            verification.requestedBy,                                        // $24
+            boolStr(verification.dscNonConformant),                          // $25
+            verification.pkdConformanceCode,                                 // $26
+            verification.pkdConformanceText                                  // $27
         };
 
         int rowsAffected = queryExecutor_->executeCommand(insertQuery, params);
@@ -150,7 +156,8 @@ Json::Value PaVerificationRepository::findById(const std::string& id) {
             "dg_hashes_valid, dg_hashes_message, "
             "crl_status, crl_message, "
             "verification_message, "
-            "request_timestamp, completed_timestamp, client_ip, user_agent "
+            "request_timestamp, completed_timestamp, client_ip, user_agent, "
+            "requested_by, dsc_non_conformant, pkd_conformance_code, pkd_conformance_text "
             "FROM pa_verification WHERE id = $1";
 
         std::vector<std::string> params = {id};
@@ -203,7 +210,8 @@ Json::Value PaVerificationRepository::findAll(
                   << "dg_hashes_valid, dg_hashes_message, "
                   << "crl_status, crl_message, "
                   << "verification_message, "
-                  << "request_timestamp, completed_timestamp, client_ip, user_agent "
+                  << "request_timestamp, completed_timestamp, client_ip, user_agent, "
+                  << "requested_by, dsc_non_conformant, pkd_conformance_code, pkd_conformance_text "
                   << "FROM pa_verification";
 
         if (!whereClause.empty()) {
@@ -416,7 +424,11 @@ Json::Value PaVerificationRepository::toCamelCase(const Json::Value& dbRow) {
         {"csca_fingerprint", "cscaFingerprint"},
         {"verification_message", "verificationMessage"},
         {"client_ip", "clientIp"},
-        {"user_agent", "userAgent"}
+        {"user_agent", "userAgent"},
+        {"requested_by", "requestedBy"},
+        {"dsc_non_conformant", "dscNonConformant"},
+        {"pkd_conformance_code", "pkdConformanceCode"},
+        {"pkd_conformance_text", "pkdConformanceText"}
     };
 
     Json::Value camelCaseRow;
@@ -442,7 +454,8 @@ Json::Value PaVerificationRepository::toCamelCase(const Json::Value& dbRow) {
         if (key.find("_valid") != std::string::npos ||
             key.find("_checked") != std::string::npos ||
             key.find("_expired") != std::string::npos ||
-            key == "revoked") {
+            key == "revoked" ||
+            key == "dsc_non_conformant") {
             if (value.isString()) {
                 std::string strVal = value.asString();
                 camelCaseRow[camelKey] = (strVal == "t" || strVal == "true" || strVal == "1");

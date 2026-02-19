@@ -1094,11 +1094,11 @@ Json::Value ValidationRepository::getReasonBreakdown()
         std::string query;
         if (dbType == "oracle") {
             query =
-                "SELECT validation_status, trust_chain_message, country_code, COUNT(*) AS cnt "
+                "SELECT validation_status, DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1) AS trust_chain_message, country_code, COUNT(*) AS cnt "
                 "FROM validation_result "
                 "WHERE validation_status IN ('INVALID', 'PENDING') "
                 "AND trust_chain_message IS NOT NULL "
-                "GROUP BY validation_status, trust_chain_message, country_code "
+                "GROUP BY validation_status, DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1), country_code "
                 "ORDER BY validation_status, cnt DESC";
         } else {
             query =

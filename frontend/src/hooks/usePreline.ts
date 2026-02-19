@@ -10,10 +10,16 @@ export const usePreline = () => {
     const initPreline = async () => {
       try {
         const { HSStaticMethods } = await import('preline/preline');
-        // Initialize all Preline components
+        // Suppress Preline's internal console output during autoInit
+        const origLog = console.log;
+        const origWarn = console.warn;
+        console.log = () => {};
+        console.warn = () => {};
         HSStaticMethods.autoInit();
+        console.log = origLog;
+        console.warn = origWarn;
       } catch (error) {
-        console.warn('Preline initialization failed:', error);
+        if (import.meta.env.DEV) console.warn('Preline initialization failed:', error);
       }
     };
 

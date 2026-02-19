@@ -570,10 +570,21 @@ export function PAVerify() {
         }))
       );
 
+      // Get current user from localStorage for requestedBy
+      let requestedBy = 'anonymous';
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          requestedBy = user.username || user.name || 'anonymous';
+        }
+      } catch { /* ignore */ }
+
       const request: PAVerificationRequest = {
         sod: sodBase64,
         dataGroups,
         mrzData: mrzData || undefined,
+        requestedBy,
       };
 
       const response = await paApi.verify(request);

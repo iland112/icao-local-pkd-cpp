@@ -72,7 +72,10 @@ public:
         const std::vector<uint8_t>& sodData,
         const std::map<std::string, std::vector<uint8_t>>& dataGroups,
         const std::string& documentNumber,
-        const std::string& countryCode
+        const std::string& countryCode,
+        const std::string& clientIp = "",
+        const std::string& userAgent = "",
+        const std::string& requestedBy = ""
     );
 
     /**

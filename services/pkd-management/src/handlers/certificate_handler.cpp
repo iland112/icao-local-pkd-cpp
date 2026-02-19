@@ -214,7 +214,17 @@ void CertificateHandler::registerRoutes(drogon::HttpAppFramework& app) {
         },
         {drogon::Get});
 
-    spdlog::info("Certificate handler: 14 routes registered");
+    // GET /api/certificates/crl/{id}/download
+    app.registerHandler(
+        "/api/certificates/crl/{id}/download",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+               const std::string& id) {
+            handleCrlDownload(req, std::move(callback), id);
+        },
+        {drogon::Get});
+
+    spdlog::info("Certificate handler: 15 routes registered");
 }
 
 // =============================================================================
@@ -1571,7 +1581,12 @@ void CertificateHandler::handleCrlReport(
             item["revokedCount"] = revokedCnt;
             item["signatureAlgorithm"] = sigAlg;
             item["fingerprint"] = fp;
-            item["storedInLdap"] = row.get("stored_in_ldap", false).asBool();
+            // Oracle returns NUMBER(1) as string "0"/"1"
+            {
+                const auto& v = row.get("stored_in_ldap", false);
+                if (v.isBool()) item["storedInLdap"] = v.asBool();
+                else { std::string s = v.asString(); item["storedInLdap"] = (s == "t" || s == "true" || s == "1" || s == "TRUE"); }
+            }
             item["createdAt"] = row.get("created_at", "").asString();
             enrichedItems.append(item);
         }
@@ -1700,7 +1715,12 @@ void CertificateHandler::handleCrlDetail(
         crlJson["signatureAlgorithm"] = parsed.signatureAlgorithm;
         crlJson["fingerprint"] = row.get("fingerprint_sha256", "").asString();
         crlJson["revokedCount"] = parsed.revokedCount;
-        crlJson["storedInLdap"] = row.get("stored_in_ldap", false).asBool();
+        // Oracle returns NUMBER(1) as string "0"/"1"
+        {
+            const auto& v = row.get("stored_in_ldap", false);
+            if (v.isBool()) crlJson["storedInLdap"] = v.asBool();
+            else { std::string s = v.asString(); crlJson["storedInLdap"] = (s == "t" || s == "true" || s == "1" || s == "TRUE"); }
+        }
         crlJson["createdAt"] = row.get("created_at", "").asString();
         response["crl"] = crlJson;
 
@@ -1723,6 +1743,74 @@ void CertificateHandler::handleCrlDetail(
 
     } catch (const std::exception& e) {
         spdlog::error("GET /api/certificates/crl/{} error: {}", id, e.what());
+        Json::Value error;
+        error["success"] = false;
+        error["error"] = e.what();
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+        resp->setStatusCode(drogon::k500InternalServerError);
+        callback(resp);
+    }
+}
+
+
+// =============================================================================
+// Handler 15: GET /api/certificates/crl/{id}/download
+// =============================================================================
+
+void CertificateHandler::handleCrlDownload(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+    const std::string& id) {
+
+    spdlog::info("GET /api/certificates/crl/{}/download", id);
+
+    try {
+        Json::Value row = crlRepository_->findById(id);
+        if (row.isNull()) {
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "CRL not found";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k404NotFound);
+            callback(resp);
+            return;
+        }
+
+        std::string crlHex = row.get("crl_binary", "").asString();
+        if (crlHex.empty()) {
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "CRL binary data not available";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k404NotFound);
+            callback(resp);
+            return;
+        }
+
+        // Convert hex to binary (strip \x prefix from PostgreSQL/Oracle)
+        std::string hexData = crlHex;
+        if (hexData.size() >= 2 && hexData[0] == '\\' && hexData[1] == 'x') {
+            hexData = hexData.substr(2);
+        }
+        std::string binaryData;
+        binaryData.reserve(hexData.length() / 2);
+        for (size_t i = 0; i + 1 < hexData.length(); i += 2) {
+            char hexByte[3] = {hexData[i], hexData[i + 1], 0};
+            binaryData.push_back(static_cast<char>(strtol(hexByte, nullptr, 16)));
+        }
+
+        std::string countryCode = row.get("country_code", "XX").asString();
+        std::string filename = "crl_" + countryCode + "_" + id.substr(0, 8) + ".crl";
+
+        auto resp = drogon::HttpResponse::newHttpResponse();
+        resp->setBody(binaryData);
+        resp->setContentTypeCode(drogon::CT_NONE);
+        resp->addHeader("Content-Type", "application/pkix-crl");
+        resp->addHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        spdlog::error("GET /api/certificates/crl/{}/download error: {}", id, e.what());
         Json::Value error;
         error["success"] = false;
         error["error"] = e.what();

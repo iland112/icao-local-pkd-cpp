@@ -392,6 +392,12 @@ CREATE TABLE IF NOT EXISTS pa_verification (
     -- Request metadata
     client_ip VARCHAR(45),
     user_agent TEXT,
+    requested_by VARCHAR(100),
+
+    -- DSC conformance (ICAO PKD nc-data)
+    dsc_non_conformant BOOLEAN DEFAULT FALSE,
+    pkd_conformance_code VARCHAR(100),
+    pkd_conformance_text VARCHAR(500),
 
     CONSTRAINT chk_verification_status CHECK (verification_status IN ('VALID', 'INVALID', 'ERROR', 'PENDING'))
 );

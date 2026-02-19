@@ -754,6 +754,34 @@ export function PAHistory() {
                 )}
               </div>
 
+              {/* DSC Non-Conformant Warning Banner */}
+              {selectedRecord.dscNonConformant && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-amber-700 dark:text-amber-400">
+                        Non-Conformant DSC
+                      </span>
+                      {selectedRecord.pkdConformanceCode && (
+                        <span className="ml-2 px-1.5 py-0.5 text-[10px] rounded bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 font-mono">
+                          {selectedRecord.pkdConformanceCode}
+                        </span>
+                      )}
+                      {selectedRecord.pkdConformanceText ? (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                          {selectedRecord.pkdConformanceText}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-0.5">
+                          이 여권의 DSC 인증서는 ICAO PKD 비적합(nc-data) 목록에 등록되어 있습니다.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Section 3: 데이터 그룹 (DG1 + DG2) */}
               {selectedRecord.status === 'VALID' && (
                 <div>

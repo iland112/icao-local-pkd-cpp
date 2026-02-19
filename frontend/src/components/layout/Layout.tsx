@@ -3,14 +3,10 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { useSidebarStore } from '@/stores/sidebarStore';
-import { usePreline } from '@/hooks/usePreline';
 import { cn } from '@/utils/cn';
 
 export function Layout() {
   const { expanded } = useSidebarStore();
-
-  // Initialize Preline on route changes
-  usePreline();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

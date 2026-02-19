@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   AlertCircle, AlertTriangle, CheckCircle, Download, Globe,
   Loader2, RefreshCw, FileWarning, X, ChevronLeft, ChevronRight,
-  Filter, Clock, XCircle, FileText, ShieldAlert,
+  Filter, Clock, XCircle, FileText, ShieldAlert, Eye,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -96,7 +96,15 @@ const formatAlgorithm = (alg?: string): string => {
   return ALGORITHM_MAP[alg] || alg;
 };
 
-const truncateDn = (s: string, n: number) => s && s.length > n ? s.slice(0, n) + '\u2026' : s;
+const extractCn = (dn: string): string => {
+  if (!dn) return '-';
+  // Handle both "/CN=value" and "CN=value," formats
+  const slashMatch = dn.match(/\/CN=([^/]*)/i);
+  if (slashMatch) return slashMatch[1];
+  const commaMatch = dn.match(/CN=([^,]*)/i);
+  if (commaMatch) return commaMatch[1];
+  return dn;
+};
 
 // --- Component ---
 
@@ -149,6 +157,23 @@ export default function CrlReport() {
   };
 
   const closeDialog = () => { setDialogOpen(false); setSelectedCrl(null); setDetailData(null); };
+
+  const handleDownloadCrl = async (crl: CrlItem) => {
+    try {
+      const res = await certificateApi.downloadCrl(crl.id);
+      const blob = new Blob([res.data], { type: 'application/pkix-crl' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `crl_${crl.countryCode}_${crl.id.slice(0, 8)}.crl`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // silent fail
+    }
+  };
   const resetFilters = () => { setCountryFilter(''); setStatusFilter(''); setPage(1); };
   const hasActiveFilters = countryFilter || statusFilter;
 
@@ -267,58 +292,95 @@ export default function CrlReport() {
       {/* Validity Status Bar */}
       <ValidityBar validCount={summary.validCount} expiredCount={summary.expiredCount} total={summary.totalCrls} />
 
-      {/* Charts Row 1: Country + Revocation Reason */}
+      {/* Row 1: Country Distribution (full width) */}
+      {sortedByCountry.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Globe className="w-5 h-5 text-orange-500" />
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">국가별 폐기 인증서</h3>
+            <span className="text-sm text-gray-500 dark:text-gray-400">(상위 20개국)</span>
+          </div>
+          <ResponsiveContainer width="100%" height={320}>
+            <BarChart data={sortedByCountry} margin={{ left: 10, right: 10, top: 5, bottom: 50 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+              <XAxis
+                dataKey="countryCode"
+                tick={((props: any) => {
+                  const { x, y, payload } = props;
+                  const code = payload.value;
+                  const flagPath = getFlagSvgPath(code);
+                  return (
+                    <g transform={`translate(${x},${y})`}>
+                      {flagPath && <image href={flagPath} x={-10} y={4} width={20} height={14} style={{ borderRadius: 2 }} />}
+                      <text x={0} y={32} textAnchor="middle" fill="#6B7280" fontSize={11}>{code}</text>
+                    </g>
+                  );
+                }) as any}
+                interval={0}
+                height={50}
+              />
+              <YAxis tick={{ fill: '#6B7280', fontSize: 12 }} />
+              <Tooltip
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const item = payload[0].payload as CrlCountryEntry;
+                  const flagPath = getFlagSvgPath(item.countryCode);
+                  return (
+                    <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        {flagPath && <img src={flagPath} alt={item.countryCode} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
+                        <span className="text-sm font-semibold text-white">{item.countryCode}</span>
+                        <span className="text-xs text-gray-400">{getCountryName(item.countryCode)}</span>
+                      </div>
+                      <div className="flex gap-3 text-xs">
+                        <span className="text-red-400">폐기: {item.revokedCount.toLocaleString()}</span>
+                        <span className="text-gray-300">CRL: {item.crlCount}</span>
+                      </div>
+                    </div>
+                  );
+                }}
+              />
+              <Bar dataKey="revokedCount" name="폐기 인증서" fill="#ef4444" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {/* Row 2: Signature Algorithm Pie + Revocation Reason (1:1) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Country Distribution */}
-        {sortedByCountry.length > 0 && (
+        {/* Signature Algorithm Pie */}
+        {reportData.bySignatureAlgorithm.length > 0 && (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <div className="flex items-center gap-2 mb-4">
-              <Globe className="w-5 h-5 text-orange-500" />
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">국가별 폐기 인증서</h3>
-              <span className="text-sm text-gray-500 dark:text-gray-400">(상위 20개국)</span>
+              <FileText className="w-5 h-5 text-violet-500" />
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">서명 알고리즘 분포</h3>
             </div>
-            <ResponsiveContainer width="100%" height={Math.max(250, sortedByCountry.length * 30)}>
-              <BarChart data={sortedByCountry} layout="vertical" margin={{ left: 70, right: 20, top: 5, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis type="number" tick={{ fill: '#6B7280', fontSize: 12 }} />
-                <YAxis
-                  type="category"
-                  dataKey="countryCode"
-                  width={65}
-                  tick={((props: any) => {
-                    const { x, y, payload } = props;
-                    const code = payload.value;
-                    const flagPath = getFlagSvgPath(code);
-                    return (
-                      <g transform={`translate(${x},${y})`}>
-                        {flagPath && <image href={flagPath} x={-62} y={-8} width={20} height={14} style={{ borderRadius: 2 }} />}
-                        <text x={-8} y={4} textAnchor="end" fill="#6B7280" fontSize={12}>{code}</text>
-                      </g>
-                    );
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={reportData.bySignatureAlgorithm as any[]}
+                  dataKey="count"
+                  nameKey="algorithm"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  label={((props: any) => {
+                    const alg = formatAlgorithm(String(props.algorithm || ''));
+                    const pct = Number(props.percent || 0);
+                    return `${alg} ${(pct * 100).toFixed(0)}%`;
                   }) as any}
-                />
+                  labelLine={false}
+                >
+                  {reportData.bySignatureAlgorithm.map((_, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
                 <Tooltip
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const item = payload[0].payload as CrlCountryEntry;
-                    const flagPath = getFlagSvgPath(item.countryCode);
-                    return (
-                      <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          {flagPath && <img src={flagPath} alt={item.countryCode} className="w-5 h-3.5 object-cover rounded-sm shadow-sm" />}
-                          <span className="text-sm font-semibold text-white">{item.countryCode}</span>
-                          <span className="text-xs text-gray-400">{getCountryName(item.countryCode)}</span>
-                        </div>
-                        <div className="flex gap-3 text-xs">
-                          <span className="text-red-400">폐기: {item.revokedCount.toLocaleString()}</span>
-                          <span className="text-gray-300">CRL: {item.crlCount}</span>
-                        </div>
-                      </div>
-                    );
-                  }}
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
+                  labelStyle={{ color: '#F3F4F6' }}
+                  itemStyle={{ color: '#F3F4F6' }}
                 />
-                <Bar dataKey="revokedCount" name="폐기 인증서" fill="#ef4444" radius={[0, 4, 4, 0]} />
-              </BarChart>
+              </PieChart>
             </ResponsiveContainer>
           </div>
         )}
@@ -331,7 +393,7 @@ export default function CrlReport() {
               <h3 className="text-base font-bold text-gray-900 dark:text-white">폐기 사유별 분포</h3>
             </div>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={sortedByReason} margin={{ left: 10, right: 20, top: 5, bottom: 60 }}>
+              <BarChart data={sortedByReason} margin={{ left: 10, right: 10, top: 5, bottom: 60 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
                 <XAxis dataKey="reason" tick={{ fill: '#6B7280', fontSize: 10 }} tickFormatter={(v: string) => REASON_KO[v] || v} angle={-35} textAnchor="end" height={70} />
                 <YAxis tick={{ fill: '#6B7280', fontSize: 12 }} />
@@ -354,43 +416,6 @@ export default function CrlReport() {
           </div>
         )}
       </div>
-
-      {/* Signature Algorithm Pie */}
-      {reportData.bySignatureAlgorithm.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="w-5 h-5 text-violet-500" />
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">서명 알고리즘 분포</h3>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={reportData.bySignatureAlgorithm as any[]}
-                dataKey="count"
-                nameKey="algorithm"
-                cx="50%"
-                cy="50%"
-                outerRadius={100}
-                label={((props: any) => {
-                  const alg = formatAlgorithm(String(props.algorithm || ''));
-                  const pct = Number(props.percent || 0);
-                  return `${alg} ${(pct * 100).toFixed(0)}%`;
-                }) as any}
-                labelLine={false}
-              >
-                {reportData.bySignatureAlgorithm.map((_, i) => (
-                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
-                labelStyle={{ color: '#F3F4F6' }}
-                itemStyle={{ color: '#F3F4F6' }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
@@ -457,12 +482,13 @@ export default function CrlReport() {
             <thead className="bg-gray-50 dark:bg-gray-700/50">
               <tr>
                 <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">국가</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Issuer</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">This Update</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Next Update</th>
+                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">발급자 (CN)</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">발급일</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">만료일</th>
                 <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">상태</th>
                 <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">폐기 수</th>
                 <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">알고리즘</th>
+                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -480,7 +506,7 @@ export default function CrlReport() {
                     </div>
                   </td>
                   <td className="px-5 py-3 max-w-[220px]" title={crl.issuerDn}>
-                    <span className="text-sm text-gray-600 dark:text-gray-300">{truncateDn(crl.issuerDn, 45)}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">{extractCn(crl.issuerDn)}</span>
                   </td>
                   <td className="px-5 py-3 text-center whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{crl.thisUpdate?.slice(0, 10)}</td>
                   <td className="px-5 py-3 text-center whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{crl.nextUpdate?.slice(0, 10) || '-'}</td>
@@ -496,11 +522,31 @@ export default function CrlReport() {
                     ) : <span className="text-sm text-gray-400">0</span>}
                   </td>
                   <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{formatAlgorithm(crl.signatureAlgorithm)}</td>
+                  <td className="px-5 py-3 whitespace-nowrap text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleRowClick(crl); }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-transparent hover:border-blue-200 dark:hover:border-blue-700"
+                        title="상세보기"
+                      >
+                        <Eye className="w-4 h-4" />
+                        상세
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDownloadCrl(crl); }}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-transparent hover:border-green-200 dark:hover:border-green-700"
+                        title="CRL 파일 다운로드"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        .crl
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
               {reportData.crls.items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-5 py-16 text-center">
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
                       <p className="text-lg font-medium">검색 결과 없음</p>
@@ -566,9 +612,19 @@ export default function CrlReport() {
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Fingerprint: {selectedCrl.fingerprint}</p>
                 </div>
               </div>
-              <button onClick={closeDialog} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadCrl(selectedCrl)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-green-200 dark:border-green-700"
+                  title="CRL 파일 다운로드"
+                >
+                  <Download className="w-4 h-4" />
+                  .crl
+                </button>
+                <button onClick={closeDialog} className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             {/* Dialog Body */}
@@ -586,11 +642,11 @@ export default function CrlReport() {
                       CRL 메타데이터
                     </h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                      <InfoRow label="Issuer DN" value={detailData.crl.issuerDn} mono />
+                      <InfoRow label="발급자 DN" value={detailData.crl.issuerDn} mono />
                       <InfoRow label="서명 알고리즘" value={formatAlgorithm(detailData.crl.signatureAlgorithm)} />
-                      <InfoRow label="This Update" value={detailData.crl.thisUpdate} />
-                      <InfoRow label="Next Update" value={detailData.crl.nextUpdate || '-'} />
-                      <InfoRow label="CRL Number" value={detailData.crl.crlNumber || '-'} />
+                      <InfoRow label="발급일" value={detailData.crl.thisUpdate} />
+                      <InfoRow label="만료일" value={detailData.crl.nextUpdate || '-'} />
+                      <InfoRow label="CRL 번호" value={detailData.crl.crlNumber || '-'} />
                       <InfoRow label="폐기 인증서 수" value={detailData.crl.revokedCount.toLocaleString()} highlight />
                     </div>
                   </div>
@@ -615,7 +671,7 @@ export default function CrlReport() {
                           <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
                             <tr>
                               <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 w-12">#</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">Serial Number</th>
+                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">시리얼 번호</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">폐기 일자</th>
                               <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">폐기 사유</th>
                             </tr>

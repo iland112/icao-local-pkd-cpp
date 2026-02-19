@@ -297,12 +297,20 @@ void PaHandler::handleVerify(
                     documentNumber.empty() ? "(unknown)" : documentNumber,
                     dataGroups.size());
 
+        // Extract client metadata for audit
+        std::string clientIp = req->getPeerAddr().toIp();
+        std::string userAgent = req->getHeader("User-Agent");
+        std::string requestedBy = (*jsonBody).get("requestedBy", "").asString();
+
         // Call service layer - this replaces ~400 lines of complex logic
         Json::Value result = paVerificationService_->verifyPassiveAuthentication(
             sodBytes,
             dataGroups,
             documentNumber,
-            countryCode
+            countryCode,
+            clientIp,
+            userAgent,
+            requestedBy
         );
 
         // Return response

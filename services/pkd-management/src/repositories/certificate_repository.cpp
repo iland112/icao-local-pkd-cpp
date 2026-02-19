@@ -61,6 +61,10 @@ static std::string convertDateToIso(const std::string& opensslDate) {
         if (result.length() > 19) {
             result = result.substr(0, 19);
         }
+        // Replace T separator with space for Oracle TO_TIMESTAMP compatibility
+        if (result.length() > 10 && result[10] == 'T') {
+            result[10] = ' ';
+        }
         return result;
     }
 
