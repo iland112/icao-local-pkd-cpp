@@ -62,10 +62,10 @@ export function VerificationResultCard({
     <div className={cn(
       'rounded-2xl p-4',
       result.status === 'VALID'
-        ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+        ? 'bg-gradient-to-r from-emerald-600/80 to-teal-600/80 text-white'
         : result.status === 'INVALID'
-        ? 'bg-gradient-to-r from-red-500 to-rose-500 text-white'
-        : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white'
+        ? 'bg-gradient-to-r from-rose-600/80 to-red-700/80 text-white'
+        : 'bg-gradient-to-r from-amber-600/80 to-orange-600/80 text-white'
     )}>
       <div className="flex items-center gap-3">
         {result.status === 'VALID' ? (
