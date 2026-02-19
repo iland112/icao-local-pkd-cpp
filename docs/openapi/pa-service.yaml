@@ -6,6 +6,7 @@ info:
     Dedicated service for ICAO 9303 Passive Authentication verification.
 
     ## Changelog
+    - **v2.1.5** (2026-02-19): requestedBy field, pkdConformanceText DB persistence, country code "XX" fallback
     - **v2.1.4** (2026-02-14): DSC Non-Conformant status fields (dscNonConformant, pkdConformanceCode, pkdConformanceText)
     - **v2.1.3** (2026-02-14): Lightweight PA Lookup API (POST /api/certificates/pa-lookup)
     - **v2.1.2** (2026-02-13): CRL expiration check, crlThisUpdate/crlNextUpdate fields, CRL_EXPIRED status
@@ -13,7 +14,7 @@ info:
     - **v1.2.0** (2026-01-06): Certificate expiration fields
     - **v1.1.0** (2026-01-03): API Gateway integration
     - **v1.0.0** (2025-12-30): Initial release
-  version: 2.1.4
+  version: 2.1.5
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -278,7 +279,7 @@ components:
           example: pa-service
         version:
           type: string
-          example: 2.1.4
+          example: 2.1.5
         timestamp:
           type: string
 
@@ -297,6 +298,9 @@ components:
         mrzData:
           type: string
           description: Optional MRZ data for additional validation
+        requestedBy:
+          type: string
+          description: Username of the requester (populated from logged-in user, defaults to 'anonymous')
 
     PAVerifyResponse:
       type: object
@@ -504,3 +508,15 @@ components:
                 enum: [VALID, INVALID]
               processingDurationMs:
                 type: integer
+              requestedBy:
+                type: string
+                description: Username of the requester
+              dscNonConformant:
+                type: boolean
+                description: Whether DSC is ICAO PKD Non-Conformant
+              pkdConformanceCode:
+                type: string
+                description: ICAO PKD non-conformance code
+              pkdConformanceText:
+                type: string
+                description: ICAO PKD non-conformance description

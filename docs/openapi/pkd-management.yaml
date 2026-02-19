@@ -6,6 +6,9 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.15.1** (2026-02-19): CRL binary download endpoint, Trust Chain demo page support
+    - **v2.15.0** (2026-02-18): CRL report + detail endpoints (report, detail, download)
+    - **v2.10.4** (2026-02-15): DSC_NC non-conformant certificate report
     - **v2.10.2** (2026-02-14): Lightweight PA lookup API (POST /api/certificates/pa-lookup) for DSC subject DN or fingerprint-based trust chain query
     - **v2.9.2** (2026-02-13): Full certificate export (DIT-structured ZIP with all LDAP-stored certs, CRLs, MLs)
     - **v2.9.1** (2026-02-13): Certificate source filter, bySource statistics, DB-based search
@@ -16,7 +19,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.10.2
+  version: 2.15.1
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -817,6 +820,103 @@ paths:
                         items:
                           $ref: '#/components/schemas/DscNcCertificate'
 
+  /api/certificates/crl/report:
+    get:
+      tags: [Certificates]
+      summary: CRL report with statistics and paginated list
+      description: |
+        Returns aggregated CRL analysis including summary statistics,
+        country distribution, signature algorithm breakdown, revocation reasons,
+        and a paginated CRL list with metadata parsed from binary at runtime.
+      operationId: getCrlReport
+      parameters:
+        - name: country
+          in: query
+          schema:
+            type: string
+          description: Filter by country code
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [VALID, EXPIRED]
+          description: Filter by CRL validity status
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: CRL report data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrlReportResponse'
+
+  /api/certificates/crl/{id}:
+    get:
+      tags: [Certificates]
+      summary: CRL detail with revoked certificate list
+      description: |
+        Returns CRL metadata and full list of revoked certificates
+        parsed from binary CRL data. Includes serial number, revocation date,
+        and RFC 5280 revocation reason for each entry.
+      operationId: getCrlDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: CRL detail with revoked certificates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrlDetailResponse'
+        '404':
+          description: CRL not found
+
+  /api/certificates/crl/{id}/download:
+    get:
+      tags: [Certificates]
+      summary: Download CRL binary file (.crl)
+      description: |
+        Downloads the raw CRL binary in DER format.
+        Content-Type: application/pkix-crl.
+        The hex-encoded CRL stored in the database is converted to binary on the fly.
+      operationId: downloadCrl
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: CRL binary file
+          headers:
+            Content-Disposition:
+              schema:
+                type: string
+              description: 'attachment; filename="crl_{country}_{id}.crl"'
+          content:
+            application/pkix-crl:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: CRL not found or binary data unavailable
+
   # ============================================
   # Authentication & User Management
   # ============================================
@@ -1552,6 +1652,135 @@ components:
           crlChecked: true
           revocationStatus: "not_revoked"
           fingerprintSha256: "a1b2c3d4e5f6..."
+
+    CrlReportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        summary:
+          type: object
+          properties:
+            totalCrls:
+              type: integer
+            countryCount:
+              type: integer
+            validCount:
+              type: integer
+            expiredCount:
+              type: integer
+            totalRevokedCertificates:
+              type: integer
+        byCountry:
+          type: array
+          items:
+            type: object
+            properties:
+              countryCode:
+                type: string
+              crlCount:
+                type: integer
+              revokedCount:
+                type: integer
+        bySignatureAlgorithm:
+          type: array
+          items:
+            type: object
+            properties:
+              algorithm:
+                type: string
+              count:
+                type: integer
+        byRevocationReason:
+          type: array
+          items:
+            type: object
+            properties:
+              reason:
+                type: string
+                description: RFC 5280 CRLReason code
+              count:
+                type: integer
+        crls:
+          type: object
+          properties:
+            total:
+              type: integer
+            page:
+              type: integer
+            size:
+              type: integer
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/CrlItem'
+
+    CrlItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        countryCode:
+          type: string
+        issuerDn:
+          type: string
+        thisUpdate:
+          type: string
+        nextUpdate:
+          type: string
+        revokedCount:
+          type: integer
+        signatureAlgorithm:
+          type: string
+        fingerprint:
+          type: string
+        storedInLdap:
+          type: boolean
+        createdAt:
+          type: string
+
+    CrlDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        crl:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            countryCode:
+              type: string
+            issuerDn:
+              type: string
+            thisUpdate:
+              type: string
+            nextUpdate:
+              type: string
+            crlNumber:
+              type: string
+            revokedCount:
+              type: integer
+            signatureAlgorithm:
+              type: string
+            fingerprint:
+              type: string
+            storedInLdap:
+              type: boolean
+        revokedCertificates:
+          type: array
+          items:
+            type: object
+            properties:
+              serialNumber:
+                type: string
+              revocationDate:
+                type: string
+              reason:
+                type: string
+                description: RFC 5280 CRLReason (e.g., keyCompromise, cessationOfOperation)
 
     IcaoVersion:
       type: object
