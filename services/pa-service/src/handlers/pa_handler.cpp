@@ -257,10 +257,10 @@ void PaHandler::handleVerify(
         }
         std::string documentNumber = (*jsonBody).get("documentNumber", "").asString();
 
-        // Extract documentNumber from DG1 if not provided
-        if (documentNumber.empty() && dataGroups.count("1") > 0) {
+        // Extract documentNumber and countryCode from DG1 MRZ if not provided
+        if ((documentNumber.empty() || countryCode.empty()) && dataGroups.count("1") > 0) {
             const auto& dg1Data = dataGroups["1"];
-            // Simple extraction: find MRZ in DG1 and extract document number
+            // Simple extraction: find MRZ in DG1 and extract document number + country
             // This is a simplified version - full parsing is in icao::DgParser
             size_t pos = 0;
             while (pos + 3 < dg1Data.size()) {
@@ -277,13 +277,24 @@ void PaHandler::handleVerify(
                     }
                     if (pos + mrzLen <= dg1Data.size() && mrzLen >= 88) {
                         std::string mrzData(dg1Data.begin() + pos, dg1Data.begin() + pos + mrzLen);
-                        // TD3 format: document number is at line2[0:9]
+                        // TD3 format (2 lines x 44 chars)
                         if (mrzData.length() >= 88) {
-                            std::string docNum = mrzData.substr(44, 9);  // Line 2, position 0-8
-                            // Remove < characters
-                            docNum.erase(std::remove(docNum.begin(), docNum.end(), '<'), docNum.end());
-                            documentNumber = docNum;
-                            spdlog::debug("Extracted document number from DG1: {}", documentNumber);
+                            // Document number: line2[0:9]
+                            if (documentNumber.empty()) {
+                                std::string docNum = mrzData.substr(44, 9);
+                                docNum.erase(std::remove(docNum.begin(), docNum.end(), '<'), docNum.end());
+                                documentNumber = docNum;
+                                spdlog::debug("Extracted document number from DG1: {}", documentNumber);
+                            }
+                            // Issuing country: line1[2:5] (3-letter alpha-3)
+                            if (countryCode.empty()) {
+                                std::string mrzCountry = mrzData.substr(2, 3);
+                                mrzCountry.erase(std::remove(mrzCountry.begin(), mrzCountry.end(), '<'), mrzCountry.end());
+                                if (!mrzCountry.empty()) {
+                                    countryCode = common::normalizeCountryCodeToAlpha2(mrzCountry);
+                                    spdlog::info("Extracted country code from DG1 MRZ: {} -> {}", mrzCountry, countryCode);
+                                }
+                            }
                         }
                     }
                     break;
