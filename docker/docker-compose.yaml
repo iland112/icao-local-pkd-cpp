@@ -102,6 +102,7 @@ services:
       - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
       - LDAP_WRITE_PORT=389
@@ -170,6 +171,7 @@ services:
       - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
       - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
       - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
@@ -224,6 +226,7 @@ services:
       - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389

@@ -132,6 +132,8 @@ add_executable(${PROJECT_NAME}
     src/handlers/upload_stats_handler.cpp
     src/handlers/certificate_handler.cpp
     src/handlers/misc_handler.cpp
+    src/repositories/code_master_repository.cpp
+    src/handlers/code_master_handler.cpp
 
     # Infrastructure
     src/infrastructure/service_container.cpp

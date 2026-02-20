@@ -52,6 +52,9 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/certificates/crl/[a-f0-9\\-]+$",       // CRL detail by ID
     "^/api/certificates/crl/[a-f0-9\\-]+/download$", // CRL binary download
 
+    // --- Code Master (Read-only reference data) ---
+    "^/api/code-master.*",             // Code master list, categories, detail (read-only GET)
+
     // --- ICAO PKD Version Monitoring (Read-only public information) ---
     "^/api/icao/status$",          // ICAO version status comparison
     "^/api/icao/latest$",          // Latest ICAO version information

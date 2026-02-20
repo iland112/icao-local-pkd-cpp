@@ -29,6 +29,7 @@
 #include "../repositories/deviation_list_repository.h"
 #include "../repositories/icao_version_repository.h"
 #include "../repositories/ldap_certificate_repository.h"
+#include "../repositories/code_master_repository.h"
 
 // Services
 #include "../services/upload_service.h"
@@ -45,6 +46,7 @@
 #include "../handlers/upload_handler.h"
 #include "../handlers/upload_stats_handler.h"
 #include "../handlers/certificate_handler.h"
+#include "../handlers/code_master_handler.h"
 
 // HTTP and Notification infrastructure
 #include "../infrastructure/http/http_client.h"
@@ -72,6 +74,7 @@ struct ServiceContainer::Impl {
     std::shared_ptr<repositories::DeviationListRepository> deviationListRepository;
     std::shared_ptr<repositories::IcaoVersionRepository> icaoVersionRepository;
     std::shared_ptr<repositories::LdapCertificateRepository> ldapCertificateRepository;
+    std::shared_ptr<repositories::CodeMasterRepository> codeMasterRepository;
 
     // Services
     std::shared_ptr<services::UploadService> uploadService;
@@ -88,6 +91,7 @@ struct ServiceContainer::Impl {
     std::shared_ptr<handlers::UploadHandler> uploadHandler;
     std::shared_ptr<handlers::UploadStatsHandler> uploadStatsHandler;
     std::shared_ptr<handlers::CertificateHandler> certificateHandler;
+    std::shared_ptr<handlers::CodeMasterHandler> codeMasterHandler;
 };
 
 ServiceContainer::ServiceContainer() : impl_(std::make_unique<Impl>()) {}
@@ -100,6 +104,7 @@ void ServiceContainer::shutdown() {
     if (!impl_) return;
 
     // Release in reverse order
+    impl_->codeMasterHandler.reset();
     impl_->certificateHandler.reset();
     impl_->uploadStatsHandler.reset();
     impl_->uploadHandler.reset();
@@ -114,6 +119,7 @@ void ServiceContainer::shutdown() {
     impl_->uploadService.reset();
     impl_->certificateService.reset();
 
+    impl_->codeMasterRepository.reset();
     impl_->ldapCertificateRepository.reset();
     impl_->icaoVersionRepository.reset();
     impl_->deviationListRepository.reset();
@@ -206,7 +212,8 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     impl_->deviationListRepository = std::make_shared<repositories::DeviationListRepository>(impl_->queryExecutor.get());
     impl_->ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(impl_->uploadRepository.get());
     impl_->icaoVersionRepository = std::make_shared<repositories::IcaoVersionRepository>(impl_->queryExecutor.get());
-    spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion)");
+    impl_->codeMasterRepository = std::make_shared<repositories::CodeMasterRepository>(impl_->queryExecutor.get());
+    spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion, CodeMaster)");
 
     // --- Phase 4.5: LDAP Storage Service ---
     impl_->ldapStorageService = std::make_shared<services::LdapStorageService>(config);
@@ -309,6 +316,11 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     );
     spdlog::info("Certificate handler initialized (12 endpoints)");
 
+    impl_->codeMasterHandler = std::make_shared<handlers::CodeMasterHandler>(
+        impl_->codeMasterRepository.get()
+    );
+    spdlog::info("Code Master handler initialized (6 endpoints)");
+
     spdlog::info("ServiceContainer initialization complete");
     return true;
 }
@@ -328,6 +340,7 @@ repositories::UserRepository* ServiceContainer::userRepository() const { return 
 repositories::AuthAuditRepository* ServiceContainer::authAuditRepository() const { return impl_->authAuditRepository.get(); }
 repositories::CrlRepository* ServiceContainer::crlRepository() const { return impl_->crlRepository.get(); }
 repositories::DeviationListRepository* ServiceContainer::deviationListRepository() const { return impl_->deviationListRepository.get(); }
+repositories::CodeMasterRepository* ServiceContainer::codeMasterRepository() const { return impl_->codeMasterRepository.get(); }
 
 // --- Service Accessors ---
 services::UploadService* ServiceContainer::uploadService() const { return impl_->uploadService.get(); }
@@ -344,5 +357,6 @@ handlers::AuthHandler* ServiceContainer::authHandler() const { return impl_->aut
 handlers::UploadHandler* ServiceContainer::uploadHandler() const { return impl_->uploadHandler.get(); }
 handlers::UploadStatsHandler* ServiceContainer::uploadStatsHandler() const { return impl_->uploadStatsHandler.get(); }
 handlers::CertificateHandler* ServiceContainer::certificateHandler() const { return impl_->certificateHandler.get(); }
+handlers::CodeMasterHandler* ServiceContainer::codeMasterHandler() const { return impl_->codeMasterHandler.get(); }
 
 } // namespace infrastructure

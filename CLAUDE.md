@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.15.2
+**Current Version**: v2.16.0
 **Last Updated**: 2026-02-20
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -120,10 +120,11 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.14.0)
+## Current Features (v2.16.0)
 
 ### Core Functionality
 
+- **Code Master**: DB-based centralized code/status/enum management (21 categories, ~150 codes, CRUD API + frontend hook)
 - LDIF/Master List upload (AUTO/MANUAL modes)
 - Individual certificate upload with preview-before-save workflow (PEM, DER, P7B, DL, CRL)
 - Master List file processing (537 certificates: 1 MLSC + 536 CSCA/LC)
@@ -221,6 +222,14 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/audit/operations` - Operation audit logs
 - `GET /api/audit/operations/stats` - Operation statistics
 
+**Code Master** (centralized code/status management):
+- `GET /api/code-master` - List codes (category filter, pagination, activeOnly)
+- `GET /api/code-master/categories` - List distinct categories
+- `GET /api/code-master/{id}` - Get code by ID
+- `POST /api/code-master` - Create code (JWT required)
+- `PUT /api/code-master/{id}` - Update code (JWT required)
+- `DELETE /api/code-master/{id}` - Deactivate code (JWT required)
+
 ### PA Service (via :8080/api/pa)
 
 - `POST /api/pa/verify` - PA verification (full 8-step process)
@@ -246,8 +255,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Static files
-- **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion
+- **Public**: Health checks, Dashboard statistics, Certificate search, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), Static files
+- **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion, Code Master (POST/PUT/DELETE)
 
 ---
 
@@ -397,6 +406,8 @@ docker-compose -f docker/docker-compose.yaml restart pkd-management pa-service p
 | JSONB cast | $1::jsonb | $1 (no cast) | Remove cast for Oracle |
 | Empty string | '' (empty) | NULL | IS NOT NULL filter |
 | Timestamps | NOW() | SYSTIMESTAMP | Database-specific function |
+| Korean text | UTF-8 default | NLS_LANG required | `NLS_LANG=AMERICAN_AMERICA.AL32UTF8` env var |
+| CLOB + sequential queries | TEXT (no issue) | ORA-03127 LOB session | Use VARCHAR2(4000) for short text |
 
 ---
 
@@ -462,6 +473,7 @@ scripts/
 - Separate tables: certificate, crl, master_list, uploaded_file, deviation_list, deviation_entry
 - Audit tables: operation_audit_log, auth_audit_log
 - Sync tables: sync_status, reconciliation_summary, reconciliation_log
+- Reference data: code_master (21 categories, ~150 codes)
 
 ### LDAP Strategy
 - Read: Software Load Balancing (openldap1:389, openldap2:389)
@@ -498,6 +510,20 @@ scripts/
 ---
 
 ## Version History
+
+### v2.16.0 (2026-02-20) - Code Master Table (Centralized Code/Status Management)
+- New feature: `code_master` DB table for centralized management of all program codes, statuses, and enum values
+- 21 code categories with ~150 seed values: VALIDATION_STATUS, CRL_STATUS, CRL_REVOCATION_REASON, CERTIFICATE_TYPE, UPLOAD_STATUS, PROCESSING_STAGE, OPERATION_TYPE, PA_ERROR_CODE, and 13 more
+- Backend: `CodeMasterRepository` (CRUD + pagination, Oracle/PostgreSQL compatible) + `CodeMasterHandler` (6 REST endpoints)
+- Backend: ServiceContainer DI integration (Phase 4 repository, Phase 7 handler)
+- Backend: Auth middleware — GET endpoints public (read-only reference data), POST/PUT/DELETE require JWT
+- Endpoints: `GET /api/code-master` (category filter, pagination), `GET /api/code-master/categories`, `GET /api/code-master/{id}`, `POST/PUT/DELETE` for management
+- Frontend: `codeMasterApi.ts` API module + `useCodeMaster(category)` TanStack Query hook (10-min cache, `getLabel(code)` → Korean name)
+- DB schema: PostgreSQL (`TEXT`, `JSONB`, `UUID`, `ON CONFLICT DO NOTHING`) + Oracle (`VARCHAR2(4000)`, `NUMBER(1)`, `SYS_GUID()`)
+- Oracle: `VARCHAR2(4000)` used for `description`/`metadata` instead of `CLOB` (avoids OCI LOB session state issue with sequential queries)
+- Docker: `NLS_LANG=AMERICAN_AMERICA.AL32UTF8` added to all 3 services (pkd-management, pa-service, pkd-relay) for Oracle UTF-8 Korean text support
+- nginx: `/api/code-master` location block added to api-gateway.conf
+- 16 files changed (9 new, 7 modified)
 
 ### v2.15.2 (2026-02-20) - Trust Chain Path Distribution + PA Structured Error Messages
 - Trust Chain report: chain path distribution from DB (`chainPathDistribution` in `/api/upload/statistics`)

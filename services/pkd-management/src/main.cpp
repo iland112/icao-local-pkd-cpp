@@ -41,6 +41,7 @@
 #include "handlers/certificate_handler.h"
 #include "handlers/misc_handler.h"
 #include "handlers/icao_handler.h"
+#include "handlers/code_master_handler.h"
 
 // Authentication middleware
 #include "middleware/auth_middleware.h"
@@ -239,6 +240,11 @@ void registerRoutes() {
         checkLdap
     );
     miscHandler.registerRoutes(app);
+
+    // --- Code Master Routes ---
+    if (g_services && g_services->codeMasterHandler()) {
+        g_services->codeMasterHandler()->registerRoutes(app);
+    }
 
     // --- ICAO Routes ---
     if (g_services && g_services->icaoHandler()) {
