@@ -547,6 +547,36 @@ Json::Value UploadRepository::getStatisticsSummary()
             validation["revokedCount"] = common::db::getInt(validationResult[0], "revoked_count", 0);
         }
 
+        // Get trust chain path distribution (GROUP BY trust_chain_message)
+        std::string chainPathQuery;
+        if (dbType == "oracle") {
+            chainPathQuery =
+                "SELECT DBMS_LOB.SUBSTR(trust_chain_message, 200, 1) as path, COUNT(*) as cnt "
+                "FROM validation_result "
+                "WHERE trust_chain_valid = 1 AND trust_chain_message IS NOT NULL "
+                "GROUP BY DBMS_LOB.SUBSTR(trust_chain_message, 200, 1) "
+                "ORDER BY cnt DESC";
+        } else {
+            chainPathQuery =
+                "SELECT trust_chain_message as path, COUNT(*) as cnt "
+                "FROM validation_result "
+                "WHERE trust_chain_valid = true AND trust_chain_message IS NOT NULL "
+                "GROUP BY trust_chain_message "
+                "ORDER BY cnt DESC";
+        }
+        Json::Value chainPathResult = queryExecutor_->executeQuery(chainPathQuery);
+        Json::Value chainPathDistribution = Json::arrayValue;
+        for (const auto& row : chainPathResult) {
+            std::string path = row.get("path", "").asString();
+            if (!path.empty()) {
+                Json::Value entry;
+                entry["path"] = path;
+                entry["count"] = common::db::getInt(row, "cnt", 0);
+                chainPathDistribution.append(entry);
+            }
+        }
+        validation["chainPathDistribution"] = chainPathDistribution;
+
         // Get CSCA breakdown (self-signed vs link certificates)
         // Oracle: is_self_signed is NUMBER(1), PostgreSQL: BOOLEAN
         std::string cscaBreakdownQuery;

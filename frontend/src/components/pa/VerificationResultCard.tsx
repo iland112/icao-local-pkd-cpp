@@ -6,11 +6,91 @@ import {
   Globe,
   IdCard,
   ExternalLink,
+  ShieldAlert,
 } from 'lucide-react';
-import type { PAVerificationResponse } from '@/types';
+import type { PAVerificationResponse, CertificateChainValidationDto } from '@/types';
 import { cn } from '@/utils/cn';
 import { Link } from 'react-router-dom';
-import { getFlagSvgPath } from '@/utils/countryCode';
+import { getFlagSvgPath, getAlpha2Code } from '@/utils/countryCode';
+import countries from 'i18n-iso-countries';
+import ko from 'i18n-iso-countries/langs/ko.json';
+
+countries.registerLocale(ko);
+
+const getCountryName = (code: string): string => {
+  const alpha2 = code.length === 2 ? code : getAlpha2Code(code);
+  return countries.getName(alpha2?.toUpperCase() || code, 'ko') || code;
+};
+
+/** Extract country code from issuer DN (/C=XX/...) */
+const extractCountryFromDn = (dn: string): string | null => {
+  const match = dn.match(/\/C=([A-Za-z]{2,3})\b/i) || dn.match(/C=([A-Za-z]{2,3})\b/i);
+  return match ? match[1].toUpperCase() : null;
+};
+
+/** Render structured error message for trust chain failures */
+function TrustChainErrorDetail({ chainValidation }: { chainValidation: CertificateChainValidationDto }) {
+  const errorCode = chainValidation.errorCode;
+  const issuerDn = chainValidation.dscIssuer || '';
+  const countryCode = extractCountryFromDn(issuerDn);
+
+  const errorMessages: Record<string, { title: string; description: string }> = {
+    CSCA_NOT_FOUND: {
+      title: 'CSCA 인증서 미등록',
+      description: '해당 국가의 CSCA 인증서가 PKD에 등록되어 있지 않습니다.',
+    },
+    CSCA_DN_MISMATCH: {
+      title: 'CSCA DN 불일치',
+      description: '해당 국가의 CSCA가 존재하나 DSC 발급자 DN과 일치하는 인증서를 찾을 수 없습니다.',
+    },
+    CSCA_SELF_SIGNATURE_FAILED: {
+      title: 'CSCA 자체 서명 검증 실패',
+      description: 'Root CSCA의 자체 서명 검증에 실패했습니다. 인증서가 변조되었을 수 있습니다.',
+    },
+  };
+
+  const errorInfo = errorCode ? errorMessages[errorCode] : null;
+
+  if (!errorInfo) {
+    // Fallback: raw validationErrors
+    return (
+      <div className="flex items-center gap-2 text-sm opacity-90">
+        <XCircle className="w-3.5 h-3.5 shrink-0" />
+        <span>Trust Chain 검증 실패{chainValidation.validationErrors ? ` — ${chainValidation.validationErrors}` : ''}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-start gap-2 text-sm opacity-90">
+        <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+        <div>
+          <div className="flex items-center gap-1.5 font-semibold">
+            {countryCode && getFlagSvgPath(countryCode) && (
+              <img
+                src={getFlagSvgPath(countryCode)}
+                alt={countryCode}
+                className="w-5 h-3.5 object-cover rounded-sm border border-white/30"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+              />
+            )}
+            <span>
+              {countryCode ? `${getCountryName(countryCode)} (${countryCode})` : ''} {errorInfo.title}
+            </span>
+          </div>
+          <p className="text-xs opacity-80 mt-0.5">{errorInfo.description}</p>
+        </div>
+      </div>
+      {issuerDn && (errorCode === 'CSCA_NOT_FOUND' || errorCode === 'CSCA_DN_MISMATCH') && (
+        <div className="ml-6 p-2 bg-black/15 rounded-lg text-xs">
+          <span className="opacity-70">DSC Issuer DN: </span>
+          <code className="font-mono break-all opacity-90">{issuerDn}</code>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // DG1 MRZ 파싱 결과 타입
 export interface DG1ParseResult {
@@ -103,7 +183,7 @@ export function VerificationResultCard({
                   />
                 ) : null}
                 <Globe className={`w-3.5 h-3.5 ${getFlagSvgPath(result.issuingCountry) ? 'hidden' : ''}`} />
-                {result.issuingCountry}
+                {getCountryName(result.issuingCountry)} ({result.issuingCountry})
               </span>
             )}
             {result.documentNumber && (
@@ -127,11 +207,8 @@ export function VerificationResultCard({
       {result.status === 'INVALID' && (
         <div className="mt-3 pt-3 border-t border-white/20 space-y-1.5">
           <div className="text-xs font-semibold opacity-90">실패 원인:</div>
-          {!result.certificateChainValidation?.valid && (
-            <div className="flex items-center gap-2 text-sm opacity-90">
-              <XCircle className="w-3.5 h-3.5 shrink-0" />
-              <span>Trust Chain 검증 실패{result.certificateChainValidation?.validationErrors ? ` \u2014 ${result.certificateChainValidation.validationErrors}` : ''}</span>
-            </div>
+          {!result.certificateChainValidation?.valid && result.certificateChainValidation && (
+            <TrustChainErrorDetail chainValidation={result.certificateChainValidation} />
           )}
           {!result.sodSignatureValidation?.valid && (
             <div className="flex items-center gap-2 text-sm opacity-90">

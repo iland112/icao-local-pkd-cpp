@@ -55,6 +55,7 @@ Json::Value CertificateChainValidation::toJson() const {
 
     // Validation errors
     if (validationErrors) json["validationErrors"] = *validationErrors;
+    if (errorCode) json["errorCode"] = *errorCode;
 
     // Signature verification
     json["signatureVerified"] = signatureVerified;

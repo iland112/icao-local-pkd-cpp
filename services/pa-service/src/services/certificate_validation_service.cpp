@@ -139,6 +139,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         std::vector<X509*> allCscas = certRepo_->findAllCscasByCountry(effectiveCountry);
         if (allCscas.empty()) {
             result.valid = false;
+            result.errorCode = "CSCA_NOT_FOUND";
             result.validationErrors = "CSCA not found for issuer: " + result.dscIssuer;
             result.expirationStatus = "INVALID";
             return result;
@@ -179,6 +180,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         if (!cscaCert) {
             for (X509* c : allCscas) X509_free(c);
             result.valid = false;
+            result.errorCode = "CSCA_DN_MISMATCH";
             result.validationErrors = "CSCA not found for issuer: " + result.dscIssuer;
             result.expirationStatus = "INVALID";
             return result;
@@ -202,6 +204,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
                 spdlog::error("CSCA self-signature verification FAILED - root CSCA may be tampered");
                 result.signatureVerified = false;
                 result.valid = false;
+                result.errorCode = "CSCA_SELF_SIGNATURE_FAILED";
                 result.validationErrors = "CSCA self-signature verification failed";
                 result.expirationStatus = "INVALID";
                 for (X509* c : allCscas) X509_free(c);

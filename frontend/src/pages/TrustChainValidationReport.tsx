@@ -37,12 +37,19 @@ interface SampleCert {
 }
 
 const SAMPLE_CERTS: SampleCert[] = [
-  { country: 'KR', fingerprint: '9ea82cef2c37c2b86cf52874e26cfc2327542e8378ee16773223e8bb0be19894', status: 'VALID', chainPattern: 'DSC → Root', label: '한국 DSC (유효)' },
-  { country: 'FR', fingerprint: '09a6ee2c858dbbeca13ca2c4edb51990a7c21eea7bf59d7c4ad67b71221e211e', status: 'VALID', chainPattern: 'DSC → Root', label: '프랑스 DSC (유효)' },
-  { country: 'DE', fingerprint: 'fc518d660b3efd1645999271dea99c7aefcbcf43f92eabea9143c53b3fbbbb66', status: 'VALID', chainPattern: 'DSC → Link → Root', label: '독일 DSC (Link Chain)' },
-  { country: 'GB', fingerprint: '36a4ba04d316aa9a34f98691f4f3ac295f3d2f50babedadb2aaa911659043e20', status: 'EXPIRED_VALID', chainPattern: 'DSC → Root', label: '영국 DSC (만료)' },
-  { country: 'AU', fingerprint: '151683ad7249d34be7fed5e616d9380cdd7a9541c9d1203ae57fa261213c5d32', status: 'PENDING', chainPattern: 'CSCA 미등록', label: '호주 DSC (CSCA 미등록)' },
+  { country: 'KR', fingerprint: '9ea82cef2c37c2b86cf52874e26cfc2327542e8378ee16773223e8bb0be19894', status: 'VALID', chainPattern: 'DSC → Root', label: '한국 DSC (Direct)' },
+  { country: 'HU', fingerprint: 'e2636645b39c47f36b0e518f34a74e96f77543059f0abee3fca98079395827a8', status: 'VALID', chainPattern: 'DSC → Link → Root', label: '헝가리 DSC (Link 1)' },
+  { country: 'LU', fingerprint: 'e3e0719559c4a46567395e94127a4248a1ea17fd72e20b44845f9e54e853e40a', status: 'VALID', chainPattern: 'DSC → Link → CSCA → Root', label: '룩셈부르크 DSC (Link 2)' },
+  { country: 'LU', fingerprint: 'ea9f8538afb2f9700d53ae450fbe4accb54fb1c512134e3fd56593c208daafdd', status: 'VALID', chainPattern: 'DSC → Link → Link → CSCA → Root', label: '룩셈부르크 DSC (Link 3)' },
+  { country: 'HU', fingerprint: 'bc1567b9da90aa19e239733d71c46e42661af816f2c6c5e1737c4273920fce26', status: 'VALID', chainPattern: 'DSC → Link → Link → Root', label: '헝가리 DSC (Link 2)' },
+  { country: 'NL', fingerprint: '574ec2b9b4a4ce15f02513c3907865fe1dc9bd0b9e0924097066d7a11832d27d', status: 'VALID', chainPattern: 'DSC → Link(x4) → Root', label: '네덜란드 DSC (Link 4)' },
 ];
+
+// Chain path distribution from API
+interface ChainPathEntry {
+  path: string;
+  count: number;
+}
 
 // 통계 타입
 interface ValidationStats {
@@ -53,6 +60,7 @@ interface ValidationStats {
   trustChainValidCount: number;
   trustChainInvalidCount: number;
   cscaNotFoundCount: number;
+  chainPathDistribution: ChainPathEntry[];
 }
 
 export function TrustChainValidationReport() {
@@ -83,6 +91,7 @@ export function TrustChainValidationReport() {
             trustChainValidCount: v.trustChainValidCount ?? 0,
             trustChainInvalidCount: v.trustChainInvalidCount ?? 0,
             cscaNotFoundCount: v.cscaNotFoundCount ?? 0,
+            chainPathDistribution: Array.isArray(v.chainPathDistribution) ? v.chainPathDistribution : [],
           });
         }
       } catch {
@@ -145,14 +154,43 @@ export function TrustChainValidationReport() {
     }, 100);
   }, []);
 
-  // Chain pattern data
-  const chainPatterns: ChainPattern[] = stats ? [
-    { label: 'DSC → Root', description: '직접 신뢰 체인 (DSC → CSCA Root)', count: 15013, color: 'bg-emerald-500' },
-    { label: 'Link Chain', description: 'Link Certificate 경유 (DSC → Link → Root 등)', count: 325, color: 'bg-blue-500' },
-    { label: 'CSCA 미등록', description: 'CSCA 인증서를 찾을 수 없음', count: stats.cscaNotFoundCount, color: 'bg-amber-500' },
-  ] : [];
+  // Chain path color assignment based on depth (number of arrows)
+  const pathColors = [
+    'bg-emerald-500',   // DSC → Root (direct, depth 1)
+    'bg-blue-500',      // DSC → Link → Root (depth 2)
+    'bg-indigo-500',    // depth 3
+    'bg-purple-500',    // depth 4
+    'bg-violet-500',    // depth 5+
+  ];
+  const getPathColor = (path: string) => {
+    const depth = (path.match(/(→|->)/g) || []).length;
+    return pathColors[Math.min(depth - 1, pathColors.length - 1)] || pathColors[0];
+  };
+  const formatPath = (path: string) => path.replace(/->/g, '→');
 
-  const totalValidated = stats ? stats.validCount + stats.expiredValidCount + stats.invalidCount + stats.pendingCount : 0;
+  // Chain pattern data from API chain path distribution
+  const chainPatterns: ChainPattern[] = stats ? [
+    // Trust Chain 유효 - broken down by path level from API
+    ...(stats.chainPathDistribution.length > 0
+      ? stats.chainPathDistribution.map((entry) => ({
+          label: formatPath(entry.path),
+          description: '',
+          count: entry.count,
+          color: getPathColor(entry.path),
+        }))
+      : stats.trustChainValidCount > 0
+        ? [{ label: 'Trust Chain 유효', description: 'DSC → CSCA 신뢰 체인 검증 성공', count: stats.trustChainValidCount, color: 'bg-emerald-500' }]
+        : []
+    ),
+    // Trust Chain 실패
+    { label: 'Trust Chain 실패', description: 'CSCA 존재하나 서명/유효기간 검증 실패', count: stats.trustChainInvalidCount - stats.cscaNotFoundCount, color: 'bg-red-500' },
+    // CSCA 미등록
+    { label: 'CSCA 미등록', description: 'CSCA 인증서를 찾을 수 없음', count: stats.cscaNotFoundCount, color: 'bg-amber-500' },
+  ].filter(p => p.count > 0) : [];
+
+  // validCount from API already includes EXPIRED_VALID, so subtract to get pure VALID
+  const pureValidCount = stats ? stats.validCount - stats.expiredValidCount : 0;
+  const totalValidated = stats ? stats.validCount + stats.invalidCount + stats.pendingCount : 0;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -210,8 +248,8 @@ export function TrustChainValidationReport() {
             <StatCard
               icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
               label="VALID"
-              value={stats.validCount.toLocaleString()}
-              sub={`${totalValidated > 0 ? ((stats.validCount / totalValidated) * 100).toFixed(1) : 0}%`}
+              value={pureValidCount.toLocaleString()}
+              sub={`${totalValidated > 0 ? ((pureValidCount / totalValidated) * 100).toFixed(1) : 0}%`}
               borderColor="border-emerald-500"
             />
             <StatCard

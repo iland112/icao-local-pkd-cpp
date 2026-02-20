@@ -140,18 +140,6 @@ export function Stepper({
           </div>
         )}
 
-        {/* Completed step details (show last completed step's details if no active step) */}
-        {showProgress && !activeStep && (() => {
-          const lastCompleted = [...steps].reverse().find(s => s.status === 'completed' && s.details);
-          if (!lastCompleted) return null;
-          return (
-            <div className="mt-3 p-3 rounded-lg bg-teal-50/50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-900/30">
-              <p className="text-xs font-medium text-teal-600 dark:text-teal-400">
-                {lastCompleted.details}
-              </p>
-            </div>
-          );
-        })()}
 
         {/* Error step details */}
         {showProgress && (() => {

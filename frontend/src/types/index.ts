@@ -356,6 +356,8 @@ export interface CertificateChainValidationDto {
   crlThisUpdate?: string;
   crlNextUpdate?: string;
   validationErrors?: string;
+  errorCode?: string;  // CSCA_NOT_FOUND, CSCA_DN_MISMATCH, CSCA_SELF_SIGNATURE_FAILED
+  dscIssuer?: string;
   // DSC conformance status (ICAO PKD nc-data)
   dscNonConformant?: boolean;
   pkdConformanceCode?: string;

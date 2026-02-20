@@ -101,6 +101,7 @@ struct CertificateChainValidation {
 
     // Validation errors
     std::optional<std::string> validationErrors;
+    std::optional<std::string> errorCode;  // Structured error code: CSCA_NOT_FOUND, CSCA_DN_MISMATCH, CSCA_SELF_SIGNATURE_FAILED
 
     // Signature verification details
     bool signatureVerified = false;

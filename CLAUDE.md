@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.15.1
-**Last Updated**: 2026-02-19
+**Current Version**: v2.15.2
+**Last Updated**: 2026-02-20
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -498,6 +498,21 @@ scripts/
 ---
 
 ## Version History
+
+### v2.15.2 (2026-02-20) - Trust Chain Path Distribution + PA Structured Error Messages
+- Trust Chain report: chain path distribution from DB (`chainPathDistribution` in `/api/upload/statistics`)
+- Backend: `trust_chain_message` GROUP BY query in `getStatisticsSummary()` (Oracle `DBMS_LOB.SUBSTR` + PostgreSQL)
+- Trust Chain 분포 bars: path-level breakdown (DSC→Root, DSC→Link→Root, etc.) with depth-based color coding
+- Sample certificates updated to 6 chain path levels (KR, HU, LU, NL — all VALID from DB)
+- Trust Chain report: fixed hardcoded chain pattern values + VALID double-counting (`pureValidCount`)
+- PA Service: structured `errorCode` field in `CertificateChainValidation` response
+- Error codes: `CSCA_NOT_FOUND`, `CSCA_DN_MISMATCH`, `CSCA_SELF_SIGNATURE_FAILED`
+- Frontend: `VerificationResultCard` — structured error display with flag icon + country name (Korean) + issuer DN
+- Frontend: `VerificationStepsPanel` Step 4 — structured CSCA lookup error with `errorCode`-based Korean messages
+- Frontend: PA result card country display: "국기 + 국가코드" → "국기 + 국가이름(국가코드)" (i18n-iso-countries Korean locale)
+- Frontend: `CertificateChainValidationDto` — added `errorCode`, `dscIssuer` fields
+- Stepper: removed completed step details message box (no longer relevant after upload UX changes)
+- 10 files changed (0 new, 10 modified)
 
 ### v2.15.1 (2026-02-19) - Trust Chain Demo + CRL Download + PA Conformance
 - New page: Trust Chain Demo (`/validation-demo`) - validation statistics dashboard with sample certificate lookup

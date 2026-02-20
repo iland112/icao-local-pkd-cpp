@@ -10,8 +10,39 @@ import {
   FileKey,
   FileText,
   Hash,
+  ShieldAlert,
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { getFlagSvgPath, getAlpha2Code } from '@/utils/countryCode';
+import countries from 'i18n-iso-countries';
+import ko from 'i18n-iso-countries/langs/ko.json';
+
+countries.registerLocale(ko);
+
+const getCountryName = (code: string): string => {
+  const alpha2 = code.length === 2 ? code : getAlpha2Code(code);
+  return countries.getName(alpha2?.toUpperCase() || code, 'ko') || code;
+};
+
+const extractCountryFromDn = (dn: string): string | null => {
+  const match = dn.match(/\/C=([A-Za-z]{2,3})\b/i) || dn.match(/C=([A-Za-z]{2,3})\b/i);
+  return match ? match[1].toUpperCase() : null;
+};
+
+const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
+  CSCA_NOT_FOUND: {
+    title: 'CSCA 인증서 미등록',
+    description: '해당 국가의 CSCA 인증서가 PKD에 등록되어 있지 않습니다.',
+  },
+  CSCA_DN_MISMATCH: {
+    title: 'CSCA DN 불일치',
+    description: '해당 국가의 CSCA가 존재하나 DSC 발급자 DN과 일치하는 인증서를 찾을 수 없습니다.',
+  },
+  CSCA_SELF_SIGNATURE_FAILED: {
+    title: 'CSCA 자체 서명 검증 실패',
+    description: 'Root CSCA의 자체 서명 검증에 실패했습니다.',
+  },
+};
 
 // Verification Step 상태 타입
 export type StepStatus = 'pending' | 'running' | 'success' | 'warning' | 'error';
@@ -302,17 +333,52 @@ export function VerificationStepsPanel({
                       </div>
                     )}
                     {/* 실패 원인 */}
-                    <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs">
-                      <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
-                        <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                        <div>
-                          <span className="font-semibold">실패 원인: </span>
-                          {step.details.error
-                            ? String(step.details.error)
-                            : 'DSC 인증서가 CSCA에 의해 서명되지 않았거나 서명 검증에 실패했습니다.'}
+                    {(() => {
+                      const errorCode = step.details.errorCode as string | undefined;
+                      const errorInfo = errorCode ? ERROR_MESSAGES[errorCode] : null;
+                      const issuerDn = (step.details.dscIssuer || '') as string;
+                      const cc = extractCountryFromDn(issuerDn || (step.details.dscSubject as string || ''));
+
+                      return errorInfo ? (
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs space-y-2">
+                          <div className="flex items-start gap-2">
+                            <ShieldAlert className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="flex items-center gap-1.5 font-semibold text-red-700 dark:text-red-300">
+                                {cc && getFlagSvgPath(cc) && (
+                                  <img
+                                    src={getFlagSvgPath(cc)}
+                                    alt={cc}
+                                    className="w-5 h-3.5 object-cover rounded-sm border border-gray-300 dark:border-gray-600"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                )}
+                                {cc ? `${getCountryName(cc)} (${cc})` : ''} {errorInfo.title}
+                              </div>
+                              <p className="text-gray-600 dark:text-gray-400 mt-0.5">{errorInfo.description}</p>
+                            </div>
+                          </div>
+                          {issuerDn && (errorCode === 'CSCA_NOT_FOUND' || errorCode === 'CSCA_DN_MISMATCH') && (
+                            <div className="ml-6 p-2 bg-gray-100 dark:bg-gray-700/50 rounded text-xs">
+                              <span className="text-gray-500">DSC Issuer DN: </span>
+                              <code className="font-mono break-all text-gray-700 dark:text-gray-300">{issuerDn}</code>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    </div>
+                      ) : (
+                        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs">
+                          <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
+                            <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-semibold">실패 원인: </span>
+                              {step.details.error
+                                ? String(step.details.error)
+                                : 'DSC 인증서가 CSCA에 의해 서명되지 않았거나 서명 검증에 실패했습니다.'}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 )}
 
@@ -327,23 +393,60 @@ export function VerificationStepsPanel({
                     </div>
                   </div>
                 )}
-                {step.id === 4 && step.status === 'error' && step.details && (
-                  <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg text-xs space-y-1.5">
-                    {step.details.dscSubject && (
-                      <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
-                        <span className="text-gray-500 shrink-0">DSC 발급자:</span>
-                        <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
-                          {step.details.dscSubject}
-                        </code>
-                      </div>
-                    )}
-                    {step.details.error && (
-                      <div className="text-red-600 dark:text-red-400">
-                        <span className="font-semibold">원인:</span> {String(step.details.error)}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {step.id === 4 && step.status === 'error' && step.details && (() => {
+                  const errorCode = step.details.errorCode as string | undefined;
+                  const errorInfo = errorCode ? ERROR_MESSAGES[errorCode] : null;
+                  const issuerDn = (step.details.dscIssuer || step.details.dscSubject || '') as string;
+                  const countryCode = extractCountryFromDn(issuerDn);
+
+                  return (
+                    <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-xs space-y-2">
+                      {errorInfo ? (
+                        <>
+                          <div className="flex items-start gap-2">
+                            <ShieldAlert className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+                            <div>
+                              <div className="flex items-center gap-1.5 font-semibold text-red-700 dark:text-red-300">
+                                {countryCode && getFlagSvgPath(countryCode) && (
+                                  <img
+                                    src={getFlagSvgPath(countryCode)}
+                                    alt={countryCode}
+                                    className="w-5 h-3.5 object-cover rounded-sm border border-gray-300 dark:border-gray-600"
+                                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                  />
+                                )}
+                                {countryCode ? `${getCountryName(countryCode)} (${countryCode})` : ''} {errorInfo.title}
+                              </div>
+                              <p className="text-gray-600 dark:text-gray-400 mt-0.5">{errorInfo.description}</p>
+                            </div>
+                          </div>
+                          {issuerDn && (errorCode === 'CSCA_NOT_FOUND' || errorCode === 'CSCA_DN_MISMATCH') && (
+                            <div className="ml-6 p-2 bg-gray-100 dark:bg-gray-700/50 rounded text-xs">
+                              <span className="text-gray-500">DSC Issuer DN: </span>
+                              <code className="font-mono break-all text-gray-700 dark:text-gray-300">{issuerDn}</code>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          {step.details.dscSubject && (
+                            <div className="flex items-start gap-2 text-gray-600 dark:text-gray-400">
+                              <span className="text-gray-500 shrink-0">DSC 발급자:</span>
+                              <code className="font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded break-all">
+                                {step.details.dscSubject}
+                              </code>
+                            </div>
+                          )}
+                          {step.details.error && (
+                            <div className="text-red-600 dark:text-red-400">
+                              <span className="font-semibold">원인:</span> {String(step.details.error)}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Step 5: SOD 서명 검증 상세 정보 (성공) */}
                 {step.id === 5 && step.status === 'success' && step.details && (

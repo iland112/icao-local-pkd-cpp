@@ -181,7 +181,9 @@ export function PAVerify() {
           message: '✗ Trust Chain 검증 실패',
           details: {
             error: chainValidation?.validationErrors,
+            errorCode: chainValidation?.errorCode,
             dscSubject: chainValidation?.dscSubject,
+            dscIssuer: chainValidation?.dscIssuer,
             cscaSubject: chainValidation?.cscaSubject,
             notBefore: chainValidation?.notBefore,
             notAfter: chainValidation?.notAfter,
@@ -211,7 +213,9 @@ export function PAVerify() {
           message: '✗ CSCA 인증서를 찾을 수 없음',
           details: {
             error: response.certificateChainValidation?.validationErrors,
+            errorCode: response.certificateChainValidation?.errorCode,
             dscSubject: response.certificateChainValidation?.dscSubject,
+            dscIssuer: response.certificateChainValidation?.dscIssuer,
           },
           expanded: true,
         };
