@@ -23,6 +23,7 @@ import type {
   PageResponse,
   LdifStructureData,
   CertificateCountriesResponse,
+  Doc9303ChecklistResult,
 } from '@/types';
 
 // --- Axios Instance ---
@@ -198,6 +199,10 @@ export const certificateApi = {
 
   downloadCrl: (id: string) =>
     pkdApi.get(`/certificates/crl/${id}/download`, { responseType: 'blob' }),
+
+  /** Doc 9303 compliance checklist by fingerprint */
+  getDoc9303Checklist: (fingerprint: string) =>
+    pkdApi.get<Doc9303ChecklistResult>(`/certificates/doc9303-checklist`, { params: { fingerprint } }),
 };
 
 // --- Upload History & Statistics (Read-Only) ---

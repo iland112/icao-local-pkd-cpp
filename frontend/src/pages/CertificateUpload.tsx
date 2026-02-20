@@ -20,6 +20,7 @@ import { uploadApi } from '@/services/api';
 import type { CertificatePreviewResult, CertificatePreviewItem, DeviationPreviewItem, CertificateUploadResponse } from '@/types';
 import { cn } from '@/utils/cn';
 import { TreeViewer, type TreeNode } from '@/components/TreeViewer';
+import { Doc9303ComplianceChecklist } from '@/components/Doc9303ComplianceChecklist';
 
 type PageState = 'IDLE' | 'FILE_SELECTED' | 'PREVIEWING' | 'PREVIEW_READY' | 'PREVIEW_ERROR' | 'CONFIRMING' | 'COMPLETED' | 'FAILED';
 type PreviewTab = 'certificates' | 'dl-structure' | 'crl';
@@ -169,7 +170,7 @@ function buildDlStructureTree(preview: CertificatePreviewResult): TreeNode[] {
 
 function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePreviewItem; index: number; deviations?: DeviationPreviewItem[] }) {
   const [expanded, setExpanded] = useState(index === 0);
-  const [activeTab, setActiveTab] = useState<'general' | 'details'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'details' | 'doc9303'>('general');
 
   const tabClass = (active: boolean) => cn(
     'px-5 py-2 text-xs font-medium border-b-2 transition-colors',
@@ -211,6 +212,17 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
                 <AlertTriangle className="w-3 h-3" /> Deviation
               </span>
             )}
+            {cert.doc9303Checklist && (
+              <span className={cn(
+                'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold',
+                cert.doc9303Checklist.overallStatus === 'CONFORMANT' && 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+                cert.doc9303Checklist.overallStatus === 'WARNING' && 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400',
+                cert.doc9303Checklist.overallStatus === 'NON_CONFORMANT' && 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
+              )}>
+                {cert.doc9303Checklist.overallStatus === 'CONFORMANT' ? <CheckCircle className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                {cert.doc9303Checklist.overallStatus === 'CONFORMANT' ? '9303' : `9303 (${cert.doc9303Checklist.failCount})`}
+              </span>
+            )}
           </div>
         </div>
         <svg className={cn('w-4 h-4 text-gray-400 transition-transform flex-shrink-0 ml-2', expanded && 'rotate-180')} fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
@@ -223,6 +235,9 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
           <div className="border-b border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-700/30 flex">
             <button onClick={() => setActiveTab('general')} className={tabClass(activeTab === 'general')}>General</button>
             <button onClick={() => setActiveTab('details')} className={tabClass(activeTab === 'details')}>Details</button>
+            {cert.doc9303Checklist && (
+              <button onClick={() => setActiveTab('doc9303')} className={tabClass(activeTab === 'doc9303')}>Doc 9303</button>
+            )}
           </div>
 
           {activeTab === 'general' && (
@@ -289,6 +304,12 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
           {activeTab === 'details' && (
             <div className="p-4">
               <TreeViewer data={buildPreviewCertificateTree(cert)} height="320px" />
+            </div>
+          )}
+
+          {activeTab === 'doc9303' && cert.doc9303Checklist && (
+            <div className="p-4">
+              <Doc9303ComplianceChecklist checklist={cert.doc9303Checklist} />
             </div>
           )}
         </div>

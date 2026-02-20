@@ -51,6 +51,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/certificates/crl/report$",              // CRL report
     "^/api/certificates/crl/[a-f0-9\\-]+$",       // CRL detail by ID
     "^/api/certificates/crl/[a-f0-9\\-]+/download$", // CRL binary download
+    "^/api/certificates/doc9303-checklist.*",      // Doc 9303 compliance checklist
 
     // --- Code Master (Read-only reference data) ---
     "^/api/code-master.*",             // Code master list, categories, detail (read-only GET)

@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.16.0
+**Current Version**: v2.17.0
 **Last Updated**: 2026-02-20
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -120,7 +120,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.16.0)
+## Current Features (v2.17.0)
 
 ### Core Functionality
 
@@ -146,6 +146,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Real-time upload processing status (PROCESSING state with periodic DB updates)
 - X.509 metadata extraction (22 fields per certificate)
 - ICAO 9303 compliance checking (6 validation categories) with per-certificate DB persistence
+- Doc 9303 per-item compliance checklist (~28 checks, certificate type-aware: CSCA/DSC/MLSC)
 - Per-certificate validation log streaming (SSE) for real-time EventLog display
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
 - CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export, CRL file download)
@@ -201,6 +202,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/certificates/crl/report` - CRL report with statistics, charts, and paginated CRL list
 - `GET /api/certificates/crl/{id}` - CRL detail with parsed revoked certificate list
 - `GET /api/certificates/crl/{id}/download` - CRL binary file download (.crl)
+- `GET /api/certificates/doc9303-checklist` - Doc 9303 compliance checklist by fingerprint
 - `GET /api/certificates/export/{format}` - Certificate export
 - `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
@@ -255,7 +257,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), Static files
+- **Public**: Health checks, Dashboard statistics, Certificate search, Doc 9303 checklist, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), Static files
 - **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion, Code Master (POST/PUT/DELETE)
 
 ---
@@ -304,8 +306,9 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | QuickLookupPanel | PA quick lookup by subject DN or fingerprint |
 | VerificationStepsPanel | 8-step ICAO verification process display |
 | VerificationResultCard | PA verification result summary card |
-| CertificateDetailDialog | Certificate detail modal (2-tab: General/Details) |
+| CertificateDetailDialog | Certificate detail modal (3-tab: General/Details/Doc 9303) |
 | CertificateSearchFilters | Certificate search filter card with export buttons |
+| Doc9303ComplianceChecklist | Doc 9303 per-item compliance checklist with collapsible categories |
 
 ### Dependencies
 
@@ -510,6 +513,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.17.0 (2026-02-20) - Doc 9303 Compliance Checklist
+- New feature: Per-item Doc 9303 compliance checklist (~28 checks) for certificate upload preview and certificate detail dialog
+- Backend: `doc9303_checklist.h/.cpp` — OpenSSL-based compliance engine checking version, serial number, signature algorithm OID match, issuer/subject country, unique identifiers, Key Usage (present/critical/correct), Basic Constraints (present/critical/CA/pathLen), EKU rules, AKI/SKI, Certificate Policies criticality, Netscape extensions, unknown critical extensions, key size (minimum/recommended)
+- Backend: Certificate type-aware checks — CSCA (keyCertSign+cRLSign, CA=true, pathLen=0), DSC (digitalSignature, CA=false), MLSC (EKU OID 2.23.136.1.1.3)
+- Backend: Preview API extension — `CertificatePreviewItem.doc9303Checklist` field added to `POST /api/upload/certificate/preview` response
+- Backend: Dedicated API — `GET /api/certificates/doc9303-checklist?fingerprint={sha256}` for certificate detail dialog (lazy loading)
+- Backend: Fingerprint-based DB lookup → hex→DER decode → `d2i_X509()` → `runDoc9303Checklist()` pipeline
+- Backend: Public endpoint (no JWT required, consistent with certificate search)
+- Frontend: `Doc9303ComplianceChecklist.tsx` — category-based collapsible groups with pass/fail/warning/NA icons, summary bar, auto-expand on failures
+- Frontend: `CertificateUpload.tsx` — "Doc 9303" tab added to CertificateCard + conformance status badge in card header
+- Frontend: `CertificateDetailDialog.tsx` — "Doc 9303" tab with fingerprint-based lazy loading API call (3-tab: General/Details/Doc 9303)
+- Frontend: `Doc9303CheckItem`, `Doc9303ChecklistResult` TypeScript interfaces
+- Frontend: `certificateApi.getDoc9303Checklist()` API function
+- Reference document: `docs/DOC9303_COMPLIANCE_CHECKS.md` — Korean documentation of all Doc 9303 compliance checks
+- 15 files changed (3 new, 12 modified)
 
 ### v2.16.0 (2026-02-20) - Code Master Table (Centralized Code/Status Management)
 - New feature: `code_master` DB table for centralized management of all program codes, statuses, and enum values

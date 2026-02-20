@@ -1,10 +1,13 @@
-import React from 'react';
-import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 import type { ValidationResult } from '@/types/validation';
+import type { Doc9303ChecklistResult } from '@/types';
 import { TreeViewer } from '@/components/TreeViewer';
 import type { TreeNode } from '@/components/TreeViewer';
+import { certificateApi } from '@/services/pkdApi';
+import { Doc9303ComplianceChecklist } from '@/components/Doc9303ComplianceChecklist';
 
 interface DnComponents {
   commonName?: string;
@@ -56,8 +59,8 @@ interface CertificateDetailDialogProps {
   selectedCert: Certificate;
   showDetailDialog: boolean;
   setShowDetailDialog: (show: boolean) => void;
-  detailTab: 'general' | 'details';
-  setDetailTab: (tab: 'general' | 'details') => void;
+  detailTab: 'general' | 'details' | 'doc9303';
+  setDetailTab: (tab: 'general' | 'details' | 'doc9303') => void;
   validationResult: ValidationResult | null;
   validationLoading: boolean;
   exportCertificate: (dn: string, format: 'der' | 'pem') => void;
@@ -86,6 +89,32 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
   getActualCertType,
   getCertTypeBadge,
 }) => {
+  // Doc 9303 checklist lazy loading state
+  const [doc9303Checklist, setDoc9303Checklist] = useState<Doc9303ChecklistResult | null>(null);
+  const [doc9303Loading, setDoc9303Loading] = useState(false);
+  const [doc9303Error, setDoc9303Error] = useState<string | null>(null);
+
+  // Load Doc 9303 checklist when tab is selected
+  useEffect(() => {
+    if (detailTab !== 'doc9303' || !selectedCert.fingerprint || doc9303Checklist) return;
+    setDoc9303Loading(true);
+    setDoc9303Error(null);
+    certificateApi.getDoc9303Checklist(selectedCert.fingerprint)
+      .then(res => {
+        setDoc9303Checklist(res.data);
+      })
+      .catch(err => {
+        setDoc9303Error(err.response?.data?.error || 'Doc 9303 체크리스트를 로드할 수 없습니다.');
+      })
+      .finally(() => setDoc9303Loading(false));
+  }, [detailTab, selectedCert.fingerprint, doc9303Checklist]);
+
+  // Reset checklist when certificate changes
+  useEffect(() => {
+    setDoc9303Checklist(null);
+    setDoc9303Error(null);
+  }, [selectedCert.fingerprint]);
+
   // Build trust chain tree from validation result
   const buildTrustChainTree = (trustChainPath: string): TreeNode[] => {
     const parts = trustChainPath.split('\u2192').map(s => s.trim());
@@ -380,6 +409,17 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
             >
               Details
             </button>
+            <button
+              onClick={() => setDetailTab('doc9303')}
+              className={cn(
+                'px-6 py-3 text-sm font-medium border-b-2 transition-colors',
+                detailTab === 'doc9303'
+                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              )}
+            >
+              Doc 9303
+            </button>
           </div>
         </div>
 
@@ -606,6 +646,31 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                     </p>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Doc 9303 Tab */}
+          {detailTab === 'doc9303' && (
+            <div className="space-y-4">
+              {doc9303Loading && (
+                <div className="flex items-center justify-center gap-2 py-8 text-blue-500">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="text-sm text-gray-500 dark:text-gray-400">Doc 9303 체크리스트 로드 중...</span>
+                </div>
+              )}
+              {doc9303Error && (
+                <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+                  <p className="text-sm text-red-600 dark:text-red-400">{doc9303Error}</p>
+                </div>
+              )}
+              {doc9303Checklist && (
+                <Doc9303ComplianceChecklist checklist={doc9303Checklist} />
+              )}
+              {!doc9303Loading && !doc9303Error && !doc9303Checklist && (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                  Doc 9303 적합성 체크리스트 데이터가 없습니다.
+                </p>
               )}
             </div>
           )}

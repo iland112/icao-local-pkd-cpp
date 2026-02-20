@@ -2331,6 +2331,7 @@ void UploadHandler::handlePreviewCertificate(
             certJson["publicKeyAlgorithm"] = cert.publicKeyAlgorithm;
             certJson["keySize"] = cert.keySize;
             certJson["fingerprintSha256"] = cert.fingerprintSha256;
+            certJson["doc9303Checklist"] = cert.doc9303Checklist.toJson();
             certsArray.append(certJson);
         }
         response["certificates"] = certsArray;

@@ -35,7 +35,7 @@ const CertificateSearch: React.FC = () => {
   const [showFilters, setShowFilters] = useState(true);
   const [selectedCert, setSelectedCert] = useState<Certificate | null>(null);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
-  const [detailTab, setDetailTab] = useState<'general' | 'details'>('general');
+  const [detailTab, setDetailTab] = useState<'general' | 'details' | 'doc9303'>('general');
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
   const [validationLoading, setValidationLoading] = useState(false);
 

@@ -235,6 +235,16 @@ private:
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& id);
+
+    /**
+     * @brief GET /api/certificates/doc9303-checklist
+     *
+     * Doc 9303 compliance checklist for a certificate identified by fingerprint.
+     * Query params: fingerprint (SHA-256 hex)
+     */
+    void handleDoc9303Checklist(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 };
 
 } // namespace handlers

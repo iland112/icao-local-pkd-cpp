@@ -7,6 +7,7 @@
 #include <json/json.h>
 #include "../processing_strategy.h"
 #include "../common.h"
+#include "../common/doc9303_checklist.h"
 #include "../repositories/upload_repository.h"
 #include "../repositories/certificate_repository.h"
 #include "../repositories/deviation_list_repository.h"
@@ -80,6 +81,7 @@ public:
         std::string publicKeyAlgorithm;
         int keySize = 0;
         std::string fingerprintSha256;
+        common::Doc9303ChecklistResult doc9303Checklist;  ///< Doc 9303 compliance checklist
     };
 
     struct DeviationPreviewItem {

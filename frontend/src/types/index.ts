@@ -683,6 +683,27 @@ export interface LdifStructureData {
 // Certificate Preview Types (preview-before-save workflow)
 // =============================================================================
 
+// Doc 9303 Compliance Checklist
+export interface Doc9303CheckItem {
+  id: string;
+  category: string;
+  label: string;
+  status: 'PASS' | 'FAIL' | 'WARNING' | 'NA';
+  message: string;
+  requirement: string;
+}
+
+export interface Doc9303ChecklistResult {
+  certificateType: string;
+  totalChecks: number;
+  passCount: number;
+  failCount: number;
+  warningCount: number;
+  naCount: number;
+  overallStatus: 'CONFORMANT' | 'NON_CONFORMANT' | 'WARNING';
+  items: Doc9303CheckItem[];
+}
+
 export interface CertificatePreviewItem {
   subjectDn: string;
   issuerDn: string;
@@ -698,6 +719,7 @@ export interface CertificatePreviewItem {
   publicKeyAlgorithm: string;
   keySize: number;
   fingerprintSha256: string;
+  doc9303Checklist?: Doc9303ChecklistResult;
 }
 
 export interface DeviationPreviewItem {

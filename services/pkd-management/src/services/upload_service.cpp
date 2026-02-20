@@ -26,6 +26,9 @@
 #include <icao/x509/certificate_parser.h>
 #include <dl_parser.h>
 
+// Doc 9303 compliance checklist
+#include "../common/doc9303_checklist.h"
+
 // processLdifFileAsync() moved to UploadHandler (Phase D3)
 // Called via g_services->uploadHandler()->processLdifFileAsync()
 
@@ -515,6 +518,9 @@ UploadService::CertificatePreviewResult UploadService::previewCertificate(
                     OPENSSL_free(derBuf);
                     item.fingerprintSha256 = computeFileHash(derBytes);
                 }
+
+                // Doc 9303 compliance checklist
+                item.doc9303Checklist = common::runDoc9303Checklist(cert, item.certificateType);
 
                 result.certificates.push_back(item);
                 X509_free(cert);

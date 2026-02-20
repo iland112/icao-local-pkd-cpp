@@ -79,6 +79,7 @@ add_executable(${PROJECT_NAME}
     src/common/progress_manager.cpp  # Phase 4.4: Enhanced progress tracking
     src/common/asn1_parser.cpp       # ASN.1/TLV parser for Master List structure
     src/common/ldif_parser.cpp       # v2.2.2: LDIF structure parser for visualization
+    src/common/doc9303_checklist.cpp  # v2.17.0: Doc 9303 compliance checklist
     # Database connection pool now provided by shared icao::database library
 
     # Sprint 2: Link Certificate Validation (NEW)
