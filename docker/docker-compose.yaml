@@ -296,6 +296,50 @@ services:
       start_period: 15s
 
   # ---------------------------------------------------------------------------
+  # AI Analysis Service (ML-based Certificate Anomaly Detection & Pattern Analysis)
+  # Python FastAPI + scikit-learn, runtime analysis of certificate metadata
+  # ---------------------------------------------------------------------------
+  ai-analysis:
+    build:
+      context: ..
+      dockerfile: services/ai-analysis/Dockerfile
+    container_name: icao-local-pkd-ai-analysis
+    # ports:
+    #   - "8085:8085"  # Direct access (use API Gateway instead)
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=ai-analysis
+      - SERVER_PORT=8085
+      # Database Type Selection
+      - DB_TYPE=${DB_TYPE}
+      # PostgreSQL Configuration
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      # Oracle Configuration
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      # Analysis Scheduler Configuration
+      - ANALYSIS_SCHEDULE_HOUR=${ANALYSIS_SCHEDULE_HOUR:-3}
+      - ANALYSIS_ENABLED=${ANALYSIS_ENABLED:-true}
+    volumes:
+      - ../.docker-data/ai-analysis-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/api/ai/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
   # Legacy App (Backwards compatibility - uses existing Dockerfile)
   # ---------------------------------------------------------------------------
   app:

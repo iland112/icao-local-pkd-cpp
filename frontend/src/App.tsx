@@ -11,6 +11,7 @@ import { OperationAuditLog } from '@/pages/OperationAuditLog';
 import DscNcReport from '@/pages/DscNcReport';
 import CrlReport from '@/pages/CrlReport';
 import { TrustChainValidationReport } from '@/pages/TrustChainValidationReport';
+import AiAnalysisDashboard from '@/pages/AiAnalysisDashboard';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -52,6 +53,7 @@ function App() {
             <Route path="sync" element={<SyncDashboard />} />
             <Route path="icao" element={<IcaoStatus />} />
             <Route path="monitoring" element={<MonitoringDashboard />} />
+            <Route path="ai/analysis" element={<AiAnalysisDashboard />} />
 
             <Route path="profile" element={<Profile />} />
             <Route path="admin/users" element={<UserManagement />} />

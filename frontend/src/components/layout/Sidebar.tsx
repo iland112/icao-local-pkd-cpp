@@ -32,6 +32,7 @@ import {
   ShieldX,
   FileWarning,
   Link2,
+  Brain,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -94,6 +95,7 @@ const navSections: NavSection[] = [
           { path: '/pkd/trust-chain', label: 'DSC Trust Chain 보고서', icon: <Link2 className="w-4 h-4" /> },
           { path: '/pkd/crl', label: 'CRL 보고서', icon: <FileWarning className="w-4 h-4" /> },
           { path: '/pkd/dsc-nc', label: '표준 부적합 DSC 보고서', icon: <ShieldX className="w-4 h-4" /> },
+          { path: '/ai/analysis', label: 'AI 인증서 분석', icon: <Brain className="w-4 h-4" /> },
         ],
       },
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" /> },

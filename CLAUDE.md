@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.17.0
+**Current Version**: v2.18.0
 **Last Updated**: 2026-02-20
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -15,7 +15,7 @@ This project **MUST support multiple database systems** including PostgreSQL, Or
 - All code must be database-agnostic
 - Runtime database switching via `DB_TYPE` environment variable
 - Query Executor Pattern (`IQueryExecutor`) for database abstraction
-- All services (PKD Management, PA Service, PKD Relay) support both PostgreSQL and Oracle
+- All services (PKD Management, PA Service, PKD Relay, AI Analysis) support both PostgreSQL and Oracle
 
 ---
 
@@ -29,10 +29,11 @@ This project **MUST support multiple database systems** including PostgreSQL, Or
 | PA Service | :8082 |
 | PKD Relay | :8083 |
 | Monitoring Service | :8084 |
+| AI Analysis Service | :8085 |
 | API Gateway | http://localhost:8080/api |
 | Frontend | http://localhost:3000 |
 
-**Technology Stack**: C++20, Drogon, PostgreSQL 15 / Oracle XE 21c, OpenLDAP (MMR), React 19, TypeScript, Tailwind CSS
+**Technology Stack**: C++20, Drogon, Python 3.12, FastAPI, scikit-learn, PostgreSQL 15 / Oracle XE 21c, OpenLDAP (MMR), React 19, TypeScript, Tailwind CSS
 
 ### Daily Commands
 
@@ -72,7 +73,10 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
                                                         |     DB-LDAP Sync, Reconciliation
                                                         |
                                                         +-- Monitoring Service (:8084)
-                                                              System Metrics, Service Health (DB-independent)
+                                                        |     System Metrics, Service Health (DB-independent)
+                                                        |
+                                                        +-- AI Analysis Service (:8085)
+                                                              ML Anomaly Detection, Pattern Analysis (Python/FastAPI)
 ```
 
 ### Design Patterns
@@ -120,7 +124,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.17.0)
+## Current Features (v2.18.0)
 
 ### Core Functionality
 
@@ -151,6 +155,14 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
 - CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export, CRL file download)
 - DSC Trust Chain report page (validation statistics, chain distribution, sample certificate lookup, QuickLookupPanel integration)
+- **AI Certificate Analysis Engine** (ML-based anomaly detection, risk scoring, pattern analysis)
+  - Isolation Forest + Local Outlier Factor dual-model anomaly detection (25 features)
+  - Composite risk scoring (0~100: algorithm, key size, compliance, validity, extensions, anomaly)
+  - Country-level PKI maturity scoring (algorithm, key size, compliance, extensions, freshness)
+  - Algorithm migration trend analysis (by issuance year)
+  - Key size distribution analysis (by algorithm family)
+  - Daily scheduled batch analysis (APScheduler, configurable hour)
+  - Per-certificate anomaly explanation (top-5 deviating features with Korean descriptions)
 
 ### Security
 
@@ -167,7 +179,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - PostgreSQL 15 (production recommended, 10-50x faster)
 - Oracle XE 21c (enterprise environments)
 - Runtime switching via `DB_TYPE` environment variable
-- All 3 services fully support both databases
+- All 4 C++ services + AI Analysis (Python) support both databases
 - Oracle-specific handling: UPPERCASE columns, NUMBER(1) booleans, OFFSET/FETCH pagination, empty-string-as-NULL
 
 ---
@@ -254,17 +266,31 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/sync/reconcile/{id}` - Reconciliation detail
 - `GET /api/sync/reconcile/stats` - Reconciliation statistics
 
+### AI Analysis Service (via :8080/api/ai)
+
+- `GET /api/ai/health` - Health check
+- `POST /api/ai/analyze` - Trigger full analysis (background)
+- `GET /api/ai/analyze/status` - Analysis job status
+- `GET /api/ai/certificate/{fingerprint}` - Certificate analysis result
+- `GET /api/ai/anomalies` - Anomaly list (filters: country, type, label, risk_level, pagination)
+- `GET /api/ai/statistics` - Overall analysis statistics
+- `GET /api/ai/reports/country-maturity` - Country PKI maturity ranking
+- `GET /api/ai/reports/algorithm-trends` - Algorithm migration trends by year
+- `GET /api/ai/reports/key-size-distribution` - Key size distribution
+- `GET /api/ai/reports/risk-distribution` - Risk level distribution
+- `GET /api/ai/reports/country/{code}` - Country detail analysis
+
 ### Public vs Protected Endpoints
 
 Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services/pkd-management/src/middleware/auth_middleware.cpp) lines 10-93. Key categories:
-- **Public**: Health checks, Dashboard statistics, Certificate search, Doc 9303 checklist, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), Static files
+- **Public**: Health checks, Dashboard statistics, Certificate search, Doc 9303 checklist, DSC_NC report, CRL report/download, PA lookup, ICAO monitoring, Sync status, PA verification, Certificate preview, Code Master (GET), AI Analysis (all endpoints), Static files
 - **Protected**: File uploads (LDIF/ML/Certificate save), User management, Audit logs, Upload deletion, Code Master (POST/PUT/DELETE)
 
 ---
 
 ## Frontend
 
-### Pages (23 total)
+### Pages (24 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -287,6 +313,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
 | ValidationDemo | `/pkd/trust-chain` | DSC Trust Chain report |
+| AiAnalysisDashboard | `/ai/analysis` | AI certificate anomaly detection & pattern analysis |
 
 ### Key Components
 
@@ -513,6 +540,25 @@ scripts/
 ---
 
 ## Version History
+
+### v2.18.0 (2026-02-20) - AI Certificate Analysis Engine
+- New service: `ai-analysis` — Python FastAPI ML-based certificate anomaly detection and pattern analysis (:8085)
+- **Tech stack**: Python 3.12, FastAPI, scikit-learn, pandas, numpy, SQLAlchemy (asyncpg + cx_Oracle), APScheduler
+- **Feature engineering**: 25 ML features from certificate + validation_result tables (cryptography, validity, compliance, extensions, country-relative values)
+- **Anomaly detection**: Dual-model approach — Isolation Forest (global) + Local Outlier Factor (local per country/type), combined score 0.0~1.0
+- **Risk scoring**: Composite 0~100 score from 6 categories (algorithm, key_size, compliance, validity, extensions, anomaly), 4 risk levels (LOW/MEDIUM/HIGH/CRITICAL)
+- **Pattern analysis**: Country PKI maturity scoring (5 weighted dimensions), algorithm migration trends by year, key size distribution by algorithm family
+- **Explainability**: Per-certificate top-5 deviating features with Korean descriptions and sigma values
+- **Background scheduler**: APScheduler daily batch analysis (configurable hour via `ANALYSIS_SCHEDULE_HOUR`, enable/disable via `ANALYSIS_ENABLED`)
+- **Multi-DBMS**: PostgreSQL (asyncpg) + Oracle (cx_Oracle) via DB_TYPE environment variable, dual engine (async + sync)
+- **API endpoints**: 12 endpoints — health, trigger analysis, job status, certificate result, anomaly list (filtered/paginated), statistics, country maturity, algorithm trends, key size distribution, risk distribution, country detail
+- **DB schema**: `ai_analysis_result` table (anomaly_score, anomaly_label, risk_score, risk_level, risk_factors JSONB, feature_vector JSONB, anomaly_explanations JSONB)
+- **Docker**: Python 3.12-slim image, non-root user, curl healthcheck, docker-compose integration
+- **nginx**: `/api/ai` location block with rate limiting, dynamic upstream resolution
+- **Frontend**: `AiAnalysisDashboard.tsx` — summary cards (total/normal/suspicious/anomalous/avg risk), risk level proportional bar, country PKI maturity horizontal bar chart, algorithm migration stacked area chart, filtered anomaly table with pagination
+- **Frontend**: `aiAnalysisApi.ts` — API module with 12 typed functions, TypeScript interfaces for all response types
+- **Frontend**: Brain icon in sidebar under "보고서" submenu, `/ai/analysis` route in App.tsx
+- 28 files changed (26 new, 2 modified infrastructure + 2 modified frontend)
 
 ### v2.17.0 (2026-02-20) - Doc 9303 Compliance Checklist
 - New feature: Per-item Doc 9303 compliance checklist (~28 checks) for certificate upload preview and certificate detail dialog
