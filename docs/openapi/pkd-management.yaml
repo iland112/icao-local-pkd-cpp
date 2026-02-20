@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.17.0** (2026-02-20): Doc 9303 compliance checklist — per-certificate conformance check API + preview integration
     - **v2.15.1** (2026-02-19): CRL binary download endpoint, Trust Chain demo page support
     - **v2.15.0** (2026-02-18): CRL report + detail endpoints (report, detail, download)
     - **v2.10.4** (2026-02-15): DSC_NC non-conformant certificate report
@@ -19,7 +20,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.15.1
+  version: 2.17.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -820,6 +821,44 @@ paths:
                         items:
                           $ref: '#/components/schemas/DscNcCertificate'
 
+  /api/certificates/doc9303-checklist:
+    get:
+      tags: [Certificates]
+      summary: Doc 9303 compliance checklist for a certificate
+      description: |
+        Run ICAO Doc 9303 conformance checks (~28 items) against a certificate
+        identified by its SHA-256 fingerprint. Checks are certificate-type-aware
+        (CSCA, DSC, MLSC) and cover version, serial number, signature algorithm,
+        issuer/subject fields, key usage, basic constraints, extensions, and key size.
+
+        The certificate binary is retrieved from LDAP (not DB BLOB) to avoid
+        Oracle OCI LOB session state issues.
+
+        **Categories**: 기본, 서명, 발급자, 주체, 고유식별자, Key Usage, 기본 제약, 확장 키 용도, 확장, 키 크기
+      operationId: getDoc9303Checklist
+      parameters:
+        - name: fingerprint
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 64
+            maxLength: 64
+          description: SHA-256 fingerprint (hex, 64 chars)
+      responses:
+        '200':
+          description: Doc 9303 checklist result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Doc9303ChecklistResponse'
+        '400':
+          description: Missing fingerprint parameter
+        '404':
+          description: Certificate not found
+        '500':
+          description: Failed to parse certificate or run checklist
+
   /api/certificates/crl/report:
     get:
       tags: [Certificates]
@@ -1444,6 +1483,8 @@ components:
           type: string
         fingerprintSha256:
           type: string
+        doc9303Checklist:
+          $ref: '#/components/schemas/Doc9303ChecklistResult'
 
     UploadStatisticsResponse:
       type: object
@@ -1781,6 +1822,101 @@ components:
               reason:
                 type: string
                 description: RFC 5280 CRLReason (e.g., keyCompromise, cessationOfOperation)
+
+    Doc9303ChecklistResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        fingerprint:
+          type: string
+          description: SHA-256 fingerprint of the certificate
+        certificateType:
+          type: string
+          enum: [CSCA, DSC, MLSC]
+        totalChecks:
+          type: integer
+          description: Total number of checks performed
+        passCount:
+          type: integer
+        failCount:
+          type: integer
+        warningCount:
+          type: integer
+        naCount:
+          type: integer
+          description: Not applicable count (checks skipped for this cert type)
+        overallStatus:
+          type: string
+          enum: [CONFORMANT, NON_CONFORMANT, WARNING]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Doc9303CheckItem'
+      example:
+        success: true
+        fingerprint: "920693cd1283824ffdf48a3579fc35528122f3de46bab2ecdaef402db6d92e4e"
+        certificateType: "CSCA"
+        totalChecks: 25
+        passCount: 24
+        failCount: 0
+        warningCount: 0
+        naCount: 1
+        overallStatus: "CONFORMANT"
+
+    Doc9303ChecklistResult:
+      type: object
+      description: Doc 9303 checklist result (embedded in certificate preview response)
+      properties:
+        certificateType:
+          type: string
+          enum: [CSCA, DSC, MLSC]
+        totalChecks:
+          type: integer
+        passCount:
+          type: integer
+        failCount:
+          type: integer
+        warningCount:
+          type: integer
+        naCount:
+          type: integer
+        overallStatus:
+          type: string
+          enum: [CONFORMANT, NON_CONFORMANT, WARNING]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Doc9303CheckItem'
+
+    Doc9303CheckItem:
+      type: object
+      properties:
+        id:
+          type: string
+          description: "Check identifier (e.g., version_v3, key_usage_critical)"
+        category:
+          type: string
+          description: "Category name (기본, 서명, 발급자, 주체, Key Usage, 기본 제약, 확장, 키 크기)"
+        label:
+          type: string
+          description: Human-readable check name (Korean)
+        status:
+          type: string
+          enum: [PASS, FAIL, WARNING, NA]
+        message:
+          type: string
+          description: "Result detail (e.g., actual value found, failure reason)"
+        requirement:
+          type: string
+          description: Doc 9303 requirement description (Korean)
+      example:
+        id: "version_v3"
+        category: "기본"
+        label: "버전 V3"
+        status: "PASS"
+        message: "V3"
+        requirement: "인증서 버전은 반드시 V3이어야 합니다"
 
     IcaoVersion:
       type: object
