@@ -160,8 +160,10 @@ private:
     /**
      * @brief Release a session back to the OCI Session Pool
      * @param session Session to release (handles are nulled after release)
+     * @param dropSession If true, destroy session instead of returning to pool
+     *        (used after LOB operations to prevent ORA-03127 on session reuse)
      */
-    void releasePooledSession(PooledSession& session);
+    void releasePooledSession(PooledSession& session, bool dropSession = false);
 
     /// @name Legacy per-query connection methods (kept as fallback)
 

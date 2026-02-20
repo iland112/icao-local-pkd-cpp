@@ -1854,14 +1854,10 @@ void CertificateHandler::handleDoc9303Checklist(
 
         spdlog::info("Doc9303 checklist request: fingerprint={}...", fingerprint.substr(0, 16));
 
-        // Query certificate binary + type from DB
-        const char* query =
-            "SELECT certificate_data, certificate_type FROM certificate "
-            "WHERE fingerprint_sha256 = $1";
-        std::vector<std::string> params = {fingerprint};
-        Json::Value dbResult = queryExecutor_->executeQuery(query, params);
+        // Step 1: Get metadata from DB (no BLOB — avoids Oracle ORA-03127 LOB session issue)
+        Json::Value certInfo = certificateRepository_->findByFingerprint(fingerprint);
 
-        if (dbResult.empty()) {
+        if (certInfo.isNull()) {
             Json::Value error;
             error["success"] = false;
             error["error"] = "Certificate not found for fingerprint: " + fingerprint;
@@ -1871,45 +1867,35 @@ void CertificateHandler::handleDoc9303Checklist(
             return;
         }
 
-        std::string certDataHex = dbResult[0].get("certificate_data", "").asString();
-        std::string certType = dbResult[0].get("certificate_type", "DSC").asString();
+        std::string certType = certInfo.get("certificate_type", "DSC").asString();
+        std::string country = certInfo.get("country_code", "").asString();
 
-        if (certDataHex.empty()) {
+        // Step 2: Build LDAP DN from metadata and get certificate binary from LDAP
+        std::string typeOu;
+        if (certType == "CSCA") typeOu = "csca";
+        else if (certType == "MLSC") typeOu = "mlsc";
+        else typeOu = "dsc";  // DSC and DSC_NC both stored under o=dsc
+
+        std::string dataDc = (certType == "DSC_NC") ? "nc-data" : "data";
+        std::string ldapDn = "cn=" + fingerprint + ",o=" + typeOu + ",c=" + country +
+            ",dc=" + dataDc + ",dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com";
+
+        spdlog::debug("Doc9303 checklist: fetching binary from LDAP DN={}", ldapDn);
+
+        auto exportResult = certificateService_->exportCertificateFile(ldapDn, services::ExportFormat::DER);
+        if (!exportResult.success || exportResult.data.empty()) {
             Json::Value error;
             error["success"] = false;
-            error["error"] = "Certificate binary data not available";
+            error["error"] = "Certificate binary data not available in LDAP";
             auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(drogon::k404NotFound);
             callback(resp);
             return;
         }
 
-        // Decode hex to DER bytes
-        auto decodeHex = [](const std::string& hex, size_t start) -> std::vector<uint8_t> {
-            std::vector<uint8_t> bytes;
-            bytes.reserve((hex.size() - start) / 2);
-            for (size_t i = start; i + 1 < hex.size(); i += 2) {
-                char h[3] = {hex[i], hex[i + 1], 0};
-                bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
-            }
-            return bytes;
-        };
-
-        std::vector<uint8_t> derBytes;
-        if (certDataHex.size() > 2 && certDataHex[0] == '\\' && certDataHex[1] == 'x') {
-            derBytes = decodeHex(certDataHex, 2);
-            // Handle double-encoded BYTEA
-            if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
-                std::string innerHex(derBytes.begin(), derBytes.end());
-                derBytes = decodeHex(innerHex, 2);
-            }
-        } else {
-            derBytes = decodeHex(certDataHex, 0);
-        }
-
-        // Parse DER to X509
-        const unsigned char* p = derBytes.data();
-        X509* cert = d2i_X509(nullptr, &p, static_cast<long>(derBytes.size()));
+        // Step 3: Parse DER to X509
+        const unsigned char* p = exportResult.data.data();
+        X509* cert = d2i_X509(nullptr, &p, static_cast<long>(exportResult.data.size()));
         if (!cert) {
             Json::Value error;
             error["success"] = false;
@@ -1920,7 +1906,7 @@ void CertificateHandler::handleDoc9303Checklist(
             return;
         }
 
-        // Run Doc 9303 checklist
+        // Step 4: Run Doc 9303 checklist
         auto checklist = common::runDoc9303Checklist(cert, certType);
         X509_free(cert);
 

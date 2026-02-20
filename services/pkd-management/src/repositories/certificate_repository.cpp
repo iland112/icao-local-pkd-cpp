@@ -294,7 +294,7 @@ Json::Value CertificateRepository::findByFingerprint(const std::string& fingerpr
     try {
         const char* query =
             "SELECT id, certificate_type, country_code, subject_dn, issuer_dn, "
-            "fingerprint_sha256, serial_number, valid_from, valid_to, "
+            "fingerprint_sha256, serial_number, not_before, not_after, "
             "stored_in_ldap, created_at "
             "FROM certificate WHERE fingerprint_sha256 = $1";
 

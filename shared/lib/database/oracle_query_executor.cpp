@@ -360,24 +360,31 @@ Json::Value OracleQueryExecutor::executeQuery(
             result.append(row);
         }
 
-        // Cleanup buffers and LOB locators
+        // Cleanup buffers and LOB locators, track whether LOBs were used
+        bool hadLobs = false;
         for (ub4 i = 0; i < colCount; ++i) {
             if (colBuffers[i]) delete[] colBuffers[i];
-            if (lobLocators[i]) OCIDescriptorFree(lobLocators[i], OCI_DTYPE_LOB);
+            if (lobLocators[i]) {
+                hadLobs = true;
+                OCIDescriptorFree(lobLocators[i], OCI_DTYPE_LOB);
+            }
         }
         for (char* buf : paramBuffers) delete[] buf;
         OCIHandleFree(stmt, OCI_HTYPE_STMT);
 
-        // Release session back to pool
-        releasePooledSession(session);
+        // Release session back to pool. If LOB operations occurred, drop the session
+        // to prevent ORA-03127 on reuse (Oracle retains internal LOB state on the
+        // session even after locator descriptors are freed).
+        releasePooledSession(session, hadLobs);
 
-        spdlog::debug("[OracleQueryExecutor] OCI query returned {} rows", result.size());
+        spdlog::debug("[OracleQueryExecutor] OCI query returned {} rows{}", result.size(),
+                     hadLobs ? " (session dropped after LOB)" : "");
         return result;
 
     } catch (const std::exception& e) {
         spdlog::error("[OracleQueryExecutor] OCI exception: {}", e.what());
-        // Ensure session is released back to pool on exception
-        releasePooledSession(session);
+        // Ensure session is released back to pool on exception (drop to be safe)
+        releasePooledSession(session, true);
         throw;
     }
 
@@ -1250,15 +1257,28 @@ OracleQueryExecutor::PooledSession OracleQueryExecutor::acquirePooledSession()
     return session;
 }
 
-void OracleQueryExecutor::releasePooledSession(PooledSession& session)
+void OracleQueryExecutor::releasePooledSession(PooledSession& session, bool dropSession)
 {
     if (session.svcCtx) {
-        // Release session back to pool with NLS tag
+        // Rollback any pending transaction state before returning session to pool.
+        OCITransRollback(session.svcCtx, session.err, OCI_DEFAULT);
+
+        // After LOB operations (BLOB/CLOB reads via OCILobRead), Oracle's OCI session
+        // retains internal LOB state that isn't cleared by OCIDescriptorFree() or
+        // OCITransRollback(). Reusing such a session causes ORA-03127 ("no new operations
+        // allowed until the active operation ends"). The fix: destroy the session instead
+        // of returning it to the pool when LOB operations occurred.
+        ub4 mode = dropSession ? OCI_SESSRLS_DROPSESS : OCI_DEFAULT;
+
         OCISessionRelease(session.svcCtx, session.err,
                          reinterpret_cast<OraText*>(const_cast<char*>(NLS_SESSION_TAG)),
                          static_cast<ub4>(strlen(NLS_SESSION_TAG)),
-                         OCI_DEFAULT);
+                         mode);
         session.svcCtx = nullptr;
+
+        if (dropSession) {
+            spdlog::debug("[SessionPool] Session dropped after LOB operation (prevents ORA-03127)");
+        }
     }
     if (session.err) {
         OCIHandleFree(session.err, OCI_HTYPE_ERROR);
