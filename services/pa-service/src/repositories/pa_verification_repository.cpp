@@ -200,25 +200,41 @@ Json::Value PaVerificationRepository::findAll(
         Json::Value countResult = queryExecutor_->executeScalar(countQuery.str(), params);
         int total = common::db::scalarToInt(countResult);
 
-        // Data query
+        // Data query — Oracle CLOB columns wrapped with DBMS_LOB.SUBSTR to avoid ORA-03127 LOB session state issue
+        std::string dbType = queryExecutor_->getDatabaseType();
         std::ostringstream dataQuery;
-        dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
-                  << "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
-                  << "csca_subject_dn, csca_fingerprint, "
-                  << "trust_chain_valid, trust_chain_message, "
-                  << "sod_signature_valid, sod_signature_message, "
-                  << "dg_hashes_valid, dg_hashes_message, "
-                  << "crl_status, crl_message, "
-                  << "verification_message, "
-                  << "request_timestamp, completed_timestamp, client_ip, user_agent, "
-                  << "requested_by, dsc_non_conformant, pkd_conformance_code, pkd_conformance_text "
-                  << "FROM pa_verification";
+        if (dbType == "oracle") {
+            dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+                      << "DBMS_LOB.SUBSTR(dsc_subject_dn, 4000, 1) AS dsc_subject_dn, dsc_serial_number, "
+                      << "DBMS_LOB.SUBSTR(dsc_issuer_dn, 4000, 1) AS dsc_issuer_dn, dsc_fingerprint, "
+                      << "DBMS_LOB.SUBSTR(csca_subject_dn, 4000, 1) AS csca_subject_dn, csca_fingerprint, "
+                      << "trust_chain_valid, DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1) AS trust_chain_message, "
+                      << "sod_signature_valid, DBMS_LOB.SUBSTR(sod_signature_message, 4000, 1) AS sod_signature_message, "
+                      << "dg_hashes_valid, DBMS_LOB.SUBSTR(dg_hashes_message, 4000, 1) AS dg_hashes_message, "
+                      << "crl_status, DBMS_LOB.SUBSTR(crl_message, 4000, 1) AS crl_message, "
+                      << "DBMS_LOB.SUBSTR(verification_message, 4000, 1) AS verification_message, "
+                      << "request_timestamp, completed_timestamp, client_ip, "
+                      << "DBMS_LOB.SUBSTR(user_agent, 4000, 1) AS user_agent, "
+                      << "requested_by, dsc_non_conformant, pkd_conformance_code, pkd_conformance_text "
+                      << "FROM pa_verification";
+        } else {
+            dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+                      << "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
+                      << "csca_subject_dn, csca_fingerprint, "
+                      << "trust_chain_valid, trust_chain_message, "
+                      << "sod_signature_valid, sod_signature_message, "
+                      << "dg_hashes_valid, dg_hashes_message, "
+                      << "crl_status, crl_message, "
+                      << "verification_message, "
+                      << "request_timestamp, completed_timestamp, client_ip, user_agent, "
+                      << "requested_by, dsc_non_conformant, pkd_conformance_code, pkd_conformance_text "
+                      << "FROM pa_verification";
+        }
 
         if (!whereClause.empty()) {
             dataQuery << " WHERE " << whereClause;
         }
 
-        std::string dbType = queryExecutor_->getDatabaseType();
         dataQuery << " ORDER BY request_timestamp DESC";
         dataQuery << common::db::paginationClause(dbType, limit, offset);
 

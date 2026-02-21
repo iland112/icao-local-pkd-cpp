@@ -545,8 +545,10 @@ scripts/
 - Frontend: PA History table — anonymous 사용자에 client IP 주소 표시 (`anonymous (192.168.1.100)` 형식)
 - Frontend: PA History detail modal — anonymous 사용자에 IP 주소 + User-Agent(40자 축약, hover 전체 표시) 표시
 - Frontend: `PAHistoryItem` TypeScript 인터페이스에 `clientIp`, `userAgent` 필드 추가
-- Backend 변경 없음 — 이미 `client_ip`, `user_agent`를 DB 저장 및 API 응답(`clientIp`, `userAgent`)에 포함
-- 2 files changed (0 new, 2 modified)
+- Frontend: PA History 테이블 페이지 크기 10 → 5로 변경
+- Backend: PA handler `getPeerAddr()` → `X-Real-IP` > `X-Forwarded-For` > `getPeerAddr()` 우선순위로 실제 클라이언트 IP 추출 (nginx 프록시 환경)
+- Backend: PA history `findAll` Oracle CLOB 9개 컬럼 `DBMS_LOB.SUBSTR()` 래핑 — ORA-03127 LOB 세션 문제로 1행만 반환되던 버그 수정
+- 4 files changed (0 new, 4 modified)
 
 ### v2.18.0 (2026-02-20) - AI Certificate Analysis Engine
 - New service: `ai-analysis` — Python FastAPI ML-based certificate anomaly detection and pattern analysis (:8085)

@@ -73,7 +73,7 @@ export function PAHistory() {
   const [dgLoading, setDgLoading] = useState(false);
   const [dgError, setDgError] = useState<string | null>(null);
 
-  const pageSize = 10;
+  const pageSize = 5;
 
   useEffect(() => {
     fetchHistory();

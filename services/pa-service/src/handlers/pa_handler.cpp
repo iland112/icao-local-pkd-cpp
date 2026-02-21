@@ -308,8 +308,21 @@ void PaHandler::handleVerify(
                     documentNumber.empty() ? "(unknown)" : documentNumber,
                     dataGroups.size());
 
-        // Extract client metadata for audit
-        std::string clientIp = req->getPeerAddr().toIp();
+        // Extract client metadata for audit (prefer X-Real-IP from reverse proxy)
+        std::string clientIp = req->getHeader("X-Real-IP");
+        if (clientIp.empty()) {
+            clientIp = req->getHeader("X-Forwarded-For");
+            if (!clientIp.empty()) {
+                // X-Forwarded-For may contain "client, proxy1, proxy2" — use first
+                auto commaPos = clientIp.find(',');
+                if (commaPos != std::string::npos) {
+                    clientIp = clientIp.substr(0, commaPos);
+                }
+            }
+        }
+        if (clientIp.empty()) {
+            clientIp = req->getPeerAddr().toIp();
+        }
         std::string userAgent = req->getHeader("User-Agent");
         std::string requestedBy = (*jsonBody).get("requestedBy", "").asString();
 
