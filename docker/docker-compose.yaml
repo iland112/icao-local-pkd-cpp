@@ -429,7 +429,7 @@ services:
     networks:
       - pkd-network
     healthcheck:
-      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/${ORACLE_PASSWORD}@//localhost:1521/XE as sysdba | grep -q 1"]
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"$ORACLE_PWD\"@//localhost:1521/XE as sysdba | grep -q 1"]
       interval: 30s
       timeout: 10s
       retries: 10
