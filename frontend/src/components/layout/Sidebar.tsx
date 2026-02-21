@@ -127,10 +127,10 @@ const navSections: NavSection[] = [
   {
     title: 'API Documentation',
     items: [
-      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.9.1`, label: 'PKD Management', icon: <BookOpen className="w-4 h-4" />, external: true },
-      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.1`, label: 'PA Service', icon: <BookOpen className="w-4 h-4" />, external: true },
-      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=PKD+Relay+Service+API+v2.0.0`, label: 'PKD Relay', icon: <BookOpen className="w-4 h-4" />, external: true },
-      { path: `http://${window.location.hostname}:8080/api-docs/?urls.primaryName=Monitoring+Service+API+v1.1.0`, label: 'Monitoring', icon: <BookOpen className="w-4 h-4" />, external: true },
+      { path: `${window.location.origin}/api-docs/?urls.primaryName=PKD+Management+API+v2.9.1`, label: 'PKD Management', icon: <BookOpen className="w-4 h-4" />, external: true },
+      { path: `${window.location.origin}/api-docs/?urls.primaryName=PA+Service+API+v2.1.1`, label: 'PA Service', icon: <BookOpen className="w-4 h-4" />, external: true },
+      { path: `${window.location.origin}/api-docs/?urls.primaryName=PKD+Relay+Service+API+v2.0.0`, label: 'PKD Relay', icon: <BookOpen className="w-4 h-4" />, external: true },
+      { path: `${window.location.origin}/api-docs/?urls.primaryName=Monitoring+Service+API+v1.1.0`, label: 'Monitoring', icon: <BookOpen className="w-4 h-4" />, external: true },
     ],
   },
 ];

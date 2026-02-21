@@ -44,8 +44,8 @@ proxy_hide_header access-control-allow-headers;
 proxy_hide_header access-control-allow-credentials;
 proxy_hide_header access-control-max-age;
 
-# CORS headers (allow frontend at localhost:3000)
-add_header 'Access-Control-Allow-Origin' 'http://localhost:3000' always;
+# CORS headers (dynamic origin — set by $cors_origin map in api-gateway*.conf)
+add_header 'Access-Control-Allow-Origin' $cors_origin always;
 add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
 add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
 add_header 'Access-Control-Allow-Credentials' 'true' always;

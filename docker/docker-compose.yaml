@@ -29,12 +29,15 @@ services:
     image: nginx:alpine
     container_name: icao-local-pkd-api-gateway
     ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
       - "18080:8080"
     volumes:
-      - ../nginx/api-gateway.conf:/etc/nginx/nginx.conf:ro
+      - ${NGINX_CONF:-../nginx/api-gateway.conf}:/etc/nginx/nginx.conf:ro
       - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
       - ../docs/openapi:/etc/nginx/openapi:ro
       - ../.docker-data/gateway-logs:/var/log/nginx
+      - ../.docker-data/ssl:/etc/ssl/private:ro
     depends_on:
       pkd-management:
         condition: service_healthy

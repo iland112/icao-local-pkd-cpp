@@ -1,8 +1,8 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.7
+**Version**: 2.1.8
 **Last Updated**: 2026-02-21
-**API Gateway Port**: 8080
+**API Gateway**: HTTP (:80) / HTTPS (:443) / Internal (:8080)
 
 ---
 
@@ -19,12 +19,18 @@ PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) �
 
 **API Gateway (권장)**:
 ```
-PA Service:         http://<server-host>:8080/api/pa
-PKD Management:     http://<server-host>:8080/api
-AI Analysis:        http://<server-host>:8080/api/ai
+# HTTPS (Private CA 인증서 필요 — ca.crt를 클라이언트에 배포)
+PA Service:         https://pkd.smartcoreinc.com/api/pa
+PKD Management:     https://pkd.smartcoreinc.com/api
+AI Analysis:        https://pkd.smartcoreinc.com/api/ai
+
+# HTTP (내부 네트워크)
+PA Service:         http://pkd.smartcoreinc.com/api/pa
+PKD Management:     http://pkd.smartcoreinc.com/api
+AI Analysis:        http://pkd.smartcoreinc.com/api/ai
 ```
 
-> **Note**: 모든 API 요청은 API Gateway(포트 8080)를 통해 라우팅됩니다. 전체 검증(`/api/pa/verify`)은 PA Service로, 간편 조회(`/api/certificates/pa-lookup`)는 PKD Management로, AI 분석(`/api/ai/*`)은 AI Analysis Service로 라우팅됩니다.
+> **Note**: 모든 API 요청은 API Gateway를 통해 라우팅됩니다. HTTPS와 HTTP 모두 지원됩니다. HTTPS 사용 시 Private CA 인증서(`ca.crt`)를 클라이언트에 설치해야 합니다. 전체 검증(`/api/pa/verify`)은 PA Service로, 간편 조회(`/api/certificates/pa-lookup`)는 PKD Management로, AI 분석(`/api/ai/*`)은 AI Analysis Service로 라우팅됩니다.
 
 ### 인증
 

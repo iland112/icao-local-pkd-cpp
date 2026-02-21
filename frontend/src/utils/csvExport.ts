@@ -226,6 +226,58 @@ export const exportDuplicateStatisticsToCsv = (
 };
 
 
+export const exportAiAnalysisReportToCsv = (
+  items: Array<{
+    fingerprint: string;
+    certificate_type: string | null;
+    country_code: string | null;
+    anomaly_score: number;
+    anomaly_label: string;
+    risk_score: number;
+    risk_level: string;
+    risk_factors: Record<string, number>;
+    anomaly_explanations: string[];
+    analyzed_at: string | null;
+  }>,
+  filename: string = 'ai-analysis-report.csv'
+) => {
+  if (items.length === 0) return;
+
+  const headers = [
+    'Country', 'Certificate Type', 'Anomaly Score', 'Anomaly Label',
+    'Risk Score', 'Risk Level', 'Top Risk Factors', 'Anomaly Explanations',
+    'Analyzed At', 'Fingerprint (SHA-256)'
+  ];
+
+  const rows = items.map(item => [
+    item.country_code || '',
+    item.certificate_type || '',
+    item.anomaly_score.toFixed(3),
+    item.anomaly_label,
+    item.risk_score.toFixed(1),
+    item.risk_level,
+    `"${escapeCsvValue(
+      Object.entries(item.risk_factors)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([k, v]) => `${k}(${v})`)
+        .join('; ')
+    )}"`,
+    `"${escapeCsvValue((item.anomaly_explanations || []).join('; '))}"`,
+    item.analyzed_at ? formatDateForCsv(item.analyzed_at) : '',
+    item.fingerprint,
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+};
+
 export const exportCrlReportToCsv = (
   crls: Array<{
     countryCode: string;

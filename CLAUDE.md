@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.18.1
+**Current Version**: v2.19.0
 **Last Updated**: 2026-02-21
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -30,8 +30,10 @@ This project **MUST support multiple database systems** including PostgreSQL, Or
 | PKD Relay | :8083 |
 | Monitoring Service | :8084 |
 | AI Analysis Service | :8085 |
-| API Gateway | http://localhost:8080/api |
-| Frontend | http://localhost:3000 |
+| API Gateway | http://localhost:18080/api |
+| API Gateway (SSL) | https://pkd.smartcoreinc.com/api |
+| Frontend | http://localhost:13080 |
+| Frontend (SSL) | https://pkd.smartcoreinc.com |
 
 **Technology Stack**: C++20, Drogon, Python 3.12, FastAPI, scikit-learn, PostgreSQL 15 / Oracle XE 21c, OpenLDAP (MMR), React 19, TypeScript, Tailwind CSS
 
@@ -61,7 +63,7 @@ source scripts/helpers/db-helpers.sh && db_count_crls
 ### System Overview
 
 ```
-Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LDAP
+Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services --> DB/LDAP
                                                         |
                                                         +-- PKD Management (:8081)
                                                         |     Upload, Certificate Search, ICAO Sync, Auth
@@ -459,6 +461,7 @@ scripts/
 +-- helpers/         # Utility functions (db-helpers.sh, ldap-helpers.sh)
 +-- maintenance/     # Data management (reset-all-data, reset-ldap, dn-migration)
 +-- monitoring/      # System monitoring (icao-version-check)
++-- ssl/             # SSL certificate management (init-cert, renew-cert)
 +-- deploy/          # Deployment (from-github-artifacts)
 +-- dev/             # Development scripts (start/stop/rebuild/logs dev services)
 ```
@@ -540,6 +543,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.19.0 (2026-02-21) - HTTPS Support (Private CA) + Frontend Proxy + AI Dashboard UX Redesign
+- **HTTPS**: Private CA 기반 TLS 지원 — HTTP (:80) + HTTPS (:443) dual-listen, 내부용 HTTP (:8080) 유지
+- **Private CA**: `scripts/ssl/init-cert.sh` — RSA 4096 CA (10년) + RSA 2048 서버 인증서 (1년), SAN (domain + localhost + 127.0.0.1)
+- **Server cert renewal**: `scripts/ssl/renew-cert.sh` — 기존 CA로 서버 인증서 갱신 + nginx reload
+- **nginx**: `api-gateway-ssl.conf` (신규) — TLS 1.2/1.3, Mozilla Intermediate cipher suite, Private CA cert paths (`/etc/ssl/private/`)
+- **nginx**: 프론트엔드 프록시 추가 (`location /` → frontend upstream) — `https://pkd.smartcoreinc.com/` 에서 React SPA 접속 가능
+- **nginx**: 동적 CORS origin (`map $http_origin $cors_origin`) — HTTPS/HTTP 도메인 + localhost 개발 환경 지원
+- **nginx**: `proxy_params` CORS origin 하드코딩 → `$cors_origin` 변수로 전환
+- **Docker**: `docker-compose.yaml` — 포트 80/443 추가, `.docker-data/ssl` 볼륨, `NGINX_CONF` 환경변수로 설정 파일 전환
+- **SSL 자동 감지**: `start.sh` — `.docker-data/ssl/server.crt` 존재 시 HTTPS 모드 자동 전환, 없으면 기존 HTTP 모드
+- **Frontend**: Sidebar Swagger 링크 `http://hostname:8080` → `window.location.origin` (프로토콜 자동 감지)
+- **Frontend**: AI Analysis Dashboard UX 전면 리디자인 — DscNcReport 디자인 패턴 적용 (gradient header, 4-col summary cards, risk bar, flag icons, filter card, CSV export, key size pie chart)
+- **Frontend**: `csvExport.ts` — `exportAiAnalysisReportToCsv()` 함수 추가 (BOM, 10 columns)
+- Certificate files: `.docker-data/ssl/` (ca.key, ca.crt, server.key, server.crt) — `.gitignore`에 포함
+- 13 files changed (3 new, 10 modified)
 
 ### v2.18.1 (2026-02-21) - PA History Anonymous User IP/User-Agent Display
 - Frontend: PA History table — anonymous 사용자에 client IP 주소 표시 (`anonymous (192.168.1.100)` 형식)

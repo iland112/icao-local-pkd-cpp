@@ -46,6 +46,19 @@ else
     PROFILE_FLAG="--profile postgres"
 fi
 
+# SSL 인증서 감지 (Private CA)
+SSL_DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
+if [ -f ".docker-data/ssl/server.crt" ] && [ -f ".docker-data/ssl/server.key" ]; then
+    export NGINX_CONF="../nginx/api-gateway-ssl.conf"
+    SSL_MODE="true"
+    echo "🔒 SSL 인증서 감지 — HTTPS + HTTP 모드로 시작 ($SSL_DOMAIN)"
+else
+    export NGINX_CONF="../nginx/api-gateway.conf"
+    SSL_MODE=""
+    echo "⚠️  SSL 인증서 없음 — HTTP 모드로 시작"
+    echo "   인증서 생성: scripts/ssl/init-cert.sh"
+fi
+
 echo "🚀 ICAO PKD Docker 컨테이너 시작... (DB_TYPE=$DB_TYPE)"
 echo ""
 
@@ -63,6 +76,7 @@ mkdir -p ./.docker-data/pa-logs
 mkdir -p ./.docker-data/sync-logs
 mkdir -p ./.docker-data/monitoring-logs
 mkdir -p ./.docker-data/gateway-logs
+mkdir -p ./.docker-data/ssl
 
 # 권한 설정 (Docker 컨테이너에서 쓰기 가능하도록)
 echo "🔒 로그 디렉토리 권한 설정 중..."
@@ -141,7 +155,13 @@ if [ -z "$SKIP_LDAP" ]; then
 fi
 if [ -z "$SKIP_APP" ]; then
     echo "   - Frontend:      http://localhost:13080"
-    echo "   - API Gateway:   http://localhost:18080/api"
+    if [ -n "$SSL_MODE" ]; then
+        echo "   - API Gateway:   https://$SSL_DOMAIN/api (HTTPS)"
+        echo "   - API Gateway:   http://$SSL_DOMAIN/api (HTTP)"
+        echo "   - API Gateway:   http://localhost:18080/api (내부용)"
+    else
+        echo "   - API Gateway:   http://localhost:18080/api"
+    fi
     echo "   - Swagger UI:    http://localhost:18090"
 fi
 echo ""
