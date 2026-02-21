@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.6
-**Last Updated**: 2026-02-19
+**Version**: 2.1.7
+**Last Updated**: 2026-02-21
 **API Gateway Port**: 8080
 
 ---
@@ -10,9 +10,10 @@
 
 PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) 검증을 수행하는 REST API 서비스입니다. 전자여권 판독기가 연결된 외부 클라이언트 애플리케이션에서 이 API를 사용하여 여권의 진위를 검증할 수 있습니다.
 
-**두 가지 검증 방식**을 제공합니다:
+**세 가지 검증/분석 방식**을 제공합니다:
 - **전체 검증** (`POST /api/pa/verify`): SOD + Data Groups를 전송하여 8단계 전체 PA 검증 수행
 - **간편 조회** (`POST /api/certificates/pa-lookup`): DSC Subject DN 또는 Fingerprint만으로 기존 Trust Chain 검증 결과를 즉시 조회 (v2.1.3+)
+- **AI 인증서 분석** (`GET /api/ai/certificate/{fingerprint}`): ML 기반 이상 탐지 및 위험도 분석 결과 조회 (v2.1.7+)
 
 ### Base URL
 
@@ -20,9 +21,10 @@ PA Service는 ICAO 9303 표준에 따른 Passive Authentication(수동 인증) �
 ```
 PA Service:         http://<server-host>:8080/api/pa
 PKD Management:     http://<server-host>:8080/api
+AI Analysis:        http://<server-host>:8080/api/ai
 ```
 
-> **Note**: 모든 API 요청은 API Gateway(포트 8080)를 통해 라우팅됩니다. 전체 검증(`/api/pa/verify`)은 PA Service로, 간편 조회(`/api/certificates/pa-lookup`)는 PKD Management로 라우팅됩니다.
+> **Note**: 모든 API 요청은 API Gateway(포트 8080)를 통해 라우팅됩니다. 전체 검증(`/api/pa/verify`)은 PA Service로, 간편 조회(`/api/certificates/pa-lookup`)는 PKD Management로, AI 분석(`/api/ai/*`)은 AI Analysis Service로 라우팅됩니다.
 
 ### 인증
 
@@ -47,6 +49,16 @@ PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. �
 | 11 | `GET` | `/api/health` | PA | 서비스 헬스 체크 |
 | 12 | `GET` | `/api/health/database` | PA | DB 연결 상태 |
 | 13 | `GET` | `/api/health/ldap` | PA | LDAP 연결 상태 |
+| **14** | **`GET`** | **`/api/ai/certificate/{fingerprint}`** | **AI** | **인증서 AI 분석 결과 조회 (v2.1.7+)** |
+| 15 | `GET` | `/api/ai/anomalies` | AI | 이상 인증서 목록 (필터/페이지네이션) (v2.1.7+) |
+| 16 | `GET` | `/api/ai/statistics` | AI | AI 분석 전체 통계 (v2.1.7+) |
+| 17 | `POST` | `/api/ai/analyze` | AI | 전체 인증서 일괄 분석 실행 (v2.1.7+) |
+| 18 | `GET` | `/api/ai/analyze/status` | AI | 분석 작업 진행 상태 (v2.1.7+) |
+| 19 | `GET` | `/api/ai/reports/country-maturity` | AI | 국가별 PKI 성숙도 (v2.1.7+) |
+| 20 | `GET` | `/api/ai/reports/algorithm-trends` | AI | 알고리즘 마이그레이션 트렌드 (v2.1.7+) |
+| 21 | `GET` | `/api/ai/reports/risk-distribution` | AI | 위험 수준별 분포 (v2.1.7+) |
+| 22 | `GET` | `/api/ai/reports/country/{code}` | AI | 국가별 상세 분석 (v2.1.7+) |
+| 23 | `GET` | `/api/ai/health` | AI | AI 서비스 헬스 체크 (v2.1.7+) |
 
 ---
 
@@ -728,6 +740,168 @@ DG1 파싱과 동일한 MRZ 필드 형식
 
 ---
 
+## 12. AI 인증서 분석 (v2.1.7+)
+
+ML 기반 인증서 이상 탐지 및 패턴 분석 결과를 조회합니다. PA 검증과 독립적으로 전체 Local PKD 인증서에 대한 분석을 수행하며, Isolation Forest + Local Outlier Factor 이중 모델로 이상치를 탐지합니다.
+
+> **Note**: AI Analysis 엔드포인트는 별도의 AI Analysis Service에서 제공됩니다. 모든 엔드포인트는 **인증 불필요**(Public)입니다.
+
+### 12.1 개별 인증서 AI 분석 결과
+
+PA 검증 후 DSC의 fingerprint로 해당 인증서의 AI 분석 결과를 조회할 수 있습니다.
+
+**Endpoint**: `GET /api/ai/certificate/{fingerprint}`
+
+```json
+{
+  "fingerprint": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+  "certificate_type": "DSC",
+  "country_code": "KR",
+  "anomaly_score": 0.12,
+  "anomaly_label": "NORMAL",
+  "risk_score": 15.0,
+  "risk_level": "LOW",
+  "risk_factors": {
+    "algorithm": 5,
+    "key_size": 10
+  },
+  "anomaly_explanations": [
+    "국가 평균 대비 유효기간 편차: 평균 대비 1.2σ 낮음",
+    "키 크기: 평균 대비 0.8σ 낮음"
+  ],
+  "analyzed_at": "2026-02-21T03:00:05"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| anomaly_score | float | 이상 점수 0.0 (정상) ~ 1.0 (이상) |
+| anomaly_label | string | `NORMAL` (<0.3), `SUSPICIOUS` (0.3~0.7), `ANOMALOUS` (≥0.7) |
+| risk_score | float | 위험 점수 0 ~ 100 (복합 점수) |
+| risk_level | string | `LOW` (0~25), `MEDIUM` (26~50), `HIGH` (51~75), `CRITICAL` (76~100) |
+| risk_factors | object | 위험 기여 요인 (algorithm, key_size, compliance, validity, extensions, anomaly) |
+| anomaly_explanations | list | 이상치 설명 — 상위 5개 기여 피처와 sigma 편차 (한국어) |
+
+### 12.2 이상 인증서 목록
+
+**Endpoint**: `GET /api/ai/anomalies`
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| country | string | - | 국가 코드 필터 |
+| type | string | - | 인증서 유형 필터 (`CSCA`, `DSC`, `DSC_NC`, `MLSC`) |
+| label | string | - | 이상 수준 필터 (`NORMAL`, `SUSPICIOUS`, `ANOMALOUS`) |
+| risk_level | string | - | 위험 수준 필터 (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) |
+| page | integer | 1 | 페이지 번호 (1부터 시작) |
+| size | integer | 20 | 페이지 크기 (최대 100) |
+
+```json
+{
+  "success": true,
+  "items": [
+    {
+      "fingerprint": "dd4ba0c9...",
+      "certificate_type": "DSC",
+      "country_code": "ID",
+      "anomaly_score": 0.80,
+      "anomaly_label": "ANOMALOUS",
+      "risk_score": 47.0,
+      "risk_level": "MEDIUM",
+      "risk_factors": {"algorithm": 5, "key_size": 10, "validity": 15, "extensions": 5, "anomaly": 12.0},
+      "anomaly_explanations": ["국가 평균 대비 유효기간 편차: 평균 대비 8.4σ 낮음", "..."],
+      "analyzed_at": "2026-02-21T03:00:05"
+    }
+  ],
+  "total": 31212,
+  "page": 1,
+  "size": 20
+}
+```
+
+### 12.3 전체 분석 통계
+
+**Endpoint**: `GET /api/ai/statistics`
+
+```json
+{
+  "total_analyzed": 31212,
+  "normal_count": 27305,
+  "suspicious_count": 3905,
+  "anomalous_count": 2,
+  "risk_distribution": {"LOW": 22396, "MEDIUM": 7405, "HIGH": 919, "CRITICAL": 492},
+  "avg_risk_score": 24.75,
+  "top_anomalous_countries": [
+    {"country": "ID", "total": 19, "anomalous": 2, "anomaly_rate": 0.1053}
+  ],
+  "last_analysis_at": "2026-02-21T03:00:05",
+  "model_version": "1.0.0"
+}
+```
+
+### 12.4 분석 실행 및 상태 확인
+
+**분석 실행**: `POST /api/ai/analyze`
+
+```json
+{"success": true, "message": "Analysis started"}
+```
+
+> 분석은 비동기 백그라운드로 실행됩니다. 이미 실행 중이면 `409 Conflict`가 반환됩니다.
+
+**진행 상태**: `GET /api/ai/analyze/status`
+
+```json
+{
+  "status": "RUNNING",
+  "progress": 0.65,
+  "total_certificates": 31212,
+  "processed_certificates": 20000,
+  "started_at": "2026-02-21T03:00:00Z",
+  "completed_at": null,
+  "error_message": null
+}
+```
+
+| status | Description |
+|--------|-------------|
+| `IDLE` | 분석 미실행 또는 초기 상태 |
+| `RUNNING` | 분석 진행 중 |
+| `COMPLETED` | 분석 완료 |
+| `FAILED` | 분석 실패 (`error_message`에 사유 표시) |
+
+### 12.5 리포트 API
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/ai/reports/country-maturity` | 국가별 PKI 성숙도 순위 (알고리즘, 키 크기, 준수성, 확장, 만료율 5개 차원) |
+| `GET /api/ai/reports/algorithm-trends` | 연도별 서명 알고리즘 사용 추이 (SHA-1→SHA-256→SHA-384 마이그레이션) |
+| `GET /api/ai/reports/key-size-distribution` | 알고리즘 군별 키 크기 분포 (RSA 2048/4096, ECDSA 256/384/521) |
+| `GET /api/ai/reports/risk-distribution` | 위험 수준별 인증서 분포 (LOW/MEDIUM/HIGH/CRITICAL) |
+| `GET /api/ai/reports/country/{code}` | 특정 국가 상세 분석 (성숙도, 위험/이상 분포, 상위 이상 인증서) |
+
+---
+
+## PA + AI Analysis 연동 활용
+
+PA 검증 결과와 AI 분석 결과를 연동하여 인증서의 종합적인 신뢰도를 평가할 수 있습니다:
+
+1. `POST /api/pa/verify` → PA 검증 수행, DSC fingerprint 획득
+2. `GET /api/ai/certificate/{fingerprint}` → 해당 DSC의 AI 이상 탐지 결과 조회
+3. PA 검증 결과 (VALID/INVALID) + AI 위험 수준 (LOW~CRITICAL)을 종합 판단
+
+```python
+# PA 검증 후 AI 분석 결합 예시
+pa_result = client.verify(sod, {1: dg1, 2: dg2})
+if pa_result["success"]:
+    dsc_reg = pa_result["data"].get("dscAutoRegistration", {})
+    fingerprint = dsc_reg.get("fingerprint")
+    if fingerprint:
+        ai_result = requests.get(f"{base_url}/ai/certificate/{fingerprint}").json()
+        print(f"PA: {pa_result['data']['status']}, AI Risk: {ai_result['risk_level']}")
+```
+
+---
+
 ## Integration Examples
 
 ### Python (requests)
@@ -833,6 +1007,51 @@ class PAServiceClient:
         response = requests.get(f"{self.base_url}/pa/statistics")
         return response.json()
 
+    # --- AI Analysis API (v2.1.7+) ---
+
+    def get_ai_analysis(self, fingerprint: str) -> dict:
+        """
+        Get AI anomaly detection result for a specific certificate.
+
+        Args:
+            fingerprint: Certificate SHA-256 fingerprint (hex, 64 chars)
+        Returns:
+            dict: {"fingerprint": "...", "anomaly_score": 0.12, "risk_level": "LOW", ...}
+        """
+        response = requests.get(f"{self.base_url}/ai/certificate/{fingerprint}")
+        if response.status_code == 404:
+            return None  # Analysis not yet run for this certificate
+        response.raise_for_status()
+        return response.json()
+
+    def get_ai_statistics(self) -> dict:
+        """Get overall AI analysis statistics."""
+        response = requests.get(f"{self.base_url}/ai/statistics")
+        return response.json()
+
+    def trigger_ai_analysis(self) -> dict:
+        """Trigger full certificate analysis (runs in background)."""
+        response = requests.post(f"{self.base_url}/ai/analyze")
+        return response.json()
+
+    def get_ai_analysis_status(self) -> dict:
+        """Get current AI analysis job status."""
+        response = requests.get(f"{self.base_url}/ai/analyze/status")
+        return response.json()
+
+    def get_ai_anomalies(self, country=None, label=None, risk_level=None,
+                         page=1, size=20) -> dict:
+        """Get list of anomalous certificates with filters."""
+        params = {"page": page, "size": size}
+        if country:
+            params["country"] = country
+        if label:
+            params["label"] = label
+        if risk_level:
+            params["risk_level"] = risk_level
+        response = requests.get(f"{self.base_url}/ai/anomalies", params=params)
+        return response.json()
+
 
 # Usage example
 if __name__ == "__main__":
@@ -883,6 +1102,28 @@ if __name__ == "__main__":
             print(f"  Reason: {v.get('pkdConformanceText', 'N/A')}")
     else:
         print("DSC not found in local PKD")
+
+    # Option C: AI analysis after PA verification (v2.1.7+)
+    if result["success"] and result["data"]["status"] == "VALID":
+        dsc_reg = result["data"].get("dscAutoRegistration", {})
+        fingerprint = dsc_reg.get("fingerprint")
+        if fingerprint:
+            ai = client.get_ai_analysis(fingerprint)
+            if ai:
+                print(f"AI Risk Level: {ai['risk_level']} (score: {ai['risk_score']})")
+                print(f"Anomaly: {ai['anomaly_label']} (score: {ai['anomaly_score']:.2f})")
+                if ai.get("risk_factors"):
+                    for factor, score in ai["risk_factors"].items():
+                        print(f"  - {factor}: {score}")
+                if ai.get("anomaly_explanations"):
+                    for explanation in ai["anomaly_explanations"]:
+                        print(f"  📋 {explanation}")
+
+    # Check AI analysis statistics
+    stats = client.get_ai_statistics()
+    print(f"Total analyzed: {stats['total_analyzed']}")
+    print(f"Anomalous: {stats['anomalous_count']}")
+    print(f"Avg risk score: {stats['avg_risk_score']}")
 ```
 
 ### Java (Spring RestTemplate)
@@ -1037,6 +1278,35 @@ curl http://localhost:8080/api/pa/statistics | jq .
 
 # Health check
 curl http://localhost:8080/api/health | jq .
+
+# --- AI Certificate Analysis (v2.1.7+) ---
+
+# Get AI analysis for a specific certificate
+curl http://localhost:8080/api/ai/certificate/a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd | jq .
+
+# Get analysis statistics
+curl http://localhost:8080/api/ai/statistics | jq .
+
+# List anomalous certificates (filtered)
+curl "http://localhost:8080/api/ai/anomalies?label=ANOMALOUS&page=1&size=10" | jq .
+
+# Trigger full analysis (background)
+curl -X POST http://localhost:8080/api/ai/analyze | jq .
+
+# Check analysis progress
+curl http://localhost:8080/api/ai/analyze/status | jq .
+
+# Country PKI maturity report
+curl http://localhost:8080/api/ai/reports/country-maturity | jq .
+
+# Risk distribution report
+curl http://localhost:8080/api/ai/reports/risk-distribution | jq .
+
+# Country detail report
+curl http://localhost:8080/api/ai/reports/country/KR | jq .
+
+# AI service health check
+curl http://localhost:8080/api/ai/health | jq .
 ```
 
 ---
@@ -1082,7 +1352,7 @@ curl http://localhost:8080/api/health | jq .
 ## OpenAPI Specification
 
 전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:
-- **Swagger UI (PA Service)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.6`
+- **Swagger UI (PA Service)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.7`
 - **Swagger UI (PKD Management)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.15.1`
 - **OpenAPI YAML (PA)**: `http://<server-host>:8080/api/docs/pa-service.yaml`
 - **OpenAPI YAML (PKD Mgmt)**: `http://<server-host>:8080/api/docs/pkd-management.yaml`
@@ -1116,6 +1386,24 @@ curl http://localhost:8080/api/health | jq .
 ---
 
 ## Changelog
+
+### v2.1.7 (2026-02-21)
+
+**AI 인증서 분석 엔진 연동 (AI Certificate Analysis)**:
+- AI Analysis Service(Python FastAPI) 기반 ML 인증서 이상 탐지 및 패턴 분석 API 10개 엔드포인트 추가
+- `GET /api/ai/certificate/{fingerprint}` — 개별 인증서 AI 분석 결과 (anomaly_score, risk_level, risk_factors, anomaly_explanations)
+- `GET /api/ai/anomalies` — 이상 인증서 목록 (country/type/label/risk_level 필터, 페이지네이션)
+- `GET /api/ai/statistics` — 전체 분석 통계 (31,212개 인증서: NORMAL 27,305 / SUSPICIOUS 3,905 / ANOMALOUS 2)
+- `POST /api/ai/analyze` — 전체 인증서 일괄 분석 실행 (비동기 백그라운드)
+- `GET /api/ai/analyze/status` — 분석 작업 진행 상태 (IDLE/RUNNING/COMPLETED/FAILED)
+- 리포트 API 5개: country-maturity, algorithm-trends, key-size-distribution, risk-distribution, country detail
+- Anomaly detection: Isolation Forest (global) + Local Outlier Factor (per country/type) 이중 모델
+- Risk scoring: 6개 카테고리 복합 점수 (algorithm 0~40, key_size 0~40, compliance 0~20, validity 0~15, extensions 0~15, anomaly 0~15)
+- Feature engineering: 25개 ML 피처 (암호학, 유효기간, 준수성, 확장, 국가 상대값)
+- Explainability: 이상 인증서당 상위 5개 기여 피처 + sigma 편차 + 한국어 설명
+- PA 검증 후 DSC fingerprint로 AI 분석 결합 활용 예시 추가
+- Python/curl Integration Example에 AI 분석 API 호출 코드 추가
+- 모든 AI 엔드포인트 Public (인증 불필요)
 
 ### v2.1.6 (2026-02-19)
 
