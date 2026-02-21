@@ -82,7 +82,7 @@ def compute_risk_scores(
         # 4. Validity risk (0~15)
         not_after = row.get("not_after")
         if not_after and not pd.isna(not_after):
-            not_after_dt = pd.to_datetime(not_after)
+            not_after_dt = pd.to_datetime(not_after, utc=True)
             days_left = (not_after_dt - pd.Timestamp.now(tz="UTC")).total_seconds() / 86400
             if days_left < 0:
                 validity_risk = 15

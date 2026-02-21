@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     def database_url(self) -> str:
         if self.db_type == "oracle":
             return (
-                f"oracle+cx_oracle://{self.oracle_user}:{self.oracle_password}"
+                f"oracle+oracledb://{self.oracle_user}:{self.oracle_password}"
                 f"@{self.oracle_host}:{self.oracle_port}"
                 f"/?service_name={self.oracle_service_name}"
             )
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
         """Synchronous URL for pandas read_sql and batch operations."""
         if self.db_type == "oracle":
             return (
-                f"oracle+cx_oracle://{self.oracle_user}:{self.oracle_password}"
+                f"oracle+oracledb://{self.oracle_user}:{self.oracle_password}"
                 f"@{self.oracle_host}:{self.oracle_port}"
                 f"/?service_name={self.oracle_service_name}"
             )

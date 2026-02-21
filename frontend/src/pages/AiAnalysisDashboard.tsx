@@ -24,9 +24,6 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  PieChart,
-  Pie,
-  Cell,
   Legend,
 } from 'recharts';
 import { aiAnalysisApi } from '@/services/aiAnalysisApi';
@@ -195,8 +192,6 @@ export default function AiAnalysisDashboard() {
     trends.forEach((t) => {
       Object.keys(t.algorithms).forEach((a) => algSet.add(ALGORITHM_GROUPS[a] || a));
     });
-    const algNames = Array.from(algSet).sort();
-
     return trends.map((t) => {
       const row: Record<string, number | string> = { year: t.year };
       Object.entries(t.algorithms).forEach(([alg, count]) => {
@@ -401,7 +396,7 @@ export default function AiAnalysisDashboard() {
                   tickFormatter={(v: string) => v}
                 />
                 <Tooltip
-                  formatter={(v: number) => [`${v.toFixed(1)}점`, '성숙도']}
+                  formatter={(v?: number | string) => [`${Number(v ?? 0).toFixed(1)}점`, '성숙도']}
                   labelFormatter={(label: string) =>
                     `${getCountryName(label)} (${label})`
                   }

@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
 **Current Version**: v2.18.0
-**Last Updated**: 2026-02-20
+**Last Updated**: 2026-02-21
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -543,14 +543,14 @@ scripts/
 
 ### v2.18.0 (2026-02-20) - AI Certificate Analysis Engine
 - New service: `ai-analysis` — Python FastAPI ML-based certificate anomaly detection and pattern analysis (:8085)
-- **Tech stack**: Python 3.12, FastAPI, scikit-learn, pandas, numpy, SQLAlchemy (asyncpg + cx_Oracle), APScheduler
+- **Tech stack**: Python 3.12, FastAPI, scikit-learn, pandas, numpy, SQLAlchemy (asyncpg + oracledb), APScheduler
 - **Feature engineering**: 25 ML features from certificate + validation_result tables (cryptography, validity, compliance, extensions, country-relative values)
 - **Anomaly detection**: Dual-model approach — Isolation Forest (global) + Local Outlier Factor (local per country/type), combined score 0.0~1.0
 - **Risk scoring**: Composite 0~100 score from 6 categories (algorithm, key_size, compliance, validity, extensions, anomaly), 4 risk levels (LOW/MEDIUM/HIGH/CRITICAL)
 - **Pattern analysis**: Country PKI maturity scoring (5 weighted dimensions), algorithm migration trends by year, key size distribution by algorithm family
 - **Explainability**: Per-certificate top-5 deviating features with Korean descriptions and sigma values
 - **Background scheduler**: APScheduler daily batch analysis (configurable hour via `ANALYSIS_SCHEDULE_HOUR`, enable/disable via `ANALYSIS_ENABLED`)
-- **Multi-DBMS**: PostgreSQL (asyncpg) + Oracle (cx_Oracle) via DB_TYPE environment variable, dual engine (async + sync)
+- **Multi-DBMS**: PostgreSQL (asyncpg) + Oracle (oracledb, pure Python) via DB_TYPE environment variable, dual engine (async + sync)
 - **API endpoints**: 12 endpoints — health, trigger analysis, job status, certificate result, anomaly list (filtered/paginated), statistics, country maturity, algorithm trends, key size distribution, risk distribution, country detail
 - **DB schema**: `ai_analysis_result` table (anomaly_score, anomaly_label, risk_score, risk_level, risk_factors JSONB, feature_vector JSONB, anomaly_explanations JSONB)
 - **Docker**: Python 3.12-slim image, non-root user, curl healthcheck, docker-compose integration
@@ -558,7 +558,9 @@ scripts/
 - **Frontend**: `AiAnalysisDashboard.tsx` — summary cards (total/normal/suspicious/anomalous/avg risk), risk level proportional bar, country PKI maturity horizontal bar chart, algorithm migration stacked area chart, filtered anomaly table with pagination
 - **Frontend**: `aiAnalysisApi.ts` — API module with 12 typed functions, TypeScript interfaces for all response types
 - **Frontend**: Brain icon in sidebar under "보고서" submenu, `/ai/analysis` route in App.tsx
-- 28 files changed (26 new, 2 modified infrastructure + 2 modified frontend)
+- **Oracle fix**: `cx_Oracle` → `oracledb` (pure Python, Python 3.12 compatible), timezone-aware datetime in risk scorer
+- **Frontend fix**: Recharts unused imports cleanup, Tooltip formatter type compatibility
+- 32 files changed (26 new, 6 modified)
 
 ### v2.17.0 (2026-02-20) - Doc 9303 Compliance Checklist
 - New feature: Per-item Doc 9303 compliance checklist (~28 checks) for certificate upload preview and certificate detail dialog
