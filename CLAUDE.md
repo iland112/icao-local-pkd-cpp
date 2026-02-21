@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.18.0
+**Current Version**: v2.18.1
 **Last Updated**: 2026-02-21
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -540,6 +540,13 @@ scripts/
 ---
 
 ## Version History
+
+### v2.18.1 (2026-02-21) - PA History Anonymous User IP/User-Agent Display
+- Frontend: PA History table — anonymous 사용자에 client IP 주소 표시 (`anonymous (192.168.1.100)` 형식)
+- Frontend: PA History detail modal — anonymous 사용자에 IP 주소 + User-Agent(40자 축약, hover 전체 표시) 표시
+- Frontend: `PAHistoryItem` TypeScript 인터페이스에 `clientIp`, `userAgent` 필드 추가
+- Backend 변경 없음 — 이미 `client_ip`, `user_agent`를 DB 저장 및 API 응답(`clientIp`, `userAgent`)에 포함
+- 2 files changed (0 new, 2 modified)
 
 ### v2.18.0 (2026-02-20) - AI Certificate Analysis Engine
 - New service: `ai-analysis` — Python FastAPI ML-based certificate anomaly detection and pattern analysis (:8085)

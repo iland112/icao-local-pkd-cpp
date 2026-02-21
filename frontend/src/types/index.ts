@@ -433,6 +433,8 @@ export interface PAHistoryItem {
   verificationTimestamp: string;
   completedTimestamp?: string;
   requestedBy?: string;
+  clientIp?: string;
+  userAgent?: string;
   // Flat validation result fields from backend
   sodSignatureValid?: boolean;
   sodSignatureMessage?: string;

@@ -524,7 +524,18 @@ export function PAHistory() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-xs text-gray-500 dark:text-gray-400">
-                        {item.requestedBy || 'anonymous'}
+                        {item.requestedBy ? (
+                          <span>{item.requestedBy}</span>
+                        ) : (
+                          <div>
+                            <span className="text-gray-400 dark:text-gray-500">anonymous</span>
+                            {item.clientIp && (
+                              <span className="ml-1.5 text-[10px] text-gray-400 dark:text-gray-500 font-mono">
+                                ({item.clientIp})
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-right">
                         <button
@@ -639,9 +650,25 @@ export function PAHistory() {
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">요청자</p>
-                  <p className="text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">
-                    {selectedRecord.requestedBy || 'anonymous'}
-                  </p>
+                  {selectedRecord.requestedBy ? (
+                    <p className="text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">
+                      {selectedRecord.requestedBy}
+                    </p>
+                  ) : (
+                    <div className="mt-0.5">
+                      <p className="text-xs text-gray-400 dark:text-gray-500">anonymous</p>
+                      {selectedRecord.clientIp && (
+                        <p className="text-[10px] font-mono text-gray-400 dark:text-gray-500 mt-0.5">
+                          IP: {selectedRecord.clientIp}
+                        </p>
+                      )}
+                      {selectedRecord.userAgent && (
+                        <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate" title={selectedRecord.userAgent}>
+                          UA: {selectedRecord.userAgent.length > 40 ? selectedRecord.userAgent.substring(0, 40) + '...' : selectedRecord.userAgent}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
