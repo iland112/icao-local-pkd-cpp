@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.20.1
+**Current Version**: v2.20.2
 **Last Updated**: 2026-02-22
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -450,6 +450,8 @@ docker-compose -f docker/docker-compose.yaml restart pkd-management pa-service p
 | Timestamps | NOW() | SYSTIMESTAMP | Database-specific function |
 | Korean text | UTF-8 default | NLS_LANG required | `NLS_LANG=AMERICAN_AMERICA.AL32UTF8` env var |
 | CLOB + sequential queries | TEXT (no issue) | ORA-03127 LOB session | Use VARCHAR2(4000) for short text |
+| BLOB read truncation | bytea (no issue) | LOB locator reads 33-89 bytes | `RAWTOHEX(DBMS_LOB.SUBSTR(col, DBMS_LOB.GETLENGTH(col), 1))` |
+| LOB/non-LOB mixed fetch | TEXT (no issue) | OCI fetch stops after 1 row | Convert all LOB columns: `TO_CHAR(clob)`, RAWTOHEX for BLOB |
 
 ---
 
@@ -553,6 +555,17 @@ scripts/
 ---
 
 ## Version History
+
+### v2.20.2 (2026-02-22) - Oracle CRL Report BLOB Read Fix
+- **CRITICAL FIX**: Oracle CRL report "폐기 인증서" 0건 표시 — OCI LOB locator가 SQLT_LBI로 INSERT된 BLOB 데이터를 33~89 bytes로 truncate하여 읽음 (실제 280~1670 bytes)
+- **Root cause 1 — BLOB truncation**: `OCILobRead`가 `SQLT_LBI` (Long Binary) binding으로 INSERT된 BLOB을 LOB locator로 읽을 때 데이터 잘림
+- **Root cause 2 — LOB/non-LOB mixed fetch**: RAWTOHEX로 BLOB→VARCHAR2 변환 시, 같은 쿼리의 CLOB(`issuer_dn`) LOB locator와 혼합되어 OCI fetch가 1행 후 중단
+- **Fix**: `RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1))` — BLOB→RAW→hex VARCHAR2 (LOB locator 완전 우회)
+- **Fix**: `TO_CHAR(issuer_dn)` — CLOB→VARCHAR2 변환으로 LOB/non-LOB 혼합 방지
+- 4개 CRL repository 메서드 수정: `findAll()`, `findById()`, `findByCountryCode()`, `findAllForExport()`
+- Oracle Compatibility Notes 테이블에 BLOB/LOB 관련 2개 항목 추가
+- **Verified**: totalRevoked 0→170, countryCount 0→67, byRevocationReason 0→5, bySignatureAlgorithm 0→7
+- 1 file changed (0 new, 1 modified: `crl_repository.cpp`)
 
 ### v2.20.1 (2026-02-22) - AI Analysis Multi-DBMS Compatibility Fix
 - **CRITICAL FIX**: PostgreSQL batch analysis failure — `operator does not exist: character varying = uuid` on `validation_result` JOIN

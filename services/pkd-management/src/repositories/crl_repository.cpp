@@ -183,8 +183,13 @@ Json::Value CrlRepository::findByCountryCode(const std::string& countryCode) {
         std::string storedFlag = common::db::boolLiteral(dbType, true);
 
         // Get the most recent CRL for the country (by this_update descending)
+        // Oracle: DBMS_LOB.SUBSTR extracts RAW from BLOB, RAWTOHEX converts to VARCHAR2 hex
+        // (LOB locator reads truncated data due to OCI SQLT_LBI insertion)
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
         std::string query =
-            "SELECT crl_binary, this_update, next_update "
+            "SELECT " + crlBinExpr + ", this_update, next_update "
             "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
             "ORDER BY this_update DESC" + common::db::limitClause(dbType, 1);
 
@@ -205,8 +210,14 @@ Json::Value CrlRepository::findAllForExport() {
     std::string dbType = queryExecutor_->getDatabaseType();
     std::string storedFlag = common::db::boolLiteral(dbType, true);
 
+    // Oracle: DBMS_LOB.SUBSTR + RAWTOHEX bypasses LOB locator (truncated BLOB reads)
+    // Oracle: TO_CHAR(issuer_dn) converts CLOB to VARCHAR2 (avoids LOB/non-LOB mixing in OCI fetch)
+    std::string crlBinExpr = (dbType == "oracle")
+        ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+        : "crl_binary";
+    std::string issuerDnExpr = (dbType == "oracle") ? "TO_CHAR(issuer_dn) as issuer_dn" : "issuer_dn";
     std::string query =
-        "SELECT country_code, issuer_dn, crl_binary, fingerprint_sha256 "
+        "SELECT country_code, " + issuerDnExpr + ", " + crlBinExpr + ", fingerprint_sha256 "
         "FROM crl WHERE stored_in_ldap = " + storedFlag + " "
         "ORDER BY country_code";
 
@@ -224,8 +235,14 @@ Json::Value CrlRepository::findAll(const std::string& countryFilter,
         std::string dbType = queryExecutor_->getDatabaseType();
         std::string tsNow = common::db::currentTimestamp(dbType);
 
-        std::string query = "SELECT id, country_code, issuer_dn, this_update, next_update, "
-                            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, crl_binary "
+        // Oracle: DBMS_LOB.SUBSTR + RAWTOHEX bypasses LOB locator (truncated BLOB reads)
+        // Oracle: TO_CHAR(issuer_dn) converts CLOB to VARCHAR2 (avoids LOB/non-LOB mixing in OCI fetch)
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
+        std::string issuerDnExpr = (dbType == "oracle") ? "TO_CHAR(issuer_dn) as issuer_dn" : "issuer_dn";
+        std::string query = "SELECT id, country_code, " + issuerDnExpr + ", this_update, next_update, "
+                            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, " + crlBinExpr + " "
                             "FROM crl";
 
         std::vector<std::string> params;
@@ -311,9 +328,16 @@ int CrlRepository::countAll(const std::string& countryFilter,
 
 Json::Value CrlRepository::findById(const std::string& crlId) {
     try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        // Oracle: DBMS_LOB.SUBSTR + RAWTOHEX bypasses LOB locator (truncated BLOB reads)
+        // Oracle: TO_CHAR(issuer_dn) converts CLOB to VARCHAR2 (avoids LOB/non-LOB mixing in OCI fetch)
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
+        std::string issuerDnExpr = (dbType == "oracle") ? "TO_CHAR(issuer_dn) as issuer_dn" : "issuer_dn";
         std::string query =
-            "SELECT id, country_code, issuer_dn, this_update, next_update, "
-            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, crl_binary "
+            "SELECT id, country_code, " + issuerDnExpr + ", this_update, next_update, "
+            "crl_number, fingerprint_sha256, stored_in_ldap, created_at, " + crlBinExpr + " "
             "FROM crl WHERE id = $1";
 
         Json::Value rows = queryExecutor_->executeQuery(query, {crlId});
