@@ -1,3 +1,4 @@
+import json
 import logging
 from contextlib import asynccontextmanager
 
@@ -8,6 +9,42 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def safe_isna(val) -> bool:
+    """Safely check if a value is NA/NaN/None, handling non-scalar values.
+
+    pd.isna() raises ValueError on array-like inputs. This function
+    handles that case gracefully, returning False for non-scalar values.
+    """
+    import pandas as pd
+
+    if val is None:
+        return True
+    try:
+        return bool(pd.isna(val))
+    except (ValueError, TypeError):
+        return False
+
+
+def safe_json_loads(value, default=None):
+    """Safely parse JSON from DB value (PostgreSQL JSONB dict or Oracle CLOB string).
+
+    PostgreSQL JSONB columns return Python dict/list directly.
+    Oracle CLOB columns return JSON as string, requiring json.loads().
+    """
+    if value is None:
+        return default if default is not None else {}
+    if not isinstance(value, str):
+        return value  # Already parsed (PostgreSQL JSONB → dict/list)
+    value = value.strip()
+    if not value:
+        return default if default is not None else {}
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, ValueError):
+        logger.warning("Failed to parse JSON from DB value: %.100s...", value)
+        return default if default is not None else {}
 
 
 class Base(DeclarativeBase):

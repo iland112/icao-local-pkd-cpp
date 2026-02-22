@@ -9,6 +9,8 @@ from collections import defaultdict
 
 import pandas as pd
 
+from app.database import safe_isna
+
 logger = logging.getLogger(__name__)
 
 # ICAO Doc 9303 expected extensions per certificate type.
@@ -83,7 +85,7 @@ def _has_field(row, field: str) -> bool:
         return False
     if isinstance(val, str) and val.strip() == "":
         return False
-    if pd.isna(val):
+    if safe_isna(val):
         return False
     return True
 

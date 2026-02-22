@@ -8,6 +8,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from app.database import safe_isna
+
 logger = logging.getLogger(__name__)
 
 # Algorithm risk weights
@@ -126,7 +128,7 @@ def compute_risk_scores(
 
         # 4. Validity risk (0~15)
         not_after = row.get("not_after")
-        if not_after and not pd.isna(not_after):
+        if not_after and not safe_isna(not_after):
             not_after_dt = pd.to_datetime(not_after, utc=True)
             days_left = (not_after_dt - pd.Timestamp.now(tz="UTC")).total_seconds() / 86400
             if days_left < 0:
@@ -200,7 +202,7 @@ def compute_risk_scores(
         # 9. Temporal pattern (0~10)
         temporal_risk = 0.0
         not_before = row.get("not_before")
-        if not_before and not pd.isna(not_before) and not_after and not pd.isna(not_after):
+        if not_before and not safe_isna(not_before) and not_after and not safe_isna(not_after):
             nb_dt = pd.to_datetime(not_before, utc=True)
             na_dt = pd.to_datetime(not_after, utc=True)
             validity_days_val = (na_dt - nb_dt).total_seconds() / 86400

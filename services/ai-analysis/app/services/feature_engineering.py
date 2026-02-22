@@ -10,6 +10,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from app.config import get_settings
+from app.database import safe_isna
 
 logger = logging.getLogger(__name__)
 
@@ -168,6 +169,8 @@ def load_certificate_data(engine) -> pd.DataFrame:
             WHERE c.certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')
         """
     else:
+        # PostgreSQL: validation_result.certificate_id is UUID FK → certificate.id
+        # Must JOIN on c.id = v.certificate_id (UUID = UUID), not fingerprint = UUID
         query = """
             SELECT c.fingerprint_sha256, c.certificate_type, c.country_code,
                    c.version, c.signature_algorithm, c.public_key_algorithm,
@@ -183,12 +186,18 @@ def load_certificate_data(engine) -> pd.DataFrame:
                    v.icao_key_size_compliant, v.icao_extensions_compliant,
                    v.signature_valid
             FROM certificate c
-            LEFT JOIN validation_result v ON c.fingerprint_sha256 = v.certificate_id
+            LEFT JOIN validation_result v ON c.id = v.certificate_id
             WHERE c.certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')
         """
 
     logger.info("Loading certificate data from DB...")
     df = pd.read_sql(text(query), engine)
+    # Deduplicate: PostgreSQL LEFT JOIN may produce multiple rows per certificate
+    # when multiple validation_results exist (UNIQUE on certificate_id + upload_id)
+    orig_len = len(df)
+    df = df.drop_duplicates(subset=["fingerprint_sha256"], keep="first")
+    if len(df) < orig_len:
+        logger.info("Deduplicated %d → %d certificates", orig_len, len(df))
     logger.info("Loaded %d certificates", len(df))
     return df
 
@@ -211,14 +220,14 @@ def _count_extensions(row) -> int:
     count = 0
     for f in _EXT_FIELDS:
         val = row.get(f)
-        if val and not (isinstance(val, float) and pd.isna(val)):
+        if val and not safe_isna(val):
             count += 1
     return count
 
 
 def _count_violations(violations_str) -> int:
     """Count ICAO violations from pipe-separated string."""
-    if not violations_str or pd.isna(violations_str):
+    if not violations_str or safe_isna(violations_str):
         return 0
     return len(str(violations_str).split("|"))
 
@@ -228,7 +237,7 @@ def _extension_set_hash(row) -> float:
     parts = []
     for f in _EXT_FIELDS:
         val = row.get(f)
-        parts.append("1" if val and not (isinstance(val, float) and pd.isna(val)) else "0")
+        parts.append("1" if val and not safe_isna(val) else "0")
     h = int(hashlib.md5("".join(parts).encode()).hexdigest()[:8], 16)
     return (h % 1000) / 1000.0  # normalize to 0~1
 
@@ -301,7 +310,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
     issuer_stats = {}
     if "issuer_dn" in df.columns:
         for issuer_dn, group in df.groupby("issuer_dn"):
-            if pd.isna(issuer_dn) or not str(issuer_dn).strip():
+            if safe_isna(issuer_dn) or not str(issuer_dn).strip():
                 continue
             g_ks = group["public_key_size"].dropna()
             g_algs = group["signature_algorithm"].value_counts()
@@ -343,7 +352,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
             ext_counts = {}
             for f in _EXT_FIELDS:
                 vals = type_group[f].apply(
-                    lambda x: 1 if x and not (isinstance(x, float) and pd.isna(x)) else 0
+                    lambda x: 1 if x and not (isinstance(x, float) and safe_isna(x)) else 0
                 )
                 ext_counts[f] = vals.mean()
             type_ext_pattern[cert_type] = ext_counts
@@ -370,12 +379,12 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
 
         # Validity period
         validity_days = row.get("_validity_days")
-        if pd.isna(validity_days):
+        if safe_isna(validity_days):
             validity_days = 0.0
 
         # Days until expiry
         not_after = row.get("not_after")
-        if not_after and not pd.isna(not_after):
+        if not_after and not safe_isna(not_after):
             not_after_dt = pd.to_datetime(not_after)
             if not_after_dt.tzinfo is None:
                 not_after_dt = not_after_dt.replace(tzinfo=timezone.utc)
@@ -436,7 +445,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
 
         # ===== Temporal pattern (4) — indices 29-32 =====
         not_before = row.get("not_before")
-        if not_before and not pd.isna(not_before):
+        if not_before and not safe_isna(not_before):
             nb_dt = pd.to_datetime(not_before)
             features[i, 29] = float(nb_dt.month) / 12.0  # issuance_month (normalized)
         else:
@@ -452,7 +461,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
 
         # issuance_rate_deviation
         issue_year = row.get("_issue_year")
-        if country in country_issuance_rates and issue_year and not pd.isna(issue_year):
+        if country in country_issuance_rates and issue_year and not safe_isna(issue_year):
             cr = country_issuance_rates[country]
             year_count = cr.get("year_counts", {}).get(int(issue_year), 0)
             avg_rate = cr.get("avg_rate", 1.0) or 1.0
@@ -461,7 +470,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
             features[i, 31] = 0.0
 
         # cert_age_ratio: elapsed / total validity
-        if not_before and not pd.isna(not_before) and validity_days > 0:
+        if not_before and not safe_isna(not_before) and validity_days > 0:
             nb_dt = pd.to_datetime(not_before)
             if nb_dt.tzinfo is None:
                 nb_dt = nb_dt.replace(tzinfo=timezone.utc)
@@ -504,7 +513,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
             match_score = 0.0
             for f in _EXT_FIELDS:
                 val = row.get(f)
-                has = 1.0 if val and not (isinstance(val, float) and pd.isna(val)) else 0.0
+                has = 1.0 if val and not (isinstance(val, float) and safe_isna(val)) else 0.0
                 expected = ext_pattern.get(f, 0.5)
                 match_score += 1.0 - abs(has - round(expected))
             features[i, 44] = match_score / len(_EXT_FIELDS)

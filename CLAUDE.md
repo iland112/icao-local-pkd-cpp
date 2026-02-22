@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.20.0
+**Current Version**: v2.20.1
 **Last Updated**: 2026-02-22
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -553,6 +553,21 @@ scripts/
 ---
 
 ## Version History
+
+### v2.20.1 (2026-02-22) - AI Analysis Multi-DBMS Compatibility Fix
+- **CRITICAL FIX**: PostgreSQL batch analysis failure — `operator does not exist: character varying = uuid` on `validation_result` JOIN
+- PostgreSQL JOIN: `c.fingerprint_sha256 = v.certificate_id` → `c.id = v.certificate_id` (UUID=UUID match, consistent with C++ services)
+- Oracle JOIN unchanged — `v.certificate_id` stores fingerprint directly (VARCHAR2=VARCHAR2)
+- **Forensic-summary unification**: Removed PostgreSQL JSONB-only branch (`->`, `->>`, `::float` operators), unified to Python-side JSON parsing for both databases
+- Fixed PostgreSQL forensic-summary returning empty `severity_distribution` and `top_findings` (dead code in JSONB branch)
+- **safe_json_loads()** helper: Handles both PostgreSQL JSONB (returns dict/list) and Oracle CLOB (returns JSON string) transparently
+- **safe_isna()** helper: Wraps `pd.isna()` to handle non-scalar values (arrays from LEFT JOIN duplicates) without ValueError
+- **Deduplication**: `drop_duplicates(subset=["fingerprint_sha256"])` after data load to handle 1:N JOIN from `validation_result` (UNIQUE on certificate_id + upload_id)
+- Replaced all raw `pd.isna()` calls across 5 service modules with `safe_isna()`
+- Replaced all raw `json.loads()` calls in API routers with `safe_json_loads()`
+- **Verified**: PostgreSQL (luckfox ARM64) — 31,212 certificates, 277s, 17/17 endpoints 200 OK
+- **Verified**: Oracle (dev) — 31,212 certificates, 17/17 endpoints 200 OK
+- 8 files changed (0 new, 8 modified)
 
 ### v2.20.0 (2026-02-22) - AI Certificate Forensic Analysis Engine Enhancement
 - **Feature engineering expansion**: 25 → 45 ML features with 20 new forensic features across 5 categories (issuer profile, temporal pattern, DN structure, extension profile, cross-certificate)

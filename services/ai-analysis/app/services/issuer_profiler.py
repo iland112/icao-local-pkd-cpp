@@ -8,6 +8,8 @@ import logging
 import re
 from collections import defaultdict
 
+from app.database import safe_isna
+
 import numpy as np
 import pandas as pd
 from sklearn.cluster import DBSCAN
@@ -78,7 +80,7 @@ def build_issuer_profiles(df: pd.DataFrame) -> dict:
     issuer_groups = df.groupby("issuer_dn")
 
     for issuer_dn, group in issuer_groups:
-        if pd.isna(issuer_dn) or not str(issuer_dn).strip():
+        if safe_isna(issuer_dn) or not str(issuer_dn).strip():
             continue
 
         n = len(group)
@@ -133,7 +135,7 @@ def compute_issuer_anomaly_scores(
 
     for i, (_, row) in enumerate(df.iterrows()):
         issuer_dn = row.get("issuer_dn")
-        if not issuer_dn or pd.isna(issuer_dn):
+        if not issuer_dn or safe_isna(issuer_dn):
             scores[i] = 0.3  # unknown issuer = moderate suspicion
             continue
 

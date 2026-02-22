@@ -1,6 +1,5 @@
 """Report API endpoints: country maturity, algorithm trends, etc."""
 
-import json
 import logging
 from typing import Optional
 
@@ -8,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
 from app.config import get_settings
-from app.database import sync_engine
+from app.database import safe_json_loads, sync_engine
 from app.schemas.analysis import (
     AlgorithmTrend,
     CountryDetail,
@@ -152,12 +151,8 @@ async def get_country_report(code: str):
     top_anomalies = []
     for r in top_rows:
         rm = r._mapping
-        rf = rm.get("risk_factors") or "{}"
-        if isinstance(rf, str):
-            rf = json.loads(rf)
-        ae = rm.get("anomaly_explanations") or "[]"
-        if isinstance(ae, str):
-            ae = json.loads(ae)
+        rf = safe_json_loads(rm.get("risk_factors"), {})
+        ae = safe_json_loads(rm.get("anomaly_explanations"), [])
         top_anomalies.append({
             "fingerprint": rm["certificate_fingerprint"],
             "certificate_type": rm.get("certificate_type"),
@@ -229,79 +224,33 @@ async def get_forensic_summary():
             for r in level_rows
         }
 
-        # Average scores per category from forensic_findings JSONB
-        settings = get_settings()
-        if settings.db_type == "oracle":
-            # Oracle: parse CLOB in Python
-            findings_rows = conn.execute(
-                text("SELECT forensic_findings FROM ai_analysis_result WHERE forensic_findings IS NOT NULL")
-            ).fetchall()
+        # Average scores per category from forensic_findings (JSONB on PostgreSQL, CLOB on Oracle)
+        # Unified Python-side parsing — works for both databases
+        findings_rows = conn.execute(
+            text("SELECT forensic_findings FROM ai_analysis_result WHERE forensic_findings IS NOT NULL")
+        ).fetchall()
 
-            from collections import defaultdict
-            cat_totals = defaultdict(float)
-            cat_counts = defaultdict(int)
-            sev_counts = defaultdict(int)
-            finding_freq = defaultdict(int)
+        from collections import defaultdict
+        cat_totals = defaultdict(float)
+        cat_counts = defaultdict(int)
+        sev_counts = defaultdict(int)
+        finding_freq = defaultdict(int)
 
-            for row in findings_rows:
-                ff = row._mapping.get("forensic_findings") or "{}"
-                if isinstance(ff, str):
-                    ff = json.loads(ff)
-                for cat, score in ff.get("categories", {}).items():
+        for row in findings_rows:
+            ff = safe_json_loads(row._mapping.get("forensic_findings"), {})
+            for cat, score in ff.get("categories", {}).items():
+                if isinstance(score, (int, float)):
                     cat_totals[cat] += score
                     cat_counts[cat] += 1
-                for f in ff.get("findings", []):
-                    sev_counts[f.get("severity", "LOW")] += 1
-                    finding_freq[f.get("message", "")] += 1
+            for f in ff.get("findings", []):
+                sev_counts[f.get("severity", "LOW")] += 1
+                finding_freq[f.get("message", "")] += 1
 
-            cat_avgs = {
-                cat: round(cat_totals[cat] / max(cat_counts[cat], 1), 2)
-                for cat in cat_totals
-            }
-            top_findings = sorted(finding_freq.items(), key=lambda x: -x[1])[:10]
-        else:
-            # PostgreSQL: use JSONB aggregate
-            cat_avg_rows = conn.execute(
-                text("""
-                    SELECT
-                        AVG((forensic_findings->'categories'->>'algorithm')::float) as avg_algorithm,
-                        AVG((forensic_findings->'categories'->>'key_size')::float) as avg_key_size,
-                        AVG((forensic_findings->'categories'->>'compliance')::float) as avg_compliance,
-                        AVG((forensic_findings->'categories'->>'validity')::float) as avg_validity,
-                        AVG((forensic_findings->'categories'->>'extensions')::float) as avg_extensions,
-                        AVG((forensic_findings->'categories'->>'anomaly')::float) as avg_anomaly,
-                        AVG((forensic_findings->'categories'->>'issuer_reputation')::float) as avg_issuer,
-                        AVG((forensic_findings->'categories'->>'structural_consistency')::float) as avg_structural,
-                        AVG((forensic_findings->'categories'->>'temporal_pattern')::float) as avg_temporal,
-                        AVG((forensic_findings->'categories'->>'dn_consistency')::float) as avg_dn
-                    FROM ai_analysis_result
-                    WHERE forensic_findings IS NOT NULL
-                """)
-            ).fetchone()
-
-            r = cat_avg_rows._mapping if cat_avg_rows else {}
-            cat_avgs = {}
-            for key in ["algorithm", "key_size", "compliance", "validity", "extensions",
-                        "anomaly", "issuer_reputation", "structural_consistency",
-                        "temporal_pattern", "dn_consistency"]:
-                val = r.get(f"avg_{key.split('_')[0]}" if "_" not in key else f"avg_{key.replace('_reputation', '').replace('_consistency', '').replace('_pattern', '')}")
-                # Simplified: just use known column aliases
-                pass
-
-            cat_avgs = {
-                "algorithm": round(float(r.get("avg_algorithm") or 0), 2),
-                "key_size": round(float(r.get("avg_key_size") or 0), 2),
-                "compliance": round(float(r.get("avg_compliance") or 0), 2),
-                "validity": round(float(r.get("avg_validity") or 0), 2),
-                "extensions": round(float(r.get("avg_extensions") or 0), 2),
-                "anomaly": round(float(r.get("avg_anomaly") or 0), 2),
-                "issuer_reputation": round(float(r.get("avg_issuer") or 0), 2),
-                "structural_consistency": round(float(r.get("avg_structural") or 0), 2),
-                "temporal_pattern": round(float(r.get("avg_temporal") or 0), 2),
-                "dn_consistency": round(float(r.get("avg_dn") or 0), 2),
-            }
-            sev_counts = {}
-            top_findings = []
+        cat_avgs = {
+            cat: round(cat_totals[cat] / max(cat_counts[cat], 1), 2)
+            for cat in cat_totals
+        }
+        top_findings = sorted(finding_freq.items(), key=lambda x: -x[1])[:10]
 
     return ForensicSummary(
         total_analyzed=total,

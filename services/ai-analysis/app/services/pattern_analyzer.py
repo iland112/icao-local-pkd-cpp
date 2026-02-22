@@ -8,6 +8,8 @@ from collections import defaultdict
 
 import pandas as pd
 
+from app.database import safe_isna
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,7 +137,7 @@ def compute_key_size_distribution(df: pd.DataFrame) -> list[dict]:
     total = len(df)
 
     for (alg, ks), group in df.groupby(["public_key_algorithm", "public_key_size"]):
-        if pd.isna(alg) or pd.isna(ks):
+        if safe_isna(alg) or safe_isna(ks):
             continue
         count = len(group)
         results.append(

@@ -15,7 +15,7 @@ AI Analysis Service(v1.0, 25-feature statistical anomaly detection)를 PKI 포�
 | Stage | 범위 | 상태 |
 |-------|------|------|
 | **Stage A** | AI 서비스 내부 강화 (Python + DB) | **완료** |
-| **Stage B** | 검증 및 안정화 (실 데이터 튜닝) | **완료** (Oracle 기반) |
+| **Stage B** | 검증 및 안정화 (실 데이터 튜닝) | **완료** (Oracle + PostgreSQL) |
 | **Stage C-2** | 프론트엔드 통합 | **완료** |
 | **Stage C-1** | 업로드 파이프라인 연동 | **보류** |
 
@@ -222,6 +222,47 @@ structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score
 
 ---
 
+## Stage B-2: 검증 결과 (PostgreSQL 기반, 2026-02-22)
+
+> 31,212 인증서 대상 전체 배치 분석 + API 검증 완료 (luckfox ARM64 환경)
+
+### Multi-DBMS 호환성 수정 사항
+
+Oracle 기반 Stage B 검증 후, PostgreSQL(luckfox) 배포 시 발견된 3가지 문제를 수정:
+
+| # | 문제 | 원인 | 수정 |
+|---|------|------|------|
+| 1 | `operator does not exist: character varying = uuid` | `validation_result.certificate_id`가 PostgreSQL에서 UUID, Oracle에서 VARCHAR2(128) | PostgreSQL JOIN: `c.fingerprint_sha256 = v.certificate_id` → `c.id = v.certificate_id` |
+| 2 | `ValueError: truth value of an array is ambiguous` | LEFT JOIN 1:N 중복 행에서 `pd.isna()` 비-스칼라 호출 | `safe_isna()` 헬퍼 + `drop_duplicates()` |
+| 3 | forensic-summary 불완전 응답 | PostgreSQL JSONB 전용 쿼리에서 `sev_counts`/`top_findings` 빈 값 반환 | Python-side JSON 파싱으로 통합 |
+
+**수정 파일 (8개)**:
+- `database.py` — `safe_isna()`, `safe_json_loads()` 헬퍼 추가
+- `feature_engineering.py` — PostgreSQL JOIN 수정 + `drop_duplicates()`
+- `analysis.py` — 6곳 `json.loads()` → `safe_json_loads()`
+- `reports.py` — forensic-summary 통합 (JSONB/CLOB 분기 제거)
+- `extension_rules_engine.py`, `issuer_profiler.py`, `risk_scorer.py`, `pattern_analyzer.py` — `pd.isna()` → `safe_isna()`
+
+### 배치 분석 성능
+
+| 항목 | PostgreSQL (luckfox ARM64) | Oracle (dev x86) | 비고 |
+|------|---------------------------|------------------|------|
+| 전체 배치 시간 | **277초** | **67초** | ARM64 vs x86 차이 |
+| 처리 인증서 | 31,212건 | 31,212건 | 동일 |
+| API 엔드포인트 | 17/17 200 OK | 17/17 200 OK | 동일 |
+
+### 분석 결과 통계 (PostgreSQL)
+
+| 항목 | 값 |
+|------|-----|
+| 정상 (NORMAL) | 25,586건 |
+| 의심 (SUSPICIOUS) | 5,616건 |
+| 이상 (ANOMALOUS) | 10건 |
+
+> Oracle(6건) 대비 ANOMALOUS 4건 증가 — `c.id = v.certificate_id` JOIN 변경으로 validation 데이터 매칭 차이 발생 (정상 범위)
+
+---
+
 ## Stage C-2: 프론트엔드 통합 (완료)
 
 | 파일 | 변경 |
@@ -304,6 +345,6 @@ structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score
 - [x] A-7. DB 스키마 변경
 - [x] C-2. 프론트엔드 통합
 - [x] Docker 빌드 + 검증
-- [x] B. Stage B 검증 (Oracle 기반, 31,212건)
-- [ ] B. Stage B 검증 (PostgreSQL 기반) — 미진행
+- [x] B. Stage B 검증 (Oracle 기반, 31,212건, 67s)
+- [x] B. Stage B 검증 (PostgreSQL 기반, 31,212건, 277s) — Multi-DBMS 호환성 수정 포함
 - [ ] C-1. 업로드 파이프라인 연동 — **보류**

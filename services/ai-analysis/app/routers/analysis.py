@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
 
 from app.config import get_settings
-from app.database import sync_engine
+from app.database import safe_json_loads, sync_engine
 from app.schemas.analysis import (
     AnalysisJobStatus,
     AnalysisStatistics,
@@ -338,15 +338,9 @@ async def get_certificate_analysis(fingerprint: str):
         raise HTTPException(status_code=404, detail="Analysis not found for this certificate")
 
     row = result._mapping
-    import json
 
-    risk_factors = row.get("risk_factors") or "{}"
-    if isinstance(risk_factors, str):
-        risk_factors = json.loads(risk_factors)
-
-    explanations = row.get("anomaly_explanations") or "[]"
-    if isinstance(explanations, str):
-        explanations = json.loads(explanations)
+    risk_factors = safe_json_loads(row.get("risk_factors"), {})
+    explanations = safe_json_loads(row.get("anomaly_explanations"), [])
 
     return CertificateAnalysis(
         fingerprint=row["certificate_fingerprint"],
@@ -377,19 +371,10 @@ async def get_certificate_forensic(fingerprint: str):
         raise HTTPException(status_code=404, detail="Analysis not found for this certificate")
 
     row = result._mapping
-    import json
 
-    risk_factors = row.get("risk_factors") or "{}"
-    if isinstance(risk_factors, str):
-        risk_factors = json.loads(risk_factors)
-
-    explanations = row.get("anomaly_explanations") or "[]"
-    if isinstance(explanations, str):
-        explanations = json.loads(explanations)
-
-    forensic_findings = row.get("forensic_findings") or "{}"
-    if isinstance(forensic_findings, str):
-        forensic_findings = json.loads(forensic_findings)
+    risk_factors = safe_json_loads(row.get("risk_factors"), {})
+    explanations = safe_json_loads(row.get("anomaly_explanations"), [])
+    forensic_findings = safe_json_loads(row.get("forensic_findings"), {})
 
     return ForensicDetail(
         fingerprint=row["certificate_fingerprint"],
@@ -473,17 +458,11 @@ async def list_anomalies(
             params,
         ).fetchall()
 
-    import json
-
     items = []
     for row in rows:
         r = row._mapping
-        rf = r.get("risk_factors") or "{}"
-        if isinstance(rf, str):
-            rf = json.loads(rf)
-        ae = r.get("anomaly_explanations") or "[]"
-        if isinstance(ae, str):
-            ae = json.loads(ae)
+        rf = safe_json_loads(r.get("risk_factors"), {})
+        ae = safe_json_loads(r.get("anomaly_explanations"), [])
 
         items.append(
             CertificateAnalysis(
