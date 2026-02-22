@@ -1,8 +1,8 @@
 # AI Certificate Forensic Analysis Engine Enhancement
 
-**Version**: v2.20.0 (Stage A + C-2)
+**Version**: v2.20.0
 **Created**: 2026-02-22
-**Status**: Stage A + C-2 Complete, Pending Verification (Stage B)
+**Status**: Stage A + B + C-2 Complete | Stage C-1 보류
 
 ---
 
@@ -15,7 +15,7 @@ AI Analysis Service(v1.0, 25-feature statistical anomaly detection)를 PKI 포�
 | Stage | 범위 | 상태 |
 |-------|------|------|
 | **Stage A** | AI 서비스 내부 강화 (Python + DB) | **완료** |
-| **Stage B** | 검증 및 안정화 (실 데이터 튜닝) | **다음 단계** |
+| **Stage B** | 검증 및 안정화 (실 데이터 튜닝) | **완료** (Oracle 기반) |
 | **Stage C-2** | 프론트엔드 통합 | **완료** |
 | **Stage C-1** | 업로드 파이프라인 연동 | **보류** |
 
@@ -122,47 +122,123 @@ structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score
 
 ---
 
-## Stage B: 검증 및 안정화
+## Stage B: 검증 결과 (Oracle 기반, 2026-02-22)
 
-> Stage A 완료 후 실제 데이터(31,212 인증서)로 검증 및 튜닝
+> 31,212 인증서 대상 전체 배치 분석 + API 검증 완료
 
-### 검증 항목
+### 배치 분석 성능
 
-| 항목 | 기준 |
+| 항목 | 측정값 | 목표 | 판정 |
+|------|--------|------|------|
+| 전체 배치 시간 | **67초** | < 600초 | PASS |
+| 메모리 사용 | **291.8 MiB** | < 500MB | PASS |
+| 처리 인증서 | 31,212건 | 31,212건 | PASS |
+
+### 분석 결과 통계
+
+| 항목 | 값 |
+|------|-----|
+| 정상 (NORMAL) | 25,853건 (82.8%) |
+| 의심 (SUSPICIOUS) | 5,353건 (17.1%) |
+| 이상 (ANOMALOUS) | 6건 (0.02%) |
+| 평균 리스크 점수 | 25.3 / 100 |
+| 평균 포렌식 점수 | 15.2 / 100 |
+
+### 리스크 분포
+
+| 레벨 | 건수 |
 |------|------|
-| False Positive | CRITICAL < 5%, HIGH < 15% |
-| 유형별 모델 | ANOMALOUS 비율 5% ± 2% |
-| 발급자 프로파일 | 상위 이상 발급자 타당성 |
-| 확장 규칙 위반 | 실제 ICAO 미달 여부 |
-| Oracle 호환 | 전체 파이프라인 정상 |
-| 성능 | 배치 < 10분, 증분 < 30초 |
-| 메모리 | RSS < 500MB |
+| LOW | 22,098 |
+| MEDIUM | 7,723 |
+| HIGH | 998 |
+| CRITICAL | 393 |
 
-### 안정화 기준 (Stage C 전환 조건)
+### 포렌식 레벨 분포
 
-1. False Positive 목표 이내
-2. 3회 이상 일관된 결과
-3. PostgreSQL + Oracle 정상
-4. 성능/메모리 목표 달성
+| 레벨 | 건수 |
+|------|------|
+| LOW | 24,092 |
+| MEDIUM | 6,701 |
+| HIGH | 419 |
+
+### 카테고리별 평균 점수
+
+| 카테고리 | 평균 점수 |
+|----------|-----------|
+| key_size | 9.06 |
+| algorithm | 6.57 |
+| extensions | 3.88 |
+| validity | 3.33 |
+| issuer_reputation | 3.35 |
+| anomaly | 2.47 |
+| structural_consistency | 1.29 |
+| temporal_pattern | 0.46 |
+| dn_consistency | 0.0 |
+| compliance | 0.0 |
+
+### 주요 포렌식 발견 사항 (top findings)
+
+| 발견 사항 | 건수 | 심각도 |
+|-----------|------|--------|
+| 인증서 만료됨 | 6,618 | HIGH |
+| 비정상적 유효기간 패턴 | 1,801 | MEDIUM |
+| 취약한 서명 알고리즘 (SHA-1) | 592 | CRITICAL |
+| 취약한 키 크기 (ECDSA 224bit) | 75 | CRITICAL |
+| 취약한 서명 알고리즘 (ECDSA-SHA1) | 45 | CRITICAL |
+| 취약한 키 크기 (RSA 1024bit) | 43 | CRITICAL |
+
+### ANOMALOUS 인증서 상세 (6건)
+
+| 국가 | 유형 | 점수 | 주요 특징 |
+|------|------|------|-----------|
+| CM | MLSC | 0.994 | 확장 부재 (CRL DP, 예상 외 확장 5.1σ) |
+| CH | MLSC | 0.835 | 확장/DN 패턴 편차, 장기 유효기간 |
+| BM | CSCA | 0.794 | 발급자/주체 국가 불일치 29.1σ |
+| HU | DSC_NC | 0.731 | 키 크기 편차, RSA 1024bit |
+| HU | DSC_NC | 0.730 | 키 크기 편차, RSA 1024bit |
+| MN | CSCA | 0.706 | OCSP Responder 16.8σ, 예상 외 확장 10.9σ |
+
+### 추가 검증 데이터
+
+| 항목 | 값 |
+|------|-----|
+| 발급자 프로파일 | 456개 |
+| 확장 규칙 위반 | 50건 |
+| 기존 API 호환 (12개) | **전체 200 OK** |
+| 새 API (5개) | **전체 200 OK** |
+
+### API 응답 시간
+
+| 엔드포인트 | 응답 시간 |
+|-----------|-----------|
+| `certificate/{fp}/forensic` | 4ms |
+| `risk-distribution` | 89ms |
+| `anomalies (paginated)` | 110ms |
+| `statistics` | 379ms |
+| `forensic-summary` | 648ms |
+| `issuer-profiles` | 1.4s |
+| `country-maturity` | 1.7s |
+| `extension-anomalies` | 2.9s |
 
 ---
 
-## Stage C-2: 프론트엔드 통합 (구현 범위)
+## Stage C-2: 프론트엔드 통합 (완료)
 
 | 파일 | 변경 |
 |------|------|
-| `frontend/src/api/aiAnalysisApi.ts` | 5개 API 함수 + TS 인터페이스 |
+| `frontend/src/services/aiAnalysisApi.ts` | 5개 API 함수 + TS 인터페이스 |
 | `frontend/src/pages/AiAnalysisDashboard.tsx` | 포렌식 요약, 발급자 차트, 확장 위반 차트 |
-| `frontend/src/components/certificate/CertificateDetailDialog.tsx` | "포렌식" 탭 추가 |
-| `frontend/src/components/ai/ForensicAnalysisPanel.tsx` | **신규** |
-| `frontend/src/components/ai/IssuerProfileCard.tsx` | **신규** |
-| `frontend/src/components/ai/ExtensionComplianceChecklist.tsx` | **신규** |
+| `frontend/src/components/CertificateDetailDialog.tsx` | "포렌식" 탭 추가 (4번째 탭) |
+| `frontend/src/pages/CertificateSearch.tsx` | 탭 타입 확장 |
+| `frontend/src/components/ai/ForensicAnalysisPanel.tsx` | **신규** — 10카테고리 레이더 차트, 점수 바, 발견 사항 |
+| `frontend/src/components/ai/IssuerProfileCard.tsx` | **신규** — 발급자별 수평 바 차트 (top 15) |
+| `frontend/src/components/ai/ExtensionComplianceChecklist.tsx` | **신규** — 위반 테이블 + 확장 상세 |
 
 ---
 
 ## Stage C-1: 업로드 파이프라인 연동 (보류)
 
-> Stage B 안정화 완료 후 별도 작업으로 진행
+> 별도 작업으로 진행 예정. 현재 수동 `POST /api/ai/analyze` 또는 일일 스케줄러로 분석 트리거.
 
 업로드 COMPLETED 후 fire-and-forget HTTP 콜백으로 AI 증분 분석 트리거.
 `services/pkd-management/src/processing_strategy.cpp` +15줄.
@@ -173,13 +249,13 @@ structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score
 
 | 항목 | 영향 |
 |------|------|
-| **변경 범위** | AI 서비스 12파일 + Frontend 6파일 |
+| **변경 범위** | AI 서비스 12파일 + Frontend 7파일 |
 | **다른 C++ 서비스** | **변경 없음** |
-| **기존 API 호환** | **100% 하위 호환** |
+| **기존 API 호환** | **100% 하위 호환** (17개 전체 200 OK 검증됨) |
 | **기존 분석 결과** | 유지 (새 컬럼 NULL, 재분석 시 채워짐) |
 | **Docker** | `ai-analysis` + `frontend` 재빌드 |
 | **requirements.txt** | 변경 없음 (DBSCAN은 scikit-learn 내장) |
-| **리스크** | LOW-MEDIUM |
+| **리스크** | LOW |
 
 ---
 
@@ -200,15 +276,16 @@ structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score
 | `services/ai-analysis/app/schemas/analysis.py` | 수정 |
 | `services/ai-analysis/app/models/analysis_result.py` | 수정 |
 | `docker/db-init/11-ai-analysis.sql` | 수정 |
-| `docker/db-oracle/init/02-schema.sql` | 수정 |
+| `docker/db-oracle/init/11-ai-analysis.sql` | **신규** |
 
 ### Stage C-2 (프론트엔드)
 
 | 파일 | 액션 |
 |------|------|
-| `frontend/src/api/aiAnalysisApi.ts` | 수정 |
+| `frontend/src/services/aiAnalysisApi.ts` | 수정 |
 | `frontend/src/pages/AiAnalysisDashboard.tsx` | 수정 |
-| `frontend/src/components/certificate/CertificateDetailDialog.tsx` | 수정 |
+| `frontend/src/pages/CertificateSearch.tsx` | 수정 |
+| `frontend/src/components/CertificateDetailDialog.tsx` | 수정 |
 | `frontend/src/components/ai/ForensicAnalysisPanel.tsx` | **신규** |
 | `frontend/src/components/ai/IssuerProfileCard.tsx` | **신규** |
 | `frontend/src/components/ai/ExtensionComplianceChecklist.tsx` | **신규** |
@@ -218,12 +295,15 @@ structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score
 ## 구현 진행 상황
 
 - [x] 계획 문서 작성
-- [ ] A-1. Feature Engineering 확장 (25→45)
-- [ ] A-2. 유형별 분리 모델
-- [ ] A-3. 확장 규칙 엔진
-- [ ] A-4. 발급자 프로파일링
-- [ ] A-5. Forensic Risk Scoring (6→10)
-- [ ] A-6. API 엔드포인트 확장
-- [ ] A-7. DB 스키마 변경
-- [ ] C-2. 프론트엔드 통합
-- [ ] Docker 빌드 + 검증
+- [x] A-1. Feature Engineering 확장 (25→45)
+- [x] A-2. 유형별 분리 모델
+- [x] A-3. 확장 규칙 엔진
+- [x] A-4. 발급자 프로파일링
+- [x] A-5. Forensic Risk Scoring (6→10)
+- [x] A-6. API 엔드포인트 확장
+- [x] A-7. DB 스키마 변경
+- [x] C-2. 프론트엔드 통합
+- [x] Docker 빌드 + 검증
+- [x] B. Stage B 검증 (Oracle 기반, 31,212건)
+- [ ] B. Stage B 검증 (PostgreSQL 기반) — 미진행
+- [ ] C-1. 업로드 파이프라인 연동 — **보류**

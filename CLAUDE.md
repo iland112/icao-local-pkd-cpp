@@ -126,7 +126,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.18.0)
+## Current Features (v2.20.0)
 
 ### Core Functionality
 
@@ -571,8 +571,9 @@ scripts/
 - **Frontend**: Certificate detail dialog 4th "포렌식" tab with 10-category breakdown, score visualization, findings list
 - **Frontend**: 3 new components (`ForensicAnalysisPanel`, `IssuerProfileCard`, `ExtensionComplianceChecklist`)
 - All 12 existing API endpoints fully backward compatible, 5 new endpoints added (total 17)
+- **Stage B verified** (Oracle): 31,212 certificates analyzed in 67s, 291.8MiB memory, 17/17 API endpoints 200 OK
 - PostgreSQL + Oracle dual-DBMS support maintained
-- 19 files changed (5 new, 14 modified)
+- 21 files changed (5 new, 16 modified)
 
 ### v2.19.0 (2026-02-21) - HTTPS Support (Private CA) + Frontend Proxy + AI Dashboard UX Redesign
 - **HTTPS**: Private CA 기반 TLS 지원 — HTTP (:80) + HTTPS (:443) dual-listen, 내부용 HTTP (:8080) 유지
