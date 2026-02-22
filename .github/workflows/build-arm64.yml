@@ -43,6 +43,7 @@ jobs:
       pa-service: ${{ steps.filter.outputs.pa-service }}
       pkd-relay: ${{ steps.filter.outputs.pkd-relay }}
       monitoring-service: ${{ steps.filter.outputs.monitoring-service }}
+      ai-analysis: ${{ steps.filter.outputs.ai-analysis }}
       frontend: ${{ steps.filter.outputs.frontend }}
       vcpkg-base: ${{ steps.filter.outputs.vcpkg-base }}
     steps:
@@ -75,6 +76,9 @@ jobs:
               - '.github/workflows/build-arm64.yml'
             monitoring-service:
               - 'services/monitoring-service/**'
+              - '.github/workflows/build-arm64.yml'
+            ai-analysis:
+              - 'services/ai-analysis/**'
               - '.github/workflows/build-arm64.yml'
             frontend:
               - 'frontend/**'
@@ -370,6 +374,52 @@ jobs:
           retention-days: 30
 
   # ---------------------------------------------------------------------------
+  # AI Analysis Service (Python - no vcpkg-base dependency)
+  # ---------------------------------------------------------------------------
+  build-ai-analysis:
+    needs: detect-changes
+    if: >-
+      needs.detect-changes.outputs.ai-analysis == 'true' ||
+      github.event.inputs.force_build_all == 'true' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.force_build_all != 'false')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export AI Analysis Service
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: services/ai-analysis/Dockerfile
+          platforms: linux/arm64
+          tags: icao-local-ai-analysis:arm64
+          outputs: type=oci,dest=ai-analysis-arm64.tar
+          no-cache: ${{ github.event.inputs.no_cache == 'true' }}
+          cache-from: type=gha,scope=ai-analysis-builder
+          cache-to: type=gha,mode=max,scope=ai-analysis-builder
+
+      - name: Compress Image
+        run: gzip ai-analysis-arm64.tar
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-analysis-arm64
+          path: ai-analysis-arm64.tar.gz
+          retention-days: 30
+
+  # ---------------------------------------------------------------------------
   # Frontend
   # ---------------------------------------------------------------------------
   build-frontend:
@@ -420,13 +470,14 @@ jobs:
   # ---------------------------------------------------------------------------
   combine-artifacts:
     runs-on: ubuntu-latest
-    needs: [detect-changes, build-pkd-management, build-pa-service, build-pkd-relay, build-monitoring-service, build-frontend]
+    needs: [detect-changes, build-pkd-management, build-pa-service, build-pkd-relay, build-monitoring-service, build-ai-analysis, build-frontend]
     if: >-
       always() && (
         needs.build-pkd-management.result == 'success' ||
         needs.build-pa-service.result == 'success' ||
         needs.build-pkd-relay.result == 'success' ||
         needs.build-monitoring-service.result == 'success' ||
+        needs.build-ai-analysis.result == 'success' ||
         needs.build-frontend.result == 'success'
       )
 

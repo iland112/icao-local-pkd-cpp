@@ -23,6 +23,7 @@ services:
       - pkd-management
       - pa-service
       - pkd-relay
+      - ai-analysis
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
@@ -159,6 +160,29 @@ services:
       - pkd-relay
     volumes:
       - ./.docker-data/monitoring-logs:/app/logs
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # AI Analysis Service (Python/FastAPI)
+  # ---------------------------------------------------------------------------
+  ai-analysis:
+    image: icao-local-ai-analysis:arm64
+    container_name: icao-pkd-ai-analysis
+    network_mode: host
+    environment:
+      - TZ=Asia/Seoul
+      - DB_TYPE=postgres
+      - DB_HOST=127.0.0.1
+      - DB_PORT=5432
+      - DB_NAME=localpkd
+      - DB_USER=pkd
+      - DB_PASSWORD=pkd
+      - ANALYSIS_SCHEDULE_HOUR=3
+      - ANALYSIS_ENABLED=true
+    depends_on:
+      - postgres
+    volumes:
+      - ./.docker-data/ai-logs:/app/logs
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------

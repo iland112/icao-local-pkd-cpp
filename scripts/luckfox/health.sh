@@ -58,6 +58,15 @@ else
     echo "  PKD Relay      (8083): DOWN (HTTP $RELAY_RESP)"
 fi
 
+# AI Analysis
+AI_RESP=$(curl -s --connect-timeout 3 http://127.0.0.1:8085/api/ai/health 2>/dev/null)
+if [ $? -eq 0 ] && [ -n "$AI_RESP" ]; then
+    AI_DB=$(echo "$AI_RESP" | grep -o '"db_type":"[^"]*"' | cut -d'"' -f4)
+    echo "  AI Analysis    (8085): UP (db: $AI_DB)"
+else
+    echo "  AI Analysis    (8085): DOWN"
+fi
+
 # API Gateway
 GW_RESP=$(curl -s --connect-timeout 3 -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/api/health 2>/dev/null)
 if [ "$GW_RESP" = "200" ]; then
