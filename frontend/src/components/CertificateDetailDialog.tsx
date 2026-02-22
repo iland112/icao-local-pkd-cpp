@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2 } from 'lucide-react';
+import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2, Brain } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 import type { ValidationResult } from '@/types/validation';
@@ -8,6 +8,7 @@ import { TreeViewer } from '@/components/TreeViewer';
 import type { TreeNode } from '@/components/TreeViewer';
 import { certificateApi } from '@/services/pkdApi';
 import { Doc9303ComplianceChecklist } from '@/components/Doc9303ComplianceChecklist';
+import ForensicAnalysisPanel from '@/components/ai/ForensicAnalysisPanel';
 
 interface DnComponents {
   commonName?: string;
@@ -59,8 +60,8 @@ interface CertificateDetailDialogProps {
   selectedCert: Certificate;
   showDetailDialog: boolean;
   setShowDetailDialog: (show: boolean) => void;
-  detailTab: 'general' | 'details' | 'doc9303';
-  setDetailTab: (tab: 'general' | 'details' | 'doc9303') => void;
+  detailTab: 'general' | 'details' | 'doc9303' | 'forensic';
+  setDetailTab: (tab: 'general' | 'details' | 'doc9303' | 'forensic') => void;
   validationResult: ValidationResult | null;
   validationLoading: boolean;
   exportCertificate: (dn: string, format: 'der' | 'pem') => void;
@@ -420,6 +421,18 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
             >
               Doc 9303
             </button>
+            <button
+              onClick={() => setDetailTab('forensic')}
+              className={cn(
+                'px-6 py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5',
+                detailTab === 'forensic'
+                  ? 'border-purple-600 text-purple-600 dark:text-purple-400 bg-white dark:bg-gray-800'
+                  : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              )}
+            >
+              <Brain className="w-3.5 h-3.5" />
+              포렌식
+            </button>
           </div>
         </div>
 
@@ -673,6 +686,11 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                 </p>
               )}
             </div>
+          )}
+
+          {/* Forensic Tab */}
+          {detailTab === 'forensic' && (
+            <ForensicAnalysisPanel fingerprint={selectedCert.fingerprint} />
           )}
 
           {/* Details Tab */}

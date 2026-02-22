@@ -41,10 +41,13 @@ import type {
   AlgorithmTrend,
   RiskDistribution,
   KeySizeDistribution,
+  ForensicSummary,
 } from '@/services/aiAnalysisApi';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { exportAiAnalysisReportToCsv } from '@/utils/csvExport';
+import IssuerProfileCard from '@/components/ai/IssuerProfileCard';
+import ExtensionComplianceChecklist from '@/components/ai/ExtensionComplianceChecklist';
 import countries from 'i18n-iso-countries';
 import ko from 'i18n-iso-countries/langs/ko.json';
 
@@ -101,6 +104,7 @@ export default function AiAnalysisDashboard() {
   const [trends, setTrends] = useState<AlgorithmTrend[]>([]);
   const [riskDist, setRiskDist] = useState<RiskDistribution[]>([]);
   const [keySizeDist, setKeySizeDist] = useState<KeySizeDistribution[]>([]);
+  const [forensicSummary, setForensicSummary] = useState<ForensicSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -115,13 +119,14 @@ export default function AiAnalysisDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [statsRes, statusRes, maturityRes, trendsRes, riskRes, keySizeRes] = await Promise.allSettled([
+      const [statsRes, statusRes, maturityRes, trendsRes, riskRes, keySizeRes, forensicRes] = await Promise.allSettled([
         aiAnalysisApi.getStatistics(),
         aiAnalysisApi.getAnalysisStatus(),
         aiAnalysisApi.getCountryMaturity(),
         aiAnalysisApi.getAlgorithmTrends(),
         aiAnalysisApi.getRiskDistribution(),
         aiAnalysisApi.getKeySizeDistribution(),
+        aiAnalysisApi.getForensicSummary(),
       ]);
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
@@ -130,6 +135,7 @@ export default function AiAnalysisDashboard() {
       if (trendsRes.status === 'fulfilled') setTrends(trendsRes.value.data);
       if (riskRes.status === 'fulfilled') setRiskDist(riskRes.value.data);
       if (keySizeRes.status === 'fulfilled') setKeySizeDist(keySizeRes.value.data);
+      if (forensicRes.status === 'fulfilled') setForensicSummary(forensicRes.value.data);
     } catch (e) {
       console.error('Failed to fetch AI analysis data', e);
     }
@@ -401,6 +407,83 @@ export default function AiAnalysisDashboard() {
           </div>
         </div>
       )}
+
+      {/* Forensic Risk Summary */}
+      {forensicSummary && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-5 h-5 text-orange-500" />
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">포렌식 분석 요약</h3>
+            </div>
+            {stats && stats.avg_forensic_score != null && (
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                평균 포렌식 점수: <span className="font-bold text-orange-600 dark:text-orange-400">{stats.avg_forensic_score!.toFixed(1)}</span>
+              </span>
+            )}
+          </div>
+          {/* Forensic level proportional bar */}
+          {forensicSummary.forensic_level_distribution && Object.keys(forensicSummary.forensic_level_distribution).length > 0 && (
+            <>
+              <div className="flex rounded-full overflow-hidden h-7 shadow-inner">
+                {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map(level => {
+                  const count = forensicSummary.forensic_level_distribution[level] || 0;
+                  const total = Object.values(forensicSummary.forensic_level_distribution).reduce<number>((a, b) => a + b, 0);
+                  const pct = total > 0 ? (count / total) * 100 : 0;
+                  if (pct === 0) return null;
+                  const cfg = RISK_BAR_CONFIG[level];
+                  return (
+                    <div
+                      key={level}
+                      className={cn(cfg?.tw || 'bg-gray-400', 'flex items-center justify-center text-xs font-medium text-white transition-all')}
+                      style={{ width: `${pct}%` }}
+                      title={`${RISK_LABELS_KO[level] || level}: ${count.toLocaleString()} (${pct.toFixed(1)}%)`}
+                    >
+                      {pct >= 8 && `${RISK_LABELS_KO[level]} ${count.toLocaleString()}`}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-5 mt-3">
+                {['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map(level => {
+                  const count = forensicSummary.forensic_level_distribution[level] || 0;
+                  if (count === 0) return null;
+                  const total = Object.values(forensicSummary.forensic_level_distribution).reduce<number>((a, b) => a + b, 0);
+                  const pct = total > 0 ? ((count / total) * 100).toFixed(1) : '0';
+                  const cfg = RISK_BAR_CONFIG[level];
+                  return (
+                    <span key={level} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
+                      <span className={cn('w-2.5 h-2.5 rounded-full', cfg?.tw || 'bg-gray-400')} />
+                      {RISK_LABELS_KO[level]}: {count.toLocaleString()} ({pct}%)
+                    </span>
+                  );
+                })}
+              </div>
+            </>
+          )}
+          {/* Top findings */}
+          {forensicSummary.top_findings && forensicSummary.top_findings.length > 0 && (
+            <div className="mt-4 space-y-1.5">
+              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">주요 발견 사항</h4>
+              {forensicSummary.top_findings.slice(0, 5).map((f, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <span className="px-1.5 py-0.5 rounded font-medium text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/20">
+                    #{i + 1}
+                  </span>
+                  <span className="text-gray-600 dark:text-gray-400">{f.message}</span>
+                  <span className="text-gray-400 dark:text-gray-500">({f.count}건)</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Issuer Profile + Extension Compliance */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <IssuerProfileCard />
+        <ExtensionComplianceChecklist />
+      </div>
 
       {/* Country PKI Maturity Chart (full width) */}
       {top15Maturity.length > 0 && (

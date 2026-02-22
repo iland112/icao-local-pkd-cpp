@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.19.0
-**Last Updated**: 2026-02-21
+**Current Version**: v2.20.0
+**Last Updated**: 2026-02-22
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -157,14 +157,19 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - DSC_NC non-conformant certificate report (conformance code/country/year/algorithm charts, CSV export)
 - CRL report page (CRL metadata, revoked certificates, revocation reasons, signature algorithms, country distribution, CSV export, CRL file download)
 - DSC Trust Chain report page (validation statistics, chain distribution, sample certificate lookup, QuickLookupPanel integration)
-- **AI Certificate Analysis Engine** (ML-based anomaly detection, risk scoring, pattern analysis)
-  - Isolation Forest + Local Outlier Factor dual-model anomaly detection (25 features)
-  - Composite risk scoring (0~100: algorithm, key size, compliance, validity, extensions, anomaly)
+- **AI Certificate Forensic Analysis Engine** (ML-based anomaly detection, forensic risk scoring, pattern analysis)
+  - Isolation Forest + Local Outlier Factor dual-model anomaly detection (45 features, type-specific models)
+  - Certificate type-specific models: CSCA/DSC/DSC_NC/MLSC with optimized contamination rates
+  - Composite risk scoring (0~100: 6 categories) + Forensic risk scoring (0~100: 10 categories)
+  - Forensic categories: algorithm, key_size, compliance, validity, extensions, anomaly, issuer_reputation, structural_consistency, temporal_pattern, dn_consistency
+  - Extension rules engine: ICAO Doc 9303 based extension profile validation per certificate type
+  - Issuer profiling: DBSCAN clustering-based behavioral analysis per issuer DN
   - Country-level PKI maturity scoring (algorithm, key size, compliance, extensions, freshness)
   - Algorithm migration trend analysis (by issuance year)
   - Key size distribution analysis (by algorithm family)
   - Daily scheduled batch analysis (APScheduler, configurable hour)
   - Per-certificate anomaly explanation (top-5 deviating features with Korean descriptions)
+  - Per-certificate forensic detail (10-category breakdown, findings with severity)
 
 ### Security
 
@@ -272,15 +277,20 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 - `GET /api/ai/health` - Health check
 - `POST /api/ai/analyze` - Trigger full analysis (background)
+- `POST /api/ai/analyze/incremental` - Incremental analysis (upload_id based)
 - `GET /api/ai/analyze/status` - Analysis job status
 - `GET /api/ai/certificate/{fingerprint}` - Certificate analysis result
+- `GET /api/ai/certificate/{fingerprint}/forensic` - Certificate forensic detail (10 categories)
 - `GET /api/ai/anomalies` - Anomaly list (filters: country, type, label, risk_level, pagination)
-- `GET /api/ai/statistics` - Overall analysis statistics
+- `GET /api/ai/statistics` - Overall analysis statistics (includes forensic scores)
 - `GET /api/ai/reports/country-maturity` - Country PKI maturity ranking
 - `GET /api/ai/reports/algorithm-trends` - Algorithm migration trends by year
 - `GET /api/ai/reports/key-size-distribution` - Key size distribution
 - `GET /api/ai/reports/risk-distribution` - Risk level distribution
 - `GET /api/ai/reports/country/{code}` - Country detail analysis
+- `GET /api/ai/reports/issuer-profiles` - Issuer profiling report
+- `GET /api/ai/reports/forensic-summary` - Forensic analysis summary
+- `GET /api/ai/reports/extension-anomalies` - Extension rule violations list
 
 ### Public vs Protected Endpoints
 
@@ -315,7 +325,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
 | ValidationDemo | `/pkd/trust-chain` | DSC Trust Chain report |
-| AiAnalysisDashboard | `/ai/analysis` | AI certificate anomaly detection & pattern analysis |
+| AiAnalysisDashboard | `/ai/analysis` | AI certificate forensic analysis & pattern analysis |
 
 ### Key Components
 
@@ -335,7 +345,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | QuickLookupPanel | PA quick lookup by subject DN or fingerprint |
 | VerificationStepsPanel | 8-step ICAO verification process display |
 | VerificationResultCard | PA verification result summary card |
-| CertificateDetailDialog | Certificate detail modal (3-tab: General/Details/Doc 9303) |
+| CertificateDetailDialog | Certificate detail modal (4-tab: General/Details/Doc 9303/포렌식) |
 | CertificateSearchFilters | Certificate search filter card with export buttons |
 | Doc9303ComplianceChecklist | Doc 9303 per-item compliance checklist with collapsible categories |
 
@@ -544,6 +554,26 @@ scripts/
 
 ## Version History
 
+### v2.20.0 (2026-02-22) - AI Certificate Forensic Analysis Engine Enhancement
+- **Feature engineering expansion**: 25 → 45 ML features with 20 new forensic features across 5 categories (issuer profile, temporal pattern, DN structure, extension profile, cross-certificate)
+- **Type-specific anomaly detection**: Separate Isolation Forest + LOF models per certificate type (CSCA/DSC/DSC_NC/MLSC) with optimized contamination rates
+- **MLSC rule-based fallback**: Median absolute deviation scoring for small datasets (< 30 samples)
+- **Extension rules engine** (new): ICAO Doc 9303 based extension profile validation — required/recommended/forbidden rules per cert type (CSCA, DSC, MLSC, DSC_NC), structural anomaly scoring (0~1)
+- **Issuer profiling** (new): Behavioral analysis per issuer DN — compliance rate, expired rate, algorithm diversity, key size diversity, anomaly deviation scoring (0~1)
+- **Forensic risk scoring**: 6 → 10 risk categories (+ issuer_reputation, structural_consistency, temporal_pattern, dn_consistency), total 200pts normalized to 0-100, backward compatible original risk_score preserved
+- **Forensic findings**: Per-certificate detailed findings with severity (CRITICAL/HIGH/MEDIUM), category breakdown, contributing factor analysis
+- **5 new API endpoints**: `GET /certificate/{fp}/forensic`, `POST /analyze/incremental`, `GET /reports/issuer-profiles`, `GET /reports/forensic-summary`, `GET /reports/extension-anomalies`
+- **DB schema**: 6 new columns on `ai_analysis_result` (forensic_risk_score, forensic_risk_level, forensic_findings JSONB, structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score) with migration support
+- **Oracle schema**: Complete `ai_analysis_result` table + indexes for Oracle (`docker/db-oracle/init/11-ai-analysis.sql`)
+- **Frontend**: Forensic summary card with level distribution bar + top findings on AI Dashboard
+- **Frontend**: Issuer profile card with horizontal bar chart (top 15 by cert count, colored by risk)
+- **Frontend**: Extension compliance checklist card with violation table + expandable details
+- **Frontend**: Certificate detail dialog 4th "포렌식" tab with 10-category breakdown, score visualization, findings list
+- **Frontend**: 3 new components (`ForensicAnalysisPanel`, `IssuerProfileCard`, `ExtensionComplianceChecklist`)
+- All 12 existing API endpoints fully backward compatible, 5 new endpoints added (total 17)
+- PostgreSQL + Oracle dual-DBMS support maintained
+- 19 files changed (5 new, 14 modified)
+
 ### v2.19.0 (2026-02-21) - HTTPS Support (Private CA) + Frontend Proxy + AI Dashboard UX Redesign
 - **HTTPS**: Private CA 기반 TLS 지원 — HTTP (:80) + HTTPS (:443) dual-listen, 내부용 HTTP (:8080) 유지
 - **Private CA**: `scripts/ssl/init-cert.sh` — RSA 4096 CA (10년) + RSA 2048 서버 인증서 (1년), SAN (domain + localhost + 127.0.0.1)
@@ -580,7 +610,7 @@ scripts/
 - **Background scheduler**: APScheduler daily batch analysis (configurable hour via `ANALYSIS_SCHEDULE_HOUR`, enable/disable via `ANALYSIS_ENABLED`)
 - **Multi-DBMS**: PostgreSQL (asyncpg) + Oracle (oracledb, pure Python) via DB_TYPE environment variable, dual engine (async + sync)
 - **API endpoints**: 12 endpoints — health, trigger analysis, job status, certificate result, anomaly list (filtered/paginated), statistics, country maturity, algorithm trends, key size distribution, risk distribution, country detail
-- **DB schema**: `ai_analysis_result` table (anomaly_score, anomaly_label, risk_score, risk_level, risk_factors JSONB, feature_vector JSONB, anomaly_explanations JSONB)
+- **DB schema**: `ai_analysis_result` table (anomaly_score, anomaly_label, risk_score, risk_level, risk_factors JSONB, feature_vector JSONB, anomaly_explanations JSONB, forensic_risk_score, forensic_risk_level, forensic_findings JSONB, structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score)
 - **Docker**: Python 3.12-slim image, non-root user, curl healthcheck, docker-compose integration
 - **nginx**: `/api/ai` location block with rate limiting, dynamic upstream resolution
 - **Frontend**: `AiAnalysisDashboard.tsx` — summary cards (total/normal/suspicious/anomalous/avg risk), risk level proportional bar, country PKI maturity horizontal bar chart, algorithm migration stacked area chart, filtered anomaly table with pagination

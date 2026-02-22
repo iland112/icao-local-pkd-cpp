@@ -13,6 +13,9 @@ from app.schemas.analysis import (
     AlgorithmTrend,
     CountryDetail,
     CountryMaturity,
+    ExtensionAnomaly,
+    ForensicSummary,
+    IssuerProfile,
     KeySizeDistribution,
     RiskDistribution,
 )
@@ -178,3 +181,158 @@ async def get_country_report(code: str):
     detail["top_anomalies"] = top_anomalies
 
     return {"success": True, **detail}
+
+
+@router.get("/reports/issuer-profiles", response_model=list[IssuerProfile])
+async def get_issuer_profiles():
+    """Get issuer profile report with anomaly indicators."""
+    from app.services.feature_engineering import load_certificate_data
+    from app.services.issuer_profiler import build_issuer_profiles, get_issuer_profile_report
+
+    try:
+        df = load_certificate_data(sync_engine)
+    except Exception as e:
+        logger.error("Failed to load data: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to load certificate data")
+
+    profiles = build_issuer_profiles(df)
+    report = get_issuer_profile_report(df, profiles)
+
+    return [IssuerProfile(**r) for r in report]
+
+
+@router.get("/reports/forensic-summary", response_model=ForensicSummary)
+async def get_forensic_summary():
+    """Get forensic analysis summary from stored results."""
+    with sync_engine.connect() as conn:
+        total = conn.execute(
+            text("SELECT COUNT(*) FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL")
+        ).scalar() or 0
+
+        if total == 0:
+            return ForensicSummary(
+                total_analyzed=0,
+                forensic_level_distribution={},
+                category_avg_scores={},
+            )
+
+        # Level distribution
+        level_rows = conn.execute(
+            text(
+                "SELECT forensic_risk_level, COUNT(*) as cnt "
+                "FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL "
+                "GROUP BY forensic_risk_level"
+            )
+        ).fetchall()
+        level_dist = {
+            r._mapping["forensic_risk_level"]: int(r._mapping["cnt"])
+            for r in level_rows
+        }
+
+        # Average scores per category from forensic_findings JSONB
+        settings = get_settings()
+        if settings.db_type == "oracle":
+            # Oracle: parse CLOB in Python
+            findings_rows = conn.execute(
+                text("SELECT forensic_findings FROM ai_analysis_result WHERE forensic_findings IS NOT NULL")
+            ).fetchall()
+
+            from collections import defaultdict
+            cat_totals = defaultdict(float)
+            cat_counts = defaultdict(int)
+            sev_counts = defaultdict(int)
+            finding_freq = defaultdict(int)
+
+            for row in findings_rows:
+                ff = row._mapping.get("forensic_findings") or "{}"
+                if isinstance(ff, str):
+                    ff = json.loads(ff)
+                for cat, score in ff.get("categories", {}).items():
+                    cat_totals[cat] += score
+                    cat_counts[cat] += 1
+                for f in ff.get("findings", []):
+                    sev_counts[f.get("severity", "LOW")] += 1
+                    finding_freq[f.get("message", "")] += 1
+
+            cat_avgs = {
+                cat: round(cat_totals[cat] / max(cat_counts[cat], 1), 2)
+                for cat in cat_totals
+            }
+            top_findings = sorted(finding_freq.items(), key=lambda x: -x[1])[:10]
+        else:
+            # PostgreSQL: use JSONB aggregate
+            cat_avg_rows = conn.execute(
+                text("""
+                    SELECT
+                        AVG((forensic_findings->'categories'->>'algorithm')::float) as avg_algorithm,
+                        AVG((forensic_findings->'categories'->>'key_size')::float) as avg_key_size,
+                        AVG((forensic_findings->'categories'->>'compliance')::float) as avg_compliance,
+                        AVG((forensic_findings->'categories'->>'validity')::float) as avg_validity,
+                        AVG((forensic_findings->'categories'->>'extensions')::float) as avg_extensions,
+                        AVG((forensic_findings->'categories'->>'anomaly')::float) as avg_anomaly,
+                        AVG((forensic_findings->'categories'->>'issuer_reputation')::float) as avg_issuer,
+                        AVG((forensic_findings->'categories'->>'structural_consistency')::float) as avg_structural,
+                        AVG((forensic_findings->'categories'->>'temporal_pattern')::float) as avg_temporal,
+                        AVG((forensic_findings->'categories'->>'dn_consistency')::float) as avg_dn
+                    FROM ai_analysis_result
+                    WHERE forensic_findings IS NOT NULL
+                """)
+            ).fetchone()
+
+            r = cat_avg_rows._mapping if cat_avg_rows else {}
+            cat_avgs = {}
+            for key in ["algorithm", "key_size", "compliance", "validity", "extensions",
+                        "anomaly", "issuer_reputation", "structural_consistency",
+                        "temporal_pattern", "dn_consistency"]:
+                val = r.get(f"avg_{key.split('_')[0]}" if "_" not in key else f"avg_{key.replace('_reputation', '').replace('_consistency', '').replace('_pattern', '')}")
+                # Simplified: just use known column aliases
+                pass
+
+            cat_avgs = {
+                "algorithm": round(float(r.get("avg_algorithm") or 0), 2),
+                "key_size": round(float(r.get("avg_key_size") or 0), 2),
+                "compliance": round(float(r.get("avg_compliance") or 0), 2),
+                "validity": round(float(r.get("avg_validity") or 0), 2),
+                "extensions": round(float(r.get("avg_extensions") or 0), 2),
+                "anomaly": round(float(r.get("avg_anomaly") or 0), 2),
+                "issuer_reputation": round(float(r.get("avg_issuer") or 0), 2),
+                "structural_consistency": round(float(r.get("avg_structural") or 0), 2),
+                "temporal_pattern": round(float(r.get("avg_temporal") or 0), 2),
+                "dn_consistency": round(float(r.get("avg_dn") or 0), 2),
+            }
+            sev_counts = {}
+            top_findings = []
+
+    return ForensicSummary(
+        total_analyzed=total,
+        forensic_level_distribution=level_dist,
+        category_avg_scores=cat_avgs,
+        severity_distribution=dict(sev_counts) if sev_counts else None,
+        top_findings=[{"message": m, "count": c} for m, c in top_findings] if top_findings else None,
+    )
+
+
+@router.get("/reports/extension-anomalies", response_model=list[ExtensionAnomaly])
+async def get_extension_anomalies(
+    cert_type: Optional[str] = Query(None, alias="type"),
+    country: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """Get extension rule violations list."""
+    from app.services.extension_rules_engine import compute_extension_anomalies
+    from app.services.feature_engineering import load_certificate_data
+
+    try:
+        df = load_certificate_data(sync_engine)
+    except Exception as e:
+        logger.error("Failed to load data: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to load certificate data")
+
+    if cert_type:
+        df = df[df["certificate_type"] == cert_type]
+    if country:
+        df = df[df["country_code"] == country.upper()]
+
+    results = compute_extension_anomalies(df)
+
+    return [ExtensionAnomaly(**r) for r in results[:limit]]

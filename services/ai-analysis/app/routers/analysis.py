@@ -16,6 +16,7 @@ from app.schemas.analysis import (
     AnalysisStatistics,
     AnomalyListResponse,
     CertificateAnalysis,
+    ForensicDetail,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,11 +48,18 @@ def _run_analysis():
             _job_status["completed_at"] = None
             _job_status["error_message"] = None
 
+        import numpy as np
+
         from app.services.anomaly_detector import AnomalyDetector, classify_anomaly
+        from app.services.extension_rules_engine import check_extension_compliance
         from app.services.feature_engineering import (
             FEATURE_NAMES,
             engineer_features,
             load_certificate_data,
+        )
+        from app.services.issuer_profiler import (
+            build_issuer_profiles,
+            compute_issuer_anomaly_scores,
         )
         from app.services.risk_scorer import classify_risk, compute_risk_scores
 
@@ -71,30 +79,54 @@ def _run_analysis():
                 _job_status["completed_at"] = datetime.now(timezone.utc).isoformat()
             return
 
-        # Step 2: Feature engineering
-        logger.info("Analysis: engineering features for %d certificates...", total)
+        # Step 2: Feature engineering (45 features)
+        logger.info("Analysis: engineering %d features for %d certificates...", len(FEATURE_NAMES), total)
         metadata, features = engineer_features(df)
         with _job_lock:
-            _job_status["progress"] = 0.3
+            _job_status["progress"] = 0.25
 
-        # Step 3: Anomaly detection
-        logger.info("Analysis: running anomaly detection...")
+        # Step 3: Anomaly detection (type-specific models)
+        logger.info("Analysis: running type-specific anomaly detection...")
         detector = AnomalyDetector()
-        combined_scores, if_scores, lof_scores, explanations = detector.fit_predict(features)
+        cert_types = metadata["certificate_type"].values
+        combined_scores, if_scores, lof_scores, explanations = detector.fit_predict(
+            features, cert_types
+        )
         with _job_lock:
-            _job_status["progress"] = 0.6
+            _job_status["progress"] = 0.45
 
-        # Step 4: Risk scoring
-        logger.info("Analysis: computing risk scores...")
-        risk_scores, risk_factors = compute_risk_scores(df, combined_scores)
+        # Step 4: Extension rules engine
+        logger.info("Analysis: checking extension compliance...")
+        structural_scores = np.zeros(total, dtype=np.float64)
+        for i, (_, row) in enumerate(df.iterrows()):
+            compliance = check_extension_compliance(row)
+            structural_scores[i] = compliance["structural_score"]
         with _job_lock:
-            _job_status["progress"] = 0.8
+            _job_status["progress"] = 0.55
 
-        # Step 5: Save results to DB
+        # Step 5: Issuer profiling
+        logger.info("Analysis: building issuer profiles...")
+        issuer_profiles = build_issuer_profiles(df)
+        issuer_scores = compute_issuer_anomaly_scores(df, issuer_profiles)
+        with _job_lock:
+            _job_status["progress"] = 0.65
+
+        # Step 6: Risk scoring (10 categories)
+        logger.info("Analysis: computing risk scores (10 categories)...")
+        risk_scores, risk_factors, forensic_scores, forensic_findings = compute_risk_scores(
+            df, combined_scores, structural_scores, issuer_scores,
+        )
+        with _job_lock:
+            _job_status["progress"] = 0.75
+
+        # Step 7: Save results
         logger.info("Analysis: saving results to DB...")
         _save_results(
             metadata, features, combined_scores, if_scores, lof_scores,
-            explanations, risk_scores, risk_factors, settings.model_version,
+            explanations, risk_scores, risk_factors,
+            forensic_scores, forensic_findings,
+            structural_scores, issuer_scores,
+            settings.model_version,
         )
 
         with _job_lock:
@@ -114,14 +146,17 @@ def _run_analysis():
 
 def _save_results(
     metadata, features, combined_scores, if_scores, lof_scores,
-    explanations, risk_scores, risk_factors, model_version,
+    explanations, risk_scores, risk_factors,
+    forensic_scores, forensic_findings,
+    structural_scores, issuer_scores,
+    model_version,
 ):
     """Batch upsert analysis results into ai_analysis_result table."""
     import json
 
     from app.services.anomaly_detector import classify_anomaly
     from app.services.feature_engineering import FEATURE_NAMES
-    from app.services.risk_scorer import classify_risk
+    from app.services.risk_scorer import classify_forensic_risk, classify_risk
 
     settings = get_settings()
     batch_size = settings.batch_size
@@ -156,6 +191,15 @@ def _save_results(
                     "risk_factors": json.dumps(risk_factors[i]),
                     "feature_vector": json.dumps(feature_dict),
                     "anomaly_explanations": json.dumps(explanations[i]),
+                    "forensic_risk_score": round(float(forensic_scores[i]), 2),
+                    "forensic_risk_level": classify_forensic_risk(forensic_scores[i]),
+                    "forensic_findings": json.dumps(forensic_findings[i]),
+                    "structural_anomaly_score": round(float(structural_scores[i]), 4),
+                    "issuer_anomaly_score": round(float(issuer_scores[i]), 4),
+                    "temporal_anomaly_score": round(
+                        float(forensic_findings[i].get("categories", {}).get("temporal_pattern", 0)) / 10.0,
+                        4,
+                    ),
                     "analysis_version": model_version,
                 })
 
@@ -163,7 +207,6 @@ def _save_results(
                 continue
 
             if settings.db_type == "oracle":
-                # Oracle: MERGE for upsert
                 for v in values:
                     conn.execute(
                         text("""
@@ -180,24 +223,35 @@ def _save_results(
                                 risk_factors = :risk_factors,
                                 feature_vector = :feature_vector,
                                 anomaly_explanations = :anomaly_explanations,
+                                forensic_risk_score = :forensic_risk_score,
+                                forensic_risk_level = :forensic_risk_level,
+                                forensic_findings = :forensic_findings,
+                                structural_anomaly_score = :structural_anomaly_score,
+                                issuer_anomaly_score = :issuer_anomaly_score,
+                                temporal_anomaly_score = :temporal_anomaly_score,
                                 analysis_version = :analysis_version,
                                 analyzed_at = SYSTIMESTAMP
                             WHEN NOT MATCHED THEN INSERT (
                                 id, certificate_fingerprint, certificate_type, country_code,
                                 anomaly_score, anomaly_label, isolation_forest_score, lof_score,
                                 risk_score, risk_level, risk_factors,
-                                feature_vector, anomaly_explanations, analysis_version
+                                feature_vector, anomaly_explanations,
+                                forensic_risk_score, forensic_risk_level, forensic_findings,
+                                structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score,
+                                analysis_version
                             ) VALUES (
                                 :id, :certificate_fingerprint, :certificate_type, :country_code,
                                 :anomaly_score, :anomaly_label, :isolation_forest_score, :lof_score,
                                 :risk_score, :risk_level, :risk_factors,
-                                :feature_vector, :anomaly_explanations, :analysis_version
+                                :feature_vector, :anomaly_explanations,
+                                :forensic_risk_score, :forensic_risk_level, :forensic_findings,
+                                :structural_anomaly_score, :issuer_anomaly_score, :temporal_anomaly_score,
+                                :analysis_version
                             )
                         """),
                         v,
                     )
             else:
-                # PostgreSQL: INSERT ON CONFLICT
                 for v in values:
                     conn.execute(
                         text("""
@@ -205,12 +259,17 @@ def _save_results(
                                 id, certificate_fingerprint, certificate_type, country_code,
                                 anomaly_score, anomaly_label, isolation_forest_score, lof_score,
                                 risk_score, risk_level, risk_factors,
-                                feature_vector, anomaly_explanations, analysis_version
+                                feature_vector, anomaly_explanations,
+                                forensic_risk_score, forensic_risk_level, forensic_findings,
+                                structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score,
+                                analysis_version
                             ) VALUES (
                                 :id, :certificate_fingerprint, :certificate_type, :country_code,
                                 :anomaly_score, :anomaly_label, :isolation_forest_score, :lof_score,
                                 :risk_score, :risk_level, CAST(:risk_factors AS JSONB),
                                 CAST(:feature_vector AS JSONB), CAST(:anomaly_explanations AS JSONB),
+                                :forensic_risk_score, :forensic_risk_level, CAST(:forensic_findings AS JSONB),
+                                :structural_anomaly_score, :issuer_anomaly_score, :temporal_anomaly_score,
                                 :analysis_version
                             )
                             ON CONFLICT (certificate_fingerprint) DO UPDATE SET
@@ -223,6 +282,12 @@ def _save_results(
                                 risk_factors = EXCLUDED.risk_factors,
                                 feature_vector = EXCLUDED.feature_vector,
                                 anomaly_explanations = EXCLUDED.anomaly_explanations,
+                                forensic_risk_score = EXCLUDED.forensic_risk_score,
+                                forensic_risk_level = EXCLUDED.forensic_risk_level,
+                                forensic_findings = EXCLUDED.forensic_findings,
+                                structural_anomaly_score = EXCLUDED.structural_anomaly_score,
+                                issuer_anomaly_score = EXCLUDED.issuer_anomaly_score,
+                                temporal_anomaly_score = EXCLUDED.temporal_anomaly_score,
                                 analysis_version = EXCLUDED.analysis_version,
                                 analyzed_at = NOW()
                         """),
@@ -233,7 +298,7 @@ def _save_results(
 
             with _job_lock:
                 _job_status["processed_certificates"] = end
-                _job_status["progress"] = 0.8 + 0.2 * (end / n)
+                _job_status["progress"] = 0.75 + 0.25 * (end / n)
 
         logger.info("Saved %d analysis results to DB", n)
 
@@ -297,6 +362,68 @@ async def get_certificate_analysis(fingerprint: str):
     )
 
 
+@router.get("/certificate/{fingerprint}/forensic", response_model=ForensicDetail)
+async def get_certificate_forensic(fingerprint: str):
+    """Get detailed forensic analysis for a specific certificate."""
+    with sync_engine.connect() as conn:
+        result = conn.execute(
+            text(
+                "SELECT * FROM ai_analysis_result WHERE certificate_fingerprint = :fp"
+            ),
+            {"fp": fingerprint},
+        ).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Analysis not found for this certificate")
+
+    row = result._mapping
+    import json
+
+    risk_factors = row.get("risk_factors") or "{}"
+    if isinstance(risk_factors, str):
+        risk_factors = json.loads(risk_factors)
+
+    explanations = row.get("anomaly_explanations") or "[]"
+    if isinstance(explanations, str):
+        explanations = json.loads(explanations)
+
+    forensic_findings = row.get("forensic_findings") or "{}"
+    if isinstance(forensic_findings, str):
+        forensic_findings = json.loads(forensic_findings)
+
+    return ForensicDetail(
+        fingerprint=row["certificate_fingerprint"],
+        certificate_type=row.get("certificate_type"),
+        country_code=row.get("country_code"),
+        anomaly_score=row.get("anomaly_score", 0),
+        anomaly_label=row.get("anomaly_label", "NORMAL"),
+        risk_score=row.get("risk_score", 0),
+        risk_level=row.get("risk_level", "LOW"),
+        risk_factors=risk_factors,
+        anomaly_explanations=explanations,
+        forensic_risk_score=row.get("forensic_risk_score") or 0,
+        forensic_risk_level=row.get("forensic_risk_level") or "LOW",
+        forensic_findings=forensic_findings,
+        structural_anomaly_score=row.get("structural_anomaly_score") or 0,
+        issuer_anomaly_score=row.get("issuer_anomaly_score") or 0,
+        temporal_anomaly_score=row.get("temporal_anomaly_score") or 0,
+        analyzed_at=row.get("analyzed_at"),
+    )
+
+
+@router.post("/analyze/incremental")
+async def trigger_incremental_analysis(upload_id: str | None = None):
+    """Trigger incremental analysis for newly uploaded certificates."""
+    with _job_lock:
+        if _job_status["status"] == "RUNNING":
+            raise HTTPException(status_code=409, detail="Analysis already running")
+
+    thread = threading.Thread(target=_run_analysis, daemon=True)
+    thread.start()
+
+    return {"success": True, "message": "Incremental analysis started", "upload_id": upload_id}
+
+
 @router.get("/anomalies", response_model=AnomalyListResponse)
 async def list_anomalies(
     country: Optional[str] = Query(None),
@@ -333,13 +460,11 @@ async def list_anomalies(
         pagination = f"LIMIT {size} OFFSET {offset}"
 
     with sync_engine.connect() as conn:
-        # Count
         count_result = conn.execute(
             text(f"SELECT COUNT(*) FROM ai_analysis_result WHERE {where}"),
             params,
         ).scalar()
 
-        # Items
         rows = conn.execute(
             text(
                 f"SELECT * FROM ai_analysis_result WHERE {where} "
@@ -390,7 +515,6 @@ async def get_statistics():
     settings = get_settings()
 
     with sync_engine.connect() as conn:
-        # Total + label counts
         total = conn.execute(text("SELECT COUNT(*) FROM ai_analysis_result")).scalar() or 0
         normal = conn.execute(
             text("SELECT COUNT(*) FROM ai_analysis_result WHERE anomaly_label = 'NORMAL'")
@@ -402,18 +526,15 @@ async def get_statistics():
             text("SELECT COUNT(*) FROM ai_analysis_result WHERE anomaly_label = 'ANOMALOUS'")
         ).scalar() or 0
 
-        # Risk distribution
         risk_rows = conn.execute(
             text("SELECT risk_level, COUNT(*) as cnt FROM ai_analysis_result GROUP BY risk_level")
         ).fetchall()
         risk_dist = {row._mapping["risk_level"]: int(row._mapping["cnt"]) for row in risk_rows}
 
-        # Average risk
         avg_risk = conn.execute(
             text("SELECT AVG(risk_score) FROM ai_analysis_result")
         ).scalar() or 0.0
 
-        # Top anomalous countries
         top_countries_rows = conn.execute(
             text("""
                 SELECT country_code,
@@ -438,9 +559,25 @@ async def get_statistics():
             for row in top_countries_rows[:10]
         ]
 
-        # Last analysis time
         last_at = conn.execute(
             text("SELECT MAX(analyzed_at) FROM ai_analysis_result")
+        ).scalar()
+
+        # Forensic statistics
+        forensic_rows = conn.execute(
+            text(
+                "SELECT forensic_risk_level, COUNT(*) as cnt "
+                "FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL "
+                "GROUP BY forensic_risk_level"
+            )
+        ).fetchall()
+        forensic_dist = {
+            row._mapping["forensic_risk_level"]: int(row._mapping["cnt"])
+            for row in forensic_rows
+        } if forensic_rows else None
+
+        avg_forensic = conn.execute(
+            text("SELECT AVG(forensic_risk_score) FROM ai_analysis_result WHERE forensic_risk_score IS NOT NULL")
         ).scalar()
 
     return AnalysisStatistics(
@@ -453,4 +590,6 @@ async def get_statistics():
         top_anomalous_countries=top_countries,
         last_analysis_at=last_at,
         model_version=settings.model_version,
+        forensic_level_distribution=forensic_dist,
+        avg_forensic_score=round(float(avg_forensic), 2) if avg_forensic else None,
     )

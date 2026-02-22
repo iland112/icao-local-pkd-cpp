@@ -27,6 +27,14 @@ class AnalysisResult(Base):
     risk_level = Column(String(20))  # LOW / MEDIUM / HIGH / CRITICAL
     risk_factors = Column(JSONB)
 
+    # Forensic Scores (v2.19.0)
+    forensic_risk_score = Column(Float)
+    forensic_risk_level = Column(String(20))
+    forensic_findings = Column(JSONB)
+    structural_anomaly_score = Column(Float)
+    issuer_anomaly_score = Column(Float)
+    temporal_anomaly_score = Column(Float)
+
     # Analysis Metadata
     feature_vector = Column(JSONB)
     anomaly_explanations = Column(JSONB)

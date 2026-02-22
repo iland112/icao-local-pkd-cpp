@@ -30,6 +30,65 @@ export interface AnalysisStatistics {
   }[];
   last_analysis_at: string | null;
   model_version: string;
+  forensic_level_distribution: Record<string, number> | null;
+  avg_forensic_score: number | null;
+}
+
+export interface ForensicDetail {
+  fingerprint: string;
+  certificate_type: string | null;
+  country_code: string | null;
+  anomaly_score: number;
+  anomaly_label: string;
+  risk_score: number;
+  risk_level: string;
+  risk_factors: Record<string, number>;
+  anomaly_explanations: string[];
+  forensic_risk_score: number;
+  forensic_risk_level: string;
+  forensic_findings: {
+    score: number;
+    level: string;
+    findings: { category: string; severity: string; message: string }[];
+    categories: Record<string, number>;
+  };
+  structural_anomaly_score: number;
+  issuer_anomaly_score: number;
+  temporal_anomaly_score: number;
+  analyzed_at: string | null;
+}
+
+export interface IssuerProfile {
+  issuer_dn: string;
+  cert_count: number;
+  type_diversity: number;
+  types: Record<string, number>;
+  dominant_algorithm: string;
+  avg_key_size: number;
+  compliance_rate: number;
+  expired_rate: number;
+  risk_indicator: 'LOW' | 'MEDIUM' | 'HIGH';
+  country: string;
+}
+
+export interface ExtensionAnomaly {
+  fingerprint: string;
+  certificate_type: string | null;
+  country_code: string | null;
+  structural_score: number;
+  missing_required: string[];
+  missing_recommended: string[];
+  forbidden_violations: string[];
+  key_usage_violations: string[];
+  violations_detail: { rule: string; severity: string }[];
+}
+
+export interface ForensicSummary {
+  total_analyzed: number;
+  forensic_level_distribution: Record<string, number>;
+  category_avg_scores: Record<string, number>;
+  severity_distribution: Record<string, number> | null;
+  top_findings: { message: string; count: number }[] | null;
 }
 
 export interface AnalysisJobStatus {
@@ -122,6 +181,20 @@ export const aiAnalysisApi = {
   getRiskDistribution: () => pkdApi.get<RiskDistribution[]>('/ai/reports/risk-distribution'),
 
   getCountryReport: (code: string) => pkdApi.get(`/ai/reports/country/${code}`),
+
+  // Forensic endpoints (v2.19.0)
+  getCertificateForensic: (fingerprint: string) =>
+    pkdApi.get<ForensicDetail>(`/ai/certificate/${fingerprint}/forensic`),
+
+  triggerIncrementalAnalysis: (uploadId?: string) =>
+    pkdApi.post<{ success: boolean; message: string }>('/ai/analyze/incremental', { upload_id: uploadId }),
+
+  getIssuerProfiles: () => pkdApi.get<IssuerProfile[]>('/ai/reports/issuer-profiles'),
+
+  getForensicSummary: () => pkdApi.get<ForensicSummary>('/ai/reports/forensic-summary'),
+
+  getExtensionAnomalies: (params?: { type?: string; country?: string; limit?: number }) =>
+    pkdApi.get<ExtensionAnomaly[]>('/ai/reports/extension-anomalies', { params }),
 };
 
 export default aiAnalysisApi;
