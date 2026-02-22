@@ -127,98 +127,94 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
         </div>
       ) : (
         <div className="max-h-96 overflow-y-auto">
-          <table className="w-full text-sm table-fixed">
-            <thead className="sticky top-0 bg-white dark:bg-gray-800 z-10">
-              <tr className="text-gray-500 dark:text-gray-400 text-left border-b border-gray-200 dark:border-gray-700">
-                <th className="pb-2 font-medium w-6" />
-                <th className="pb-2 font-medium">인증서</th>
-                <th className="pb-2 font-medium text-center w-16">유형</th>
-                <th className="pb-2 font-medium text-center w-12">국가</th>
-                <th className="pb-2 font-medium text-center w-20">심각도</th>
-                <th className="pb-2 font-medium text-center w-14">위반 수</th>
-                <th className="pb-2 font-medium text-center w-12">점수</th>
-              </tr>
-            </thead>
-            <tbody>
-              {anomalies.slice(0, 100).map((a, idx) => {
-                const isExpanded = expandedRows.has(idx);
-                const sev = deriveSeverity(a.structural_score);
-                const Icon = SEVERITY_ICON[sev] || AlertTriangle;
-                const violationCount = totalViolations(a);
-                return (
-                  <>
-                    <tr
-                      key={`row-${idx}`}
-                      className="border-t border-gray-100 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750"
-                      onClick={() => toggleRow(idx)}
-                    >
-                      <td className="py-1.5">
-                        {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
-                        )}
-                      </td>
-                      <td className="py-1.5 text-gray-700 dark:text-gray-300 font-mono text-xs truncate" title={a.fingerprint}>
-                        {a.fingerprint.slice(0, 16)}...
-                      </td>
-                      <td className="py-1.5 text-center">
-                        <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                          {a.certificate_type || '-'}
-                        </span>
-                      </td>
-                      <td className="py-1.5 text-center text-xs">{a.country_code || '-'}</td>
-                      <td className="py-1.5 text-center">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium ${SEVERITY_STYLE[sev] || ''}`}>
-                          <Icon className="w-3 h-3" />
-                          {sev}
-                        </span>
-                      </td>
-                      <td className="py-1.5 text-center">{violationCount}</td>
-                      <td className="py-1.5 text-center font-medium">
-                        {(a.structural_score * 100).toFixed(0)}
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr key={`detail-${idx}`} className="bg-gray-50 dark:bg-gray-900/30">
-                        <td colSpan={7} className="px-4 py-3">
-                          <div className="space-y-1.5">
-                            {a.violations_detail.map((v, vi) => (
-                              <div key={vi} className="flex items-start gap-2 text-xs min-w-0">
-                                <span className={`shrink-0 px-1.5 py-0.5 rounded font-medium ${
-                                  v.severity === 'CRITICAL' ? 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
-                                  v.severity === 'HIGH' ? 'text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/20' :
-                                  'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
-                                }`}>
-                                  {v.severity}
-                                </span>
-                                <span className="text-gray-600 dark:text-gray-400 break-words">{v.rule}</span>
-                              </div>
-                            ))}
-                            {a.missing_required.length > 0 && (
-                              <div className="text-xs text-red-500 break-words">
-                                필수 누락: {a.missing_required.join(', ')}
-                              </div>
-                            )}
-                            {a.forbidden_violations.length > 0 && (
-                              <div className="text-xs text-orange-500 break-words">
-                                금지 위반: {a.forbidden_violations.join(', ')}
-                              </div>
-                            )}
-                            {a.key_usage_violations.length > 0 && (
-                              <div className="text-xs text-amber-500 break-words">
-                                키 사용 위반: {a.key_usage_violations.join(', ')}
-                              </div>
-                            )}
+          {/* Header */}
+          <div className="grid grid-cols-[24px_1fr_56px_40px_72px_48px_40px] gap-1 text-xs text-gray-500 dark:text-gray-400 font-medium pb-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10 px-1">
+            <div />
+            <div>인증서</div>
+            <div className="text-center">유형</div>
+            <div className="text-center">국가</div>
+            <div className="text-center">심각도</div>
+            <div className="text-center">위반</div>
+            <div className="text-center">점수</div>
+          </div>
+
+          {/* Rows */}
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {anomalies.slice(0, 100).map((a, idx) => {
+              const isExpanded = expandedRows.has(idx);
+              const sev = deriveSeverity(a.structural_score);
+              const Icon = SEVERITY_ICON[sev] || AlertTriangle;
+              const violationCount = totalViolations(a);
+              return (
+                <div key={idx}>
+                  <div
+                    className="grid grid-cols-[24px_1fr_56px_40px_72px_48px_40px] gap-1 items-center py-1.5 px-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750"
+                    onClick={() => toggleRow(idx)}
+                  >
+                    <div>
+                      {isExpanded ? (
+                        <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                      ) : (
+                        <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="text-gray-700 dark:text-gray-300 font-mono text-xs truncate" title={a.fingerprint}>
+                      {a.fingerprint.slice(0, 16)}...
+                    </div>
+                    <div className="text-center">
+                      <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                        {a.certificate_type || '-'}
+                      </span>
+                    </div>
+                    <div className="text-center text-xs">{a.country_code || '-'}</div>
+                    <div className="text-center">
+                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium ${SEVERITY_STYLE[sev] || ''}`}>
+                        <Icon className="w-3 h-3" />
+                        {sev}
+                      </span>
+                    </div>
+                    <div className="text-center text-sm">{violationCount}</div>
+                    <div className="text-center text-sm font-medium">
+                      {(a.structural_score * 100).toFixed(0)}
+                    </div>
+                  </div>
+                  {isExpanded && (
+                    <div className="bg-gray-50 dark:bg-gray-900/30 px-4 py-3">
+                      <div className="space-y-1.5">
+                        {a.violations_detail.map((v, vi) => (
+                          <div key={vi} className="flex items-start gap-2 text-xs">
+                            <span className={`shrink-0 px-1.5 py-0.5 rounded font-medium ${
+                              v.severity === 'CRITICAL' ? 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/20' :
+                              v.severity === 'HIGH' ? 'text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/20' :
+                              'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20'
+                            }`}>
+                              {v.severity}
+                            </span>
+                            <span className="text-gray-600 dark:text-gray-400 break-words">{v.rule}</span>
                           </div>
-                        </td>
-                      </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                        ))}
+                        {a.missing_required.length > 0 && (
+                          <div className="text-xs text-red-500 break-words">
+                            필수 누락: {a.missing_required.join(', ')}
+                          </div>
+                        )}
+                        {a.forbidden_violations.length > 0 && (
+                          <div className="text-xs text-orange-500 break-words">
+                            금지 위반: {a.forbidden_violations.join(', ')}
+                          </div>
+                        )}
+                        {a.key_usage_violations.length > 0 && (
+                          <div className="text-xs text-amber-500 break-words">
+                            키 사용 위반: {a.key_usage_violations.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
