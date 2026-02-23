@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.8
-**Last Updated**: 2026-02-21
+**Version**: 2.1.9
+**Last Updated**: 2026-02-23
 **API Gateway**: HTTP (:80) / HTTPS (:443) / Internal (:8080)
 
 ---
@@ -30,7 +30,27 @@ PKD Management:     http://pkd.smartcoreinc.com/api
 AI Analysis:        http://pkd.smartcoreinc.com/api/ai
 ```
 
+**WiFi 네트워크 (SC-WiFi) 접속**:
+```
+# Luckfox WiFi IP (192.168.1.70) — 같은 WiFi 네트워크 내에서 접근
+PA Service:         http://192.168.1.70:8080/api/pa
+PKD Management:     http://192.168.1.70:8080/api
+AI Analysis:        http://192.168.1.70:8080/api/ai
+Frontend:           http://192.168.1.70
+```
+
+**유선 LAN (내부 네트워크) 접속**:
+```
+# Luckfox 유선 IP (192.168.100.10)
+PA Service:         http://192.168.100.10:8080/api/pa
+PKD Management:     http://192.168.100.10:8080/api
+AI Analysis:        http://192.168.100.10:8080/api/ai
+Frontend:           http://192.168.100.10
+```
+
 > **Note**: 모든 API 요청은 API Gateway를 통해 라우팅됩니다. HTTPS와 HTTP 모두 지원됩니다. HTTPS 사용 시 Private CA 인증서(`ca.crt`)를 클라이언트에 설치해야 합니다. 전체 검증(`/api/pa/verify`)은 PA Service로, 간편 조회(`/api/certificates/pa-lookup`)는 PKD Management로, AI 분석(`/api/ai/*`)은 AI Analysis Service로 라우팅됩니다.
+>
+> **⚠ 현재 상태 (2026-02-23)**: `192.168.100.11` 하드웨어 장애로 정지. `192.168.100.10` (유선) 또는 `192.168.1.70` (WiFi, SC-WiFi) 으로 접근.
 
 ### 인증
 
@@ -1248,6 +1268,11 @@ public class PAServiceClient
 ```
 
 ### curl
+
+> **접속 환경별 HOST 치환**: `localhost:8080` 대신 환경에 맞는 주소 사용
+> - WiFi (SC-WiFi): `192.168.1.70:8080`
+> - 유선 LAN: `192.168.100.10:8080`
+> - 도메인: `pkd.smartcoreinc.com`
 
 ```bash
 # Full PA Verify (SOD + DG files required)
