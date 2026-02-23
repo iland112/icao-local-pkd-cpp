@@ -1,11 +1,14 @@
 # ICAO Local PKD - Luckfox 배포 가이드
 
 **Device**: Luckfox Pico (ARM64)
-**IP Address**: 192.168.100.11
+**IP Address**: ~~192.168.100.11~~ → **192.168.100.10** (하드웨어 장애로 노드 변경)
 **Project Directory**: `/home/luckfox/icao-local-pkd-cpp-v2`
 **Current Version**: v1.6.1 (PKD Management), v1.3.0 (Sync Service)
 **Last Deployed**: 2026-01-16 14:27:34 (KST)
-**Updated**: 2026-01-16
+**Updated**: 2026-02-23
+
+> **⚠ 하드웨어 장애 공지 (2026-02-23)**: `192.168.100.11` 노드가 하드웨어 문제로 동작 정지.
+> 현재 `192.168.100.10` 노드로만 접근 가능. 아래 접속 정보의 IP를 `192.168.100.10`으로 대체하여 사용.
 
 ---
 
@@ -167,8 +170,8 @@ cd /home/luckfox/icao-local-pkd-cpp-v2
 
 | 서비스 | URL/주소 | 설명 |
 |--------|----------|------|
-| **Frontend** | http://192.168.100.11 | 웹 UI (포트 80) |
-| **API Gateway** | http://192.168.100.11:8080/api | 통합 API 엔드포인트 |
+| **Frontend** | http://192.168.100.10 | 웹 UI (포트 80) |
+| **API Gateway** | http://192.168.100.10:8080/api | 통합 API 엔드포인트 |
 | **PostgreSQL** | 127.0.0.1:5432 | DB: localpkd, User: pkd, Pass: pkd |
 
 ---
@@ -344,7 +347,7 @@ docker load < /tmp/icao-management-arm64.tar
 Luckfox는 **host network mode**를 사용합니다.
 - 모든 컨테이너가 호스트 네트워크 네임스페이스 공유
 - 포트 바인딩 없음 (127.0.0.1 직접 접근)
-- 외부 접근: 192.168.100.11 (Luckfox IP)
+- 외부 접근: 192.168.100.10 (활성 노드 IP, 기존 192.168.100.11은 하드웨어 장애)
 
 ### PostgreSQL 데이터베이스명
 
@@ -456,6 +459,7 @@ docker images | grep icao
 
 ---
 
-**Last Updated**: 2026-01-16
+**Last Updated**: 2026-02-23
 **Current Version**: v1.6.1 (PKD Management), v1.3.0 (Sync Service)
 **Last Deployment**: 2026-01-16 14:27:34 (KST)
+**Node Status**: 192.168.100.11 하드웨어 장애 → 192.168.100.10 단일 노드 운영

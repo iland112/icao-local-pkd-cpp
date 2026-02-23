@@ -1,8 +1,10 @@
 # Luckfox Docker Management Scripts
 
-Luckfox ARM64 (192.168.100.11) 환경에서 ICAO Local PKD 서비스를 운영하기 위한 스크립트.
+Luckfox ARM64 환경에서 ICAO Local PKD 서비스를 운영하기 위한 스크립트.
 
-**Updated: 2026-02-12** - GitHub Actions CI/CD 기반 배포
+**Updated: 2026-02-23** - GitHub Actions CI/CD 기반 배포
+
+> **⚠ 현재 상태 (2026-02-23)**: `192.168.100.11` 하드웨어 장애로 정지. `192.168.100.10`으로만 접근 가능.
 
 ## Architecture
 
@@ -57,11 +59,11 @@ bash scripts/deploy/from-github-artifacts.sh frontend
 # Copy management scripts (rename to luckfox-*.sh at project root)
 for f in scripts/luckfox/*.sh; do
   sshpass -p luckfox scp "$f" \
-    luckfox@192.168.100.11:/home/luckfox/icao-local-pkd-cpp-v2/luckfox-$(basename "$f")
+    luckfox@192.168.100.10:/home/luckfox/icao-local-pkd-cpp-v2/luckfox-$(basename "$f")
 done
 
 # Set executable
-sshpass -p luckfox ssh luckfox@192.168.100.11 \
+sshpass -p luckfox ssh luckfox@192.168.100.10 \
   'chmod +x /home/luckfox/icao-local-pkd-cpp-v2/luckfox-*.sh'
 ```
 
@@ -69,7 +71,7 @@ sshpass -p luckfox ssh luckfox@192.168.100.11 \
 
 ```bash
 # SSH to luckfox
-ssh luckfox@192.168.100.11
+ssh luckfox@192.168.100.10
 cd ~/icao-local-pkd-cpp-v2
 
 # Start / Stop / Restart

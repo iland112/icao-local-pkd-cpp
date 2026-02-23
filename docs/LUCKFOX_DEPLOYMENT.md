@@ -1,8 +1,8 @@
 # Luckfox ARM64 Deployment Guide
 
-**Version**: 3.0
-**Last Updated**: 2026-02-13
-**Status**: Production Ready
+**Version**: 3.1
+**Last Updated**: 2026-02-23
+**Status**: Degraded — 192.168.100.11 하드웨어 장애로 단일 노드(192.168.100.10) 운영 중
 
 ---
 
@@ -14,9 +14,13 @@ All services use `network_mode: host` (luckfox kernel lacks iptables DNAT).
 ### Architecture
 
 ```
-192.168.100.10: OpenLDAP1 (:389) - Master Node
-192.168.100.11: OpenLDAP2 (:389) + Docker Apps - Luckfox (This Node)
+192.168.100.10: OpenLDAP1 (:389) - Master Node (현재 유일한 활성 노드)
+192.168.100.11: OpenLDAP2 (:389) + Docker Apps - Luckfox (하드웨어 장애로 정지)
 ```
+
+> **⚠ 현재 상태 (2026-02-23)**: `192.168.100.11` (Luckfox) 하드웨어 장애로 동작 정지.
+> OpenLDAP MMR 복제는 `192.168.100.10` 단일 노드로 운영 중.
+> Docker 서비스 배포 대상도 `192.168.100.10`으로 변경 필요.
 
 ### Services
 
@@ -48,7 +52,8 @@ command -v sshpass && command -v skopeo && command -v gh && echo "All OK"
 ### Luckfox
 
 - Docker installed and running
-- SSH access: `luckfox@192.168.100.11` (password: luckfox)
+- ~~SSH access: `luckfox@192.168.100.11` (password: luckfox)~~ — **하드웨어 장애로 사용 불가**
+- 현재 활성 노드: `luckfox@192.168.100.10` (password: luckfox)
 - Project directory: `/home/luckfox/icao-local-pkd-cpp-v2`
 
 ---
@@ -243,6 +248,12 @@ Ensure `/api/auth` route exists in API gateway config.
 ---
 
 ## Change Log
+
+### 2026-02-23: v3.1 - Hardware Failure Status Update
+- `192.168.100.11` (Luckfox) 하드웨어 장애로 동작 정지
+- 현재 `192.168.100.10` 단일 노드로만 연결 가능
+- OpenLDAP MMR 복제 단일 노드 운영 상태 반영
+- 배포 대상 노드 정보 업데이트
 
 ### 2026-02-13: v3.0 - Full Pipeline + Monitoring Service
 - GitHub Actions CI/CD with change detection (dorny/paths-filter)

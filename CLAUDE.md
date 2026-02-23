@@ -521,7 +521,7 @@ scripts/
 - Reference data: code_master (21 categories, ~150 codes)
 
 ### LDAP Strategy
-- Read: Software Load Balancing (openldap1:389, openldap2:389)
+- Read: Software Load Balancing (openldap1:389, openldap2:389) — **현재 openldap2(192.168.100.11) 하드웨어 장애로 단일 노드(openldap1) 운영 중**
 - Write: Direct to primary (openldap1:389)
 - DN format: `cn={FINGERPRINT},o={TYPE},c={COUNTRY},dc=data,...`
 - Object classes: pkdDownload (certs), cRLDistributionPoint (CRLs)
