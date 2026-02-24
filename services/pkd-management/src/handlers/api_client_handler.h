@@ -9,6 +9,7 @@
  */
 
 #include <drogon/drogon.h>
+#include "../auth/jwt_service.h"
 #include "../repositories/api_client_repository.h"
 
 namespace handlers {

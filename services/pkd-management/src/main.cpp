@@ -42,6 +42,7 @@
 #include "handlers/misc_handler.h"
 #include "handlers/icao_handler.h"
 #include "handlers/code_master_handler.h"
+#include "handlers/api_client_handler.h"
 
 // Authentication middleware
 #include "middleware/auth_middleware.h"

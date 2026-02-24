@@ -186,40 +186,67 @@ std::string ApiClientRepository::insert(const domain::models::ApiClient& client)
         std::string endpointsStr = Json::writeString(writerBuilder, endpointsJson);
         std::string ipsStr = Json::writeString(writerBuilder, ipsJson);
 
+        // Build query and params — $11 is expiresAt (only if present), last param is createdBy
         std::string query;
-        if (dbType == "oracle") {
-            query =
-                "INSERT INTO api_clients (client_name, api_key_hash, api_key_prefix, description, "
-                "  permissions, allowed_endpoints, allowed_ips, "
-                "  rate_limit_per_minute, rate_limit_per_hour, rate_limit_per_day, "
-                "  is_active, expires_at, created_by) "
-                "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, " + isActiveVal + ", "
-                "  " + (client.expiresAt.has_value() ? "TO_TIMESTAMP($11, 'YYYY-MM-DD\"T\"HH24:MI:SS')" : "NULL") + ", $12)";
+        std::vector<std::string> params = {
+            client.clientName,          // $1
+            client.apiKeyHash,          // $2
+            client.apiKeyPrefix,        // $3
+            client.description.value_or(""),  // $4
+            permsStr,                   // $5
+            endpointsStr,               // $6
+            ipsStr,                     // $7
+            std::to_string(client.rateLimitPerMinute),   // $8
+            std::to_string(client.rateLimitPerHour),     // $9
+            std::to_string(client.rateLimitPerDay),      // $10
+        };
+
+        if (client.expiresAt.has_value()) {
+            params.push_back(client.expiresAt.value());        // $11
+            params.push_back(client.createdBy.value_or(""));   // $12
         } else {
-            query =
-                "INSERT INTO api_clients (client_name, api_key_hash, api_key_prefix, description, "
-                "  permissions, allowed_endpoints, allowed_ips, "
-                "  rate_limit_per_minute, rate_limit_per_hour, rate_limit_per_day, "
-                "  is_active, expires_at, created_by) "
-                "VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, " + isActiveVal + ", "
-                "  " + (client.expiresAt.has_value() ? "$11::timestamp" : "NULL") + ", $12) "
-                "RETURNING id";
+            params.push_back(client.createdBy.value_or(""));   // $11
         }
 
-        std::vector<std::string> params = {
-            client.clientName,
-            client.apiKeyHash,
-            client.apiKeyPrefix,
-            client.description.value_or(""),
-            permsStr,
-            endpointsStr,
-            ipsStr,
-            std::to_string(client.rateLimitPerMinute),
-            std::to_string(client.rateLimitPerHour),
-            std::to_string(client.rateLimitPerDay),
-            client.expiresAt.value_or(""),
-            client.createdBy.value_or("")
-        };
+        if (dbType == "oracle") {
+            if (client.expiresAt.has_value()) {
+                query =
+                    "INSERT INTO api_clients (client_name, api_key_hash, api_key_prefix, description, "
+                    "  permissions, allowed_endpoints, allowed_ips, "
+                    "  rate_limit_per_minute, rate_limit_per_hour, rate_limit_per_day, "
+                    "  is_active, expires_at, created_by) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, " + isActiveVal + ", "
+                    "  TO_TIMESTAMP($11, 'YYYY-MM-DD\"T\"HH24:MI:SS'), $12)";
+            } else {
+                query =
+                    "INSERT INTO api_clients (client_name, api_key_hash, api_key_prefix, description, "
+                    "  permissions, allowed_endpoints, allowed_ips, "
+                    "  rate_limit_per_minute, rate_limit_per_hour, rate_limit_per_day, "
+                    "  is_active, expires_at, created_by) "
+                    "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, " + isActiveVal + ", "
+                    "  NULL, $11)";
+            }
+        } else {
+            if (client.expiresAt.has_value()) {
+                query =
+                    "INSERT INTO api_clients (client_name, api_key_hash, api_key_prefix, description, "
+                    "  permissions, allowed_endpoints, allowed_ips, "
+                    "  rate_limit_per_minute, rate_limit_per_hour, rate_limit_per_day, "
+                    "  is_active, expires_at, created_by) "
+                    "VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, " + isActiveVal + ", "
+                    "  $11::timestamp, $12) "
+                    "RETURNING id";
+            } else {
+                query =
+                    "INSERT INTO api_clients (client_name, api_key_hash, api_key_prefix, description, "
+                    "  permissions, allowed_endpoints, allowed_ips, "
+                    "  rate_limit_per_minute, rate_limit_per_hour, rate_limit_per_day, "
+                    "  is_active, expires_at, created_by) "
+                    "VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, $8, $9, $10, " + isActiveVal + ", "
+                    "  NULL, $11) "
+                    "RETURNING id";
+            }
+        }
 
         if (dbType == "oracle") {
             executor_->executeCommand(query, params);

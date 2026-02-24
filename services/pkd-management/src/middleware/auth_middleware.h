@@ -109,5 +109,6 @@ private:
         const std::string& errorMessage = "");
 
     static std::unique_ptr<middleware::ApiRateLimiter> rateLimiter_;
+};
 
 } // namespace middleware
