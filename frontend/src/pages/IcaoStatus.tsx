@@ -200,7 +200,7 @@ export default function IcaoStatus() {
                   <div
                     key={status.collection_type}
                     className={cn(
-                      "bg-white dark:bg-gray-800 rounded-xl border-2 shadow-sm p-5 transition-all duration-200",
+                      "bg-white dark:bg-gray-800 rounded-2xl border shadow-lg p-5 transition-all duration-200",
                       status.needs_update
                         ? 'border-orange-300 dark:border-orange-700'
                         : 'border-green-300 dark:border-green-700'
@@ -305,7 +305,7 @@ export default function IcaoStatus() {
           {/* Version History Table */}
           <div className="mb-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">버전 감지 이력</h2>
-            <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-800">
@@ -389,7 +389,7 @@ export default function IcaoStatus() {
           </div>
 
           {/* Info Section */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-6">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl p-6">
             <h3 className="text-base font-semibold text-blue-900 dark:text-blue-300 mb-3">ICAO Auto Sync 정보</h3>
             <div className="text-sm text-blue-800 dark:text-blue-300 space-y-3">
               <p>

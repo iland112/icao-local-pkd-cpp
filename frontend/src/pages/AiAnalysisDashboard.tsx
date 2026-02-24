@@ -856,7 +856,7 @@ function PageHeader({
   lastAnalysisAt: string | null;
 }) {
   return (
-    <div className="mb-2">
+    <div className="mb-6">
       <div className="flex items-center gap-4">
         <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg">
           <Brain className="w-7 h-7 text-white" />

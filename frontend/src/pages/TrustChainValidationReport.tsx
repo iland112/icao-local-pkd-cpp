@@ -403,7 +403,7 @@ function StatCard({ icon, label, value, sub, borderColor }: {
   borderColor: string;
 }) {
   return (
-    <div className={cn('bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4', borderColor)}>
+    <div className={cn('bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4', borderColor)}>
       <div className="flex items-center gap-3">
         <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-700/50">
           {icon}

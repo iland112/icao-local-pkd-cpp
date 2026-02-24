@@ -41,7 +41,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
   exportAllLoading,
 }) => {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-4 p-5">
       <div className="flex items-center gap-2 mb-3">
         <Filter className="w-4 h-4 text-blue-500" />
         <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>

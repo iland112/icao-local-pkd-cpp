@@ -158,17 +158,17 @@ export function OperationAuditLog() {
   const totalPages = Math.ceil(total / limit);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full px-4 lg:px-6 py-4">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-500 to-cyan-500 rounded-xl p-6 text-white">
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-white/20 backdrop-blur-sm rounded-lg">
-              <ShieldCheck className="w-8 h-8" />
+        <div className="mb-6">
+          <div className="flex items-center gap-4">
+            <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+              <ShieldCheck className="w-7 h-7 text-white" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold">운영 감사 로그</h1>
-              <p className="text-sm text-blue-100 mt-1">시스템 작업 추적 및 모니터링</p>
+            <div className="flex-1">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">운영 감사 로그</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">시스템 작업 추적 및 모니터링</p>
             </div>
           </div>
         </div>
@@ -176,7 +176,7 @@ export function OperationAuditLog() {
         {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           {/* Total Operations */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">총 작업</p>
@@ -189,7 +189,7 @@ export function OperationAuditLog() {
           </div>
 
           {/* Successful Operations */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">성공</p>
@@ -202,7 +202,7 @@ export function OperationAuditLog() {
           </div>
 
           {/* Failed Operations */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">실패</p>
@@ -215,7 +215,7 @@ export function OperationAuditLog() {
           </div>
 
           {/* Average Duration */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400">평균 소요시간</p>
@@ -229,7 +229,7 @@ export function OperationAuditLog() {
         </div>
 
         {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">필터</h2>
@@ -317,7 +317,7 @@ export function OperationAuditLog() {
         </div>
 
         {/* Audit Log Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-600">
@@ -470,7 +470,7 @@ export function OperationAuditLog() {
         {/* Detail Dialog */}
         {dialogOpen && selectedLog && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
               {/* Dialog Header */}
               <div className="sticky top-0 bg-gradient-to-r from-blue-500 to-cyan-500 px-6 py-4 rounded-t-xl">
                 <div className="flex items-center justify-between">

@@ -418,7 +418,7 @@ export default function CrlReport() {
       </div>
 
       {/* Filters */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-amber-500" />
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
@@ -468,7 +468,7 @@ export default function CrlReport() {
       </div>
 
       {/* CRL Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-amber-500" />
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">CRL 목록</h3>
@@ -590,7 +590,7 @@ export default function CrlReport() {
       {/* Detail Dialog */}
       {dialogOpen && selectedCrl && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeDialog}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Dialog Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">
@@ -718,7 +718,7 @@ export default function CrlReport() {
 
 function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; onExport: () => void; loading: boolean }) {
   return (
-    <div className="mb-2">
+    <div className="mb-6">
       <div className="flex items-center gap-4">
         <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
           <FileWarning className="w-7 h-7 text-white" />

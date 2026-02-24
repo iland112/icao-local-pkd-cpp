@@ -508,7 +508,7 @@ const CertificateSearch: React.FC = () => {
       {/* Statistics Cards - Hierarchical Layout */}
       <div className="mb-4">
         {/* Main Total Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-5 border-l-4 border-blue-500">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
           <div className="flex items-center gap-3 mb-4">
             <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/30">
               <Shield className="w-6 h-6 text-blue-500" />
@@ -568,7 +568,7 @@ const CertificateSearch: React.FC = () => {
       </div>
 
       {/* Results Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
         {/* Table Header */}
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-2">

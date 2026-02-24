@@ -680,7 +680,7 @@ export default function DscNcReport() {
 
 function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; onExport: () => void; loading: boolean }) {
   return (
-    <div className="mb-2">
+    <div className="mb-6">
       <div className="flex items-center gap-4">
         <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
           <ShieldAlert className="w-7 h-7 text-white" />

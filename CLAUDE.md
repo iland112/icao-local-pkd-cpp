@@ -302,30 +302,33 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 ## Frontend
 
-### Pages (24 total)
+### Pages (23 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
+| Login | `/login` | Landing page + Authentication |
 | Dashboard | `/` | Homepage with certificate statistics |
 | FileUpload | `/upload` | LDIF/Master List upload |
 | CertificateUpload | `/upload/certificate` | Individual certificate upload (preview-before-save) |
+| UploadHistory | `/upload-history` | Upload management |
+| UploadDetail | `/upload/:uploadId` | Upload detail & structure |
+| UploadDashboard | `/upload/dashboard` | Upload statistics dashboard |
 | CertificateSearch | `/pkd/certificates` | Certificate search & detail |
 | DscNcReport | `/pkd/dsc-nc` | DSC_NC non-conformant certificate report |
 | CrlReport | `/pkd/crl` | CRL report & revoked certificate analysis |
-| UploadHistory | `/upload-history` | Upload management |
-| UploadDetail | `/upload/:uploadId` | Upload detail & structure |
+| TrustChainValidationReport | `/pkd/trust-chain` | DSC Trust Chain report |
 | PAVerify | `/pa/verify` | PA verification |
 | PAHistory | `/pa/history` | PA history |
 | PADetail | `/pa/:paId` | PA detail |
+| PADashboard | `/pa/dashboard` | PA statistics dashboard |
 | SyncDashboard | `/sync` | DB-LDAP sync monitoring |
 | IcaoStatus | `/icao` | ICAO PKD version tracking |
 | MonitoringDashboard | `/monitoring` | System monitoring |
-| Login | `/login` | Authentication |
-| UserManagement | `/admin/users` | User administration |
+| AiAnalysisDashboard | `/ai/analysis` | AI certificate forensic analysis & pattern analysis |
+| UserManagement | `/admin/users` | User administration (grid card layout) |
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
-| ValidationDemo | `/pkd/trust-chain` | DSC Trust Chain report |
-| AiAnalysisDashboard | `/ai/analysis` | AI certificate forensic analysis & pattern analysis |
+| Profile | `/profile` | User profile & account info |
 
 ### Key Components
 
@@ -1105,6 +1108,7 @@ scripts/
 - [docs/PA_API_GUIDE.md](docs/PA_API_GUIDE.md) - PA Service API guide (v2.1.1)
 - [docs/CERTIFICATE_SEARCH_QUICKSTART.md](docs/CERTIFICATE_SEARCH_QUICKSTART.md) - Certificate search guide
 - [docs/LDAP_QUERY_GUIDE.md](docs/LDAP_QUERY_GUIDE.md) - LDAP operations guide
+- [docs/FRONTEND_DESIGN_SYSTEM.md](docs/FRONTEND_DESIGN_SYSTEM.md) - Frontend UI/UX design system (color theme, components, tokens)
 
 ### Architecture
 - [docs/SOFTWARE_ARCHITECTURE.md](docs/SOFTWARE_ARCHITECTURE.md) - System architecture

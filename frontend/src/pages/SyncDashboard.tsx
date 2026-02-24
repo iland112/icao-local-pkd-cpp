@@ -298,7 +298,7 @@ export function SyncDashboard() {
 
       {/* Config Card */}
       {config && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-gray-500" />
@@ -349,7 +349,7 @@ export function SyncDashboard() {
       {/* Status Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Current Status Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               현재 상태
@@ -447,7 +447,7 @@ export function SyncDashboard() {
         </div>
 
         {/* DB vs LDAP Comparison Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 md:col-span-2">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:col-span-2">
           <div className="flex items-center gap-2 mb-4">
             <ArrowRightLeft className="w-5 h-5 text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -654,7 +654,7 @@ export function SyncDashboard() {
       )}
 
       {/* Sync History */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
         <div className="flex items-center gap-2 mb-4">
           <History className="w-5 h-5 text-purple-500" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -749,7 +749,7 @@ export function SyncDashboard() {
 
       {/* Revalidation History */}
       {revalidationHistory.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <ShieldCheck className="w-5 h-5 text-green-500" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -847,7 +847,7 @@ export function SyncDashboard() {
       )}
 
       {/* Reconciliation History */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
         <ReconciliationHistory />
       </div>
 

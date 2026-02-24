@@ -111,26 +111,28 @@ export function AuditLog() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="w-full px-4 lg:px-6 py-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-500 rounded-xl flex items-center justify-center shadow-lg">
-          <Shield className="w-6 h-6 text-white" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            로그인 이력
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            사용자 인증 및 활동 로그
-          </p>
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+            <Shield className="w-7 h-7 text-white" />
+          </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              로그인 이력
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              사용자 인증 및 활동 로그
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Statistics Cards */}
       {stats && (
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
                 <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
@@ -144,7 +146,7 @@ export function AuditLog() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
                 <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
@@ -158,7 +160,7 @@ export function AuditLog() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -172,7 +174,7 @@ export function AuditLog() {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/30 rounded-lg flex items-center justify-center">
                 <Clock className="w-5 h-5 text-purple-600 dark:text-purple-400" />
@@ -189,7 +191,7 @@ export function AuditLog() {
       )}
 
       {/* Filter Card */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center gap-2 mb-4">
           <Filter className="w-5 h-5 text-gray-400" />
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">필터</h2>
@@ -253,7 +255,7 @@ export function AuditLog() {
       </div>
 
       {/* Audit Log Table */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead className="bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
@@ -376,7 +378,7 @@ export function AuditLog() {
       {/* Detail Dialog */}
       {dialogOpen && selectedLog && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             {/* Dialog Header */}
             <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4 rounded-t-xl">
               <div className="flex items-center justify-between">

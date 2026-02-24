@@ -7,15 +7,9 @@ import {
   Upload,
   Clock,
   BarChart3,
-  CheckCircle,
-  IdCard,
-  History,
-  PresentationIcon,
   Calendar,
   FileText,
   Key,
-  User,
-  GraduationCap,
   Globe,
   Loader2,
   Shield,
@@ -187,89 +181,52 @@ export function Dashboard() {
   };
 
   return (
-    <div className="w-full px-4 lg:px-6 py-6">
-      {/* Header Section */}
-      <div className="mb-8">
-        <div className="relative overflow-hidden rounded-2xl shadow-2xl">
-          {/* Background Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700"></div>
-          {/* Decorative Elements */}
-          <div className="absolute inset-0 opacity-30">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
-            <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-400/20 rounded-full blur-2xl transform -translate-x-1/3 translate-y-1/3"></div>
+    <div className="w-full px-4 lg:px-6 py-4 space-y-6">
+      {/* Header */}
+      <div className="mb-6">
+        <div className="flex items-center gap-4">
+          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
+            <ShieldCheck className="w-7 h-7 text-white" />
           </div>
-          {/* Content */}
-          <div className="relative p-6 lg:p-8 text-white">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h1 className="text-3xl lg:text-4xl font-bold mb-3 flex items-center gap-4">
-                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
-                    <ShieldCheck className="w-8 h-8" />
-                  </div>
-                  ICAO PKD Local Manager
-                </h1>
-                <p className="text-blue-100 text-lg mb-1">
-                  ICAO Public Key Directory 로컬 평가 및 관리 시스템
-                </p>
-                <p className="text-blue-200/80 text-sm">
-                  ePassport 인증서 관리 및 Passive Authentication 검증 플랫폼
-                </p>
-                {/* Standards Badges */}
-                <div className="flex flex-wrap gap-2 mt-5">
-                  {[
-                    { icon: GraduationCap, label: 'ICAO Doc 9303' },
-                    { icon: FileText, label: 'RFC 5652 CMS' },
-                    { icon: Key, label: 'RFC 5280 X.509' },
-                    { icon: User, label: 'ISO/IEC 19794-5' },
-                  ].map((badge) => (
-                    <span
-                      key={badge.label}
-                      className="inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 backdrop-blur-sm text-white border border-white/20 hover:bg-white/20 transition-colors"
-                    >
-                      <badge.icon className="w-4 h-4 mr-1.5" />
-                      {badge.label}
-                    </span>
-                  ))}
-                </div>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD Local Manager</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              ePassport 인증서 관리 및 Passive Authentication 검증 플랫폼
+            </p>
+          </div>
+          <div className="hidden lg:flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-1.5">
+              <Calendar className="w-4 h-4" />
+              <span>{currentDate}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4" />
+              <span>{currentTime}</span>
+            </div>
+            <div className="flex items-center gap-2 pl-3 border-l border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-1.5" title={dbStatus.message}>
+                <Database className="w-3.5 h-3.5" />
+                <span className="text-xs">DB</span>
+                {dbStatus.testing ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <span className={cn(
+                    'w-2 h-2 rounded-full',
+                    dbStatus.connected ? 'bg-green-500' : 'bg-red-500'
+                  )} />
+                )}
               </div>
-              <div className="text-right hidden lg:block ml-8">
-                <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                  <div className="text-white/90 text-sm flex items-center justify-end gap-2 mb-2">
-                    <Calendar className="w-4 h-4" />
-                    <span>{currentDate}</span>
-                  </div>
-                  <div className="text-white/90 text-sm flex items-center justify-end gap-2 mb-3">
-                    <Clock className="w-4 h-4" />
-                    <span>{currentTime}</span>
-                  </div>
-                  {/* Compact Connection Status */}
-                  <div className="border-t border-white/20 pt-3 flex items-center justify-end gap-3">
-                    <div className="flex items-center gap-1.5" title={dbStatus.message}>
-                      <Database className="w-3.5 h-3.5" />
-                      <span className="text-xs">DB</span>
-                      {dbStatus.testing ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <span className={cn(
-                          'w-2 h-2 rounded-full',
-                          dbStatus.connected ? 'bg-green-400' : 'bg-red-400'
-                        )} />
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1.5" title={ldapStatus.message}>
-                      <Server className="w-3.5 h-3.5" />
-                      <span className="text-xs">LDAP</span>
-                      {ldapStatus.testing ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <span className={cn(
-                          'w-2 h-2 rounded-full',
-                          ldapStatus.connected ? 'bg-green-400' : 'bg-red-400'
-                        )} />
-                      )}
-                    </div>
-                  </div>
-                </div>
+              <div className="flex items-center gap-1.5" title={ldapStatus.message}>
+                <Server className="w-3.5 h-3.5" />
+                <span className="text-xs">LDAP</span>
+                {ldapStatus.testing ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <span className={cn(
+                    'w-2 h-2 rounded-full',
+                    ldapStatus.connected ? 'bg-green-500' : 'bg-red-500'
+                  )} />
+                )}
               </div>
             </div>
           </div>
@@ -278,7 +235,7 @@ export function Dashboard() {
 
       {/* ICAO PKD Update Notification Banner */}
       {icaoStatus?.any_needs_update && !icaoDismissed && (
-        <div className="mb-8 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-700 rounded-2xl shadow-lg overflow-hidden">
           <div className="px-6 py-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-3 flex-1">
@@ -336,7 +293,7 @@ export function Dashboard() {
       )}
 
       {/* Country Certificate Statistics - Top 10 in 2 columns */}
-      <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
@@ -455,169 +412,6 @@ export function Dashboard() {
               </Link>
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Main Features */}
-      <div className="mb-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-r from-violet-500 to-purple-500">
-              <Database className="w-5 h-5 text-white" />
-            </div>
-            주요 기능
-          </h3>
-        </div>
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* PKD Relay Service - Upload & Processing Card */}
-            <div className="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden bg-gradient-to-br from-violet-50/50 to-purple-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-violet-100 dark:border-gray-600 hover:border-violet-300">
-              <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
-                <Upload className="w-full h-full text-violet-500" />
-              </div>
-              <div className="relative z-10">
-                <h4 className="font-semibold mb-2 flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                  <span className="shrink-0 p-2 rounded-lg bg-violet-100 dark:bg-violet-900/50">
-                    <Upload className="w-5 h-5 text-violet-500" />
-                  </span>
-                  PKD 파일 업로드 및 처리
-                </h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  ICAO PKD LDIF/Master List 파일을 업로드하고, 인증서를 파싱, 검증하여 DB 및 LDAP에 저장합니다.
-                </p>
-                <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 mb-4">
-                  {[
-                    'LDIF / Master List 파일 업로드',
-                    'CSCA/DSC/CRL 파싱 및 검증',
-                    'Trust Chain 검증 (DSC → CSCA)',
-                    'PostgreSQL + LDAP 저장'
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-violet-500" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/upload"
-                    className="py-2.5 px-5 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-gradient-to-r from-violet-600 to-purple-600 text-white hover:from-violet-700 hover:to-purple-700 hover:shadow-md transition-all duration-200"
-                  >
-                    <Upload className="w-4 h-4" />
-                    파일 업로드
-                  </Link>
-                  <Link
-                    to="/upload-history"
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
-                  >
-                    <Clock className="w-4 h-4" />
-                    업로드 이력
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* Passive Authentication Card */}
-            <div className="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden bg-gradient-to-br from-teal-50/50 to-cyan-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-teal-100 dark:border-gray-600 hover:border-teal-300">
-              <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
-                <IdCard className="w-full h-full text-teal-500" />
-              </div>
-              <div className="relative z-10">
-                <h4 className="font-semibold mb-2 flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                  <span className="shrink-0 p-2 rounded-lg bg-teal-100 dark:bg-teal-900/50">
-                    <IdCard className="w-5 h-5 text-teal-500" />
-                  </span>
-                  Passive Authentication
-                </h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  전자여권 칩의 SOD(Security Object Document), DG(Data Group)를 업로드하여 ICAO 9303 표준에 따른 Passive Authentication을 수행합니다.
-                </p>
-                <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 mb-4">
-                  {[
-                    'SOD CMS 서명 검증',
-                    'DSC → CSCA Trust Chain 검증',
-                    'Data Group 해시 무결성 검증',
-                    'DG1/DG2 파싱 및 시각화'
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-teal-500" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/pa/verify"
-                    className="py-2.5 px-5 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-gradient-to-r from-teal-500 to-cyan-500 text-white hover:from-teal-600 hover:to-cyan-600 hover:shadow-md transition-all duration-200"
-                  >
-                    <ShieldCheck className="w-4 h-4" />
-                    PA 검증
-                  </Link>
-                  <Link
-                    to="/pa/history"
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
-                  >
-                    <History className="w-4 h-4" />
-                    검증 이력
-                  </Link>
-                  <Link
-                    to="/pa/dashboard"
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
-                  >
-                    <PresentationIcon className="w-4 h-4" />
-                    통계
-                  </Link>
-                </div>
-              </div>
-            </div>
-
-            {/* PKD Management - Certificate Search & Export Card */}
-            <div className="relative p-6 rounded-xl border transition-all duration-300 hover:shadow-lg overflow-hidden bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-gray-700/50 dark:to-gray-700/50 border-blue-100 dark:border-gray-600 hover:border-blue-300">
-              <div className="absolute top-0 right-0 w-24 h-24 opacity-5 pointer-events-none">
-                <Database className="w-full h-full text-blue-500" />
-              </div>
-              <div className="relative z-10">
-                <h4 className="font-semibold mb-2 flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                  <span className="shrink-0 p-2 rounded-lg bg-blue-100 dark:bg-blue-900/50">
-                    <Database className="w-5 h-5 text-blue-500" />
-                  </span>
-                  인증서 관리 및 조회
-                </h4>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                  저장된 CSCA/DSC/CRL 인증서를 검색하고, DER/PEM 형식으로 내보내기하거나 국가별 ZIP으로 다운로드할 수 있습니다.
-                </p>
-                <ul className="text-sm space-y-2 text-gray-600 dark:text-gray-400 mb-4">
-                  {[
-                    'LDAP 기반 실시간 인증서 검색',
-                    '국가/타입별 필터링 및 정렬',
-                    '단일 인증서 Export (DER/PEM)',
-                    '국가별 전체 인증서 ZIP 다운로드'
-                  ].map((item) => (
-                    <li key={item} className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-blue-500" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    to="/certificates"
-                    className="py-2.5 px-5 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:from-blue-600 hover:to-indigo-600 hover:shadow-md transition-all duration-200"
-                  >
-                    <Database className="w-4 h-4" />
-                    인증서 검색
-                  </Link>
-                  <Link
-                    to="/upload-dashboard"
-                    className="py-2 px-4 inline-flex items-center gap-x-2 text-sm font-medium rounded-lg border transition border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700/50 dark:text-gray-300 dark:hover:bg-gray-600/50"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    통계
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

@@ -179,7 +179,7 @@ export default function MonitoringDashboard() {
           </div>
 
           {/* Service Health Status */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center gap-2 mb-4">
               <Server className="w-5 h-5 text-gray-700 dark:text-gray-300" />
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white">서비스 상태</h2>
@@ -228,7 +228,7 @@ function MetricCard({ title, icon, value, unit, details, percentage }: MetricCar
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 hover:shadow-md transition-all duration-200">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 hover:shadow-xl transition-all duration-200">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {icon}
