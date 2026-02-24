@@ -4,10 +4,13 @@
 
 #include "auth_middleware.h"
 #include "../repositories/auth_audit_repository.h"
+#include "../repositories/api_client_repository.h"
+#include "../auth/api_key_generator.h"
 #include "../infrastructure/service_container.h"
 #include <spdlog/spdlog.h>
 #include <cstdlib>
 #include <regex>
+#include <chrono>
 
 // Global service container (defined in main.cpp)
 extern infrastructure::ServiceContainer* g_services;
@@ -94,6 +97,7 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
 bool AuthMiddleware::authEnabled_ = true;
 std::vector<std::regex> AuthMiddleware::compiledPatterns_;
 std::once_flag AuthMiddleware::patternsInitFlag_;
+std::unique_ptr<middleware::ApiRateLimiter> AuthMiddleware::rateLimiter_;
 
 AuthMiddleware::AuthMiddleware() {
     // Check if authentication is disabled (for testing)
@@ -128,6 +132,11 @@ AuthMiddleware::AuthMiddleware() {
         jwtExpiration
     );
 
+    // Initialize rate limiter (singleton, thread-safe)
+    if (!rateLimiter_) {
+        rateLimiter_ = std::make_unique<middleware::ApiRateLimiter>();
+    }
+
     spdlog::info("[AuthMiddleware] Initialized (issuer={}, expiration={}s)",
                  jwtIssuer ? jwtIssuer : "icao-pkd", jwtExpiration);
 }
@@ -152,13 +161,88 @@ void AuthMiddleware::doFilter(
         return;
     }
 
+    // --- Try X-API-Key header first (external client agents) ---
+    std::string apiKeyHeader = req->getHeader("X-API-Key");
+    if (!apiKeyHeader.empty()) {
+        auto client = validateApiKey(apiKeyHeader, path, req->peerAddr().toIp());
+        if (client) {
+            // Store client info in request attributes
+            auto attrs = req->getAttributes();
+            attrs->insert("client_id", client->id);
+            attrs->insert("client_name", client->clientName);
+            attrs->insert("auth_type", std::string("api_key"));
+
+            // Store permissions
+            Json::Value permsJson(Json::arrayValue);
+            for (const auto& perm : client->permissions) {
+                permsJson.append(perm);
+            }
+            attrs->insert("permissions", permsJson.toStyledString());
+
+            // Check rate limit
+            if (rateLimiter_) {
+                auto rl = rateLimiter_->checkAndIncrement(
+                    client->id,
+                    client->rateLimitPerMinute,
+                    client->rateLimitPerHour,
+                    client->rateLimitPerDay);
+
+                if (!rl.allowed) {
+                    Json::Value resp;
+                    resp["success"] = false;
+                    resp["error"] = "Rate limit exceeded";
+                    resp["limit"] = rl.limit;
+                    resp["window"] = rl.window;
+                    resp["retry_after_seconds"] = static_cast<int>(rl.resetAt -
+                        std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()));
+
+                    auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+                    response->setStatusCode(drogon::k429TooManyRequests);
+                    response->addHeader("Retry-After",
+                        std::to_string(rl.resetAt - std::chrono::system_clock::to_time_t(
+                            std::chrono::system_clock::now())));
+                    response->addHeader("X-RateLimit-Limit", std::to_string(rl.limit));
+                    response->addHeader("X-RateLimit-Remaining", "0");
+                    response->addHeader("X-RateLimit-Reset", std::to_string(rl.resetAt));
+                    fcb(response);
+                    return;
+                }
+            }
+
+            // Update usage asynchronously (fire-and-forget)
+            if (g_services && g_services->apiClientRepository()) {
+                g_services->apiClientRepository()->updateUsage(client->id);
+            }
+
+            spdlog::debug("[AuthMiddleware] API Key authenticated: {} ({})",
+                          client->clientName, client->apiKeyPrefix);
+            fccb();
+            return;
+        }
+
+        // API Key validation failed
+        Json::Value resp;
+        resp["error"] = "Unauthorized";
+        resp["message"] = "Invalid API key";
+        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+        response->setStatusCode(drogon::k401Unauthorized);
+        fcb(response);
+
+        logAuthEvent("", "API_KEY_INVALID", false,
+                     req->peerAddr().toIp(),
+                     req->getHeader("User-Agent"),
+                     "Invalid API key");
+        return;
+    }
+
+    // --- Try Bearer JWT (web UI users) ---
     // Extract Authorization header
     std::string authHeader = req->getHeader("Authorization");
     if (authHeader.empty()) {
         Json::Value resp;
         resp["error"] = "Unauthorized";
         resp["message"] = "Missing Authorization header";
-        resp["required_format"] = "Bearer <token>";
+        resp["required_format"] = "Bearer <token> or X-API-Key header";
 
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
         response->setStatusCode(drogon::k401Unauthorized);
@@ -302,6 +386,112 @@ void AuthMiddleware::logAuthEvent(
     } catch (const std::exception& e) {
         spdlog::error("[AuthMiddleware] Failed to insert audit log: {}", e.what());
     }
+}
+
+std::optional<domain::models::ApiClient> AuthMiddleware::validateApiKey(
+    const std::string& apiKey,
+    const std::string& path,
+    const std::string& clientIp) {
+
+    if (!g_services || !g_services->apiClientRepository()) {
+        spdlog::warn("[AuthMiddleware] apiClientRepository not available");
+        return std::nullopt;
+    }
+
+    // Hash the key and look up
+    std::string keyHash = auth::hashApiKey(apiKey);
+    auto client = g_services->apiClientRepository()->findByKeyHash(keyHash);
+
+    if (!client) {
+        spdlog::debug("[AuthMiddleware] API key not found");
+        return std::nullopt;
+    }
+
+    // Check active status
+    if (!client->isActive) {
+        spdlog::warn("[AuthMiddleware] API key inactive: {}", client->apiKeyPrefix);
+        return std::nullopt;
+    }
+
+    // Check expiration
+    if (client->expiresAt.has_value() && !client->expiresAt->empty()) {
+        // Simple string comparison works for ISO 8601 timestamps
+        auto now = std::chrono::system_clock::now();
+        auto nowTime = std::chrono::system_clock::to_time_t(now);
+        struct tm tmBuf;
+        gmtime_r(&nowTime, &tmBuf);
+        char nowStr[32];
+        strftime(nowStr, sizeof(nowStr), "%Y-%m-%d %H:%M:%S", &tmBuf);
+
+        if (std::string(nowStr) > client->expiresAt.value()) {
+            spdlog::warn("[AuthMiddleware] API key expired: {}", client->apiKeyPrefix);
+            return std::nullopt;
+        }
+    }
+
+    // Check IP whitelist
+    if (!isIpAllowed(client->allowedIps, clientIp)) {
+        spdlog::warn("[AuthMiddleware] API key IP denied: {} from {}", client->apiKeyPrefix, clientIp);
+        return std::nullopt;
+    }
+
+    // Check endpoint permissions (allowed_endpoints)
+    if (!client->allowedEndpoints.empty()) {
+        bool endpointAllowed = false;
+        for (const auto& pattern : client->allowedEndpoints) {
+            try {
+                std::regex re(pattern);
+                if (std::regex_match(path, re)) {
+                    endpointAllowed = true;
+                    break;
+                }
+            } catch (const std::regex_error&) {
+                // If pattern is not regex, do prefix match
+                if (path.find(pattern) == 0) {
+                    endpointAllowed = true;
+                    break;
+                }
+            }
+        }
+        if (!endpointAllowed) {
+            spdlog::warn("[AuthMiddleware] API key endpoint denied: {} for {}", client->apiKeyPrefix, path);
+            return std::nullopt;
+        }
+    }
+
+    return client;
+}
+
+bool AuthMiddleware::isIpAllowed(
+    const std::vector<std::string>& allowedIps,
+    const std::string& clientIp) {
+
+    // Empty list = all IPs allowed
+    if (allowedIps.empty()) return true;
+
+    for (const auto& allowed : allowedIps) {
+        // Exact match
+        if (allowed == clientIp) return true;
+
+        // Simple CIDR prefix match (e.g., "192.168.1." matches "192.168.1.100")
+        if (allowed.back() == '.' || allowed.find('/') != std::string::npos) {
+            // Strip /xx suffix for simple prefix matching
+            std::string prefix = allowed;
+            auto slashPos = prefix.find('/');
+            if (slashPos != std::string::npos) {
+                // For /24 = first 3 octets, /16 = first 2 octets
+                prefix = prefix.substr(0, slashPos);
+                // Simple approach: match the network portion
+                auto lastDot = prefix.rfind('.');
+                if (lastDot != std::string::npos) {
+                    prefix = prefix.substr(0, lastDot + 1);
+                }
+            }
+            if (clientIp.find(prefix) == 0) return true;
+        }
+    }
+
+    return false;
 }
 
 } // namespace middleware

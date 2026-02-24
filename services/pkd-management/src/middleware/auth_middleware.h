@@ -2,6 +2,8 @@
 
 #include <drogon/HttpFilter.h>
 #include "../auth/jwt_service.h"
+#include "../domain/models/api_client.h"
+#include "api_rate_limiter.h"
 #include <memory>
 #include <set>
 #include <vector>
@@ -76,6 +78,24 @@ private:
     bool isPublicEndpoint(const std::string& path) const;
 
     /**
+     * @brief Validate API key and return client info
+     * @param apiKey Raw API key from X-API-Key header
+     * @param path Request path (for endpoint permission check)
+     * @param clientIp Client IP address (for IP whitelist check)
+     * @return ApiClient if valid, nullopt otherwise
+     */
+    std::optional<domain::models::ApiClient> validateApiKey(
+        const std::string& apiKey,
+        const std::string& path,
+        const std::string& clientIp);
+
+    /**
+     * @brief Check if client IP is allowed
+     */
+    bool isIpAllowed(const std::vector<std::string>& allowedIps,
+                     const std::string& clientIp);
+
+    /**
      * @brief Log authentication event to database
      *
      * Records authentication attempts (success/failure) in auth_audit_log table.
@@ -87,6 +107,7 @@ private:
         const std::string& ipAddress,
         const std::string& userAgent,
         const std::string& errorMessage = "");
-};
+
+    static std::unique_ptr<middleware::ApiRateLimiter> rateLimiter_;
 
 } // namespace middleware

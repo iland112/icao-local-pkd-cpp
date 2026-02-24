@@ -30,6 +30,7 @@
 #include "../repositories/icao_version_repository.h"
 #include "../repositories/ldap_certificate_repository.h"
 #include "../repositories/code_master_repository.h"
+#include "../repositories/api_client_repository.h"
 
 // Services
 #include "../services/upload_service.h"
@@ -47,6 +48,7 @@
 #include "../handlers/upload_stats_handler.h"
 #include "../handlers/certificate_handler.h"
 #include "../handlers/code_master_handler.h"
+#include "../handlers/api_client_handler.h"
 
 // HTTP and Notification infrastructure
 #include "../infrastructure/http/http_client.h"
@@ -75,6 +77,7 @@ struct ServiceContainer::Impl {
     std::shared_ptr<repositories::IcaoVersionRepository> icaoVersionRepository;
     std::shared_ptr<repositories::LdapCertificateRepository> ldapCertificateRepository;
     std::shared_ptr<repositories::CodeMasterRepository> codeMasterRepository;
+    std::shared_ptr<repositories::ApiClientRepository> apiClientRepository;
 
     // Services
     std::shared_ptr<services::UploadService> uploadService;
@@ -92,6 +95,7 @@ struct ServiceContainer::Impl {
     std::shared_ptr<handlers::UploadStatsHandler> uploadStatsHandler;
     std::shared_ptr<handlers::CertificateHandler> certificateHandler;
     std::shared_ptr<handlers::CodeMasterHandler> codeMasterHandler;
+    std::shared_ptr<handlers::ApiClientHandler> apiClientHandler;
 };
 
 ServiceContainer::ServiceContainer() : impl_(std::make_unique<Impl>()) {}
@@ -104,6 +108,7 @@ void ServiceContainer::shutdown() {
     if (!impl_) return;
 
     // Release in reverse order
+    impl_->apiClientHandler.reset();
     impl_->codeMasterHandler.reset();
     impl_->certificateHandler.reset();
     impl_->uploadStatsHandler.reset();
@@ -119,6 +124,7 @@ void ServiceContainer::shutdown() {
     impl_->uploadService.reset();
     impl_->certificateService.reset();
 
+    impl_->apiClientRepository.reset();
     impl_->codeMasterRepository.reset();
     impl_->ldapCertificateRepository.reset();
     impl_->icaoVersionRepository.reset();
@@ -213,7 +219,8 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     impl_->ldifStructureRepository = std::make_shared<repositories::LdifStructureRepository>(impl_->uploadRepository.get());
     impl_->icaoVersionRepository = std::make_shared<repositories::IcaoVersionRepository>(impl_->queryExecutor.get());
     impl_->codeMasterRepository = std::make_shared<repositories::CodeMasterRepository>(impl_->queryExecutor.get());
-    spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion, CodeMaster)");
+    impl_->apiClientRepository = std::make_shared<repositories::ApiClientRepository>(impl_->queryExecutor.get());
+    spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion, CodeMaster, ApiClient)");
 
     // --- Phase 4.5: LDAP Storage Service ---
     impl_->ldapStorageService = std::make_shared<services::LdapStorageService>(config);
@@ -321,6 +328,11 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     );
     spdlog::info("Code Master handler initialized (6 endpoints)");
 
+    impl_->apiClientHandler = std::make_shared<handlers::ApiClientHandler>(
+        impl_->apiClientRepository.get()
+    );
+    spdlog::info("API Client handler initialized (7 endpoints)");
+
     spdlog::info("ServiceContainer initialization complete");
     return true;
 }
@@ -341,6 +353,7 @@ repositories::AuthAuditRepository* ServiceContainer::authAuditRepository() const
 repositories::CrlRepository* ServiceContainer::crlRepository() const { return impl_->crlRepository.get(); }
 repositories::DeviationListRepository* ServiceContainer::deviationListRepository() const { return impl_->deviationListRepository.get(); }
 repositories::CodeMasterRepository* ServiceContainer::codeMasterRepository() const { return impl_->codeMasterRepository.get(); }
+repositories::ApiClientRepository* ServiceContainer::apiClientRepository() const { return impl_->apiClientRepository.get(); }
 
 // --- Service Accessors ---
 services::UploadService* ServiceContainer::uploadService() const { return impl_->uploadService.get(); }
@@ -358,5 +371,6 @@ handlers::UploadHandler* ServiceContainer::uploadHandler() const { return impl_-
 handlers::UploadStatsHandler* ServiceContainer::uploadStatsHandler() const { return impl_->uploadStatsHandler.get(); }
 handlers::CertificateHandler* ServiceContainer::certificateHandler() const { return impl_->certificateHandler.get(); }
 handlers::CodeMasterHandler* ServiceContainer::codeMasterHandler() const { return impl_->codeMasterHandler.get(); }
+handlers::ApiClientHandler* ServiceContainer::apiClientHandler() const { return impl_->apiClientHandler.get(); }
 
 } // namespace infrastructure

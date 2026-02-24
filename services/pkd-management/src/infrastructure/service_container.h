@@ -36,6 +36,7 @@ namespace repositories {
     class IcaoVersionRepository;
     class LdapCertificateRepository;
     class CodeMasterRepository;
+    class ApiClientRepository;
 }
 
 // Forward declarations - Services
@@ -57,6 +58,7 @@ namespace handlers {
     class UploadStatsHandler;
     class CertificateHandler;
     class CodeMasterHandler;
+    class ApiClientHandler;
 }
 
 namespace infrastructure {
@@ -110,6 +112,7 @@ public:
     repositories::CrlRepository* crlRepository() const;
     repositories::DeviationListRepository* deviationListRepository() const;
     repositories::CodeMasterRepository* codeMasterRepository() const;
+    repositories::ApiClientRepository* apiClientRepository() const;
 
     // --- Service Accessors ---
     services::UploadService* uploadService() const;
@@ -127,6 +130,7 @@ public:
     handlers::UploadStatsHandler* uploadStatsHandler() const;
     handlers::CertificateHandler* certificateHandler() const;
     handlers::CodeMasterHandler* codeMasterHandler() const;
+    handlers::ApiClientHandler* apiClientHandler() const;
 
 private:
     struct Impl;

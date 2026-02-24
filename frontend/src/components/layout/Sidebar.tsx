@@ -33,6 +33,7 @@ import {
   FileWarning,
   Link2,
   Brain,
+  KeyRound,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
@@ -120,6 +121,7 @@ const navSections: NavSection[] = [
   {
     title: 'Admin & Security',
     items: [
+      { path: '/admin/api-clients', label: 'API 클라이언트', icon: <KeyRound className="w-4 h-4" /> },
       { path: '/admin/operation-audit', label: '운영 감사 로그', icon: <ShieldCheck className="w-4 h-4" /> },
       { path: '/admin/audit-log', label: '인증 감사 로그', icon: <Key className="w-4 h-4" /> },
     ],

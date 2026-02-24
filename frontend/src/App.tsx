@@ -12,6 +12,7 @@ import DscNcReport from '@/pages/DscNcReport';
 import CrlReport from '@/pages/CrlReport';
 import { TrustChainValidationReport } from '@/pages/TrustChainValidationReport';
 import AiAnalysisDashboard from '@/pages/AiAnalysisDashboard';
+import ApiClientManagement from '@/pages/ApiClientManagement';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -57,6 +58,7 @@ function App() {
 
             <Route path="profile" element={<Profile />} />
             <Route path="admin/users" element={<UserManagement />} />
+            <Route path="admin/api-clients" element={<ApiClientManagement />} />
             <Route path="admin/operation-audit" element={<OperationAuditLog />} />
             <Route path="admin/audit-log" element={<AuditLog />} />
           </Route>

@@ -246,6 +246,11 @@ void registerRoutes() {
         g_services->codeMasterHandler()->registerRoutes(app);
     }
 
+    // --- API Client Routes ---
+    if (g_services && g_services->apiClientHandler()) {
+        g_services->apiClientHandler()->registerRoutes(app);
+    }
+
     // --- ICAO Routes ---
     if (g_services && g_services->icaoHandler()) {
         g_services->icaoHandler()->registerRoutes(app);
