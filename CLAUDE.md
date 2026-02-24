@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.20.2
-**Last Updated**: 2026-02-22
+**Current Version**: v2.21.0
+**Last Updated**: 2026-02-24
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -126,10 +126,11 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ---
 
-## Current Features (v2.20.0)
+## Current Features (v2.21.0)
 
 ### Core Functionality
 
+- **API Client Authentication**: External client API Key authentication (X-API-Key header, SHA-256 hash, per-client Rate Limiting, Permission/IP/Endpoint access control)
 - **Code Master**: DB-based centralized code/status/enum management (21 categories, ~150 codes, CRUD API + frontend hook)
 - LDIF/Master List upload (AUTO/MANUAL modes)
 - Individual certificate upload with preview-before-save workflow (PEM, DER, P7B, DL, CRL)
@@ -174,7 +175,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 ### Security
 
 - 100% parameterized SQL queries (all services)
-- JWT authentication (HS256) + RBAC (admin/user)
+- JWT authentication (HS256) + RBAC (admin/user) + API Key authentication (X-API-Key, SHA-256)
 - Credential externalization (.env)
 - File upload validation (MIME type, path sanitization)
 - Dual audit logging: `auth_audit_log` (authentication events) + `operation_audit_log` (operations)
@@ -239,6 +240,15 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/auth/users` - User management (admin)
 - `GET /api/auth/audit-log` - Auth audit logs (admin)
 
+**API Client Management** (admin only, JWT required):
+- `POST /api/auth/api-clients` - Create new API client + generate key
+- `GET /api/auth/api-clients` - List all clients (pagination, activeOnly filter)
+- `GET /api/auth/api-clients/{id}` - Get client detail
+- `PUT /api/auth/api-clients/{id}` - Update client (permissions, rate limits, status)
+- `DELETE /api/auth/api-clients/{id}` - Deactivate client (soft delete)
+- `POST /api/auth/api-clients/{id}/regenerate` - Regenerate API key
+- `GET /api/auth/api-clients/{id}/usage` - Usage statistics (days parameter)
+
 **Audit**:
 - `GET /api/audit/operations` - Operation audit logs
 - `GET /api/audit/operations/stats` - Operation statistics
@@ -302,7 +312,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 ## Frontend
 
-### Pages (23 total)
+### Pages (24 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -328,6 +338,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | UserManagement | `/admin/users` | User administration (grid card layout) |
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
+| ApiClientManagement | `/admin/api-clients` | API Client management (CRUD, key regeneration) |
 | Profile | `/profile` | User profile & account info |
 
 ### Key Components
@@ -558,6 +569,25 @@ scripts/
 ---
 
 ## Version History
+
+### v2.21.0 (2026-02-24) - API Client Authentication (X-API-Key)
+- New feature: External client API Key authentication for server-to-server (M2M) API access
+- **API Key format**: `icao_{prefix}_{random}` (46 chars), SHA-256 hash stored in DB, raw key shown only at creation
+- **Auth middleware**: `X-API-Key` header validation alongside existing JWT Bearer — dual authentication support
+- **Permission model**: 10 granular permissions (cert:read, cert:export, pa:verify, pa:read, upload:read, upload:write, report:read, ai:read, sync:read, icao:read)
+- **Rate Limiting**: In-memory sliding window per-client (3-tier: per-minute, per-hour, per-day), 429 response with Retry-After header
+- **IP whitelist**: Per-client allowed IP/CIDR restriction (`allowed_ips` field)
+- **Endpoint restriction**: Per-client allowed endpoint patterns (`allowed_endpoints` field)
+- **7 management API endpoints** (admin JWT required): create, list, detail, update, deactivate, regenerate key, usage stats
+- Backend: `ApiClientHandler` (7 endpoints), `ApiClientRepository` (CRUD + usage tracking, PostgreSQL + Oracle), `ApiRateLimiter` (thread-safe sliding window), `api_key_generator` (SHA-256 + Base62)
+- Backend: `api_clients` + `api_client_usage_log` DB tables (PostgreSQL + Oracle schemas)
+- Frontend: `ApiClientManagement.tsx` page — client CRUD, key generation with copy-to-clipboard, usage display
+- Frontend: Sidebar "Admin & Security" section — "API 클라이언트" menu item (KeyRound icon)
+- OpenAPI: `pkd-management.yaml` v2.21.0 — 7 paths, 6 schemas, `apiKeyAuth` security scheme
+- Documentation: `API_CLIENT_ADMIN_GUIDE.md` (관리자 가이드, 7 endpoints 상세, Permission/Rate Limit/IP 설정)
+- Documentation: `API_CLIENT_USER_GUIDE.md` (외부 연동 가이드, Python/Java/C#/curl 예제, FAQ)
+- Multi-DBMS: PostgreSQL + Oracle dual support (IQueryExecutor pattern, conditional parameter binding)
+- 15+ files changed (10 new, 5+ modified)
 
 ### v2.20.2 (2026-02-22) - Oracle CRL Report BLOB Read Fix
 - **CRITICAL FIX**: Oracle CRL report "폐기 인증서" 0건 표시 — OCI LOB locator가 SQLT_LBI로 INSERT된 BLOB 데이터를 33~89 bytes로 truncate하여 읽음 (실제 280~1670 bytes)
@@ -1108,6 +1138,8 @@ scripts/
 - [docs/PA_API_GUIDE.md](docs/PA_API_GUIDE.md) - PA Service API guide (v2.1.1)
 - [docs/CERTIFICATE_SEARCH_QUICKSTART.md](docs/CERTIFICATE_SEARCH_QUICKSTART.md) - Certificate search guide
 - [docs/LDAP_QUERY_GUIDE.md](docs/LDAP_QUERY_GUIDE.md) - LDAP operations guide
+- [docs/API_CLIENT_ADMIN_GUIDE.md](docs/API_CLIENT_ADMIN_GUIDE.md) - API Client admin guide (management API, permissions, rate limiting)
+- [docs/API_CLIENT_USER_GUIDE.md](docs/API_CLIENT_USER_GUIDE.md) - API Client user guide (external integration, Python/Java/C#/curl examples)
 - [docs/FRONTEND_DESIGN_SYSTEM.md](docs/FRONTEND_DESIGN_SYSTEM.md) - Frontend UI/UX design system (color theme, components, tokens)
 
 ### Architecture

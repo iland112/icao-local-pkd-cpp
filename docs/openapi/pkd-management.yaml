@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.21.0** (2026-02-24): API Client management — API Key 기반 외부 클라이언트 인증 (7 endpoints), X-API-Key 헤더 인증, Rate Limiting, Permission/IP/Endpoint 접근 제어
     - **v2.17.0** (2026-02-20): Doc 9303 compliance checklist — per-certificate conformance check API + preview integration
     - **v2.15.1** (2026-02-19): CRL binary download endpoint, Trust Chain demo page support
     - **v2.15.0** (2026-02-18): CRL report + detail endpoints (report, detail, download)
@@ -20,16 +21,18 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.17.0
+  version: 2.21.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
 
 servers:
+  - url: https://pkd.smartcoreinc.com
+    description: Production (HTTPS via API Gateway)
+  - url: http://localhost:8080
+    description: API Gateway (HTTP)
   - url: http://localhost:8081
     description: Development server (direct)
-  - url: http://localhost:8080
-    description: API Gateway
 
 tags:
   - name: Health
@@ -44,6 +47,8 @@ tags:
     description: Operation audit logging
   - name: ICAO
     description: ICAO PKD version monitoring and comparison
+  - name: ApiClient
+    description: API Client management — external client API key authentication (admin only)
   - name: Progress
     description: Upload progress tracking (SSE)
 
@@ -1191,6 +1196,250 @@ paths:
           description: Auth audit statistics
 
   # ============================================
+  # API Client Management (v2.21.0)
+  # ============================================
+  /api/auth/api-clients:
+    post:
+      tags: [ApiClient]
+      summary: Create new API client
+      description: |
+        Create a new external API client and generate an API key.
+        The raw API key is returned **only in this response** — store it securely.
+        Subsequent queries will only show the key prefix (`icao_XXXXXXXX_...`).
+
+        **Required role**: admin (JWT Bearer token)
+      operationId: createApiClient
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientCreateRequest'
+            example:
+              client_name: "Immigration Agent"
+              description: "출입국관리시스템 연동 Agent"
+              permissions: ["pa:verify", "cert:read", "ai:read"]
+              allowed_ips: ["192.168.1.0/24"]
+              rate_limit_per_minute: 120
+              rate_limit_per_hour: 2000
+              rate_limit_per_day: 20000
+      responses:
+        '200':
+          description: Client created with one-time API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientCreateResponse'
+        '400':
+          description: Missing required field (client_name)
+        '403':
+          description: Admin privileges required
+        '500':
+          description: Internal server error
+    get:
+      tags: [ApiClient]
+      summary: List all API clients
+      description: |
+        List all registered API clients with pagination.
+        Supports filtering by active status.
+
+        **Required role**: admin (JWT Bearer token)
+      operationId: listApiClients
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: active_only
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: Filter active clients only
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Client list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientListResponse'
+        '403':
+          description: Admin privileges required
+
+  /api/auth/api-clients/{id}:
+    get:
+      tags: [ApiClient]
+      summary: Get API client detail
+      operationId: getApiClient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Client detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  client:
+                    $ref: '#/components/schemas/ApiClient'
+        '403':
+          description: Admin privileges required
+        '404':
+          description: Client not found
+    put:
+      tags: [ApiClient]
+      summary: Update API client
+      description: |
+        Update client properties (name, description, permissions, rate limits, status).
+        Only provided fields are updated; omitted fields remain unchanged.
+      operationId: updateApiClient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiClientUpdateRequest'
+      responses:
+        '200':
+          description: Client updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  client:
+                    $ref: '#/components/schemas/ApiClient'
+        '400':
+          description: Invalid JSON body
+        '403':
+          description: Admin privileges required
+        '404':
+          description: Client not found
+    delete:
+      tags: [ApiClient]
+      summary: Deactivate API client
+      description: |
+        Soft-delete (deactivate) an API client. The client record is preserved
+        but `is_active` is set to false. The API key will no longer authenticate.
+      operationId: deleteApiClient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Client deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '403':
+          description: Admin privileges required
+        '404':
+          description: Client not found
+
+  /api/auth/api-clients/{id}/regenerate:
+    post:
+      tags: [ApiClient]
+      summary: Regenerate API key
+      description: |
+        Generate a new API key for an existing client. The old key is immediately invalidated.
+        The new raw API key is returned **only in this response**.
+      operationId: regenerateApiKey
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: New API key generated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientCreateResponse'
+        '403':
+          description: Admin privileges required
+        '404':
+          description: Client not found
+
+  /api/auth/api-clients/{id}/usage:
+    get:
+      tags: [ApiClient]
+      summary: Get API client usage statistics
+      description: Returns usage statistics for the specified client over the given time period.
+      operationId: getApiClientUsage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: days
+          in: query
+          schema:
+            type: integer
+            default: 7
+          description: Number of days to look back (default 7)
+      responses:
+        '200':
+          description: Usage statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiClientUsageResponse'
+        '403':
+          description: Admin privileges required
+
+  # ============================================
   # Operation Audit
   # ============================================
   /api/audit/operations:
@@ -1346,8 +1595,209 @@ components:
       scheme: bearer
       bearerFormat: JWT
       description: JWT token from /api/auth/login
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        API Key for external client authentication.
+        Format: `icao_{prefix}_{random}` (46 characters).
+        Issued via POST /api/auth/api-clients (admin only).
+        Include in requests as `X-API-Key: icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYY`
 
   schemas:
+    # ============================================
+    # API Client Schemas (v2.21.0)
+    # ============================================
+    ApiClient:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        client_name:
+          type: string
+          description: Human-readable client name
+        api_key_prefix:
+          type: string
+          description: First 8 characters of the API key (for identification)
+          example: "icao_NggoCnqh"
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+          description: "Granted permissions (e.g., cert:read, pa:verify, ai:read)"
+          example: ["pa:verify", "cert:read", "ai:read"]
+        allowed_endpoints:
+          type: array
+          items:
+            type: string
+          description: Allowed endpoint patterns (empty = all endpoints)
+        allowed_ips:
+          type: array
+          items:
+            type: string
+          description: Allowed IP addresses/CIDRs (empty = all IPs)
+          example: ["192.168.1.0/24"]
+        rate_limit_per_minute:
+          type: integer
+          default: 60
+        rate_limit_per_hour:
+          type: integer
+          default: 1000
+        rate_limit_per_day:
+          type: integer
+          default: 10000
+        is_active:
+          type: boolean
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Expiration timestamp (null = no expiration)
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        total_requests:
+          type: integer
+          format: int64
+        created_by:
+          type: string
+          format: uuid
+          description: Admin user ID who created this client
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ApiClientCreateRequest:
+      type: object
+      required: [client_name]
+      properties:
+        client_name:
+          type: string
+          description: Human-readable client name (required)
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            type: string
+            enum: [cert:read, cert:export, pa:verify, pa:read, upload:read, upload:write, report:read, ai:read, sync:read, icao:read]
+        allowed_endpoints:
+          type: array
+          items:
+            type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+        rate_limit_per_minute:
+          type: integer
+          default: 60
+        rate_limit_per_hour:
+          type: integer
+          default: 1000
+        rate_limit_per_day:
+          type: integer
+          default: 10000
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    ApiClientUpdateRequest:
+      type: object
+      properties:
+        client_name:
+          type: string
+        description:
+          type: string
+        is_active:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+        allowed_endpoints:
+          type: array
+          items:
+            type: string
+        allowed_ips:
+          type: array
+          items:
+            type: string
+        rate_limit_per_minute:
+          type: integer
+        rate_limit_per_hour:
+          type: integer
+        rate_limit_per_day:
+          type: integer
+
+    ApiClientCreateResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        warning:
+          type: string
+          description: "Warning that the API key is only shown once"
+          example: "API Key is only shown in this response. Store it securely."
+        client:
+          allOf:
+            - $ref: '#/components/schemas/ApiClient'
+            - type: object
+              properties:
+                api_key:
+                  type: string
+                  description: "Raw API key (shown ONLY in create/regenerate response)"
+                  example: "icao_NggoCnqh_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+
+    ApiClientListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        total:
+          type: integer
+        clients:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApiClient'
+
+    ApiClientUsageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        client_id:
+          type: string
+          format: uuid
+        days:
+          type: integer
+        usage:
+          type: object
+          properties:
+            total_requests:
+              type: integer
+            top_endpoints:
+              type: array
+              items:
+                type: object
+                properties:
+                  endpoint:
+                    type: string
+                  count:
+                    type: integer
+
+    # ============================================
+    # Existing Schemas
+    # ============================================
     DscNcCertificate:
       type: object
       properties:
