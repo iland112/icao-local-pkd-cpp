@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.21.0
-**Last Updated**: 2026-02-24
+**Current Version**: v2.22.0
+**Last Updated**: 2026-02-25
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -130,7 +130,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 ### Core Functionality
 
-- **API Client Authentication**: External client API Key authentication (X-API-Key header, SHA-256 hash, per-client Rate Limiting, Permission/IP/Endpoint access control)
+- **API Client Authentication**: External client API Key authentication (X-API-Key header, SHA-256 hash, per-client Rate Limiting, Permission/IP/Endpoint access control, nginx auth_request for cross-service tracking)
 - **Code Master**: DB-based centralized code/status/enum management (21 categories, ~150 codes, CRUD API + frontend hook)
 - LDIF/Master List upload (AUTO/MANUAL modes)
 - Individual certificate upload with preview-before-save workflow (PEM, DER, P7B, DL, CRL)
@@ -248,6 +248,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `DELETE /api/auth/api-clients/{id}` - Deactivate client (soft delete)
 - `POST /api/auth/api-clients/{id}/regenerate` - Regenerate API key
 - `GET /api/auth/api-clients/{id}/usage` - Usage statistics (days parameter)
+- `GET /api/auth/internal/check` - Internal auth check (nginx auth_request only)
 
 **Audit**:
 - `GET /api/audit/operations` - Operation audit logs
@@ -569,6 +570,18 @@ scripts/
 ---
 
 ## Version History
+
+### v2.22.0 (2026-02-25) - API Client Usage Tracking + PA nginx auth_request
+- **Bug fix**: `insertUsageLog()` was never called — auth middleware only incremented counter (`updateUsage`), detailed log was never written to `api_client_usage_log`
+- **Bug fix**: API Key regeneration didn't save hash to DB — `handleRegenerate()` used `update()` which excludes `api_key_hash`/`api_key_prefix` columns; added dedicated `updateKeyHash()` method
+- **PA Service API Key tracking**: nginx `auth_request` module sends subrequest to PKD Management for `/api/pa/*` endpoints; API Key validation, rate limiting, and usage logging handled by PKD Management without modifying PA Service code
+- **Internal auth endpoint**: `GET /api/auth/internal/check` — nginx-only internal endpoint; validates X-API-Key, checks rate limits, logs usage with original URI/method/IP from nginx headers (X-Original-URI, X-Original-Method, X-Real-IP)
+- **Frontend UsageDialog**: API Client management page — usage history modal with period selector (7/30/90 days), summary cards, horizontal BarChart (Recharts) for top endpoints, detail table with rank badges and percentages
+- nginx: `auth_request /internal/auth-check` on `/api/pa` location (api-gateway-ssl.conf, api-gateway-luckfox.conf), `@auth_denied`/`@auth_forbidden` named locations for JSON error responses
+- Backend: `handleInternalAuthCheck()` in AuthMiddleware, `updateKeyHash()` in ApiClientRepository, fallback route in ApiClientHandler
+- PA Service: zero code changes (service isolation maintained)
+- Multi-DBMS: PostgreSQL + Oracle dual support maintained
+- 9 files changed (0 new, 9 modified)
 
 ### v2.21.0 (2026-02-24) - API Client Authentication (X-API-Key)
 - New feature: External client API Key authentication for server-to-server (M2M) API access

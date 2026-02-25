@@ -101,7 +101,20 @@ void ApiClientHandler::registerRoutes(HttpAppFramework& app) {
         },
         {Get});
 
-    spdlog::info("[ApiClientHandler] Routes registered: 7 endpoints on /api/auth/api-clients");
+    // GET /api/auth/internal/check — Internal auth check for nginx auth_request
+    // The actual logic is handled by AuthMiddleware in registerPreHandlingAdvice.
+    // This handler is a fallback that should never be reached.
+    app.registerHandler(
+        "/api/auth/internal/check",
+        [](const HttpRequestPtr& req,
+           std::function<void(const HttpResponsePtr&)>&& callback) {
+            auto resp = HttpResponse::newHttpResponse();
+            resp->setStatusCode(k200OK);
+            callback(resp);
+        },
+        {Get});
+
+    spdlog::info("[ApiClientHandler] Routes registered: 7 endpoints on /api/auth/api-clients + internal auth-check");
 }
 
 // ============================================================================
@@ -482,11 +495,9 @@ void ApiClientHandler::handleRegenerate(
         // Generate new key
         auto keyInfo = auth::generateApiKey();
 
-        // Update hash and prefix in DB
-        existing->apiKeyHash = keyInfo.hash;
+        // Update hash and prefix in DB (dedicated method, not general update)
+        repository_->updateKeyHash(id, keyInfo.hash, keyInfo.prefix);
         existing->apiKeyPrefix = keyInfo.prefix;
-        existing->id = id;
-        repository_->update(*existing);
 
         Json::Value resp;
         resp["success"] = true;

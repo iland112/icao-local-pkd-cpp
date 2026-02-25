@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff } from 'lucide-react';
-import { apiClientApi, type ApiClient, type CreateApiClientRequest, type UpdateApiClientRequest } from '@/api/apiClientApi';
+import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { apiClientApi, type ApiClient, type UsageStats, type CreateApiClientRequest, type UpdateApiClientRequest } from '@/api/apiClientApi';
 
 const AVAILABLE_PERMISSIONS = [
   { value: 'cert:read', label: '인증서 검색' },
@@ -23,6 +24,7 @@ export default function ApiClientManagement() {
   const [showEdit, setShowEdit] = useState<ApiClient | null>(null);
   const [showDelete, setShowDelete] = useState<ApiClient | null>(null);
   const [showKey, setShowKey] = useState<{ client: ApiClient; key: string } | null>(null);
+  const [showUsage, setShowUsage] = useState<ApiClient | null>(null);
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -94,6 +96,7 @@ export default function ApiClientManagement() {
                 client={client}
                 onEdit={() => setShowEdit(client)}
                 onDelete={() => setShowDelete(client)}
+                onUsage={() => setShowUsage(client)}
                 onRegenerate={async () => {
                   if (!confirm('API Key를 재발급하시겠습니까? 기존 키는 즉시 무효화됩니다.')) return;
                   try {
@@ -144,6 +147,12 @@ export default function ApiClientManagement() {
           onClose={() => setShowKey(null)}
         />
       )}
+      {showUsage && (
+        <UsageDialog
+          client={showUsage}
+          onClose={() => setShowUsage(null)}
+        />
+      )}
     </div>
   );
 }
@@ -167,10 +176,11 @@ function StatCard({ label, value, color }: { label: string; value: number | stri
   );
 }
 
-function ClientRow({ client, onEdit, onDelete, onRegenerate }: {
+function ClientRow({ client, onEdit, onDelete, onUsage, onRegenerate }: {
   client: ApiClient;
   onEdit: () => void;
   onDelete: () => void;
+  onUsage: () => void;
   onRegenerate: () => void;
 }) {
   return (
@@ -203,6 +213,9 @@ function ClientRow({ client, onEdit, onDelete, onRegenerate }: {
         </div>
       </div>
       <div className="flex items-center gap-1 ml-4">
+        <button onClick={onUsage} title="사용 이력" className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors">
+          <BarChart3 className="w-4 h-4" />
+        </button>
         <button onClick={onRegenerate} title="Key 재발급" className="p-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-900/20 rounded-lg transition-colors">
           <RefreshCw className="w-4 h-4" />
         </button>
@@ -415,6 +428,141 @@ function DeleteDialog({ client, onClose, onDeleted }: {
         >
           {deleting ? '처리 중...' : '비활성화'}
         </button>
+      </div>
+    </DialogWrapper>
+  );
+}
+
+const PERIOD_OPTIONS = [
+  { days: 7, label: '7일' },
+  { days: 30, label: '30일' },
+  { days: 90, label: '90일' },
+];
+
+const BAR_COLORS = ['#6366f1', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe', '#ede9fe', '#818cf8', '#7c3aed', '#6d28d9', '#5b21b6'];
+
+function UsageDialog({ client, onClose }: {
+  client: ApiClient;
+  onClose: () => void;
+}) {
+  const [days, setDays] = useState(7);
+  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+    apiClientApi.getUsage(client.id, days)
+      .then(res => setUsage(res.usage))
+      .catch(() => setUsage(null))
+      .finally(() => setLoading(false));
+  }, [client.id, days]);
+
+  const totalRequests = usage?.totalRequests ?? 0;
+  const endpoints = usage?.topEndpoints ?? [];
+
+  return (
+    <DialogWrapper onClose={onClose} title={`${client.client_name} — API 사용 이력`}>
+      {/* Period selector */}
+      <div className="flex gap-2 mb-4">
+        {PERIOD_OPTIONS.map(opt => (
+          <button
+            key={opt.days}
+            onClick={() => setDays(opt.days)}
+            className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+              days === opt.days
+                ? 'bg-indigo-600 text-white'
+                : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+        </div>
+      ) : totalRequests === 0 ? (
+        <div className="text-center py-12">
+          <Activity className="w-10 h-10 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+          <p className="text-gray-500 dark:text-gray-400">최근 {days}일간 사용 이력이 없습니다</p>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4">
+              <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">총 요청</p>
+              <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mt-1">{totalRequests.toLocaleString()}</p>
+            </div>
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4">
+              <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">사용 엔드포인트</p>
+              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 mt-1">{endpoints.length}</p>
+            </div>
+          </div>
+
+          {/* Horizontal bar chart */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">엔드포인트별 요청 수</h4>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
+              <ResponsiveContainer width="100%" height={Math.max(endpoints.length * 36, 120)}>
+                <BarChart data={endpoints} layout="vertical" margin={{ left: 0, right: 40, top: 4, bottom: 4 }}>
+                  <XAxis type="number" hide />
+                  <YAxis
+                    type="category"
+                    dataKey="endpoint"
+                    width={180}
+                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                    tickFormatter={(v: string) => v.length > 28 ? '...' + v.slice(-25) : v}
+                  />
+                  <Tooltip
+                    formatter={(value) => [`${Number(value).toLocaleString()} 요청`, '']}
+                    labelFormatter={(label) => String(label)}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
+                    {endpoints.map((_entry, i) => (
+                      <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">상세 내역</h4>
+            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 dark:bg-gray-700/80">
+                  <tr>
+                    <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-300">엔드포인트</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600 dark:text-gray-300 w-24">요청 수</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-600 dark:text-gray-300 w-20">비율</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                  {endpoints.map((ep, i) => (
+                    <tr key={ep.endpoint} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-4 py-2 font-mono text-xs text-gray-700 dark:text-gray-300">
+                        {i < 3 && <span className="inline-block w-5 h-5 text-center text-xs font-bold text-white rounded-full mr-2" style={{ backgroundColor: BAR_COLORS[i] }}>{i + 1}</span>}
+                        {ep.endpoint}
+                      </td>
+                      <td className="text-right px-4 py-2 font-semibold text-gray-900 dark:text-white">{ep.count.toLocaleString()}</td>
+                      <td className="text-right px-4 py-2 text-gray-500 dark:text-gray-400">{(ep.count / totalRequests * 100).toFixed(1)}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-end mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">닫기</button>
       </div>
     </DialogWrapper>
   );

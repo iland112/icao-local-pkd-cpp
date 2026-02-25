@@ -331,6 +331,32 @@ bool ApiClientRepository::update(const domain::models::ApiClient& client) {
     }
 }
 
+bool ApiClientRepository::updateKeyHash(const std::string& id,
+                                        const std::string& keyHash,
+                                        const std::string& keyPrefix) {
+    try {
+        std::string dbType = executor_->getDatabaseType();
+        std::string tsFunc = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+
+        std::string query =
+            "UPDATE api_clients SET api_key_hash = $1, api_key_prefix = $2, "
+            "  updated_at = " + tsFunc + " WHERE id = $3";
+
+        std::vector<std::string> params = { keyHash, keyPrefix, id };
+        int rowsAffected = executor_->executeCommand(query, params);
+
+        if (rowsAffected > 0) {
+            spdlog::info("[ApiClientRepository] Updated key hash for client: {}", id);
+            return true;
+        }
+        return false;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[ApiClientRepository] updateKeyHash failed: {}", e.what());
+        return false;
+    }
+}
+
 bool ApiClientRepository::deactivate(const std::string& id) {
     try {
         std::string dbType = executor_->getDatabaseType();

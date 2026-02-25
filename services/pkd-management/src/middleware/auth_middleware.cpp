@@ -154,8 +154,34 @@ void AuthMiddleware::doFilter(
 
     std::string path = req->path();
 
-    // Allow public endpoints
+    // Internal auth check for nginx auth_request (PA Service, etc.)
+    if (path == "/api/auth/internal/check") {
+        handleInternalAuthCheck(req, fcb);
+        return;
+    }
+
+    // Allow public endpoints (but still track API Key usage if present)
     if (isPublicEndpoint(path)) {
+        std::string publicApiKey = req->getHeader("X-API-Key");
+        if (!publicApiKey.empty() && g_services && g_services->apiClientRepository()) {
+            auto client = validateApiKey(publicApiKey, path, req->peerAddr().toIp());
+            if (client) {
+                // Store client info for downstream handlers
+                auto attrs = req->getAttributes();
+                attrs->insert("client_id", client->id);
+                attrs->insert("client_name", client->clientName);
+                attrs->insert("auth_type", std::string("api_key"));
+
+                // Track usage
+                g_services->apiClientRepository()->updateUsage(client->id);
+                g_services->apiClientRepository()->insertUsageLog(
+                    client->id, client->clientName,
+                    path, req->methodString(),
+                    200, 0,
+                    req->peerAddr().toIp(),
+                    req->getHeader("User-Agent"));
+            }
+        }
         spdlog::debug("[AuthMiddleware] Public endpoint: {}", path);
         fccb();
         return;
@@ -209,9 +235,15 @@ void AuthMiddleware::doFilter(
                 }
             }
 
-            // Update usage asynchronously (fire-and-forget)
+            // Update usage + insert detailed log (fire-and-forget)
             if (g_services && g_services->apiClientRepository()) {
                 g_services->apiClientRepository()->updateUsage(client->id);
+                g_services->apiClientRepository()->insertUsageLog(
+                    client->id, client->clientName,
+                    path, req->methodString(),
+                    200, 0,
+                    req->peerAddr().toIp(),
+                    req->getHeader("User-Agent"));
             }
 
             spdlog::debug("[AuthMiddleware] API Key authenticated: {} ({})",
@@ -492,6 +524,86 @@ bool AuthMiddleware::isIpAllowed(
     }
 
     return false;
+}
+
+void AuthMiddleware::handleInternalAuthCheck(
+    const drogon::HttpRequestPtr& req,
+    drogon::FilterCallback& fcb) {
+
+    // Read original request info from nginx headers
+    std::string originalUri = req->getHeader("X-Original-URI");
+    std::string originalMethod = req->getHeader("X-Original-Method");
+    std::string clientIp = req->getHeader("X-Real-IP");
+    if (clientIp.empty()) clientIp = req->peerAddr().toIp();
+    std::string userAgent = req->getHeader("User-Agent");
+
+    // No API Key = public access, allow without logging
+    std::string apiKey = req->getHeader("X-API-Key");
+    if (apiKey.empty()) {
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k200OK);
+        fcb(response);
+        return;
+    }
+
+    // Validate API Key against original URI and IP
+    if (!g_services || !g_services->apiClientRepository()) {
+        spdlog::error("[AuthMiddleware] Internal auth check: service container not available");
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k200OK);  // Fail open — allow if service unavailable
+        fcb(response);
+        return;
+    }
+
+    auto client = validateApiKey(apiKey, originalUri, clientIp);
+    if (!client) {
+        spdlog::warn("[AuthMiddleware] Internal auth check failed for {} from {}",
+                      originalUri, clientIp);
+        auto response = drogon::HttpResponse::newHttpResponse();
+        response->setStatusCode(drogon::k401Unauthorized);
+        fcb(response);
+        return;
+    }
+
+    // Rate limit check (shared rate limiter with all endpoints)
+    if (rateLimiter_) {
+        auto rl = rateLimiter_->checkAndIncrement(
+            client->id,
+            client->rateLimitPerMinute,
+            client->rateLimitPerHour,
+            client->rateLimitPerDay);
+
+        if (!rl.allowed) {
+            spdlog::warn("[AuthMiddleware] Internal auth check: rate limited {} ({})",
+                          client->clientName, rl.window);
+            auto response = drogon::HttpResponse::newHttpResponse();
+            response->setStatusCode(drogon::k403Forbidden);
+            response->addHeader("Retry-After",
+                std::to_string(rl.resetAt - std::chrono::system_clock::to_time_t(
+                    std::chrono::system_clock::now())));
+            fcb(response);
+            return;
+        }
+    }
+
+    // Log usage with original endpoint info
+    g_services->apiClientRepository()->updateUsage(client->id);
+    g_services->apiClientRepository()->insertUsageLog(
+        client->id, client->clientName,
+        originalUri, originalMethod,
+        200, 0,
+        clientIp, userAgent);
+
+    spdlog::debug("[AuthMiddleware] Internal auth check OK: {} → {} ({})",
+                  client->clientName, originalUri, clientIp);
+
+    // Return 200 with client info headers for downstream service
+    auto response = drogon::HttpResponse::newHttpResponse();
+    response->setStatusCode(drogon::k200OK);
+    response->addHeader("X-Client-Id", client->id);
+    response->addHeader("X-Client-Name", client->clientName);
+    response->addHeader("X-Auth-Type", "api_key");
+    fcb(response);
 }
 
 } // namespace middleware

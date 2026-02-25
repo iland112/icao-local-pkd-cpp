@@ -1,7 +1,7 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.9
-**Last Updated**: 2026-02-23
+**Version**: 2.1.11
+**Last Updated**: 2026-02-25
 **API Gateway**: HTTP (:80) / HTTPS (:443) / Internal (:8080)
 
 ---
@@ -55,6 +55,36 @@ Frontend:           http://192.168.100.10
 ### 인증
 
 PA Service의 모든 엔드포인트는 **인증 불필요**(Public)입니다. 전자여권 판독기 등 외부 클라이언트에서 별도 인증 없이 호출할 수 있습니다.
+
+#### API Key 인증 (선택, v2.1.10+)
+
+관리자가 발급한 **API Key**를 `X-API-Key` 헤더에 포함하면, 클라이언트별 사용량 추적 및 Rate Limiting이 적용됩니다. API Key가 없어도 Public 엔드포인트는 정상 호출 가능합니다.
+
+```
+X-API-Key: icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY
+```
+
+| 구분 | 인증 없음 | API Key 사용 |
+|------|-----------|-------------|
+| Public 엔드포인트 호출 | O | O |
+| 클라이언트별 사용량 추적 | X | O |
+| Rate Limiting (분/시/일) | X | O (클라이언트별 개별 한도) |
+| 권한(Permission) 제어 | X | O (`pa:verify`, `pa:read` 등) |
+
+> **API Key 발급**: 시스템 관리자가 `/admin/api-clients` 페이지 또는 `POST /api/auth/api-clients` API로 발급합니다. 자세한 내용은 [API_CLIENT_USER_GUIDE.md](API_CLIENT_USER_GUIDE.md)를 참조하세요.
+
+#### PA 관련 Permission
+
+API Key에 할당 가능한 PA 관련 권한:
+
+| Permission | 접근 가능 엔드포인트 |
+|------------|-------------------|
+| `pa:verify` | `POST /api/pa/verify`, `POST /api/pa/parse-sod`, `POST /api/pa/parse-dg1`, `POST /api/pa/parse-dg2`, `POST /api/pa/parse-mrz-text` |
+| `pa:read` | `GET /api/pa/history`, `GET /api/pa/{id}`, `GET /api/pa/{id}/datagroups`, `GET /api/pa/statistics` |
+| `cert:read` | `POST /api/certificates/pa-lookup`, `GET /api/certificates/search` |
+| `ai:read` | `GET /api/ai/certificate/{fingerprint}`, `GET /api/ai/anomalies`, `GET /api/ai/statistics`, 리포트 API |
+
+> **Note**: API Key 없이도 위 엔드포인트는 모두 Public으로 접근 가능합니다. Permission은 API Key를 사용하는 경우에만 적용됩니다.
 
 ---
 
@@ -937,8 +967,11 @@ import requests
 import base64
 
 class PAServiceClient:
-    def __init__(self, base_url="http://localhost:8080/api"):
+    def __init__(self, base_url="http://localhost:8080/api", api_key=None):
         self.base_url = base_url
+        self.headers = {"Content-Type": "application/json"}
+        if api_key:
+            self.headers["X-API-Key"] = api_key
 
     def verify(self, sod: bytes, data_groups: dict) -> dict:
         """
@@ -961,7 +994,7 @@ class PAServiceClient:
         response = requests.post(
             f"{self.base_url}/pa/verify",
             json=request,
-            headers={"Content-Type": "application/json"}
+            headers=self.headers
         )
 
         response.raise_for_status()
@@ -989,7 +1022,7 @@ class PAServiceClient:
         response = requests.post(
             f"{self.base_url}/certificates/pa-lookup",
             json=params,
-            headers={"Content-Type": "application/json"}
+            headers=self.headers
         )
         response.raise_for_status()
         return response.json()
@@ -998,7 +1031,8 @@ class PAServiceClient:
         """Parse SOD metadata."""
         response = requests.post(
             f"{self.base_url}/pa/parse-sod",
-            json={"sod": base64.b64encode(sod).decode('utf-8')}
+            json={"sod": base64.b64encode(sod).decode('utf-8')},
+            headers=self.headers
         )
         return response.json()
 
@@ -1006,7 +1040,8 @@ class PAServiceClient:
         """Parse MRZ from DG1."""
         response = requests.post(
             f"{self.base_url}/pa/parse-dg1",
-            json={"dg1": base64.b64encode(dg1).decode('utf-8')}
+            json={"dg1": base64.b64encode(dg1).decode('utf-8')},
+            headers=self.headers
         )
         return response.json()
 
@@ -1014,7 +1049,8 @@ class PAServiceClient:
         """Extract face image from DG2 (JPEG2000 auto-converted to JPEG)."""
         response = requests.post(
             f"{self.base_url}/pa/parse-dg2",
-            json={"dg2": base64.b64encode(dg2).decode('utf-8')}
+            json={"dg2": base64.b64encode(dg2).decode('utf-8')},
+            headers=self.headers
         )
         return response.json()
 
@@ -1025,12 +1061,16 @@ class PAServiceClient:
             params["status"] = status
         if country:
             params["issuingCountry"] = country
-        response = requests.get(f"{self.base_url}/pa/history", params=params)
+        response = requests.get(
+            f"{self.base_url}/pa/history", params=params, headers=self.headers
+        )
         return response.json()
 
     def get_statistics(self) -> dict:
         """Get verification statistics."""
-        response = requests.get(f"{self.base_url}/pa/statistics")
+        response = requests.get(
+            f"{self.base_url}/pa/statistics", headers=self.headers
+        )
         return response.json()
 
     # --- AI Analysis API (v2.1.7+) ---
@@ -1044,7 +1084,9 @@ class PAServiceClient:
         Returns:
             dict: {"fingerprint": "...", "anomaly_score": 0.12, "risk_level": "LOW", ...}
         """
-        response = requests.get(f"{self.base_url}/ai/certificate/{fingerprint}")
+        response = requests.get(
+            f"{self.base_url}/ai/certificate/{fingerprint}", headers=self.headers
+        )
         if response.status_code == 404:
             return None  # Analysis not yet run for this certificate
         response.raise_for_status()
@@ -1052,17 +1094,23 @@ class PAServiceClient:
 
     def get_ai_statistics(self) -> dict:
         """Get overall AI analysis statistics."""
-        response = requests.get(f"{self.base_url}/ai/statistics")
+        response = requests.get(
+            f"{self.base_url}/ai/statistics", headers=self.headers
+        )
         return response.json()
 
     def trigger_ai_analysis(self) -> dict:
         """Trigger full certificate analysis (runs in background)."""
-        response = requests.post(f"{self.base_url}/ai/analyze")
+        response = requests.post(
+            f"{self.base_url}/ai/analyze", headers=self.headers
+        )
         return response.json()
 
     def get_ai_analysis_status(self) -> dict:
         """Get current AI analysis job status."""
-        response = requests.get(f"{self.base_url}/ai/analyze/status")
+        response = requests.get(
+            f"{self.base_url}/ai/analyze/status", headers=self.headers
+        )
         return response.json()
 
     def get_ai_anomalies(self, country=None, label=None, risk_level=None,
@@ -1075,13 +1123,19 @@ class PAServiceClient:
             params["label"] = label
         if risk_level:
             params["risk_level"] = risk_level
-        response = requests.get(f"{self.base_url}/ai/anomalies", params=params)
+        response = requests.get(
+            f"{self.base_url}/ai/anomalies", params=params, headers=self.headers
+        )
         return response.json()
 
 
 # Usage example
 if __name__ == "__main__":
+    # API Key 없이 사용 (Public 접근)
     client = PAServiceClient()
+
+    # API Key로 사용 (사용량 추적 + Rate Limiting 적용)
+    # client = PAServiceClient(api_key="icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY")
 
     # Read passport data from reader
     sod = read_sod_from_passport()
@@ -1160,7 +1214,26 @@ import org.springframework.http.*;
 
 public class PAServiceClient {
     private final RestTemplate restTemplate = new RestTemplate();
-    private final String baseUrl = "http://localhost:8080/api";
+    private final String baseUrl;
+    private final String apiKey; // nullable — API Key 없이도 사용 가능
+
+    public PAServiceClient(String baseUrl) {
+        this(baseUrl, null);
+    }
+
+    public PAServiceClient(String baseUrl, String apiKey) {
+        this.baseUrl = baseUrl;
+        this.apiKey = apiKey;
+    }
+
+    private HttpHeaders createHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        if (apiKey != null && !apiKey.isEmpty()) {
+            headers.set("X-API-Key", apiKey);
+        }
+        return headers;
+    }
 
     public Map<String, Object> verify(byte[] sod, Map<Integer, byte[]> dataGroups) {
         Map<String, Object> request = new HashMap<>();
@@ -1172,10 +1245,7 @@ public class PAServiceClient {
         );
         request.put("dataGroups", dgMap);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, createHeaders());
 
         ResponseEntity<Map> response = restTemplate.exchange(
             baseUrl + "/pa/verify",
@@ -1191,10 +1261,7 @@ public class PAServiceClient {
         Map<String, Object> request = new HashMap<>();
         request.put("subjectDn", subjectDn);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-
-        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, createHeaders());
 
         ResponseEntity<Map> response = restTemplate.exchange(
             baseUrl + "/certificates/pa-lookup",
@@ -1206,6 +1273,16 @@ public class PAServiceClient {
         return response.getBody();
     }
 }
+
+// Usage
+// API Key 없이 사용
+PAServiceClient client = new PAServiceClient("http://localhost:8080/api");
+
+// API Key로 사용 (사용량 추적 + Rate Limiting)
+PAServiceClient client = new PAServiceClient(
+    "http://localhost:8080/api",
+    "icao_XXXXXXXX_YYYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY"
+);
 ```
 
 ### C# (.NET)
@@ -1218,10 +1295,14 @@ public class PAServiceClient
     private readonly HttpClient _client;
     private readonly string _baseUrl;
 
-    public PAServiceClient(string baseUrl = "http://localhost:8080/api")
+    public PAServiceClient(string baseUrl = "http://localhost:8080/api", string apiKey = null)
     {
         _client = new HttpClient();
         _baseUrl = baseUrl;
+        if (!string.IsNullOrEmpty(apiKey))
+        {
+            _client.DefaultRequestHeaders.Add("X-API-Key", apiKey);
+        }
     }
 
     public async Task<JsonElement> VerifyAsync(
@@ -1274,8 +1355,11 @@ public class PAServiceClient
 > - 유선 LAN: `192.168.100.10:8080`
 > - 도메인: `pkd.smartcoreinc.com`
 
+> **API Key 사용 시**: 모든 curl 명령에 `-H "X-API-Key: icao_XXXXXXXX_..."` 헤더를 추가하면 됩니다. API Key 없이도 Public 엔드포인트는 정상 호출됩니다.
+
 ```bash
 # Full PA Verify (SOD + DG files required)
+# API Key 사용 시: -H "X-API-Key: icao_XXXXXXXX_..." 추가
 curl -X POST http://localhost:8080/api/pa/verify \
   -H "Content-Type: application/json" \
   -d '{
@@ -1384,9 +1468,102 @@ curl http://localhost:8080/api/ai/health | jq .
 
 전체 OpenAPI 3.0.3 스펙은 다음에서 확인할 수 있습니다:
 - **Swagger UI (PA Service)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PA+Service+API+v2.1.7`
-- **Swagger UI (PKD Management)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.15.1`
+- **Swagger UI (PKD Management)**: `http://<server-host>:8080/api-docs/?urls.primaryName=PKD+Management+API+v2.21.0`
 - **OpenAPI YAML (PA)**: `http://<server-host>:8080/api/docs/pa-service.yaml`
 - **OpenAPI YAML (PKD Mgmt)**: `http://<server-host>:8080/api/docs/pkd-management.yaml`
+
+---
+
+## Rate Limiting (v2.1.10+)
+
+API Key를 사용하는 경우, 클라이언트별 Rate Limiting이 적용됩니다. 기본 한도는 관리자가 클라이언트 생성 시 설정하며, 기본값은 다음과 같습니다:
+
+| 구간 | 기본 한도 | 설명 |
+|------|----------|------|
+| 분당 | 60 requests | 1분 슬라이딩 윈도우 |
+| 시간당 | 1,000 requests | 1시간 슬라이딩 윈도우 |
+| 일당 | 10,000 requests | 24시간 슬라이딩 윈도우 |
+
+### Rate Limit 초과 시 응답
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 45
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1708800000
+
+{
+  "error": "Rate limit exceeded",
+  "message": "Per-minute rate limit exceeded (60/min)",
+  "retryAfter": 45
+}
+```
+
+### Rate Limit 응답 헤더
+
+| 헤더 | 설명 |
+|------|------|
+| `Retry-After` | 다음 요청까지 대기 시간 (초) |
+| `X-RateLimit-Limit` | 현재 구간 최대 요청 수 |
+| `X-RateLimit-Remaining` | 현재 구간 남은 요청 수 |
+| `X-RateLimit-Reset` | 제한 초기화 시각 (Unix timestamp) |
+
+### Retry 로직 예시 (Python)
+
+```python
+import time
+import requests
+
+def api_call_with_retry(url, headers, max_retries=3):
+    for attempt in range(max_retries):
+        response = requests.get(url, headers=headers)
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", 60))
+            print(f"Rate limited. Retrying after {retry_after}s...")
+            time.sleep(retry_after)
+            continue
+        return response
+    raise Exception("Max retries exceeded")
+```
+
+> **Note**: API Key 없이 호출하는 경우 Rate Limiting은 적용되지 않습니다.
+
+---
+
+## API Key 에러 코드 (v2.1.10+)
+
+API Key를 사용하는 경우 발생할 수 있는 추가 에러:
+
+| HTTP Status | Error | Description |
+|-------------|-------|-------------|
+| `401` | Unauthorized | API Key가 유효하지 않거나 만료됨 |
+| `403` | Forbidden | API Key에 해당 엔드포인트 접근 권한이 없음 (Permission 부족) |
+| `403` | IP Not Allowed | API Key에 설정된 IP 화이트리스트에 포함되지 않은 IP에서 접근 |
+| `429` | Rate Limit Exceeded | 분/시/일 중 하나의 Rate Limit 초과 |
+
+```json
+// 401 — 유효하지 않은 API Key
+{
+  "error": "Unauthorized",
+  "message": "Invalid API key"
+}
+
+// 403 — 권한 부족
+{
+  "error": "Forbidden",
+  "message": "Insufficient permissions. Required: pa:verify"
+}
+
+// 429 — Rate Limit 초과
+{
+  "error": "Rate limit exceeded",
+  "message": "Per-minute rate limit exceeded (60/min)",
+  "retryAfter": 45
+}
+```
+
+> **Note**: 이 에러들은 API Key를 `X-API-Key` 헤더에 포함한 경우에만 발생합니다. API Key 없이 Public 엔드포인트를 호출하면 이 에러가 발생하지 않습니다.
 
 ---
 
@@ -1414,9 +1591,47 @@ curl http://localhost:8080/api/ai/health | jq .
 - 원인: DG2 파싱 시 JPEG2000 → JPEG 변환 미지원 빌드
 - 해결: pa-service가 OpenJPEG(`libopenjp2-dev`) + libjpeg(`libjpeg-dev`)와 함께 빌드되었는지 확인
 
+**6. 429 Too Many Requests (v2.1.10+)**
+- 원인: API Key 사용 시 Rate Limit 초과
+- 해결: `Retry-After` 헤더 값만큼 대기 후 재시도. 지속적 초과 시 관리자에게 Rate Limit 상향 요청
+- 참고: API Key 없이 호출하면 Rate Limiting이 적용되지 않음
+
+**7. 403 Forbidden — Insufficient permissions (v2.1.10+)**
+- 원인: API Key에 해당 엔드포인트 접근 권한이 없음
+- 해결: 관리자에게 필요한 Permission 추가 요청 (예: `pa:verify`, `pa:read`)
+- 확인: 현재 API Key의 Permission은 관리자가 `/admin/api-clients` 페이지에서 확인 가능
+
+**8. 401 Unauthorized — Invalid API key (v2.1.10+)**
+- 원인: API Key가 유효하지 않거나, 비활성화되었거나, 만료됨
+- 해결: 관리자에게 API Key 재발급 요청 (`POST /api/auth/api-clients/{id}/regenerate`)
+- 참고: API Key 없이 호출하면 Public 엔드포인트는 정상 접근 가능
+
 ---
 
 ## Changelog
+
+### v2.1.11 (2026-02-25)
+
+**PA API Key 사용량 추적 + nginx auth_request 통합 (v2.22.0)**:
+- nginx `auth_request` 모듈을 통해 모든 PA Service 요청의 API Key 사용량 자동 추적
+- `/api/pa/verify`, `/api/pa/parse-*`, `/api/pa/history` 등 PA 엔드포인트 사용 이력이 `api_client_usage_log`에 기록
+- 관리자 페이지 UsageDialog에서 PA 엔드포인트별 호출 횟수를 BarChart로 확인 가능
+- Rate Limiting이 PKD Management와 PA Service 전체에 공유 적용 (단일 Rate Limiter)
+- API Key 없이도 Public 엔드포인트는 기존과 동일하게 접근 가능 (하위 호환)
+
+### v2.1.10 (2026-02-25)
+
+**API Key 인증 지원 (API Client Authentication, v2.21.0)**:
+- `X-API-Key` 헤더를 통한 선택적 API Key 인증 지원
+- API Key 사용 시 클라이언트별 사용량 추적 및 Rate Limiting 적용
+- PA 관련 Permission: `pa:verify` (검증/파싱 엔드포인트), `pa:read` (이력/통계 조회), `cert:read` (간편 조회), `ai:read` (AI 분석)
+- 3-tier Rate Limiting: 분당/시간당/일당 슬라이딩 윈도우 방식 (기본 60/1000/10000)
+- Rate Limit 초과 시 `429 Too Many Requests` + `Retry-After` 헤더 반환
+- API Key 에러 코드: 401 (유효하지 않은 키), 403 (권한/IP 부족), 429 (Rate Limit 초과)
+- Python/Java/C#/curl Integration Example에 API Key 지원 추가 (생성자/헤더 파라미터)
+- API Key 없이도 Public 엔드포인트는 기존과 동일하게 접근 가능 (하위 호환)
+- API Key 발급/관리: 관리자 가이드 [API_CLIENT_ADMIN_GUIDE.md](API_CLIENT_ADMIN_GUIDE.md) 참조
+- 외부 클라이언트 연동: 사용자 가이드 [API_CLIENT_USER_GUIDE.md](API_CLIENT_USER_GUIDE.md) 참조
 
 ### v2.1.7 (2026-02-21)
 

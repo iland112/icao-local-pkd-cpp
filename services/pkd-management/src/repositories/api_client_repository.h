@@ -41,6 +41,9 @@ public:
     /** Update client (name, description, permissions, rate limits) */
     bool update(const domain::models::ApiClient& client);
 
+    /** Update API key hash and prefix (for key regeneration) */
+    bool updateKeyHash(const std::string& id, const std::string& keyHash, const std::string& keyPrefix);
+
     /** Deactivate a client (soft delete) */
     bool deactivate(const std::string& id);
 

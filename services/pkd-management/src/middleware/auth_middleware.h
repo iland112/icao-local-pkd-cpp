@@ -108,6 +108,17 @@ private:
         const std::string& userAgent,
         const std::string& errorMessage = "");
 
+    /**
+     * @brief Handle internal auth check for nginx auth_request
+     *
+     * Used by nginx auth_request module to validate API Key for
+     * services that bypass PKD Management (e.g., PA Service).
+     * Returns 200 (allow), 401 (invalid key), or 403 (rate limited).
+     */
+    void handleInternalAuthCheck(
+        const drogon::HttpRequestPtr& req,
+        drogon::FilterCallback& fcb);
+
     static std::unique_ptr<middleware::ApiRateLimiter> rateLimiter_;
 };
 

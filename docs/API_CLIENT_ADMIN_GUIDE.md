@@ -305,6 +305,34 @@ curl -X GET "https://pkd.smartcoreinc.com/api/auth/api-clients/{id}/usage?days=3
 
 ---
 
+## PA Service 연동 (nginx auth_request)
+
+PA Service(`/api/pa/*`) 요청의 API Key 추적은 **nginx auth_request** 메커니즘으로 구현됩니다.
+
+### 동작 방식
+
+```
+Client ──X-API-Key──→ nginx (/api/pa/verify)
+                        ├── auth_request → PKD Management /api/auth/internal/check
+                        │     ↓ API Key 검증 + Rate Limit + Usage Log
+                        │     ↓ 200 OK (허용) / 401 (거부) / 403 (Rate Limit)
+                        └── proxy_pass → PA Service (8082)
+```
+
+1. 클라이언트가 `X-API-Key` 헤더와 함께 PA 요청 전송
+2. nginx가 내부 subrequest로 PKD Management에 인증 확인 (`/api/auth/internal/check`)
+3. PKD Management가 API Key 검증 → Rate Limit 체크 → 사용 로그 기록
+4. 인증 성공(200) 시 nginx가 PA Service로 요청 전달, 실패 시 JSON 에러 반환
+
+### 관리자 참고사항
+
+- **Permission**: PA 통신용 클라이언트는 `pa:verify` 또는 `pa:read` 포함 필수
+- **사용량 모니터링**: `/api/auth/api-clients/{id}/usage` API에서 `/api/pa/verify` 등 PA 엔드포인트 사용량 확인
+- **Rate Limit**: 전체 엔드포인트(PKD Management + PA)에 대해 공유 Rate Limiter 적용
+- **API Key 미제공 시**: 기존과 동일하게 public 접근 허용 (하위 호환)
+
+---
+
 ## Permission 모델
 
 10개의 세부 Permission으로 클라이언트별 접근 범위를 제어합니다.
