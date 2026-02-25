@@ -463,12 +463,12 @@ function UsageDialog({ client, onClose }: {
   return (
     <DialogWrapper onClose={onClose} title={`${client.client_name} — API 사용 이력`}>
       {/* Period selector */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-3">
         {PERIOD_OPTIONS.map(opt => (
           <button
             key={opt.days}
             onClick={() => setDays(opt.days)}
-            className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+            className={`px-3 py-1 text-sm rounded-lg font-medium transition-colors ${
               days === opt.days
                 ? 'bg-indigo-600 text-white'
                 : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
@@ -489,39 +489,39 @@ function UsageDialog({ client, onClose }: {
           <p className="text-gray-500 dark:text-gray-400">최근 {days}일간 사용 이력이 없습니다</p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           {/* Summary cards */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-xl p-4">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3">
               <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">총 요청</p>
-              <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-300 mt-1">{totalRequests.toLocaleString()}</p>
+              <p className="text-xl font-bold text-indigo-700 dark:text-indigo-300">{totalRequests.toLocaleString()}</p>
             </div>
-            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-4">
+            <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-3">
               <p className="text-xs text-purple-600 dark:text-purple-400 font-medium">사용 엔드포인트</p>
-              <p className="text-2xl font-bold text-purple-700 dark:text-purple-300 mt-1">{endpoints.length}</p>
+              <p className="text-xl font-bold text-purple-700 dark:text-purple-300">{endpoints.length}</p>
             </div>
           </div>
 
           {/* Horizontal bar chart */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">엔드포인트별 요청 수</h4>
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-3">
-              <ResponsiveContainer width="100%" height={Math.max(endpoints.length * 36, 120)}>
-                <BarChart data={endpoints} layout="vertical" margin={{ left: 0, right: 40, top: 4, bottom: 4 }}>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">엔드포인트별 요청 수</h4>
+            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+              <ResponsiveContainer width="100%" height={Math.max(endpoints.length * 28, 100)}>
+                <BarChart data={endpoints} layout="vertical" margin={{ left: 0, right: 40, top: 2, bottom: 2 }}>
                   <XAxis type="number" hide />
                   <YAxis
                     type="category"
                     dataKey="endpoint"
-                    width={180}
-                    tick={{ fontSize: 11, fill: '#6b7280' }}
-                    tickFormatter={(v: string) => v.length > 28 ? '...' + v.slice(-25) : v}
+                    width={160}
+                    tick={{ fontSize: 10, fill: '#6b7280' }}
+                    tickFormatter={(v: string) => v.length > 25 ? '...' + v.slice(-22) : v}
                   />
                   <Tooltip
                     formatter={(value) => [`${Number(value).toLocaleString()} 요청`, '']}
                     labelFormatter={(label) => String(label)}
                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   />
-                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={20}>
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={16}>
                     {endpoints.map((_entry, i) => (
                       <Cell key={i} fill={BAR_COLORS[i % BAR_COLORS.length]} />
                     ))}
@@ -533,25 +533,25 @@ function UsageDialog({ client, onClose }: {
 
           {/* Table */}
           <div>
-            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">상세 내역</h4>
-            <div className="border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">상세 내역</h4>
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+              <table className="w-full text-xs">
                 <thead className="bg-gray-50 dark:bg-gray-700/80">
                   <tr>
-                    <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-300">엔드포인트</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600 dark:text-gray-300 w-24">요청 수</th>
-                    <th className="text-right px-4 py-2 font-medium text-gray-600 dark:text-gray-300 w-20">비율</th>
+                    <th className="text-left px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300">엔드포인트</th>
+                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-20">요청 수</th>
+                    <th className="text-right px-3 py-1.5 font-medium text-gray-600 dark:text-gray-300 w-16">비율</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {endpoints.map((ep, i) => (
                     <tr key={ep.endpoint} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
-                      <td className="px-4 py-2 font-mono text-xs text-gray-700 dark:text-gray-300">
-                        {i < 3 && <span className="inline-block w-5 h-5 text-center text-xs font-bold text-white rounded-full mr-2" style={{ backgroundColor: BAR_COLORS[i] }}>{i + 1}</span>}
+                      <td className="px-3 py-1.5 font-mono text-xs text-gray-700 dark:text-gray-300">
+                        <span className={`inline-flex items-center justify-center w-4.5 h-4.5 text-center text-[10px] font-bold rounded-full mr-1.5 ${i < 3 ? 'text-white' : 'text-gray-500 dark:text-gray-400 bg-gray-200 dark:bg-gray-600'}`} style={i < 3 ? { backgroundColor: BAR_COLORS[i], width: '18px', height: '18px' } : { width: '18px', height: '18px' }}>{i + 1}</span>
                         {ep.endpoint}
                       </td>
-                      <td className="text-right px-4 py-2 font-semibold text-gray-900 dark:text-white">{ep.count.toLocaleString()}</td>
-                      <td className="text-right px-4 py-2 text-gray-500 dark:text-gray-400">{(ep.count / totalRequests * 100).toFixed(1)}%</td>
+                      <td className="text-right px-3 py-1.5 font-semibold text-gray-900 dark:text-white">{ep.count.toLocaleString()}</td>
+                      <td className="text-right px-3 py-1.5 text-gray-500 dark:text-gray-400">{(ep.count / totalRequests * 100).toFixed(1)}%</td>
                     </tr>
                   ))}
                 </tbody>
@@ -561,7 +561,7 @@ function UsageDialog({ client, onClose }: {
         </div>
       )}
 
-      <div className="flex justify-end mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex justify-end mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
         <button onClick={onClose} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">닫기</button>
       </div>
     </DialogWrapper>

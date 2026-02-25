@@ -557,10 +557,13 @@ void AuthMiddleware::handleInternalAuthCheck(
 
     auto client = validateApiKey(apiKey, originalUri, clientIp);
     if (!client) {
-        spdlog::warn("[AuthMiddleware] Internal auth check failed for {} from {}",
+        // API key not found/invalid — allow request (PA API is public)
+        // but log warning for monitoring. Do NOT block, as existing clients
+        // may send unregistered keys.
+        spdlog::warn("[AuthMiddleware] Internal auth check: unregistered API key for {} from {} (allowing)",
                       originalUri, clientIp);
         auto response = drogon::HttpResponse::newHttpResponse();
-        response->setStatusCode(drogon::k401Unauthorized);
+        response->setStatusCode(drogon::k200OK);
         fcb(response);
         return;
     }

@@ -1,6 +1,6 @@
 # PA Service API Guide for External Clients
 
-**Version**: 2.1.11
+**Version**: 2.1.12
 **Last Updated**: 2026-02-25
 **API Gateway**: HTTP (:80) / HTTPS (:443) / Internal (:8080)
 
@@ -1537,13 +1537,13 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 
 | HTTP Status | Error | Description |
 |-------------|-------|-------------|
-| `401` | Unauthorized | API Key가 유효하지 않거나 만료됨 |
+| `401` | Unauthorized | API Key가 유효하지 않거나 만료됨 (**PKD Management 엔드포인트만 해당**) |
 | `403` | Forbidden | API Key에 해당 엔드포인트 접근 권한이 없음 (Permission 부족) |
 | `403` | IP Not Allowed | API Key에 설정된 IP 화이트리스트에 포함되지 않은 IP에서 접근 |
 | `429` | Rate Limit Exceeded | 분/시/일 중 하나의 Rate Limit 초과 |
 
 ```json
-// 401 — 유효하지 않은 API Key
+// 401 — 유효하지 않은 API Key (PKD Management 엔드포인트만)
 {
   "error": "Unauthorized",
   "message": "Invalid API key"
@@ -1564,6 +1564,8 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 ```
 
 > **Note**: 이 에러들은 API Key를 `X-API-Key` 헤더에 포함한 경우에만 발생합니다. API Key 없이 Public 엔드포인트를 호출하면 이 에러가 발생하지 않습니다.
+>
+> **PA Service 엔드포인트 (v2.22.1+)**: `/api/pa/*` 경로는 Public API이므로, 미등록/유효하지 않은 API Key를 전송해도 **401이 발생하지 않고 정상 처리**됩니다. 등록된 유효한 API Key인 경우에만 사용량 추적이 적용됩니다. 이는 기존 클라이언트의 하위 호환성을 보장합니다.
 
 ---
 
@@ -1605,10 +1607,19 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 - 원인: API Key가 유효하지 않거나, 비활성화되었거나, 만료됨
 - 해결: 관리자에게 API Key 재발급 요청 (`POST /api/auth/api-clients/{id}/regenerate`)
 - 참고: API Key 없이 호출하면 Public 엔드포인트는 정상 접근 가능
+- **PA 엔드포인트 (v2.22.1+)**: `/api/pa/*` 경로에서는 미등록 API Key를 전송해도 401이 발생하지 않습니다 (Public API 하위 호환). 서버 로그에 경고만 기록됩니다.
 
 ---
 
 ## Changelog
+
+### v2.1.12 (2026-02-25)
+
+**PA auth_request 하위 호환성 수정 + UsageDialog UX 개선 (v2.22.1)**:
+- 미등록/유효하지 않은 API Key로 PA 엔드포인트 호출 시 401 대신 200 반환 (Public API 하위 호환)
+- 기존 외부 클라이언트가 미등록 API Key를 전송해도 PA 서비스 정상 이용 가능
+- 등록된 유효한 API Key만 사용량 추적 및 Rate Limiting 적용 (기존과 동일)
+- 서버 로그에 미등록 API Key 경고 기록 (모니터링용)
 
 ### v2.1.11 (2026-02-25)
 

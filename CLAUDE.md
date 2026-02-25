@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.22.0
+**Current Version**: v2.22.1
 **Last Updated**: 2026-02-25
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -570,6 +570,15 @@ scripts/
 ---
 
 ## Version History
+
+### v2.22.1 (2026-02-25) - PA auth_request Backward Compatibility Fix + UsageDialog UX
+- **CRITICAL FIX**: 미등록/유효하지 않은 API Key로 PA 엔드포인트 호출 시 401 대신 200 반환 — 기존 외부 클라이언트(Java Apache-HttpClient 등)가 미등록 X-API-Key 헤더를 전송해도 PA 서비스 정상 이용 가능
+- **Root cause**: v2.22.0에서 nginx auth_request 추가 후, `handleInternalAuthCheck()`가 미등록 API Key에 대해 401을 반환하여 기존 클라이언트 차단
+- **Fix**: `auth_middleware.cpp` — 미등록 API Key 시 200 OK 반환 (경고 로그만 기록), 등록된 유효한 키만 사용량 추적/Rate Limiting 적용
+- **Frontend UsageDialog**: 엔드포인트 테이블 순위 번호 전체 표시 (top 3 컬러 + 나머지 회색 배지), 다이얼로그 전체 compact 레이아웃 (spacing, font size, bar size 축소)
+- Documentation: PA_API_GUIDE.md v2.1.12 — PA 엔드포인트 미등록 키 허용 동작 명시, Troubleshooting 업데이트
+- Documentation: API_CLIENT_USER_GUIDE.md v1.0.1 — PA 미등록 키 FAQ 추가, 에러 코드 테이블 보완
+- 4 files changed (0 new, 4 modified: auth_middleware.cpp, ApiClientManagement.tsx, PA_API_GUIDE.md, API_CLIENT_USER_GUIDE.md)
 
 ### v2.22.0 (2026-02-25) - API Client Usage Tracking + PA nginx auth_request
 - **Bug fix**: `insertUsageLog()` was never called — auth middleware only incremented counter (`updateUsage`), detailed log was never written to `api_client_usage_log`

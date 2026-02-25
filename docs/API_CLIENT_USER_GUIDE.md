@@ -1,7 +1,7 @@
 # API Client 사용자 가이드 (외부 연동)
 
-**Version**: 1.0.0
-**Last Updated**: 2026-02-24
+**Version**: 1.0.1
+**Last Updated**: 2026-02-25
 **대상**: 외부 클라이언트 애플리케이션 개발자
 **API Version**: v2.21.0
 
@@ -562,7 +562,7 @@ public String callWithRetry(HttpRequest request, int maxRetries) throws Exceptio
 
 | HTTP Status | 원인 | 대응 |
 |-------------|------|------|
-| `401 Unauthorized` | API Key가 없거나 잘못됨 | `X-API-Key` 헤더 확인, 키 값 검증 |
+| `401 Unauthorized` | API Key가 없거나 잘못됨 (**주의**: PA 엔드포인트에서는 미등록 키도 허용) | `X-API-Key` 헤더 확인, 키 값 검증 |
 | `403 Forbidden` | 비활성 클라이언트, 만료, IP 차단, 권한 부족 | 관리자에게 클라이언트 상태 확인 요청 |
 | `429 Too Many Requests` | Rate Limit 초과 | `Retry-After` 헤더 값만큼 대기 후 재시도 |
 | `500 Internal Server Error` | 서버 오류 | 관리자에게 보고 |
@@ -635,6 +635,12 @@ curl https://pkd.smartcoreinc.com/api/health/database
 # LDAP 연결 상태
 curl https://pkd.smartcoreinc.com/api/health/ldap
 ```
+
+### Q. 미등록 API Key로 PA 요청을 보내면 어떻게 되나요?
+
+**PA 엔드포인트(`/api/pa/*`)에서는 미등록/유효하지 않은 API Key를 전송해도 요청이 정상 처리됩니다** (v2.22.1+). PA Service는 Public API이므로 하위 호환성을 위해 미등록 키를 차단하지 않습니다. 등록된 유효한 API Key인 경우에만 사용량 추적이 적용됩니다.
+
+> PKD Management 엔드포인트(`/api/certificates/*`, `/api/upload/*` 등)에서는 미등록 API Key가 `401 Unauthorized`를 반환합니다.
 
 ### Q. 어떤 엔드포인트가 인증 없이 접근 가능한가요?
 
