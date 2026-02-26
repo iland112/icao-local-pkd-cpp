@@ -490,7 +490,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // Update enhanced statistics (ValidationStatistics)
     enhancedStats.totalCertificates++;
     enhancedStats.certificateTypes[certType]++;
-    enhancedStats.signatureAlgorithms[certMetadata.signatureAlgorithm]++;
+    common::safeIncrementMap(enhancedStats.signatureAlgorithms, certMetadata.signatureAlgorithm, 50);
     enhancedStats.keySizes[certMetadata.keySize]++;
 
     // Update ICAO compliance counts
@@ -499,7 +499,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     } else {
         enhancedStats.icaoNonCompliantCount++;
     }
-    // Track per-category violation counts
+    // Track per-category violation counts (fixed keys, naturally bounded)
     if (!icaoCompliance.keyUsageCompliant) enhancedStats.complianceViolations["keyUsage"]++;
     if (!icaoCompliance.algorithmCompliant) enhancedStats.complianceViolations["algorithm"]++;
     if (!icaoCompliance.keySizeCompliant) enhancedStats.complianceViolations["keySize"]++;
@@ -507,19 +507,19 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     if (!icaoCompliance.dnFormatCompliant) enhancedStats.complianceViolations["dnFormat"]++;
     if (!icaoCompliance.extensionsCompliant) enhancedStats.complianceViolations["extensions"]++;
 
-    // Update validation status counts and reason tracking
+    // Update validation status counts and reason tracking (bounded to prevent DoS)
     if (validationStatus == "VALID") {
         enhancedStats.validCount++;
-        enhancedStats.validationReasons["VALID"]++;
+        common::safeIncrementMap(enhancedStats.validationReasons, "VALID");
     } else if (validationStatus == "EXPIRED_VALID") {
         enhancedStats.expiredValidCount++;
-        enhancedStats.validationReasons["EXPIRED_VALID: " + valRecord.trustChainMessage]++;
+        common::safeIncrementMap(enhancedStats.validationReasons, "EXPIRED_VALID: " + valRecord.trustChainMessage);
     } else if (validationStatus == "INVALID") {
         enhancedStats.invalidCount++;
-        enhancedStats.validationReasons["INVALID: " + valRecord.trustChainMessage]++;
+        common::safeIncrementMap(enhancedStats.validationReasons, "INVALID: " + valRecord.trustChainMessage);
     } else if (validationStatus == "PENDING") {
         enhancedStats.pendingCount++;
-        enhancedStats.validationReasons["PENDING: " + valRecord.trustChainMessage]++;
+        common::safeIncrementMap(enhancedStats.validationReasons, "PENDING: " + valRecord.trustChainMessage);
     }
 
     // Update trust chain counters on enhancedStats (SSE-streamed)

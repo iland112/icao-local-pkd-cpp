@@ -73,11 +73,42 @@ export function PAHistory() {
   const [dgLoading, setDgLoading] = useState(false);
   const [dgError, setDgError] = useState<string | null>(null);
 
+  // Global statistics (independent of pagination)
+  const [globalStats, setGlobalStats] = useState<{
+    total: number;
+    valid: number;
+    invalid: number;
+    error: number;
+  }>({ total: 0, valid: 0, invalid: 0, error: 0 });
+
   const pageSize = 5;
+
+  useEffect(() => {
+    fetchStatistics();
+  }, []);
 
   useEffect(() => {
     fetchHistory();
   }, [page]);
+
+  const fetchStatistics = async () => {
+    try {
+      const resp = await paApi.getStatistics();
+      const data = resp.data;
+      const byStatus = data.byStatus || {};
+      const valid = byStatus['VALID'] || 0;
+      const invalid = byStatus['INVALID'] || 0;
+      const error = byStatus['ERROR'] || 0;
+      setGlobalStats({
+        total: data.totalVerifications || 0,
+        valid,
+        invalid,
+        error,
+      });
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Failed to fetch PA statistics:', err);
+    }
+  };
 
   const fetchHistory = async () => {
     setLoading(true);
@@ -103,15 +134,11 @@ export function PAHistory() {
     }
   };
 
-  // Calculate statistics from current page data
+  // Statistics derived from global stats (not current page)
   const stats = useMemo(() => {
-    const valid = history.filter((h) => h.status === 'VALID').length;
-    const invalid = history.filter((h) => h.status === 'INVALID').length;
-    const error = history.filter((h) => h.status === 'ERROR').length;
-    const total = history.length;
-
+    const { total, valid, invalid, error } = globalStats;
     return {
-      total: totalElements,
+      total,
       valid,
       invalid,
       error,
@@ -119,7 +146,7 @@ export function PAHistory() {
       invalidPercent: total > 0 ? Math.round((invalid / total) * 100) : 0,
       errorPercent: total > 0 ? Math.round((error / total) * 100) : 0,
     };
-  }, [history, totalElements]);
+  }, [globalStats]);
 
   // Extract unique countries from history
   const uniqueCountries = useMemo(() => {

@@ -1091,22 +1091,37 @@ Json::Value ValidationRepository::getReasonBreakdown()
 
         // GROUP BY validation_status, trust_chain_message, country_code
         // Only INVALID and PENDING are interesting for reason breakdown
+        // Use COALESCE to provide fallback messages for records without trust_chain_message
         std::string query;
         if (dbType == "oracle") {
             query =
-                "SELECT validation_status, DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1) AS trust_chain_message, country_code, COUNT(*) AS cnt "
+                "SELECT validation_status, "
+                "  COALESCE(NULLIF(DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1), ''), "
+                "    CASE WHEN csca_found = 0 THEN 'CSCA not found' "
+                "    ELSE 'Trust chain validation failed' END) AS trust_chain_message, "
+                "  country_code, COUNT(*) AS cnt "
                 "FROM validation_result "
                 "WHERE validation_status IN ('INVALID', 'PENDING') "
-                "AND trust_chain_message IS NOT NULL "
-                "GROUP BY validation_status, DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1), country_code "
+                "GROUP BY validation_status, "
+                "  COALESCE(NULLIF(DBMS_LOB.SUBSTR(trust_chain_message, 4000, 1), ''), "
+                "    CASE WHEN csca_found = 0 THEN 'CSCA not found' "
+                "    ELSE 'Trust chain validation failed' END), "
+                "  country_code "
                 "ORDER BY validation_status, cnt DESC";
         } else {
             query =
-                "SELECT validation_status, trust_chain_message, country_code, COUNT(*) AS cnt "
+                "SELECT validation_status, "
+                "  COALESCE(NULLIF(trust_chain_message, ''), "
+                "    CASE WHEN csca_found = false THEN 'CSCA not found' "
+                "    ELSE 'Trust chain validation failed' END) AS trust_chain_message, "
+                "  country_code, COUNT(*) AS cnt "
                 "FROM validation_result "
                 "WHERE validation_status IN ('INVALID', 'PENDING') "
-                "AND trust_chain_message IS NOT NULL AND trust_chain_message != '' "
-                "GROUP BY validation_status, trust_chain_message, country_code "
+                "GROUP BY validation_status, "
+                "  COALESCE(NULLIF(trust_chain_message, ''), "
+                "    CASE WHEN csca_found = false THEN 'CSCA not found' "
+                "    ELSE 'Trust chain validation failed' END), "
+                "  country_code "
                 "ORDER BY validation_status, cnt DESC";
         }
 

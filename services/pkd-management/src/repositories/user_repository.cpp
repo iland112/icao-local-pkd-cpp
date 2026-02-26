@@ -31,8 +31,11 @@ std::optional<domain::User> UserRepository::findByUsername(const std::string& us
     try {
         spdlog::debug("[UserRepository] Finding user by username: {}", username);
 
-        const char* query =
-            "SELECT id, username, password_hash, email, full_name, permissions, "
+        // Oracle: TO_CHAR(permissions) avoids CLOB LOB truncation
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string permCol = (dbType == "oracle") ? "TO_CHAR(permissions) AS permissions" : "permissions";
+        std::string query =
+            "SELECT id, username, password_hash, email, full_name, " + permCol + ", "
             "is_active, is_admin, created_at, last_login_at, updated_at "
             "FROM users WHERE username = $1";
 
@@ -57,8 +60,11 @@ std::optional<domain::User> UserRepository::findById(const std::string& id)
     try {
         spdlog::debug("[UserRepository] Finding user by ID: {}", id);
 
-        const char* query =
-            "SELECT id, username, password_hash, email, full_name, permissions, "
+        // Oracle: TO_CHAR(permissions) avoids CLOB LOB truncation
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string permCol = (dbType == "oracle") ? "TO_CHAR(permissions) AS permissions" : "permissions";
+        std::string query =
+            "SELECT id, username, password_hash, email, full_name, " + permCol + ", "
             "is_active, is_admin, created_at, last_login_at, updated_at "
             "FROM users WHERE id = $1";
 
@@ -107,15 +113,43 @@ Json::Value UserRepository::findAll(
 
         // Main query with database-specific pagination
         std::string dbType = queryExecutor_->getDatabaseType();
+        // Oracle: TO_CHAR(permissions) avoids CLOB LOB truncation
+        std::string permCol = (dbType == "oracle") ? "TO_CHAR(permissions) AS permissions" : "permissions";
         std::string query =
             "SELECT id, username, email, full_name, is_admin, is_active, "
-            "permissions, created_at, last_login_at, updated_at "
+            + permCol + ", created_at, last_login_at, updated_at "
             "FROM users " + whereClause +
             " ORDER BY created_at DESC" +
             common::db::paginationClause(dbType, limit, offset);
 
         Json::Value result = queryExecutor_->executeQuery(query, params);
         spdlog::debug("[UserRepository] Found {} users", result.size());
+
+        // Normalize Oracle types for API response
+        if (dbType == "oracle") {
+            for (auto& row : result) {
+                // Boolean fields: "1"/"0" → true/false
+                if (row.isMember("is_admin")) {
+                    row["is_admin"] = (row["is_admin"].asString() == "1");
+                }
+                if (row.isMember("is_active")) {
+                    row["is_active"] = (row["is_active"].asString() == "1");
+                }
+                // Parse permissions JSON string → array
+                if (row.isMember("permissions") && row["permissions"].isString()) {
+                    std::string permStr = row["permissions"].asString();
+                    Json::Value parsedPerms;
+                    Json::CharReaderBuilder builder;
+                    std::string errs;
+                    std::istringstream stream(permStr);
+                    if (Json::parseFromStream(builder, stream, &parsedPerms, &errs) && parsedPerms.isArray()) {
+                        row["permissions"] = parsedPerms;
+                    } else {
+                        row["permissions"] = Json::arrayValue;
+                    }
+                }
+            }
+        }
 
         return result;
 
@@ -184,9 +218,11 @@ std::string UserRepository::create(const domain::User& user)
         std::string userId;
 
         if (dbType == "oracle") {
-            // Oracle: Pre-generate UUID, no RETURNING clause
+            // Oracle: Pre-generate UUID via SYS_GUID() in standard UUID format
             Json::Value uuidResult = queryExecutor_->executeQuery(
-                "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+                "SELECT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), "
+                "'([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', "
+                "'\\1-\\2-\\3-\\4-\\5')) AS id FROM DUAL", {});
             if (uuidResult.empty()) {
                 throw std::runtime_error("Failed to generate UUID from Oracle");
             }

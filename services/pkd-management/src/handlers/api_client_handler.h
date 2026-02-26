@@ -64,8 +64,10 @@ private:
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& id);
 
-    /** Helper: require admin JWT and return claims */
-    std::optional<auth::JwtClaims> requireAdmin(const drogon::HttpRequestPtr& req);
+    /** Helper: require admin JWT and return claims (sends 401/403 via callback) */
+    std::optional<auth::JwtClaims> requireAdmin(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>& callback);
     std::optional<auth::JwtClaims> validateRequestToken(const drogon::HttpRequestPtr& req);
 
     /** Helper: convert ApiClient to JSON (without hash) */

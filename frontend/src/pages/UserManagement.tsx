@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Users, Plus, Edit, Trash2, Key, Shield, Search, X, Check, AlertCircle, Mail, Clock, User } from 'lucide-react';
 import { createAuthenticatedClient } from '@/services/authApi';
+import { authApi } from '@/services/api';
+import { PERMISSION_GROUPS, AVAILABLE_PERMISSIONS } from '@/utils/permissions';
 
 interface UserData {
   id: string;
@@ -25,16 +27,6 @@ interface UserFormData {
 
 const authClient = createAuthenticatedClient('/api/auth');
 
-const AVAILABLE_PERMISSIONS = [
-  { value: 'upload:read', label: '업로드 조회', desc: '업로드 이력 조회' },
-  { value: 'upload:write', label: '파일 업로드', desc: '파일 업로드 실행' },
-  { value: 'cert:read', label: '인증서 조회', desc: '인증서 검색 및 조회' },
-  { value: 'cert:export', label: '인증서 내보내기', desc: '인증서 파일 내보내기' },
-  { value: 'pa:verify', label: 'PA 검증', desc: 'Passive Authentication 검증' },
-  { value: 'sync:read', label: '동기화 조회', desc: 'DB-LDAP 동기화 상태 조회' },
-  { value: 'sync:write', label: '동기화 실행', desc: 'DB-LDAP 수동 동기화 실행' },
-];
-
 export function UserManagement() {
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +49,7 @@ export function UserManagement() {
   });
 
   const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: '',
   });
@@ -71,8 +64,9 @@ export function UserManagement() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError('');
       const { data } = await authClient.get('/users');
-      setUsers(data.users || []);
+      setUsers(data.data || data.users || []);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching users:', error);
       setError('사용자 목록을 불러오는데 실패했습니다.');
@@ -128,6 +122,14 @@ export function UserManagement() {
   const handleChangePassword = async () => {
     if (!selectedUser) return;
 
+    const currentUser = authApi.getStoredUser();
+    const isSelf = currentUser?.id === selectedUser.id;
+
+    if (isSelf && !passwordData.currentPassword) {
+      setError('현재 비밀번호를 입력해주세요.');
+      return;
+    }
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       setError('비밀번호가 일치하지 않습니다.');
       return;
@@ -135,12 +137,14 @@ export function UserManagement() {
 
     try {
       setError('');
-      await authClient.put(`/users/${selectedUser.id}/password`, {
-        new_password: passwordData.newPassword,
-      });
+      const payload: Record<string, string> = { new_password: passwordData.newPassword };
+      if (isSelf) {
+        payload.current_password = passwordData.currentPassword;
+      }
+      await authClient.put(`/users/${selectedUser.id}/password`, payload);
       setSuccess('비밀번호가 변경되었습니다.');
       setShowPasswordModal(false);
-      setPasswordData({ newPassword: '', confirmPassword: '' });
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setSelectedUser(null);
     } catch (error: any) {
       setError(error.response?.data?.message || error.message || '비밀번호 변경에 실패했습니다.');
@@ -211,8 +215,10 @@ export function UserManagement() {
     return user.username.charAt(0).toUpperCase();
   };
 
-  const adminCount = users.filter(u => u.is_admin).length;
-  const activeCount = users.filter(u => u.is_active).length;
+  // Oracle may return "1"/"0" strings instead of booleans
+  const toBool = (v: unknown): boolean => v === true || v === 1 || v === '1' || v === 'true';
+  const adminCount = users.filter(u => toBool(u.is_admin)).length;
+  const activeCount = users.filter(u => toBool(u.is_active)).length;
 
   return (
     <div className="w-full px-4 lg:px-6 py-4 space-y-6">
@@ -314,7 +320,7 @@ export function UserManagement() {
               <div className="p-5 pb-4">
                 <div className="flex items-start gap-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 ${
-                    user.is_admin
+                    toBool(user.is_admin)
                       ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
                       : 'bg-gradient-to-br from-gray-400 to-gray-500'
                   }`}>
@@ -325,7 +331,7 @@ export function UserManagement() {
                       <h3 className="text-base font-semibold text-gray-900 dark:text-white truncate">
                         {user.full_name || user.username}
                       </h3>
-                      {user.is_admin && (
+                      {toBool(user.is_admin) && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full flex-shrink-0">
                           <Shield className="w-3 h-3" />
                           관리자
@@ -367,7 +373,9 @@ export function UserManagement() {
                     </span>
                   ))}
                   {user.permissions.length === 0 && (
-                    <span className="text-xs text-gray-400 dark:text-gray-500 italic">권한 없음</span>
+                    toBool(user.is_admin)
+                      ? <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs rounded-full">전체 권한 (관리자)</span>
+                      : <span className="text-xs text-gray-400 dark:text-gray-500 italic">권한 없음</span>
                   )}
                 </div>
               </div>
@@ -493,29 +501,36 @@ export function UserManagement() {
                 </div>
               </div>
 
-              {/* Permissions Grid — compact 3-column */}
+              {/* Permissions Grid — grouped by menu section */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   권한 설정
                 </label>
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
-                  {AVAILABLE_PERMISSIONS.map((perm) => (
-                    <label
-                      key={perm.value}
-                      className={`flex items-center gap-2 px-2.5 py-2 border rounded-lg cursor-pointer transition-colors ${
-                        formData.permissions.includes(perm.value)
-                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.permissions.includes(perm.value)}
-                        onChange={() => togglePermission(perm.value)}
-                        className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{perm.label}</span>
-                    </label>
+                <div className="space-y-3">
+                  {PERMISSION_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1.5">{group.label}</p>
+                      <div className="grid grid-cols-2 lg:grid-cols-3 gap-1.5">
+                        {group.permissions.map((perm) => (
+                          <label
+                            key={perm.value}
+                            className={`flex items-center gap-2 px-2.5 py-2 border rounded-lg cursor-pointer transition-colors ${
+                              formData.permissions.includes(perm.value)
+                                ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.permissions.includes(perm.value)}
+                              onChange={() => togglePermission(perm.value)}
+                              className="w-3.5 h-3.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{perm.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -615,32 +630,39 @@ export function UserManagement() {
                 </div>
               </div>
 
-              {/* Permissions Grid */}
+              {/* Permissions Grid — grouped by menu section */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   권한 설정
                 </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  {AVAILABLE_PERMISSIONS.map((perm) => (
-                    <label
-                      key={perm.value}
-                      className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${
-                        formData.permissions.includes(perm.value)
-                          ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.permissions.includes(perm.value)}
-                        onChange={() => togglePermission(perm.value)}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{perm.label}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{perm.desc}</p>
+                <div className="space-y-4">
+                  {PERMISSION_GROUPS.map((group) => (
+                    <div key={group.label}>
+                      <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">{group.label}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {group.permissions.map((perm) => (
+                          <label
+                            key={perm.value}
+                            className={`flex items-center gap-3 p-3 border rounded-xl cursor-pointer transition-colors ${
+                              formData.permissions.includes(perm.value)
+                                ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                                : 'border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={formData.permissions.includes(perm.value)}
+                              onChange={() => togglePermission(perm.value)}
+                              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{perm.label}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400">{perm.desc}</p>
+                            </div>
+                          </label>
+                        ))}
                       </div>
-                    </label>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -716,6 +738,23 @@ export function UserManagement() {
               </div>
             </div>
             <div className="p-6 space-y-4">
+              {authApi.getStoredUser()?.id === selectedUser.id && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    현재 비밀번호
+                  </label>
+                  <div className="relative">
+                    <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="password"
+                      value={passwordData.currentPassword}
+                      onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                      placeholder="현재 비밀번호 입력"
+                      className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                    />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
                   새 비밀번호
@@ -755,14 +794,14 @@ export function UserManagement() {
             </div>
             <div className="p-6 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
               <button
-                onClick={() => { setShowPasswordModal(false); setPasswordData({ newPassword: '', confirmPassword: '' }); setSelectedUser(null); }}
+                onClick={() => { setShowPasswordModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); setSelectedUser(null); }}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors text-sm"
               >
                 취소
               </button>
               <button
                 onClick={handleChangePassword}
-                disabled={!passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword}
+                disabled={!passwordData.newPassword || passwordData.newPassword !== passwordData.confirmPassword || (authApi.getStoredUser()?.id === selectedUser.id && !passwordData.currentPassword)}
                 className="px-5 py-2 bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-xl hover:from-purple-600 hover:to-violet-600 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
               >
                 변경

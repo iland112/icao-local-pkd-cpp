@@ -101,7 +101,7 @@ export function ValidationSummaryPanel({
   type CardInfo = { key: string; label: string; value: number; color: string };
   const activeCards: CardInfo[] = [];
   if (data.validCount > 0) activeCards.push({ key: 'valid', label: '유효', value: data.validCount, color: 'green' });
-  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: '만료-유효', value: expiredValidCount, color: 'amber' });
+  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: '만료(서명유효)', value: expiredValidCount, color: 'amber' });
   if (data.pendingCount > 0) activeCards.push({ key: 'pending', label: '보류', value: data.pendingCount, color: 'yellow' });
   if (data.invalidCount > 0) activeCards.push({ key: 'invalid', label: '무효', value: data.invalidCount, color: 'red' });
   if ((data.errorCount ?? 0) > 0) activeCards.push({ key: 'error', label: '오류', value: data.errorCount!, color: 'gray' });

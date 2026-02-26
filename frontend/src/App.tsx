@@ -1,7 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Layout } from '@/components/layout';
-import { ToastContainer, PrivateRoute, ErrorBoundary } from '@/components/common';
+import { ToastContainer, PrivateRoute, AdminRoute, ErrorBoundary } from '@/components/common';
 import { Dashboard, FileUpload, UploadHistory, UploadDetail, UploadDashboard, PAVerify, PAHistory, PADetail, PADashboard, SyncDashboard, Login, Profile, AuditLog, UserManagement, CertificateUpload } from '@/pages';
 import MonitoringDashboard from '@/pages/MonitoringDashboard';
 import CertificateSearch from '@/pages/CertificateSearch';
@@ -57,10 +57,10 @@ function App() {
             <Route path="ai/analysis" element={<AiAnalysisDashboard />} />
 
             <Route path="profile" element={<Profile />} />
-            <Route path="admin/users" element={<UserManagement />} />
-            <Route path="admin/api-clients" element={<ApiClientManagement />} />
-            <Route path="admin/operation-audit" element={<OperationAuditLog />} />
-            <Route path="admin/audit-log" element={<AuditLog />} />
+            <Route path="admin/users" element={<AdminRoute><UserManagement /></AdminRoute>} />
+            <Route path="admin/api-clients" element={<AdminRoute><ApiClientManagement /></AdminRoute>} />
+            <Route path="admin/operation-audit" element={<AdminRoute><OperationAuditLog /></AdminRoute>} />
+            <Route path="admin/audit-log" element={<AdminRoute><AuditLog /></AdminRoute>} />
           </Route>
         </Routes>
         <ToastContainer />

@@ -489,7 +489,7 @@ bool parseMasterListEntryV2(
                 enhancedStats->certificateTypes[logCertType]++;
                 if (!isDuplicate) {
                     enhancedStats->validCount++;
-                    enhancedStats->validationReasons["VALID"]++;
+                    common::safeIncrementMap(enhancedStats->validationReasons, "VALID");
                 }
 
                 // ICAO 9303 compliance check
@@ -509,7 +509,7 @@ bool parseMasterListEntryV2(
                 // Signature algorithm and key size distribution
                 common::CertificateMetadata certMeta = common::extractCertificateMetadataForProgress(cert, false);
                 if (!certMeta.signatureAlgorithm.empty()) {
-                    enhancedStats->signatureAlgorithms[certMeta.signatureAlgorithm]++;
+                    common::safeIncrementMap(enhancedStats->signatureAlgorithms, certMeta.signatureAlgorithm, 50);
                 }
                 if (certMeta.keySize > 0) {
                     enhancedStats->keySizes[certMeta.keySize]++;
@@ -927,7 +927,7 @@ bool processMasterListFile(
                 enhancedStats->certificateTypes[logCertType]++;
                 if (!isDuplicate) {
                     enhancedStats->validCount++;
-                    enhancedStats->validationReasons["VALID"]++;
+                    common::safeIncrementMap(enhancedStats->validationReasons, "VALID");
                 } else {
                     enhancedStats->duplicateCount++;
                 }
@@ -949,7 +949,7 @@ bool processMasterListFile(
                 // Signature algorithm and key size distribution
                 common::CertificateMetadata certMeta = common::extractCertificateMetadataForProgress(cert, false);
                 if (!certMeta.signatureAlgorithm.empty()) {
-                    enhancedStats->signatureAlgorithms[certMeta.signatureAlgorithm]++;
+                    common::safeIncrementMap(enhancedStats->signatureAlgorithms, certMeta.signatureAlgorithm, 50);
                 }
                 if (certMeta.keySize > 0) {
                     enhancedStats->keySizes[certMeta.keySize]++;

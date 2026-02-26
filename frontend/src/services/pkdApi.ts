@@ -62,10 +62,10 @@ export const healthApi = {
   check: () => pkdApi.get<HealthStatus>('/health'),
 
   /**
-   * Check PostgreSQL database connection
-   * @returns Database status and version
+   * Check database connection (PostgreSQL or Oracle)
+   * @returns Database status, version, type, and response time
    */
-  checkDatabase: () => pkdApi.get<{ status: string; version?: string }>('/health/database'),
+  checkDatabase: () => pkdApi.get<{ status: string; version?: string; type?: string; responseTimeMs?: number }>('/health/database'),
 
   /**
    * Check LDAP connection

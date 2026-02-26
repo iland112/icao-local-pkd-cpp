@@ -275,6 +275,22 @@ struct ValidationStatistics {
 };
 
 /**
+ * @brief Safely increment a bounded map counter (DoS defense)
+ *
+ * Increments existing key or adds new key only if map size < maxSize.
+ * Prevents unbounded map growth from malformed input data.
+ */
+inline void safeIncrementMap(std::map<std::string, int>& m, const std::string& key, size_t maxSize = 100) {
+    auto it = m.find(key);
+    if (it != m.end()) {
+        it->second++;  // Existing key: always increment
+    } else if (m.size() < maxSize) {
+        m[key] = 1;    // New key: only add if under limit
+    }
+    // else: silently ignore new keys beyond limit
+}
+
+/**
  * @brief Add a processing error to statistics
  *
  * Thread-safe note: Only called from the sequential processing loop,
@@ -402,6 +418,7 @@ private:
     std::mutex mutex_;
     std::map<std::string, ProcessingProgress> progressCache_;
     std::map<std::string, std::function<void(const std::string&)>> sseCallbacks_;
+    int sendProgressCallCount_ = 0;  // Auto-cleanup trigger counter
 
     // Private constructor for singleton
     ProgressManager() = default;
@@ -459,6 +476,16 @@ public:
      * @param uploadId Upload UUID
      */
     void clearProgress(const std::string& uploadId);
+
+    /**
+     * @brief Remove stale entries from progress cache
+     *
+     * Evicts entries older than maxAge from both progressCache_ and sseCallbacks_.
+     * Called automatically by sendProgress() every 100 calls.
+     *
+     * @param maxAgeMinutes Maximum age in minutes before eviction (default: 30)
+     */
+    void cleanupStaleEntries(int maxAgeMinutes = 30);
 };
 
 /// @name ICAO 9303 Compliance Checker

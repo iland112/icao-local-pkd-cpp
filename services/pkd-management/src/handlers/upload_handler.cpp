@@ -160,6 +160,7 @@ namespace handlers {
 // Static member definitions
 std::mutex UploadHandler::s_processingMutex;
 std::set<std::string> UploadHandler::s_processingUploads;
+std::atomic<int> UploadHandler::s_activeProcessingCount{0};
 
 // =============================================================================
 // Constructor
@@ -333,6 +334,10 @@ LDAP* UploadHandler::getLdapWriteConnection() {
     // Direct connection, no referral chasing needed
     ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
+    // DoS defense: network timeout to prevent blocking on unresponsive LDAP
+    struct timeval ldapTimeout = {10, 0};  // 10 seconds
+    ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
+
     struct berval cred;
     cred.bv_val = const_cast<char*>(ldapConfig_.bindPassword.c_str());
     cred.bv_len = ldapConfig_.bindPassword.length();
@@ -363,11 +368,29 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         s_processingUploads.insert(uploadId);
     }
 
+    // DoS defense: limit concurrent processing threads
+    if (s_activeProcessingCount.load() >= MAX_CONCURRENT_PROCESSING) {
+        spdlog::warn("[processLdifFileAsync] Concurrent processing limit reached ({}/{}), rejecting upload {}",
+            s_activeProcessingCount.load(), MAX_CONCURRENT_PROCESSING, uploadId);
+        g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
+            "Server busy - too many concurrent uploads. Please retry later.");
+        ProgressManager::getInstance().sendProgress(
+            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                0, 0, "서버 과부하", "동시 업로드 처리 한도 초과. 잠시 후 다시 시도해주세요."));
+        {
+            std::lock_guard<std::mutex> lock(s_processingMutex);
+            s_processingUploads.erase(uploadId);
+        }
+        return;
+    }
+    s_activeProcessingCount.fetch_add(1);
+
     std::thread([uploadId, content]() {
         // Ensure cleanup on thread exit
         auto cleanupGuard = [&uploadId]() {
             std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
             UploadHandler::s_processingUploads.erase(uploadId);
+            UploadHandler::s_activeProcessingCount.fetch_sub(1);
         };
 
         spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
@@ -465,6 +488,9 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         }
         // Note: No PGconn cleanup needed - Strategy Pattern uses Repository with connection pool
 
+        // Clear progress cache after processing completes (DoS defense: prevent unbounded growth)
+        ProgressManager::getInstance().clearProgress(uploadId);
+
         // Remove from processing set
         cleanupGuard();
     }).detach();
@@ -485,6 +511,23 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         s_processingUploads.insert(uploadId);
     }
 
+    // DoS defense: limit concurrent processing threads
+    if (s_activeProcessingCount.load() >= MAX_CONCURRENT_PROCESSING) {
+        spdlog::warn("[processMasterListFileAsync] Concurrent processing limit reached ({}/{}), rejecting upload {}",
+            s_activeProcessingCount.load(), MAX_CONCURRENT_PROCESSING, uploadId);
+        g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
+            "Server busy - too many concurrent uploads. Please retry later.");
+        ProgressManager::getInstance().sendProgress(
+            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                0, 0, "서버 과부하", "동시 업로드 처리 한도 초과. 잠시 후 다시 시도해주세요."));
+        {
+            std::lock_guard<std::mutex> lock(s_processingMutex);
+            s_processingUploads.erase(uploadId);
+        }
+        return;
+    }
+    s_activeProcessingCount.fetch_add(1);
+
     // Capture trustAnchorPath for use in detached thread
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
 
@@ -493,6 +536,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         auto cleanupGuard = [&uploadId]() {
             std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
             UploadHandler::s_processingUploads.erase(uploadId);
+            UploadHandler::s_activeProcessingCount.fetch_sub(1);
         };
 
         spdlog::info("Starting async Master List processing for upload: {}", uploadId);
@@ -1115,6 +1159,9 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             ldap_unbind_ext_s(ld, nullptr, nullptr);
         }
 
+        // Clear progress cache after processing completes (DoS defense: prevent unbounded growth)
+        ProgressManager::getInstance().clearProgress(uploadId);
+
         // Remove from processing set
         cleanupGuard();
     }).detach();
@@ -1590,6 +1637,20 @@ void UploadHandler::handleUploadLdif(
         auto& file = files[0];
         std::string originalFileName = file.getFileName();
 
+        // DoS defense: validate file size BEFORE reading into memory
+        int64_t rawFileSize = static_cast<int64_t>(file.fileLength());
+        if (rawFileSize > MAX_LDIF_FILE_SIZE) {
+            Json::Value error;
+            error["success"] = false;
+            error["message"] = "File too large. Maximum size is 100MB for LDIF files.";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k413RequestEntityTooLarge);
+            callback(resp);
+            spdlog::warn("LDIF file rejected: {} ({} bytes exceeds {}MB limit)",
+                originalFileName, rawFileSize, MAX_LDIF_FILE_SIZE / (1024 * 1024));
+            return;
+        }
+
         // Sanitize filename to prevent path traversal attacks
         std::string fileName;
         try {
@@ -1817,6 +1878,20 @@ void UploadHandler::handleUploadMasterList(
 
         auto& file = files[0];
         std::string originalFileName = file.getFileName();
+
+        // DoS defense: validate file size BEFORE reading into memory
+        int64_t rawFileSize = static_cast<int64_t>(file.fileLength());
+        if (rawFileSize > MAX_ML_FILE_SIZE) {
+            Json::Value error;
+            error["success"] = false;
+            error["message"] = "File too large. Maximum size is 30MB for Master List files.";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k413RequestEntityTooLarge);
+            callback(resp);
+            spdlog::warn("Master List file rejected: {} ({} bytes exceeds {}MB limit)",
+                originalFileName, rawFileSize, MAX_ML_FILE_SIZE / (1024 * 1024));
+            return;
+        }
 
         // Sanitize filename to prevent path traversal attacks
         std::string fileName;

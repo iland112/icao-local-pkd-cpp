@@ -1,11 +1,37 @@
 import { useState, useEffect } from 'react';
-import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, CheckCircle2, XCircle, Clock, RefreshCw, Loader2, Gauge } from 'lucide-react';
+import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, CheckCircle2, XCircle, Clock, RefreshCw, Loader2, Gauge, Database, Globe } from 'lucide-react';
 import { monitoringServiceApi, type SystemMetrics, type ServiceHealth } from '@/services/monitoringApi';
+import { healthApi } from '@/services/pkdApi';
 import { cn } from '@/utils/cn';
+
+interface InfraHealth {
+  name: string;
+  status: 'UP' | 'DOWN';
+  responseTimeMs: number;
+  version?: string;
+  type?: string;
+  errorMessage?: string;
+}
+
+const SERVICE_DEFS = [
+  { name: 'PKD Management', url: '/api/health', port: 8081, desc: '업로드, 인증서 관리, 인증' },
+  { name: 'PA Service', url: '/api/pa/health', port: 8082, desc: '여권 Passive Authentication' },
+  { name: 'PKD Relay', url: '/api/sync/health', port: 8083, desc: 'DB-LDAP 동기화' },
+  { name: 'Monitoring', url: '/api/monitoring/health', port: 8084, desc: '시스템 메트릭 수집' },
+  { name: 'AI Analysis', url: '/api/ai/health', port: 8085, desc: 'ML 이상 탐지 분석' },
+];
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
 
 export default function MonitoringDashboard() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [services, setServices] = useState<ServiceHealth[]>([]);
+  const [infraHealth, setInfraHealth] = useState<InfraHealth[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -14,19 +40,17 @@ export default function MonitoringDashboard() {
     const startTime = Date.now();
     try {
       await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5000) });
-      const responseTime = Date.now() - startTime;
       return {
         serviceName: name,
         status: 'UP',
-        responseTimeMs: responseTime,
+        responseTimeMs: Date.now() - startTime,
         checkedAt: new Date().toISOString(),
       };
     } catch (err) {
-      const responseTime = Date.now() - startTime;
       return {
         serviceName: name,
         status: 'DOWN',
-        responseTimeMs: responseTime,
+        responseTimeMs: Date.now() - startTime,
         errorMessage: err instanceof Error ? err.message : 'Connection failed',
         checkedAt: new Date().toISOString(),
       };
@@ -41,16 +65,42 @@ export default function MonitoringDashboard() {
       const metricsResponse = await monitoringServiceApi.getSystemOverview();
       setMetrics(metricsResponse.data as any);
 
-      // Fetch services health - Direct client-side health checks
-      const serviceChecks = [
-        checkServiceHealth('PKD Management', '/api/health'),
-        checkServiceHealth('PA Service', '/api/pa/health'),
-        checkServiceHealth('Sync Service', '/api/sync/health'),
-      ];
+      // Health checks — all 5 services
+      const serviceResults = await Promise.all(
+        SERVICE_DEFS.map(s => checkServiceHealth(s.name, s.url))
+      );
+      setServices(serviceResults);
 
-      const healthResults = await Promise.all(serviceChecks);
-      setServices(healthResults);
+      // Infrastructure health (Database + LDAP)
+      const infra: InfraHealth[] = [];
 
+      try {
+        const startDb = Date.now();
+        const dbRes = await healthApi.checkDatabase();
+        infra.push({
+          name: dbRes.data.type || 'Database',
+          status: dbRes.data.status === 'UP' ? 'UP' : 'DOWN',
+          responseTimeMs: dbRes.data.responseTimeMs ?? (Date.now() - startDb),
+          version: dbRes.data.version,
+          type: dbRes.data.type,
+        });
+      } catch {
+        infra.push({ name: 'Database', status: 'DOWN', responseTimeMs: 0, errorMessage: 'Connection failed' });
+      }
+
+      try {
+        const startLdap = Date.now();
+        const ldapRes = await healthApi.checkLdap();
+        infra.push({
+          name: 'LDAP',
+          status: ldapRes.data.status === 'UP' ? 'UP' : 'DOWN',
+          responseTimeMs: (ldapRes.data as any).responseTimeMs ?? ldapRes.data.responseTime ?? (Date.now() - startLdap),
+        });
+      } catch {
+        infra.push({ name: 'LDAP', status: 'DOWN', responseTimeMs: 0, errorMessage: 'Connection failed' });
+      }
+
+      setInfraHealth(infra);
       setLastUpdate(new Date());
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to fetch monitoring data:', err);
@@ -62,11 +112,14 @@ export default function MonitoringDashboard() {
 
   useEffect(() => {
     fetchData();
-
-    // Auto-refresh every 10 seconds
     const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  const upCount = services.filter(s => s.status === 'UP').length;
+  const totalCount = services.length;
+  const infraUp = infraHealth.filter(i => i.status === 'UP').length;
+  const allHealthy = upCount === totalCount && infraUp === infraHealth.length;
 
   return (
     <div className="w-full px-4 lg:px-6 py-4">
@@ -82,7 +135,6 @@ export default function MonitoringDashboard() {
               실시간 시스템 리소스 및 서비스 상태를 모니터링합니다.
             </p>
           </div>
-          {/* Quick Actions */}
           <div className="flex gap-2 items-center">
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mr-2">
               <Clock className="w-4 h-4" />
@@ -119,9 +171,38 @@ export default function MonitoringDashboard() {
         </div>
       ) : (
         <>
+          {/* Overall Status Summary */}
+          <div className={cn(
+            'flex items-center gap-4 px-4 py-3 rounded-xl mb-6 border',
+            allHealthy
+              ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+              : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+          )}>
+            {allHealthy ? (
+              <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+            ) : (
+              <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+            )}
+            <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
+              <span className={cn(
+                'font-medium',
+                upCount === totalCount ? 'text-green-700 dark:text-green-300' : 'text-amber-700 dark:text-amber-300'
+              )}>
+                서비스 {upCount}/{totalCount} 정상
+              </span>
+              {infraHealth.map(ih => (
+                <span key={ih.name} className={cn(
+                  'font-medium',
+                  ih.status === 'UP' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                )}>
+                  {ih.name} {ih.status === 'UP' ? '정상' : '중단'}
+                </span>
+              ))}
+            </div>
+          </div>
+
           {/* System Metrics Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            {/* CPU Card */}
             <MetricCard
               title="CPU"
               icon={<Cpu className="w-6 h-6 text-blue-500" />}
@@ -134,48 +215,86 @@ export default function MonitoringDashboard() {
               ]}
               percentage={metrics.cpu.usagePercent}
             />
-
-            {/* Memory Card */}
             <MetricCard
               title="메모리"
               icon={<MemoryStick className="w-6 h-6 text-green-500" />}
               value={metrics.memory.usagePercent.toFixed(1)}
               unit="%"
               details={[
-                { label: 'Total', value: `${metrics.memory.totalMb.toLocaleString()} MB` },
-                { label: 'Used', value: `${metrics.memory.usedMb.toLocaleString()} MB` },
-                { label: 'Free', value: `${metrics.memory.freeMb.toLocaleString()} MB` },
+                { label: '전체', value: `${metrics.memory.totalMb.toLocaleString()} MB` },
+                { label: '사용', value: `${metrics.memory.usedMb.toLocaleString()} MB` },
+                { label: '여유', value: `${metrics.memory.freeMb.toLocaleString()} MB` },
               ]}
               percentage={metrics.memory.usagePercent}
             />
-
-            {/* Disk Card */}
             <MetricCard
               title="디스크"
               icon={<HardDrive className="w-6 h-6 text-purple-500" />}
               value={metrics.disk.usagePercent.toFixed(1)}
               unit="%"
               details={[
-                { label: 'Total', value: `${metrics.disk.totalGb.toFixed(0)} GB` },
-                { label: 'Used', value: `${metrics.disk.usedGb.toFixed(0)} GB` },
-                { label: 'Free', value: `${metrics.disk.freeGb.toFixed(0)} GB` },
+                { label: '전체', value: `${metrics.disk.totalGb.toFixed(0)} GB` },
+                { label: '사용', value: `${metrics.disk.usedGb.toFixed(0)} GB` },
+                { label: '여유', value: `${metrics.disk.freeGb.toFixed(0)} GB` },
               ]}
               percentage={metrics.disk.usagePercent}
             />
-
-            {/* Network Card */}
             <MetricCard
-              title="네트워크"
+              title="네트워크 I/O"
               icon={<Network className="w-6 h-6 text-orange-500" />}
-              value={(metrics.network.bytesSent / 1024 / 1024 / 1024).toFixed(2)}
-              unit="GB Sent"
+              value={formatBytes(metrics.network.bytesSent + metrics.network.bytesRecv)}
+              unit=""
               details={[
-                { label: 'Sent', value: `${(metrics.network.bytesSent / 1024 / 1024 / 1024).toFixed(2)} GB` },
-                { label: 'Recv', value: `${(metrics.network.bytesRecv / 1024 / 1024 / 1024).toFixed(2)} GB` },
-                { label: 'Packets', value: `${((metrics.network.packetsSent + metrics.network.packetsRecv) / 1000).toFixed(0)}K` },
+                { label: '송신', value: formatBytes(metrics.network.bytesSent) },
+                { label: '수신', value: formatBytes(metrics.network.bytesRecv) },
+                { label: '패킷', value: `${((metrics.network.packetsSent + metrics.network.packetsRecv) / 1000).toFixed(0)}K` },
               ]}
               percentage={null}
             />
+          </div>
+
+          {/* Infrastructure Health */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {infraHealth.map(ih => (
+              <div key={ih.name} className={cn(
+                'border rounded-xl p-4 transition-all duration-200',
+                ih.status === 'UP'
+                  ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
+                  : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+              )}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {ih.name === 'LDAP' ? (
+                      <Globe className="w-5 h-5 text-blue-500" />
+                    ) : (
+                      <Database className="w-5 h-5 text-indigo-500" />
+                    )}
+                    <div>
+                      <h4 className="font-semibold text-gray-800 dark:text-white">{ih.name}</h4>
+                      {ih.version && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{ih.version}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">{ih.responseTimeMs}ms</span>
+                    <span className={cn(
+                      'px-2 py-1 rounded text-xs font-medium',
+                      ih.status === 'UP'
+                        ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300'
+                        : 'bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300'
+                    )}>
+                      {ih.status}
+                    </span>
+                  </div>
+                </div>
+                {ih.errorMessage && (
+                  <div className="mt-2 p-2 bg-white dark:bg-gray-900/40 rounded text-xs text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                    {ih.errorMessage}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Service Health Status */}
@@ -183,6 +302,7 @@ export default function MonitoringDashboard() {
             <div className="flex items-center gap-2 mb-4">
               <Server className="w-5 h-5 text-gray-700 dark:text-gray-300" />
               <h2 className="text-lg font-semibold text-gray-800 dark:text-white">서비스 상태</h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">{upCount}/{totalCount} 정상</span>
             </div>
 
             {services.length === 0 ? (
@@ -191,10 +311,13 @@ export default function MonitoringDashboard() {
                 <p>서비스 상태를 확인하는 중...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {services.map((service) => (
-                  <ServiceCard key={service.serviceName} service={service} />
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {services.map((service) => {
+                  const def = SERVICE_DEFS.find(d => d.name === service.serviceName);
+                  return (
+                    <ServiceCard key={service.serviceName} service={service} port={def?.port} description={def?.desc} />
+                  );
+                })}
               </div>
             )}
           </div>
@@ -239,7 +362,7 @@ function MetricCard({ title, icon, value, unit, details, percentage }: MetricCar
       <div className="mb-3">
         <div className="flex items-baseline gap-1">
           <span className="text-3xl font-bold text-gray-900 dark:text-white">{value}</span>
-          <span className="text-sm text-gray-600 dark:text-gray-400">{unit}</span>
+          {unit && <span className="text-sm text-gray-600 dark:text-gray-400">{unit}</span>}
         </div>
       </div>
 
@@ -269,9 +392,11 @@ function MetricCard({ title, icon, value, unit, details, percentage }: MetricCar
 // Service Card Component
 interface ServiceCardProps {
   service: ServiceHealth;
+  port?: number;
+  description?: string;
 }
 
-function ServiceCard({ service }: ServiceCardProps) {
+function ServiceCard({ service, port, description }: ServiceCardProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'UP':
@@ -313,15 +438,23 @@ function ServiceCard({ service }: ServiceCardProps) {
 
   return (
     <div className={`border rounded-xl p-4 transition-all duration-200 ${getStatusColor(service.status)}`}>
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           {getStatusIcon(service.status)}
-          <h4 className="font-semibold text-gray-800 dark:text-white">{service.serviceName}</h4>
+          <div>
+            <h4 className="font-semibold text-gray-800 dark:text-white">{service.serviceName}</h4>
+          </div>
         </div>
         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(service.status)}`}>
           {service.status}
         </span>
       </div>
+
+      {(description || port) && (
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+          {description}{port ? ` (:${port})` : ''}
+        </p>
+      )}
 
       <div className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
         <div className="flex justify-between">

@@ -114,6 +114,7 @@ export function UploadDashboard() {
     if (reason.includes('CSCA not found')) return 'CSCA 미등록';
     if (reason.includes('not yet valid')) return '유효기간 미도래';
     if (reason.includes('certificates expired')) return '인증서 만료 (서명 유효)';
+    if (reason === 'Trust chain validation failed') return 'Trust Chain 검증 실패';
     return reason;
   };
 
@@ -874,7 +875,7 @@ export function UploadDashboard() {
                     </div>
                     <p className="text-2xl font-bold text-green-800 dark:text-green-200">{(stats.validation?.trustChainValidCount ?? 0).toLocaleString()}</p>
                     {(stats.validation?.expiredValidCount ?? 0) > 0 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">만료-유효: {stats.validation!.expiredValidCount.toLocaleString()}</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">만료(서명유효): {stats.validation!.expiredValidCount.toLocaleString()}</p>
                     )}
                   </div>
                   <div className="p-4 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
@@ -882,8 +883,8 @@ export function UploadDashboard() {
                       <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
                       <span className="text-sm font-medium text-red-700 dark:text-red-300">검증 실패</span>
                     </div>
-                    <p className="text-2xl font-bold text-red-800 dark:text-red-200">{(stats.validation?.trustChainInvalidCount ?? 0).toLocaleString()}</p>
-                    {(stats.validation?.trustChainInvalidCount ?? 0) > 0 && (
+                    <p className="text-2xl font-bold text-red-800 dark:text-red-200">{(stats.validation?.invalidCount ?? 0).toLocaleString()}</p>
+                    {(stats.validation?.invalidCount ?? 0) > 0 && (
                       <button onClick={() => openDetailDialog('INVALID')} className="text-xs text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 underline mt-1">
                         상세 내용
                       </button>
@@ -1010,6 +1011,7 @@ export function UploadDashboard() {
                   if (reason === 'CSCA 미등록') return '해당 국가 CSCA가 DB에 없어 검증 수행 불가';
                   if (reason === '유효기간 미도래') return '인증서 유효기간이 아직 시작되지 않음';
                   if (reason === '인증서 만료 (서명 유효)') return '유효기간은 경과했으나 서명 검증은 성공';
+                  if (reason === 'Trust Chain 검증 실패') return 'CSCA는 존재하나 서명 또는 유효기간 검증 실패';
                   return '';
                 };
                 const isInvalid = reasonDialogOpen === 'INVALID';

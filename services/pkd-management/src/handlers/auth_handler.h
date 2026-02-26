@@ -213,10 +213,15 @@ private:
 
     /**
      * @brief Check if request is from admin user
-     * @return JwtClaims if admin, std::nullopt otherwise
+     *
+     * Sends 401 if token is missing/expired, 403 if not admin.
+     * Caller should return immediately when nullopt is returned.
+     *
+     * @return JwtClaims if admin, std::nullopt otherwise (response already sent)
      */
     std::optional<auth::JwtClaims> requireAdmin(
-        const drogon::HttpRequestPtr& req);
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>& callback);
 
     /// @}
 

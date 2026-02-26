@@ -125,17 +125,8 @@ void ApiClientHandler::handleCreate(
     std::function<void(const HttpResponsePtr&)>&& callback) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         auto body = req->getJsonObject();
         if (!body || !(*body).isMember("client_name")) {
@@ -236,16 +227,8 @@ void ApiClientHandler::handleGetAll(
     std::function<void(const HttpResponsePtr&)>&& callback) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         int limit = 100, offset = 0;
         auto limitParam = req->getParameter("limit");
@@ -291,16 +274,8 @@ void ApiClientHandler::handleGetById(
     const std::string& id) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         auto client = repository_->findById(id);
         if (!client) {
@@ -340,16 +315,8 @@ void ApiClientHandler::handleUpdate(
     const std::string& id) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         auto existing = repository_->findById(id);
         if (!existing) {
@@ -429,16 +396,8 @@ void ApiClientHandler::handleDelete(
     const std::string& id) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         bool deactivated = repository_->deactivate(id);
 
@@ -470,16 +429,8 @@ void ApiClientHandler::handleRegenerate(
     const std::string& id) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         auto existing = repository_->findById(id);
         if (!existing) {
@@ -529,16 +480,8 @@ void ApiClientHandler::handleGetUsage(
     const std::string& id) {
 
     try {
-        auto admin = requireAdmin(req);
-        if (!admin) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            auto response = HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto admin = requireAdmin(req, callback);
+        if (!admin) return;
 
         int days = 7;
         auto daysParam = req->getParameter("days");
@@ -584,10 +527,30 @@ std::optional<auth::JwtClaims> ApiClientHandler::validateRequestToken(
 }
 
 std::optional<auth::JwtClaims> ApiClientHandler::requireAdmin(
-    const drogon::HttpRequestPtr& req) {
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>& callback) {
 
     auto claims = validateRequestToken(req);
-    if (!claims || !claims->isAdmin) {
+    if (!claims) {
+        // Token missing or expired → 401
+        Json::Value resp;
+        resp["success"] = false;
+        resp["error"] = "Unauthorized";
+        resp["message"] = "Invalid or missing authentication token";
+        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+        response->setStatusCode(drogon::k401Unauthorized);
+        callback(response);
+        return std::nullopt;
+    }
+    if (!claims->isAdmin) {
+        // Not admin → 403
+        Json::Value resp;
+        resp["success"] = false;
+        resp["error"] = "Forbidden";
+        resp["message"] = "Admin privileges required";
+        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+        response->setStatusCode(drogon::k403Forbidden);
+        callback(response);
         return std::nullopt;
     }
     return claims;

@@ -37,6 +37,10 @@ LDAP* LdapStorageService::getLdapWriteConnection() {
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
     ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
+    // DoS defense: network timeout to prevent blocking on unresponsive LDAP
+    struct timeval ldapTimeout = {10, 0};  // 10 seconds
+    ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
+
     struct berval cred;
     cred.bv_val = const_cast<char*>(config_.ldapBindPassword.c_str());
     cred.bv_len = config_.ldapBindPassword.length();
@@ -74,6 +78,10 @@ LDAP* LdapStorageService::getLdapReadConnection() {
     int version = LDAP_VERSION3;
     ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
     ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
+
+    // DoS defense: network timeout to prevent blocking on unresponsive LDAP
+    struct timeval ldapTimeout = {10, 0};  // 10 seconds
+    ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
 
     struct berval cred;
     cred.bv_val = const_cast<char*>(config_.ldapBindPassword.c_str());

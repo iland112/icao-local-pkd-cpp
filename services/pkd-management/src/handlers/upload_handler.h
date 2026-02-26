@@ -26,6 +26,7 @@
 #include <vector>
 #include <mutex>
 #include <set>
+#include <atomic>
 
 // Forward declaration for OpenLDAP type
 typedef struct ldap LDAP;
@@ -146,6 +147,14 @@ private:
     // --- Static processing state (shared across instances) ---
     static std::mutex s_processingMutex;
     static std::set<std::string> s_processingUploads;
+
+    // --- DoS defense: concurrent processing limit ---
+    static std::atomic<int> s_activeProcessingCount;
+    static constexpr int MAX_CONCURRENT_PROCESSING = 3;
+
+    // --- DoS defense: file size limits ---
+    static constexpr int64_t MAX_LDIF_FILE_SIZE = 100LL * 1024 * 1024;   // 100MB
+    static constexpr int64_t MAX_ML_FILE_SIZE   =  30LL * 1024 * 1024;   // 30MB
 
     // --- Handler methods ---
 

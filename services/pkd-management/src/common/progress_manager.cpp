@@ -507,9 +507,39 @@ ProgressManager& ProgressManager::getInstance() {
     return instance;
 }
 
+void ProgressManager::cleanupStaleEntries(int maxAgeMinutes) {
+    // Called under mutex_ lock by sendProgress()
+    auto now = std::chrono::system_clock::now();
+    auto maxAge = std::chrono::minutes(maxAgeMinutes);
+
+    std::vector<std::string> staleIds;
+    for (const auto& [id, progress] : progressCache_) {
+        if ((now - progress.updatedAt) > maxAge) {
+            staleIds.push_back(id);
+        }
+    }
+
+    for (const auto& id : staleIds) {
+        progressCache_.erase(id);
+        sseCallbacks_.erase(id);
+        spdlog::info("[ProgressManager] Cleaned up stale entry: {}", id.substr(0, 8));
+    }
+
+    if (!staleIds.empty()) {
+        spdlog::info("[ProgressManager] Cleaned up {} stale entries (cache size: {}, callbacks: {})",
+            staleIds.size(), progressCache_.size(), sseCallbacks_.size());
+    }
+}
+
 void ProgressManager::sendProgress(const ProcessingProgress& progress) {
     std::lock_guard<std::mutex> lock(mutex_);
     progressCache_[progress.uploadId] = progress;
+
+    // Periodic stale entry cleanup (every 100 calls)
+    if (++sendProgressCallCount_ >= 100) {
+        sendProgressCallCount_ = 0;
+        cleanupStaleEntries();
+    }
 
     // Send to SSE callback if registered
     auto it = sseCallbacks_.find(progress.uploadId);

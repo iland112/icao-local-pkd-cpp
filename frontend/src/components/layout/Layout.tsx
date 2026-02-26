@@ -16,7 +16,7 @@ export function Layout() {
       {/* Main Content Wrapper */}
       <div
         className={cn(
-          'transition-all duration-300',
+          'flex flex-col min-h-screen transition-all duration-300',
           expanded ? 'lg:ps-64' : 'lg:ps-[70px]'
         )}
       >
@@ -24,7 +24,7 @@ export function Layout() {
         <Header />
 
         {/* Main Content */}
-        <main className="min-h-[calc(100vh-8rem)]">
+        <main className="flex-1">
           <Outlet />
         </main>
 

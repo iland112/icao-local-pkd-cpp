@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.22.1
-**Last Updated**: 2026-02-25
+**Current Version**: v2.23.0
+**Last Updated**: 2026-02-26
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -346,6 +346,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 | Component | Purpose |
 |-----------|---------|
+| AdminRoute | Admin-only route guard (role-based access control) |
 | ErrorBoundary | Global error boundary with recovery UI |
 | TreeViewer | Reusable tree visualization (react-arborist) |
 | CountryStatisticsDialog | Country-level certificate breakdown |
@@ -570,6 +571,24 @@ scripts/
 ---
 
 ## Version History
+
+### v2.23.0 (2026-02-26) - DoS 방어 보강 + 대시보드 통계 수정 + Admin 권한 UI
+- **Security — DoS 방어**: LDIF 업로드 파일 크기 제한 (100MB), Master List 업로드 파일 크기 제한 (30MB), 크기 초과 시 HTTP 413 반환
+- **Security — 동시 처리 제한**: `std::atomic<int> s_activeProcessingCount` 기반 최대 3개 동시 업로드 처리, 초과 시 HTTP 503 + Retry-After 반환
+- **Security — LDAP 타임아웃**: LDAP 쓰기 연결에 `LDAP_OPT_NETWORK_TIMEOUT` (10초) 설정 (upload_handler, ldap_storage_service)
+- **Security — 캐시 만료**: ProgressManager `cleanupStaleEntries()` — 30분 이상 미갱신 항목 자동 정리 (progressCache_ + sseCallbacks_)
+- **Security — 분포 map 제한**: `safeIncrementMap()` 헬퍼 — validationReasons/signatureAlgorithms/complianceViolations map 최대 크기 제한 (100/50/100)
+- **Security — nginx per-IP**: `limit_conn_zone` + `limit_conn conn_limit 20` (api-gateway.conf, api-gateway-ssl.conf, api-gateway-luckfox.conf)
+- **Bug fix**: 업로드 대시보드 "검증 실패" 카드 — `trustChainInvalidCount`(15,005) → `invalidCount`(1)로 변경, PENDING(CSCA 미발견) 15,004건과의 중복 계수 제거
+- **Bug fix**: 검증 사유 breakdown 쿼리 — `trust_chain_message IS NOT NULL` 필터 제거 + COALESCE 폴백 메시지 (`csca_found` 기반 분기)
+- **Bug fix**: PA 검증 이력 상태 카드 — 현재 페이지(5건) 기반 카운트 → `/pa/statistics` API 전체 카운트로 변경 (페이지 변경 시 수량 고정)
+- **Bug fix**: "만료-유효" → "만료(서명유효)" 라벨 변경 (UploadDashboard, ValidationSummaryPanel)
+- **Frontend**: `AdminRoute` 컴포넌트 — admin 전용 라우트 가드 (UserManagement, ApiClient, AuditLog, OperationAuditLog)
+- **Frontend**: Sidebar 권한 기반 메뉴 표시 (`adminOnly`, `permission` 필드), compact 리팩토링
+- **Frontend**: Header 리디자인, Profile 페이지 확장, MonitoringDashboard 개선, UserManagement UI 개선
+- **Backend**: API Client/Auth handler 리팩토링, User repository 권한 관련 변경
+- Documentation: EULA.md, LICENSE_COMPLIANCE.md 추가
+- 29 files changed (5 new, 24 modified)
 
 ### v2.22.1 (2026-02-25) - PA auth_request Backward Compatibility Fix + UsageDialog UX
 - **CRITICAL FIX**: 미등록/유효하지 않은 API Key로 PA 엔드포인트 호출 시 401 대신 200 반환 — 기존 외부 클라이언트(Java Apache-HttpClient 등)가 미등록 X-API-Key 헤더를 전송해도 PA 서비스 정상 이용 가능

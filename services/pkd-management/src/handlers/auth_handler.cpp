@@ -586,10 +586,19 @@ std::optional<auth::JwtClaims> AuthHandler::validateRequestToken(
 
 
 std::optional<auth::JwtClaims> AuthHandler::requireAdmin(
-    const drogon::HttpRequestPtr& req) {
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>& callback) {
 
     auto claims = validateRequestToken(req);
     if (!claims) {
+        // Token missing or expired → 401
+        Json::Value resp;
+        resp["success"] = false;
+        resp["error"] = "Unauthorized";
+        resp["message"] = "Invalid or missing authentication token";
+        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+        response->setStatusCode(drogon::k401Unauthorized);
+        callback(response);
         return std::nullopt;
     }
 
@@ -597,6 +606,13 @@ std::optional<auth::JwtClaims> AuthHandler::requireAdmin(
     if (!claims->isAdmin) {
         spdlog::warn("[AuthHandler] Non-admin user {} attempted admin operation",
                      claims->username);
+        Json::Value resp;
+        resp["success"] = false;
+        resp["error"] = "Forbidden";
+        resp["message"] = "Admin privileges required";
+        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
+        response->setStatusCode(drogon::k403Forbidden);
+        callback(response);
         return std::nullopt;
     }
 
@@ -611,17 +627,8 @@ void AuthHandler::handleListUsers(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Parse query parameters
         auto params = req->getParameters();
@@ -676,17 +683,8 @@ void AuthHandler::handleGetUser(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Use repository to find user
         auto userOpt = userRepository_->findById(userId);
@@ -765,17 +763,8 @@ void AuthHandler::handleCreateUser(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Parse request body
         auto json = req->getJsonObject();
@@ -905,17 +894,8 @@ void AuthHandler::handleUpdateUser(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Parse request body
         auto json = req->getJsonObject();
@@ -1050,17 +1030,8 @@ void AuthHandler::handleDeleteUser(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Prevent self-deletion
         if (userId == adminClaims->userId) {
@@ -1254,17 +1225,8 @@ void AuthHandler::handleGetAuditLog(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Parse query parameters
         auto params = req->getParameters();
@@ -1335,17 +1297,8 @@ void AuthHandler::handleGetAuditStats(
 
     try {
         // Require admin privileges
-        auto adminClaims = requireAdmin(req);
-        if (!adminClaims) {
-            Json::Value resp;
-            resp["success"] = false;
-            resp["error"] = "Forbidden";
-            resp["message"] = "Admin privileges required";
-            auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-            response->setStatusCode(drogon::k403Forbidden);
-            callback(response);
-            return;
-        }
+        auto adminClaims = requireAdmin(req, callback);
+        if (!adminClaims) return;
 
         // Get statistics via repository
         Json::Value stats = authAuditRepository_->getStatistics();
