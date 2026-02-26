@@ -24,12 +24,19 @@ export function Layout() {
         <Header />
 
         {/* Main Content */}
-        <main className="flex-1">
+        <main className="flex-1 pb-10">
           <Outlet />
         </main>
 
-        {/* Footer */}
-        <Footer />
+        {/* Footer - fixed to bottom */}
+        <div className="fixed bottom-0 right-0 left-0 z-30">
+          <div className={cn(
+            'transition-all duration-300',
+            expanded ? 'lg:ps-64' : 'lg:ps-[70px]'
+          )}>
+            <Footer />
+          </div>
+        </div>
       </div>
     </div>
   );
