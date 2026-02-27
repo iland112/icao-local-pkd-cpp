@@ -55,8 +55,11 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
             generatedId = std::to_string(getInt(result[0], "id", 0));
         }
 
-        // Step 2: Insert with generated UUID and current timestamp (no RETURNING clause)
-        const char* query =
+        // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
+        std::string tsFunc = common::db::currentTimestamp(dbType);
+        std::string jsonCast = (dbType == "oracle") ? "" : "::jsonb";
+
+        std::string query =
             "INSERT INTO sync_status ("
             "id, checked_at, "
             "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
@@ -65,11 +68,11 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
             "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms, "
             "db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy"
             ") VALUES ("
-            "$1, NOW(), "
+            "$1, " + tsFunc + ", "
             "$2, $3, $4, $5, $6, "
             "$7, $8, $9, $10, $11, "
             "$12, $13, $14, $15, $16, "
-            "$17::jsonb, $18::jsonb, $19, $20, $21, "
+            "$17" + jsonCast + ", $18" + jsonCast + ", $19, $20, $21, "
             "$22, $23, $24"
             ")";
 
@@ -145,7 +148,8 @@ bool SyncStatusRepository::create(domain::SyncStatus& syncStatus) {
 
 std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
             "SELECT id, checked_at, "
             "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
             "ldap_csca_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
@@ -153,8 +157,8 @@ std::optional<domain::SyncStatus> SyncStatusRepository::findLatest() {
             "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms, "
             "db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy "
             "FROM sync_status "
-            "ORDER BY checked_at DESC "
-            "LIMIT 1";
+            "ORDER BY checked_at DESC " +
+            common::db::limitClause(dbType, 1);
 
         Json::Value result = queryExecutor_->executeQuery(query);
 
@@ -175,7 +179,8 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
     std::vector<domain::SyncStatus> results;
 
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
             "SELECT id, checked_at, "
             "db_csca_count, db_dsc_count, db_dsc_nc_count, db_crl_count, db_stored_in_ldap_count, "
             "ldap_csca_count, ldap_dsc_count, ldap_dsc_nc_count, ldap_crl_count, ldap_total_entries, "
@@ -183,15 +188,10 @@ std::vector<domain::SyncStatus> SyncStatusRepository::findAll(int limit, int off
             "db_country_stats, ldap_country_stats, status, error_message, check_duration_ms, "
             "db_mlsc_count, ldap_mlsc_count, mlsc_discrepancy "
             "FROM sync_status "
-            "ORDER BY checked_at DESC "
-            "LIMIT $1 OFFSET $2";
+            "ORDER BY checked_at DESC " +
+            common::db::paginationClause(dbType, limit, offset);
 
-        std::vector<std::string> params = {
-            std::to_string(limit),   // $1
-            std::to_string(offset)   // $2
-        };
-
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query);
 
         for (const auto& row : result) {
             results.push_back(jsonToSyncStatus(row));

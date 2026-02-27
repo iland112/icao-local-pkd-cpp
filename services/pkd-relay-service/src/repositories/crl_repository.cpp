@@ -3,6 +3,7 @@
  * @brief CRL repository implementation
  */
 #include "crl_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -43,17 +44,18 @@ std::vector<domain::Crl> CrlRepository::findNotInLdap(int limit) {
     std::vector<domain::Crl> results;
 
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+
+        std::string query =
             "SELECT id, fingerprint_sha256, issuer_dn, country_code, "
-            "this_update, next_update, stored_in_ldap, crl_data "
+            "this_update, next_update, stored_in_ldap, crl_binary "
             "FROM crl "
-            "WHERE stored_in_ldap = FALSE "
-            "ORDER BY this_update ASC "
-            "LIMIT $1";
+            "WHERE stored_in_ldap = " + falseVal + " "
+            "ORDER BY this_update ASC " +
+            common::db::limitClause(dbType, limit);
 
-        std::vector<std::string> params = {std::to_string(limit)};
-
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query);
 
         for (const auto& row : result) {
             results.push_back(jsonToCrl(row));
@@ -74,10 +76,11 @@ int CrlRepository::markStoredInLdap(const std::vector<std::string>& fingerprints
     }
 
     try {
-        // Build parameterized query with IN clause
-        // UPDATE crl SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN ($1, $2, ...)
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+
         std::ostringstream queryBuilder;
-        queryBuilder << "UPDATE crl SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN (";
+        queryBuilder << "UPDATE crl SET stored_in_ldap = " << trueVal << " WHERE fingerprint_sha256 IN (";
 
         for (size_t i = 0; i < fingerprints.size(); i++) {
             if (i > 0) {
@@ -105,8 +108,10 @@ int CrlRepository::markStoredInLdap(const std::vector<std::string>& fingerprints
 
 bool CrlRepository::markStoredInLdap(const std::string& fingerprint) {
     try {
-        const char* query =
-            "UPDATE crl SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+        std::string query =
+            "UPDATE crl SET stored_in_ldap = " + trueVal + " WHERE fingerprint_sha256 = $1";
 
         std::vector<std::string> params = {fingerprint};
 
@@ -153,8 +158,8 @@ domain::Crl CrlRepository::jsonToCrl(const Json::Value& row) {
 
     // Parse binary CRL data (bytea format: \x followed by hex)
     std::vector<unsigned char> crlData;
-    if (!row["crl_data"].isNull() && row["crl_data"].isString()) {
-        std::string crlDataHex = row["crl_data"].asString();
+    if (!row["crl_binary"].isNull() && row["crl_binary"].isString()) {
+        std::string crlDataHex = row["crl_binary"].asString();
         if (crlDataHex.length() > 2 && crlDataHex[0] == '\\' && crlDataHex[1] == 'x') {
             // Skip '\x' prefix and parse hex
             const char* hexData = crlDataHex.c_str() + 2;

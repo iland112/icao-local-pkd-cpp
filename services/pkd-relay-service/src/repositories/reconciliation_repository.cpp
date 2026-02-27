@@ -50,14 +50,15 @@ bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summ
         std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
 
         // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
-        const char* query =
+        std::string tsFunc = common::db::currentTimestamp(dbType);
+        std::string query =
             "INSERT INTO reconciliation_summary ("
             "id, triggered_by, started_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
             "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted"
             ") VALUES ("
-            "$1, $2, NOW(), $3, $4, "
+            "$1, $2, " + tsFunc + ", $3, $4, "
             "$5, $6, "
             "$7, $8, $9, $10, $11, "
             "$12, $13, $14, $15"
@@ -204,22 +205,18 @@ std::vector<domain::ReconciliationSummary> ReconciliationRepository::findAllSumm
     std::vector<domain::ReconciliationSummary> results;
 
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
             "SELECT id, triggered_by, started_at, completed_at, status, dry_run, "
             "success_count, failed_count, "
             "csca_added, dsc_added, dsc_nc_added, crl_added, total_added, "
             "csca_deleted, dsc_deleted, dsc_nc_deleted, crl_deleted, "
             "duration_ms, error_message, sync_status_id "
             "FROM reconciliation_summary "
-            "ORDER BY started_at DESC "
-            "LIMIT $1 OFFSET $2";
+            "ORDER BY started_at DESC " +
+            common::db::paginationClause(dbType, limit, offset);
 
-        std::vector<std::string> params = {
-            std::to_string(limit),
-            std::to_string(offset)
-        };
-
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query);
 
         for (const auto& row : result) {
             results.push_back(jsonToSummary(row));
@@ -278,12 +275,13 @@ bool ReconciliationRepository::createLog(domain::ReconciliationLog& log) {
         std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
 
         // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
-        const char* query =
+        std::string tsFunc = common::db::currentTimestamp(dbType);
+        std::string query =
             "INSERT INTO reconciliation_log ("
             "id, summary_id, started_at, fingerprint_sha256, certificate_type, country_code, "
             "operation, status, error_message"
             ") VALUES ("
-            "$1, $2, NOW(), $3, $4, $5, "
+            "$1, $2, " + tsFunc + ", $3, $4, $5, "
             "$6, $7, $8"
             ")";
 
@@ -329,19 +327,16 @@ std::vector<domain::ReconciliationLog> ReconciliationRepository::findLogsByRecon
     std::vector<domain::ReconciliationLog> results;
 
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
             "SELECT id, summary_id, started_at, fingerprint_sha256, certificate_type, "
             "country_code, operation, status, error_message "
             "FROM reconciliation_log "
             "WHERE summary_id = $1 "
-            "ORDER BY started_at ASC "
-            "LIMIT $2 OFFSET $3";
+            "ORDER BY started_at ASC " +
+            common::db::paginationClause(dbType, limit, offset);
 
-        std::vector<std::string> params = {
-            reconciliationId,
-            std::to_string(limit),
-            std::to_string(offset)
-        };
+        std::vector<std::string> params = { reconciliationId };
 
         Json::Value result = queryExecutor_->executeQuery(query, params);
 

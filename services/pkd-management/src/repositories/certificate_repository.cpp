@@ -372,8 +372,10 @@ bool CertificateRepository::markStoredInLdap(const std::string& fingerprint)
         fingerprint.substr(0, 16));
 
     try {
-        const char* query =
-            "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+        std::string query =
+            "UPDATE certificate SET stored_in_ldap = " + trueVal + " WHERE fingerprint_sha256 = $1";
         std::vector<std::string> params = {fingerprint};
 
         queryExecutor_->executeCommand(query, params);
@@ -421,7 +423,8 @@ X509* CertificateRepository::findCscaByIssuerDn(const std::string& issuerDn)
             query += " AND LOWER(subject_dn) LIKE LOWER($" + std::to_string(paramIdx++) + ")";
             params.push_back("%o=" + org + "%");
         }
-        query += " LIMIT 20";  // Fetch candidates for post-filtering
+        std::string dbType = queryExecutor_->getDatabaseType();
+        query += " " + common::db::limitClause(dbType, 20);  // Fetch candidates for post-filtering
 
         Json::Value result = queryExecutor_->executeQuery(query, params);
 
@@ -542,18 +545,19 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
 
     try {
         // Query DSC/DSC_NC certificates where CSCA was not found (failed validation)
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+        std::string query =
             "SELECT c.id, c.issuer_dn, c.certificate_data, c.fingerprint_sha256 "
             "FROM certificate c "
             "JOIN validation_result vr ON c.id = vr.certificate_id "
             "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
-            "AND vr.csca_found = FALSE "
+            "AND vr.csca_found = " + falseVal + " "
             "AND vr.validation_status IN ('INVALID', 'PENDING') "
-            "ORDER BY c.not_after DESC "
-            "LIMIT $1";
+            "ORDER BY c.not_after DESC " +
+            common::db::limitClause(dbType, limit);
 
-        std::vector<std::string> params = {std::to_string(limit)};
-        Json::Value result = queryExecutor_->executeQuery(query, params);
+        Json::Value result = queryExecutor_->executeQuery(query);
 
         // Transform field names to match expected format (camelCase)
         for (Json::ArrayIndex i = 0; i < result.size(); i++) {
@@ -769,10 +773,12 @@ X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexD
 
 std::string CertificateRepository::findFirstUploadIdByFingerprint(const std::string& fingerprint) {
     try {
-        const char* query =
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string query =
             "SELECT upload_id FROM certificate "
             "WHERE fingerprint_sha256 = $1 "
-            "ORDER BY uploaded_at ASC LIMIT 1";
+            "ORDER BY uploaded_at ASC " +
+            common::db::limitClause(dbType, 1);
 
         std::vector<std::string> params = {fingerprint};
         Json::Value result = queryExecutor_->executeQuery(query, params);

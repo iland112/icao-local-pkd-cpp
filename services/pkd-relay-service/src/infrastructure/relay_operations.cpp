@@ -14,6 +14,7 @@
 
 #include "relay_operations.h"
 #include "relay/sync/common/config.h"
+#include "query_helpers.h"
 
 #include <spdlog/spdlog.h>
 #include <ldap.h>
@@ -346,12 +347,13 @@ Json::Value getRevalidationHistory(common::IQueryExecutor* executor, int limit) 
     }
 
     try {
+        std::string dbType = executor->getDatabaseType();
         std::string query = "SELECT id, executed_at, total_processed, newly_expired, newly_valid, "
             "unchanged, errors, duration_ms FROM revalidation_history "
-            "ORDER BY executed_at DESC LIMIT $1";
+            "ORDER BY executed_at DESC " +
+            common::db::limitClause(dbType, limit);
 
-        std::vector<std::string> params = { std::to_string(limit) };
-        Json::Value rows = executor->executeQuery(query, params);
+        Json::Value rows = executor->executeQuery(query);
 
         // Helper: parse int from various DB formats
         auto getInt = [](const Json::Value& v, int def = 0) -> int {

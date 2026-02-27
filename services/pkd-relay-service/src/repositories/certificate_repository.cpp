@@ -3,6 +3,7 @@
  * @brief Certificate repository implementation
  */
 #include "certificate_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -47,11 +48,14 @@ std::vector<domain::Certificate> CertificateRepository::findNotInLdap(
     std::vector<domain::Certificate> results;
 
     try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+
         std::string query =
             "SELECT id, fingerprint_sha256, certificate_type, country_code, "
             "subject_dn, issuer_dn, stored_in_ldap "
             "FROM certificate "
-            "WHERE stored_in_ldap = FALSE";
+            "WHERE stored_in_ldap = " + falseVal;
 
         std::vector<std::string> params;
         int paramIndex = 1;
@@ -62,9 +66,8 @@ std::vector<domain::Certificate> CertificateRepository::findNotInLdap(
             params.push_back(certificateType);
         }
 
-        // Add ORDER BY and LIMIT
-        query += " ORDER BY created_at ASC LIMIT $" + std::to_string(paramIndex);
-        params.push_back(std::to_string(limit));
+        // Add ORDER BY and LIMIT (database-agnostic)
+        query += " ORDER BY created_at ASC " + common::db::limitClause(dbType, limit);
 
         Json::Value result = queryExecutor_->executeQuery(query, params);
 
@@ -87,10 +90,11 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
     }
 
     try {
-        // Build parameterized query with IN clause
-        // UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN ($1, $2, ...)
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+
         std::ostringstream queryBuilder;
-        queryBuilder << "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 IN (";
+        queryBuilder << "UPDATE certificate SET stored_in_ldap = " << trueVal << " WHERE fingerprint_sha256 IN (";
 
         for (size_t i = 0; i < fingerprints.size(); i++) {
             if (i > 0) {
@@ -118,8 +122,10 @@ int CertificateRepository::markStoredInLdap(const std::vector<std::string>& fing
 
 bool CertificateRepository::markStoredInLdap(const std::string& fingerprint) {
     try {
-        const char* query =
-            "UPDATE certificate SET stored_in_ldap = TRUE WHERE fingerprint_sha256 = $1";
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string trueVal = common::db::boolLiteral(dbType, true);
+        std::string query =
+            "UPDATE certificate SET stored_in_ldap = " + trueVal + " WHERE fingerprint_sha256 = $1";
 
         std::vector<std::string> params = {fingerprint};
 

@@ -11,6 +11,7 @@
 #include "relay/sync/common/config.h"
 #include "../services/sync_service.h"
 #include "../services/validation_service.h"
+#include "query_helpers.h"
 
 #include <spdlog/spdlog.h>
 #include <numeric>
@@ -132,8 +133,8 @@ void SyncHandler::handleDiscrepancies(const HttpRequestPtr&,
             "issue_type, db_exists, ldap_exists "
             "FROM sync_discrepancy "
             "WHERE resolved = " + boolFalse + " "
-            "ORDER BY detected_at DESC "
-            "LIMIT 100";
+            "ORDER BY detected_at DESC " +
+            common::db::limitClause(dbType, 100);
 
         Json::Value rows = queryExecutor_->executeQuery(query, {});
 
@@ -278,7 +279,8 @@ void SyncHandler::handleUpdateSyncConfig(const HttpRequestPtr& req,
         }
 
         // Add updated_at
-        setClauses.push_back("updated_at = NOW()");
+        std::string tsFunc = common::db::currentTimestamp(dbType);
+        setClauses.push_back("updated_at = " + tsFunc);
 
         std::string query = "UPDATE sync_config SET " +
                            std::accumulate(setClauses.begin(), setClauses.end(), std::string(),

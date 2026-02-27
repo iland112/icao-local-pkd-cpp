@@ -210,6 +210,82 @@ CREATE INDEX idx_recon_log_status ON reconciliation_log(status);
 CREATE INDEX idx_recon_log_started_at ON reconciliation_log(started_at);
 
 -- =============================================================================
+-- Revalidation History (certificate expiration re-checks)
+-- =============================================================================
+
+CREATE SEQUENCE seq_revalidation_history START WITH 1 INCREMENT BY 1 NOCACHE;
+
+CREATE TABLE revalidation_history (
+    id NUMBER(10) PRIMARY KEY,
+    executed_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    total_processed NUMBER(10) DEFAULT 0 NOT NULL,
+    newly_expired NUMBER(10) DEFAULT 0 NOT NULL,
+    newly_valid NUMBER(10) DEFAULT 0 NOT NULL,
+    unchanged NUMBER(10) DEFAULT 0 NOT NULL,
+    errors NUMBER(10) DEFAULT 0 NOT NULL,
+    duration_ms NUMBER(10) DEFAULT 0 NOT NULL
+);
+
+CREATE OR REPLACE TRIGGER trg_revalidation_history_id
+BEFORE INSERT ON revalidation_history
+FOR EACH ROW
+WHEN (NEW.id IS NULL)
+BEGIN
+    SELECT seq_revalidation_history.NEXTVAL INTO :NEW.id FROM DUAL;
+END;
+/
+
+CREATE INDEX idx_reval_history_executed ON revalidation_history(executed_at DESC);
+
+-- =============================================================================
+-- Sync Configuration (daily sync settings)
+-- =============================================================================
+
+CREATE TABLE sync_config (
+    id NUMBER(10) PRIMARY KEY,
+    daily_sync_enabled NUMBER(1) DEFAULT 1 NOT NULL,
+    daily_sync_hour NUMBER(5) DEFAULT 0 NOT NULL,
+    daily_sync_minute NUMBER(5) DEFAULT 0 NOT NULL,
+    auto_reconcile NUMBER(1) DEFAULT 0 NOT NULL,
+    revalidate_certs_on_sync NUMBER(1) DEFAULT 1 NOT NULL,
+    max_reconcile_batch_size NUMBER(10) DEFAULT 100 NOT NULL,
+    updated_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    updated_by VARCHAR2(100),
+    CONSTRAINT chk_single_config_row CHECK (id = 1)
+);
+
+-- Insert default config row
+INSERT INTO sync_config (id, daily_sync_enabled, daily_sync_hour, daily_sync_minute,
+    auto_reconcile, revalidate_certs_on_sync, max_reconcile_batch_size)
+VALUES (1, 1, 0, 0, 0, 1, 100);
+
+-- =============================================================================
+-- CRL Revocation Log (CRL check audit trail)
+-- =============================================================================
+
+CREATE TABLE crl_revocation_log (
+    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+    certificate_id VARCHAR2(128) NOT NULL,
+    certificate_type VARCHAR2(20) NOT NULL,
+    serial_number VARCHAR2(100),
+    fingerprint_sha256 VARCHAR2(64),
+    subject_dn VARCHAR2(4000),
+    revocation_status VARCHAR2(20),
+    revocation_reason VARCHAR2(50),
+    revocation_date VARCHAR2(50),
+    crl_id VARCHAR2(128),
+    crl_issuer_dn VARCHAR2(4000),
+    crl_this_update VARCHAR2(50),
+    crl_next_update VARCHAR2(50),
+    checked_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    check_duration_ms NUMBER(10)
+);
+
+CREATE INDEX idx_crl_revlog_cert_id ON crl_revocation_log(certificate_id);
+CREATE INDEX idx_crl_revlog_fingerprint ON crl_revocation_log(fingerprint_sha256);
+CREATE INDEX idx_crl_revlog_checked_at ON crl_revocation_log(checked_at DESC);
+
+-- =============================================================================
 -- Commit changes
 -- =============================================================================
 
@@ -219,10 +295,11 @@ COMMIT;
 BEGIN
     DBMS_OUTPUT.PUT_LINE('=============================================================================');
     DBMS_OUTPUT.PUT_LINE('Services schema created successfully');
-    DBMS_OUTPUT.PUT_LINE('Tables: 5 (sync_status, system_metrics, service_health,');
-    DBMS_OUTPUT.PUT_LINE('        reconciliation_summary, reconciliation_log)');
-    DBMS_OUTPUT.PUT_LINE('Sequences: 5');
-    DBMS_OUTPUT.PUT_LINE('Triggers: 4 (auto-increment IDs)');
+    DBMS_OUTPUT.PUT_LINE('Tables: 8 (sync_status, system_metrics, service_health,');
+    DBMS_OUTPUT.PUT_LINE('        reconciliation_summary, reconciliation_log,');
+    DBMS_OUTPUT.PUT_LINE('        revalidation_history, sync_config, crl_revocation_log)');
+    DBMS_OUTPUT.PUT_LINE('Sequences: 6');
+    DBMS_OUTPUT.PUT_LINE('Triggers: 5 (auto-increment IDs)');
     DBMS_OUTPUT.PUT_LINE('=============================================================================');
 END;
 /

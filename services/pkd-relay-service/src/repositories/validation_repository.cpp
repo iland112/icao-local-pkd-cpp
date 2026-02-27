@@ -3,6 +3,7 @@
  * @brief Validation repository implementation
  */
 #include "validation_repository.h"
+#include "query_helpers.h"
 #include <spdlog/spdlog.h>
 #include <json/json.h>
 #include <stdexcept>
@@ -33,12 +34,13 @@ std::vector<domain::ValidationResult> ValidationRepository::findAllWithExpiratio
         std::vector<domain::ValidationResult> validations;
         if (result.isArray()) {
             for (const auto& row : result) {
+                bool vpValid = common::db::getBool(row, "validity_period_valid", false);
                 validations.emplace_back(
                     row["id"].asString(),
                     row["certificate_id"].asString(),
                     row["certificate_type"].asString(),
                     row["country_code"].asString(),
-                    row["validity_period_valid"].asBool(),
+                    vpValid,
                     row["validation_status"].asString(),
                     row["not_after"].asString()
                 );
@@ -67,8 +69,9 @@ bool ValidationRepository::updateValidityStatus(
     )";
 
     try {
+        std::string dbType = queryExecutor_->getDatabaseType();
         std::vector<std::string> params;
-        params.push_back(validityPeriodValid ? "TRUE" : "FALSE");
+        params.push_back(common::db::boolLiteral(dbType, validityPeriodValid));
         params.push_back(newStatus);
         params.push_back(id);
 
@@ -90,13 +93,15 @@ bool ValidationRepository::updateValidityStatus(
 }
 
 int ValidationRepository::countExpiredByUploadId(const std::string& uploadId) {
-    const char* query = R"(
-        SELECT COUNT(*) as count
-        FROM validation_result vr
-        JOIN certificate c ON vr.certificate_id = c.id
-        WHERE c.upload_id = $1
-        AND vr.validity_period_valid = FALSE
-    )";
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string falseVal = common::db::boolLiteral(dbType, false);
+
+    std::string query =
+        "SELECT COUNT(*) as count "
+        "FROM validation_result vr "
+        "JOIN certificate c ON vr.certificate_id = c.id "
+        "WHERE c.upload_id = $1 "
+        "AND vr.validity_period_valid = " + falseVal;
 
     try {
         std::vector<std::string> params;
@@ -122,16 +127,18 @@ int ValidationRepository::countExpiredByUploadId(const std::string& uploadId) {
 }
 
 int ValidationRepository::updateAllUploadExpiredCounts() {
-    const char* query = R"(
-        UPDATE uploaded_file uf
-        SET expired_count = (
-            SELECT COUNT(*)
-            FROM validation_result vr
-            JOIN certificate c ON vr.certificate_id = c.id
-            WHERE c.upload_id = uf.id
-            AND vr.validity_period_valid = FALSE
-        )
-    )";
+    std::string dbType = queryExecutor_->getDatabaseType();
+    std::string falseVal = common::db::boolLiteral(dbType, false);
+
+    std::string query =
+        "UPDATE uploaded_file uf "
+        "SET expired_count = ("
+        "    SELECT COUNT(*) "
+        "    FROM validation_result vr "
+        "    JOIN certificate c ON vr.certificate_id = c.id "
+        "    WHERE c.upload_id = uf.id "
+        "    AND vr.validity_period_valid = " + falseVal +
+        ")";
 
     try {
         std::vector<std::string> params;  // Empty params vector
