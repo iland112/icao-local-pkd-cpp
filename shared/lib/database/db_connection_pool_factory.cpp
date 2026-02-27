@@ -50,7 +50,7 @@ DbPoolConfig DbPoolConfig::fromEnvironment() {
     config.pgHost = pgHost ? pgHost : "localhost";
 
     const char* pgPort = std::getenv("DB_PORT");
-    config.pgPort = pgPort ? std::stoi(pgPort) : 5432;
+    config.pgPort = (pgPort && pgPort[0] != '\0') ? std::stoi(pgPort) : 5432;
 
     const char* pgDb = std::getenv("DB_NAME");
     config.pgDatabase = pgDb ? pgDb : "localpkd";
@@ -66,7 +66,7 @@ DbPoolConfig DbPoolConfig::fromEnvironment() {
     config.oracleHost = oracleHost ? oracleHost : "localhost";
 
     const char* oraclePort = std::getenv("ORACLE_PORT");
-    config.oraclePort = oraclePort ? std::stoi(oraclePort) : 1521;
+    config.oraclePort = (oraclePort && oraclePort[0] != '\0') ? std::stoi(oraclePort) : 1521;
 
     const char* oracleSvc = std::getenv("ORACLE_SERVICE_NAME");
     config.oracleServiceName = oracleSvc ? oracleSvc : "XE";
