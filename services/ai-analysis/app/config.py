@@ -36,9 +36,10 @@ class Settings(BaseSettings):
 
     @field_validator("oracle_port", "db_port", "server_port", "analysis_schedule_hour", mode="before")
     @classmethod
-    def empty_str_to_default(cls, v: Any) -> Any:
+    def empty_str_to_default(cls, v: Any, info: Any) -> Any:
         if isinstance(v, str) and v.strip() == "":
-            return None  # triggers pydantic default
+            defaults = {"oracle_port": 1521, "db_port": 5432, "server_port": 8085, "analysis_schedule_hour": 3}
+            return defaults.get(info.field_name, 0)
         return v
 
     # Model Configuration
