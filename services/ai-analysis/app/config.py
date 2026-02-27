@@ -1,6 +1,8 @@
 import logging
 from functools import lru_cache
+from typing import Any
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,13 @@ class Settings(BaseSettings):
     # Analysis Scheduler
     analysis_schedule_hour: int = 3
     analysis_enabled: bool = True
+
+    @field_validator("oracle_port", "db_port", "server_port", "analysis_schedule_hour", mode="before")
+    @classmethod
+    def empty_str_to_default(cls, v: Any) -> Any:
+        if isinstance(v, str) and v.strip() == "":
+            return None  # triggers pydantic default
+        return v
 
     # Model Configuration
     model_version: str = "1.0.0"
