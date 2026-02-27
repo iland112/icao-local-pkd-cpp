@@ -10,8 +10,8 @@
 -- SQL*Plus settings
 SET SQLBLANKLINES ON
 
--- Connect as PKD_USER to XEPDB1 (Pluggable Database)
-CONNECT pkd_user/pkd_password@XEPDB1;
+-- Connect as PKD_USER to ORCLPDB1 (Pluggable Database — Oracle EE 21c)
+CONNECT pkd_user/pkd_password@ORCLPDB1;
 
 -- Allow re-runs: skip "already exists" errors (ORA-00955, ORA-01430, ORA-02261, ORA-01442)
 WHENEVER SQLERROR CONTINUE;

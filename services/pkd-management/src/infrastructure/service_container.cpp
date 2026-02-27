@@ -155,16 +155,22 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     try {
         std::string ldapWriteUri = "ldap://" + config.ldapWriteHost + ":" + std::to_string(config.ldapWritePort);
 
+        // Read LDAP pool sizes from environment (default: min=2, max=10, timeout=5)
+        int ldapPoolMin = 2, ldapPoolMax = 10, ldapPoolTimeout = 5;
+        if (auto* v = std::getenv("LDAP_POOL_MIN")) ldapPoolMin = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_POOL_MAX")) ldapPoolMax = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_POOL_TIMEOUT")) ldapPoolTimeout = std::stoi(v);
+
         impl_->ldapPool = std::make_shared<common::LdapConnectionPool>(
             ldapWriteUri,
             config.ldapBindDn,
             config.ldapBindPassword,
-            2,   // minConnections
-            10,  // maxConnections
-            5    // acquireTimeoutSec
+            ldapPoolMin,
+            ldapPoolMax,
+            ldapPoolTimeout
         );
 
-        spdlog::info("LDAP connection pool initialized (min=2, max=10, host={})", ldapWriteUri);
+        spdlog::info("LDAP connection pool initialized (min={}, max={}, host={})", ldapPoolMin, ldapPoolMax, ldapWriteUri);
     } catch (const std::exception& e) {
         spdlog::critical("Failed to initialize LDAP connection pool: {}", e.what());
         return false;

@@ -45,6 +45,11 @@ DbPoolConfig DbPoolConfig::fromEnvironment() {
     const char* dbType = std::getenv("DB_TYPE");
     config.dbType = dbType ? dbType : "postgres";
 
+    // Connection pool size settings (shared across DB types)
+    if (auto* v = std::getenv("DB_POOL_MIN")) config.minSize = std::stoul(v);
+    if (auto* v = std::getenv("DB_POOL_MAX")) config.maxSize = std::stoul(v);
+    if (auto* v = std::getenv("DB_POOL_TIMEOUT")) config.acquireTimeoutSec = std::stoi(v);
+
     // PostgreSQL settings
     const char* pgHost = std::getenv("DB_HOST");
     config.pgHost = pgHost ? pgHost : "localhost";
@@ -69,7 +74,7 @@ DbPoolConfig DbPoolConfig::fromEnvironment() {
     config.oraclePort = (oraclePort && oraclePort[0] != '\0') ? std::stoi(oraclePort) : 1521;
 
     const char* oracleSvc = std::getenv("ORACLE_SERVICE_NAME");
-    config.oracleServiceName = oracleSvc ? oracleSvc : "XE";
+    config.oracleServiceName = oracleSvc ? oracleSvc : "ORCLPDB1";
 
     const char* oracleUser = std::getenv("ORACLE_USER");
     config.oracleUser = oracleUser ? oracleUser : "pkd";

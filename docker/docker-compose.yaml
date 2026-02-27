@@ -106,6 +106,12 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
+      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      - DB_POOL_MIN=${DB_POOL_MIN:-2}
+      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
+      - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
+      - THREAD_NUM=${THREAD_NUM:-16}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
       - LDAP_WRITE_PORT=389
@@ -175,6 +181,10 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
+      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      - DB_POOL_MIN=${DB_POOL_MIN:-2}
+      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      - THREAD_NUM=${THREAD_NUM:-16}
       - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
       - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
@@ -230,6 +240,12 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
+      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      - DB_POOL_MIN=${DB_POOL_MIN:-2}
+      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
+      - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
+      - THREAD_NUM=${THREAD_NUM:-16}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
@@ -274,6 +290,7 @@ services:
       - TZ=Asia/Seoul
       - SERVICE_NAME=monitoring-service
       - SERVER_PORT=8084
+      - THREAD_NUM=${THREAD_NUM:-16}
       - SYSTEM_METRICS_INTERVAL=5
       - SERVICE_HEALTH_INTERVAL=30
       - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
@@ -327,6 +344,9 @@ services:
       - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
+      - DB_POOL_OVERFLOW=${DB_POOL_OVERFLOW:-10}
       # Analysis Scheduler Configuration
       - ANALYSIS_SCHEDULE_HOUR=${ANALYSIS_SCHEDULE_HOUR:-3}
       - ANALYSIS_ENABLED=${ANALYSIS_ENABLED:-true}
@@ -411,10 +431,10 @@ services:
     restart: unless-stopped
 
   # ---------------------------------------------------------------------------
-  # Oracle Database XE 21c (Optional - for testing Oracle support)
+  # Oracle Database EE 21c (Enterprise Edition — 부하 테스트용, 제한 해제)
   # ---------------------------------------------------------------------------
   oracle:
-    image: container-registry.oracle.com/database/express:21.3.0-xe
+    image: container-registry.oracle.com/database/enterprise:21.3.0.0
     container_name: icao-local-pkd-oracle
     ports:
       - "11521:1521"  # External: 11521, Internal: 1521
@@ -429,13 +449,13 @@ services:
     networks:
       - pkd-network
     healthcheck:
-      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"$ORACLE_PWD\"@//localhost:1521/XE as sysdba | grep -q 1"]
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"$ORACLE_PWD\"@//localhost:1521/ORCLPDB1 as sysdba | grep -q 1"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 300s  # Oracle takes 3-5 minutes to initialize first time
     restart: unless-stopped
-    shm_size: 1g  # Shared memory for Oracle
+    shm_size: 4g  # Shared memory for Oracle EE (XE: 1g → EE: 4g)
     profiles:
       - oracle  # Only starts with: docker compose --profile oracle up
 

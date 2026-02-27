@@ -8,7 +8,7 @@
 
 SET SQLBLANKLINES ON
 
-CONNECT pkd_user/pkd_password@XEPDB1;
+CONNECT pkd_user/pkd_password@ORCLPDB1;
 
 WHENEVER SQLERROR CONTINUE;
 

@@ -58,6 +58,7 @@ struct DbPoolConfig {
      *
      * Reads:
      * - DB_TYPE (postgres/oracle)
+     * - DB_POOL_MIN, DB_POOL_MAX, DB_POOL_TIMEOUT (connection pool size)
      * - DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD (PostgreSQL)
      * - ORACLE_HOST, ORACLE_PORT, ORACLE_SERVICE_NAME, ORACLE_USER, ORACLE_PASSWORD (Oracle)
      */

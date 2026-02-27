@@ -440,7 +440,7 @@ DB_PASSWORD=<from .env>
 DB_TYPE=oracle
 ORACLE_HOST=oracle
 ORACLE_PORT=1521
-ORACLE_SERVICE_NAME=XEPDB1
+ORACLE_SERVICE_NAME=ORCLPDB1
 ORACLE_USER=pkd_user
 ORACLE_PASSWORD=<from .env>
 ```
@@ -546,8 +546,10 @@ scripts/
 - Object classes: pkdDownload (certs), cRLDistributionPoint (CRLs)
 
 ### Connection Pooling
-- Database: min=5, max=20 connections (PostgreSQL), min=2, max=10 (Oracle OCI Session Pool)
-- LDAP: min=2, max=10 connections, 5s acquire timeout
+- Database: configurable via `DB_POOL_MIN`/`DB_POOL_MAX` env vars (default: min=2, max=10)
+- LDAP: configurable via `LDAP_POOL_MIN`/`LDAP_POOL_MAX` env vars (default: min=2, max=10, 5s timeout)
+- Drogon Thread: configurable via `THREAD_NUM` env var (default: 16)
+- AI Service: configurable via `DB_POOL_SIZE`/`DB_POOL_OVERFLOW` env vars (default: 5/10)
 - RAII pattern: automatic connection release on scope exit
 
 ### Reconciliation Logic

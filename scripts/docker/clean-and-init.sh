@@ -121,7 +121,7 @@ if [ "$DB_TYPE" = "oracle" ]; then
             ORACLE_PWD=$(grep -E '^ORACLE_PASSWORD=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
             ORACLE_PWD="${ORACLE_PWD:-pkd_password}"
             for j in {1..30}; do
-                INIT_CHECK=$(docker exec icao-local-pkd-oracle bash -c "echo 'SELECT 1 FROM DUAL;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1 2>/dev/null | grep -c '1'" 2>/dev/null || echo "0")
+                INIT_CHECK=$(docker exec icao-local-pkd-oracle bash -c "echo 'SELECT 1 FROM DUAL;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/ORCLPDB1 2>/dev/null | grep -c '1'" 2>/dev/null || echo "0")
                 if [ "$INIT_CHECK" -ge 1 ] 2>/dev/null; then
                     echo ""
                     echo -e "${GREEN}✓ Oracle pkd_user is ready${NC}"

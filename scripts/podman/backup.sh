@@ -38,13 +38,13 @@ if [ "$DB_TYPE" = "oracle" ]; then
     ORACLE_PWD="${ORACLE_PWD:-pkd_password}"
     ORACLE_HEALTH=$(podman inspect icao-local-pkd-oracle --format='{{.State.Health.Status}}' 2>/dev/null || echo "not-found")
     if [ "$ORACLE_HEALTH" = "healthy" ]; then
-        podman exec icao-local-pkd-oracle bash -c "expdp pkd_user/${ORACLE_PWD}@XEPDB1 directory=DATA_PUMP_DIR dumpfile=pkd_backup.dmp logfile=pkd_backup.log schemas=PKD_USER" 2>/dev/null
-        podman cp icao-local-pkd-oracle:/opt/oracle/admin/XE/dpdump/pkd_backup.dmp "$BACKUP_DIR/oracle_backup.dmp" 2>/dev/null
+        podman exec icao-local-pkd-oracle bash -c "expdp pkd_user/${ORACLE_PWD}@ORCLPDB1 directory=DATA_PUMP_DIR dumpfile=pkd_backup.dmp logfile=pkd_backup.log schemas=PKD_USER" 2>/dev/null
+        podman cp icao-local-pkd-oracle:/opt/oracle/admin/ORCLCDB/dpdump/pkd_backup.dmp "$BACKUP_DIR/oracle_backup.dmp" 2>/dev/null
         if [ -f "$BACKUP_DIR/oracle_backup.dmp" ]; then
             echo "    Oracle 백업 완료"
         else
             echo "    Oracle Data Pump 백업 실패 — SQL 덤프로 대체합니다"
-            podman exec icao-local-pkd-oracle bash -c "echo 'SELECT COUNT(*) FROM pkd_user.certificate;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1" > "$BACKUP_DIR/oracle_verify.txt" 2>/dev/null
+            podman exec icao-local-pkd-oracle bash -c "echo 'SELECT COUNT(*) FROM pkd_user.certificate;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/ORCLPDB1" > "$BACKUP_DIR/oracle_verify.txt" 2>/dev/null
             echo "    Oracle 데이터 검증 파일 저장됨"
         fi
     else

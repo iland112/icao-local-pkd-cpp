@@ -8,7 +8,7 @@
 -- =============================================================================
 
 -- Connect to pluggable database
-ALTER SESSION SET CONTAINER = XEPDB1;
+ALTER SESSION SET CONTAINER = ORCLPDB1;
 
 -- Grant privileges to PKD user
 GRANT CREATE TABLE TO pkd;

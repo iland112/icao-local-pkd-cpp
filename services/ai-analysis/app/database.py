@@ -57,8 +57,8 @@ settings = get_settings()
 if settings.db_type == "postgres":
     async_engine = create_async_engine(
         settings.database_url,
-        pool_size=5,
-        max_overflow=10,
+        pool_size=settings.db_pool_size,
+        max_overflow=settings.db_pool_overflow,
         echo=False,
     )
     AsyncSessionLocal = async_sessionmaker(
@@ -74,8 +74,8 @@ else:
 # Sync engine for pandas batch operations and Oracle
 sync_engine = create_engine(
     settings.sync_database_url,
-    pool_size=5,
-    max_overflow=10,
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_pool_overflow,
     echo=False,
 )
 SyncSessionLocal = sessionmaker(bind=sync_engine)

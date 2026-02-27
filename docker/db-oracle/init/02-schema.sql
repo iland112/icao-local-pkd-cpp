@@ -33,9 +33,9 @@
 -- SQL*Plus settings
 SET SQLBLANKLINES ON
 
--- Connect as PKD_USER to XEPDB1 (Pluggable Database)
--- Note: pkd_user is created in XEPDB1 by 01-create-user.sql
-CONNECT pkd_user/pkd_password@XEPDB1;
+-- Connect as PKD_USER to ORCLPDB1 (Pluggable Database — Oracle EE 21c)
+-- Note: pkd_user is created in ORCLPDB1 by 01-create-user.sql
+CONNECT pkd_user/pkd_password@ORCLPDB1;
 
 -- Placeholder for schema creation
 -- TO BE IMPLEMENTED IN PHASE 4.3

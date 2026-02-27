@@ -54,8 +54,8 @@ if [ "$DB_TYPE" = "oracle" ] && [ -f "$BACKUP_DIR/oracle_backup.dmp" ]; then
     echo "  Oracle 복구 중..."
     ORACLE_PWD=$(grep -E '^ORACLE_PASSWORD=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
     ORACLE_PWD="${ORACLE_PWD:-pkd_password}"
-    podman cp "$BACKUP_DIR/oracle_backup.dmp" icao-local-pkd-oracle:/opt/oracle/admin/XE/dpdump/pkd_backup.dmp 2>/dev/null
-    podman exec icao-local-pkd-oracle bash -c "impdp pkd_user/${ORACLE_PWD}@XEPDB1 directory=DATA_PUMP_DIR dumpfile=pkd_backup.dmp logfile=pkd_restore.log schemas=PKD_USER table_exists_action=replace" 2>/dev/null
+    podman cp "$BACKUP_DIR/oracle_backup.dmp" icao-local-pkd-oracle:/opt/oracle/admin/ORCLCDB/dpdump/pkd_backup.dmp 2>/dev/null
+    podman exec icao-local-pkd-oracle bash -c "impdp pkd_user/${ORACLE_PWD}@ORCLPDB1 directory=DATA_PUMP_DIR dumpfile=pkd_backup.dmp logfile=pkd_restore.log schemas=PKD_USER table_exists_action=replace" 2>/dev/null
     echo "    Oracle 복구 완료"
 fi
 

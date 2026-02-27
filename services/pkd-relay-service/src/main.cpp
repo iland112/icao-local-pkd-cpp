@@ -15,6 +15,7 @@
 
 #include <iostream>
 #include <memory>
+#include <cstdlib>
 
 // Config
 #include "relay/sync/common/config.h"
@@ -439,9 +440,11 @@ int main() {
     g_scheduler.start();
 
     // Start HTTP server
-    spdlog::info("Starting HTTP server on port {}...", g_config.serverPort);
+    int threadNum = 4;
+    if (auto* v = std::getenv("THREAD_NUM")) threadNum = std::stoi(v);
+    spdlog::info("Starting HTTP server on port {} with {} threads...", g_config.serverPort, threadNum);
     app().addListener("0.0.0.0", g_config.serverPort)
-        .setThreadNum(4)
+        .setThreadNum(threadNum)
         .run();
 
     // Cleanup

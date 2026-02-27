@@ -83,16 +83,22 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
         spdlog::info("{} Query Executor created", dbType == "postgres" ? "PostgreSQL" : "Oracle");
 
         // Step 3: LDAP Connection Pool
-        spdlog::info("Creating LDAP connection pool (min=2, max=10)...");
+        // Read LDAP pool sizes from environment (default: min=2, max=10, timeout=5)
+        int ldapPoolMin = 2, ldapPoolMax = 10, ldapPoolTimeout = 5;
+        if (auto* v = std::getenv("LDAP_POOL_MIN")) ldapPoolMin = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_POOL_MAX")) ldapPoolMax = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_POOL_TIMEOUT")) ldapPoolTimeout = std::stoi(v);
+
+        spdlog::info("Creating LDAP connection pool (min={}, max={})...", ldapPoolMin, ldapPoolMax);
         std::string ldapUri = "ldap://" + config.ldapWriteHost + ":" +
                              std::to_string(config.ldapWritePort);
         impl_->ldapPool = std::make_shared<common::LdapConnectionPool>(
             ldapUri,
             config.ldapBindDn,
             config.ldapBindPassword,
-            2,   // min connections
-            10,  // max connections
-            5    // timeout seconds
+            ldapPoolMin,
+            ldapPoolMax,
+            ldapPoolTimeout
         );
         if (!impl_->ldapPool->initialize()) {
             spdlog::critical("Failed to initialize LDAP connection pool");

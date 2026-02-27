@@ -13,6 +13,7 @@
 
 #include <memory>
 #include <iostream>
+#include <cstdlib>
 
 #include "handlers/monitoring_handler.h"
 
@@ -80,8 +81,11 @@ int main() {
     // Start server
     spdlog::info("Starting HTTP server on port {}...", config.serverPort);
 
+    int threadNum = 4;
+    if (auto* v = std::getenv("THREAD_NUM")) threadNum = std::stoi(v);
+    spdlog::info("Using {} threads", threadNum);
     app().addListener("0.0.0.0", config.serverPort)
-        .setThreadNum(4)
+        .setThreadNum(threadNum)
         .run();
 
     spdlog::info("Server stopped");

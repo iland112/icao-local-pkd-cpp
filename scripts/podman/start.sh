@@ -181,7 +181,7 @@ echo ""
 echo "  접속 정보:"
 echo "   - Database:      DB_TYPE=$DB_TYPE"
 if [ "$DB_TYPE" = "oracle" ]; then
-    echo "   - Oracle:        localhost:11521 (XEPDB1)"
+    echo "   - Oracle:        localhost:11521 (ORCLPDB1)"
 else
     echo "   - PostgreSQL:    localhost:15432 (pkd/pkd)"
 fi

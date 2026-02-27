@@ -26,9 +26,13 @@ class Settings(BaseSettings):
     # Oracle Configuration
     oracle_host: str = "oracle"
     oracle_port: int = 1521
-    oracle_service_name: str = "XEPDB1"
+    oracle_service_name: str = "ORCLPDB1"
     oracle_user: str = "pkd_user"
     oracle_password: str = ""
+
+    # Connection Pool Configuration
+    db_pool_size: int = 5
+    db_pool_overflow: int = 10
 
     # Analysis Scheduler
     analysis_schedule_hour: int = 3
