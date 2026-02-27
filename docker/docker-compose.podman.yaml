@@ -1,0 +1,459 @@
+# =============================================================================
+# ICAO Local PKD - Podman Compose Configuration (Production RHEL 9)
+# =============================================================================
+# Adapted from docker-compose.yaml for Podman compatibility:
+#   - depends_on: simple list (no condition: service_healthy/service_completed_successfully)
+#   - LDAP init containers removed (handled by scripts/podman/clean-and-init.sh)
+#   - Nginx config defaults to podman-specific resolver
+#   - All other features identical to Docker version
+# =============================================================================
+# Usage: podman-compose -f docker/docker-compose.podman.yaml up -d
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Shared vcpkg Base Image (build once, reused by all C++ services)
+  # ---------------------------------------------------------------------------
+  vcpkg-base:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.vcpkg-base
+    image: icao-vcpkg-base:latest
+    profiles:
+      - build-only
+
+  # ---------------------------------------------------------------------------
+  # API Gateway (Nginx - Unified API Entry Point)
+  # ---------------------------------------------------------------------------
+  api-gateway:
+    image: nginx:alpine
+    container_name: icao-local-pkd-api-gateway
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+      - "18080:8080"
+    volumes:
+      - ${NGINX_CONF:-../nginx/api-gateway-podman-ssl.conf}:/etc/nginx/nginx.conf:ro
+      - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
+      - ../docs/openapi:/etc/nginx/openapi:ro
+      - ../.docker-data/gateway-logs:/var/log/nginx
+      - ../.docker-data/ssl:/etc/ssl/private:ro
+    depends_on:
+      - pkd-management
+      - pa-service
+      - pkd-relay
+      - monitoring-service
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # Frontend (React.js)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    image: docker-frontend:latest
+    container_name: icao-local-pkd-frontend
+    ports:
+      - "13080:80"
+    environment:
+      - TZ=Asia/Seoul
+    depends_on:
+      - pkd-management
+      - pa-service
+    networks:
+      - pkd-network
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # PKD Management Service (File Upload, Parsing, Certificate Validation)
+  # ---------------------------------------------------------------------------
+  pkd-management:
+    build:
+      context: ..
+      dockerfile: services/pkd-management/Dockerfile
+    image: docker-pkd-management:latest
+    container_name: icao-local-pkd-management
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-management
+      - SERVER_PORT=8081
+      - DB_TYPE=${DB_TYPE}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - NLS_LANG=AMERICAN_AMERICA.AL32UTF8
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389
+      - LDAP_WRITE_HOST=openldap1
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_DATA_CONTAINER=dc=data
+      - LDAP_NC_DATA_CONTAINER=dc=nc-data
+      - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}
+      - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}
+      - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}
+      - ICAO_CHECK_SCHEDULE_HOUR=${ICAO_CHECK_SCHEDULE_HOUR:-9}
+      - ICAO_SCHEDULER_ENABLED=${ICAO_SCHEDULER_ENABLED:-true}
+    depends_on:
+      - openldap1
+      - openldap2
+    volumes:
+      - ../.docker-data/pkd-logs:/app/logs
+      - ../.docker-data/pkd-uploads:/app/uploads
+      - ../data/cert:/app/data/cert:ro
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+
+  # ---------------------------------------------------------------------------
+  # PA Service (Passive Authentication Verification)
+  # ---------------------------------------------------------------------------
+  pa-service:
+    build:
+      context: ..
+      dockerfile: services/pa-service/Dockerfile
+    image: docker-pa-service:latest
+    container_name: icao-local-pkd-pa-service
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pa-service
+      - SERVER_PORT=8082
+      - DB_TYPE=${DB_TYPE}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - NLS_LANG=AMERICAN_AMERICA.AL32UTF8
+      - LDAP_HOST=openldap1
+      - LDAP_PORT=389
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+    depends_on:
+      - openldap1
+      - openldap2
+    volumes:
+      - ../.docker-data/pa-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ---------------------------------------------------------------------------
+  # PKD Relay Service (Data Relay Layer)
+  # ---------------------------------------------------------------------------
+  pkd-relay:
+    build:
+      context: ..
+      dockerfile: services/pkd-relay-service/Dockerfile
+    image: docker-pkd-relay:latest
+    container_name: icao-local-pkd-relay
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=pkd-relay
+      - SERVER_PORT=8083
+      - DB_TYPE=${DB_TYPE}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - NLS_LANG=AMERICAN_AMERICA.AL32UTF8
+      - LDAP_READ_HOSTS=openldap1:389,openldap2:389
+      - LDAP_WRITE_HOST=openldap1
+      - LDAP_WRITE_PORT=389
+      - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
+      - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_DATA_CONTAINER=${LDAP_DATA_CONTAINER:-dc=data}
+      - LDAP_NC_DATA_CONTAINER=${LDAP_NC_DATA_CONTAINER:-dc=nc-data}
+      - SYNC_INTERVAL_MINUTES=5
+      - AUTO_RECONCILE=true
+      - MAX_RECONCILE_BATCH_SIZE=100
+    depends_on:
+      - openldap1
+      - openldap2
+    volumes:
+      - ../.docker-data/sync-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/api/sync/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Monitoring Service (System Metrics + Service Health Monitoring)
+  # ---------------------------------------------------------------------------
+  monitoring-service:
+    build:
+      context: ..
+      dockerfile: services/monitoring-service/Dockerfile
+    image: docker-monitoring-service:latest
+    container_name: icao-local-pkd-monitoring
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=monitoring-service
+      - SERVER_PORT=8084
+      - SYSTEM_METRICS_INTERVAL=5
+      - SERVICE_HEALTH_INTERVAL=30
+      - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
+      - SERVICE_PA_SERVICE=http://pa-service:8082/api/health
+      - SERVICE_SYNC_SERVICE=http://pkd-relay:8083/api/sync/health
+    depends_on:
+      - pkd-management
+      - pa-service
+      - pkd-relay
+    volumes:
+      - ../.docker-data/monitoring-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/api/monitoring/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # AI Analysis Service (ML-based Certificate Anomaly Detection)
+  # ---------------------------------------------------------------------------
+  ai-analysis:
+    build:
+      context: ..
+      dockerfile: services/ai-analysis/Dockerfile
+    image: docker-ai-analysis:latest
+    container_name: icao-local-pkd-ai-analysis
+    environment:
+      - TZ=Asia/Seoul
+      - SERVICE_NAME=ai-analysis
+      - SERVER_PORT=8085
+      - DB_TYPE=${DB_TYPE}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ORACLE_HOST=${ORACLE_HOST}
+      - ORACLE_PORT=${ORACLE_PORT}
+      - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
+      - ORACLE_USER=${ORACLE_USER}
+      - ORACLE_PASSWORD=${ORACLE_PASSWORD}
+      - ANALYSIS_SCHEDULE_HOUR=${ANALYSIS_SCHEDULE_HOUR:-3}
+      - ANALYSIS_ENABLED=${ANALYSIS_ENABLED:-true}
+    volumes:
+      - ../.docker-data/ai-analysis-logs:/app/logs
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/api/ai/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ---------------------------------------------------------------------------
+  # Oracle Database XE 21c (Production — RHEL 9)
+  # ---------------------------------------------------------------------------
+  oracle:
+    image: container-registry.oracle.com/database/express:21.3.0-xe
+    container_name: icao-local-pkd-oracle
+    ports:
+      - "11521:1521"
+      - "15500:5500"
+    environment:
+      - ORACLE_PWD=${ORACLE_PASSWORD}
+      - ORACLE_CHARACTERSET=AL32UTF8
+      - TZ=Asia/Seoul
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+      - ./db-oracle/init:/opt/oracle/scripts/startup:ro
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"$ORACLE_PWD\"@//localhost:1521/XE as sysdba | grep -q 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 300s
+    restart: unless-stopped
+    shm_size: 1g
+    profiles:
+      - oracle
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL Database (optional — for testing/migration)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15
+    container_name: icao-local-pkd-postgres
+    profiles:
+      - postgres
+    ports:
+      - "15432:5432"
+    environment:
+      - POSTGRES_USER=pkd
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=localpkd
+      - TZ=Asia/Seoul
+      - PGTZ=Asia/Seoul
+    volumes:
+      - ../.docker-data/postgres:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pkd -d localpkd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenLDAP Node 1 (MMR Master)
+  # ---------------------------------------------------------------------------
+  openldap1:
+    build:
+      context: ../openldap
+      dockerfile: Dockerfile
+    image: icao-local-pkd-openldap:1.5.0
+    container_name: icao-local-pkd-openldap1
+    hostname: openldap1
+    command: --copy-service
+    ports:
+      - "13891:389"
+    environment:
+      - LDAP_ORGANISATION=SmartCore Inc
+      - LDAP_DOMAIN=ldap.smartcoreinc.com
+      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}
+      - LDAP_READONLY_USER=false
+      - LDAP_TLS=false
+    volumes:
+      - ../.docker-data/openldap1/data:/var/lib/ldap
+      - ../.docker-data/openldap1/config:/etc/ldap/slapd.d
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # OpenLDAP Node 2 (MMR Master)
+  # ---------------------------------------------------------------------------
+  openldap2:
+    image: icao-local-pkd-openldap:1.5.0
+    container_name: icao-local-pkd-openldap2
+    hostname: openldap2
+    command: --copy-service
+    ports:
+      - "13892:389"
+    environment:
+      - LDAP_ORGANISATION=SmartCore Inc
+      - LDAP_DOMAIN=ldap.smartcoreinc.com
+      - LDAP_BASE_DN=dc=ldap,dc=smartcoreinc,dc=com
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+      - LDAP_CONFIG_PASSWORD=${LDAP_CONFIG_PASSWORD}
+      - LDAP_READONLY_USER=false
+      - LDAP_TLS=false
+    volumes:
+      - ../.docker-data/openldap2/data:/var/lib/ldap
+      - ../.docker-data/openldap2/config:/etc/ldap/slapd.d
+    networks:
+      - pkd-network
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-b", "", "-s", "base"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Swagger UI (API Documentation)
+  # ---------------------------------------------------------------------------
+  swagger-ui:
+    image: swaggerapi/swagger-ui:latest
+    container_name: icao-local-pkd-swagger
+    ports:
+      - "18090:8080"
+    environment:
+      - URLS=[{"url":"/api/docs/pkd-management.yaml","name":"PKD Management API v2.9.1"},{"url":"/api/docs/pa-service.yaml","name":"PA Service API v2.1.1"},{"url":"/api/docs/pkd-relay-service.yaml","name":"PKD Relay Service API v2.0.0"},{"url":"/api/docs/monitoring-service.yaml","name":"Monitoring Service API v1.1.0"}]
+      - URLS_PRIMARY_NAME=PKD Management API v2.9.1
+    volumes:
+      - ../docs/openapi:/usr/share/nginx/html/api/docs:ro
+    networks:
+      - pkd-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  pkd-network:
+    driver: bridge
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  oracle-data:
+    name: icao-local-pkd-oracle-data

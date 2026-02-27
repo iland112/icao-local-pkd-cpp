@@ -17,6 +17,7 @@ DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
 SERVER_DAYS=365
 SERVER_KEY_SIZE=2048
 SSL_DIR=".docker-data/ssl"
+EXTRA_IPS=""
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -26,6 +27,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --days)
             SERVER_DAYS="$2"
+            shift 2
+            ;;
+        --ip)
+            EXTRA_IPS="$EXTRA_IPS $2"
             shift 2
             ;;
         *)
@@ -80,6 +85,13 @@ DNS.2 = localhost
 DNS.3 = api-gateway
 IP.1 = 127.0.0.1
 EOF
+
+# Add extra IPs to SAN
+IP_IDX=2
+for IP in $EXTRA_IPS; do
+    echo "IP.$IP_IDX = $IP" >> "$SSL_DIR/server.cnf"
+    IP_IDX=$((IP_IDX + 1))
+done
 
 openssl req -new \
     -key "$SSL_DIR/server.key" \

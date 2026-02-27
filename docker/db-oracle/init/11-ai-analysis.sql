@@ -3,6 +3,12 @@
 -- ML-based certificate anomaly detection, pattern analysis, forensic scoring
 -- =============================================================================
 
+CONNECT pkd_user/pkd_password@XEPDB1;
+SET SQLBLANKLINES ON;
+
+-- Allow re-runs (skip "already exists" errors)
+WHENEVER SQLERROR CONTINUE;
+
 -- AI Analysis Results (per-certificate anomaly scores and risk assessment)
 CREATE TABLE ai_analysis_result (
     id VARCHAR2(128) PRIMARY KEY,
@@ -47,3 +53,7 @@ CREATE INDEX idx_ai_score ON ai_analysis_result(anomaly_score DESC);
 CREATE INDEX idx_ai_risk_score ON ai_analysis_result(risk_score DESC);
 CREATE INDEX idx_ai_forensic ON ai_analysis_result(forensic_risk_level);
 CREATE INDEX idx_ai_forensic_score ON ai_analysis_result(forensic_risk_score DESC);
+
+COMMIT;
+
+EXIT;

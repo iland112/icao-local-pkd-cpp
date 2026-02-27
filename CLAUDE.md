@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.23.0
-**Last Updated**: 2026-02-26
+**Current Version**: v2.24.0
+**Last Updated**: 2026-02-27
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -484,6 +484,7 @@ docker-compose -f docker/docker-compose.yaml restart pkd-management pa-service p
 ```
 scripts/
 +-- docker/          # Docker management (start, stop, restart, health, logs, backup)
++-- podman/          # Podman management for Production RHEL 9 (same structure as docker/)
 +-- luckfox/         # ARM64 deployment (same structure as docker/)
 +-- build/           # Build scripts (build, rebuild-*, check-freshness, verify-*)
 +-- helpers/         # Utility functions (db-helpers.sh, ldap-helpers.sh)
@@ -494,7 +495,9 @@ scripts/
 +-- dev/             # Development scripts (start/stop/rebuild/logs dev services)
 ```
 
-**Root convenience wrappers**: `./docker-start.sh`, `./docker-stop.sh`, `./docker-health.sh`, `./docker-clean-and-init.sh`
+**Root convenience wrappers**:
+- Docker: `./docker-start.sh`, `./docker-stop.sh`, `./docker-health.sh`, `./docker-clean-and-init.sh`
+- Podman: `./podman-start.sh`, `./podman-stop.sh`, `./podman-health.sh`, `./podman-clean-and-init.sh`
 
 ---
 
@@ -571,6 +574,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.24.0 (2026-02-27) - Production Podman Migration + Oracle Schema Consolidation
+- **Podman Migration**: Production RHEL 9 서버 (10.0.0.220) Docker CE → Podman 5.6.0 전환
+- **Podman Compose**: `docker/docker-compose.podman.yaml` — condition 제거, image 필드 추가, init 컨테이너 제거
+- **Podman scripts**: `scripts/podman/` (start, stop, restart, health, logs, clean-and-init, backup, restore) + root wrappers
+- **SELinux Rootless Podman**: `:Z`/`:z` 볼륨 라벨 대신 2단계 `chcon` 사전 라벨링 (`container_file_t` + MCS `s0` 제거)
+- **CNI DNS**: `podman-plugins` 패키지의 dnsname 플러그인으로 컨테이너 간 호스트명 해석 (Docker 내장 DNS 대체)
+- **nginx DNS**: Podman aardvark-dns 게이트웨이 IP 자동 감지 → resolver 치환
+- **LDAP init**: `clean-and-init.sh`에서 `podman exec`로 직접 MMR + DIT 초기화 (Docker init 컨테이너 불필요)
+- **Oracle schema**: `docker/db-oracle/init/03-core-schema.sql` 리팩토링 — 독립 실행 가능, `CONNECT`/`SET SQLBLANKLINES`/`WHENEVER SQLERROR`/`COMMIT`/`EXIT` 추가
+- **Oracle schema**: `10-code-master.sql`, `11-ai-analysis.sql`, `12-api-clients.sql` — 독립 실행 지시문 추가
+- **SSL cert**: `init-cert.sh`, `renew-cert.sh` — `--ip` 플래그 추가 (SAN에 추가 IP 주입)
+- **Client script**: `setup-pkd-access.ps1` — IP 10.0.0.163→10.0.0.220, CA 인증서 갱신
+- Documentation: `PODMAN_DEPLOYMENT.md` (SELinux MCS, DNS, 트러블슈팅), `SERVER_SETUP_10.0.0.220.md` 업데이트
+- 서버 이전: `SERVER_SETUP_10.0.0.163.md` 삭제 (구 서버)
+- 23+ files changed (15 new, 8+ modified, 1 deleted)
 
 ### v2.23.0 (2026-02-26) - DoS 방어 보강 + 대시보드 통계 수정 + Admin 권한 UI
 - **Security — DoS 방어**: LDIF 업로드 파일 크기 제한 (100MB), Master List 업로드 파일 크기 제한 (30MB), 크기 초과 시 HTTP 413 반환

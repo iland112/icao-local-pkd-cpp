@@ -1,4 +1,4 @@
-# RHEL 9 서버 설정 — 10.0.0.163
+# RHEL 9 서버 설정 — 10.0.0.220 (static)
 
 **문서 작성일**: 2026-02-27
 **작업자**: kbjung
@@ -46,8 +46,8 @@
 | 항목 | 값 |
 |------|-----|
 | 호스트명 | pkd.smartcoreinc.com |
-| IP 주소 | 10.0.0.163/24 |
-| 인터페이스 | eno1 (dynamic, noprefixroute) |
+| IP 주소 | 10.0.0.220/24 (static) |
+| 인터페이스 | eno1 |
 | 게이트웨이 | 10.0.0.255 (broadcast) |
 
 ### /etc/hosts
@@ -63,7 +63,7 @@
 
 | 항목 | 값 |
 |------|-----|
-| SSH | `ssh scpkd@10.0.0.163` |
+| SSH | `ssh scpkd@10.0.0.220` |
 | 계정 | scpkd |
 | 비밀번호 | core |
 | sudo | 가능 (비밀번호: core) |
@@ -132,21 +132,54 @@ sudo subscription-manager repos --list-enabled
 
 ---
 
-## 6. Docker CE 설치
+## 6. 컨테이너 런타임: Docker → Podman 마이그레이션
+
+### 6.1 초기 Docker CE 설치 (2026-02-27, 제거됨)
 
 ```bash
+# 아래는 초기 설치 기록 — 현재 제거됨
 sudo dnf config-manager --add-repo https://download.docker.com/linux/rhel/docker-ce.repo
 sudo dnf install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-sudo systemctl enable --now docker
-sudo usermod -aG docker scpkd
 ```
 
-| 패키지 | 버전 |
-|--------|------|
-| Docker CE | 29.2.1 |
-| Docker Compose | v5.1.0 |
-| Buildx | 0.31.1 |
-| containerd | 2.2.1 |
+### 6.2 Podman 마이그레이션 (2026-02-27)
+
+Docker CE를 제거하고 Podman (RHEL 9 기본 포함)으로 전환:
+
+```bash
+# Docker 이미지를 Podman으로 복사 (skopeo)
+for img in docker-pkd-management docker-pa-service docker-pkd-relay \
+           docker-frontend docker-monitoring-service docker-ai-analysis; do
+    sudo skopeo copy docker-daemon:$img:latest \
+         containers-storage:docker.io/library/$img:latest
+done
+
+# Docker CE 제거
+sudo systemctl stop docker
+sudo dnf remove -y docker-ce docker-ce-cli containerd.io \
+    docker-buildx-plugin docker-compose-plugin
+sudo rm -rf /var/lib/docker /var/lib/containerd
+
+# podman-compose (pip 설치)
+pip3 install --user podman-compose  # → ~/.local/bin/
+
+# CNI DNS 플러그인 (컨테이너 간 호스트명 해석 필수)
+sudo dnf install -y podman-plugins
+
+# Rootless 모드에서 80/443 포트 바인딩 허용
+echo 'net.ipv4.ip_unprivileged_port_start=80' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -w net.ipv4.ip_unprivileged_port_start=80
+```
+
+| 패키지 | 버전 | 비고 |
+|--------|------|------|
+| Podman | 5.6.0 | RHEL 9 기본 포함 |
+| podman-compose | 1.5.0 | pip3 설치 |
+| podman-plugins | 5.6.0-14 | dnsname CNI 플러그인 |
+| aardvark-dns | 1.16.0 | 설치됨 (미사용, CNI 백엔드) |
+| netavark | 1.16.0 | 설치됨 (미사용, CNI 백엔드) |
+
+> **Network backend**: CNI (netavark 아님). `podman-plugins`의 dnsname 플러그인이 DNS 해석 담당
 
 ---
 
@@ -176,12 +209,9 @@ git checkout main
 ### .env 파일 (`/home/scpkd/icao-local-pkd/.env`)
 
 ```
-DB_TYPE=postgres
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=localpkd
-DB_USER=pkd
-DB_PASSWORD=pkd_test_password_123
+DB_TYPE=oracle
+ORACLE_USER=pkd_user
+ORACLE_PASSWORD=pkd_password
 LDAP_READ_HOSTS=openldap1:389,openldap2:389
 LDAP_WRITE_HOST=openldap1
 LDAP_WRITE_PORT=389
@@ -211,7 +241,7 @@ Private CA 기반 자체 서명 인증서 생성:
 cd /home/scpkd/icao-local-pkd
 mkdir -p .docker-data/ssl
 # CA (RSA 4096, 10년) + Server cert (RSA 2048, 1년)
-# SAN: pkd.smartcoreinc.com, localhost, 127.0.0.1, 10.0.0.163
+# SAN: pkd.smartcoreinc.com, localhost, 127.0.0.1, 10.0.0.220
 ```
 
 | 파일 | 용도 |
@@ -227,55 +257,58 @@ mkdir -p .docker-data/ssl
 
 ---
 
-## 10. 시스템 기동
+## 10. 시스템 기동 (Podman)
 
 ```bash
 cd /home/scpkd/icao-local-pkd
 
-# vcpkg-base 빌드 (최초 1회, 20-30분)
-sudo docker compose -f docker/docker-compose.yaml --profile build-only build vcpkg-base
+# 최초 설치: 완전 초기화 (Oracle + LDAP DIT + 서비스)
+./podman-clean-and-init.sh
 
-# 전체 서비스 빌드
-sudo docker compose -f docker/docker-compose.yaml build
+# 일반 시작
+./podman-start.sh
 
-# 기동 (PostgreSQL 프로파일 포함)
-sudo docker compose -f docker/docker-compose.yaml --profile postgres up -d
+# 헬스 체크
+./podman-health.sh
 ```
 
-### 로그 디렉토리 권한 (필수)
+### SELinux 볼륨 라벨링 (필수)
 
 ```bash
-sudo chmod 777 .docker-data/pkd-logs .docker-data/pkd-uploads .docker-data/pa-logs \
-    .docker-data/sync-logs .docker-data/monitoring-logs .docker-data/ai-analysis-logs
+# Rootless Podman + SELinux Enforcing 모드:
+# `:Z`/`:z` 볼륨 라벨 사용 불가 (CAP_MAC_ADMIN 없음)
+# 대신 2단계 사전 라벨링:
+chcon -Rt container_file_t .docker-data/ docker/db-oracle/init data/cert nginx/ docs/openapi
+chcon -R -l s0 .docker-data/ docker/db-oracle/init data/cert nginx/ docs/openapi
+# → clean-and-init.sh, start.sh가 자동으로 수행
 ```
 
-> Drogon 프레임워크가 로그 경로에 쓰기 권한이 없으면 컨테이너가 즉시 종료됨
+### 컨테이너 상태 (2026-02-27 Podman 마이그레이션 완료)
 
-### 컨테이너 상태 (2026-02-27 기동 완료)
-
-| 컨테이너 | 상태 |
-|----------|------|
-| icao-local-pkd-api-gateway | healthy |
-| icao-local-pkd-management | healthy |
-| icao-local-pkd-pa-service | healthy |
-| icao-local-pkd-relay | healthy |
-| icao-local-pkd-monitoring | healthy |
-| icao-local-pkd-ai-analysis | healthy |
-| icao-local-pkd-frontend | Up |
-| icao-local-pkd-postgres | healthy |
-| icao-local-pkd-openldap1 | healthy |
-| icao-local-pkd-openldap2 | healthy |
-| icao-local-pkd-swagger | healthy |
+| 컨테이너 | 상태 | 런타임 |
+|----------|------|--------|
+| icao-local-pkd-api-gateway | healthy | Podman |
+| icao-local-pkd-management | healthy | Podman |
+| icao-local-pkd-pa-service | healthy | Podman |
+| icao-local-pkd-relay | healthy | Podman |
+| icao-local-pkd-monitoring | healthy | Podman |
+| icao-local-pkd-ai-analysis | healthy | Podman |
+| icao-local-pkd-frontend | Up | Podman |
+| icao-local-pkd-oracle | healthy | Podman |
+| icao-local-pkd-openldap1 | healthy | Podman |
+| icao-local-pkd-openldap2 | healthy | Podman |
+| icao-local-pkd-swagger | healthy | Podman |
 
 ### 접속 정보
 
 | 서비스 | URL |
 |--------|-----|
-| Frontend (HTTPS) | https://10.0.0.163/ |
-| Frontend (HTTP) | http://10.0.0.163/ |
-| API Gateway (HTTPS) | https://10.0.0.163/api |
-| API Gateway (HTTP) | http://10.0.0.163:8080/api |
-| Swagger UI | http://10.0.0.163:18081 |
+| Frontend (HTTPS) | https://pkd.smartcoreinc.com |
+| Frontend (HTTP) | http://pkd.smartcoreinc.com |
+| API Gateway (HTTPS) | https://pkd.smartcoreinc.com/api |
+| API Gateway (HTTP) | http://pkd.smartcoreinc.com/api |
+| API Gateway (내부) | http://localhost:18080/api |
+| Swagger UI | http://localhost:18090 |
 
 ---
 
@@ -311,7 +344,7 @@ Private CA 기반 인증서이므로 클라이언트 PC에서 CA 인증서를 �
 **사용법**: 두 파일을 같은 폴더에 복사 → `setup-pkd-access.bat` 더블클릭 → UAC "예"
 
 **스크립트 동작**:
-1. `hosts` 파일에 `10.0.0.163 pkd.smartcoreinc.com` 추가
+1. `hosts` 파일에 `10.0.0.220 pkd.smartcoreinc.com` 추가
 2. Private CA 인증서를 Windows 신뢰할 수 있는 루트 인증 기관에 등록
 3. DNS 캐시 초기화
 4. `https://pkd.smartcoreinc.com/health` 접속 테스트
@@ -323,7 +356,7 @@ Private CA 기반 인증서이므로 클라이언트 PC에서 CA 인증서를 �
 
 1. `hosts` 파일 (`C:\Windows\System32\drivers\etc\hosts`):
    ```
-   10.0.0.163    pkd.smartcoreinc.com
+   10.0.0.220    pkd.smartcoreinc.com
    ```
 
 2. CA 인증서 등록: `.docker-data/ssl/ca.crt` 파일을 더블클릭 → "인증서 설치" → "로컬 컴퓨터" → "신뢰할 수 있는 루트 인증 기관"
@@ -335,13 +368,17 @@ Private CA 기반 인증서이므로 클라이언트 PC에서 CA 인증서를 �
 - [x] 호스트명 변경 (`pkd.smartcoreinc.com`)
 - [x] `/etc/hosts` 업데이트
 - [x] Red Hat Developer 계정 등록 (SCA 활성)
-- [x] Docker CE 29.2.1 설치
-- [x] Docker Compose v5.1.0 설치
+- [x] Docker CE 29.2.1 설치 → **Podman 5.6.0으로 마이그레이션 완료**
+- [x] Docker CE 제거, 이미지 skopeo 마이그레이션
+- [x] podman-compose 1.5.0 설치 (pip)
+- [x] podman-plugins 설치 (CNI dnsname DNS)
+- [x] sysctl 특권 포트 허용 (80/443)
 - [x] 방화벽 포트 설정 (80, 443, 8080)
 - [x] 프로젝트 소스 배포 (git clone main)
-- [x] SSL 인증서 생성 (Private CA)
-- [x] 전체 서비스 빌드 및 기동 (11 컨테이너)
-- [x] API health check 확인
+- [x] SSL 인증서 생성 (Private CA, SAN: 10.0.0.220)
+- [x] 전체 서비스 기동 (11 컨테이너, Podman rootless)
+- [x] SELinux MCS 라벨링 해결
+- [x] API health check 확인 (HTTP + HTTPS)
 - [x] 클라이언트 HTTPS 접속 설정 스크립트 (`scripts/client/`)
 - [ ] 데이터 업로드 (LDIF/Master List)
-- [ ] DNS 설정 (pkd.smartcoreinc.com → 10.0.0.163)
+- [ ] DNS 설정 (pkd.smartcoreinc.com → 10.0.0.220)

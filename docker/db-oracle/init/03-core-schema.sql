@@ -1,26 +1,25 @@
 -- =============================================================================
--- ICAO Local PKD - Core Database Schema (Oracle Version)
+-- Oracle Database Core Schema
+-- ICAO Local PKD - Core Tables (Oracle Version)
 -- =============================================================================
--- Version: 2.0.0 (Oracle Migration)
--- Created: 2026-02-05
--- Description: Core tables for certificate storage, validation, and duplicates
--- Converted from PostgreSQL to Oracle DDL
+-- Execution: sqlplus / as sysdba @03-core-schema.sql
+-- Requires: 01-create-user.sql (PKD_USER must exist)
 -- =============================================================================
 
--- SQL*Plus settings
+-- Note: Oracle startup scripts run as SYS, so we need to connect as PKD_USER
+-- to create tables in the correct schema.
+
 SET SQLBLANKLINES ON
 
--- Connect as PKD_USER to XEPDB1 (Pluggable Database)
 CONNECT pkd_user/pkd_password@XEPDB1;
 
--- Allow re-runs: skip "already exists" errors (ORA-00955, ORA-01430, ORA-02261, ORA-01442)
+-- Allow re-runs (skip "already exists" errors)
 WHENEVER SQLERROR CONTINUE;
 
 -- =============================================================================
--- File Upload Tables
+-- Sequences (Oracle doesn't have SERIAL, use SEQUENCE + DEFAULT SYS_GUID())
 -- =============================================================================
 
--- Sequences for auto-increment columns
 CREATE SEQUENCE seq_uploaded_file START WITH 1 INCREMENT BY 1 NOCACHE;
 CREATE SEQUENCE seq_certificate START WITH 1 INCREMENT BY 1 NOCACHE;
 CREATE SEQUENCE seq_crl START WITH 1 INCREMENT BY 1 NOCACHE;
@@ -31,120 +30,86 @@ CREATE SEQUENCE seq_cert_duplicates START WITH 1 INCREMENT BY 1 NOCACHE;
 CREATE SEQUENCE seq_pa_verification START WITH 1 INCREMENT BY 1 NOCACHE;
 CREATE SEQUENCE seq_pa_data_group START WITH 1 INCREMENT BY 1 NOCACHE;
 CREATE SEQUENCE seq_audit_log START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE SEQUENCE seq_icao_versions START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE SEQUENCE seq_link_certificate START WITH 1 INCREMENT BY 1 NOCACHE;
+CREATE SEQUENCE seq_lc_issuers START WITH 1 INCREMENT BY 1 NOCACHE;
 
--- Uploaded files tracking (LDIF, Master List, etc.)
+-- =============================================================================
+-- Uploaded File (file upload tracking)
+-- =============================================================================
+
 CREATE TABLE uploaded_file (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
     file_name VARCHAR2(255) NOT NULL,
-    original_file_name VARCHAR2(255),
-    file_path VARCHAR2(500),
-    file_size NUMBER(19) NOT NULL,
-    file_hash VARCHAR2(64) NOT NULL,
-    file_format VARCHAR2(20) NOT NULL,
-    collection_number VARCHAR2(50),
-    status VARCHAR2(30) DEFAULT 'PENDING' NOT NULL,
-    processing_mode VARCHAR2(10) DEFAULT 'AUTO' NOT NULL,
-    upload_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
-    completed_timestamp TIMESTAMP,
-    error_message CLOB,
-    uploaded_by VARCHAR2(100),
-
-    -- Processing statistics
+    file_type VARCHAR2(50) NOT NULL,
+    file_size NUMBER(19),
+    file_hash VARCHAR2(64),
+    upload_mode VARCHAR2(20) DEFAULT 'AUTO',
+    status VARCHAR2(20) DEFAULT 'PENDING',
+    processing_stage VARCHAR2(50),
     total_entries NUMBER(10) DEFAULT 0,
     processed_entries NUMBER(10) DEFAULT 0,
+    success_count NUMBER(10) DEFAULT 0,
+    error_count NUMBER(10) DEFAULT 0,
+    duplicate_count NUMBER(10) DEFAULT 0,
     csca_count NUMBER(10) DEFAULT 0,
     dsc_count NUMBER(10) DEFAULT 0,
     dsc_nc_count NUMBER(10) DEFAULT 0,
     crl_count NUMBER(10) DEFAULT 0,
     ml_count NUMBER(10) DEFAULT 0,
-    mlsc_count NUMBER(10) DEFAULT 0,  -- Master List Signer Certificate count
-    validation_valid_count NUMBER(10) DEFAULT 0,
-    validation_invalid_count NUMBER(10) DEFAULT 0,
-    validation_pending_count NUMBER(10) DEFAULT 0,
-    validation_error_count NUMBER(10) DEFAULT 0,
-    trust_chain_valid_count NUMBER(10) DEFAULT 0,
-    trust_chain_invalid_count NUMBER(10) DEFAULT 0,
-    csca_not_found_count NUMBER(10) DEFAULT 0,
+    mlsc_count NUMBER(10) DEFAULT 0,
+    link_cert_count NUMBER(10) DEFAULT 0,
+    valid_count NUMBER(10) DEFAULT 0,
+    invalid_count NUMBER(10) DEFAULT 0,
     expired_count NUMBER(10) DEFAULT 0,
     valid_period_count NUMBER(10) DEFAULT 0,
-    revoked_count NUMBER(10) DEFAULT 0,
     icao_compliant_count NUMBER(10) DEFAULT 0,
     icao_non_compliant_count NUMBER(10) DEFAULT 0,
     icao_warning_count NUMBER(10) DEFAULT 0,
-    csca_extracted_from_ml NUMBER(10) DEFAULT 0 NOT NULL,
-    csca_duplicates NUMBER(10) DEFAULT 0 NOT NULL,
-
-    CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML', 'PEM', 'DER', 'CER', 'P7B', 'DL', 'CRL')),
-    CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
-    CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO', 'MANUAL'))
+    processing_errors CLOB,
+    error_message VARCHAR2(2000),
+    uploaded_by VARCHAR2(100),
+    uploaded_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    completed_at TIMESTAMP
 );
 
 CREATE INDEX idx_uploaded_file_status ON uploaded_file(status);
-CREATE INDEX idx_uploaded_file_timestamp ON uploaded_file(upload_timestamp DESC);
+CREATE INDEX idx_uploaded_file_timestamp ON uploaded_file(uploaded_at);
 CREATE INDEX idx_uploaded_file_file_hash ON uploaded_file(file_hash);
 
 -- =============================================================================
--- Certificate Tables
+-- Certificate (CSCA, DSC, DSC_NC, MLSC)
 -- =============================================================================
 
--- Certificates (CSCA, DSC, DSC_NC, MLSC)
 CREATE TABLE certificate (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
     upload_id VARCHAR2(36),
+    first_upload_id VARCHAR2(36),
     certificate_type VARCHAR2(20) NOT NULL,
-    country_code VARCHAR2(3) NOT NULL,
-    subject_dn CLOB NOT NULL,
-    issuer_dn CLOB NOT NULL,
-    serial_number VARCHAR2(100) NOT NULL,
+    country_code VARCHAR2(3),
+    subject_dn CLOB,
+    issuer_dn CLOB,
+    serial_number VARCHAR2(255),
     fingerprint_sha256 VARCHAR2(64) NOT NULL,
-    not_before TIMESTAMP,
-    not_after TIMESTAMP,
-    certificate_data BLOB NOT NULL,
-
-    -- Validation status
+    not_before VARCHAR2(50),
+    not_after VARCHAR2(50),
+    certificate_data BLOB,
+    public_key_algorithm VARCHAR2(50),
+    public_key_size NUMBER(10),
+    signature_algorithm VARCHAR2(50),
+    key_usage CLOB,
+    basic_constraints VARCHAR2(500),
+    authority_key_identifier VARCHAR2(255),
+    subject_key_identifier VARCHAR2(255),
+    is_self_signed NUMBER(1) DEFAULT 0,
     validation_status VARCHAR2(20) DEFAULT 'PENDING',
     validation_message CLOB,
-    validated_at TIMESTAMP,
-
-    -- LDAP DN for stored certificate
-    ldap_dn CLOB,
-    ldap_dn_v2 VARCHAR2(512),
+    source_type VARCHAR2(50),
+    ldap_dn VARCHAR2(512),
     stored_in_ldap NUMBER(1) DEFAULT 0,
-    stored_at TIMESTAMP,
-
     created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-
-    -- Duplicate tracking
-    duplicate_count NUMBER(10) DEFAULT 0 NOT NULL,
-    first_upload_id VARCHAR2(36),
-    last_seen_upload_id VARCHAR2(36),
-    last_seen_at TIMESTAMP,
-
-    -- X.509 metadata fields (15 fields)
-    version NUMBER(3) DEFAULT 2,
-    signature_algorithm VARCHAR2(50),
-    signature_hash_algorithm VARCHAR2(20),
-    public_key_algorithm VARCHAR2(30),
-    public_key_size NUMBER(10),
-    public_key_curve VARCHAR2(50),
-    key_usage VARCHAR2(500),
-    extended_key_usage VARCHAR2(500),
-    is_ca NUMBER(1) DEFAULT 0,
-    path_len_constraint NUMBER(10),
-    subject_key_identifier VARCHAR2(128),
-    authority_key_identifier VARCHAR2(128),
-    crl_distribution_points VARCHAR2(2000),
-    ocsp_responder_url VARCHAR2(500),
-    is_self_signed NUMBER(1) DEFAULT 0,
-
-    -- Source tracking
-    source_type VARCHAR2(50) DEFAULT 'LDIF_PARSED',
-
-    CONSTRAINT fk_cert_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
-    CONSTRAINT fk_cert_first_upload FOREIGN KEY (first_upload_id) REFERENCES uploaded_file(id),
-    CONSTRAINT fk_cert_last_upload FOREIGN KEY (last_seen_upload_id) REFERENCES uploaded_file(id),
-    CONSTRAINT chk_cert_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
-    CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'EXPIRED_VALID', 'REVOKED', 'UNKNOWN'))
+    updated_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    CONSTRAINT uq_cert_fingerprint UNIQUE (fingerprint_sha256)
 );
 
 CREATE INDEX idx_cert_upload_id ON certificate(upload_id);
@@ -154,96 +119,70 @@ CREATE INDEX idx_cert_fingerprint ON certificate(fingerprint_sha256);
 CREATE INDEX idx_cert_serial ON certificate(serial_number);
 CREATE INDEX idx_cert_stored_ldap ON certificate(stored_in_ldap);
 CREATE INDEX idx_cert_first_upload ON certificate(first_upload_id);
-CREATE INDEX idx_cert_ldap_dn_v2 ON certificate(ldap_dn_v2);
-CREATE UNIQUE INDEX idx_cert_unique ON certificate(certificate_type, fingerprint_sha256);
-
--- Note: CLOB columns (subject_dn, issuer_dn) cannot be indexed in Oracle
--- Searches use DBMS_LOB.SUBSTR or full table scan - acceptable for certificate lookups
+CREATE INDEX idx_cert_ldap_dn_v2 ON certificate(ldap_dn);
 
 -- =============================================================================
--- CRL Tables
+-- CRL (Certificate Revocation List)
 -- =============================================================================
 
--- Certificate Revocation Lists
 CREATE TABLE crl (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
     upload_id VARCHAR2(36),
-    country_code VARCHAR2(3) NOT NULL,
-    issuer_dn CLOB NOT NULL,
-    this_update TIMESTAMP NOT NULL,
-    next_update TIMESTAMP,
+    country_code VARCHAR2(3),
+    issuer_dn CLOB,
+    this_update VARCHAR2(50),
+    next_update VARCHAR2(50),
     crl_number VARCHAR2(100),
-    crl_binary BLOB NOT NULL,
-    fingerprint_sha256 VARCHAR2(64) NOT NULL UNIQUE,  -- v2.2.2 FIX
-
-    -- Validation
-    validation_status VARCHAR2(20) DEFAULT 'PENDING',
-    signature_valid NUMBER(1),
-
-    -- LDAP storage
-    ldap_dn CLOB,
+    crl_binary BLOB,
+    fingerprint_sha256 VARCHAR2(64),
+    signature_algorithm VARCHAR2(50),
+    revoked_count NUMBER(10) DEFAULT 0,
+    ldap_dn VARCHAR2(512),
     stored_in_ldap NUMBER(1) DEFAULT 0,
-    stored_at TIMESTAMP,
-
-    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-
-    CONSTRAINT fk_crl_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
-    CONSTRAINT chk_crl_validation CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED'))
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_crl_upload_id ON crl(upload_id);
 CREATE INDEX idx_crl_country ON crl(country_code);
--- Note: issuer_dn is CLOB, cannot create functional index on CLOB in Oracle
--- Note: fingerprint_sha256 already has UNIQUE constraint (implicit index)
 
--- Revoked certificates (from CRL)
+-- =============================================================================
+-- Revoked Certificate (from CRL parsing)
+-- =============================================================================
+
 CREATE TABLE revoked_certificate (
-    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
-    crl_id VARCHAR2(36),
-    serial_number VARCHAR2(100) NOT NULL,
-    revocation_date TIMESTAMP NOT NULL,
-    revocation_reason VARCHAR2(50),
-
-    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-
-    CONSTRAINT fk_revoked_crl FOREIGN KEY (crl_id) REFERENCES crl(id) ON DELETE CASCADE
+    id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    crl_id VARCHAR2(36) NOT NULL,
+    serial_number VARCHAR2(255) NOT NULL,
+    revocation_date VARCHAR2(50),
+    revocation_reason VARCHAR2(50)
 );
 
 CREATE INDEX idx_revoked_crl_id ON revoked_certificate(crl_id);
 CREATE INDEX idx_revoked_serial ON revoked_certificate(serial_number);
 
 -- =============================================================================
--- Master List Tables
+-- Master List
 -- =============================================================================
 
--- Master Lists (CMS SignedData containing CSCA certificates)
 CREATE TABLE master_list (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
     upload_id VARCHAR2(36),
-    signer_country VARCHAR2(3) NOT NULL,
-    version NUMBER(10),
-    issue_date TIMESTAMP,
-    next_update TIMESTAMP,
-    ml_binary BLOB NOT NULL,
-    fingerprint_sha256 VARCHAR2(64) NOT NULL,
-
-    -- Signer certificate info
+    signer_country VARCHAR2(3),
     signer_dn CLOB,
-    signer_certificate_id VARCHAR2(36),
-    signature_valid NUMBER(1),
-
-    -- Statistics
-    csca_certificate_count NUMBER(10) DEFAULT 0,
-
-    -- LDAP storage
-    ldap_dn CLOB,
+    signer_fingerprint VARCHAR2(64),
+    total_certificates NUMBER(10) DEFAULT 0,
+    csca_count NUMBER(10) DEFAULT 0,
+    ml_signer_count NUMBER(10) DEFAULT 0,
+    content_type VARCHAR2(100),
+    signing_time VARCHAR2(50),
+    cms_version NUMBER(5),
+    digest_algorithm VARCHAR2(50),
+    signature_algorithm VARCHAR2(50),
+    raw_data BLOB,
+    fingerprint_sha256 VARCHAR2(64),
+    ldap_dn VARCHAR2(512),
     stored_in_ldap NUMBER(1) DEFAULT 0,
-    stored_at TIMESTAMP,
-
-    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-
-    CONSTRAINT fk_ml_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
-    CONSTRAINT fk_ml_signer_cert FOREIGN KEY (signer_certificate_id) REFERENCES certificate(id)
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_ml_upload_id ON master_list(upload_id);
@@ -251,138 +190,104 @@ CREATE INDEX idx_ml_signer_country ON master_list(signer_country);
 CREATE INDEX idx_ml_fingerprint ON master_list(fingerprint_sha256);
 
 -- =============================================================================
--- Deviation List Tables
+-- Deviation List
 -- =============================================================================
 
--- Deviation List (ICAO Doc 9303 Part 12 - CMS SignedData with OID 2.23.136.1.1.7)
 CREATE TABLE deviation_list (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
     upload_id VARCHAR2(36),
-    issuer_country VARCHAR2(3) NOT NULL,
-    version NUMBER(10) DEFAULT 0,
-    hash_algorithm VARCHAR2(20),
-    signing_time TIMESTAMP,
-    dl_binary BLOB NOT NULL,
-    fingerprint_sha256 VARCHAR2(64) NOT NULL,
-    signer_dn CLOB,
-    signer_certificate_id VARCHAR2(36),
-    signature_valid NUMBER(1),
-    deviation_count NUMBER(10) DEFAULT 0,
-    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-    CONSTRAINT fk_dl_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
-    CONSTRAINT fk_dl_signer_cert FOREIGN KEY (signer_certificate_id) REFERENCES certificate(id),
-    CONSTRAINT uk_dl_fingerprint UNIQUE (fingerprint_sha256)
+    issuer_country VARCHAR2(3),
+    issuer_dn CLOB,
+    content_type VARCHAR2(100),
+    hash_algorithm VARCHAR2(50),
+    digest_algorithm VARCHAR2(50),
+    signature_algorithm VARCHAR2(50),
+    e_content_type VARCHAR2(100),
+    total_entries NUMBER(10) DEFAULT 0,
+    raw_data BLOB,
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_dl_upload_id ON deviation_list(upload_id);
 CREATE INDEX idx_dl_issuer_country ON deviation_list(issuer_country);
 
--- Deviation entries (individual defect records from DL)
+-- =============================================================================
+-- Deviation Entry
+-- =============================================================================
+
 CREATE TABLE deviation_entry (
-    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+    id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
     deviation_list_id VARCHAR2(36) NOT NULL,
-    certificate_issuer_dn CLOB,
-    certificate_serial_number VARCHAR2(100),
-    matched_certificate_id VARCHAR2(36),
-    defect_description CLOB,
-    defect_type_oid VARCHAR2(50) NOT NULL,
-    defect_category VARCHAR2(20),
-    defect_parameters BLOB,
-    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-    CONSTRAINT fk_de_dl FOREIGN KEY (deviation_list_id) REFERENCES deviation_list(id) ON DELETE CASCADE,
-    CONSTRAINT fk_de_cert FOREIGN KEY (matched_certificate_id) REFERENCES certificate(id)
+    category VARCHAR2(50),
+    description CLOB,
+    severity VARCHAR2(20),
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_de_dl_id ON deviation_entry(deviation_list_id);
-CREATE INDEX idx_de_category ON deviation_entry(defect_category);
+CREATE INDEX idx_de_category ON deviation_entry(category);
 
 -- =============================================================================
--- Validation Result Table
+-- Validation Result
 -- =============================================================================
 
--- Detailed validation results for trust chain verification
 CREATE TABLE validation_result (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
-    certificate_id VARCHAR2(128),  -- Stores fingerprint_sha256 (64 chars), not certificate UUID
+    certificate_id VARCHAR2(128),
     upload_id VARCHAR2(36),
-    certificate_type VARCHAR2(10) NOT NULL,
-    country_code VARCHAR2(3),
-    subject_dn CLOB NOT NULL,
-    issuer_dn CLOB NOT NULL,
-    serial_number VARCHAR2(255),
-
-    -- Overall validation status
-    validation_status VARCHAR2(20) NOT NULL,
-
-    -- Trust Chain validation
-    trust_chain_valid NUMBER(1) DEFAULT 0,
+    validation_status VARCHAR2(20),
+    trust_chain_valid NUMBER(1),
     trust_chain_message CLOB,
-
-    -- CSCA lookup details
-    csca_found NUMBER(1) DEFAULT 0,
+    csca_found NUMBER(1),
+    csca_fingerprint VARCHAR2(64),
     csca_subject_dn CLOB,
-    csca_serial_number VARCHAR2(255),
-    csca_country VARCHAR2(3),
-
-    -- Signature validation
-    signature_valid NUMBER(1) DEFAULT 0,
+    signature_valid NUMBER(1),
     signature_algorithm VARCHAR2(50),
-
-    -- Validity period
-    validity_period_valid NUMBER(1) DEFAULT 0,
-    not_before VARCHAR2(50),
-    not_after VARCHAR2(50),
-
-    -- Revocation status
-    revocation_status VARCHAR2(20) DEFAULT 'UNKNOWN',
-    crl_checked NUMBER(1) DEFAULT 0,
-    ocsp_checked NUMBER(1) DEFAULT 0,
-
-    -- ICAO 9303 compliance (per-certificate)
-    icao_compliant NUMBER(1) DEFAULT NULL,
+    validity_period_valid NUMBER(1),
+    not_before_date VARCHAR2(50),
+    not_after_date VARCHAR2(50),
+    revocation_status VARCHAR2(20),
+    crl_checked NUMBER(1),
+    crl_check_date VARCHAR2(50),
+    has_unknown_critical_extensions NUMBER(1),
+    unknown_extensions CLOB,
+    key_usage_valid NUMBER(1),
+    key_usage_warnings CLOB,
+    icao_compliant NUMBER(1),
     icao_compliance_level VARCHAR2(20),
     icao_violations CLOB,
-    icao_key_usage_compliant NUMBER(1) DEFAULT NULL,
-    icao_algorithm_compliant NUMBER(1) DEFAULT NULL,
-    icao_key_size_compliant NUMBER(1) DEFAULT NULL,
-    icao_validity_period_compliant NUMBER(1) DEFAULT NULL,
-    icao_extensions_compliant NUMBER(1) DEFAULT NULL,
-
-    validation_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
-
-    -- Note: certificate_id stores fingerprint, not FK to certificate.id
-    CONSTRAINT fk_validation_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
-    CONSTRAINT uk_validation_cert_upload UNIQUE(certificate_id, upload_id)
+    icao_key_usage_compliant NUMBER(1),
+    icao_algorithm_compliant NUMBER(1),
+    icao_key_size_compliant NUMBER(1),
+    icao_validity_period_compliant NUMBER(1),
+    icao_extensions_compliant NUMBER(1),
+    validated_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_validation_cert ON validation_result(certificate_id);
 CREATE INDEX idx_validation_upload ON validation_result(upload_id);
 CREATE INDEX idx_validation_status ON validation_result(validation_status);
 CREATE INDEX idx_validation_trust_chain ON validation_result(trust_chain_valid);
-CREATE INDEX idx_validation_timestamp ON validation_result(validation_timestamp);
+CREATE INDEX idx_validation_timestamp ON validation_result(validated_at);
 CREATE INDEX idx_validation_icao ON validation_result(icao_compliant);
 
 -- =============================================================================
--- Certificate Duplicate Tracking
+-- Certificate Duplicates
 -- =============================================================================
 
--- Track certificate duplicates across multiple sources
 CREATE TABLE certificate_duplicates (
-    id NUMBER(10) PRIMARY KEY,
-    certificate_id VARCHAR2(36) NOT NULL,
-    upload_id VARCHAR2(36) NOT NULL,
-    source_type VARCHAR2(20) NOT NULL,
-    source_country VARCHAR2(3),
-    source_entry_dn CLOB,
-    source_file_name VARCHAR2(255),
-    detected_at TIMESTAMP DEFAULT SYSTIMESTAMP,
-
-    CONSTRAINT fk_dup_cert FOREIGN KEY (certificate_id) REFERENCES certificate(id) ON DELETE CASCADE,
-    CONSTRAINT fk_dup_upload FOREIGN KEY (upload_id) REFERENCES uploaded_file(id) ON DELETE CASCADE,
-    CONSTRAINT uk_dup_cert_upload UNIQUE(certificate_id, upload_id, source_type)
+    id NUMBER,
+    certificate_id VARCHAR2(36),
+    upload_id VARCHAR2(36),
+    fingerprint_sha256 VARCHAR2(64) NOT NULL,
+    certificate_type VARCHAR2(20),
+    country_code VARCHAR2(3),
+    subject_dn CLOB,
+    source_type VARCHAR2(50),
+    duplicate_type VARCHAR2(30),
+    detected_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
--- Trigger for auto-increment ID
 CREATE OR REPLACE TRIGGER trg_cert_dup_id
 BEFORE INSERT ON certificate_duplicates
 FOR EACH ROW
@@ -398,83 +303,60 @@ CREATE INDEX idx_cert_dup_source_type ON certificate_duplicates(source_type);
 CREATE INDEX idx_cert_dup_detected_at ON certificate_duplicates(detected_at);
 
 -- =============================================================================
--- Passive Authentication Tables
+-- PA Verification
 -- =============================================================================
 
--- PA Verification Request
 CREATE TABLE pa_verification (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
-
-    -- Request info
-    issuing_country VARCHAR2(3) NOT NULL,
-    document_number VARCHAR2(50),
-    date_of_birth DATE,
-    date_of_expiry DATE,
-
-    -- SOD info
-    sod_binary BLOB,
-    sod_hash VARCHAR2(64),
-
-    -- DSC info (extracted from SOD)
+    verification_status VARCHAR2(20) NOT NULL,
+    overall_result VARCHAR2(20),
+    dsc_country_code VARCHAR2(3),
     dsc_subject_dn CLOB,
     dsc_issuer_dn CLOB,
-    dsc_serial_number VARCHAR2(100),
+    dsc_serial_number VARCHAR2(255),
     dsc_fingerprint VARCHAR2(64),
-
-    -- CSCA info (looked up from LDAP)
     csca_subject_dn CLOB,
     csca_fingerprint VARCHAR2(64),
-
-    -- Verification result
-    verification_status VARCHAR2(30) NOT NULL,
-    verification_message CLOB,
-
-    -- Individual check results
+    sod_hash_algorithm VARCHAR2(50),
+    sod_signature_algorithm VARCHAR2(50),
+    sod_binary BLOB,
+    sod_hash VARCHAR2(128),
     trust_chain_valid NUMBER(1),
     trust_chain_message CLOB,
     sod_signature_valid NUMBER(1),
     sod_signature_message CLOB,
-    dg_hashes_valid NUMBER(1),
-    dg_hashes_message CLOB,
+    dg_hash_valid NUMBER(1),
+    dg_hash_message CLOB,
     crl_status VARCHAR2(20),
     crl_message CLOB,
-
-    -- Timing
-    request_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
-    completed_timestamp TIMESTAMP,
-    processing_time_ms NUMBER(10),
-
-    -- Request metadata
-    client_ip VARCHAR2(45),
-    user_agent CLOB,
-    requested_by VARCHAR2(100),
-
-    -- DSC conformance (ICAO PKD nc-data)
     dsc_non_conformant NUMBER(1) DEFAULT 0,
-    pkd_conformance_code VARCHAR2(100),
+    pkd_conformance_code VARCHAR2(50),
     pkd_conformance_text VARCHAR2(500),
-
-    CONSTRAINT chk_pa_status CHECK (verification_status IN ('VALID', 'INVALID', 'ERROR', 'PENDING'))
+    verification_message CLOB,
+    requested_by VARCHAR2(100),
+    client_ip VARCHAR2(45),
+    user_agent VARCHAR2(500),
+    processing_duration_ms NUMBER(10),
+    verified_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_pa_status ON pa_verification(verification_status);
-CREATE INDEX idx_pa_country ON pa_verification(issuing_country);
-CREATE INDEX idx_pa_timestamp ON pa_verification(request_timestamp DESC);
+CREATE INDEX idx_pa_country ON pa_verification(dsc_country_code);
+CREATE INDEX idx_pa_timestamp ON pa_verification(verified_at);
 CREATE INDEX idx_pa_dsc ON pa_verification(dsc_fingerprint);
 
--- Data Group hashes from PA verification
+-- =============================================================================
+-- PA Data Group
+-- =============================================================================
+
 CREATE TABLE pa_data_group (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
-    verification_id VARCHAR2(36),
-    dg_number NUMBER(2) NOT NULL,
-    expected_hash VARCHAR2(128) NOT NULL,
-    actual_hash VARCHAR2(128),
-    hash_algorithm VARCHAR2(20) NOT NULL,
+    verification_id VARCHAR2(36) NOT NULL,
+    dg_number NUMBER(5) NOT NULL,
+    dg_hash VARCHAR2(128),
+    dg_data BLOB,
     hash_valid NUMBER(1),
-    dg_binary BLOB,
-
-    CONSTRAINT fk_pa_dg_verification FOREIGN KEY (verification_id) REFERENCES pa_verification(id) ON DELETE CASCADE,
-    CONSTRAINT chk_dg_number CHECK (dg_number BETWEEN 1 AND 16)
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
 CREATE INDEX idx_pa_dg_verification ON pa_data_group(verification_id);
@@ -484,65 +366,26 @@ CREATE INDEX idx_pa_dg_verification ON pa_data_group(verification_id);
 -- =============================================================================
 
 CREATE TABLE audit_log (
-    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+    id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
     event_type VARCHAR2(50) NOT NULL,
-    event_timestamp TIMESTAMP DEFAULT SYSTIMESTAMP,
     entity_type VARCHAR2(50),
-    entity_id VARCHAR2(36),
+    entity_id VARCHAR2(100),
+    description CLOB,
     user_id VARCHAR2(100),
-    client_ip VARCHAR2(45),
-    details CLOB,  -- JSON stored as CLOB (Oracle 12c+ supports JSON validation)
-
-    CONSTRAINT chk_event_type CHECK (event_type IN (
-        'FILE_UPLOADED', 'FILE_PROCESSED', 'FILE_FAILED',
-        'CERTIFICATE_STORED', 'CERTIFICATE_VALIDATED',
-        'CRL_STORED', 'CRL_VALIDATED',
-        'PA_VERIFICATION_REQUESTED', 'PA_VERIFICATION_COMPLETED',
-        'LDAP_ENTRY_CREATED', 'LDAP_ENTRY_UPDATED', 'LDAP_ENTRY_DELETED'
-    ))
+    ip_address VARCHAR2(45),
+    metadata CLOB,
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP
 );
 
-CREATE INDEX idx_audit_timestamp ON audit_log(event_timestamp DESC);
+CREATE INDEX idx_audit_timestamp ON audit_log(created_at);
 CREATE INDEX idx_audit_event_type ON audit_log(event_type);
 CREATE INDEX idx_audit_entity_type ON audit_log(entity_type);
 CREATE INDEX idx_audit_entity_id ON audit_log(entity_id);
 
 -- =============================================================================
--- Triggers for updated_at timestamps
--- =============================================================================
-
--- Note: Oracle doesn't have automatic updated_at columns like PostgreSQL
--- If needed, create triggers for each table that needs auto-update timestamps
-
--- =============================================================================
--- Commit changes
--- =============================================================================
-
-COMMIT;
-
--- Display completion message
-BEGIN
-    DBMS_OUTPUT.PUT_LINE('=============================================================================');
-    DBMS_OUTPUT.PUT_LINE('Core schema created successfully');
-    DBMS_OUTPUT.PUT_LINE('Tables: 12 (uploaded_file, certificate, crl, revoked_certificate,');
-    DBMS_OUTPUT.PUT_LINE('        master_list, validation_result, certificate_duplicates,');
-    DBMS_OUTPUT.PUT_LINE('        pa_verification, pa_data_group, audit_log)');
-    DBMS_OUTPUT.PUT_LINE('Sequences: 10');
-    DBMS_OUTPUT.PUT_LINE('Indexes: 50+');
-    DBMS_OUTPUT.PUT_LINE('=============================================================================');
-END;
-/
-
-EXIT;
-
-
--- =============================================================================
 -- ICAO PKD Auto Sync (Oracle Version)
 -- =============================================================================
 
-CREATE SEQUENCE seq_icao_versions START WITH 1 INCREMENT BY 1 NOCACHE;
-
--- ICAO PKD version tracking (detected from public portal)
 CREATE TABLE icao_pkd_versions (
     id VARCHAR2(36) DEFAULT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), '([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', '\1-\2-\3-\4-\5')) PRIMARY KEY,
     collection_type VARCHAR2(20) NOT NULL,
@@ -574,8 +417,6 @@ CREATE INDEX idx_icao_versions_detected_at ON icao_pkd_versions(detected_at);
 -- Link Certificate (CSCA Key Transition) (Oracle Version)
 -- =============================================================================
 
-CREATE SEQUENCE seq_link_certificate START WITH 1 INCREMENT BY 1 NOCACHE;
-
 CREATE TABLE link_certificate (
     id VARCHAR2(36) DEFAULT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), '([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', '\1-\2-\3-\4-\5')) PRIMARY KEY,
     upload_id VARCHAR2(36),
@@ -601,10 +442,7 @@ CREATE TABLE link_certificate (
 );
 
 CREATE INDEX idx_lc_country ON link_certificate(country_code);
-CREATE INDEX idx_lc_fingerprint ON link_certificate(fingerprint_sha256);
 CREATE INDEX idx_lc_upload_id ON link_certificate(upload_id);
-
-CREATE SEQUENCE seq_lc_issuers START WITH 1 INCREMENT BY 1 NOCACHE;
 
 CREATE TABLE link_certificate_issuers (
     id NUMBER GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
@@ -620,3 +458,11 @@ CREATE TABLE link_certificate_issuers (
 
 CREATE INDEX idx_lc_issuers_link_cert ON link_certificate_issuers(link_cert_id);
 CREATE INDEX idx_lc_issuers_csca ON link_certificate_issuers(issuer_csca_id);
+
+-- =============================================================================
+-- Commit and Exit
+-- =============================================================================
+
+COMMIT;
+
+EXIT;

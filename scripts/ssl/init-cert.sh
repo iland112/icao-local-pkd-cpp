@@ -26,6 +26,7 @@ SERVER_DAYS=365   # Server cert validity: 1 year
 CA_KEY_SIZE=4096
 SERVER_KEY_SIZE=2048
 FORCE=""
+EXTRA_IPS=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -42,13 +43,17 @@ while [[ $# -gt 0 ]]; do
             CA_DAYS="$2"
             shift 2
             ;;
+        --ip)
+            EXTRA_IPS="$EXTRA_IPS $2"
+            shift 2
+            ;;
         --force)
             FORCE="true"
             shift
             ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--domain DOMAIN] [--days DAYS] [--ca-days DAYS] [--force]"
+            echo "Usage: $0 [--domain DOMAIN] [--ip IP] [--days DAYS] [--ca-days DAYS] [--force]"
             exit 1
             ;;
     esac
@@ -121,6 +126,13 @@ DNS.2 = localhost
 DNS.3 = api-gateway
 IP.1 = 127.0.0.1
 EOF
+
+# Add extra IPs to SAN
+IP_IDX=2
+for IP in $EXTRA_IPS; do
+    echo "IP.$IP_IDX = $IP" >> "$SSL_DIR/server.cnf"
+    IP_IDX=$((IP_IDX + 1))
+done
 
 openssl req -new \
     -key "$SSL_DIR/server.key" \

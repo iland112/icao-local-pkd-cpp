@@ -213,3 +213,5 @@ INSERT INTO code_master (category, code, name_ko, name_en, sort_order) VALUES ('
 INSERT INTO code_master (category, code, name_ko, name_en, sort_order) VALUES ('VALIDATION_REASON', 'CERTIFICATES_EXPIRED', '인증서 만료 (서명 유효)', 'Certificates Expired (Signature Valid)', 5);
 
 COMMIT;
+
+EXIT;

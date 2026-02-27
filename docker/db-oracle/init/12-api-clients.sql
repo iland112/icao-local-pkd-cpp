@@ -3,6 +3,12 @@
 -- v2.21.0: External client agent API key authentication
 -- ============================================================================
 
+CONNECT pkd_user/pkd_password@XEPDB1;
+SET SQLBLANKLINES ON;
+
+-- Allow re-runs (skip "already exists" errors)
+WHENEVER SQLERROR CONTINUE;
+
 -- API Client table
 CREATE TABLE api_clients (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
@@ -62,3 +68,7 @@ CREATE TABLE api_client_usage_log (
 
 CREATE INDEX idx_usage_log_client_time ON api_client_usage_log(client_id, created_at);
 CREATE INDEX idx_usage_log_created ON api_client_usage_log(created_at);
+
+COMMIT;
+
+EXIT;
