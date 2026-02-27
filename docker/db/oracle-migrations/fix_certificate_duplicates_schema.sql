@@ -8,7 +8,7 @@
 -- =============================================================================
 
 -- Connect to pluggable database
-ALTER SESSION SET CONTAINER = ORCLPDB1;
+ALTER SESSION SET CONTAINER = XEPDB1;
 
 -- Drop the old table (data loss acceptable since this is development/testing)
 DROP TABLE certificate_duplicates CASCADE CONSTRAINTS;

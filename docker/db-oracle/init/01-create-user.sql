@@ -10,8 +10,8 @@
 -- SQL*Plus settings
 SET SQLBLANKLINES ON
 
--- Connect to ORCLPDB1 (pluggable database — Oracle EE 21c default)
-ALTER SESSION SET CONTAINER = ORCLPDB1;
+-- Connect to XEPDB1 (pluggable database — Oracle EE 21c default)
+ALTER SESSION SET CONTAINER = XEPDB1;
 
 -- Create tablespace (skip if exists)
 DECLARE
@@ -19,7 +19,7 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO v_count FROM dba_tablespaces WHERE tablespace_name = 'PKD_DATA';
   IF v_count = 0 THEN
-    EXECUTE IMMEDIATE 'CREATE TABLESPACE pkd_data DATAFILE ''/opt/oracle/oradata/ORCLCDB/ORCLPDB1/pkd_data01.dbf'' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED';
+    EXECUTE IMMEDIATE 'CREATE TABLESPACE pkd_data DATAFILE ''/opt/oracle/oradata/XE/XEPDB1/pkd_data01.dbf'' SIZE 100M AUTOEXTEND ON NEXT 10M MAXSIZE UNLIMITED';
     DBMS_OUTPUT.PUT_LINE('Tablespace PKD_DATA created');
   ELSE
     DBMS_OUTPUT.PUT_LINE('Tablespace PKD_DATA already exists - skipping');

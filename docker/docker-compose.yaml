@@ -434,7 +434,7 @@ services:
   # Oracle Database EE 21c (Enterprise Edition — 부하 테스트용, 제한 해제)
   # ---------------------------------------------------------------------------
   oracle:
-    image: container-registry.oracle.com/database/enterprise:21.3.0.0
+    image: container-registry.oracle.com/database/express:21.3.0-xe
     container_name: icao-local-pkd-oracle
     ports:
       - "11521:1521"  # External: 11521, Internal: 1521
@@ -449,13 +449,13 @@ services:
     networks:
       - pkd-network
     healthcheck:
-      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"$ORACLE_PWD\"@//localhost:1521/ORCLPDB1 as sysdba | grep -q 1"]
+      test: ["CMD-SHELL", "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"$ORACLE_PWD\"@//localhost:1521/XE as sysdba | grep -q 1"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 300s  # Oracle takes 3-5 minutes to initialize first time
     restart: unless-stopped
-    shm_size: 4g  # Shared memory for Oracle EE (XE: 1g → EE: 4g)
+    shm_size: 1g
     profiles:
       - oracle  # Only starts with: docker compose --profile oracle up
 

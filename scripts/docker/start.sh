@@ -146,7 +146,7 @@ echo "📌 접속 정보:"
 echo "   - Database:      DB_TYPE=$DB_TYPE"
 echo "   - PostgreSQL:    localhost:15432 (pkd/pkd)"
 if [ "$DB_TYPE" = "oracle" ]; then
-    echo "   - Oracle:        localhost:11521 (ORCLPDB1)"
+    echo "   - Oracle:        localhost:11521 (XEPDB1)"
 fi
 if [ -z "$SKIP_LDAP" ]; then
     echo "   - OpenLDAP 1:    ldap://localhost:13891 (직접 연결)"

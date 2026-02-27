@@ -74,7 +74,7 @@ DbPoolConfig DbPoolConfig::fromEnvironment() {
     config.oraclePort = (oraclePort && oraclePort[0] != '\0') ? std::stoi(oraclePort) : 1521;
 
     const char* oracleSvc = std::getenv("ORACLE_SERVICE_NAME");
-    config.oracleServiceName = oracleSvc ? oracleSvc : "ORCLPDB1";
+    config.oracleServiceName = oracleSvc ? oracleSvc : "XEPDB1";
 
     const char* oracleUser = std::getenv("ORACLE_USER");
     config.oracleUser = oracleUser ? oracleUser : "pkd";

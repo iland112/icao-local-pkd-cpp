@@ -3,7 +3,7 @@
 -- v2.21.0: External client agent API key authentication
 -- ============================================================================
 
-CONNECT pkd_user/pkd_password@ORCLPDB1;
+CONNECT pkd_user/pkd_password@XEPDB1;
 SET SQLBLANKLINES ON;
 
 -- Allow re-runs (skip "already exists" errors)

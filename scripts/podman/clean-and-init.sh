@@ -192,7 +192,7 @@ if [ "$DB_TYPE" = "oracle" ]; then
             # Wait for init scripts
             echo -n "  Waiting for Oracle init scripts (pkd_user)"
             for j in {1..30}; do
-                INIT_CHECK=$(podman exec icao-local-pkd-oracle bash -c "echo 'SELECT 1 FROM DUAL;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/ORCLPDB1 2>/dev/null | grep -c '1'" 2>/dev/null || echo "0")
+                INIT_CHECK=$(podman exec icao-local-pkd-oracle bash -c "echo 'SELECT 1 FROM DUAL;' | sqlplus -s pkd_user/${ORACLE_PWD}@//localhost:1521/XEPDB1 2>/dev/null | grep -c '1'" 2>/dev/null || echo "0")
                 if [ "$INIT_CHECK" -ge 1 ] 2>/dev/null; then
                     echo ""
                     echo -e "${GREEN}  Oracle pkd_user is ready${NC}"
@@ -494,7 +494,7 @@ echo "  - Frontend: http://localhost:13080"
 echo "  - API Gateway: http://localhost:18080/api"
 echo "  - API Documentation: http://localhost:18090"
 if [ "$DB_TYPE" = "oracle" ]; then
-    echo "  - Oracle: localhost:11521 (ORCLPDB1)"
+    echo "  - Oracle: localhost:11521 (XEPDB1)"
 fi
 
 SSL_DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
