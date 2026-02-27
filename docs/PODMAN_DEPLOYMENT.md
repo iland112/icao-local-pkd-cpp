@@ -109,13 +109,13 @@ Podman 버전은 `clean-and-init.sh` 스크립트가 `podman exec`로 직접 MMR
 
 ```
 scripts/podman/
-├── start.sh          # 컨테이너 시작 (nginx DNS 자동 설정)
-├── stop.sh           # 컨테이너 중지
-├── restart.sh        # 컨테이너 재시작 [서비스명]
-├── health.sh         # 전체 헬스 체크
+├── start.sh          # 컨테이너 시작 (nginx DNS 자동 설정, --profile 자동)
+├── stop.sh           # 컨테이너 중지 (--profile 자동, fallback: podman rm -f)
+├── restart.sh        # 재시작: 전체(stop+start) 또는 단일 서비스(compose restart)
+├── health.sh         # 전체 헬스 체크 (API Gateway port 80 우선)
 ├── logs.sh           # 로그 확인 [서비스명] [줄수]
 ├── clean-and-init.sh # 완전 초기화 (데이터 삭제 + LDAP DIT + 서비스 시작)
-├── backup.sh         # 데이터 백업
+├── backup.sh         # 데이터 백업 (Oracle Data Pump + LDAP + SSL)
 └── restore.sh        # 데이터 복구
 
 # 루트 편의 래퍼
@@ -363,7 +363,36 @@ podman ps -a --filter "name=icao-local-pkd" --format "{{.Names}}" | xargs -r pod
 
 ---
 
+## 스크립트 주의사항
+
+### 서비스 이름 (Compose)
+
+`logs.sh`, `restart.sh`에서 서비스 지정 시 compose 파일의 서비스명을 사용합니다:
+
+| 서비스명 | 컨테이너명 |
+|---------|-----------|
+| `pkd-management` | `icao-local-pkd-management` |
+| `pa-service` | `icao-local-pkd-pa-service` |
+| `pkd-relay` | `icao-local-pkd-relay` |
+| `api-gateway` | `icao-local-pkd-api-gateway` |
+| `monitoring-service` | `icao-local-pkd-monitoring` |
+| `ai-analysis` | `icao-local-pkd-ai-analysis` |
+| `frontend` | `icao-local-pkd-frontend` |
+| `openldap1` / `openldap2` | `icao-local-pkd-openldap1` / `openldap2` |
+| `swagger-ui` | `icao-local-pkd-swagger` |
+
+### --profile 플래그
+
+`stop.sh`, `start.sh`, `restart.sh`는 `.env`의 `DB_TYPE`을 읽어 자동으로 `--profile oracle` 또는 `--profile postgres`를 추가합니다. 프로파일 없이 `podman-compose down`을 실행하면 DB 컨테이너가 중지되지 않으므로, 반드시 스크립트를 통해 실행하세요.
+
+### 전체 재시작
+
+`restart.sh`를 인수 없이 실행하면 `stop.sh` + `start.sh`를 순차 호출합니다. Podman의 컨테이너 의존성 관리로 인해 `podman-compose restart`는 일부 컨테이너가 의존성 순서 문제로 재시작되지 않을 수 있습니다.
+
+---
+
 ## 버전 이력
 
+- v1.2.0 (2026-02-27): 스크립트 안정성 개선 — `--profile` 자동, chmod fallback, health port 80, restart stop+start
 - v1.1.0 (2026-02-27): Docker→Podman 마이그레이션 완료, SELinux MCS 해결, DNS 플러그인 설정
 - v1.0.0 (2026-02-27): 최초 Podman 지원 — Docker 스크립트에서 분리

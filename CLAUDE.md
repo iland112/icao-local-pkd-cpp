@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.24.0
+**Current Version**: v2.24.1
 **Last Updated**: 2026-02-27
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -574,6 +574,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.24.1 (2026-02-27) - Podman 스크립트 안정성 + HTTPS Client 인증서 관리 개선
+- **stop.sh**: `--profile oracle/postgres` 플래그 추가 — DB 컨테이너(Oracle/PostgreSQL)가 중지되지 않는 버그 수정
+- **start.sh**: `mkdir -p` 에러 무시 (`2>/dev/null || true`), `chmod sudo` fallback 실패 시 스크립트 종료 방지
+- **health.sh**: API Gateway 헬스 체크 port 18080→80 변경 (SSL 설정에서 port 8080 블록은 `/health`만 포함)
+- **restart.sh**: `--profile` 플래그 추가, 전체 재시작 시 `stop.sh` + `start.sh` 호출 (Podman 컨테이너 의존성 순서 문제 우회)
+- **setup-pkd-access.ps1**: Thumbprint 비교 → Subject CN(`ICAO Local PKD Private CA`) 기반 구 인증서 전부 삭제 후 재설치 (CA 재발급/서버 IP 변경 시 브라우저 인증서 찾기 실패 방지)
+- Production 5회 반복 테스트 통과 (clean-and-init: Oracle 31 테이블 + LDAP 5 DIT 엔트리 + API 13/13 OK)
+- 7개 Podman 스크립트 전수 테스트 완료 (stop, start, health, logs, restart, backup, restore)
+- 6 files changed (0 new, 6 modified)
 
 ### v2.24.0 (2026-02-27) - Production Podman Migration + Oracle Schema Consolidation
 - **Podman Migration**: Production RHEL 9 서버 (10.0.0.220) Docker CE → Podman 5.6.0 전환

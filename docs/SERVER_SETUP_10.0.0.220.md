@@ -345,9 +345,13 @@ Private CA 기반 인증서이므로 클라이언트 PC에서 CA 인증서를 �
 
 **스크립트 동작**:
 1. `hosts` 파일에 `10.0.0.220 pkd.smartcoreinc.com` 추가
-2. Private CA 인증서를 Windows 신뢰할 수 있는 루트 인증 기관에 등록
-3. DNS 캐시 초기화
-4. `https://pkd.smartcoreinc.com/health` 접속 테스트
+2. 기존 "ICAO Local PKD Private CA" 인증서 전부 삭제 (Subject CN 기반)
+3. 새 Private CA 인증서를 Windows 신뢰할 수 있는 루트 인증 기관에 등록
+4. DNS 캐시 초기화
+5. `https://pkd.smartcoreinc.com/health` 접속 테스트
+
+> **참고**: CA 인증서 재발급(`init-cert.sh --force`) 또는 서버 IP 변경 시 스크립트를 재실행하면
+> 구 인증서가 자동 삭제되고 새 인증서가 등록됩니다. (v2.24.1)
 
 > **참고**: Firefox는 Windows 인증서 저장소를 사용하지 않으므로 별도로 인증서 가져오기 필요
 > (설정 → 개인정보 및 보안 → 인증서 → 인증서 보기 → 인증 기관 → 가져오기)
