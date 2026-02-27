@@ -68,12 +68,12 @@ echo ""
 # 1. 필요한 디렉토리 생성
 # =============================================================================
 echo "  디렉토리 생성 중..."
-mkdir -p ./data/uploads ./data/cert ./logs ./backups
-mkdir -p ./.docker-data/pkd-logs ./.docker-data/pkd-uploads
-mkdir -p ./.docker-data/pa-logs ./.docker-data/sync-logs
-mkdir -p ./.docker-data/monitoring-logs ./.docker-data/gateway-logs
-mkdir -p ./.docker-data/ssl ./.docker-data/nginx
-mkdir -p ./.docker-data/ai-analysis-logs
+mkdir -p ./data/uploads ./data/cert ./logs ./backups 2>/dev/null || true
+mkdir -p ./.docker-data/pkd-logs ./.docker-data/pkd-uploads 2>/dev/null || true
+mkdir -p ./.docker-data/pa-logs ./.docker-data/sync-logs 2>/dev/null || true
+mkdir -p ./.docker-data/monitoring-logs ./.docker-data/gateway-logs 2>/dev/null || true
+mkdir -p ./.docker-data/ssl ./.docker-data/nginx 2>/dev/null || true
+mkdir -p ./.docker-data/ai-analysis-logs 2>/dev/null || true
 
 # 권한 설정
 echo "  로그 디렉토리 권한 설정 중..."

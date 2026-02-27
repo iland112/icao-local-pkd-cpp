@@ -78,13 +78,22 @@ try {
     $store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "LocalMachine")
     $store.Open("ReadWrite")
 
-    $existing = $store.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
-    if ($existing) {
-        Write-Host "      Already registered (skipped)" -ForegroundColor Green
-    } else {
-        $store.Add($cert)
-        Write-Host "      Registered to Trusted Root CA store!" -ForegroundColor Green
+    # Remove ALL existing "ICAO Local PKD Private CA" certs (handles CA regeneration)
+    $caSubjectCN = "ICAO Local PKD Private CA"
+    $oldCerts = $store.Certificates | Where-Object { $_.Subject -match $caSubjectCN }
+    $removedCount = 0
+    foreach ($old in $oldCerts) {
+        Write-Host "      Removing old cert: $($old.Thumbprint) (Expires: $($old.NotAfter))" -ForegroundColor Yellow
+        $store.Remove($old)
+        $removedCount++
     }
+    if ($removedCount -gt 0) {
+        Write-Host "      Removed $removedCount old certificate(s)" -ForegroundColor Yellow
+    }
+
+    # Install new certificate
+    $store.Add($cert)
+    Write-Host "      Registered to Trusted Root CA store!" -ForegroundColor Green
     $store.Close()
 
     # Verify
