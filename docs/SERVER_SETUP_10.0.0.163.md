@@ -295,7 +295,42 @@ sudo chmod 777 .docker-data/pkd-logs .docker-data/pkd-uploads .docker-data/pa-lo
 
 ---
 
-## 12. 작업 체크리스트
+## 12. 클라이언트 PC HTTPS 접속 설정
+
+Private CA 기반 인증서이므로 클라이언트 PC에서 CA 인증서를 신뢰 등록해야 합니다.
+
+### 자동 설정 스크립트
+
+`scripts/client/` 폴더의 두 파일을 클라이언트 PC에 복사 후 실행:
+
+| 파일 | 용도 |
+|------|------|
+| `setup-pkd-access.bat` | 더블클릭 실행 (관리자 권한 자동 요청) |
+| `setup-pkd-access.ps1` | 실제 설정 스크립트 |
+
+**사용법**: 두 파일을 같은 폴더에 복사 → `setup-pkd-access.bat` 더블클릭 → UAC "예"
+
+**스크립트 동작**:
+1. `hosts` 파일에 `10.0.0.163 pkd.smartcoreinc.com` 추가
+2. Private CA 인증서를 Windows 신뢰할 수 있는 루트 인증 기관에 등록
+3. DNS 캐시 초기화
+4. `https://pkd.smartcoreinc.com/health` 접속 테스트
+
+> **참고**: Firefox는 Windows 인증서 저장소를 사용하지 않으므로 별도로 인증서 가져오기 필요
+> (설정 → 개인정보 및 보안 → 인증서 → 인증서 보기 → 인증 기관 → 가져오기)
+
+### 수동 설정
+
+1. `hosts` 파일 (`C:\Windows\System32\drivers\etc\hosts`):
+   ```
+   10.0.0.163    pkd.smartcoreinc.com
+   ```
+
+2. CA 인증서 등록: `.docker-data/ssl/ca.crt` 파일을 더블클릭 → "인증서 설치" → "로컬 컴퓨터" → "신뢰할 수 있는 루트 인증 기관"
+
+---
+
+## 13. 작업 체크리스트
 
 - [x] 호스트명 변경 (`pkd.smartcoreinc.com`)
 - [x] `/etc/hosts` 업데이트
@@ -307,5 +342,6 @@ sudo chmod 777 .docker-data/pkd-logs .docker-data/pkd-uploads .docker-data/pa-lo
 - [x] SSL 인증서 생성 (Private CA)
 - [x] 전체 서비스 빌드 및 기동 (11 컨테이너)
 - [x] API health check 확인
+- [x] 클라이언트 HTTPS 접속 설정 스크립트 (`scripts/client/`)
 - [ ] 데이터 업로드 (LDIF/Master List)
 - [ ] DNS 설정 (pkd.smartcoreinc.com → 10.0.0.163)
