@@ -84,7 +84,7 @@ chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads \
 sudo chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads \
     ./.docker-data/pa-logs ./.docker-data/sync-logs \
     ./.docker-data/monitoring-logs ./.docker-data/gateway-logs \
-    ./.docker-data/ai-analysis-logs
+    ./.docker-data/ai-analysis-logs 2>/dev/null || true
 
 # SELinux context (RHEL 9 Enforcing)
 # Rootless Podman needs container_file_t type AND no MCS categories (s0 only)
