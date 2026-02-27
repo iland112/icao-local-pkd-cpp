@@ -101,9 +101,9 @@ fi
 # PKD Management API 체크
 echo ""
 echo "  PKD Management Service:"
-if curl -sf http://localhost:18080/api/health > /dev/null 2>&1; then
-    HEALTH=$(curl -s http://localhost:18080/api/health 2>/dev/null)
-    echo "    정상 (via API Gateway :18080)"
+if curl -sf http://localhost/api/health > /dev/null 2>&1; then
+    HEALTH=$(curl -s http://localhost/api/health 2>/dev/null)
+    echo "    정상 (via API Gateway :80)"
     echo "     $HEALTH"
 else
     if podman exec icao-local-pkd-management curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
@@ -140,7 +140,9 @@ fi
 # API Gateway 체크
 echo ""
 echo "  API Gateway:"
-if curl -sf http://localhost:18080/health > /dev/null 2>&1; then
+if curl -sf http://localhost/health > /dev/null 2>&1; then
+    echo "    정상 (http://localhost:80)"
+elif curl -sf http://localhost:18080/health > /dev/null 2>&1; then
     echo "    정상 (http://localhost:18080)"
 else
     echo "    오류 (not responding)"
