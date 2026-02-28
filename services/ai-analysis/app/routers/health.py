@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
@@ -19,3 +20,20 @@ async def health_check():
         db_type=settings.db_type,
         analysis_enabled=settings.analysis_enabled,
     )
+
+
+@router.get("/internal/metrics")
+async def internal_metrics():
+    """Internal metrics endpoint for monitoring service."""
+    from app.database import sync_engine
+
+    pool = sync_engine.pool
+    return {
+        "service": "ai-analysis",
+        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S"),
+        "dbPool": {
+            "available": pool.checkedin(),
+            "total": pool.checkedout() + pool.checkedin(),
+            "max": pool.size() + pool._max_overflow,
+        },
+    }

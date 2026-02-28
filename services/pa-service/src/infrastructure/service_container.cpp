@@ -220,6 +220,7 @@ void ServiceContainer::shutdown() {
 }
 
 // --- Accessors ---
+common::IDbConnectionPool* ServiceContainer::dbPool() const { return impl_->dbPool.get(); }
 common::IQueryExecutor* ServiceContainer::queryExecutor() const { return impl_->queryExecutor.get(); }
 repositories::PaVerificationRepository* ServiceContainer::paVerificationRepository() const { return impl_->paVerificationRepo.get(); }
 repositories::DataGroupRepository* ServiceContainer::dataGroupRepository() const { return impl_->dataGroupRepo.get(); }

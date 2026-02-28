@@ -21,6 +21,7 @@ namespace middleware {
 std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     // --- System & Authentication ---
     "^/api/health.*",              // Health check endpoints
+    "^/internal/metrics$",         // Internal metrics for monitoring service
     "^/api/auth/login$",           // Login endpoint
     "^/api/auth/register$",        // Registration endpoint (future)
     "^/api/auth/logout$",          // Logout endpoint (handler validates JWT)

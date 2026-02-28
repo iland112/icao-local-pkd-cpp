@@ -61,6 +61,7 @@ public:
     void shutdown();
 
     // --- Connection Pool Accessors ---
+    common::IDbConnectionPool* dbPool() const;
     common::IQueryExecutor* queryExecutor() const;
 
     // --- Repository Accessors ---

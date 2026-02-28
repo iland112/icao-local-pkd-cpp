@@ -15,6 +15,7 @@ find_package(CURL REQUIRED)
 set(SOURCES
     src/main.cpp
     src/handlers/monitoring_handler.cpp
+    src/collectors/metrics_collector.cpp
 )
 
 # Create executable

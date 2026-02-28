@@ -263,6 +263,9 @@ services:
       - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
       - SERVICE_PA_SERVICE=http://pa-service:8082/api/health
       - SERVICE_SYNC_SERVICE=http://pkd-relay:8083/api/sync/health
+      - NGINX_STATUS_URL=http://api-gateway:8080/nginx_status
+      - COLLECTION_INTERVAL=10
+      - METRICS_ENDPOINT_AI_ANALYSIS=http://ai-analysis:8085/api/ai/internal/metrics
     depends_on:
       - pkd-management
       - pa-service

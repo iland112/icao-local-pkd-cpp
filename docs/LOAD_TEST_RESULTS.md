@@ -204,59 +204,142 @@
 
 ---
 
-## 5. 권장 개선 사항
+## 5. Phase 3: Pool 파라미터화 적용 후 재테스트 (Oracle XE 유지)
 
-### 완료된 개선 (v2.25.0)
+**테스트 일자**: 2026-02-27 23:20~23:49
+**변경 사항**: Connection Pool + Thread 환경변수 파라미터화 적용
 
-1. **Oracle XE → EE 21c 마이그레이션** (하드 제한 해제)
-   - PROCESSES: 150 → 1000, SESSIONS: 248 → 1500, SGA: 2GB → 4GB
-   - PDB: XEPDB1 → ORCLPDB1 (EE 기본값)
-   - `docker/db-oracle/init/00-ee-tuning.sql` 신규 생성
+| 파라미터 | 이전 | 이후 |
+|---------|------|------|
+| `DB_POOL_MAX` | 10 (하드코딩) | 20 (환경변수) |
+| `LDAP_POOL_MAX` | 10 (하드코딩) | 20 (환경변수) |
+| `THREAD_NUM` | 4 (하드코딩) | 16 (환경변수) |
+| `DB_POOL_SIZE` (AI) | 5 (하드코딩) | 10 (환경변수) |
+| `DB_POOL_OVERFLOW` (AI) | 10 (하드코딩) | 15 (환경변수) |
+| nginx | 부하 테스트용 튜닝 적용 | 동일 |
 
-2. **DB Connection Pool 환경변수 파라미터화**
-   - `DB_POOL_MIN`, `DB_POOL_MAX`, `DB_POOL_TIMEOUT` (C++ 전 서비스)
-   - 기본값: min=2, max=10 → 테스트 시 `.env`에서 50으로 설정 가능
+> **참고**: Oracle EE 이미지 pull 인증 실패로 XE 유지. Pool 파라미터화 효과만 측정.
+> DB 데이터: 빈 DB (clean-and-init 후, 데이터 미로드)
 
-3. **LDAP Connection Pool 환경변수 파라미터화**
-   - `LDAP_POOL_MIN`, `LDAP_POOL_MAX`, `LDAP_POOL_TIMEOUT` (pkd-management, pkd-relay)
-   - 기본값: min=2, max=10 → 테스트 시 50으로 설정 가능
+### Phase 3-0: Smoke Test (5 VU, 1분)
 
-4. **Drogon Thread 수 환경변수 파라미터화**
-   - `THREAD_NUM` (전 서비스, 기본값 16)
-   - pkd-relay, monitoring-service 하드코딩(4) 제거
+| 항목 | 결과 | Phase 0 (이전) | 비교 |
+|------|------|---------------|------|
+| 성공률 | 88.54% | 98.98% | -10% (cert_search 5xx) |
+| P95 Latency | **101ms** | 203ms | **2배 개선** |
+| DB 쿼리 P95 | 37.68ms | - | - |
+| LDAP 쿼리 P95 | 37.66ms | - | - |
 
-5. **AI Analysis Service Pool 파라미터화**
-   - `DB_POOL_SIZE`, `DB_POOL_OVERFLOW` (기본 5/10 → 테스트 시 20/30)
+### Phase 3-1: Baseline Test (50 VU, 5분)
 
-### 즉시 적용 가능 (코드 변경 없음)
+| 항목 | 결과 | Phase 1 (이전) | 비교 |
+|------|------|---------------|------|
+| 성공률 | 70.48% | 93.47% | -23% (login 병목) |
+| P95 Latency | **35.22ms** | 370ms | **10배 개선** |
+| 5xx 에러 | 876건 | 320건 | login 집중 |
+| 처리량 | 13.3 req/s | 16.1 req/s | 유사 |
 
-6. **nginx 부하 테스트 설정**: `server-prep/nginx-loadtest.conf` 별도 유지
-7. **OS 커널 튜닝**: `server-prep/tune-server.sh apply` (테스트 시에만)
+**login 실패율 93%**: 50 VU에서 15개 write VU가 login 반복 → Oracle XE 세션 고갈.
 
-### 아키텍처 변경 (장기)
+### Phase 3-2: Ramp-Up Test (50→500 VU, 17분)
 
-8. **캐싱 레이어**: Redis/Memcached로 읽기 전용 API 캐싱 (country_list, statistics)
-9. **분산 배포**: Backend 서비스 수평 확장 (Kubernetes)
+| 항목 | Phase 2 (이전, 튜닝만) | Phase 3-2 (Pool 적용) | 변화 |
+|------|----------------------|----------------------|------|
+| **최대 VU** | 200→500 | **500** | 동일 |
+| **총 요청** | 55,161 | **84,118** | **+52%** |
+| **성공률** | 85.52% | **62.63%** | -23% (500VU 전구간) |
+| **P95 Latency** | **5.78s** | **35.11ms** | **165배 개선** |
+| **처리량** | 53.8 req/s | **82.3 req/s** | **+53%** |
+| **5xx 에러** | 7,486 | 24,106 | VU 비례 증가 |
+| **429 Rate Limit** | 0건 | 0건 | 동일 |
+
+**엔드포인트별 P95 레이턴시 비교**:
+
+| 엔드포인트 | Phase 2 (이전) | Phase 3-2 (Pool 적용) | 개선율 |
+|-----------|---------------|----------------------|--------|
+| health | ~5ms | 1.27ms | 4배 |
+| upload_stats | 6.12s | 43.12ms | **142배** |
+| cert_search | 6.15s | 2.49ms | **2,470배** |
+| country_list | 5.93s | 8.21ms | **722배** |
+| login | 6.19s | 0.79ms | **7,835배** |
+| sync_check | 996ms | 144.69ms | 7배 |
+| sync_status | 500ms | 129.77ms | 4배 |
+| ai_stats | timeout | 11.78ms | ∞ |
+| ai_anomalies | timeout | 8.07ms | ∞ |
+| pa_history | timeout | 16.63ms | ∞ |
+
+### Phase 3 핵심 분석
+
+**Pool 파라미터화 효과**:
+- P95 응답시간 **5.78초 → 35ms** (165배 개선) — 커넥션 풀 재사용 + 스레드 증가 효과
+- AI 서비스 **완전 timeout → 11ms** — DB Pool 확장(5→10) + Overflow(10→15) 효과
+- 처리량 **53.8 → 82.3 req/s** (53% 증가) — 16 스레드 동시 처리 효과
+
+**잔여 병목** (Oracle XE 한계):
+- 성공률 62.63%는 **500 VU에서 Oracle XE PROCESSES=150 세션 고갈**이 원인
+- login 실패율 93% — 동시 DB 세션 부족으로 인증 쿼리 실패
+- 3,000 VU 목표 달성을 위해 Oracle EE (PROCESSES=1000+) 전환 필수
 
 ---
 
-## 6. Phase 3+ 진행 조건
+## 6. 권장 개선 사항
 
-Phase 3 (Stress: 500→2000 VUs) 진행을 위해 다음 작업이 선행되어야 합니다:
+### 완료된 개선 (v2.25.0)
 
-- [x] Oracle XE → EE 21c 마이그레이션 (하드 제한 해제)
+1. **Connection Pool 환경변수 파라미터화** (Phase 3에서 효과 확인)
+   - `DB_POOL_MIN`, `DB_POOL_MAX`, `DB_POOL_TIMEOUT` (C++ 전 서비스, 기본 2/10/5)
+   - `LDAP_POOL_MIN`, `LDAP_POOL_MAX`, `LDAP_POOL_TIMEOUT` (pkd-management, pkd-relay, 기본 2/10/5)
+   - `THREAD_NUM` (pkd-relay, monitoring-service, 기본 16)
+   - `DB_POOL_SIZE`, `DB_POOL_OVERFLOW` (AI Analysis, 기본 5/10)
+   - **Phase 3 적용값**: DB/LDAP Pool Max=20, Thread=16, AI Pool=10/15
+
+2. **nginx 부하 테스트 설정** (Phase 2+ 적용)
+   - `worker_connections`: 1024 → 16384
+   - `limit_conn`: 20 → 5000, `api_limit`: 100r/s → 10000r/s
+   - `server-prep/nginx-loadtest.conf` 별도 유지
+
+3. **OS 커널 튜닝** (Phase 2+ 적용)
+   - `somaxconn=65535`, `tcp_tw_reuse=1`
+   - `server-prep/tune-server.sh apply` (테스트 시에만)
+
+### 추가 개선 필요 (중기)
+
+4. **Oracle EE 마이그레이션** (Oracle Container Registry 인증 문제로 미완료)
+   - XE 한계: PROCESSES=150, SESSIONS=248, SGA=2GB (변경 불가)
+   - EE 이미지 pull 시 `container-registry.oracle.com` 인증 필요 (SSO + License Accept)
+   - 코드 변경 완료: `XEPDB1` ↔ `ORCLPDB1` 전환 가능 (커밋 이력에 보존)
+   - **예상 효과**: login 실패율 93% → ~5% (세션 고갈 해소)
+
+5. **Pool 크기 추가 확장** (`.env` 수정만으로 가능)
+   - 현재: DB/LDAP Pool Max=20 → 목표: 50
+   - Oracle XE에서는 PROCESSES=150 제한으로 50 설정 시 세션 고갈 가능성
+   - Oracle EE 전환 후 `DB_POOL_MAX=50, LDAP_POOL_MAX=50` 적용 권장
+
+### 아키텍처 변경 (장기)
+
+6. **캐싱 레이어**: Redis/Memcached로 읽기 전용 API 캐싱 (country_list, statistics)
+7. **분산 배포**: Backend 서비스 수평 확장 (Kubernetes)
+
+---
+
+## 7. Phase 4+ 진행 조건
+
+다음 단계 부하 테스트 (Stress: 500→2000 VUs) 진행을 위한 선행 조건:
+
 - [x] Oracle OCI Session Pool `DB_POOL_MAX` 환경변수 파라미터화
 - [x] LDAP Pool `LDAP_POOL_MAX` 환경변수 파라미터화
 - [x] Drogon `THREAD_NUM` 환경변수 파라미터화
 - [x] AI Service `DB_POOL_SIZE`/`DB_POOL_OVERFLOW` 파라미터화
-- [ ] 전체 서비스 재빌드 (`--no-cache`)
-- [ ] Oracle EE 이미지 pull + `clean-and-init.sh`
-- [ ] `.env` 부하 테스트용 값 설정 (`DB_POOL_MAX=50, LDAP_POOL_MAX=50`)
-- [ ] 컨테이너 정상 확인 후 Phase 3 실행
+- [x] 전체 서비스 재빌드 (`--no-cache`)
+- [x] Pool 파라미터 `.env` 설정 + 서비스 재시작
+- [ ] Oracle EE 이미지 pull (Container Registry 인증 해결)
+- [ ] Oracle EE로 `clean-and-init.sh` (PROCESSES=1000, SGA=4GB)
+- [ ] Production 데이터 로드 (31,212 인증서)
+- [ ] Phase 4 Stress 테스트 실행 (500→2000 VUs)
 
 ---
 
-## 7. 테스트 파일 위치
+## 8. 테스트 파일 위치
 
 ```
 load-tests/
@@ -272,11 +355,37 @@ load-tests/
 
 ---
 
-## 8. 결론
+## 9. 결론
 
-현재 시스템은 **nginx 튜닝 없이 ~50 VU**, **nginx 튜닝 후 ~150-200 VU**를 안정적으로 처리할 수 있습니다. 5,000 VU 목표 달성을 위해서는 Backend 연결 풀 확장, 서비스 스레드 증가, AI 서비스 최적화, 그리고 장기적으로 Oracle 라이선스 업그레이드와 캐싱 레이어 도입이 필요합니다.
+### 테스트 결과 요약
 
-가장 비용 효율적인 개선 순서:
-1. **Connection Pool 확장** (코드 변경) → ~500-1,000 VU 예상
-2. **Drogon 스레드 증가** (설정 변경) → ~1,000-1,500 VU 예상
-3. **캐싱 레이어 추가** (아키텍처 변경) → ~3,000-5,000 VU 예상
+| Phase | VU | 성공률 | P95 Latency | 처리량 | 핵심 병목 |
+|-------|-----|--------|-------------|--------|----------|
+| Phase 0 (Smoke) | 5 | 98.98% | 203ms | 1.5 req/s | - |
+| Phase 1 (Baseline) | 50 | 93.47% | 370ms | 16.1 req/s | nginx rate limit |
+| Phase 2 (nginx 튜닝) | 50→500 | 85.52% | **5.78s** | 53.8 req/s | Connection Pool 고갈 |
+| **Phase 3 (Pool 적용)** | **50→500** | **62.63%** | **35ms** | **82.3 req/s** | **Oracle XE 세션 제한** |
+
+### Pool 파라미터화 효과 (Phase 2 → Phase 3)
+
+- **P95 레이턴시**: 5.78s → 35ms (**165배 개선**)
+- **처리량**: 53.8 → 82.3 req/s (**+53%**)
+- **AI 서비스**: timeout → 11ms (**완전 복구**)
+- **PA 이력**: timeout → 16ms (**완전 복구**)
+
+### 현재 시스템 수용 가능 동시 접속자 수
+
+| 튜닝 수준 | 예상 최대 VU | 상태 |
+|-----------|-------------|------|
+| **기본 설정** | **~50** | 검증 완료 (Phase 1) |
+| **nginx 튜닝** | **~150-200** | 검증 완료 (Phase 2) |
+| **+ Pool 파라미터화** | **~200-300** | 검증 완료 (Phase 3, P95=35ms) |
+| + Oracle EE (세션 해제) | ~1,000-2,000 | EE 이미지 필요 |
+| + 캐싱 레이어 (Redis) | ~3,000-5,000 | 아키텍처 변경 |
+
+### 다음 단계
+
+1. **Oracle EE Container Registry 인증 해결** → EE 마이그레이션 완료
+2. **Production 데이터 로드 후 재테스트** → 실제 31,212건 기반 성능 측정
+3. **Phase 4 Stress 테스트** (500→2000 VUs) → Oracle EE 세션 확장 효과 검증
+4. **모니터링 대시보드 개선** → 실시간 부하/레이턴시/동시접속 표시

@@ -2,7 +2,7 @@
  * @file main.cpp
  * @brief ICAO Local PKD Monitoring Service
  *
- * System resource and service health monitoring (DB-independent).
+ * System resource, service health, and application load monitoring (DB-independent).
  */
 
 #include <drogon/drogon.h>
@@ -16,6 +16,7 @@
 #include <cstdlib>
 
 #include "handlers/monitoring_handler.h"
+#include "collectors/metrics_collector.h"
 
 using namespace drogon;
 
@@ -62,13 +63,16 @@ int main() {
     setupLogging();
 
     spdlog::info("===========================================");
-    spdlog::info("  ICAO Local PKD - Monitoring Service v1.1.0");
+    spdlog::info("  ICAO Local PKD - Monitoring Service v1.2.0");
     spdlog::info("===========================================");
     spdlog::info("Server port: {}", config.serverPort);
-    spdlog::info("Mode: On-demand metrics (no database dependency)");
+    spdlog::info("Mode: Background metrics collection + on-demand queries");
 
-    // Create handler and register routes
-    handlers::MonitoringHandler monitoringHandler(&config);
+    // Create metrics collector
+    handlers::MetricsCollector metricsCollector(&config);
+
+    // Create handler with collector reference and register routes
+    handlers::MonitoringHandler monitoringHandler(&config, &metricsCollector);
     monitoringHandler.registerRoutes(app());
 
     // Enable CORS
@@ -76,6 +80,25 @@ int main() {
         resp->addHeader("Access-Control-Allow-Origin", "*");
         resp->addHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
         resp->addHeader("Access-Control-Allow-Headers", "Content-Type");
+    });
+
+    // Background metrics collection timer
+    int collectionInterval = config.systemMetricsInterval;
+    if (collectionInterval <= 0) collectionInterval = 10;
+
+    spdlog::info("Background metrics collection: every {}s (30 min ring buffer)",
+                 collectionInterval);
+
+    app().getLoop()->runAfter(5.0, [&metricsCollector, collectionInterval]() {
+        spdlog::info("Starting background metrics collection...");
+        metricsCollector.collectOnce(); // Initial collection
+
+        app().getLoop()->runEvery(
+            static_cast<double>(collectionInterval),
+            [&metricsCollector]() {
+                metricsCollector.collectOnce();
+            }
+        );
     });
 
     // Start server

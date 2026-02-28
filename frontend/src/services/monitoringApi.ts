@@ -70,6 +70,60 @@ export interface MetricsHistoryItem {
   diskUsagePercent: number;
 }
 
+// --- Load Monitoring Types ---
+
+export interface NginxStatus {
+  activeConnections: number;
+  totalRequests: number;
+  requestsPerSecond: number;
+  reading: number;
+  writing: number;
+  waiting: number;
+}
+
+export interface PoolStats {
+  available: number;
+  total: number;
+  max: number;
+}
+
+export interface ServiceLoadMetrics {
+  name: string;
+  status: string;
+  responseTimeMs: number;
+  dbPool?: PoolStats;
+  ldapPool?: PoolStats;
+}
+
+export interface LoadSnapshot {
+  timestamp: string;
+  nginx: NginxStatus;
+  services: ServiceLoadMetrics[];
+  system: {
+    cpuPercent: number;
+    memoryPercent: number;
+  };
+}
+
+export interface HistoryPoint {
+  timestamp: string;
+  nginx: {
+    activeConnections: number;
+    requestsPerSecond: number;
+  };
+  latency: Record<string, number>;
+  system: {
+    cpuPercent: number;
+    memoryPercent: number;
+  };
+}
+
+export interface LoadHistory {
+  intervalSeconds: number;
+  totalPoints: number;
+  data: HistoryPoint[];
+}
+
 // --- Axios Instance ---
 
 const monitoringClient = axios.create({
@@ -105,4 +159,10 @@ export const monitoringServiceApi = {
 
   getSystemMetricsLatest: () =>
     monitoringClient.get<SystemMetrics>('/system/latest'),
+
+  getLoadSnapshot: () =>
+    monitoringClient.get<LoadSnapshot>('/load'),
+
+  getLoadHistory: (minutes = 30) =>
+    monitoringClient.get<LoadHistory>('/load/history', { params: { minutes } }),
 };

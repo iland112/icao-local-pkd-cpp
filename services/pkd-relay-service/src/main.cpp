@@ -16,12 +16,17 @@
 #include <iostream>
 #include <memory>
 #include <cstdlib>
+#include <sstream>
+#include <iomanip>
+#include <chrono>
 
 // Config
 #include "relay/sync/common/config.h"
 
 // Infrastructure
 #include "infrastructure/service_container.h"
+#include "db_connection_interface.h"
+#include "ldap_connection_pool.h"
 #include "infrastructure/sync_scheduler.h"
 #include "infrastructure/relay_operations.h"
 #include "services/validation_service.h"
@@ -304,6 +309,32 @@ paths:
             resp->setContentTypeCode(CT_TEXT_PLAIN);
             resp->addHeader("Content-Type", "application/x-yaml");
             callback(resp);
+        }, {Get});
+
+    // --- Internal Metrics (monitoring service only) ---
+    app().registerHandler("/internal/metrics",
+        [](const HttpRequestPtr&, std::function<void(const HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["service"] = "pkd-relay";
+            auto now = std::chrono::system_clock::now();
+            auto time_t = std::chrono::system_clock::to_time_t(now);
+            std::stringstream ss;
+            ss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+            result["timestamp"] = ss.str();
+
+            if (g_services && g_services->dbPool()) {
+                auto stats = g_services->dbPool()->getStats();
+                result["dbPool"]["available"] = static_cast<Json::UInt>(stats.availableConnections);
+                result["dbPool"]["total"] = static_cast<Json::UInt>(stats.totalConnections);
+                result["dbPool"]["max"] = static_cast<Json::UInt>(stats.maxConnections);
+            }
+            if (g_services && g_services->ldapPool()) {
+                auto stats = g_services->ldapPool()->getStats();
+                result["ldapPool"]["available"] = static_cast<Json::UInt>(stats.availableConnections);
+                result["ldapPool"]["total"] = static_cast<Json::UInt>(stats.totalConnections);
+                result["ldapPool"]["max"] = static_cast<Json::UInt>(stats.maxConnections);
+            }
+            callback(HttpResponse::newHttpJsonResponse(result));
         }, {Get});
 
     // Swagger UI redirect

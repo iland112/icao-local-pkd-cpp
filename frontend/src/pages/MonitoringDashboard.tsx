@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, CheckCircle2, XCircle, Clock, RefreshCw, Loader2, Gauge, Database, Globe } from 'lucide-react';
-import { monitoringServiceApi, type SystemMetrics, type ServiceHealth } from '@/services/monitoringApi';
+import { monitoringServiceApi, type SystemMetrics, type ServiceHealth, type LoadSnapshot, type HistoryPoint } from '@/services/monitoringApi';
 import { healthApi } from '@/services/pkdApi';
 import { cn } from '@/utils/cn';
+import ActiveConnectionsCard from '@/components/monitoring/ActiveConnectionsCard';
+import RequestRateChart from '@/components/monitoring/RequestRateChart';
+import LatencyTrendChart from '@/components/monitoring/LatencyTrendChart';
+import ConnectionPoolChart from '@/components/monitoring/ConnectionPoolChart';
 
 interface InfraHealth {
   name: string;
@@ -32,6 +36,8 @@ export default function MonitoringDashboard() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [services, setServices] = useState<ServiceHealth[]>([]);
   const [infraHealth, setInfraHealth] = useState<InfraHealth[]>([]);
+  const [loadSnapshot, setLoadSnapshot] = useState<LoadSnapshot | null>(null);
+  const [loadHistory, setLoadHistory] = useState<HistoryPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -101,6 +107,19 @@ export default function MonitoringDashboard() {
       }
 
       setInfraHealth(infra);
+
+      // Fetch load metrics (non-blocking — don't fail the whole page)
+      try {
+        const [snapRes, histRes] = await Promise.all([
+          monitoringServiceApi.getLoadSnapshot(),
+          monitoringServiceApi.getLoadHistory(30),
+        ]);
+        setLoadSnapshot(snapRes.data);
+        setLoadHistory(histRes.data?.data ?? []);
+      } catch {
+        // Load metrics are supplementary — don't show error
+      }
+
       setLastUpdate(new Date());
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to fetch monitoring data:', err);
@@ -252,6 +271,36 @@ export default function MonitoringDashboard() {
               percentage={null}
             />
           </div>
+
+          {/* Load Monitoring Section */}
+          {loadSnapshot && (
+            <>
+              {/* Row: Active Connections + Connection Pool */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                <ActiveConnectionsCard
+                  nginx={loadSnapshot.nginx}
+                  requestsPerSecond={loadSnapshot.nginx.requestsPerSecond}
+                />
+                <div className="lg:col-span-2">
+                  <ConnectionPoolChart services={loadSnapshot.services} />
+                </div>
+              </div>
+
+              {/* Row: Request Rate Trend (full width) */}
+              {loadHistory.length > 0 && (
+                <div className="mb-6">
+                  <RequestRateChart data={loadHistory} />
+                </div>
+              )}
+
+              {/* Row: Latency Trend */}
+              {loadHistory.length > 0 && (
+                <div className="mb-6">
+                  <LatencyTrendChart data={loadHistory} />
+                </div>
+              )}
+            </>
+          )}
 
           {/* Infrastructure Health */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">

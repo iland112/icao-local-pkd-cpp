@@ -19,12 +19,18 @@
 #include <ctime>
 #include <string>
 #include <vector>
+#include <sstream>
+#include <iomanip>
 
 // PostgreSQL header for checkDatabase()
 #include <libpq-fe.h>
 
 // OpenLDAP header for checkLdap()
 #include <ldap.h>
+
+// Pool stats for /internal/metrics
+#include "db_connection_interface.h"
+#include "ldap_connection_pool.h"
 
 // Project headers
 #include <icao/audit/audit_log.h>
@@ -257,6 +263,33 @@ void registerRoutes() {
         g_services->icaoHandler()->registerRoutes(app);
     }
 
+
+    // --- Internal Metrics (monitoring service only) ---
+    app.registerHandler("/internal/metrics",
+        [](const drogon::HttpRequestPtr&,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["service"] = "pkd-management";
+            auto now = std::chrono::system_clock::now();
+            auto time_t = std::chrono::system_clock::to_time_t(now);
+            std::stringstream ss;
+            ss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+            result["timestamp"] = ss.str();
+
+            if (g_services && g_services->dbPool()) {
+                auto stats = g_services->dbPool()->getStats();
+                result["dbPool"]["available"] = static_cast<Json::UInt>(stats.availableConnections);
+                result["dbPool"]["total"] = static_cast<Json::UInt>(stats.totalConnections);
+                result["dbPool"]["max"] = static_cast<Json::UInt>(stats.maxConnections);
+            }
+            if (g_services && g_services->ldapPool()) {
+                auto stats = g_services->ldapPool()->getStats();
+                result["ldapPool"]["available"] = static_cast<Json::UInt>(stats.availableConnections);
+                result["ldapPool"]["total"] = static_cast<Json::UInt>(stats.totalConnections);
+                result["ldapPool"]["max"] = static_cast<Json::UInt>(stats.maxConnections);
+            }
+            callback(drogon::HttpResponse::newHttpJsonResponse(result));
+        }, {drogon::Get});
 
     spdlog::info("API routes registered");
 }

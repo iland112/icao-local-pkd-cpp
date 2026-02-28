@@ -142,17 +142,22 @@ struct MonitoringConfig {
  * - GET /api/monitoring/health - Health check
  * - GET /api/monitoring/system/overview - System metrics (CPU, memory, disk, network)
  * - GET /api/monitoring/services - All services health status
+ * - GET /api/monitoring/load - Current load snapshot (nginx + pools + latency)
+ * - GET /api/monitoring/load/history - Time-series load history
  *
  * DB-independent: no database dependency required.
  */
+class MetricsCollector;
+
 class MonitoringHandler {
 public:
     /**
      * @brief Construct MonitoringHandler
      *
      * @param config Monitoring configuration (non-owning pointer)
+     * @param collector MetricsCollector (optional, non-owning pointer)
      */
-    explicit MonitoringHandler(MonitoringConfig* config);
+    explicit MonitoringHandler(MonitoringConfig* config, MetricsCollector* collector = nullptr);
 
     /**
      * @brief Register monitoring routes
@@ -165,6 +170,7 @@ public:
 
 private:
     MonitoringConfig* config_;
+    MetricsCollector* collector_ = nullptr;
 
     /**
      * @brief GET /api/monitoring/health
@@ -216,6 +222,16 @@ private:
      * ]
      */
     void handleServicesHealth(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** @brief GET /api/monitoring/load — Current load snapshot */
+    void handleLoadSnapshot(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** @brief GET /api/monitoring/load/history — Time-series load history */
+    void handleLoadHistory(
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 };

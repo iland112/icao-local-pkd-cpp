@@ -23,6 +23,7 @@
 #include "infrastructure/app_config.h"
 #include "infrastructure/service_container.h"
 #include "i_query_executor.h"
+#include "db_connection_interface.h"
 #include "handlers/health_handler.h"
 #include "handlers/pa_handler.h"
 #include "handlers/info_handler.h"
@@ -180,7 +181,24 @@ void registerRoutes() {
     static handlers::InfoHandler infoHandler;
     infoHandler.registerRoutes(app);
 
-    spdlog::info("PA Service API routes registered (16 endpoints via 3 handlers)");
+    // --- Internal Metrics (monitoring service only) ---
+    app.registerHandler("/internal/metrics",
+        [](const drogon::HttpRequestPtr&,
+           std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            Json::Value result;
+            result["service"] = "pa-service";
+            result["timestamp"] = getCurrentTimestamp();
+
+            if (g_services && g_services->dbPool()) {
+                auto stats = g_services->dbPool()->getStats();
+                result["dbPool"]["available"] = static_cast<Json::UInt>(stats.availableConnections);
+                result["dbPool"]["total"] = static_cast<Json::UInt>(stats.totalConnections);
+                result["dbPool"]["max"] = static_cast<Json::UInt>(stats.maxConnections);
+            }
+            callback(drogon::HttpResponse::newHttpJsonResponse(result));
+        }, {drogon::Get});
+
+    spdlog::info("PA Service API routes registered (17 endpoints via 3 handlers)");
 }
 
 } // anonymous namespace

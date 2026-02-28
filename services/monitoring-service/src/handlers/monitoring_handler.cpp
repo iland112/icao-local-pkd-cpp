@@ -3,6 +3,7 @@
  */
 
 #include "monitoring_handler.h"
+#include "../collectors/metrics_collector.h"
 #include <spdlog/spdlog.h>
 
 namespace handlers {
@@ -278,14 +279,14 @@ ServiceHealth ServiceHealthChecker::checkService(const std::string& name, const 
 
 // --- MonitoringHandler ---
 
-MonitoringHandler::MonitoringHandler(MonitoringConfig* config)
-    : config_(config) {
+MonitoringHandler::MonitoringHandler(MonitoringConfig* config, MetricsCollector* collector)
+    : config_(config), collector_(collector) {
 
     if (!config_) {
         throw std::invalid_argument("MonitoringHandler: config cannot be nullptr");
     }
 
-    spdlog::info("[MonitoringHandler] Initialized");
+    spdlog::info("[MonitoringHandler] Initialized (collector={})", collector_ ? "yes" : "no");
 }
 
 void MonitoringHandler::registerRoutes(drogon::HttpAppFramework& app) {
@@ -319,10 +320,32 @@ void MonitoringHandler::registerRoutes(drogon::HttpAppFramework& app) {
         {drogon::Get}
     );
 
+    // GET /api/monitoring/load
+    app.registerHandler(
+        "/api/monitoring/load",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handleLoadSnapshot(req, std::move(callback));
+        },
+        {drogon::Get}
+    );
+
+    // GET /api/monitoring/load/history
+    app.registerHandler(
+        "/api/monitoring/load/history",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handleLoadHistory(req, std::move(callback));
+        },
+        {drogon::Get}
+    );
+
     spdlog::info("[MonitoringHandler] Routes registered: "
                  "/api/monitoring/health, "
                  "/api/monitoring/system/overview, "
-                 "/api/monitoring/services");
+                 "/api/monitoring/services, "
+                 "/api/monitoring/load, "
+                 "/api/monitoring/load/history");
 }
 
 // --- Handler Implementations ---
@@ -437,6 +460,124 @@ void MonitoringHandler::handleServicesHealth(
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(services);
     callback(resp);
+}
+
+// --- Load Snapshot ---
+
+static std::string formatTimestamp(std::chrono::system_clock::time_point tp) {
+    auto time_t = std::chrono::system_clock::to_time_t(tp);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", std::localtime(&time_t));
+    return buf;
+}
+
+void MonitoringHandler::handleLoadSnapshot(
+    const drogon::HttpRequestPtr&,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+
+    if (!collector_ || !collector_->hasData()) {
+        Json::Value err;
+        err["error"] = "No metrics data collected yet";
+        err["message"] = "Metrics collection starts after service initialization. Please retry in 10 seconds.";
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
+        resp->setStatusCode(drogon::k503ServiceUnavailable);
+        callback(resp);
+        return;
+    }
+
+    auto snapshot = collector_->getLatestSnapshot();
+    Json::Value response;
+    response["timestamp"] = formatTimestamp(snapshot.timestamp);
+
+    // nginx
+    response["nginx"]["activeConnections"] = snapshot.nginx.activeConnections;
+    response["nginx"]["totalRequests"] = (Json::Value::UInt64)snapshot.nginx.totalRequests;
+    response["nginx"]["requestsPerSecond"] = snapshot.requestsPerSecond;
+    response["nginx"]["reading"] = snapshot.nginx.reading;
+    response["nginx"]["writing"] = snapshot.nginx.writing;
+    response["nginx"]["waiting"] = snapshot.nginx.waiting;
+
+    // services
+    Json::Value servicesArr(Json::arrayValue);
+    for (const auto& svc : snapshot.services) {
+        Json::Value svcJson;
+        svcJson["name"] = svc.serviceName;
+        svcJson["status"] = svc.status;
+        svcJson["responseTimeMs"] = svc.responseTimeMs;
+
+        if (svc.hasDbPool) {
+            svcJson["dbPool"]["available"] = (Json::UInt)svc.dbPool.available;
+            svcJson["dbPool"]["total"] = (Json::UInt)svc.dbPool.total;
+            svcJson["dbPool"]["max"] = (Json::UInt)svc.dbPool.max;
+        }
+        if (svc.hasLdapPool) {
+            svcJson["ldapPool"]["available"] = (Json::UInt)svc.ldapPool.available;
+            svcJson["ldapPool"]["total"] = (Json::UInt)svc.ldapPool.total;
+            svcJson["ldapPool"]["max"] = (Json::UInt)svc.ldapPool.max;
+        }
+
+        servicesArr.append(svcJson);
+    }
+    response["services"] = servicesArr;
+
+    // system
+    response["system"]["cpuPercent"] = snapshot.cpuPercent;
+    response["system"]["memoryPercent"] = snapshot.memoryPercent;
+
+    callback(drogon::HttpResponse::newHttpJsonResponse(response));
+}
+
+// --- Load History ---
+
+void MonitoringHandler::handleLoadHistory(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+
+    if (!collector_ || !collector_->hasData()) {
+        Json::Value result;
+        result["intervalSeconds"] = 10;
+        result["totalPoints"] = 0;
+        result["data"] = Json::Value(Json::arrayValue);
+        callback(drogon::HttpResponse::newHttpJsonResponse(result));
+        return;
+    }
+
+    int minutes = 30;
+    auto minutesParam = req->getParameter("minutes");
+    if (!minutesParam.empty()) {
+        try { minutes = std::stoi(minutesParam); }
+        catch (...) {}
+    }
+
+    auto history = collector_->getHistory(minutes);
+
+    Json::Value result;
+    result["intervalSeconds"] = 10;
+    result["totalPoints"] = (Json::UInt)history.size();
+
+    Json::Value dataArr(Json::arrayValue);
+    for (const auto& snap : history) {
+        Json::Value point;
+        point["timestamp"] = formatTimestamp(snap.timestamp);
+
+        point["nginx"]["activeConnections"] = snap.nginx.activeConnections;
+        point["nginx"]["requestsPerSecond"] = snap.requestsPerSecond;
+
+        // Per-service latency
+        Json::Value latency;
+        for (const auto& svc : snap.services) {
+            latency[svc.serviceName] = svc.responseTimeMs;
+        }
+        point["latency"] = latency;
+
+        point["system"]["cpuPercent"] = snap.cpuPercent;
+        point["system"]["memoryPercent"] = snap.memoryPercent;
+
+        dataArr.append(point);
+    }
+    result["data"] = dataArr;
+
+    callback(drogon::HttpResponse::newHttpJsonResponse(result));
 }
 
 } // namespace handlers
