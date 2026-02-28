@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.0
+**Current Version**: v2.25.1
 **Last Updated**: 2026-02-28
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -577,6 +577,14 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.1 (2026-02-28) - API 클라이언트 사용량 추적 수정 (CIDR + nginx)
+- **CRITICAL FIX**: `isIpAllowed()` CIDR 매칭 로직 — `/8`, `/16` 서브넷이 항상 `/24`처럼 동작하는 버그 수정
+- **Root cause**: `10.0.0.0/8` → 마지막 옥텟만 제거하여 `10.0.0.` prefix 비교 → `10.89.1.42` 매칭 실패
+- **Fix**: 비트 연산 기반 정확한 CIDR 매칭으로 교체 (IP→32bit 정수 변환, 서브넷 마스크 적용 비교)
+- **nginx fix**: `/internal/auth-check` location에 `proxy_set_header X-API-Key $http_x_api_key;` 누락 — API Key 헤더가 auth_request 서브리퀘스트에 전달되지 않아 사용량 추적 불가
+- nginx 설정 수정: `api-gateway-ssl.conf`, `api-gateway-luckfox.conf`
+- 3 files changed (0 new, 3 modified: auth_middleware.cpp, api-gateway-ssl.conf, api-gateway-luckfox.conf)
 
 ### v2.25.0 (2026-02-28) - MANUAL 모드 제거 + AUTO 모드 LDAP 복원력 + 실패 업로드 재시도
 - **MANUAL 모드 완전 제거**: `ManualProcessingStrategy` 클래스 및 `ProcessingStrategyFactory` 제거 (~470줄 삭제)
