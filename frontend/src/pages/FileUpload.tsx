@@ -1,14 +1,14 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   Upload,
   CloudUpload,
   Clock,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   AlertTriangle,
-  Play,
   FileText,
   Loader2,
   Upload as UploadIcon,
@@ -16,7 +16,7 @@ import {
   Database,
 } from 'lucide-react';
 import { uploadApi, createProgressEventSource } from '@/services/api';
-import type { ProcessingMode, UploadProgress, UploadedFile, ValidationStatistics, CertificateMetadata, IcaoComplianceStatus, ProcessingError } from '@/types';
+import type { UploadProgress, UploadedFile, ValidationStatistics, CertificateMetadata, IcaoComplianceStatus, ProcessingError } from '@/types';
 import { cn } from '@/utils/cn';
 import { Stepper, type Step, type StepStatus } from '@/components/common/Stepper';
 import { RealTimeStatisticsPanel } from '@/components/RealTimeStatisticsPanel';
@@ -39,18 +39,13 @@ const initialStage: StageStatus = {
 
 export function FileUpload() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [processingMode, setProcessingMode] = useState<ProcessingMode>('AUTO');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [uploadId, setUploadId] = useState<string | null>(null);
 
-  // Stage statuses for 2-stage MANUAL mode (v1.5.0)
-  // Stage 1: Upload & Parse
-  // Stage 2: Validate & Save (DB + LDAP simultaneously)
+  // Stage statuses for 3-stage processing progress
   const [uploadStage, setUploadStage] = useState<StageStatus>(initialStage);
   const [parseStage, setParseStage] = useState<StageStatus>(initialStage);
   const [dbSaveStage, setDbSaveStage] = useState<StageStatus>(initialStage);
@@ -73,6 +68,9 @@ export function FileUpload() {
   const [processingErrors, setProcessingErrors] = useState<ProcessingError[]>([]);
   const [errorCounts, setErrorCounts] = useState({ total: 0, parse: 0, db: 0, ldap: 0 });
 
+  // CSCA certificate count for warning banner
+  const [cscaCount, setCscaCount] = useState<number | null>(null);
+
   // Event log for SSE events (filtered: only meaningful events)
   const [eventLogEntries, setEventLogEntries] = useState<EventLogEntry[]>([]);
   const eventIdRef = useRef(0);
@@ -83,110 +81,12 @@ export function FileUpload() {
   const lastMilestoneRef = useRef(0);
   const lastValidationLogCountRef = useRef(0);
 
-  // Restore upload state on page load (for MANUAL mode)
+  // Fetch CSCA count on page load
   useEffect(() => {
-    const restoreUploadState = async () => {
-      // CRITICAL: URL parameter takes precedence over localStorage
-      const urlUploadId = searchParams.get('uploadId');
-      if (urlUploadId) {
-        // Clear localStorage to avoid conflict
-        localStorage.removeItem('currentUploadId');
-        return; // Let the URL parameter handling take over
-      }
-
-      const savedUploadId = localStorage.getItem('currentUploadId');
-      if (!savedUploadId) return;
-
-      try {
-        const response = await uploadApi.getDetail(savedUploadId);
-        if (!response.data?.success || !response.data.data) {
-          localStorage.removeItem('currentUploadId');
-          return;
-        }
-
-        const upload = response.data.data as UploadedFile;
-
-        // Only restore MANUAL mode uploads that are not FAILED or fully COMPLETED
-        if (upload.processingMode !== 'MANUAL') {
-          localStorage.removeItem('currentUploadId');
-          return;
-        }
-
-        // v1.5.0: MANUAL mode is 2-stage, DB save = LDAP save (simultaneous)
-        // All stages completed if status is COMPLETED
-        if (upload.status === 'FAILED' || upload.status === 'COMPLETED') {
-          localStorage.removeItem('currentUploadId');
-          return;
-        }
-
-        // Restore state
-        setUploadId(savedUploadId);
-        setProcessingMode('MANUAL');
-        setSelectedFile(new File([], upload.fileName));  // Dummy file for display
-
-        // Determine stage states based on DB data
-        // Stage 1 (Upload): Always completed if we have the upload record
-        setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
-
-        // Parse stage: Only completed if totalEntries > 0 (parsing was actually done)
-        if ((upload.totalEntries || 0) > 0) {
-          // For Master List: use processedEntries (extracted certificates)
-          // For LDIF: use totalEntries (LDIF entries)
-          const entriesCount = upload.fileFormat === 'ML' ? upload.processedEntries : upload.totalEntries;
-          setParseStage({
-            status: 'COMPLETED',
-            message: '파싱 완료',
-            percentage: 100,
-            details: `${entriesCount?.toLocaleString()}건 처리`
-          });
-        } else {
-          // Parsing not started yet - keep IDLE state
-          setParseStage({
-            status: 'IDLE',
-            message: '파싱 대기 중',
-            percentage: 0
-          });
-        }
-
-        // Stage 2 (Validate & DB + LDAP): Check if certificates exist in DB
-        // v1.5.0: DB and LDAP are saved simultaneously, so DB save = completion
-        const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) + (upload.mlscCount || 0) > 0;
-        if (hasCertificates) {
-          // Build detailed certificate breakdown
-          const certDetails = [];
-          if (upload.mlscCount) certDetails.push(`MLSC: ${upload.mlscCount.toLocaleString()}`);  // Master List Signer Certificate (v2.1.1)
-          if (upload.cscaCount) certDetails.push(`CSCA: ${upload.cscaCount.toLocaleString()}`);
-          if (upload.dscCount) certDetails.push(`DSC: ${upload.dscCount.toLocaleString()}`);
-          if (upload.dscNcCount) certDetails.push(`DSC_NC: ${upload.dscNcCount.toLocaleString()}`);
-          if (upload.crlCount) certDetails.push(`CRL: ${upload.crlCount.toLocaleString()}`);
-          if (upload.mlCount) certDetails.push(`ML: ${upload.mlCount.toLocaleString()}`);
-
-          setDbSaveStage({
-            status: 'COMPLETED',
-            message: 'DB + LDAP 저장 완료',
-            percentage: 100,
-            details: certDetails.join(', ')
-          });
-        } else {
-          setDbSaveStage({
-            status: 'IDLE',
-            message: 'DB + LDAP 저장 대기 중',
-            percentage: 0
-          });
-        }
-
-        setOverallStatus('PROCESSING');
-        setOverallMessage(`업로드 재개: ${upload.fileName}`);
-
-        if (import.meta.env.DEV) console.log('Upload state restored:', savedUploadId, upload);
-      } catch (error) {
-        if (import.meta.env.DEV) console.error('Failed to restore upload state:', error);
-        localStorage.removeItem('currentUploadId');
-      }
-    };
-
-    restoreUploadState();
-  }, [searchParams]);
+    uploadApi.getStatistics()
+      .then(res => setCscaCount(res.data.cscaCount ?? 0))
+      .catch(() => {});
+  }, []);
 
   // Convert stage status to step status for Stepper
   const toStepStatus = (status: StageStatus['status']): StepStatus => {
@@ -299,7 +199,6 @@ export function FileUpload() {
     setOverallStatus('IDLE');
     setOverallMessage('');
     setErrorMessages([]);
-    setUploadId(null);
     // Phase 4.4: Reset enhanced metadata
     setStatistics(null);
     setCurrentCertificate(null);
@@ -333,17 +232,12 @@ export function FileUpload() {
       const isLdif = selectedFile.name.toLowerCase().endsWith('.ldif');
       const uploadFn = isLdif ? uploadApi.uploadLdif : uploadApi.uploadMasterList;
 
-      const response = await uploadFn(selectedFile, processingMode);
+      const response = await uploadFn(selectedFile);
 
       if (response.data.success && response.data.data) {
         const uploadedFile = response.data.data;
         const fileId = (uploadedFile as { uploadId?: string }).uploadId || uploadedFile.id;
-        setUploadId(fileId);
         setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
-
-        if (processingMode === 'MANUAL') {
-          localStorage.setItem('currentUploadId', fileId);
-        }
 
         connectToProgressStream(fileId);
       } else {
@@ -359,7 +253,6 @@ export function FileUpload() {
             fileName: string;
             uploadTimestamp: string;
             status: string;
-            processingMode: string;
             fileFormat: string;
           };
         };
@@ -376,7 +269,6 @@ export function FileUpload() {
             `파일명: ${existing.fileName}`,
             `업로드 시간: ${new Date(existing.uploadTimestamp).toLocaleString('ko-KR')}`,
             `상태: ${existing.status}`,
-            `처리 모드: ${existing.processingMode}`,
             `파일 형식: ${existing.fileFormat}`,
           ]);
         } else {
@@ -447,7 +339,6 @@ export function FileUpload() {
         setOverallStatus('FINALIZED');
         setOverallMessage('모든 처리가 완료되었습니다.');
         setIsProcessing(false);
-        localStorage.removeItem('currentUploadId');
         // Stop polling when completed
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
@@ -463,7 +354,6 @@ export function FileUpload() {
         setOverallStatus('FAILED');
         setOverallMessage('처리 중 오류가 발생했습니다.');
         setIsProcessing(false);
-        localStorage.removeItem('currentUploadId');
         // Stop polling on failure
         if (pollingIntervalRef.current) {
           clearInterval(pollingIntervalRef.current);
@@ -863,34 +753,6 @@ export function FileUpload() {
     }
   };
 
-  // Manual mode triggers
-  const triggerParse = async () => {
-    if (!uploadId) return;
-    setParseStage({ status: 'IN_PROGRESS', message: '파싱 시작...', percentage: 0 });
-    try {
-      // Reconnect to SSE for progress updates
-      connectToProgressStream(uploadId);
-      await uploadApi.triggerParse(uploadId);
-    } catch (error) {
-      setParseStage({ status: 'FAILED', message: '파싱 실패', percentage: 0 });
-      setErrorMessages(prev => [...prev, error instanceof Error ? error.message : '파싱 요청 실패']);
-    }
-  };
-
-  const triggerValidate = async () => {
-    if (!uploadId) return;
-    setDbSaveStage({ status: 'IN_PROGRESS', message: '검증 시작...', percentage: 0 });
-    try {
-      // Reconnect to SSE for progress updates
-      connectToProgressStream(uploadId);
-      await uploadApi.triggerValidate(uploadId);
-    } catch (error) {
-      setDbSaveStage({ status: 'FAILED', message: '검증 실패', percentage: 0 });
-      setErrorMessages(prev => [...prev, error instanceof Error ? error.message : '검증 요청 실패']);
-    }
-  };
-
-
   return (
     <div className="w-full px-4 lg:px-6 py-4">
       {/* Page Header */}
@@ -909,6 +771,28 @@ export function FileUpload() {
           </div>
         </div>
       </div>
+
+      {/* CSCA Certificate Status Banner */}
+      {cscaCount !== null && (
+        cscaCount === 0 ? (
+          <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
+            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">CSCA 인증서가 등록되지 않았습니다</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                Trust Chain 검증을 위해 먼저 CSCA가 포함된 LDIF 또는 Master List를 업로드해 주세요.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-6 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800">
+            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+            <p className="text-xs text-green-700 dark:text-green-400">
+              CSCA <span className="font-semibold">{cscaCount.toLocaleString()}</span>개 등록됨 — 인증서 검증 가능
+            </p>
+          </div>
+        )
+      )}
 
       {/* Row 1: Upload Result Card — hidden until upload completes */}
       {overallStatus === 'FINALIZED' && (
@@ -1026,29 +910,6 @@ export function FileUpload() {
                   <p className="text-xs text-gray-500 dark:text-gray-400">
                     LDIF, Master List 파일을 업로드합니다.
                   </p>
-                </div>
-              </div>
-
-              {/* Processing Mode Selector */}
-              <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  처리 모드
-                </label>
-                <div className="flex gap-2">
-                  {(['AUTO', 'MANUAL'] as ProcessingMode[]).map((mode) => (
-                    <button
-                      key={mode}
-                      onClick={() => setProcessingMode(mode)}
-                      className={cn(
-                        'flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all',
-                        processingMode === mode
-                          ? 'bg-indigo-500 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      )}
-                    >
-                      {mode === 'AUTO' ? '자동 처리' : '수동 처리'}
-                    </button>
-                  ))}
                 </div>
               </div>
 
@@ -1227,56 +1088,6 @@ export function FileUpload() {
                   </div>
                 )}
 
-                {/* Manual Mode Controls */}
-                {processingMode === 'MANUAL' && uploadId && overallStatus !== 'FINALIZED' && overallStatus !== 'FAILED' && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">수동 처리 제어</h4>
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={triggerParse}
-                        disabled={parseStage.status === 'COMPLETED' || parseStage.status === 'IN_PROGRESS'}
-                        className={cn(
-                          'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
-                          parseStage.status === 'COMPLETED'
-                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
-                          'disabled:opacity-50'
-                        )}
-                      >
-                        {parseStage.status === 'IN_PROGRESS' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : parseStage.status === 'COMPLETED' ? (
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5" />
-                        )}
-                        {parseStage.status === 'COMPLETED' ? '파싱 완료' : '1. 파싱'}
-                      </button>
-
-                      <button
-                        onClick={triggerValidate}
-                        disabled={parseStage.status !== 'COMPLETED' || dbSaveStage.status === 'COMPLETED' || dbSaveStage.status === 'IN_PROGRESS'}
-                        className={cn(
-                          'py-2.5 px-3 text-xs font-medium rounded-lg flex items-center justify-center gap-1.5 transition-all',
-                          dbSaveStage.status === 'COMPLETED'
-                            ? 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400'
-                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50',
-                          'disabled:opacity-50'
-                        )}
-                      >
-                        {dbSaveStage.status === 'IN_PROGRESS' ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : dbSaveStage.status === 'COMPLETED' ? (
-                          <CheckCircle className="w-3.5 h-3.5" />
-                        ) : (
-                          <Play className="w-3.5 h-3.5" />
-                        )}
-                        {dbSaveStage.status === 'COMPLETED' ? '저장 완료' : '2. 저장 (DB+LDAP)'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* Final Status — FAILED only (FINALIZED shown in top summary card) */}
                 {overallStatus === 'FAILED' && (
                   <div className="mt-4 p-4 rounded-xl flex items-start gap-3 bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
@@ -1290,48 +1101,6 @@ export function FileUpload() {
                   </div>
                 )}
 
-
-                {/* LDAP Connection Failure Warning (v2.0.0 - Data Consistency Protection) */}
-                {overallStatus === 'FAILED' && overallMessage &&
-                 (overallMessage.includes('LDAP 연결') || overallMessage.includes('LDAP connection') ||
-                  overallMessage.includes('데이터 일관성')) && (
-                  <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-6 h-6 text-red-500 mt-0.5 flex-shrink-0" />
-                      <div className="flex-1">
-                        <h4 className="font-bold text-base text-red-800 dark:text-red-300 mb-2">
-                          ⚠️ LDAP 연결 실패 - 데이터 일관성 보장 불가
-                        </h4>
-                        <p className="text-sm text-red-700 dark:text-red-400 mb-2">
-                          {overallMessage}
-                        </p>
-                        <div className="bg-red-100 dark:bg-red-900/30 rounded-lg p-3 mt-3">
-                          <p className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">
-                            💡 해결 방법:
-                          </p>
-                          <ul className="text-sm text-red-700 dark:text-red-400 space-y-1.5">
-                            <li className="flex items-start gap-2">
-                              <span className="text-red-500 mt-1">1.</span>
-                              <span>LDAP 서버 상태를 확인하세요 (시스템 정보 &gt; LDAP 연결 테스트)</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <span className="text-red-500 mt-1">2.</span>
-                              <span>LDAP 서버가 정상이면 이 파일을 다시 업로드하세요</span>
-                            </li>
-                            <li className="flex items-start gap-2">
-                              <span className="text-red-500 mt-1">3.</span>
-                              <span>문제가 계속되면 관리자에게 문의하세요</span>
-                            </li>
-                          </ul>
-                        </div>
-                        <p className="text-xs text-red-600 dark:text-red-500 mt-3 font-medium">
-                          ℹ️ 참고: 이 오류는 v2.0.0부터 데이터 일관성을 보장하기 위해 도입되었습니다.
-                          LDAP 저장 실패 시 자동으로 업로드가 중단되어 PostgreSQL과 LDAP 간 데이터 불일치를 방지합니다.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* General Error Messages */}
                 {errorMessages.length > 0 && (

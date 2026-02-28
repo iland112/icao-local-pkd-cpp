@@ -79,19 +79,17 @@ relayApi.interceptors.response.use(
 
 /**
  * Upload & Parsing APIs
- * Handles LDIF and Master List file uploads with AUTO/MANUAL processing modes
+ * Handles LDIF and Master List file uploads (AUTO processing)
  */
 export const uploadApi = {
   /**
    * Upload LDIF file
    * @param file - LDIF file to upload
-   * @param processingMode - AUTO (immediate processing) or MANUAL (3-stage processing)
    * @returns Upload record with uploadId (used for SSE connection)
    */
-  uploadLdif: (file: File, processingMode: string = 'AUTO') => {
+  uploadLdif: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('processingMode', processingMode);
 
     return relayApi.post<ApiResponse<UploadedFile>>('/upload/ldif', formData, {
       headers: { 'Content-Type': undefined }, // Let axios set multipart boundary
@@ -102,13 +100,11 @@ export const uploadApi = {
   /**
    * Upload Master List file (ICAO CMS/PKCS7 format)
    * @param file - Master List file to upload
-   * @param processingMode - AUTO or MANUAL
    * @returns Upload record with uploadId
    */
-  uploadMasterList: (file: File, processingMode: string = 'AUTO') => {
+  uploadMasterList: (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('processingMode', processingMode);
 
     return relayApi.post<ApiResponse<UploadedFile>>('/upload/masterlist', formData, {
       headers: { 'Content-Type': undefined },
@@ -164,36 +160,14 @@ export const uploadApi = {
   getDetail: (uploadId: string) =>
     relayApi.get<ApiResponse<UploadedFile>>(`/upload/detail/${uploadId}`),
 
-  // -------------------------------------------------------------------------
-  // Manual Processing Triggers (3-stage workflow)
-  // -------------------------------------------------------------------------
-
   /**
-   * Stage 1: Parse LDIF file
-   * Parses LDIF entries and saves to temp file (no DB write)
-   * @param uploadId - Upload record UUID
-   * @returns Parse result
+   * Retry a failed upload
+   * Cleans up partial data, resets status, and re-processes from original file
+   * @param uploadId - Upload record UUID (must have status = FAILED)
+   * @returns Retry result
    */
-  triggerParse: (uploadId: string) =>
-    relayApi.post(`/upload/${uploadId}/parse`),
-
-  /**
-   * Stage 2: Validate & Save to DB
-   * Reads temp file, validates certificates, saves to PostgreSQL
-   * @param uploadId - Upload record UUID
-   * @returns Validation result
-   */
-  triggerValidate: (uploadId: string) =>
-    relayApi.post(`/upload/${uploadId}/validate`),
-
-  /**
-   * Stage 3: Upload to LDAP
-   * Reads from DB and uploads to LDAP directory
-   * @param uploadId - Upload record UUID
-   * @returns LDAP upload result
-   */
-  triggerLdapUpload: (uploadId: string) =>
-    relayApi.post(`/upload/${uploadId}/ldap`),
+  retryUpload: (uploadId: string) =>
+    relayApi.post(`/upload/${uploadId}/retry`),
 
   /**
    * Delete failed or pending upload
@@ -216,7 +190,7 @@ export const uploadApi = {
  * - VITE_USE_RELAY_SSE=true  → /api/relay/progress/stream/{uploadId}
  * - VITE_USE_RELAY_SSE=false → /api/progress/stream/{uploadId} (default)
  *
- * SSE Event Flow (AUTO mode):
+ * SSE Event Flow:
  * 1. connected          → Connection established
  * 2. PARSING_STARTED    → Parsing begins (10%)
  * 3. PARSING_COMPLETED  → Parsing done (50%)
@@ -226,11 +200,6 @@ export const uploadApi = {
  * 7. LDAP_SAVING_STARTED → LDAP upload begins (87%)
  * 8. LDAP_SAVING_COMPLETED → LDAP upload done (100%)
  * 9. COMPLETED          → All stages complete
- *
- * SSE Event Flow (MANUAL mode):
- * Stage 1: PARSING_* events
- * Stage 2: VALIDATION_* + DB_SAVING_* events
- * Stage 3: LDAP_SAVING_* events
  *
  * @param uploadId - Upload record UUID
  * @returns EventSource instance (caller must close() when done)

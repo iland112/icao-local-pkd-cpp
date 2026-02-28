@@ -124,6 +124,7 @@ extendedKeyUsage = serverAuth
 DNS.1 = $DOMAIN
 DNS.2 = localhost
 DNS.3 = api-gateway
+DNS.4 = dev.$DOMAIN
 IP.1 = 127.0.0.1
 EOF
 

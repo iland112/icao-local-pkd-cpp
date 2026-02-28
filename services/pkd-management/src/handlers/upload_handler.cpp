@@ -15,6 +15,7 @@
 #include <json/json.h>
 
 #include <fstream>
+#include <filesystem>
 #include <thread>
 #include <future>
 #include <set>
@@ -216,13 +217,13 @@ void UploadHandler::registerRoutes(drogon::HttpAppFramework& app) {
         {drogon::Post}
     );
 
-    // POST /api/upload/{uploadId}/validate
+    // POST /api/upload/{uploadId}/retry
     app.registerHandler(
-        "/api/upload/{uploadId}/validate",
+        "/api/upload/{uploadId}/retry",
         [this](const drogon::HttpRequestPtr& req,
                std::function<void(const drogon::HttpResponsePtr&)>&& callback,
                const std::string& uploadId) {
-            handleValidate(req, std::move(callback), uploadId);
+            handleRetry(req, std::move(callback), uploadId);
         },
         {drogon::Post}
     );
@@ -395,39 +396,15 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 
         spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
 
-        // Get processing_mode from upload record using Repository
-        auto uploadOpt = g_services->uploadRepository()->findById(uploadId);
-        if (!uploadOpt.has_value()) {
-            spdlog::error("Upload record not found: {}", uploadId);
-            cleanupGuard();
-            return;
-        }
-
-        std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
-        spdlog::info("Processing mode for LDIF upload {}: {}", uploadId, processingMode);
-
-        // Connect to LDAP only if AUTO mode (for MANUAL, LDAP connection happens during triggerLdapUpload)
-        LDAP* ld = nullptr;
-        if (processingMode == "AUTO") {
-            ld = g_services->ldapStorageService()->getLdapWriteConnection();
-            if (!ld) {
-                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for LDIF upload {}", uploadId);
-                spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
-
-                // Update upload status to FAILED using Repository
-                g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
-                    "LDAP connection failure - cannot ensure data consistency");
-
-                // Send failure progress
-                ProgressManager::getInstance().sendProgress(
-                    ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                        0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
-
-                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                cleanupGuard();
-                return;
-            }
-            spdlog::info("LDAP write connection established successfully for AUTO mode LDIF upload {}", uploadId);
+        // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
+        LDAP* ld = g_services->ldapStorageService()->getLdapWriteConnection();
+        if (!ld) {
+            spdlog::warn("LDAP write connection unavailable for LDIF upload {} - proceeding with DB-only mode (reconciliation will sync to LDAP later)", uploadId);
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED,
+                    0, 0, "LDAP 연결 불가 - DB 전용 모드로 처리합니다 (추후 Reconciliation 동기화)"));
+        } else {
+            spdlog::info("LDAP write connection established for LDIF upload {}", uploadId);
         }
 
         try {
@@ -451,31 +428,16 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
                 spdlog::info("Upload {} status updated to PROCESSING (total_entries={})", uploadId, totalEntries);
             }
 
-            // Use Strategy Pattern to handle AUTO vs MANUAL modes
-            auto strategy = ProcessingStrategyFactory::create(processingMode);
-            strategy->processLdifEntries(uploadId, entries, ld);
+            // Process all entries (AUTO mode: parse → validate → save to DB + LDAP)
+            AutoProcessingStrategy strategy;
+            strategy.processLdifEntries(uploadId, entries, ld);
 
-            // Send parsing completed progress AFTER strategy completes (for MANUAL mode)
-            // This ensures temp file is saved and DB status is updated before frontend receives event
-            if (processingMode == "MANUAL") {
-                ProgressManager::getInstance().sendProgress(
-                    ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                        totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
-            } else {
-                // For AUTO mode, send progress immediately since processing continues
-                ProgressManager::getInstance().sendProgress(
-                    ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                        totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
-            }
+            // Send parsing completed progress
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
+                    totalEntries, totalEntries, "LDIF 파싱 완료: " + std::to_string(totalEntries) + "개 엔트리"));
 
-            // For MANUAL mode, stop here (strategy already saved to temp file)
-            if (processingMode == "MANUAL") {
-                return;
-            }
-
-            // For AUTO mode, strategy has already processed everything
-            // No additional work needed here
-            spdlog::info("AUTO mode: Processing completed by Strategy Pattern");
+            spdlog::info("Processing completed for LDIF upload {}", uploadId);
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
@@ -541,38 +503,15 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
 
         spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
-        // Get processing_mode from upload record using Repository
-        auto uploadOpt = g_services->uploadRepository()->findById(uploadId);
-        if (!uploadOpt.has_value()) {
-            spdlog::error("Upload record not found: {}", uploadId);
-            cleanupGuard();
-            return;
-        }
-
-        std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
-        spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
-
-        // Connect to LDAP only if AUTO mode
-        LDAP* ld = nullptr;
-        if (processingMode == "AUTO") {
-            ld = g_services->ldapStorageService()->getLdapWriteConnection();
-            if (!ld) {
-                spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
-                spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
-
-                // Update upload status to FAILED using Repository
-                g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
-                    "LDAP connection failure - cannot ensure data consistency");
-
-                // Send failure progress
-                ProgressManager::getInstance().sendProgress(
-                    ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                        0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
-
-                cleanupGuard();
-                return;
-            }
-            spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
+        // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
+        LDAP* ld = g_services->ldapStorageService()->getLdapWriteConnection();
+        if (!ld) {
+            spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode (reconciliation will sync to LDAP later)", uploadId);
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::PARSING_STARTED,
+                    0, 0, "LDAP 연결 불가 - DB 전용 모드로 처리합니다 (추후 Reconciliation 동기화)"));
+        } else {
+            spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
         }
 
         try {
@@ -1254,65 +1193,29 @@ void UploadHandler::handleParse(
             std::thread([this, uploadId, contentBytes, uploadRepo]() {
                 spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
-                // Get processing mode from upload record using Repository
-                auto uploadOpt = uploadRepo->findById(uploadId);
-                if (!uploadOpt.has_value()) {
-                    spdlog::error("Upload record not found: {}", uploadId);
-                    return;
-                }
-
-                std::string processingMode = uploadOpt->processingMode.value_or("AUTO");
-                spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
-
-                // Connect to LDAP only if AUTO mode
-                LDAP* ld = nullptr;
-                if (processingMode == "AUTO") {
-                    ld = this->getLdapWriteConnection();
-                    if (!ld) {
-                        spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for Master List upload {}", uploadId);
-                        spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
-
-                        // Update upload status to FAILED using Repository
-                        uploadRepo->updateStatus(uploadId, "FAILED",
-                            "LDAP connection failure - cannot ensure data consistency");
-
-                        // Send failure progress
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                                0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
-
-                        return;
-                    }
-                    spdlog::info("LDAP write connection established successfully for AUTO mode Master List upload {}", uploadId);
+                // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
+                LDAP* ld = this->getLdapWriteConnection();
+                if (!ld) {
+                    spdlog::warn("LDAP write connection unavailable for Master List re-parse {} - proceeding with DB-only mode", uploadId);
+                } else {
+                    spdlog::info("LDAP write connection established for Master List re-parse {}", uploadId);
                 }
 
                 try {
-                    // Use Strategy Pattern
-                    auto strategy = ProcessingStrategyFactory::create(processingMode);
-                    strategy->processMasterListContent(uploadId, contentBytes, ld);
+                    AutoProcessingStrategy strategy;
+                    strategy.processMasterListContent(uploadId, contentBytes, ld);
 
-                    // Send appropriate progress based on mode
-                    if (processingMode == "MANUAL") {
-                        // MANUAL mode: Only parsing completed, waiting for Stage 2
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                                100, 100, "Master List 파싱 완료 - 검증 대기"));
-                    } else {
-                        // AUTO mode: All processing completed
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                100, 100, "Master List 처리 완료"));
-                    }
-
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                            100, 100, "Master List 처리 완료"));
                 } catch (const std::exception& e) {
-                    spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
+                    spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
                     ProgressManager::getInstance().sendProgress(
                         ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                             0, 0, "처리 실패", e.what()));
                 }
 
                 if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
-                // Note: No PGconn cleanup needed - using Repository Pattern with connection pool
             }).detach();
         } else {
             Json::Value error;
@@ -1344,64 +1247,139 @@ void UploadHandler::handleParse(
 }
 
 // =============================================================================
-// POST /api/upload/{uploadId}/validate
+// POST /api/upload/{uploadId}/retry
 // =============================================================================
 
-void UploadHandler::handleValidate(
+void UploadHandler::handleRetry(
     const drogon::HttpRequestPtr& req,
     std::function<void(const drogon::HttpResponsePtr&)>&& callback,
     const std::string& uploadId)
 {
-    spdlog::info("POST /api/upload/{}/validate - Trigger validation and DB save", uploadId);
+    spdlog::info("POST /api/upload/{}/retry - Retry failed upload", uploadId);
 
-    // Check if upload exists using Repository Pattern
-    auto uploadOpt = uploadRepository_->findById(uploadId);
-    if (!uploadOpt.has_value()) {
+    try {
+        // 1. Verify upload exists and is FAILED
+        auto uploadOpt = uploadRepository_->findById(uploadId);
+        if (!uploadOpt.has_value()) {
+            Json::Value error;
+            error["success"] = false;
+            error["message"] = "Upload not found";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k404NotFound);
+            callback(resp);
+            return;
+        }
+
+        if (uploadOpt->status != "FAILED") {
+            Json::Value error;
+            error["success"] = false;
+            error["message"] = "Only FAILED uploads can be retried. Current status: " + uploadOpt->status;
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        // 2. Construct file path from uploadId + file_format
+        std::string fileFormat = uploadOpt->fileFormat;
+        std::string extension = (fileFormat == "ML") ? ".ml" : ".ldif";
+        std::string filePath = "/app/uploads/" + uploadId + extension;
+
+        // 3. Verify file exists on disk
+        if (!std::filesystem::exists(filePath)) {
+            Json::Value error;
+            error["success"] = false;
+            error["message"] = "Original file not found on disk: " + filePath;
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k404NotFound);
+            callback(resp);
+            return;
+        }
+
+        // 4. Clean up partial data from previous attempt
+        cleanupPartialData(uploadId);
+
+        // 5. Reset upload status to PENDING, clear error message and counters
+        uploadRepository_->updateStatus(uploadId, "PENDING", "");
+        uploadRepository_->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
+        uploadRepository_->updateProgress(uploadId, 0, 0);
+
+        spdlog::info("Upload {} reset to PENDING for retry", uploadId);
+
+        // 6. Read file from disk
+        std::ifstream inFile(filePath, std::ios::binary | std::ios::ate);
+        if (!inFile.is_open()) {
+            Json::Value error;
+            error["success"] = false;
+            error["message"] = "Failed to read file from disk";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k500InternalServerError);
+            callback(resp);
+            return;
+        }
+
+        std::streamsize fileSize = inFile.tellg();
+        inFile.seekg(0, std::ios::beg);
+        std::vector<uint8_t> contentBytes(fileSize);
+        inFile.read(reinterpret_cast<char*>(contentBytes.data()), fileSize);
+        inFile.close();
+
+        // 7. Re-trigger async processing
+        if (fileFormat == "ML") {
+            processMasterListFileAsync(uploadId, contentBytes);
+        } else {
+            processLdifFileAsync(uploadId, contentBytes);
+        }
+
+        spdlog::info("Retry processing started for upload {} (format: {})", uploadId, fileFormat);
+
+        // 8. Return success
+        Json::Value result;
+        result["success"] = true;
+        result["message"] = "Retry processing started";
+        result["data"]["uploadId"] = uploadId;
+        result["data"]["status"] = "PENDING";
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        spdlog::error("POST /api/upload/{}/retry error: {}", uploadId, e.what());
         Json::Value error;
         error["success"] = false;
-        error["message"] = "Upload not found";
+        error["message"] = std::string("Retry failed: ") + e.what();
         auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k404NotFound);
+        resp->setStatusCode(drogon::k500InternalServerError);
         callback(resp);
-        return;
     }
+}
 
-    // Trigger validation and DB save in background (MANUAL mode Stage 2)
-    std::thread([uploadId]() {
-        spdlog::info("Starting DSC validation for upload: {}", uploadId);
+void UploadHandler::cleanupPartialData(const std::string& uploadId) {
+    spdlog::info("Cleaning up partial data for upload: {}", uploadId);
 
-        try {
-            // Send validation started
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::VALIDATION_IN_PROGRESS,
-                    0, 100, "인증서 검증 중..."));
-
-            // MANUAL mode Stage 2: Validate and save to DB
-            // Note: validateAndSaveToDb() uses Repository Pattern internally (no PGconn* needed)
-            auto strategy = ProcessingStrategyFactory::create("MANUAL");
-            strategy->validateAndSaveToDb(uploadId);
-
-            // Send DB save completed (Stage 2 completed)
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::DB_SAVING_COMPLETED,
-                    100, 100, "DB 저장 및 검증 완료"));
-
-            spdlog::info("MANUAL mode Stage 2 completed for upload {}", uploadId);
-        } catch (const std::exception& e) {
-            spdlog::error("Validation failed for upload {}: {}", uploadId, e.what());
-            ProgressManager::getInstance().sendProgress(
-                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                    0, 0, std::string("검증 실패: ") + e.what()));
+    try {
+        if (!queryExecutor_) {
+            spdlog::error("QueryExecutor is null, cannot cleanup partial data");
+            return;
         }
-    }).detach();
 
-    Json::Value result;
-    result["success"] = true;
-    result["message"] = "Validation processing started";
-    result["uploadId"] = uploadId;
+        // Delete in dependency order (child tables first)
+        int valDeleted = queryExecutor_->executeCommand(
+            "DELETE FROM validation_result WHERE upload_id = $1", {uploadId});
+        int dupDeleted = queryExecutor_->executeCommand(
+            "DELETE FROM certificate_duplicates WHERE upload_id = $1", {uploadId});
+        int certsDeleted = queryExecutor_->executeCommand(
+            "DELETE FROM certificate WHERE upload_id = $1", {uploadId});
+        int crlsDeleted = queryExecutor_->executeCommand(
+            "DELETE FROM crl WHERE upload_id = $1", {uploadId});
+        int mlsDeleted = queryExecutor_->executeCommand(
+            "DELETE FROM master_list WHERE upload_id = $1", {uploadId});
 
-    auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-    callback(resp);
+        spdlog::info("Partial data cleanup completed for upload {}: {} validations, {} duplicates, {} certs, {} CRLs, {} MLs deleted",
+                     uploadId, valDeleted, dupDeleted, certsDeleted, crlsDeleted, mlsDeleted);
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to cleanup partial data for upload {}: {}", uploadId, e.what());
+    }
 }
 
 // =============================================================================
@@ -1681,16 +1659,6 @@ void UploadHandler::handleUploadLdif(
             return;
         }
 
-        // Get processing mode from form data
-        std::string processingMode = "AUTO";  // default
-        auto& params = parser.getParameters();
-        for (const auto& param : params) {
-            if (param.first == "processingMode") {
-                processingMode = param.second;
-                break;
-            }
-        }
-
         // Get username from session
         std::string username = "anonymous";
         auto session = req->getSession();
@@ -1699,7 +1667,8 @@ void UploadHandler::handleUploadLdif(
             username = sessionUsername.value_or("anonymous");
         }
 
-        // Call UploadService to handle upload
+        // Call UploadService to handle upload (always AUTO mode)
+        std::string processingMode = "AUTO";
         auto result = uploadService_->uploadLdif(fileName, contentBytes, processingMode, username);
 
         // Handle duplicate file
@@ -1781,19 +1750,13 @@ void UploadHandler::handleUploadLdif(
             return;
         }
 
-        // Success - Start async processing
-        // MANUAL mode: Stage 1 (parsing) runs automatically
-        // AUTO mode: All stages run automatically
+        // Success - Start async processing (AUTO mode: all stages run automatically)
         processLdifFileAsync(result.uploadId, contentBytes);
 
         // Return success response
         Json::Value response;
         response["success"] = true;
-        if (processingMode == "MANUAL" || processingMode == "manual") {
-            response["message"] = "LDIF file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
-        } else {
-            response["message"] = result.message.empty() ? "LDIF file uploaded successfully. Processing started." : result.message;
-        }
+        response["message"] = result.message.empty() ? "LDIF file uploaded successfully. Processing started." : result.message;
 
         Json::Value data;
         data["uploadId"] = result.uploadId;
@@ -1923,16 +1886,6 @@ void UploadHandler::handleUploadMasterList(
             return;
         }
 
-        // Get processing mode from form data
-        std::string processingMode = "AUTO";  // default
-        auto& params = parser.getParameters();
-        for (const auto& param : params) {
-            if (param.first == "processingMode") {
-                processingMode = param.second;
-                break;
-            }
-        }
-
         // Get username from session
         std::string username = "anonymous";
         auto session = req->getSession();
@@ -1941,7 +1894,8 @@ void UploadHandler::handleUploadMasterList(
             username = sessionUsername.value_or("anonymous");
         }
 
-        // Call UploadService to handle upload
+        // Call UploadService to handle upload (always AUTO mode)
+        std::string processingMode = "AUTO";
         auto uploadResult = uploadService_->uploadMasterList(fileName, contentBytes, processingMode, username);
 
         // Handle duplicate file
@@ -2026,69 +1980,28 @@ void UploadHandler::handleUploadMasterList(
         // Success - Get upload ID from Service result
         std::string uploadId = uploadResult.uploadId;
 
-        // Start async processing for both AUTO and MANUAL modes using Strategy Pattern
-        // MANUAL mode: Stage 1 (parsing) runs automatically
-        // AUTO mode: All stages run automatically
-        // Capture member pointers for use in detached thread
+        // Start async processing (AUTO mode: all stages run automatically)
         auto* uploadRepo = uploadRepository_;
-        auto* qe = queryExecutor_;
-        std::thread([this, uploadId, contentBytes, uploadRepo, qe]() {
-                spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
+        std::thread([this, uploadId, contentBytes, uploadRepo]() {
+                spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
-                // Use QueryExecutor (Oracle/PostgreSQL agnostic) instead of PGconn
-                if (!qe) {
-                    spdlog::error("QueryExecutor is null for async processing");
-                    return;
-                }
-
-                // Get processing mode via UploadRepository
-                std::string processingMode = "AUTO";
-                try {
-                    auto uploadOpt = uploadRepo->findById(uploadId);
-                    if (uploadOpt.has_value() && uploadOpt->processingMode.has_value()) {
-                        processingMode = uploadOpt->processingMode.value();
-                    }
-                } catch (const std::exception& e) {
-                    spdlog::warn("Failed to get processing mode, defaulting to AUTO: {}", e.what());
-                }
-
-                spdlog::info("Processing mode for Master List upload {}: {}", uploadId, processingMode);
-
-                // Connect to LDAP only if AUTO mode
-                LDAP* ld = nullptr;
-                if (processingMode == "AUTO") {
-                    ld = this->getLdapWriteConnection();
-                    if (!ld) {
-                        spdlog::error("CRITICAL: LDAP write connection failed in AUTO mode for upload {}", uploadId);
-                        spdlog::error("Cannot proceed - data consistency requires both DB and LDAP storage");
-
-                        // Update upload status to FAILED via Repository
-                        if (uploadRepo) {
-                            uploadRepo->updateStatus(uploadId, "FAILED",
-                                "LDAP connection failure - cannot ensure data consistency");
-                        }
-
-                        // Send failure progress
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                                0, 0, "LDAP 연결 실패", "데이터 일관성을 보장할 수 없어 처리를 중단했습니다."));
-
-                        return;
-                    }
-                    spdlog::info("LDAP write connection established successfully for AUTO mode");
+                // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
+                LDAP* ld = this->getLdapWriteConnection();
+                if (!ld) {
+                    spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode", uploadId);
+                } else {
+                    spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
                 }
 
                 try {
-                    // Use Strategy Pattern
-                    auto strategy = ProcessingStrategyFactory::create(processingMode);
-                    strategy->processMasterListContent(uploadId, contentBytes, ld);
+                    AutoProcessingStrategy strategy;
+                    strategy.processMasterListContent(uploadId, contentBytes, ld);
 
-                    // Query statistics from database via UploadRepository
-                    int cscaCount = 0, totalEntries = 0, processedEntries = 0, mlscCount = 0;
+                    // Query statistics from database for completion message
+                    int totalEntries = 0, processedEntries = 0, mlscCount = 0;
                     try {
                         auto uploadOpt = uploadRepo->findById(uploadId);
                         if (uploadOpt.has_value()) {
-                            cscaCount = uploadOpt->cscaCount;
                             totalEntries = uploadOpt->totalEntries;
                             processedEntries = uploadOpt->processedEntries;
                             mlscCount = uploadOpt->mlscCount;
@@ -2100,36 +2013,20 @@ void UploadHandler::handleUploadMasterList(
                     int dupCount = totalEntries - processedEntries;
                     int totalCount = processedEntries + mlscCount;
 
-                    spdlog::info("Master List processing completed - csca_count: {}, total_entries: {}, processed_entries: {}, mlsc_count: {}, dupCount: {}",
-                                cscaCount, totalEntries, processedEntries, mlscCount, dupCount);
-
-                    // Build detailed completion message
-                    std::string completionMsg;
-                    if (processingMode == "MANUAL") {
-                        completionMsg = "Master List 파싱 완료 - 검증 대기";
-                    } else {
-                        completionMsg = "처리 완료: CSCA " + std::to_string(processedEntries);
-                        if (dupCount > 0) {
-                            completionMsg += " (중복 " + std::to_string(dupCount) + "개 건너뜀)";
-                        }
-                        if (mlscCount > 0) {
-                            completionMsg += ", MLSC " + std::to_string(mlscCount);
-                        }
+                    std::string completionMsg = "처리 완료: CSCA " + std::to_string(processedEntries);
+                    if (dupCount > 0) {
+                        completionMsg += " (중복 " + std::to_string(dupCount) + "개 건너뜀)";
+                    }
+                    if (mlscCount > 0) {
+                        completionMsg += ", MLSC " + std::to_string(mlscCount);
                     }
 
-                    // Send appropriate progress based on mode
-                    if (processingMode == "MANUAL") {
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::PARSING_COMPLETED,
-                                totalCount, totalCount, completionMsg));
-                    } else {
-                        ProgressManager::getInstance().sendProgress(
-                            ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
-                                totalCount, totalCount, completionMsg));
-                    }
+                    ProgressManager::getInstance().sendProgress(
+                        ProcessingProgress::create(uploadId, ProcessingStage::COMPLETED,
+                            totalCount, totalCount, completionMsg));
 
                 } catch (const std::exception& e) {
-                    spdlog::error("Master List processing via Strategy failed for upload {}: {}", uploadId, e.what());
+                    spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
                     ProgressManager::getInstance().sendProgress(
                         ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                             0, 0, "처리 실패", e.what()));
@@ -2141,11 +2038,7 @@ void UploadHandler::handleUploadMasterList(
         // Return success response
         Json::Value result;
         result["success"] = true;
-        if (processingMode == "MANUAL" || processingMode == "manual") {
-            result["message"] = "Master List file uploaded successfully. Use parse/validate/ldap endpoints to process manually.";
-        } else {
-            result["message"] = "Master List file uploaded successfully. Processing started.";
-        }
+        result["message"] = "Master List file uploaded successfully. Processing started.";
 
         Json::Value data;
         data["uploadId"] = uploadId;

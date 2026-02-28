@@ -53,8 +53,8 @@ export function useUploadLdif() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, processingMode }: { file: File; processingMode: string }) => {
-      const response = await uploadApi.uploadLdif(file, processingMode);
+    mutationFn: async ({ file }: { file: File }) => {
+      const response = await uploadApi.uploadLdif(file);
       return response.data;
     },
     onSuccess: (data) => {
@@ -75,8 +75,8 @@ export function useUploadMasterList() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ file, processingMode }: { file: File; processingMode: string }) => {
-      const response = await uploadApi.uploadMasterList(file, processingMode);
+    mutationFn: async ({ file }: { file: File }) => {
+      const response = await uploadApi.uploadMasterList(file);
       return response.data;
     },
     onSuccess: (data) => {
@@ -88,63 +88,6 @@ export function useUploadMasterList() {
     },
     onError: (error) => {
       toast.error('파일 업로드 실패', error instanceof Error ? error.message : '알 수 없는 오류');
-    },
-  });
-}
-
-// Trigger parse mutation
-export function useTriggerParse() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (uploadId: string) => {
-      const response = await uploadApi.triggerParse(uploadId);
-      return response.data;
-    },
-    onSuccess: (_, uploadId) => {
-      queryClient.invalidateQueries({ queryKey: uploadKeys.detail(uploadId) });
-      toast.info('파싱 시작', '파일 파싱이 시작되었습니다.');
-    },
-    onError: (error) => {
-      toast.error('파싱 실패', error instanceof Error ? error.message : '알 수 없는 오류');
-    },
-  });
-}
-
-// Trigger validate mutation
-export function useTriggerValidate() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (uploadId: string) => {
-      const response = await uploadApi.triggerValidate(uploadId);
-      return response.data;
-    },
-    onSuccess: (_, uploadId) => {
-      queryClient.invalidateQueries({ queryKey: uploadKeys.detail(uploadId) });
-      toast.info('검증 시작', '인증서 검증이 시작되었습니다.');
-    },
-    onError: (error) => {
-      toast.error('검증 실패', error instanceof Error ? error.message : '알 수 없는 오류');
-    },
-  });
-}
-
-// Trigger LDAP upload mutation
-export function useTriggerLdapUpload() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (uploadId: string) => {
-      const response = await uploadApi.triggerLdapUpload(uploadId);
-      return response.data;
-    },
-    onSuccess: (_, uploadId) => {
-      queryClient.invalidateQueries({ queryKey: uploadKeys.detail(uploadId) });
-      toast.info('LDAP 저장 시작', 'LDAP 서버로 데이터 저장이 시작되었습니다.');
-    },
-    onError: (error) => {
-      toast.error('LDAP 저장 실패', error instanceof Error ? error.message : '알 수 없는 오류');
     },
   });
 }

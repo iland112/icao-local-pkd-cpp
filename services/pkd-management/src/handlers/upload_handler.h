@@ -5,8 +5,8 @@
  * @brief Upload endpoints handler
  *
  * Provides upload-related API endpoints:
- * - POST /api/upload/{uploadId}/parse       - Trigger parsing
- * - POST /api/upload/{uploadId}/validate    - Trigger validation and DB save
+ * - POST /api/upload/{uploadId}/parse       - Trigger re-parsing
+ * - POST /api/upload/{uploadId}/retry       - Retry failed upload
  * - GET  /api/upload/{uploadId}/validations - Get validation results
  * - GET  /api/upload/{uploadId}/validation-statistics - Get validation stats
  * - GET  /api/upload/{uploadId}/ldif-structure       - Get LDIF structure
@@ -170,11 +170,12 @@ private:
         const std::string& uploadId);
 
     /**
-     * @brief POST /api/upload/{uploadId}/validate
+     * @brief POST /api/upload/{uploadId}/retry
      *
-     * Trigger validation and DB save (MANUAL mode Stage 2).
+     * Retry a failed upload: clean up partial data, reset status, and re-process.
+     * Only works for uploads with status = FAILED.
      */
-    void handleValidate(
+    void handleRetry(
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback,
         const std::string& uploadId);
@@ -226,7 +227,6 @@ private:
      * @brief POST /api/upload/ldif
      *
      * Upload LDIF file with multipart form data.
-     * Supports AUTO and MANUAL processing modes.
      * Includes file validation, duplicate detection, and audit logging.
      */
     void handleUploadLdif(
@@ -237,7 +237,6 @@ private:
      * @brief POST /api/upload/masterlist
      *
      * Upload Master List (CMS/PKCS7) file with multipart form data.
-     * Supports AUTO and MANUAL processing modes.
      * Includes format validation, duplicate detection, and audit logging.
      */
     void handleUploadMasterList(
@@ -271,6 +270,16 @@ private:
      * @return LDAP connection pointer or nullptr on failure
      */
     LDAP* getLdapWriteConnection();
+
+    /**
+     * @brief Clean up partial data from a failed upload
+     *
+     * Deletes certificates, CRLs, master lists, validation results, and duplicates
+     * associated with the upload, but preserves the uploaded_file record.
+     *
+     * @param uploadId Upload record UUID
+     */
+    void cleanupPartialData(const std::string& uploadId);
 };
 
 } // namespace handlers

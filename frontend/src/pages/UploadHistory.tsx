@@ -78,6 +78,7 @@ export function UploadHistory() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [uploadToDelete, setUploadToDelete] = useState<UploadedFile | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   // Tab state for detail dialog
   const [activeTab, setActiveTab] = useState<'details' | 'structure' | 'duplicates'>('details');
@@ -321,6 +322,20 @@ export function UploadHistory() {
       alert('업로드 삭제에 실패했습니다.');
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleRetry = async (upload: UploadedFile) => {
+    setRetryingId(upload.id);
+    try {
+      await uploadApi.retryUpload(upload.id);
+      // Refresh the list to show updated status
+      await fetchUploads();
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Failed to retry upload:', error);
+      alert('재시도에 실패했습니다.');
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -670,11 +685,22 @@ export function UploadHistory() {
                             <Eye className="w-4 h-4" />
                             상세
                           </button>
+                          {upload.status === 'FAILED' && (
+                            <button
+                              onClick={() => handleRetry(upload)}
+                              disabled={retryingId === upload.id}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
+                              title="실패한 업로드 재시도"
+                            >
+                              <RefreshCw className={cn("w-4 h-4", retryingId === upload.id && "animate-spin")} />
+                              재시도
+                            </button>
+                          )}
                           {(upload.status === 'FAILED' || upload.status === 'PENDING') && (
                             <button
                               onClick={() => handleDeleteClick(upload)}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              title="실패한 업로드 삭제"
+                              title="업로드 삭제"
                             >
                               <Trash2 className="w-4 h-4" />
                               삭제

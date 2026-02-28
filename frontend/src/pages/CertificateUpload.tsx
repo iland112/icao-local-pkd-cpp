@@ -1,10 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   CloudUpload,
   FileText,
   CheckCircle,
+  CheckCircle2,
   XCircle,
   AlertTriangle,
   Loader2,
@@ -335,6 +336,14 @@ export default function CertificateUpload() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [cscaCount, setCscaCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    uploadApi.getStatistics()
+      .then(res => setCscaCount(res.data.cscaCount ?? 0))
+      .catch(() => {});
+  }, []);
+
   const [pageState, setPageState] = useState<PageState>('IDLE');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -457,6 +466,28 @@ export default function CertificateUpload() {
           </p>
         </div>
       </div>
+
+      {/* CSCA Certificate Status Banner */}
+      {cscaCount !== null && (
+        cscaCount === 0 ? (
+          <div className="max-w-4xl mb-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
+            <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">CSCA 인증서가 등록되지 않았습니다</p>
+              <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
+                Trust Chain 검증을 위해 먼저 CSCA가 포함된 LDIF 또는 Master List를 업로드해 주세요.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="max-w-4xl mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800">
+            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+            <p className="text-xs text-green-700 dark:text-green-400">
+              CSCA <span className="font-semibold">{cscaCount.toLocaleString()}</span>개 등록됨 — 인증서 검증 가능
+            </p>
+          </div>
+        )
+      )}
 
       <div className="max-w-4xl space-y-4">
         {/* Step 1: File Selection — compact */}

@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.24.1
-**Last Updated**: 2026-02-27
+**Current Version**: v2.25.0
+**Last Updated**: 2026-02-28
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -91,7 +91,7 @@ Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services 
 | **Service Container** | Centralized DI — `ServiceContainer` owns all repos/services/handlers (pimpl) |
 | **Handler Pattern** | Route handlers extracted from main.cpp — `registerRoutes(HttpAppFramework&)` |
 | **Factory Pattern** | Runtime database selection via DB_TYPE |
-| **Strategy Pattern** | Processing strategies (AUTO/MANUAL upload modes) |
+| **Strategy Pattern** | Processing strategies (AUTO upload mode) |
 | **RAII** | Connection pooling (DB and LDAP) |
 
 ### Shared Libraries (`shared/lib/`)
@@ -132,7 +132,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 
 - **API Client Authentication**: External client API Key authentication (X-API-Key header, SHA-256 hash, per-client Rate Limiting, Permission/IP/Endpoint access control, nginx auth_request for cross-service tracking)
 - **Code Master**: DB-based centralized code/status/enum management (21 categories, ~150 codes, CRUD API + frontend hook)
-- LDIF/Master List upload (AUTO/MANUAL modes)
+- LDIF/Master List upload (AUTO mode, LDAP-resilient with retry)
 - Individual certificate upload with preview-before-save workflow (PEM, DER, P7B, DL, CRL)
 - Master List file processing (537 certificates: 1 MLSC + 536 CSCA/LC)
 - Country-based LDAP storage (95+ countries)
@@ -203,6 +203,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `POST /api/upload/certificate/preview` - Preview certificate (parse only, no save)
 - `GET /api/upload/history` - Upload history (paginated)
 - `GET /api/upload/detail/{id}` - Upload detail by ID
+- `POST /api/upload/{id}/retry` - Retry failed upload
 - `DELETE /api/upload/{id}` - Delete upload
 - `GET /api/upload/statistics` - Upload statistics summary
 - `GET /api/upload/countries` - Country statistics (dashboard)
@@ -576,6 +577,23 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.0 (2026-02-28) - MANUAL 모드 제거 + AUTO 모드 LDAP 복원력 + 실패 업로드 재시도
+- **MANUAL 모드 완전 제거**: `ManualProcessingStrategy` 클래스 및 `ProcessingStrategyFactory` 제거 (~470줄 삭제)
+- **Backend**: `handleValidate()` 핸들러 + `/api/upload/{uploadId}/validate` 라우트 제거
+- **Backend**: `processLdifFileAsync()`, `processMasterListFileAsync()` — processingMode 분기 제거, 항상 AUTO 처리
+- **Backend**: LDIF/ML 업로드 시 `processingMode` form 파라미터 파싱 제거
+- **Backend**: LDAP 연결 실패 시 차단→경고로 변경 — DB-only 저장 후 Reconciliation으로 LDAP 동기화 가능
+- **Backend**: SSE "LDAP 연결 불가 - DB 전용 모드" 알림 전송
+- **Backend**: `POST /api/upload/{id}/retry` 엔드포인트 추가 — FAILED 업로드 부분 데이터 정리 후 재처리
+- **Backend**: `cleanupPartialData()` — validation_result, certificate_duplicates, certificate, crl, master_list 레코드 정리
+- **Frontend**: Processing Mode Selector UI 제거, Manual Mode Controls 패널 제거
+- **Frontend**: `processingMode` state/localStorage 로직 제거 (~200줄 삭제)
+- **Frontend**: `triggerParse()`, `triggerValidate()`, `triggerLdapUpload()` 함수/훅 제거
+- **Frontend**: UploadHistory에 재시도 버튼 추가 (FAILED 상태, RefreshCw 아이콘 + spin 애니메이션)
+- **Frontend**: `uploadApi.retryUpload()` API 함수 추가
+- **SSL**: `init-cert.sh`, `renew-cert.sh` — SAN에 `DNS.4 = dev.$DOMAIN` 추가
+- 11 files changed, 349 insertions, 1,297 deletions (net -948 lines)
 
 ### v2.24.1 (2026-02-27) - Podman 스크립트 안정성 + HTTPS Client 인증서 관리 개선
 - **stop.sh**: `--profile oracle/postgres` 플래그 추가 — DB 컨테이너(Oracle/PostgreSQL)가 중지되지 않는 버그 수정
