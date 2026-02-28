@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.4
+**Current Version**: v2.25.5
 **Last Updated**: 2026-02-28
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -546,9 +546,11 @@ scripts/
 - DN format: `cn={FINGERPRINT},o={TYPE},c={COUNTRY},dc=data,...`
 - Object classes: pkdDownload (certs), cRLDistributionPoint (CRLs)
 
-### Connection Pooling
+### Connection Pooling & Resource Configuration
 - Database: configurable via `DB_POOL_MIN`/`DB_POOL_MAX` env vars (default: min=2, max=10)
 - LDAP: configurable via `LDAP_POOL_MIN`/`LDAP_POOL_MAX` env vars (default: min=2, max=10, 5s timeout)
+- LDAP timeout: `LDAP_NETWORK_TIMEOUT` (default: 5s), `LDAP_HEALTH_CHECK_TIMEOUT` (default: 2s), `LDAP_WRITE_TIMEOUT` (default: 10s)
+- Upload limits: `MAX_CONCURRENT_UPLOADS` (default: 3), `MAX_BODY_SIZE_MB` (default: 100MB PKD Mgmt / 50MB PA)
 - Drogon Thread: configurable via `THREAD_NUM` env var (default: 16)
 - AI Service: configurable via `DB_POOL_SIZE`/`DB_POOL_OVERFLOW` env vars (default: 5/10)
 - RAII pattern: automatic connection release on scope exit
@@ -577,6 +579,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.5 (2026-02-28) - 마이크로서비스 리소스 동적 확장성
+- **5개 신규 환경변수**: 하드코딩된 리소스 파라미터를 환경변수로 외부화 (docker-compose environment만 수정하면 배포 환경별 튜닝 가능)
+- `LDAP_NETWORK_TIMEOUT` (기본 5초): LDAP 네트워크 타임아웃 — PKD Mgmt, PA, Relay
+- `LDAP_HEALTH_CHECK_TIMEOUT` (기본 2초): LDAP 헬스체크 타임아웃 — PKD Mgmt, Relay
+- `LDAP_WRITE_TIMEOUT` (기본 10초): LDAP 쓰기 연결 타임아웃 — PKD Mgmt (LdapStorageService)
+- `MAX_CONCURRENT_UPLOADS` (기본 3): 동시 업로드 처리 한도 — PKD Mgmt (upload_handler)
+- `MAX_BODY_SIZE_MB` (기본 100/50): HTTP 업로드 크기 제한 — PKD Mgmt 100MB / PA 50MB
+- **shared lib**: `LdapConnectionPool` 생성자에 `networkTimeoutSec`, `healthCheckTimeoutSec` 파라미터 추가
+- **PA Service**: 자체 LDAP 풀 + 직접 LDAP 연결 모두 `LDAP_NETWORK_TIMEOUT` 적용
+- **docker-compose**: `docker-compose.yaml` + `docker-compose.podman.yaml` 3개 서비스에 신규 환경변수 추가
+- Backward compatible: 환경변수 미설정 시 기존 기본값으로 동작
+- 16 files changed (0 new, 16 modified)
 
 ### v2.25.4 (2026-02-28) - 서버 리소스 최적화 (환경별 튜닝)
 - **Production (16코어/14GB)**: DB Pool min 2→4, max 10→20, LDAP Pool min 2→4, max 10→20, shm_size 1g→2g
