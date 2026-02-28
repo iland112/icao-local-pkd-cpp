@@ -82,12 +82,24 @@ Json::Value AuditRepository::findAll(
         std::string dbType = queryExecutor_->getDatabaseType();
 
         // Build query with optional filters
+        // Oracle: CLOB columns (user_agent, request_path, error_message, metadata)
+        // must be wrapped with TO_CHAR() to avoid LOB/non-LOB mixed fetch issue
         std::ostringstream query;
-        query << "SELECT id, user_id, username, operation_type, operation_subtype, "
-              << "resource_id, resource_type, ip_address, user_agent, "
-              << "request_method, request_path, "
-              << "success, status_code, error_message, metadata, duration_ms, created_at "
-              << "FROM operation_audit_log WHERE 1=1";
+        if (dbType == "oracle") {
+            query << "SELECT id, user_id, username, operation_type, operation_subtype, "
+                  << "resource_id, resource_type, ip_address, "
+                  << "TO_CHAR(user_agent) AS user_agent, "
+                  << "request_method, TO_CHAR(request_path) AS request_path, "
+                  << "success, status_code, TO_CHAR(error_message) AS error_message, "
+                  << "TO_CHAR(metadata) AS metadata, duration_ms, created_at "
+                  << "FROM operation_audit_log WHERE 1=1";
+        } else {
+            query << "SELECT id, user_id, username, operation_type, operation_subtype, "
+                  << "resource_id, resource_type, ip_address, user_agent, "
+                  << "request_method, request_path, "
+                  << "success, status_code, error_message, metadata, duration_ms, created_at "
+                  << "FROM operation_audit_log WHERE 1=1";
+        }
 
         std::vector<std::string> params;
         int paramCount = 1;

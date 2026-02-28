@@ -127,9 +127,18 @@ Json::Value AuthAuditRepository::findAll(
         }
 
         // Main query with database-specific pagination
-        std::string query =
-            "SELECT id, user_id, username, event_type, ip_address, user_agent, "
-            "success, error_message, created_at "
+        // Oracle: CLOB columns (user_agent, error_message) must be wrapped with
+        // TO_CHAR() to avoid LOB/non-LOB mixed fetch issue (OCI returns only 1 row)
+        std::string selectCols;
+        if (dbType == "oracle") {
+            selectCols = "SELECT id, user_id, username, event_type, ip_address, "
+                         "TO_CHAR(user_agent) AS user_agent, "
+                         "success, TO_CHAR(error_message) AS error_message, created_at ";
+        } else {
+            selectCols = "SELECT id, user_id, username, event_type, ip_address, user_agent, "
+                         "success, error_message, created_at ";
+        }
+        std::string query = selectCols +
             "FROM auth_audit_log " + whereClause +
             " ORDER BY created_at DESC";
 
