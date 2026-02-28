@@ -4,6 +4,7 @@
 
 #include "pa_handler.h"
 
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <json/json.h>
 
@@ -50,11 +51,13 @@ PaHandler::PaHandler(
     services::PaVerificationService* paVerificationService,
     repositories::DataGroupRepository* dataGroupRepository,
     icao::SodParser* sodParserService,
-    icao::DgParser* dataGroupParserService)
+    icao::DgParser* dataGroupParserService,
+    common::IQueryExecutor* queryExecutor)
     : paVerificationService_(paVerificationService),
       dataGroupRepository_(dataGroupRepository),
       sodParserService_(sodParserService),
-      dataGroupParserService_(dataGroupParserService) {
+      dataGroupParserService_(dataGroupParserService),
+      queryExecutor_(queryExecutor) {
 
     if (!paVerificationService_ || !dataGroupRepository_ ||
         !sodParserService_ || !dataGroupParserService_) {
@@ -344,8 +347,30 @@ void PaHandler::handleVerify(
         }
         callback(resp);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::PA_VERIFY);
+        auditEntry.success = result["success"].asBool();
+        if (result.isMember("verificationId")) {
+            auditEntry.resourceId = result["verificationId"].asString();
+        }
+        auditEntry.resourceType = "PA_VERIFICATION";
+        Json::Value auditMeta;
+        if (!countryCode.empty()) auditMeta["country"] = countryCode;
+        if (!documentNumber.empty()) auditMeta["documentNumber"] = documentNumber;
+        if (result.isMember("overallStatus")) auditMeta["status"] = result["overallStatus"].asString();
+        auditEntry.metadata = auditMeta;
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         spdlog::error("Error in POST /api/pa/verify: {}", e.what());
+
+        // Audit log (failure)
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::PA_VERIFY);
+        auditEntry.success = false;
+        auditEntry.resourceType = "PA_VERIFICATION";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value error;
         error["success"] = false;
         error["error"] = "Internal Server Error";

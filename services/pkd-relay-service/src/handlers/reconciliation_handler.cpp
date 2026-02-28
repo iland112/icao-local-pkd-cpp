@@ -11,6 +11,7 @@
 #include "relay/sync/reconciliation_engine.h"
 #include "../services/reconciliation_service.h"
 
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 
 using namespace drogon;
@@ -90,7 +91,26 @@ void ReconciliationHandler::handleReconcile(const HttpRequestPtr& req,
         auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::RECONCILE);
+        auditEntry.success = result.success;
+        auditEntry.resourceType = "RECONCILIATION";
+        Json::Value auditMeta;
+        auditMeta["dryRun"] = dryRun;
+        auditMeta["totalProcessed"] = result.totalProcessed;
+        auditMeta["successCount"] = result.successCount;
+        auditMeta["failedCount"] = result.failedCount;
+        auditEntry.metadata = auditMeta;
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
+        // Audit log (failure)
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::RECONCILE);
+        auditEntry.success = false;
+        auditEntry.resourceType = "RECONCILIATION";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value error(Json::objectValue);
         error["success"] = false;
         error["error"] = std::string("Reconciliation failed: ") + e.what();

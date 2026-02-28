@@ -3,14 +3,16 @@
  */
 
 #include "code_master_handler.h"
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 
 using namespace drogon;
 
 namespace handlers {
 
-CodeMasterHandler::CodeMasterHandler(repositories::CodeMasterRepository* repository)
-    : repository_(repository) {
+CodeMasterHandler::CodeMasterHandler(repositories::CodeMasterRepository* repository,
+                                     common::IQueryExecutor* queryExecutor)
+    : repository_(repository), queryExecutor_(queryExecutor) {
     spdlog::info("[CodeMasterHandler] Initialized");
 }
 
@@ -240,6 +242,16 @@ void CodeMasterHandler::handleCreate(
 
         bool result = repository_->insert(item);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::CODE_MASTER_CREATE);
+        auditEntry.success = result;
+        auditEntry.resourceType = "CODE_MASTER";
+        Json::Value auditMeta;
+        auditMeta["category"] = item.category;
+        auditMeta["code"] = item.code;
+        auditEntry.metadata = auditMeta;
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value response;
         response["success"] = result;
         response["message"] = result ? "Created" : "Insert failed (duplicate?)";
@@ -305,6 +317,13 @@ void CodeMasterHandler::handleUpdate(
 
         bool result = repository_->update(item);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::CODE_MASTER_UPDATE);
+        auditEntry.success = result;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "CODE_MASTER";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value response;
         response["success"] = result;
         response["message"] = result ? "Updated" : "Update failed";
@@ -330,6 +349,13 @@ void CodeMasterHandler::handleDelete(
 
     try {
         bool result = repository_->deactivate(id);
+
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::CODE_MASTER_DELETE);
+        auditEntry.success = result;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "CODE_MASTER";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
 
         Json::Value response;
         response["success"] = result;

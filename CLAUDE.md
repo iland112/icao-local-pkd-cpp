@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.1
+**Current Version**: v2.25.2
 **Last Updated**: 2026-02-28
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -577,6 +577,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.2 (2026-02-28) - 전체 서비스 운영 감사 로그 확장
+- **OperationType enum 확장**: 15개 신규 작업 유형 추가 (API_CLIENT_CREATE/UPDATE/DELETE/KEY_REGEN, CODE_MASTER_CREATE/UPDATE/DELETE, USER_CREATE/UPDATE/DELETE, PASSWORD_CHANGE, UPLOAD_RETRY, CERT_UPLOAD, ICAO_CHECK, TRIGGER_DAILY_SYNC)
+- **PKD Management 감사 로그**: ApiClientHandler (4개: CREATE/UPDATE/DELETE/KEY_REGEN), CodeMasterHandler (3개: CREATE/UPDATE/DELETE), AuthHandler (4개: USER_CREATE/UPDATE/DELETE/PASSWORD_CHANGE)
+- **PKD Management DI**: ApiClientHandler, CodeMasterHandler, AuthHandler에 `IQueryExecutor*` 주입 + ServiceContainer 수정
+- **PA Service 감사 로그**: PaHandler `handleVerify()` — PA_VERIFY 감사 로그 (country, documentNumber, status 메타데이터)
+- **PA Service DI**: PaHandler에 `IQueryExecutor*` 주입 + main.cpp 수정
+- **PKD Relay 감사 로그**: SyncHandler (4개: SYNC_CHECK/CONFIG_UPDATE/REVALIDATE/TRIGGER_DAILY_SYNC), ReconciliationHandler (1개: RECONCILE with dryRun/totalProcessed/successCount/failedCount 메타데이터)
+- **감사 로그 패턴**: 성공/실패 양쪽 모두 기록, `logOperation()` 예외 삼킴으로 비즈니스 로직 영향 없음
+- **변수명 충돌 수정**: CodeMasterHandler `handleCreate()` — `meta` → `auditMeta` (기존 metadata 파싱 변수와 충돌)
+- 총 16개 신규 감사 로그 엔드포인트 추가 (기존 ~9개 → 총 ~25개)
+- 13 files changed (0 new, 13 modified)
+- Docker build 검증: pkd-management, pa-service, pkd-relay 3개 서비스 모두 성공
 
 ### v2.25.1 (2026-02-28) - API 클라이언트 사용량 추적 + 감사 로그 Oracle 수정
 - **CRITICAL FIX**: `isIpAllowed()` CIDR 매칭 로직 — `/8`, `/16` 서브넷이 항상 `/24`처럼 동작하는 버그 수정

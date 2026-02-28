@@ -13,6 +13,7 @@
 #include "../services/validation_service.h"
 #include "query_helpers.h"
 
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <numeric>
 #include <algorithm>
@@ -68,7 +69,7 @@ void SyncHandler::handleSyncHistory(const HttpRequestPtr& req,
     callback(resp);
 }
 
-void SyncHandler::handleSyncCheck(const HttpRequestPtr&,
+void SyncHandler::handleSyncCheck(const HttpRequestPtr& req,
                                    std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
         spdlog::info("Starting sync check...");
@@ -110,11 +111,29 @@ void SyncHandler::handleSyncCheck(const HttpRequestPtr&,
         }
 
         callback(resp);
+
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::SYNC_CHECK);
+        auditEntry.success = result.get("success", true).asBool();
+        auditEntry.resourceType = "SYNC";
+        Json::Value auditMeta;
+        auditMeta["dbTotal"] = dbStats.cscaCount + dbStats.mlscCount + dbStats.dscCount + dbStats.dscNcCount + dbStats.crlCount;
+        auditMeta["ldapTotal"] = ldapStats.cscaCount + ldapStats.mlscCount + ldapStats.dscCount + ldapStats.dscNcCount + ldapStats.crlCount;
+        auditEntry.metadata = auditMeta;
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         Json::Value error;
         error["success"] = false;
         error["message"] = "Sync check failed";
         error["error"] = e.what();
+
+        // Audit log (failure)
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::SYNC_CHECK);
+        auditEntry.success = false;
+        auditEntry.resourceType = "SYNC";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
 
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
@@ -326,7 +345,21 @@ void SyncHandler::handleUpdateSyncConfig(const HttpRequestPtr& req,
         auto resp = HttpResponse::newHttpJsonResponse(response);
         callback(resp);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::CONFIG_UPDATE);
+        auditEntry.success = true;
+        auditEntry.resourceType = "SYNC_CONFIG";
+        auditEntry.metadata = json;
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
+        // Audit log (failure)
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::CONFIG_UPDATE);
+        auditEntry.success = false;
+        auditEntry.resourceType = "SYNC_CONFIG";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value error(Json::objectValue);
         error["success"] = false;
         error["error"] = std::string("Exception: ") + e.what();
@@ -336,7 +369,7 @@ void SyncHandler::handleUpdateSyncConfig(const HttpRequestPtr& req,
     }
 }
 
-void SyncHandler::handleRevalidate(const HttpRequestPtr&,
+void SyncHandler::handleRevalidate(const HttpRequestPtr& req,
                                     std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
         spdlog::info("Manual certificate re-validation triggered via API");
@@ -349,8 +382,28 @@ void SyncHandler::handleRevalidate(const HttpRequestPtr&,
         }
 
         callback(resp);
+
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::REVALIDATE);
+        auditEntry.success = response.get("success", false).asBool();
+        auditEntry.resourceType = "CERTIFICATE";
+        if (response.isMember("totalProcessed")) {
+            Json::Value auditMeta;
+            auditMeta["totalProcessed"] = response["totalProcessed"];
+            auditEntry.metadata = auditMeta;
+        }
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         spdlog::error("Revalidation request failed: {}", e.what());
+
+        // Audit log (failure)
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::REVALIDATE);
+        auditEntry.success = false;
+        auditEntry.resourceType = "CERTIFICATE";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value error(Json::objectValue);
         error["success"] = false;
         error["error"] = e.what();
@@ -372,7 +425,7 @@ void SyncHandler::handleRevalidationHistory(const HttpRequestPtr& req,
     callback(resp);
 }
 
-void SyncHandler::handleTriggerDailySync(const HttpRequestPtr&,
+void SyncHandler::handleTriggerDailySync(const HttpRequestPtr& req,
                                           std::function<void(const HttpResponsePtr&)>&& callback) {
     spdlog::info("Manual daily sync triggered via API");
     scheduler_.triggerDailySync();
@@ -383,6 +436,12 @@ void SyncHandler::handleTriggerDailySync(const HttpRequestPtr&,
 
     auto resp = HttpResponse::newHttpJsonResponse(response);
     callback(resp);
+
+    // Audit log
+    auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::TRIGGER_DAILY_SYNC);
+    auditEntry.success = true;
+    auditEntry.resourceType = "SYNC";
+    icao::audit::logOperation(queryExecutor_, auditEntry);
 }
 
 void SyncHandler::handleSyncStats(const HttpRequestPtr&,

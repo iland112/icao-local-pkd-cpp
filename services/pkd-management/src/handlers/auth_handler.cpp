@@ -3,6 +3,7 @@
  */
 
 #include "auth_handler.h"
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <json/json.h>
 #include <numeric>
@@ -12,9 +13,11 @@ namespace handlers {
 
 AuthHandler::AuthHandler(
     repositories::UserRepository* userRepository,
-    repositories::AuthAuditRepository* authAuditRepository)
+    repositories::AuthAuditRepository* authAuditRepository,
+    common::IQueryExecutor* queryExecutor)
     : userRepository_(userRepository),
-      authAuditRepository_(authAuditRepository) {
+      authAuditRepository_(authAuditRepository),
+      queryExecutor_(queryExecutor) {
 
     if (!userRepository_ || !authAuditRepository_) {
         throw std::invalid_argument("AuthHandler: repositories cannot be nullptr");
@@ -874,8 +877,22 @@ void AuthHandler::handleCreateUser(
 
         spdlog::info("[AuthHandler] User created: {} by admin {}", username, adminClaims->username);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_CREATE);
+        auditEntry.success = true;
+        auditEntry.resourceType = "USER";
+        Json::Value meta;
+        meta["username"] = username;
+        auditEntry.metadata = meta;
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         spdlog::error("[AuthHandler] Create user error: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_CREATE);
+        auditEntry.success = false;
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
 
         Json::Value resp;
         resp["success"] = false;
@@ -1010,8 +1027,22 @@ void AuthHandler::handleUpdateUser(
 
         spdlog::info("[AuthHandler] User {} updated by admin {}", userId, adminClaims->username);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_UPDATE);
+        auditEntry.success = true;
+        auditEntry.resourceId = userId;
+        auditEntry.resourceType = "USER";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         spdlog::error("[AuthHandler] Update user error: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_UPDATE);
+        auditEntry.success = false;
+        auditEntry.resourceId = userId;
+        auditEntry.resourceType = "USER";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
 
         Json::Value resp;
         resp["success"] = false;
@@ -1068,8 +1099,22 @@ void AuthHandler::handleDeleteUser(
 
         spdlog::info("[AuthHandler] User {} deleted by admin {}", deletedUsernameOpt.value(), adminClaims->username);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_DELETE);
+        auditEntry.success = true;
+        auditEntry.resourceId = userId;
+        auditEntry.resourceType = "USER";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         spdlog::error("[AuthHandler] Delete user error: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_DELETE);
+        auditEntry.success = false;
+        auditEntry.resourceId = userId;
+        auditEntry.resourceType = "USER";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
 
         Json::Value resp;
         resp["success"] = false;
@@ -1204,8 +1249,22 @@ void AuthHandler::handleChangePassword(
 
         spdlog::info("[AuthHandler] Password changed for user {}", userId);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::PASSWORD_CHANGE);
+        auditEntry.success = true;
+        auditEntry.resourceId = userId;
+        auditEntry.resourceType = "USER";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
     } catch (const std::exception& e) {
         spdlog::error("[AuthHandler] Change password error: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::PASSWORD_CHANGE);
+        auditEntry.success = false;
+        auditEntry.resourceId = userId;
+        auditEntry.resourceType = "USER";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
 
         Json::Value resp;
         resp["success"] = false;

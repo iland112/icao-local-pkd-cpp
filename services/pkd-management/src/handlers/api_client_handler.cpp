@@ -4,6 +4,7 @@
 
 #include "api_client_handler.h"
 #include "../auth/api_key_generator.h"
+#include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <cstdlib>
 
@@ -11,8 +12,9 @@ using namespace drogon;
 
 namespace handlers {
 
-ApiClientHandler::ApiClientHandler(repositories::ApiClientRepository* repository)
-    : repository_(repository)
+ApiClientHandler::ApiClientHandler(repositories::ApiClientRepository* repository,
+                                   common::IQueryExecutor* queryExecutor)
+    : repository_(repository), queryExecutor_(queryExecutor)
 {
     // Initialize JWT service for admin validation
     const char* jwtSecret = std::getenv("JWT_SECRET_KEY");
@@ -205,11 +207,24 @@ void ApiClientHandler::handleCreate(
         }
         resp["client"]["api_key"] = keyInfo.key;  // Only time the raw key is returned
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_CREATE);
+        auditEntry.success = true;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         auto response = HttpResponse::newHttpJsonResponse(resp);
         callback(response);
 
     } catch (const std::exception& e) {
         spdlog::error("[ApiClientHandler] handleCreate failed: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_CREATE);
+        auditEntry.success = false;
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value resp;
         resp["success"] = false;
         resp["message"] = std::string("Error: ") + e.what();
@@ -373,11 +388,26 @@ void ApiClientHandler::handleUpdate(
             if (refreshed) resp["client"] = modelToJson(*refreshed);
         }
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_UPDATE);
+        auditEntry.success = updated;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         auto response = HttpResponse::newHttpJsonResponse(resp);
         callback(response);
 
     } catch (const std::exception& e) {
         spdlog::error("[ApiClientHandler] handleUpdate failed: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_UPDATE);
+        auditEntry.success = false;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value resp;
         resp["success"] = false;
         resp["message"] = std::string("Error: ") + e.what();
@@ -401,6 +431,13 @@ void ApiClientHandler::handleDelete(
 
         bool deactivated = repository_->deactivate(id);
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_DELETE);
+        auditEntry.success = deactivated;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value resp;
         resp["success"] = deactivated;
         resp["message"] = deactivated ? "Client deactivated" : "Client not found";
@@ -411,6 +448,14 @@ void ApiClientHandler::handleDelete(
 
     } catch (const std::exception& e) {
         spdlog::error("[ApiClientHandler] handleDelete failed: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_DELETE);
+        auditEntry.success = false;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value resp;
         resp["success"] = false;
         resp["message"] = std::string("Error: ") + e.what();
@@ -457,11 +502,26 @@ void ApiClientHandler::handleRegenerate(
         resp["client"]["api_key"] = keyInfo.key;
         resp["client"]["api_key_prefix"] = keyInfo.prefix;
 
+        // Audit log
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_KEY_REGEN);
+        auditEntry.success = true;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         auto response = HttpResponse::newHttpJsonResponse(resp);
         callback(response);
 
     } catch (const std::exception& e) {
         spdlog::error("[ApiClientHandler] handleRegenerate failed: {}", e.what());
+
+        auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_KEY_REGEN);
+        auditEntry.success = false;
+        auditEntry.resourceId = id;
+        auditEntry.resourceType = "API_CLIENT";
+        auditEntry.errorMessage = e.what();
+        icao::audit::logOperation(queryExecutor_, auditEntry);
+
         Json::Value resp;
         resp["success"] = false;
         resp["message"] = std::string("Error: ") + e.what();

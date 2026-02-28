@@ -285,7 +285,8 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     // --- Phase 7: Handlers ---
     impl_->authHandler = std::make_shared<handlers::AuthHandler>(
         impl_->userRepository.get(),
-        impl_->authAuditRepository.get()
+        impl_->authAuditRepository.get(),
+        impl_->queryExecutor.get()
     );
     spdlog::info("Authentication handler initialized");
 
@@ -330,12 +331,14 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     spdlog::info("Certificate handler initialized (12 endpoints)");
 
     impl_->codeMasterHandler = std::make_shared<handlers::CodeMasterHandler>(
-        impl_->codeMasterRepository.get()
+        impl_->codeMasterRepository.get(),
+        impl_->queryExecutor.get()
     );
     spdlog::info("Code Master handler initialized (6 endpoints)");
 
     impl_->apiClientHandler = std::make_shared<handlers::ApiClientHandler>(
-        impl_->apiClientRepository.get()
+        impl_->apiClientRepository.get(),
+        impl_->queryExecutor.get()
     );
     spdlog::info("API Client handler initialized (7 endpoints)");
 

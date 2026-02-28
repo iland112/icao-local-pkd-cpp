@@ -7,6 +7,9 @@
 #include <map>
 
 // Forward declarations
+namespace common {
+    class IQueryExecutor;
+}
 namespace services {
     class PaVerificationService;
 }
@@ -46,11 +49,12 @@ public:
      * @param sodParserService SOD parser service (non-owning pointer)
      * @param dataGroupParserService DG parser service (non-owning pointer)
      */
-    explicit PaHandler(
+    PaHandler(
         services::PaVerificationService* paVerificationService,
         repositories::DataGroupRepository* dataGroupRepository,
         icao::SodParser* sodParserService,
-        icao::DgParser* dataGroupParserService);
+        icao::DgParser* dataGroupParserService,
+        common::IQueryExecutor* queryExecutor = nullptr);
 
     /**
      * @brief Register PA routes
@@ -66,6 +70,7 @@ private:
     repositories::DataGroupRepository* dataGroupRepository_;
     icao::SodParser* sodParserService_;
     icao::DgParser* dataGroupParserService_;
+    common::IQueryExecutor* queryExecutor_;
 
     /**
      * @brief POST /api/pa/verify

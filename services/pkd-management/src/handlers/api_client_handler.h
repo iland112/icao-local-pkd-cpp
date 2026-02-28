@@ -11,12 +11,14 @@
 #include <drogon/drogon.h>
 #include "../auth/jwt_service.h"
 #include "../repositories/api_client_repository.h"
+#include "i_query_executor.h"
 
 namespace handlers {
 
 class ApiClientHandler {
 public:
-    explicit ApiClientHandler(repositories::ApiClientRepository* repository);
+    ApiClientHandler(repositories::ApiClientRepository* repository,
+                     common::IQueryExecutor* queryExecutor);
     ~ApiClientHandler();
 
     void registerRoutes(drogon::HttpAppFramework& app);
@@ -74,6 +76,7 @@ private:
     Json::Value modelToJson(const domain::models::ApiClient& client);
 
     std::shared_ptr<auth::JwtService> jwtService_;
+    common::IQueryExecutor* queryExecutor_;
 };
 
 } // namespace handlers

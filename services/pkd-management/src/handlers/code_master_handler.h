@@ -10,18 +10,21 @@
 
 #include <drogon/drogon.h>
 #include "../repositories/code_master_repository.h"
+#include "i_query_executor.h"
 
 namespace handlers {
 
 class CodeMasterHandler {
 public:
-    explicit CodeMasterHandler(repositories::CodeMasterRepository* repository);
+    CodeMasterHandler(repositories::CodeMasterRepository* repository,
+                      common::IQueryExecutor* queryExecutor);
     ~CodeMasterHandler();
 
     void registerRoutes(drogon::HttpAppFramework& app);
 
 private:
     repositories::CodeMasterRepository* repository_;
+    common::IQueryExecutor* queryExecutor_;
 
     /** GET /api/code-master — List codes (category filter, pagination) */
     void handleGetAll(

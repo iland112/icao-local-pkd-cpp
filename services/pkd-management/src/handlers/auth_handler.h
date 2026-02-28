@@ -5,6 +5,7 @@
 #include "../auth/password_hash.h"
 #include "../repositories/user_repository.h"
 #include "../repositories/auth_audit_repository.h"
+#include "i_query_executor.h"
 #include <memory>
 
 namespace handlers {
@@ -30,9 +31,10 @@ public:
      * @param userRepository User repository (non-owning pointer)
      * @param authAuditRepository Auth audit repository (non-owning pointer)
      */
-    explicit AuthHandler(
+    AuthHandler(
         repositories::UserRepository* userRepository,
-        repositories::AuthAuditRepository* authAuditRepository);
+        repositories::AuthAuditRepository* authAuditRepository,
+        common::IQueryExecutor* queryExecutor);
 
     /**
      * @brief Register authentication routes
@@ -46,6 +48,7 @@ public:
 private:
     repositories::UserRepository* userRepository_;
     repositories::AuthAuditRepository* authAuditRepository_;
+    common::IQueryExecutor* queryExecutor_;
     std::shared_ptr<auth::JwtService> jwtService_;
 
     /**

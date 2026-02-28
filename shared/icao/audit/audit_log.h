@@ -46,11 +46,36 @@ enum class OperationType {
     PA_PARSE_DG1,       // Parse Data Group 1 (MRZ)
     PA_PARSE_DG2,       // Parse Data Group 2 (Face)
 
+    // PKD Management — API Client Management
+    API_CLIENT_CREATE,  // Create new API client
+    API_CLIENT_UPDATE,  // Update API client
+    API_CLIENT_DELETE,  // Deactivate API client
+    API_CLIENT_KEY_REGEN, // Regenerate API key
+
+    // PKD Management — Code Master Management
+    CODE_MASTER_CREATE, // Create code master entry
+    CODE_MASTER_UPDATE, // Update code master entry
+    CODE_MASTER_DELETE, // Deactivate code master entry
+
+    // PKD Management — User Management
+    USER_CREATE,        // Create user
+    USER_UPDATE,        // Update user
+    USER_DELETE,        // Delete user
+    PASSWORD_CHANGE,    // Change user password
+
+    // PKD Management — Upload (additional)
+    UPLOAD_RETRY,       // Retry failed upload
+    CERT_UPLOAD,        // Individual certificate upload
+
+    // PKD Management — ICAO
+    ICAO_CHECK,         // Manual ICAO version check trigger
+
     // PKD Relay Operations
     SYNC_TRIGGER,       // Manual sync trigger
     SYNC_CHECK,         // Sync status check
     RECONCILE,          // DB-LDAP reconciliation
     REVALIDATE,         // Certificate re-validation
+    TRIGGER_DAILY_SYNC, // Trigger daily sync manually
 
     // Common Operations
     CONFIG_UPDATE,      // Configuration update
@@ -75,11 +100,36 @@ inline std::string operationTypeToString(OperationType type) {
         case OperationType::PA_PARSE_DG1: return "PA_PARSE_DG1";
         case OperationType::PA_PARSE_DG2: return "PA_PARSE_DG2";
 
+        // PKD Management — API Client
+        case OperationType::API_CLIENT_CREATE: return "API_CLIENT_CREATE";
+        case OperationType::API_CLIENT_UPDATE: return "API_CLIENT_UPDATE";
+        case OperationType::API_CLIENT_DELETE: return "API_CLIENT_DELETE";
+        case OperationType::API_CLIENT_KEY_REGEN: return "API_CLIENT_KEY_REGEN";
+
+        // PKD Management — Code Master
+        case OperationType::CODE_MASTER_CREATE: return "CODE_MASTER_CREATE";
+        case OperationType::CODE_MASTER_UPDATE: return "CODE_MASTER_UPDATE";
+        case OperationType::CODE_MASTER_DELETE: return "CODE_MASTER_DELETE";
+
+        // PKD Management — User Management
+        case OperationType::USER_CREATE: return "USER_CREATE";
+        case OperationType::USER_UPDATE: return "USER_UPDATE";
+        case OperationType::USER_DELETE: return "USER_DELETE";
+        case OperationType::PASSWORD_CHANGE: return "PASSWORD_CHANGE";
+
+        // PKD Management — Upload (additional)
+        case OperationType::UPLOAD_RETRY: return "UPLOAD_RETRY";
+        case OperationType::CERT_UPLOAD: return "CERT_UPLOAD";
+
+        // PKD Management — ICAO
+        case OperationType::ICAO_CHECK: return "ICAO_CHECK";
+
         // PKD Relay
         case OperationType::SYNC_TRIGGER: return "SYNC_TRIGGER";
         case OperationType::SYNC_CHECK: return "SYNC_CHECK";
         case OperationType::RECONCILE: return "RECONCILE";
         case OperationType::REVALIDATE: return "REVALIDATE";
+        case OperationType::TRIGGER_DAILY_SYNC: return "TRIGGER_DAILY_SYNC";
 
         // Common
         case OperationType::CONFIG_UPDATE: return "CONFIG_UPDATE";
