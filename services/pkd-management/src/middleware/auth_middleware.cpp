@@ -506,21 +506,39 @@ bool AuthMiddleware::isIpAllowed(
         // Exact match
         if (allowed == clientIp) return true;
 
-        // Simple CIDR prefix match (e.g., "192.168.1." matches "192.168.1.100")
-        if (allowed.back() == '.' || allowed.find('/') != std::string::npos) {
-            // Strip /xx suffix for simple prefix matching
-            std::string prefix = allowed;
-            auto slashPos = prefix.find('/');
-            if (slashPos != std::string::npos) {
-                // For /24 = first 3 octets, /16 = first 2 octets
-                prefix = prefix.substr(0, slashPos);
-                // Simple approach: match the network portion
-                auto lastDot = prefix.rfind('.');
-                if (lastDot != std::string::npos) {
-                    prefix = prefix.substr(0, lastDot + 1);
+        // CIDR match (e.g., "10.0.0.0/8" matches "10.89.1.42")
+        auto slashPos = allowed.find('/');
+        if (slashPos != std::string::npos) {
+            std::string network = allowed.substr(0, slashPos);
+            int maskBits = std::stoi(allowed.substr(slashPos + 1));
+
+            // Parse IP addresses to 32-bit integers
+            auto parseIp = [](const std::string& ip) -> uint32_t {
+                uint32_t result = 0;
+                int octet = 0, shift = 24;
+                for (char c : ip) {
+                    if (c == '.') {
+                        result |= (octet << shift);
+                        shift -= 8;
+                        octet = 0;
+                    } else {
+                        octet = octet * 10 + (c - '0');
+                    }
                 }
-            }
-            if (clientIp.find(prefix) == 0) return true;
+                result |= (octet << shift);
+                return result;
+            };
+
+            uint32_t mask = maskBits > 0 ? ~((1U << (32 - maskBits)) - 1) : 0;
+            uint32_t networkAddr = parseIp(network);
+            uint32_t clientAddr = parseIp(clientIp);
+
+            if ((clientAddr & mask) == (networkAddr & mask)) return true;
+        }
+
+        // Simple prefix match (e.g., "192.168.1." matches "192.168.1.100")
+        if (allowed.back() == '.') {
+            if (clientIp.find(allowed) == 0) return true;
         }
     }
 
