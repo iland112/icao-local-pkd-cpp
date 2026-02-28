@@ -34,18 +34,22 @@ LdapConnectionPool::LdapConnectionPool(
     const std::string& bindPassword,
     size_t minSize,
     size_t maxSize,
-    int acquireTimeoutSec)
+    int acquireTimeoutSec,
+    int networkTimeoutSec,
+    int healthCheckTimeoutSec)
     : ldapUri_(ldapUri),
       bindDn_(bindDn),
       bindPassword_(bindPassword),
       minSize_(minSize),
       maxSize_(maxSize),
       acquireTimeout_(acquireTimeoutSec),
+      networkTimeout_(networkTimeoutSec),
+      healthCheckTimeout_(healthCheckTimeoutSec),
       totalConnections_(0),
       shutdown_(false)
 {
-    spdlog::info("LdapConnectionPool created: uri={}, minSize={}, maxSize={}, timeout={}s",
-                 ldapUri_, minSize_, maxSize_, acquireTimeoutSec);
+    spdlog::info("LdapConnectionPool created: uri={}, minSize={}, maxSize={}, timeout={}s, networkTimeout={}s, healthCheckTimeout={}s",
+                 ldapUri_, minSize_, maxSize_, acquireTimeoutSec, networkTimeoutSec, healthCheckTimeoutSec);
 }
 
 LdapConnectionPool::~LdapConnectionPool() {
@@ -173,8 +177,8 @@ LDAP* LdapConnectionPool::createConnection() {
         return nullptr;
     }
 
-    // Set network timeout (5 seconds)
-    struct timeval timeout = {5, 0};
+    // Set network timeout
+    struct timeval timeout = {networkTimeout_, 0};
     rc = ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &timeout);
     if (rc != LDAP_SUCCESS) {
         spdlog::warn("ldap_set_option NETWORK_TIMEOUT failed: {}", ldap_err2string(rc));
@@ -212,7 +216,7 @@ bool LdapConnectionPool::isConnectionHealthy(LDAP* ld) {
     // Perform a simple search to check if connection is alive
     // Search for root DSE (empty base DN, scope base, filter objectClass=*)
     LDAPMessage* result = nullptr;
-    struct timeval timeout = {2, 0};  // 2 second timeout
+    struct timeval timeout = {healthCheckTimeout_, 0};
 
     int rc = ldap_search_ext_s(ld, "", LDAP_SCOPE_BASE, "(objectClass=*)",
                                 nullptr, 0, nullptr, nullptr, &timeout, 1, &result);

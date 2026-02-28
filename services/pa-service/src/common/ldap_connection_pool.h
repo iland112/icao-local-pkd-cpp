@@ -100,6 +100,8 @@ private:
     size_t minSize_;
     size_t maxSize_;
     std::chrono::seconds acquireTimeout_;
+    int networkTimeout_;
+    int healthCheckTimeout_;
 
     std::queue<LDAP*> availableConnections_;
     std::atomic<size_t> totalConnections_;
@@ -119,6 +121,8 @@ public:
      * @param minSize Minimum number of connections to maintain
      * @param maxSize Maximum number of connections allowed
      * @param acquireTimeoutSec Timeout for acquiring connection (seconds)
+     * @param networkTimeoutSec LDAP network operation timeout (seconds)
+     * @param healthCheckTimeoutSec Health check query timeout (seconds)
      */
     explicit LdapConnectionPool(
         const std::string& ldapUrl,
@@ -126,7 +130,9 @@ public:
         const std::string& bindPassword,
         size_t minSize = 2,
         size_t maxSize = 10,
-        int acquireTimeoutSec = 5
+        int acquireTimeoutSec = 5,
+        int networkTimeoutSec = 5,
+        int healthCheckTimeoutSec = 2
     );
 
     /**

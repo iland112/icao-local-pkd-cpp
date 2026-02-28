@@ -85,11 +85,15 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
         // Step 3: LDAP Connection Pool
         // Read LDAP pool sizes from environment (default: min=2, max=10, timeout=5)
         int ldapPoolMin = 2, ldapPoolMax = 10, ldapPoolTimeout = 5;
+        int ldapNetworkTimeout = 5, ldapHealthCheckTimeout = 2;
         if (auto* v = std::getenv("LDAP_POOL_MIN")) ldapPoolMin = std::stoi(v);
         if (auto* v = std::getenv("LDAP_POOL_MAX")) ldapPoolMax = std::stoi(v);
         if (auto* v = std::getenv("LDAP_POOL_TIMEOUT")) ldapPoolTimeout = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) ldapNetworkTimeout = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_HEALTH_CHECK_TIMEOUT")) ldapHealthCheckTimeout = std::stoi(v);
 
-        spdlog::info("Creating LDAP connection pool (min={}, max={})...", ldapPoolMin, ldapPoolMax);
+        spdlog::info("Creating LDAP connection pool (min={}, max={}, networkTimeout={}s, healthCheckTimeout={}s)...",
+                     ldapPoolMin, ldapPoolMax, ldapNetworkTimeout, ldapHealthCheckTimeout);
         std::string ldapUri = "ldap://" + config.ldapWriteHost + ":" +
                              std::to_string(config.ldapWritePort);
         impl_->ldapPool = std::make_shared<common::LdapConnectionPool>(
@@ -98,7 +102,9 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
             config.ldapBindPassword,
             ldapPoolMin,
             ldapPoolMax,
-            ldapPoolTimeout
+            ldapPoolTimeout,
+            ldapNetworkTimeout,
+            ldapHealthCheckTimeout
         );
         if (!impl_->ldapPool->initialize()) {
             spdlog::critical("Failed to initialize LDAP connection pool");

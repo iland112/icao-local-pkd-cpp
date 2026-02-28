@@ -85,8 +85,10 @@ LDAP* connectLdap(const AppConfig& config) {
         int version = LDAP_VERSION3;
         ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
+        int networkTimeoutSec = 5;
+        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) networkTimeoutSec = std::stoi(v);
         struct timeval timeout;
-        timeout.tv_sec = 5;
+        timeout.tv_sec = networkTimeoutSec;
         timeout.tv_usec = 0;
         ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &timeout);
 

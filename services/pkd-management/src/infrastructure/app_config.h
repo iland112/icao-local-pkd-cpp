@@ -60,6 +60,7 @@ struct AppConfig {
 
     int serverPort = 8081;
     int threadNum = 4;
+    int maxBodySizeMB = 100;  // HTTP upload body size limit (MB)
 
     static AppConfig fromEnvironment() {
         AppConfig config;
@@ -119,6 +120,9 @@ struct AppConfig {
 
         // ASN.1 Parser Configuration
         if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = std::stoi(val);
+
+        // HTTP upload body size limit
+        if (auto val = std::getenv("MAX_BODY_SIZE_MB")) config.maxBodySizeMB = std::stoi(val);
 
         // ICAO Scheduler Configuration
         if (auto val = std::getenv("ICAO_CHECK_SCHEDULE_HOUR")) {

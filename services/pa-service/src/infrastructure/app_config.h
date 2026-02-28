@@ -27,6 +27,7 @@ struct AppConfig {
 
     int serverPort = 8082;
     int threadNum = 4;
+    int maxBodySizeMB = 50;  // HTTP upload body size limit (MB)
 
     static AppConfig fromEnvironment() {
         AppConfig config;
@@ -45,6 +46,9 @@ struct AppConfig {
 
         if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
         if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
+
+        // HTTP upload body size limit
+        if (auto val = std::getenv("MAX_BODY_SIZE_MB")) config.maxBodySizeMB = std::stoi(val);
 
         return config;
     }

@@ -38,13 +38,17 @@ LdapConnectionPool::LdapConnectionPool(
     const std::string& bindPassword,
     size_t minSize,
     size_t maxSize,
-    int acquireTimeoutSec)
+    int acquireTimeoutSec,
+    int networkTimeoutSec,
+    int healthCheckTimeoutSec)
     : ldapUrl_(ldapUrl)
     , bindDn_(bindDn)
     , bindPassword_(bindPassword)
     , minSize_(minSize)
     , maxSize_(maxSize)
     , acquireTimeout_(acquireTimeoutSec)
+    , networkTimeout_(networkTimeoutSec)
+    , healthCheckTimeout_(healthCheckTimeoutSec)
     , totalConnections_(0)
     , shutdown_(false)
 {
@@ -52,8 +56,8 @@ LdapConnectionPool::LdapConnectionPool(
         throw std::invalid_argument("minSize cannot exceed maxSize");
     }
 
-    spdlog::info("LdapConnectionPool created: url={}, minSize={}, maxSize={}, timeout={}s",
-                 ldapUrl_, minSize_, maxSize_, acquireTimeoutSec);
+    spdlog::info("LdapConnectionPool created: url={}, minSize={}, maxSize={}, timeout={}s, networkTimeout={}s, healthCheckTimeout={}s",
+                 ldapUrl_, minSize_, maxSize_, acquireTimeoutSec, networkTimeoutSec, healthCheckTimeoutSec);
 }
 
 LdapConnectionPool::~LdapConnectionPool() {
@@ -187,7 +191,7 @@ LDAP* LdapConnectionPool::createConnection() {
 
     // Set network timeout (5 seconds)
     struct timeval timeout;
-    timeout.tv_sec = 5;
+    timeout.tv_sec = networkTimeout_;
     timeout.tv_usec = 0;
     ldap_set_option(ldap, LDAP_OPT_NETWORK_TIMEOUT, &timeout);
 
@@ -229,7 +233,7 @@ bool LdapConnectionPool::isConnectionHealthy(LDAP* ldap) {
     // Send a simple search query to check health (base DN only, no results expected)
     LDAPMessage* res = nullptr;
     struct timeval timeout;
-    timeout.tv_sec = 2;
+    timeout.tv_sec = healthCheckTimeout_;
     timeout.tv_usec = 0;
 
     int rc = ldap_search_ext_s(

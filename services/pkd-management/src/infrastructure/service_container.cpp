@@ -157,9 +157,12 @@ bool ServiceContainer::initialize(const AppConfig& config) {
 
         // Read LDAP pool sizes from environment (default: min=2, max=10, timeout=5)
         int ldapPoolMin = 2, ldapPoolMax = 10, ldapPoolTimeout = 5;
+        int ldapNetworkTimeout = 5, ldapHealthCheckTimeout = 2;
         if (auto* v = std::getenv("LDAP_POOL_MIN")) ldapPoolMin = std::stoi(v);
         if (auto* v = std::getenv("LDAP_POOL_MAX")) ldapPoolMax = std::stoi(v);
         if (auto* v = std::getenv("LDAP_POOL_TIMEOUT")) ldapPoolTimeout = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) ldapNetworkTimeout = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_HEALTH_CHECK_TIMEOUT")) ldapHealthCheckTimeout = std::stoi(v);
 
         impl_->ldapPool = std::make_shared<common::LdapConnectionPool>(
             ldapWriteUri,
@@ -167,10 +170,13 @@ bool ServiceContainer::initialize(const AppConfig& config) {
             config.ldapBindPassword,
             ldapPoolMin,
             ldapPoolMax,
-            ldapPoolTimeout
+            ldapPoolTimeout,
+            ldapNetworkTimeout,
+            ldapHealthCheckTimeout
         );
 
-        spdlog::info("LDAP connection pool initialized (min={}, max={}, host={})", ldapPoolMin, ldapPoolMax, ldapWriteUri);
+        spdlog::info("LDAP connection pool initialized (min={}, max={}, networkTimeout={}s, healthCheckTimeout={}s, host={})",
+                     ldapPoolMin, ldapPoolMax, ldapNetworkTimeout, ldapHealthCheckTimeout, ldapWriteUri);
     } catch (const std::exception& e) {
         spdlog::critical("Failed to initialize LDAP connection pool: {}", e.what());
         return false;

@@ -150,7 +150,7 @@ private:
 
     // --- DoS defense: concurrent processing limit ---
     static std::atomic<int> s_activeProcessingCount;
-    static constexpr int MAX_CONCURRENT_PROCESSING = 3;
+    static int MAX_CONCURRENT_PROCESSING;
 
     // --- DoS defense: file size limits ---
     static constexpr int64_t MAX_LDIF_FILE_SIZE = 100LL * 1024 * 1024;   // 100MB

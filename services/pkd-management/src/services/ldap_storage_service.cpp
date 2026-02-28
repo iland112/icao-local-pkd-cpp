@@ -15,6 +15,7 @@
 #include <vector>
 #include <string>
 #include <algorithm>
+#include <cstdlib>
 
 namespace services {
 
@@ -38,7 +39,9 @@ LDAP* LdapStorageService::getLdapWriteConnection() {
     ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
     // DoS defense: network timeout to prevent blocking on unresponsive LDAP
-    struct timeval ldapTimeout = {10, 0};  // 10 seconds
+    int writeTimeoutSec = 10;
+    if (auto* v = std::getenv("LDAP_WRITE_TIMEOUT")) writeTimeoutSec = std::stoi(v);
+    struct timeval ldapTimeout = {writeTimeoutSec, 0};
     ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
 
     struct berval cred;
@@ -80,7 +83,9 @@ LDAP* LdapStorageService::getLdapReadConnection() {
     ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
     // DoS defense: network timeout to prevent blocking on unresponsive LDAP
-    struct timeval ldapTimeout = {10, 0};  // 10 seconds
+    int writeTimeoutSec = 10;
+    if (auto* v = std::getenv("LDAP_WRITE_TIMEOUT")) writeTimeoutSec = std::stoi(v);
+    struct timeval ldapTimeout = {writeTimeoutSec, 0};
     ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
 
     struct berval cred;

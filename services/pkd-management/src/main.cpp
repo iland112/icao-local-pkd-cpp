@@ -339,7 +339,7 @@ int main(int argc, char* argv[]) {
            .addListener("0.0.0.0", appConfig.serverPort)
            .setThreadNum(appConfig.threadNum)
            .enableGzip(true)
-           .setClientMaxBodySize(100 * 1024 * 1024)  // 100MB max upload
+           .setClientMaxBodySize(static_cast<size_t>(appConfig.maxBodySizeMB) * 1024 * 1024)
            .setUploadPath("/app/uploads")  // Absolute path for security
            .setDocumentRoot("./static");
 

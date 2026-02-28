@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <thread>
 #include <future>
+#include <cstdlib>
 #include <set>
 #include <algorithm>
 #include <sstream>
@@ -162,6 +163,10 @@ namespace handlers {
 std::mutex UploadHandler::s_processingMutex;
 std::set<std::string> UploadHandler::s_processingUploads;
 std::atomic<int> UploadHandler::s_activeProcessingCount{0};
+int UploadHandler::MAX_CONCURRENT_PROCESSING = []() {
+    if (auto* v = std::getenv("MAX_CONCURRENT_UPLOADS")) return std::stoi(v);
+    return 3;
+}();
 
 // =============================================================================
 // Constructor

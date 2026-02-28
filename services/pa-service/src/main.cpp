@@ -238,7 +238,7 @@ int main(int /* argc */, char* /* argv */[]) {
            .addListener("0.0.0.0", appConfig.serverPort)
            .setThreadNum(appConfig.threadNum)
            .enableGzip(true)
-           .setClientMaxBodySize(50 * 1024 * 1024)
+           .setClientMaxBodySize(static_cast<size_t>(appConfig.maxBodySizeMB) * 1024 * 1024)
            .setDocumentRoot("./static");
 
         // Global exception handler

@@ -111,6 +111,11 @@ services:
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
       - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
       - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
+      - LDAP_NETWORK_TIMEOUT=${LDAP_NETWORK_TIMEOUT:-5}
+      - LDAP_HEALTH_CHECK_TIMEOUT=${LDAP_HEALTH_CHECK_TIMEOUT:-2}
+      - LDAP_WRITE_TIMEOUT=${LDAP_WRITE_TIMEOUT:-10}
+      - MAX_CONCURRENT_UPLOADS=${MAX_CONCURRENT_UPLOADS:-3}
+      - MAX_BODY_SIZE_MB=${MAX_BODY_SIZE_MB:-100}
       - THREAD_NUM=${THREAD_NUM:-8}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
@@ -184,6 +189,9 @@ services:
       # Connection Pool Configuration (Local 8코어/12GB 최적화)
       - DB_POOL_MIN=${DB_POOL_MIN:-2}
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      - LDAP_NETWORK_TIMEOUT=${LDAP_NETWORK_TIMEOUT:-5}
+      - LDAP_HEALTH_CHECK_TIMEOUT=${LDAP_HEALTH_CHECK_TIMEOUT:-2}
+      - MAX_BODY_SIZE_MB=${MAX_BODY_SIZE_MB:-50}
       - THREAD_NUM=${THREAD_NUM:-8}
       - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
       - LDAP_PORT=389
@@ -245,6 +253,8 @@ services:
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
       - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
       - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
+      - LDAP_NETWORK_TIMEOUT=${LDAP_NETWORK_TIMEOUT:-5}
+      - LDAP_HEALTH_CHECK_TIMEOUT=${LDAP_HEALTH_CHECK_TIMEOUT:-2}
       - THREAD_NUM=${THREAD_NUM:-8}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1
