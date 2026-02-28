@@ -5,6 +5,7 @@
 #include "icao_handler.h"
 #include <spdlog/spdlog.h>
 #include <json/json.h>
+#include "handler_utils.h"
 
 using namespace drogon;
 
@@ -97,15 +98,7 @@ void IcaoHandler::handleCheckUpdates(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[IcaoHandler] Exception: {}", e.what());
-
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("IcaoHandler::handleCheckUpdates", e));
     }
 }
 
@@ -132,15 +125,7 @@ void IcaoHandler::handleGetLatest(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[IcaoHandler] Exception: {}", e.what());
-
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("IcaoHandler::handleGetLatest", e));
     }
 }
 
@@ -169,15 +154,7 @@ void IcaoHandler::handleGetHistory(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[IcaoHandler] Exception: {}", e.what());
-
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("IcaoHandler::handleGetHistory", e));
     }
 }
 
@@ -238,15 +215,7 @@ void IcaoHandler::handleGetStatus(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[IcaoHandler] Exception: {}", e.what());
-
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("IcaoHandler::handleGetStatus", e));
     }
 }
 

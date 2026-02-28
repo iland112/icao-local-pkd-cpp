@@ -11,6 +11,9 @@
 #include <cstdlib>
 #include <regex>
 #include <chrono>
+#include <unordered_map>
+#include <optional>
+#include "handler_utils.h"
 
 // Global service container (defined in main.cpp)
 extern infrastructure::ServiceContainer* g_services;
@@ -470,20 +473,33 @@ std::optional<domain::models::ApiClient> AuthMiddleware::validateApiKey(
 
     // Check endpoint permissions (allowed_endpoints)
     if (!client->allowedEndpoints.empty()) {
+        // Cache compiled regexes to avoid recompilation per request (ReDoS prevention)
+        static std::mutex s_regexCacheMutex;
+        static std::unordered_map<std::string, std::optional<std::regex>> s_regexCache;
+
         bool endpointAllowed = false;
         for (const auto& pattern : client->allowedEndpoints) {
-            try {
-                std::regex re(pattern);
-                if (std::regex_match(path, re)) {
-                    endpointAllowed = true;
-                    break;
+            std::optional<std::regex> cachedRegex;
+            {
+                std::lock_guard<std::mutex> lock(s_regexCacheMutex);
+                auto it = s_regexCache.find(pattern);
+                if (it != s_regexCache.end()) {
+                    cachedRegex = it->second;
+                } else {
+                    try {
+                        cachedRegex = std::regex(pattern, std::regex::optimize);
+                    } catch (const std::regex_error&) {
+                        cachedRegex = std::nullopt;
+                    }
+                    s_regexCache[pattern] = cachedRegex;
                 }
-            } catch (const std::regex_error&) {
-                // If pattern is not regex, do prefix match
-                if (path.find(pattern) == 0) {
-                    endpointAllowed = true;
-                    break;
-                }
+            }
+            if (cachedRegex && std::regex_match(path, *cachedRegex)) {
+                endpointAllowed = true;
+                break;
+            } else if (!cachedRegex && path.find(pattern) == 0) {
+                endpointAllowed = true;
+                break;
             }
         }
         if (!endpointAllowed) {
@@ -510,7 +526,7 @@ bool AuthMiddleware::isIpAllowed(
         auto slashPos = allowed.find('/');
         if (slashPos != std::string::npos) {
             std::string network = allowed.substr(0, slashPos);
-            int maskBits = std::stoi(allowed.substr(slashPos + 1));
+            int maskBits = common::handler::safeStoi(allowed.substr(slashPos + 1), 32, 0, 32);
 
             // Parse IP addresses to 32-bit integers
             auto parseIp = [](const std::string& ip) -> uint32_t {

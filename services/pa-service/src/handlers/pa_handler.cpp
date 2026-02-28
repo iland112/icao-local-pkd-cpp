@@ -7,6 +7,7 @@
 #include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <json/json.h>
+#include "handler_utils.h"
 
 #include <openssl/bio.h>
 #include <openssl/evp.h>
@@ -197,6 +198,10 @@ void PaHandler::handleVerify(
         }
 
         // Get SOD data (Base64 encoded)
+        if (!jsonBody->isMember("sod")) {
+            callback(common::handler::badRequest("SOD data is required"));
+            return;
+        }
         std::string sodBase64 = (*jsonBody)["sod"].asString();
         if (sodBase64.empty()) {
             Json::Value error;
@@ -362,22 +367,14 @@ void PaHandler::handleVerify(
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
     } catch (const std::exception& e) {
-        spdlog::error("Error in POST /api/pa/verify: {}", e.what());
-
-        // Audit log (failure)
+        // Audit log (failure) — keep real error for internal audit records
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::PA_VERIFY);
         auditEntry.success = false;
         auditEntry.resourceType = "PA_VERIFICATION";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = "Internal Server Error";
-        error["message"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("PaHandler::handleVerify", e));
     }
 }
 
@@ -423,13 +420,7 @@ void PaHandler::handleHistory(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Error in GET /api/pa/history: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("PaHandler::handleHistory", e));
     }
 }
 
@@ -459,13 +450,7 @@ void PaHandler::handleDetail(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Error in GET /api/pa/{}: {}", id, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("PaHandler::handleDetail", e));
     }
 }
 
@@ -483,13 +468,7 @@ void PaHandler::handleStatistics(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Error in GET /api/pa/statistics: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("PaHandler::handleStatistics", e));
     }
 }
 
@@ -733,13 +712,7 @@ void PaHandler::handleDataGroups(
         auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
         callback(resp);
     } catch (const std::exception& e) {
-        spdlog::error("Error in /api/pa/{}/datagroups: {}", id, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("PaHandler::handleDataGroups", e));
     }
 }
 

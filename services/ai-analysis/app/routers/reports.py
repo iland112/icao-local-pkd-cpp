@@ -1,9 +1,14 @@
 """Report API endpoints: country maturity, algorithm trends, etc."""
 
 import logging
+import re
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+
+# Input validation patterns (security hardening)
+_COUNTRY_RE = re.compile(r"^[A-Z]{2,3}$")
+_CERT_TYPE_RE = re.compile(r"^(CSCA|DSC|DSC_NC|MLSC|LC)$")
 from sqlalchemy import text
 
 from app.config import get_settings
@@ -110,6 +115,8 @@ async def get_risk_distribution():
 @router.get("/reports/country/{code}")
 async def get_country_report(code: str):
     """Get detailed analysis for a specific country."""
+    if not _COUNTRY_RE.match(code.upper()):
+        raise HTTPException(status_code=400, detail="Invalid country code format")
     from app.services.feature_engineering import load_certificate_data
     from app.services.pattern_analyzer import compute_country_detail, compute_country_maturity
 
@@ -268,6 +275,12 @@ async def get_extension_anomalies(
     limit: int = Query(50, ge=1, le=200),
 ):
     """Get extension rule violations list."""
+    # Input validation
+    if cert_type and not _CERT_TYPE_RE.match(cert_type):
+        raise HTTPException(status_code=400, detail="Invalid certificate type")
+    if country and not _COUNTRY_RE.match(country.upper()):
+        raise HTTPException(status_code=400, detail="Invalid country code format")
+
     from app.services.extension_rules_engine import compute_extension_anomalies
     from app.services.feature_engineering import load_certificate_data
 

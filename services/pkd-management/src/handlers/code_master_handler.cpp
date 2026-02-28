@@ -5,6 +5,7 @@
 #include "code_master_handler.h"
 #include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
+#include "handler_utils.h"
 
 using namespace drogon;
 
@@ -121,13 +122,7 @@ void CodeMasterHandler::handleGetAll(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CodeMasterHandler] GET /api/code-master failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CodeMaster::handleGetAll", e));
     }
 }
 
@@ -152,13 +147,7 @@ void CodeMasterHandler::handleGetCategories(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CodeMasterHandler] GET /api/code-master/categories failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CodeMaster::handleGetCategories", e));
     }
 }
 
@@ -188,13 +177,7 @@ void CodeMasterHandler::handleGetById(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CodeMasterHandler] GET /api/code-master/{{id}} failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CodeMaster::handleGetById", e));
     }
 }
 
@@ -261,13 +244,7 @@ void CodeMasterHandler::handleCreate(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CodeMasterHandler] POST /api/code-master failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CodeMaster::handleCreate", e));
     }
 }
 
@@ -332,13 +309,7 @@ void CodeMasterHandler::handleUpdate(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CodeMasterHandler] PUT /api/code-master/{{id}} failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CodeMaster::handleUpdate", e));
     }
 }
 
@@ -366,13 +337,7 @@ void CodeMasterHandler::handleDelete(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("[CodeMasterHandler] DELETE /api/code-master/{{id}} failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CodeMaster::handleDelete", e));
     }
 }
 

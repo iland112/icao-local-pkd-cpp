@@ -9,6 +9,7 @@
  */
 
 #include "upload_stats_handler.h"
+#include "handler_utils.h"
 
 #include <drogon/drogon.h>
 #include <spdlog/spdlog.h>
@@ -216,12 +217,7 @@ void UploadStatsHandler::handleGetStatistics(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/statistics failed: {}", e.what());
-        Json::Value error;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::statistics", e));
     }
 }
 
@@ -241,13 +237,7 @@ void UploadStatsHandler::handleGetValidationReasons(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/statistics/validation-reasons failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::validationReasons", e));
     }
 }
 
@@ -270,10 +260,10 @@ void UploadStatsHandler::handleGetHistory(
         filter.direction = "DESC";
 
         if (auto p = req->getParameter("page"); !p.empty()) {
-            filter.page = std::stoi(p);
+            filter.page = common::handler::safeStoi(p, 0, 0, 100000);
         }
         if (auto s = req->getParameter("size"); !s.empty()) {
-            filter.size = std::stoi(s);
+            filter.size = common::handler::safeStoi(s, 20, 1, 200);
         }
         if (auto sort = req->getParameter("sort"); !sort.empty()) {
             filter.sort = sort;
@@ -300,13 +290,7 @@ void UploadStatsHandler::handleGetHistory(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/history error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::history", e));
     }
 }
 
@@ -361,13 +345,7 @@ void UploadStatsHandler::handleGetDetail(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/detail/{} error: {}", uploadId, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::detail", e));
     }
 }
 
@@ -387,13 +365,7 @@ void UploadStatsHandler::handleGetIssues(
         auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
         callback(resp);
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/{}/issues error: {}", uploadId, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::issues", e));
     }
 }
 
@@ -491,11 +463,7 @@ void UploadStatsHandler::handleGetMasterListStructure(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/{}/masterlist-structure error: {}", uploadId, e.what());
-        result["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::masterlistStructure", e));
     }
 }
 
@@ -599,8 +567,8 @@ void UploadStatsHandler::handleGetChanges(
         result["changes"] = changes;
 
     } catch (const std::exception& e) {
-        result["error"] = std::string("Query failed: ") + e.what();
-        spdlog::error("[UploadChanges] Query failed: {}", e.what());
+        spdlog::error("[UploadStatsHandler::changes] Query failed: {}", e.what());
+        result["error"] = "Internal server error";
     }
 
     auto resp = drogon::HttpResponse::newHttpJsonResponse(result);
@@ -621,7 +589,7 @@ void UploadStatsHandler::handleGetCountries(
         // Get query parameter for limit (default 20)
         int limit = 20;
         if (auto l = req->getParameter("limit"); !l.empty()) {
-            limit = std::stoi(l);
+            limit = common::handler::safeStoi(l, 20, 1, 1000);
         }
 
         Json::Value result = uploadService_->getCountryStatistics(limit);
@@ -629,12 +597,7 @@ void UploadStatsHandler::handleGetCountries(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/countries failed: {}", e.what());
-        Json::Value error;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::countries", e));
     }
 }
 
@@ -652,7 +615,7 @@ void UploadStatsHandler::handleGetCountriesDetailed(
         // Get query parameters for limit (default ALL countries)
         int limit = 0;  // 0 = no limit
         if (auto l = req->getParameter("limit"); !l.empty()) {
-            limit = std::stoi(l);
+            limit = common::handler::safeStoi(l, 0, 0, 1000);
         }
 
         Json::Value result = uploadService_->getDetailedCountryStatistics(limit);
@@ -660,12 +623,7 @@ void UploadStatsHandler::handleGetCountriesDetailed(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/upload/countries/detailed failed: {}", e.what());
-        Json::Value error;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadStatsHandler::countriesDetailed", e));
     }
 }
 

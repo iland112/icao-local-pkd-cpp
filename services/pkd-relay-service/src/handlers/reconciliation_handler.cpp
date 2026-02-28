@@ -12,6 +12,7 @@
 #include "../services/reconciliation_service.h"
 
 #include <icao/audit/audit_log.h>
+#include "handler_utils.h"
 #include <spdlog/spdlog.h>
 
 using namespace drogon;
@@ -111,12 +112,7 @@ void ReconciliationHandler::handleReconcile(const HttpRequestPtr& req,
         auditEntry.errorMessage = e.what();
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
-        Json::Value error(Json::objectValue);
-        error["success"] = false;
-        error["error"] = std::string("Reconciliation failed: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("ReconciliationHandler::reconcile", e));
     }
 }
 
@@ -144,12 +140,7 @@ void ReconciliationHandler::handleReconciliationHistory(const HttpRequestPtr& re
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error(Json::objectValue);
-        error["success"] = false;
-        error["error"] = std::string("Failed to get reconciliation history: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("ReconciliationHandler::history", e));
     }
 }
 
@@ -178,14 +169,7 @@ void ReconciliationHandler::handleReconciliationDetails(const HttpRequestPtr& re
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = "Failed to get reconciliation details";
-        error["error"] = e.what();
-
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("ReconciliationHandler::details", e));
     }
 }
 
@@ -202,12 +186,7 @@ void ReconciliationHandler::handleReconciliationStats(const HttpRequestPtr&,
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error(Json::objectValue);
-        error["success"] = false;
-        error["error"] = std::string("Failed to get reconciliation statistics: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("ReconciliationHandler::stats", e));
     }
 }
 

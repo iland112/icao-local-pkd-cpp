@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -54,11 +55,21 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Security: explicit CORS origin whitelist (RFC 6749 — no wildcard with credentials)
+_cors_origins = [
+    "http://localhost:13080",
+    "http://localhost:3080",
+    "https://pkd.smartcoreinc.com",
+    "https://dev.pkd.smartcoreinc.com",
+]
+if _env_origins := os.getenv("CORS_ALLOWED_ORIGINS"):
+    _cors_origins = [o.strip() for o in _env_origins.split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 

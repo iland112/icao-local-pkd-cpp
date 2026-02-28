@@ -6,6 +6,7 @@
 #include <spdlog/spdlog.h>
 #include <trantor/utils/Date.h>
 #include <ctime>
+#include "handler_utils.h"
 
 namespace handlers {
 
@@ -191,13 +192,7 @@ void MiscHandler::handleGetOperationLogs(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/audit/operations error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("MiscHandler::handleGetOperationLogs", e));
     }
 }
 
@@ -218,13 +213,7 @@ void MiscHandler::handleGetOperationStats(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/audit/operations/stats error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("MiscHandler::handleGetOperationStats", e));
     }
 }
 
@@ -294,13 +283,7 @@ void MiscHandler::handleRevalidate(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Revalidation error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("MiscHandler::handleRevalidate", e));
     }
 }
 

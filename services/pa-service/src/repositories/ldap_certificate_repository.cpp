@@ -71,10 +71,11 @@ X509* LdapCertificateRepository::findCscaBySubjectDn(
 
     for (X509* cert : certs) {
         X509_NAME* subject = X509_get_subject_name(cert);
-        char subjectBuf[512];
-        X509_NAME_oneline(subject, subjectBuf, sizeof(subjectBuf));
+        char* subjectStr = X509_NAME_oneline(subject, nullptr, 0);
+        if (!subjectStr) continue;
 
-        std::string certCn = extractDnAttribute(subjectBuf, "CN");
+        std::string certCn = extractDnAttribute(subjectStr, "CN");
+        OPENSSL_free(subjectStr);
         std::string certCnLower = certCn;
         std::transform(certCnLower.begin(), certCnLower.end(), certCnLower.begin(), ::tolower);
 
@@ -157,10 +158,11 @@ X509* LdapCertificateRepository::findCscaByIssuerDn(
 
         for (X509* cert : certs) {
             X509_NAME* subject = X509_get_subject_name(cert);
-            char subjectBuf[512];
-            X509_NAME_oneline(subject, subjectBuf, sizeof(subjectBuf));
+            char* subjectStr = X509_NAME_oneline(subject, nullptr, 0);
+            if (!subjectStr) continue;
 
-            std::string certCn = extractDnAttribute(subjectBuf, "CN");
+            std::string certCn = extractDnAttribute(subjectStr, "CN");
+            OPENSSL_free(subjectStr);
             std::string certCnLower = certCn;
             std::transform(certCnLower.begin(), certCnLower.end(), certCnLower.begin(), ::tolower);
 
@@ -191,10 +193,11 @@ X509* LdapCertificateRepository::findCscaByIssuerDn(
 
         for (X509* cert : certs) {
             X509_NAME* subject = X509_get_subject_name(cert);
-            char subjectBuf[512];
-            X509_NAME_oneline(subject, subjectBuf, sizeof(subjectBuf));
+            char* subjectStr = X509_NAME_oneline(subject, nullptr, 0);
+            if (!subjectStr) continue;
 
-            std::string certCn = extractDnAttribute(subjectBuf, "CN");
+            std::string certCn = extractDnAttribute(subjectStr, "CN");
+            OPENSSL_free(subjectStr);
             std::string certCnLower = certCn;
             std::transform(certCnLower.begin(), certCnLower.end(), certCnLower.begin(), ::tolower);
 

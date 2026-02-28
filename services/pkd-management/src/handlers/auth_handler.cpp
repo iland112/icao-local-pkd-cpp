@@ -3,6 +3,7 @@
  */
 
 #include "auth_handler.h"
+#include "handler_utils.h"
 #include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <json/json.h>
@@ -641,11 +642,10 @@ void AuthHandler::handleListUsers(
         std::string isActiveFilter;
 
         if (params.find("limit") != params.end()) {
-            limit = std::stoi(params.at("limit"));
-            if (limit > 100) limit = 100; // Max limit
+            limit = common::handler::safeStoi(params.at("limit"), 50, 1, 100);
         }
         if (params.find("offset") != params.end()) {
-            offset = std::stoi(params.at("offset"));
+            offset = common::handler::safeStoi(params.at("offset"), 0, 0, 100000);
         }
         if (params.find("search") != params.end()) {
             search = params.at("search");
@@ -667,15 +667,7 @@ void AuthHandler::handleListUsers(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[AuthHandler] List users error: {}", e.what());
-
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::listUsers", e));
     }
 }
 
@@ -748,15 +740,7 @@ void AuthHandler::handleGetUser(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[AuthHandler] Get user error: {}", e.what());
-
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::getUser", e));
     }
 }
 
@@ -892,15 +876,9 @@ void AuthHandler::handleCreateUser(
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_CREATE);
         auditEntry.success = false;
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::createUser", e));
     }
 }
 
@@ -1042,15 +1020,9 @@ void AuthHandler::handleUpdateUser(
         auditEntry.resourceId = userId;
         auditEntry.resourceType = "USER";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::updateUser", e));
     }
 }
 
@@ -1114,15 +1086,9 @@ void AuthHandler::handleDeleteUser(
         auditEntry.resourceId = userId;
         auditEntry.resourceType = "USER";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::deleteUser", e));
     }
 }
 
@@ -1264,15 +1230,9 @@ void AuthHandler::handleChangePassword(
         auditEntry.resourceId = userId;
         auditEntry.resourceType = "USER";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::changePassword", e));
     }
 }
 
@@ -1294,11 +1254,10 @@ void AuthHandler::handleGetAuditLog(
         std::string userId, username, eventType, successFilter, startDate, endDate;
 
         if (params.find("limit") != params.end()) {
-            limit = std::stoi(params.at("limit"));
-            if (limit > 200) limit = 200; // Max limit
+            limit = common::handler::safeStoi(params.at("limit"), 50, 1, 200);
         }
         if (params.find("offset") != params.end()) {
-            offset = std::stoi(params.at("offset"));
+            offset = common::handler::safeStoi(params.at("offset"), 0, 0, 100000);
         }
         if (params.find("user_id") != params.end()) {
             userId = params.at("user_id");
@@ -1338,15 +1297,7 @@ void AuthHandler::handleGetAuditLog(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[AuthHandler] Get audit log error: {}", e.what());
-
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::getAuditLog", e));
     }
 }
 
@@ -1370,15 +1321,7 @@ void AuthHandler::handleGetAuditStats(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[AuthHandler] Get audit stats error: {}", e.what());
-
-        Json::Value resp;
-        resp["success"] = false;
-        resp["error"] = "Internal server error";
-        resp["message"] = e.what();
-        auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(drogon::k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("AuthHandler::getAuditStats", e));
     }
 }
 

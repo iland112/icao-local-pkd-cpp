@@ -229,7 +229,8 @@ std::string LdapStorageService::buildCertificateDn(const std::string& certType, 
     auto [standardDn_extracted, nonStandardAttrs] = extractStandardAttributes(subjectDn);
     std::string escapedSubjectDn = escapeLdapDnValue(standardDn_extracted);
 
-    return "cn=" + escapedSubjectDn + "+sn=" + serialNumber + ",o=" + ou + ",c=" + countryCode +
+    return "cn=" + escapedSubjectDn + "+sn=" + ldap_utils::escapeDnComponent(serialNumber) +
+           ",o=" + ldap_utils::escapeDnComponent(ou) + ",c=" + ldap_utils::escapeDnComponent(countryCode) +
            "," + dataContainer + "," + config_.ldapBaseDn;
 }
 
@@ -258,7 +259,8 @@ std::string LdapStorageService::buildCertificateDnV2(const std::string& fingerpr
         dataContainer = config_.ldapDataContainer;
     }
 
-    return "cn=" + fingerprint + ",o=" + ou + ",c=" + countryCode +
+    return "cn=" + ldap_utils::escapeDnComponent(fingerprint) +
+           ",o=" + ldap_utils::escapeDnComponent(ou) + ",c=" + ldap_utils::escapeDnComponent(countryCode) +
            "," + dataContainer + "," + config_.ldapBaseDn;
 }
 

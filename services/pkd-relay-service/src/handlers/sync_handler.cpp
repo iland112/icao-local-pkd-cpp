@@ -14,6 +14,7 @@
 #include "query_helpers.h"
 
 #include <icao/audit/audit_log.h>
+#include "handler_utils.h"
 #include <spdlog/spdlog.h>
 #include <numeric>
 #include <algorithm>
@@ -123,11 +124,6 @@ void SyncHandler::handleSyncCheck(const HttpRequestPtr& req,
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
     } catch (const std::exception& e) {
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = "Sync check failed";
-        error["error"] = e.what();
-
         // Audit log (failure)
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::SYNC_CHECK);
         auditEntry.success = false;
@@ -135,9 +131,7 @@ void SyncHandler::handleSyncCheck(const HttpRequestPtr& req,
         auditEntry.errorMessage = e.what();
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("SyncHandler::syncCheck", e));
     }
 }
 
@@ -182,12 +176,7 @@ void SyncHandler::handleDiscrepancies(const HttpRequestPtr&,
         auto resp = HttpResponse::newHttpJsonResponse(result);
         callback(resp);
     } catch (const std::exception& e) {
-        spdlog::error("Failed to get discrepancies: {}", e.what());
-        Json::Value error(Json::objectValue);
-        error["error"] = std::string("Failed to get discrepancies: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("SyncHandler::discrepancies", e));
     }
 }
 
@@ -360,12 +349,7 @@ void SyncHandler::handleUpdateSyncConfig(const HttpRequestPtr& req,
         auditEntry.errorMessage = e.what();
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
-        Json::Value error(Json::objectValue);
-        error["success"] = false;
-        error["error"] = std::string("Exception: ") + e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("SyncHandler::updateSyncConfig", e));
     }
 }
 
@@ -395,8 +379,6 @@ void SyncHandler::handleRevalidate(const HttpRequestPtr& req,
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
     } catch (const std::exception& e) {
-        spdlog::error("Revalidation request failed: {}", e.what());
-
         // Audit log (failure)
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::REVALIDATE);
         auditEntry.success = false;
@@ -404,12 +386,7 @@ void SyncHandler::handleRevalidate(const HttpRequestPtr& req,
         auditEntry.errorMessage = e.what();
         icao::audit::logOperation(queryExecutor_, auditEntry);
 
-        Json::Value error(Json::objectValue);
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("SyncHandler::revalidate", e));
     }
 }
 

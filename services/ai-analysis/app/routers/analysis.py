@@ -1,6 +1,7 @@
 """Analysis API endpoints: trigger analysis, get results, list anomalies."""
 
 import logging
+import re
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -8,6 +9,13 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import text
+
+# Input validation patterns (security hardening)
+_FINGERPRINT_RE = re.compile(r"^[a-fA-F0-9]{64}$")  # SHA-256 hex
+_COUNTRY_RE = re.compile(r"^[A-Z]{2,3}$")
+_CERT_TYPE_RE = re.compile(r"^(CSCA|DSC|DSC_NC|MLSC|LC)$")
+_RISK_LEVEL_RE = re.compile(r"^(LOW|MEDIUM|HIGH|CRITICAL)$")
+_ANOMALY_LABEL_RE = re.compile(r"^(normal|suspicious|anomalous)$")
 
 from app.config import get_settings
 from app.database import safe_json_loads, sync_engine
@@ -141,7 +149,7 @@ def _run_analysis():
         logger.error("Analysis failed: %s", e, exc_info=True)
         with _job_lock:
             _job_status["status"] = "FAILED"
-            _job_status["error_message"] = str(e)
+            _job_status["error_message"] = "Analysis failed. Check server logs for details."
 
 
 def _save_results(
@@ -326,6 +334,8 @@ async def get_analysis_status():
 @router.get("/certificate/{fingerprint}", response_model=CertificateAnalysis)
 async def get_certificate_analysis(fingerprint: str):
     """Get AI analysis result for a specific certificate."""
+    if not _FINGERPRINT_RE.match(fingerprint):
+        raise HTTPException(status_code=400, detail="Invalid fingerprint format (expected SHA-256 hex)")
     with sync_engine.connect() as conn:
         result = conn.execute(
             text(
@@ -359,6 +369,8 @@ async def get_certificate_analysis(fingerprint: str):
 @router.get("/certificate/{fingerprint}/forensic", response_model=ForensicDetail)
 async def get_certificate_forensic(fingerprint: str):
     """Get detailed forensic analysis for a specific certificate."""
+    if not _FINGERPRINT_RE.match(fingerprint):
+        raise HTTPException(status_code=400, detail="Invalid fingerprint format (expected SHA-256 hex)")
     with sync_engine.connect() as conn:
         result = conn.execute(
             text(
@@ -419,13 +431,23 @@ async def list_anomalies(
     size: int = Query(20, ge=1, le=100),
 ):
     """List anomalous certificates with filters and pagination."""
+    # Input validation (security hardening)
+    if country and not _COUNTRY_RE.match(country.upper()):
+        raise HTTPException(status_code=400, detail="Invalid country code format")
+    if cert_type and not _CERT_TYPE_RE.match(cert_type):
+        raise HTTPException(status_code=400, detail="Invalid certificate type")
+    if label and not _ANOMALY_LABEL_RE.match(label):
+        raise HTTPException(status_code=400, detail="Invalid anomaly label")
+    if risk_level and not _RISK_LEVEL_RE.match(risk_level):
+        raise HTTPException(status_code=400, detail="Invalid risk level")
+
     settings = get_settings()
     conditions = []
     params = {}
 
     if country:
         conditions.append("country_code = :country")
-        params["country"] = country
+        params["country"] = country.upper()
     if cert_type:
         conditions.append("certificate_type = :cert_type")
         params["cert_type"] = cert_type

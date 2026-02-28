@@ -8,6 +8,7 @@
  */
 
 #include <string>
+#include <algorithm>
 #include <cstdlib>
 #include <stdexcept>
 #include <spdlog/spdlog.h>
@@ -29,26 +30,37 @@ struct AppConfig {
     int threadNum = 4;
     int maxBodySizeMB = 50;  // HTTP upload body size limit (MB)
 
+    // Safe environment variable integer parser with range clamping
+    static int envStoi(const char* val, int defaultVal, int minVal, int maxVal) {
+        try {
+            int v = std::stoi(val);
+            return std::clamp(v, minVal, maxVal);
+        } catch (...) {
+            spdlog::warn("Invalid integer env value '{}', using default {}", val, defaultVal);
+            return defaultVal;
+        }
+    }
+
     static AppConfig fromEnvironment() {
         AppConfig config;
 
         if (auto val = std::getenv("DB_HOST")) config.dbHost = val;
-        if (auto val = std::getenv("DB_PORT")) config.dbPort = std::stoi(val);
+        if (auto val = std::getenv("DB_PORT")) config.dbPort = envStoi(val, 5432, 1, 65535);
         if (auto val = std::getenv("DB_NAME")) config.dbName = val;
         if (auto val = std::getenv("DB_USER")) config.dbUser = val;
         if (auto val = std::getenv("DB_PASSWORD")) config.dbPassword = val;
 
         if (auto val = std::getenv("LDAP_HOST")) config.ldapHost = val;
-        if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = std::stoi(val);
+        if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = envStoi(val, 389, 1, 65535);
         if (auto val = std::getenv("LDAP_BIND_DN")) config.ldapBindDn = val;
         if (auto val = std::getenv("LDAP_BIND_PASSWORD")) config.ldapBindPassword = val;
         if (auto val = std::getenv("LDAP_BASE_DN")) config.ldapBaseDn = val;
 
-        if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
-        if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
+        if (auto val = std::getenv("SERVER_PORT")) config.serverPort = envStoi(val, 8082, 1, 65535);
+        if (auto val = std::getenv("THREAD_NUM")) config.threadNum = envStoi(val, 4, 1, 128);
 
         // HTTP upload body size limit
-        if (auto val = std::getenv("MAX_BODY_SIZE_MB")) config.maxBodySizeMB = std::stoi(val);
+        if (auto val = std::getenv("MAX_BODY_SIZE_MB")) config.maxBodySizeMB = envStoi(val, 50, 1, 500);
 
         return config;
     }

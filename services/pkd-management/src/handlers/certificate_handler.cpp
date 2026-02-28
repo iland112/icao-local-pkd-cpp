@@ -10,6 +10,7 @@
 #include "certificate_handler.h"
 #include "../common/crl_parser.h"
 #include "../common/doc9303_checklist.h"
+#include "handler_utils.h"
 
 #include <openssl/x509.h>
 
@@ -457,13 +458,7 @@ void CertificateHandler::handleSearch(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Certificate search error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::search", e));
     }
 }
 
@@ -525,13 +520,7 @@ void CertificateHandler::handleDetail(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Certificate detail error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::detail", e));
     }
 }
 
@@ -562,13 +551,7 @@ void CertificateHandler::handleValidation(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Certificate validation error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::validation", e));
     }
 }
 
@@ -617,13 +600,7 @@ void CertificateHandler::handlePaLookup(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("PA lookup error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::paLookup", e));
     }
 }
 
@@ -708,13 +685,7 @@ void CertificateHandler::handleExportFile(
         }
 
     } catch (const std::exception& e) {
-        spdlog::error("Certificate export file error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::exportFile", e));
     }
 }
 
@@ -790,13 +761,7 @@ void CertificateHandler::handleExportCountry(
         }
 
     } catch (const std::exception& e) {
-        spdlog::error("Certificate export country error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::exportCountry", e));
     }
 }
 
@@ -867,13 +832,7 @@ void CertificateHandler::handleExportAll(
         }
 
     } catch (const std::exception& e) {
-        spdlog::error("Full PKD export error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::exportAll", e));
     }
 }
 
@@ -909,13 +868,7 @@ void CertificateHandler::handleCountries(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Error fetching countries: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::countries", e));
     }
 }
 
@@ -1145,13 +1098,7 @@ void CertificateHandler::handleDscNcReport(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("DSC_NC report error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::dscNcReport", e));
     }
 }
 
@@ -1194,12 +1141,8 @@ void CertificateHandler::handleValidateLinkCert(
         std::string decoded = drogon::utils::base64Decode(certBase64);
         certBinary.assign(decoded.begin(), decoded.end());
     } catch (const std::exception& e) {
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = std::string("Base64 decode failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k400BadRequest);
-        callback(resp);
+        spdlog::warn("[CertHandler::validateLinkCert] Base64 decode failed: {}", e.what());
+        callback(common::handler::badRequest("Base64 decode failed"));
         return;
     }
 
@@ -1266,12 +1209,7 @@ void CertificateHandler::handleValidateLinkCert(
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = std::string("Validation failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::validateLinkCert", e));
     }
 }
 
@@ -1291,8 +1229,8 @@ void CertificateHandler::handleLinkCertsSearch(
     std::string offsetStr = req->getParameter("offset");
 
     bool validOnly = (validOnlyStr == "true");
-    int limit = limitStr.empty() ? 50 : std::stoi(limitStr);
-    int offset = offsetStr.empty() ? 0 : std::stoi(offsetStr);
+    int limit = common::handler::safeStoi(limitStr, 50, 1, 1000);
+    int offset = common::handler::safeStoi(offsetStr, 0, 0, 100000);
 
     // Validate parameters
     if (limit <= 0 || limit > 1000) {
@@ -1358,12 +1296,7 @@ void CertificateHandler::handleLinkCertsSearch(
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = std::string("Search failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::linkCertsSearch", e));
     }
 }
 
@@ -1469,12 +1402,7 @@ void CertificateHandler::handleLinkCertDetail(
         callback(resp);
 
     } catch (const std::exception& e) {
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = std::string("Query failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::linkCertDetail", e));
     }
 }
 
@@ -1673,13 +1601,7 @@ void CertificateHandler::handleCrlReport(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/certificates/crl/report error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::crlReport", e));
     }
 }
 
@@ -1754,13 +1676,7 @@ void CertificateHandler::handleCrlDetail(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/certificates/crl/{} error: {}", id, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::crlDetail", e));
     }
 }
 
@@ -1822,13 +1738,7 @@ void CertificateHandler::handleCrlDownload(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/certificates/crl/{}/download error: {}", id, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::crlDownload", e));
     }
 }
 
@@ -1925,13 +1835,7 @@ void CertificateHandler::handleDoc9303Checklist(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("GET /api/certificates/doc9303-checklist error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("CertHandler::doc9303Checklist", e));
     }
 }
 

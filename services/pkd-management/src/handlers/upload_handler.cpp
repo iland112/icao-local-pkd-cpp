@@ -70,6 +70,9 @@
 // Audit logging (shared library)
 #include <icao/audit/audit_log.h>
 
+// Handler utilities (sanitized error responses)
+#include "handler_utils.h"
+
 // Bring in audit types for cleaner code
 using icao::audit::AuditLogEntry;
 using icao::audit::OperationType;
@@ -364,32 +367,27 @@ LDAP* UploadHandler::getLdapWriteConnection() {
 // =============================================================================
 
 void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
-    // Check and register this upload for processing (prevent duplicate threads)
+    // Atomic check+register: prevent duplicate threads AND enforce concurrent limit under single mutex
     {
         std::lock_guard<std::mutex> lock(s_processingMutex);
         if (s_processingUploads.count(uploadId) > 0) {
             spdlog::warn("[processLdifFileAsync] Upload {} already being processed - skipping duplicate", uploadId);
             return;
         }
-        s_processingUploads.insert(uploadId);
-    }
-
-    // DoS defense: limit concurrent processing threads
-    if (s_activeProcessingCount.load() >= MAX_CONCURRENT_PROCESSING) {
-        spdlog::warn("[processLdifFileAsync] Concurrent processing limit reached ({}/{}), rejecting upload {}",
-            s_activeProcessingCount.load(), MAX_CONCURRENT_PROCESSING, uploadId);
-        g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
-            "Server busy - too many concurrent uploads. Please retry later.");
-        ProgressManager::getInstance().sendProgress(
-            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                0, 0, "서버 과부하", "동시 업로드 처리 한도 초과. 잠시 후 다시 시도해주세요."));
-        {
-            std::lock_guard<std::mutex> lock(s_processingMutex);
-            s_processingUploads.erase(uploadId);
+        // DoS defense: limit concurrent processing threads (TOCTOU-safe under mutex)
+        if (s_activeProcessingCount.load() >= MAX_CONCURRENT_PROCESSING) {
+            spdlog::warn("[processLdifFileAsync] Concurrent processing limit reached ({}/{}), rejecting upload {}",
+                s_activeProcessingCount.load(), MAX_CONCURRENT_PROCESSING, uploadId);
+            g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
+                "Server busy - too many concurrent uploads. Please retry later.");
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                    0, 0, "서버 과부하", "동시 업로드 처리 한도 초과. 잠시 후 다시 시도해주세요."));
+            return;
         }
-        return;
+        s_processingUploads.insert(uploadId);
+        s_activeProcessingCount.fetch_add(1);
     }
-    s_activeProcessingCount.fetch_add(1);
 
     std::thread([uploadId, content]() {
         // Ensure cleanup on thread exit
@@ -468,32 +466,27 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 // =============================================================================
 
 void UploadHandler::processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
-    // Check and register this upload for processing (prevent duplicate threads)
+    // Atomic check+register: prevent duplicate threads AND enforce concurrent limit under single mutex
     {
         std::lock_guard<std::mutex> lock(s_processingMutex);
         if (s_processingUploads.count(uploadId) > 0) {
             spdlog::warn("[processMasterListFileAsync] Upload {} already being processed - skipping duplicate", uploadId);
             return;
         }
-        s_processingUploads.insert(uploadId);
-    }
-
-    // DoS defense: limit concurrent processing threads
-    if (s_activeProcessingCount.load() >= MAX_CONCURRENT_PROCESSING) {
-        spdlog::warn("[processMasterListFileAsync] Concurrent processing limit reached ({}/{}), rejecting upload {}",
-            s_activeProcessingCount.load(), MAX_CONCURRENT_PROCESSING, uploadId);
-        g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
-            "Server busy - too many concurrent uploads. Please retry later.");
-        ProgressManager::getInstance().sendProgress(
-            ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
-                0, 0, "서버 과부하", "동시 업로드 처리 한도 초과. 잠시 후 다시 시도해주세요."));
-        {
-            std::lock_guard<std::mutex> lock(s_processingMutex);
-            s_processingUploads.erase(uploadId);
+        // DoS defense: limit concurrent processing threads (TOCTOU-safe under mutex)
+        if (s_activeProcessingCount.load() >= MAX_CONCURRENT_PROCESSING) {
+            spdlog::warn("[processMasterListFileAsync] Concurrent processing limit reached ({}/{}), rejecting upload {}",
+                s_activeProcessingCount.load(), MAX_CONCURRENT_PROCESSING, uploadId);
+            g_services->uploadRepository()->updateStatus(uploadId, "FAILED",
+                "Server busy - too many concurrent uploads. Please retry later.");
+            ProgressManager::getInstance().sendProgress(
+                ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
+                    0, 0, "서버 과부하", "동시 업로드 처리 한도 초과. 잠시 후 다시 시도해주세요."));
+            return;
         }
-        return;
+        s_processingUploads.insert(uploadId);
+        s_activeProcessingCount.fetch_add(1);
     }
-    s_activeProcessingCount.fetch_add(1);
 
     // Capture trustAnchorPath for use in detached thread
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
@@ -741,6 +734,8 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
 
                     if (ret == 0x80 || tag != V_ASN1_SEQUENCE) {
                         spdlog::error("Invalid Master List structure: expected SEQUENCE");
+                    } else if (seqLen < 0 || seqLen > remaining) {
+                        spdlog::error("Invalid ASN.1 sequence length: {} exceeds remaining: {}", seqLen, remaining);
                     } else {
                         const unsigned char* seqEnd = p + seqLen;
 
@@ -1242,12 +1237,7 @@ void UploadHandler::handleParse(
 
     } catch (const std::exception& e) {
         spdlog::error("POST /api/upload/{}/parse error: {}", uploadId, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Internal error: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::parse", e));
     }
 }
 
@@ -1350,12 +1340,7 @@ void UploadHandler::handleRetry(
 
     } catch (const std::exception& e) {
         spdlog::error("POST /api/upload/{}/retry error: {}", uploadId, e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Retry failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::retry", e));
     }
 }
 
@@ -1417,13 +1402,7 @@ void UploadHandler::handleGetValidations(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Upload validations error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::getValidations", e));
     }
 }
 
@@ -1446,13 +1425,7 @@ void UploadHandler::handleGetValidationStatistics(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("Validation statistics error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::getValidationStatistics", e));
     }
 }
 
@@ -1486,13 +1459,7 @@ void UploadHandler::handleGetLdifStructure(
         callback(resp);
 
     } catch (const std::exception& e) {
-        spdlog::error("LDIF structure error: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["error"] = e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::getLdifStructure", e));
     }
 }
 
@@ -1574,12 +1541,7 @@ void UploadHandler::handleDelete(
             logOperation(queryExecutor_, auditEntry);
         }
 
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Delete failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::delete", e));
     }
 }
 
@@ -1639,12 +1601,8 @@ void UploadHandler::handleUploadLdif(
         try {
             fileName = sanitizeFilename(originalFileName);
         } catch (const std::exception& e) {
-            Json::Value error;
-            error["success"] = false;
-            error["message"] = std::string("Invalid filename: ") + e.what();
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
+            spdlog::warn("Invalid LDIF filename rejected: {}", e.what());
+            callback(common::handler::badRequest("Invalid filename"));
             return;
         }
 
@@ -1801,12 +1759,7 @@ void UploadHandler::handleUploadLdif(
 
     } catch (const std::exception& e) {
         spdlog::error("LDIF upload failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Upload failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::uploadLdif", e));
     }
 }
 
@@ -1866,12 +1819,8 @@ void UploadHandler::handleUploadMasterList(
         try {
             fileName = sanitizeFilename(originalFileName);
         } catch (const std::exception& e) {
-            Json::Value error;
-            error["success"] = false;
-            error["message"] = std::string("Invalid filename: ") + e.what();
-            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-            resp->setStatusCode(drogon::k400BadRequest);
-            callback(resp);
+            spdlog::warn("Invalid Master List filename rejected: {}", e.what());
+            callback(common::handler::badRequest("Invalid filename"));
             return;
         }
 
@@ -2083,12 +2032,7 @@ void UploadHandler::handleUploadMasterList(
 
     } catch (const std::exception& e) {
         spdlog::error("Master List upload failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Upload failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::uploadMasterList", e));
     }
 }
 
@@ -2210,12 +2154,7 @@ void UploadHandler::handleUploadCertificate(
 
     } catch (const std::exception& e) {
         spdlog::error("Certificate upload failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Upload failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::uploadCertificate", e));
     }
 }
 
@@ -2351,12 +2290,7 @@ void UploadHandler::handlePreviewCertificate(
 
     } catch (const std::exception& e) {
         spdlog::error("Certificate preview failed: {}", e.what());
-        Json::Value error;
-        error["success"] = false;
-        error["message"] = std::string("Preview failed: ") + e.what();
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
-        resp->setStatusCode(drogon::k500InternalServerError);
-        callback(resp);
+        callback(common::handler::internalError("UploadHandler::previewCertificate", e));
     }
 }
 

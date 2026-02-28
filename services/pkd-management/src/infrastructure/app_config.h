@@ -9,6 +9,7 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <cstdlib>
 #include <sstream>
 #include <stdexcept>
@@ -62,11 +63,22 @@ struct AppConfig {
     int threadNum = 4;
     int maxBodySizeMB = 100;  // HTTP upload body size limit (MB)
 
+    // Safe environment variable integer parser with range clamping
+    static int envStoi(const char* val, int defaultVal, int minVal, int maxVal) {
+        try {
+            int v = std::stoi(val);
+            return std::clamp(v, minVal, maxVal);
+        } catch (...) {
+            spdlog::warn("Invalid integer env value '{}', using default {}", val, defaultVal);
+            return defaultVal;
+        }
+    }
+
     static AppConfig fromEnvironment() {
         AppConfig config;
 
         if (auto val = std::getenv("DB_HOST")) config.dbHost = val;
-        if (auto val = std::getenv("DB_PORT")) config.dbPort = std::stoi(val);
+        if (auto val = std::getenv("DB_PORT")) config.dbPort = envStoi(val, 5432, 1, 65535);
         if (auto val = std::getenv("DB_NAME")) config.dbName = val;
         if (auto val = std::getenv("DB_USER")) config.dbUser = val;
         if (auto val = std::getenv("DB_PASSWORD")) config.dbPassword = val;
@@ -95,40 +107,38 @@ struct AppConfig {
         } else {
             // Fallback to single host for backward compatibility
             if (auto val = std::getenv("LDAP_HOST")) config.ldapHost = val;
-            if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = std::stoi(val);
+            if (auto val = std::getenv("LDAP_PORT")) config.ldapPort = envStoi(val, 389, 1, 65535);
             config.ldapReadHostList.push_back(config.ldapHost + ":" + std::to_string(config.ldapPort));
             spdlog::warn("LDAP_READ_HOSTS not set, using single host: {}", config.ldapReadHostList[0]);
         }
 
         if (auto val = std::getenv("LDAP_WRITE_HOST")) config.ldapWriteHost = val;
-        if (auto val = std::getenv("LDAP_WRITE_PORT")) config.ldapWritePort = std::stoi(val);
+        if (auto val = std::getenv("LDAP_WRITE_PORT")) config.ldapWritePort = envStoi(val, 389, 1, 65535);
         if (auto val = std::getenv("LDAP_BIND_DN")) config.ldapBindDn = val;
         if (auto val = std::getenv("LDAP_BIND_PASSWORD")) config.ldapBindPassword = val;
         if (auto val = std::getenv("LDAP_BASE_DN")) config.ldapBaseDn = val;
         if (auto val = std::getenv("LDAP_DATA_CONTAINER")) config.ldapDataContainer = val;
         if (auto val = std::getenv("LDAP_NC_DATA_CONTAINER")) config.ldapNcDataContainer = val;
 
-        if (auto val = std::getenv("SERVER_PORT")) config.serverPort = std::stoi(val);
-        if (auto val = std::getenv("THREAD_NUM")) config.threadNum = std::stoi(val);
+        if (auto val = std::getenv("SERVER_PORT")) config.serverPort = envStoi(val, 8081, 1, 65535);
+        if (auto val = std::getenv("THREAD_NUM")) config.threadNum = envStoi(val, 4, 1, 128);
         if (auto val = std::getenv("TRUST_ANCHOR_PATH")) config.trustAnchorPath = val;
 
         // ICAO Auto Sync environment variables
         if (auto val = std::getenv("ICAO_PORTAL_URL")) config.icaoPortalUrl = val;
         if (auto val = std::getenv("ICAO_NOTIFICATION_EMAIL")) config.notificationEmail = val;
         if (auto val = std::getenv("ICAO_AUTO_NOTIFY")) config.icaoAutoNotify = (std::string(val) == "true");
-        if (auto val = std::getenv("ICAO_HTTP_TIMEOUT")) config.icaoHttpTimeout = std::stoi(val);
+        if (auto val = std::getenv("ICAO_HTTP_TIMEOUT")) config.icaoHttpTimeout = envStoi(val, 30, 1, 300);
 
         // ASN.1 Parser Configuration
-        if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = std::stoi(val);
+        if (auto val = std::getenv("ASN1_MAX_LINES")) config.asn1MaxLines = envStoi(val, 100, 10, 10000);
 
         // HTTP upload body size limit
-        if (auto val = std::getenv("MAX_BODY_SIZE_MB")) config.maxBodySizeMB = std::stoi(val);
+        if (auto val = std::getenv("MAX_BODY_SIZE_MB")) config.maxBodySizeMB = envStoi(val, 100, 1, 500);
 
         // ICAO Scheduler Configuration
         if (auto val = std::getenv("ICAO_CHECK_SCHEDULE_HOUR")) {
-            config.icaoCheckScheduleHour = std::stoi(val);
-            if (config.icaoCheckScheduleHour < 0 || config.icaoCheckScheduleHour > 23)
-                config.icaoCheckScheduleHour = 9;
+            config.icaoCheckScheduleHour = envStoi(val, 9, 0, 23);
         }
         if (auto val = std::getenv("ICAO_SCHEDULER_ENABLED"))
             config.icaoSchedulerEnabled = (std::string(val) == "true");

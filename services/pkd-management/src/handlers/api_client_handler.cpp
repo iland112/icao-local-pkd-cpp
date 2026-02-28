@@ -3,6 +3,7 @@
  */
 
 #include "api_client_handler.h"
+#include "handler_utils.h"
 #include "../auth/api_key_generator.h"
 #include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
@@ -223,14 +224,9 @@ void ApiClientHandler::handleCreate(
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_CREATE);
         auditEntry.success = false;
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::create", e));
     }
 }
 
@@ -248,8 +244,8 @@ void ApiClientHandler::handleGetAll(
         int limit = 100, offset = 0;
         auto limitParam = req->getParameter("limit");
         auto offsetParam = req->getParameter("offset");
-        if (!limitParam.empty()) limit = std::stoi(limitParam);
-        if (!offsetParam.empty()) offset = std::stoi(offsetParam);
+        limit = common::handler::safeStoi(limitParam, 100, 1, 1000);
+        offset = common::handler::safeStoi(offsetParam, 0, 0, 100000);
 
         bool activeOnly = req->getParameter("active_only") == "true";
 
@@ -270,13 +266,7 @@ void ApiClientHandler::handleGetAll(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[ApiClientHandler] handleGetAll failed: {}", e.what());
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::getAll", e));
     }
 }
 
@@ -311,13 +301,7 @@ void ApiClientHandler::handleGetById(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[ApiClientHandler] handleGetById failed: {}", e.what());
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::getById", e));
     }
 }
 
@@ -406,14 +390,9 @@ void ApiClientHandler::handleUpdate(
         auditEntry.resourceId = id;
         auditEntry.resourceType = "API_CLIENT";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::update", e));
     }
 }
 
@@ -454,14 +433,9 @@ void ApiClientHandler::handleDelete(
         auditEntry.resourceId = id;
         auditEntry.resourceType = "API_CLIENT";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::delete", e));
     }
 }
 
@@ -520,14 +494,9 @@ void ApiClientHandler::handleRegenerate(
         auditEntry.resourceId = id;
         auditEntry.resourceType = "API_CLIENT";
         auditEntry.errorMessage = e.what();
-        icao::audit::logOperation(queryExecutor_, auditEntry);
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (...) {}
 
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::regenerate", e));
     }
 }
 
@@ -543,9 +512,7 @@ void ApiClientHandler::handleGetUsage(
         auto admin = requireAdmin(req, callback);
         if (!admin) return;
 
-        int days = 7;
-        auto daysParam = req->getParameter("days");
-        if (!daysParam.empty()) days = std::stoi(daysParam);
+        int days = common::handler::safeStoi(req->getParameter("days"), 7, 1, 365);
 
         auto stats = repository_->getUsageStats(id, days);
 
@@ -559,13 +526,7 @@ void ApiClientHandler::handleGetUsage(
         callback(response);
 
     } catch (const std::exception& e) {
-        spdlog::error("[ApiClientHandler] handleGetUsage failed: {}", e.what());
-        Json::Value resp;
-        resp["success"] = false;
-        resp["message"] = std::string("Error: ") + e.what();
-        auto response = HttpResponse::newHttpJsonResponse(resp);
-        response->setStatusCode(k500InternalServerError);
-        callback(response);
+        callback(common::handler::internalError("ApiClientHandler::getUsage", e));
     }
 }
 
