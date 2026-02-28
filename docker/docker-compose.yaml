@@ -106,12 +106,12 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      # Connection Pool Configuration (Local 8코어/12GB 최적화)
       - DB_POOL_MIN=${DB_POOL_MIN:-2}
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
       - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
       - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
-      - THREAD_NUM=${THREAD_NUM:-16}
+      - THREAD_NUM=${THREAD_NUM:-8}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1   # Write operations direct to primary master
       - LDAP_WRITE_PORT=389
@@ -181,10 +181,10 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      # Connection Pool Configuration (Local 8코어/12GB 최적화)
       - DB_POOL_MIN=${DB_POOL_MIN:-2}
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
-      - THREAD_NUM=${THREAD_NUM:-16}
+      - THREAD_NUM=${THREAD_NUM:-8}
       - LDAP_HOST=openldap1                          # PA service reads LDAP_HOST (single host)
       - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
@@ -240,12 +240,12 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8          # OCI client UTF-8 (Korean text support)
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      # Connection Pool Configuration (Local 8코어/12GB 최적화)
       - DB_POOL_MIN=${DB_POOL_MIN:-2}
       - DB_POOL_MAX=${DB_POOL_MAX:-10}
       - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
       - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
-      - THREAD_NUM=${THREAD_NUM:-16}
+      - THREAD_NUM=${THREAD_NUM:-8}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389  # v2.0.1: Application-level load balancing
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
@@ -290,7 +290,7 @@ services:
       - TZ=Asia/Seoul
       - SERVICE_NAME=monitoring-service
       - SERVER_PORT=8084
-      - THREAD_NUM=${THREAD_NUM:-16}
+      - THREAD_NUM=${THREAD_NUM:-4}
       - SYSTEM_METRICS_INTERVAL=5
       - SERVICE_HEALTH_INTERVAL=30
       - SERVICE_PKD_MANAGEMENT=http://pkd-management:8081/api/health
@@ -347,9 +347,10 @@ services:
       - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
+      # Connection Pool Configuration (Local 8코어/12GB 최적화)
       - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
       - DB_POOL_OVERFLOW=${DB_POOL_OVERFLOW:-10}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-2}
       # Analysis Scheduler Configuration
       - ANALYSIS_SCHEDULE_HOUR=${ANALYSIS_SCHEDULE_HOUR:-3}
       - ANALYSIS_ENABLED=${ANALYSIS_ENABLED:-true}

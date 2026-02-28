@@ -13,9 +13,9 @@
 --       두 번째 기동부터는 SPFILE에 이미 설정값이 저장되어 있음
 -- =============================================================================
 
--- 메모리 할당 (XE 제한 내 최적)
-ALTER SYSTEM SET SGA_TARGET=1536M SCOPE=SPFILE;           -- 1.5GB (XE max 2GB)
-ALTER SYSTEM SET PGA_AGGREGATE_TARGET=512M SCOPE=SPFILE;  -- 512MB (XE max 1GB)
+-- 메모리 할당 (XE 제한 내 최대 — 14GB 서버, shm_size=2g)
+ALTER SYSTEM SET SGA_TARGET=2G SCOPE=SPFILE;              -- 2GB (XE max 2GB)
+ALTER SYSTEM SET PGA_AGGREGATE_TARGET=768M SCOPE=SPFILE;  -- 768MB (XE max 1GB)
 
 -- 동시 접속 (XE 하드 제한)
 ALTER SYSTEM SET PROCESSES=150 SCOPE=SPFILE;              -- XE max 150

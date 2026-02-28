@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.3
+**Current Version**: v2.25.4
 **Last Updated**: 2026-02-28
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -577,6 +577,13 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.4 (2026-02-28) - 서버 리소스 최적화 (환경별 튜닝)
+- **Production (16코어/14GB)**: DB Pool min 2→4, max 10→20, LDAP Pool min 2→4, max 10→20, Oracle SGA 1.5GB→2GB(XE max), PGA 512MB→768MB, shm_size 1g→2g
+- **Production AI Analysis**: uvicorn workers 1→4, DB Pool 5→10, overflow 10→20
+- **Local (8코어/12GB)**: THREAD_NUM 16→8 (코어 수 맞춤), Monitoring THREAD_NUM 16→4, AI workers 1→2
+- **AI Dockerfile**: `UVICORN_WORKERS` 환경변수로 workers 수 런타임 설정 가능 (`--workers ${UVICORN_WORKERS:-1}`)
+- 5 files changed (0 new, 5 modified)
 
 ### v2.25.3 (2026-02-28) - Oracle XE 안정화 + XEPDB1 Healthcheck 개선
 - **CRITICAL FIX**: `00-ee-tuning.sql` 삭제 — EE 파라미터(SGA 4GB, PGA 2GB, PROCESSES 1000)가 XE 이미지에 적용되어 `ORA-56752`로 Oracle 기동 실패하던 근본 원인 제거

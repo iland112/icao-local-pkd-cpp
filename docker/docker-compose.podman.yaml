@@ -98,11 +98,11 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
-      - DB_POOL_MIN=${DB_POOL_MIN:-2}
-      - DB_POOL_MAX=${DB_POOL_MAX:-10}
-      - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
-      - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
+      # Connection Pool Configuration (Production 16코어/14GB 최적화)
+      - DB_POOL_MIN=${DB_POOL_MIN:-4}
+      - DB_POOL_MAX=${DB_POOL_MAX:-20}
+      - LDAP_POOL_MIN=${LDAP_POOL_MIN:-4}
+      - LDAP_POOL_MAX=${LDAP_POOL_MAX:-20}
       - THREAD_NUM=${THREAD_NUM:-16}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389
       - LDAP_WRITE_HOST=openldap1
@@ -162,9 +162,9 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
-      - DB_POOL_MIN=${DB_POOL_MIN:-2}
-      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      # Connection Pool Configuration (Production 16코어/14GB 최적화)
+      - DB_POOL_MIN=${DB_POOL_MIN:-4}
+      - DB_POOL_MAX=${DB_POOL_MAX:-20}
       - THREAD_NUM=${THREAD_NUM:-16}
       - LDAP_HOST=openldap1
       - LDAP_PORT=389
@@ -212,11 +212,11 @@ services:
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
       - NLS_LANG=AMERICAN_AMERICA.AL32UTF8
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
-      - DB_POOL_MIN=${DB_POOL_MIN:-2}
-      - DB_POOL_MAX=${DB_POOL_MAX:-10}
-      - LDAP_POOL_MIN=${LDAP_POOL_MIN:-2}
-      - LDAP_POOL_MAX=${LDAP_POOL_MAX:-10}
+      # Connection Pool Configuration (Production 16코어/14GB 최적화)
+      - DB_POOL_MIN=${DB_POOL_MIN:-4}
+      - DB_POOL_MAX=${DB_POOL_MAX:-20}
+      - LDAP_POOL_MIN=${LDAP_POOL_MIN:-4}
+      - LDAP_POOL_MAX=${LDAP_POOL_MAX:-20}
       - THREAD_NUM=${THREAD_NUM:-16}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389
       - LDAP_WRITE_HOST=openldap1
@@ -306,9 +306,10 @@ services:
       - ORACLE_SERVICE_NAME=${ORACLE_SERVICE_NAME}
       - ORACLE_USER=${ORACLE_USER}
       - ORACLE_PASSWORD=${ORACLE_PASSWORD}
-      # Connection Pool Configuration (부하 테스트용 파라미터화)
-      - DB_POOL_SIZE=${DB_POOL_SIZE:-5}
-      - DB_POOL_OVERFLOW=${DB_POOL_OVERFLOW:-10}
+      # Connection Pool Configuration (Production 16코어/14GB 최적화)
+      - DB_POOL_SIZE=${DB_POOL_SIZE:-10}
+      - DB_POOL_OVERFLOW=${DB_POOL_OVERFLOW:-20}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-4}
       - ANALYSIS_SCHEDULE_HOUR=${ANALYSIS_SCHEDULE_HOUR:-3}
       - ANALYSIS_ENABLED=${ANALYSIS_ENABLED:-true}
     volumes:
@@ -348,7 +349,7 @@ services:
       retries: 10
       start_period: 300s
     restart: unless-stopped
-    shm_size: 1g
+    shm_size: 2g
     profiles:
       - oracle
 
