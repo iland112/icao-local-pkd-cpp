@@ -7,12 +7,13 @@ info:
     performs auto-reconciliation, and certificate expiration re-validation.
 
     ## Changelog
+    - **v2.25.5** (2026-03-01): Sync statistics + Reconciliation statistics endpoints 추가
     - **v2.0.0** (2026-02-06): Oracle + PostgreSQL multi-DBMS support, UUID primary keys
     - **v1.6.0** (2026-01-14): Auto Reconcile feature complete (Phase 1-6)
     - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
     - **v1.1.0** (2026-01-06): Daily scheduler, certificate re-validation
     - **v1.0.0** (2026-01-03): Initial release
-  version: 2.0.0
+  version: 2.25.5
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -94,6 +95,22 @@ paths:
         '200':
           description: Check result
 
+  /api/sync/stats:
+    get:
+      tags: [Sync]
+      summary: Get sync statistics
+      description: |
+        Returns overall sync statistics including total syncs, success/failure counts,
+        DB and LDAP certificate counts by type, and discrepancy summary.
+      operationId: getSyncStats
+      responses:
+        '200':
+          description: Sync statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncStatsResponse'
+
   /api/sync/discrepancies:
     get:
       tags: [Sync]
@@ -166,6 +183,23 @@ paths:
           description: Reconciliation detail with individual logs
         '404':
           description: Not found
+
+  /api/sync/reconcile/stats:
+    get:
+      tags: [Reconcile]
+      summary: Get reconciliation statistics
+      description: |
+        Returns overall reconciliation statistics including total runs,
+        success/failure counts, processed/successful/failed totals, and
+        per-type breakdown (CSCA, MLSC, DSC, DSC_NC, CRL).
+      operationId: getReconcileStats
+      responses:
+        '200':
+          description: Reconciliation statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationStatsResponse'
 
   # ============================================
   # Revalidation
@@ -282,6 +316,90 @@ components:
                   type: integer
                 ldap:
                   type: integer
+
+    SyncStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        totalSyncs:
+          type: integer
+        successfulSyncs:
+          type: integer
+        failedSyncs:
+          type: integer
+        lastSyncTime:
+          type: string
+          format: date-time
+        averageSyncDuration:
+          type: integer
+          description: Average sync duration in milliseconds
+        dbCounts:
+          type: object
+          properties:
+            csca:
+              type: integer
+            mlsc:
+              type: integer
+            dsc:
+              type: integer
+            dsc_nc:
+              type: integer
+            crl:
+              type: integer
+        ldapCounts:
+          type: object
+          properties:
+            csca:
+              type: integer
+            mlsc:
+              type: integer
+            dsc:
+              type: integer
+            dsc_nc:
+              type: integer
+            crl:
+              type: integer
+        discrepancies:
+          type: object
+          properties:
+            missing_in_ldap:
+              type: integer
+            missing_in_db:
+              type: integer
+
+    ReconciliationStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        totalReconciliations:
+          type: integer
+        successfulReconciliations:
+          type: integer
+        failedReconciliations:
+          type: integer
+        totalProcessed:
+          type: integer
+        totalSuccessful:
+          type: integer
+        totalFailed:
+          type: integer
+        lastReconciliationTime:
+          type: string
+          format: date-time
+        averageDurationMs:
+          type: integer
+        byType:
+          type: object
+          description: Per certificate type breakdown
+          additionalProperties:
+            type: object
+            properties:
+              added:
+                type: integer
+              deleted:
+                type: integer
 
     ReconciliationResult:
       type: object

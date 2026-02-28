@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.25.5** (2026-03-01): Code Master 6 endpoints, Link Certificate 3 endpoints, Upload parse/retry, Validation reasons, Internal auth check 추가
     - **v2.21.0** (2026-02-24): API Client management — API Key 기반 외부 클라이언트 인증 (7 endpoints), X-API-Key 헤더 인증, Rate Limiting, Permission/IP/Endpoint 접근 제어
     - **v2.17.0** (2026-02-20): Doc 9303 compliance checklist — per-certificate conformance check API + preview integration
     - **v2.15.1** (2026-02-19): CRL binary download endpoint, Trust Chain demo page support
@@ -21,7 +22,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.21.0
+  version: 2.25.5
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -49,6 +50,10 @@ tags:
     description: ICAO PKD version monitoring and comparison
   - name: ApiClient
     description: API Client management — external client API key authentication (admin only)
+  - name: CodeMaster
+    description: Centralized code/status/enum management (21 categories, ~150 codes)
+  - name: LinkCertificate
+    description: Link Certificate validation and search (CSCA key rollover)
   - name: Progress
     description: Upload progress tracking (SSE)
 
@@ -397,6 +402,135 @@ paths:
       responses:
         '200':
           description: Master List structure tree
+
+  /api/upload/{uploadId}/parse:
+    post:
+      tags: [Upload]
+      summary: Re-parse uploaded file
+      description: Trigger re-parsing of an uploaded file. Useful for re-processing after configuration changes.
+      operationId: parseUpload
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Parse initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  uploadId:
+                    type: string
+                    format: uuid
+                  status:
+                    type: string
+                    enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+                  totalCertificates:
+                    type: integer
+                  processedCount:
+                    type: integer
+                  stage:
+                    type: string
+                    enum: [PARSING, VALIDATING, SAVING, LDAP_UPLOAD, COMPLETE]
+        '404':
+          description: Upload not found
+
+  /api/upload/{uploadId}/retry:
+    post:
+      tags: [Upload]
+      summary: Retry failed upload
+      description: |
+        Retry a previously failed upload. Cleans up partial data (certificates, CRLs,
+        validation results, duplicates) and re-triggers processing.
+        Only applicable to uploads with FAILED status.
+      operationId: retryUpload
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uploadId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Retry initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  uploadId:
+                    type: string
+                    format: uuid
+                  newStatus:
+                    type: string
+                  cleanedUp:
+                    type: object
+                    properties:
+                      certCount:
+                        type: integer
+                      crlCount:
+                        type: integer
+                      validationCount:
+                        type: integer
+                      duplicateCount:
+                        type: integer
+        '400':
+          description: Upload is not in FAILED state
+        '404':
+          description: Upload not found
+
+  /api/upload/statistics/validation-reasons:
+    get:
+      tags: [Upload]
+      summary: Get validation reason breakdown by status
+      description: |
+        Returns a breakdown of validation reasons grouped by validation status
+        (VALID, EXPIRED_VALID, INVALID, PENDING). Useful for understanding why
+        certificates passed or failed trust chain validation.
+      operationId: getValidationReasons
+      responses:
+        '200':
+          description: Validation reason breakdown
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  validationReasons:
+                    type: object
+                    description: Reasons grouped by validation status
+                    additionalProperties:
+                      type: object
+                      description: Reason string → count mapping
+                      additionalProperties:
+                        type: integer
+                    example:
+                      VALID:
+                        "Trust chain verified": 15004
+                      INVALID:
+                        "Trust chain signature verification failed": 1
+                      PENDING:
+                        "CSCA not found": 14834
 
   /api/upload/countries:
     get:
@@ -962,6 +1096,281 @@ paths:
           description: CRL not found or binary data unavailable
 
   # ============================================
+  # Link Certificate (v2.15.1)
+  # ============================================
+  /api/validate/link-cert:
+    post:
+      tags: [LinkCertificate]
+      summary: Validate Link Certificate trust chain
+      description: |
+        Validate a Link Certificate against both old and new CSCA certificates.
+        Link Certificates bridge CSCA key rollovers per ICAO 9303.
+        Accepts base64-encoded DER certificate binary.
+      operationId: validateLinkCert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                certificateBinary:
+                  type: string
+                  description: Base64-encoded DER certificate binary
+              required: [certificateBinary]
+      responses:
+        '200':
+          description: Validation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkCertValidationResponse'
+        '400':
+          description: Missing certificateBinary field
+
+  /api/link-certs/search:
+    get:
+      tags: [LinkCertificate]
+      summary: Search Link Certificates
+      description: Search stored Link Certificates with optional country and validity filters.
+      operationId: searchLinkCerts
+      parameters:
+        - name: country
+          in: query
+          schema:
+            type: string
+          description: Filter by country code (e.g., KR, DE)
+        - name: validOnly
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Filter only valid certificates
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Link certificate search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkCertSearchResponse'
+
+  /api/link-certs/{id}:
+    get:
+      tags: [LinkCertificate]
+      summary: Get Link Certificate detail
+      operationId: getLinkCertDetail
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Link certificate detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LinkCertDetailResponse'
+        '404':
+          description: Link certificate not found
+
+  # ============================================
+  # Code Master (v2.16.0)
+  # ============================================
+  /api/code-master:
+    get:
+      tags: [CodeMaster]
+      summary: List codes (category filter, pagination)
+      description: |
+        Query centralized code/status/enum values. 21 categories with ~150 codes.
+        Categories include: VALIDATION_STATUS, CRL_STATUS, CRL_REVOCATION_REASON,
+        CERTIFICATE_TYPE, UPLOAD_STATUS, PROCESSING_STAGE, OPERATION_TYPE, PA_ERROR_CODE, etc.
+      operationId: listCodeMaster
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category (e.g., VALIDATION_STATUS, CERTIFICATE_TYPE)
+        - name: activeOnly
+          in: query
+          schema:
+            type: boolean
+            default: true
+          description: Filter active codes only
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 200
+            maximum: 1000
+      responses:
+        '200':
+          description: Code list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CodeMasterListResponse'
+    post:
+      tags: [CodeMaster]
+      summary: Create code (admin only)
+      operationId: createCodeMaster
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeMasterCreateRequest'
+      responses:
+        '200':
+          description: Code created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Missing required fields (category, code, nameKo)
+        '409':
+          description: Duplicate code/category combination
+
+  /api/code-master/categories:
+    get:
+      tags: [CodeMaster]
+      summary: List distinct categories
+      operationId: listCodeMasterCategories
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  categories:
+                    type: array
+                    items:
+                      type: string
+                    example: ["VALIDATION_STATUS", "CERTIFICATE_TYPE", "UPLOAD_STATUS"]
+
+  /api/code-master/{id}:
+    get:
+      tags: [CodeMaster]
+      summary: Get code by ID
+      operationId: getCodeMaster
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Code detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  item:
+                    $ref: '#/components/schemas/CodeMasterItem'
+        '404':
+          description: Code not found
+    put:
+      tags: [CodeMaster]
+      summary: Update code (admin only)
+      operationId: updateCodeMaster
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CodeMasterCreateRequest'
+      responses:
+        '200':
+          description: Code updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Code not found
+    delete:
+      tags: [CodeMaster]
+      summary: Deactivate code (admin only)
+      description: Soft-delete (deactivate) a code. The record is preserved but is_active is set to false.
+      operationId: deleteCodeMaster
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Code deactivated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '404':
+          description: Code not found
+
+  # ============================================
   # Authentication & User Management
   # ============================================
   /api/auth/login:
@@ -1438,6 +1847,52 @@ paths:
                 $ref: '#/components/schemas/ApiClientUsageResponse'
         '403':
           description: Admin privileges required
+
+  /api/auth/internal/check:
+    get:
+      tags: [ApiClient]
+      summary: Internal auth check (nginx auth_request only)
+      description: |
+        Internal endpoint used by nginx `auth_request` module to validate API Key
+        for PA Service endpoints. Not intended for direct client use.
+
+        **Behavior**:
+        - No API Key → 200 OK (public access)
+        - Valid API Key → 200 OK + usage tracking + rate limit check
+        - Rate limit exceeded → 403 Forbidden + Retry-After header
+        - Invalid/unregistered API Key → 200 OK (warn log, fail-open)
+
+        **Response headers** (when authenticated):
+        - `X-Client-Id`: Client UUID
+        - `X-Client-Name`: Client name
+        - `X-Auth-Type`: "api_key"
+      operationId: internalAuthCheck
+      parameters:
+        - name: X-API-Key
+          in: header
+          schema:
+            type: string
+          description: API Key for authentication
+        - name: X-Original-URI
+          in: header
+          schema:
+            type: string
+          description: Original request URI (set by nginx)
+        - name: X-Original-Method
+          in: header
+          schema:
+            type: string
+          description: Original HTTP method (set by nginx)
+        - name: X-Real-IP
+          in: header
+          schema:
+            type: string
+          description: Client IP address (set by nginx)
+      responses:
+        '200':
+          description: Auth check passed
+        '403':
+          description: Rate limit exceeded
 
   # ============================================
   # Operation Audit
@@ -2368,6 +2823,272 @@ components:
         message: "V3"
         requirement: "인증서 버전은 반드시 V3이어야 합니다"
 
+    # ============================================
+    # Code Master Schemas (v2.16.0)
+    # ============================================
+    CodeMasterItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        category:
+          type: string
+          description: Code category (e.g., VALIDATION_STATUS, CERTIFICATE_TYPE)
+        code:
+          type: string
+          description: Code value (e.g., VALID, CSCA, PENDING)
+        nameKo:
+          type: string
+          description: Korean display name
+        nameEn:
+          type: string
+          nullable: true
+          description: English display name
+        description:
+          type: string
+          nullable: true
+        severity:
+          type: string
+          nullable: true
+          description: Severity level for status codes
+        sortOrder:
+          type: integer
+          description: Display order within category
+        isActive:
+          type: boolean
+        metadata:
+          type: object
+          nullable: true
+          description: Additional JSON metadata
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CodeMasterCreateRequest:
+      type: object
+      required: [category, code, nameKo]
+      properties:
+        category:
+          type: string
+        code:
+          type: string
+        nameKo:
+          type: string
+        nameEn:
+          type: string
+        description:
+          type: string
+        severity:
+          type: string
+        sortOrder:
+          type: integer
+        isActive:
+          type: boolean
+          default: true
+        metadata:
+          type: string
+          description: JSON string for additional metadata
+
+    CodeMasterListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        total:
+          type: integer
+        page:
+          type: integer
+        size:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CodeMasterItem'
+
+    # ============================================
+    # Link Certificate Schemas (v2.15.1)
+    # ============================================
+    LinkCertValidationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        trustChainValid:
+          type: boolean
+        validationMessage:
+          type: string
+        signatures:
+          type: object
+          properties:
+            oldCscaSignatureValid:
+              type: boolean
+            oldCscaSubjectDn:
+              type: string
+            oldCscaFingerprint:
+              type: string
+            newCscaSignatureValid:
+              type: boolean
+            newCscaSubjectDn:
+              type: string
+            newCscaFingerprint:
+              type: string
+        properties:
+          type: object
+          properties:
+            validityPeriodValid:
+              type: boolean
+            notBefore:
+              type: string
+              format: date-time
+            notAfter:
+              type: string
+              format: date-time
+            extensionsValid:
+              type: boolean
+        extensions:
+          type: object
+          properties:
+            basicConstraintsCa:
+              type: boolean
+            basicConstraintsPathlen:
+              type: integer
+            keyUsage:
+              type: string
+            extendedKeyUsage:
+              type: string
+        revocation:
+          type: object
+          properties:
+            status:
+              type: string
+              enum: [VALID, EXPIRED, REVOKED, CRL_EXPIRED, UNKNOWN]
+            message:
+              type: string
+        validationDurationMs:
+          type: integer
+
+    LinkCertSearchResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer
+        certificates:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              subjectDn:
+                type: string
+              issuerDn:
+                type: string
+              serialNumber:
+                type: string
+              fingerprint:
+                type: string
+                description: SHA-256 hex fingerprint
+              oldCscaSubjectDn:
+                type: string
+              newCscaSubjectDn:
+                type: string
+              trustChainValid:
+                type: boolean
+              createdAt:
+                type: string
+                format: date-time
+              countryCode:
+                type: string
+
+    LinkCertDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        certificate:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            subjectDn:
+              type: string
+            issuerDn:
+              type: string
+            serialNumber:
+              type: string
+            fingerprint:
+              type: string
+            signatures:
+              type: object
+              properties:
+                oldCscaSubjectDn:
+                  type: string
+                oldCscaFingerprint:
+                  type: string
+                newCscaSubjectDn:
+                  type: string
+                newCscaFingerprint:
+                  type: string
+                trustChainValid:
+                  type: boolean
+                oldCscaSignatureValid:
+                  type: boolean
+                newCscaSignatureValid:
+                  type: boolean
+            properties:
+              type: object
+              properties:
+                validityPeriodValid:
+                  type: boolean
+                notBefore:
+                  type: string
+                notAfter:
+                  type: string
+                extensionsValid:
+                  type: boolean
+            extensions:
+              type: object
+              properties:
+                basicConstraintsCa:
+                  type: boolean
+                basicConstraintsPathlen:
+                  type: integer
+                keyUsage:
+                  type: string
+                extendedKeyUsage:
+                  type: string
+            revocation:
+              type: object
+              properties:
+                status:
+                  type: string
+                message:
+                  type: string
+            ldapDn:
+              type: string
+            storedInLdap:
+              type: boolean
+            createdAt:
+              type: string
+              format: date-time
+            countryCode:
+              type: string
+
+    # ============================================
+    # Other Schemas
+    # ============================================
     IcaoVersion:
       type: object
       properties:
