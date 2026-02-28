@@ -13,9 +13,11 @@
 --       두 번째 기동부터는 SPFILE에 이미 설정값이 저장되어 있음
 -- =============================================================================
 
--- 메모리 할당 (XE 제한 내 최대 — 14GB 서버, shm_size=2g)
-ALTER SYSTEM SET SGA_TARGET=2G SCOPE=SPFILE;              -- 2GB (XE max 2GB)
-ALTER SYSTEM SET PGA_AGGREGATE_TARGET=768M SCOPE=SPFILE;  -- 768MB (XE max 1GB)
+-- 메모리 할당 (XE 컨테이너 안정 값 — shm_size=2g 환경)
+-- 주의: SGA 2GB/1.5GB는 XE 컨테이너에서 ORA-56752로 기동 실패
+--       SGA 1GB가 XE 21c Docker 이미지에서 안정적으로 작동하는 최대값
+ALTER SYSTEM SET SGA_TARGET=1G SCOPE=SPFILE;              -- 1GB (XE 컨테이너 안정 최대)
+ALTER SYSTEM SET PGA_AGGREGATE_TARGET=512M SCOPE=SPFILE;  -- 512MB (XE max 1GB)
 
 -- 동시 접속 (XE 하드 제한)
 ALTER SYSTEM SET PROCESSES=150 SCOPE=SPFILE;              -- XE max 150

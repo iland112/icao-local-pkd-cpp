@@ -579,15 +579,16 @@ scripts/
 ## Version History
 
 ### v2.25.4 (2026-02-28) - 서버 리소스 최적화 (환경별 튜닝)
-- **Production (16코어/14GB)**: DB Pool min 2→4, max 10→20, LDAP Pool min 2→4, max 10→20, Oracle SGA 1.5GB→2GB(XE max), PGA 512MB→768MB, shm_size 1g→2g
+- **Production (16코어/14GB)**: DB Pool min 2→4, max 10→20, LDAP Pool min 2→4, max 10→20, shm_size 1g→2g
 - **Production AI Analysis**: uvicorn workers 1→4, DB Pool 5→10, overflow 10→20
 - **Local (8코어/12GB)**: THREAD_NUM 16→8 (코어 수 맞춤), Monitoring THREAD_NUM 16→4, AI workers 1→2
 - **AI Dockerfile**: `UVICORN_WORKERS` 환경변수로 workers 수 런타임 설정 가능 (`--workers ${UVICORN_WORKERS:-1}`)
+- **Oracle XE SGA 검증**: SGA 2GB/1.5GB는 XE 21c Docker 컨테이너에서 ORA-56752로 기동 실패 — SGA 1GB가 안정적 최대값으로 확인
 - 5 files changed (0 new, 5 modified)
 
 ### v2.25.3 (2026-02-28) - Oracle XE 안정화 + XEPDB1 Healthcheck 개선
 - **CRITICAL FIX**: `00-ee-tuning.sql` 삭제 — EE 파라미터(SGA 4GB, PGA 2GB, PROCESSES 1000)가 XE 이미지에 적용되어 `ORA-56752`로 Oracle 기동 실패하던 근본 원인 제거
-- **00-xe-tuning.sql**: XE 하드 제한 내 최적 파라미터 (SGA 1.5GB, PGA 512MB, PROCESSES 150, OPEN_CURSORS 300)
+- **00-xe-tuning.sql**: XE 컨테이너 안정 파라미터 (SGA 1GB, PGA 512MB, PROCESSES 150, OPEN_CURSORS 300)
 - **Healthcheck 개선**: docker-compose.yaml + docker-compose.podman.yaml — CDB(XE) 체크 → XEPDB1(PDB) 체크로 변경, XEPDB1 미오픈 상태에서 healthy 판정 방지
 - **start.sh XEPDB1 대기**: Podman/Docker 양쪽 start.sh에 Oracle XEPDB1 준비 대기 로직 추가 (최대 120초, 5초 간격 폴링)
 - **health.sh XEPDB1 체크**: 컨테이너 health status 외에 XEPDB1 실제 쿼리 체크 추가
