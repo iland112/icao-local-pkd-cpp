@@ -26,13 +26,22 @@ if [ "$DB_TYPE" = "oracle" ]; then
     echo "  Oracle:"
     ORACLE_HEALTH=$(podman inspect icao-local-pkd-oracle --format='{{.State.Health.Status}}' 2>/dev/null || echo "not-found")
     if [ "$ORACLE_HEALTH" = "healthy" ]; then
-        echo "    정상 (healthy)"
+        echo "    컨테이너: 정상 (healthy)"
     elif [ "$ORACLE_HEALTH" = "starting" ]; then
-        echo "    시작 중 (starting...)"
+        echo "    컨테이너: 시작 중 (starting...)"
     elif [ "$ORACLE_HEALTH" = "not-found" ]; then
         echo "    Oracle 컨테이너가 없습니다"
     else
-        echo "    오류 (status: $ORACLE_HEALTH)"
+        echo "    컨테이너: 오류 (status: $ORACLE_HEALTH)"
+    fi
+    # XEPDB1 PDB 실제 연결 체크
+    if [ "$ORACLE_HEALTH" != "not-found" ]; then
+        if podman exec icao-local-pkd-oracle bash -c \
+            "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"\$ORACLE_PWD\"@//localhost:1521/XEPDB1 as sysdba 2>/dev/null | grep -q 1" 2>/dev/null; then
+            echo "    XEPDB1: OPEN (정상)"
+        else
+            echo "    XEPDB1: 미준비 (PDB 미오픈)"
+        fi
     fi
 else
     echo "  PostgreSQL:"

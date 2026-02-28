@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.2
+**Current Version**: v2.25.3
 **Last Updated**: 2026-02-28
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -577,6 +577,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.3 (2026-02-28) - Oracle XE 안정화 + XEPDB1 Healthcheck 개선
+- **CRITICAL FIX**: `00-ee-tuning.sql` 삭제 — EE 파라미터(SGA 4GB, PGA 2GB, PROCESSES 1000)가 XE 이미지에 적용되어 `ORA-56752`로 Oracle 기동 실패하던 근본 원인 제거
+- **00-xe-tuning.sql**: XE 하드 제한 내 최적 파라미터 (SGA 1.5GB, PGA 512MB, PROCESSES 150, OPEN_CURSORS 300)
+- **Healthcheck 개선**: docker-compose.yaml + docker-compose.podman.yaml — CDB(XE) 체크 → XEPDB1(PDB) 체크로 변경, XEPDB1 미오픈 상태에서 healthy 판정 방지
+- **start.sh XEPDB1 대기**: Podman/Docker 양쪽 start.sh에 Oracle XEPDB1 준비 대기 로직 추가 (최대 120초, 5초 간격 폴링)
+- **health.sh XEPDB1 체크**: 컨테이너 health status 외에 XEPDB1 실제 쿼리 체크 추가
+- **fix-oracle-memory.sh**: Production SPFILE 복구 스크립트 — 이미 EE 파라미터가 기록된 환경 복구용
+- **주석 정정**: docker-compose 파일에서 "Oracle EE 21c (Enterprise Edition)" → "Oracle XE 21c (Express Edition)"
+- 7 files changed (2 new, 5 modified, 1 deleted)
 
 ### v2.25.2 (2026-02-28) - 전체 서비스 운영 감사 로그 확장
 - **OperationType enum 확장**: 15개 신규 작업 유형 추가 (API_CLIENT_CREATE/UPDATE/DELETE/KEY_REGEN, CODE_MASTER_CREATE/UPDATE/DELETE, USER_CREATE/UPDATE/DELETE, PASSWORD_CHANGE, UPLOAD_RETRY, CERT_UPLOAD, ICAO_CHECK, TRIGGER_DAILY_SYNC)

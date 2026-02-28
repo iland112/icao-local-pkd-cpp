@@ -159,6 +159,27 @@ echo ""
 echo "  컨테이너 시작 대기 중..."
 sleep 5
 
+# Oracle XEPDB1 PDB 준비 대기 (앱 서비스 시작 전 DB 정상화 보장)
+if [ "$DB_TYPE" = "oracle" ]; then
+    echo ""
+    echo "  Oracle XEPDB1 준비 대기 중..."
+    MAX_WAIT=120
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        if podman exec icao-local-pkd-oracle bash -c \
+            "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"\$ORACLE_PWD\"@//localhost:1521/XEPDB1 as sysdba 2>/dev/null | grep -q 1" 2>/dev/null; then
+            echo "    Oracle XEPDB1 준비 완료 (${WAITED}초)"
+            break
+        fi
+        sleep 5
+        WAITED=$((WAITED + 5))
+        echo "    대기 중... (${WAITED}/${MAX_WAIT}초)"
+    done
+    if [ $WAITED -ge $MAX_WAIT ]; then
+        echo "    Oracle XEPDB1 타임아웃 (${MAX_WAIT}초) — 수동 확인 필요"
+    fi
+fi
+
 echo ""
 echo "  컨테이너 상태:"
 podman ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" \
