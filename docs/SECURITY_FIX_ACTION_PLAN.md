@@ -1,14 +1,12 @@
 # Security Fix Action Plan
 
 **관련 보고서**: [SECURITY_AUDIT_REPORT.md](SECURITY_AUDIT_REPORT.md)
-**작성일**: 2026-02-13
-**완료일**: 2026-02-15
-**대상 버전**: v2.9.1 → **적용 브랜치**: `feat/security-fixes`
-**상태**: **전체 완료 (Phase 1-4 + 추가 강화)**
 
 ---
 
 ## 실행 요약
+
+### 1차 감사 (2026-02-13 → 2026-02-15 완료)
 
 | 구분 | 작업 | 상태 |
 |------|------|------|
@@ -21,6 +19,18 @@
 | 추가 | Frontend OWASP 보안 감사 | **완료** |
 
 **변경 파일**: 23개, **변경량**: +410/-277 lines
+
+### 2차 감사 (2026-03-01 완료)
+
+| 구분 | 작업 | 상태 |
+|------|------|------|
+| Phase 5 | CORS 수정 (CRITICAL, 1건) | **완료** |
+| Phase 6 | 예외 메시지 유출 + stoi 크래시 일괄 수정 (12개 파일) | **완료** |
+| Phase 7 | LDAP DN 이스케이프 + X509 버퍼 + TOCTOU + regex 캐시 | **완료** |
+| Phase 8 | AI Python 입력 검증 + 예외 유출 | **완료** |
+| Phase 9 | ASN.1 바운드 + 환경변수 범위 검증 | **완료** |
+
+**변경 파일**: 20개 (1개 신규), **변경량**: +353/-648 lines
 
 ---
 
@@ -263,5 +273,184 @@ OpenSSL 할당 함수 (`BIO_new`, `EVP_MD_CTX_new`, `X509_STORE_new`, `sk_X509_n
 
 ---
 
-*Plan created: 2026-02-13*
-*Completed: 2026-02-15*
+---
+
+## Phase 5: CORS 수정 (CRITICAL) — 완료 (2026-03-01)
+
+### Task 5.1: AI 서비스 CORS 와일드카드 제거 [2C-01] — **완료**
+
+**파일**: `services/ai-analysis/app/main.py`
+**작업**: `allow_origins=["*"]` + `allow_credentials=True` → 명시적 origin 화이트리스트
+
+```python
+_cors_origins = [
+    "http://localhost:13080", "http://localhost:3080",
+    "https://pkd.smartcoreinc.com", "https://dev.pkd.smartcoreinc.com",
+]
+if _env_origins := os.getenv("CORS_ALLOWED_ORIGINS"):
+    _cors_origins = [o.strip() for o in _env_origins.split(",") if o.strip()]
+```
+
+**결과**: RFC 6749 위반 해결, CSRF 공격 벡터 제거
+
+---
+
+## Phase 6: 예외 메시지 유출 + stoi 크래시 일괄 수정 — 완료 (2026-03-01)
+
+### Task 6.0: 공유 유틸리티 헤더 생성 — **완료**
+
+**파일**: `shared/lib/database/handler_utils.h` (신규, ~70줄)
+**내용**: `common::handler` 네임스페이스
+
+| 함수 | 용도 |
+|------|------|
+| `safeStoi(str, default, min, max)` | try-catch + `std::clamp`, stoi 대체 |
+| `internalError(logContext, exception)` | spdlog 에러 로그 + "Internal server error" 응답 |
+| `badRequest(publicMessage)` | 400 응답 헬퍼 |
+
+---
+
+### Task 6.1: PKD Management 핸들러 예외 유출 수정 (8개 파일) [2H-01] — **완료**
+
+| 파일 | catch 수정 | stoi 수정 |
+|------|----------:|----------:|
+| `handlers/certificate_handler.cpp` | 17 | 2 |
+| `handlers/upload_handler.cpp` | 12 | - |
+| `handlers/upload_stats_handler.cpp` | 9 | 6 |
+| `handlers/auth_handler.cpp` | 8 | 4 |
+| `handlers/api_client_handler.cpp` | 7 | 3 |
+| `handlers/code_master_handler.cpp` | 6 | - |
+| `handlers/icao_handler.cpp` | 4 | - |
+| `handlers/misc_handler.cpp` | 3 | - |
+
+---
+
+### Task 6.2: PA Service 핸들러 예외 유출 수정 [2H-01] — **완료**
+
+**파일**: `services/pa-service/src/handlers/pa_handler.cpp`
+- 5 catch 블록 → `internalError()` 적용
+- JSON `isMember("sod")` 필드 체크 추가 [2M-07]
+
+---
+
+### Task 6.3: PKD Relay 핸들러 예외 유출 수정 [2H-01] — **완료**
+
+**파일**: `services/pkd-relay-service/src/handlers/sync_handler.cpp` (4 catch)
+**파일**: `services/pkd-relay-service/src/handlers/reconciliation_handler.cpp` (4 catch)
+- 감사 로그 유지하면서 `internalError()` 적용
+
+---
+
+## Phase 7: 타겟 보안 수정 — 완료 (2026-03-01)
+
+### Task 7.1: LDAP DN 이스케이프 일관성 [2H-03] — **완료**
+
+**파일**: `services/pkd-management/src/services/ldap_storage_service.cpp`
+- `buildCertificateDn()`: serialNumber, ou, countryCode → `escapeDnComponent()` 적용
+- `buildCertificateDnV2()`: fingerprint, ou, countryCode → `escapeDnComponent()` 적용
+
+---
+
+### Task 7.2: X509_NAME_oneline 동적 할당 [2H-04] — **완료**
+
+**파일**: `services/pa-service/src/repositories/ldap_certificate_repository.cpp`
+- 3개소: `char buf[512]` → `X509_NAME_oneline(name, nullptr, 0)` + `OPENSSL_free()`
+
+---
+
+### Task 7.3: Upload Counter TOCTOU 수정 [2H-05] — **완료**
+
+**파일**: `services/pkd-management/src/handlers/upload_handler.cpp`
+- `processLdifFileAsync()`: atomic check를 `s_processingMutex` 내부로 이동
+- `processMasterListFileAsync()`: 동일 수정
+
+---
+
+### Task 7.4: CIDR maskBits stoi 검증 [2M-02] — **완료**
+
+**파일**: `services/pkd-management/src/middleware/auth_middleware.cpp`
+- `std::stoi(maskStr)` → `common::handler::safeStoi(maskStr, 32, 0, 32)`
+
+---
+
+### Task 7.5: Regex 캐시 [2M-01] — **완료**
+
+**파일**: `services/pkd-management/src/middleware/auth_middleware.cpp`
+- `static std::unordered_map<std::string, std::regex> s_regexCache` + `std::mutex`
+- 요청당 컴파일 → 1회 컴파일 + 캐시 재사용
+
+---
+
+## Phase 8: AI Python 서비스 보안 — 완료 (2026-03-01)
+
+### Task 8.1: 예외 메시지 유출 수정 [2M-03] — **완료**
+
+**파일**: `services/ai-analysis/app/routers/analysis.py`
+- `str(e)` → `"Analysis failed. Check server logs for details."` 고정 메시지
+
+---
+
+### Task 8.2: 입력 검증 추가 [2M-04] — **완료**
+
+**파일**: `services/ai-analysis/app/routers/analysis.py`, `reports.py`
+
+| 파라미터 | 검증 패턴 | 적용 엔드포인트 |
+|----------|----------|----------------|
+| fingerprint | `^[a-fA-F0-9]{64}$` | certificate/{fp}, certificate/{fp}/forensic |
+| country | `^[A-Z]{2,3}$` | anomalies, country/{code}, extension-anomalies |
+| cert_type | `^(CSCA\|DSC\|DSC_NC\|MLSC\|LC)$` | anomalies, extension-anomalies |
+| risk_level | `^(LOW\|MEDIUM\|HIGH\|CRITICAL)$` | anomalies |
+| anomaly_label | `^(NORMAL\|SUSPICIOUS\|ANOMALOUS)$` | anomalies |
+
+---
+
+## Phase 9: 나머지 보안 수정 — 완료 (2026-03-01)
+
+### Task 9.1: ASN.1 바운드 체크 [2M-05] — **완료**
+
+**파일**: `services/pkd-management/src/handlers/upload_handler.cpp`
+- `ASN1_get_object()` 후 `seqLen > remaining` 검증 3개소 추가
+- 위반 시 에러 로그 + `false` 반환 (안전한 early return)
+
+---
+
+### Task 9.2: 환경변수 범위 검증 [2M-06] — **완료**
+
+**파일**: `services/pkd-management/src/infrastructure/app_config.h`
+- `envStoi()` static 메서드 추가 (try-catch + clamp + spdlog 경고)
+- 모든 `std::stoi()` → `envStoi()` 전환 (DB_PORT, LDAP_PORT, SERVER_PORT, THREAD_NUM 등 10개)
+
+**파일**: `services/pa-service/src/infrastructure/app_config.h`
+- 동일 `envStoi()` 패턴 적용 (DB_PORT, LDAP_PORT, SERVER_PORT, THREAD_NUM, MAX_BODY_SIZE_MB)
+
+---
+
+## 2차 감사 변경 파일 목록 (20개)
+
+| 파일 | 변경 내용 |
+|------|-----------|
+| `shared/lib/database/handler_utils.h` | **신규** — safeStoi, internalError, badRequest |
+| `services/ai-analysis/app/main.py` | CORS 와일드카드 → origin 화이트리스트 |
+| `services/ai-analysis/app/routers/analysis.py` | 예외 유출 + 입력 검증 5개 패턴 |
+| `services/ai-analysis/app/routers/reports.py` | 입력 검증 (country, cert_type) |
+| `services/pkd-management/src/handlers/certificate_handler.cpp` | internalError 17개소 + safeStoi 2 |
+| `services/pkd-management/src/handlers/upload_handler.cpp` | internalError 12 + TOCTOU + ASN.1 바운드 |
+| `services/pkd-management/src/handlers/upload_stats_handler.cpp` | internalError 9 + safeStoi 6 |
+| `services/pkd-management/src/handlers/auth_handler.cpp` | internalError 8 + safeStoi 4 |
+| `services/pkd-management/src/handlers/api_client_handler.cpp` | internalError 7 + safeStoi 3 |
+| `services/pkd-management/src/handlers/code_master_handler.cpp` | internalError 6 |
+| `services/pkd-management/src/handlers/icao_handler.cpp` | internalError 4 |
+| `services/pkd-management/src/handlers/misc_handler.cpp` | internalError 3 |
+| `services/pkd-management/src/middleware/auth_middleware.cpp` | regex 캐시 + CIDR safeStoi |
+| `services/pkd-management/src/services/ldap_storage_service.cpp` | DN escapeDnComponent 2개 함수 |
+| `services/pkd-management/src/infrastructure/app_config.h` | envStoi 10개 환경변수 |
+| `services/pa-service/src/handlers/pa_handler.cpp` | internalError 5 + isMember 체크 |
+| `services/pa-service/src/repositories/ldap_certificate_repository.cpp` | X509_NAME 동적 할당 3개소 |
+| `services/pa-service/src/infrastructure/app_config.h` | envStoi 5개 환경변수 |
+| `services/pkd-relay-service/src/handlers/sync_handler.cpp` | internalError 4 |
+| `services/pkd-relay-service/src/handlers/reconciliation_handler.cpp` | internalError 4 |
+
+---
+
+*1차 Plan created: 2026-02-13, Completed: 2026-02-15*
+*2차 Plan created & completed: 2026-03-01*

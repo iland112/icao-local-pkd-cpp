@@ -1,14 +1,16 @@
 # Security Audit Report - ICAO Local PKD
 
-**Date**: 2026-02-13
-**Version**: v2.9.0 (감사 시점) → **v2.10.5에서 전체 해결 완료** (2026-02-15)
+**1차 감사**: 2026-02-13 (v2.9.0) → **v2.10.5에서 전체 해결** (2026-02-15)
+**2차 감사**: 2026-03-01 (v2.25.5) → **동일 버전에서 전체 해결** (2026-03-01)
 **Auditor**: Code Review (Automated + Manual)
-**Scope**: 전체 C++ 백엔드 서비스 (pkd-management, pa-service, pkd-relay-service) + shared libraries
-**Resolution**: [SECURITY_FIX_ACTION_PLAN.md](SECURITY_FIX_ACTION_PLAN.md) — 23개 파일, +410/-277 lines
+**Scope**: 전체 백엔드 서비스 (pkd-management, pa-service, pkd-relay-service, ai-analysis) + shared libraries + nginx
+**Resolution**: [SECURITY_FIX_ACTION_PLAN.md](SECURITY_FIX_ACTION_PLAN.md)
 
 ---
 
 ## 1. 요약 (Executive Summary)
+
+### 1차 감사 (2026-02-13, v2.9.0 → v2.10.5)
 
 | 심각도 | 건수 | 상태 |
 |--------|------|------|
@@ -18,18 +20,34 @@
 | **LOW** | 3 | **완료** (v2.10.5) |
 | **Total** | **23** | **전체 완료** |
 
+### 2차 감사 (2026-03-01, v2.25.5)
+
+| 심각도 | 건수 | 상태 |
+|--------|------|------|
+| **CRITICAL** | 1 | **완료** |
+| **HIGH** | 6 | **완료** |
+| **MEDIUM** | 8 | **완료** |
+| **Total** | **15** | **전체 완료** |
+
+**누적 해결**: 1차 23건 + 2차 15건 = **총 38건 전체 해결**
+
 ### 긍정적 사항
-- 대부분의 SQL 쿼리가 parameterized queries (QueryExecutor) 사용
+- 100% parameterized SQL queries (QueryExecutor 패턴)
 - XSS 취약점 없음 (백엔드 JSON API, 프론트엔드 React)
 - SodData 구조체 RAII 패턴 적용 (OpenSSL 리소스 자동 해제)
-- LDAP connection pool RAII 패턴 적용
-- JWT 인증 구현 완료
+- LDAP/DB connection pool RAII 패턴 적용
+- JWT + API Key 이중 인증 구현
+- Command Injection 벡터 전무 (system/popen 완전 제거)
+- LDAP Injection 방어 (RFC 4514 이스케이프)
+- DoS 방어 다층 구현 (파일 크기, 동시 처리, Rate Limiting, nginx per-IP)
 
-### ~~주요 위험 요소~~ (v2.10.5에서 전체 해결)
-- ~~인증 우회: 업로드 엔드포인트 임시 공개 상태 (CRITICAL)~~ → 인증 복원 완료
-- ~~Command Injection: system()/popen() 4개소 (CRITICAL)~~ → 네이티브 C API로 교체 완료
-- ~~SOD 파서 버퍼 오버리드: ASN.1 수동 파싱 경계 검사 부재 (CRITICAL)~~ → end 포인터 경계 검사 추가
-- ~~SQL Injection: LIKE 절 문자열 연결 2개소 (HIGH)~~ → parameterized LIKE + wildcard escape 완료
+### ~~주요 위험 요소~~ (전체 해결)
+- ~~인증 우회: 업로드 엔드포인트 임시 공개 상태 (CRITICAL)~~ → 인증 복원 완료 (1차)
+- ~~Command Injection: system()/popen() 4개소 (CRITICAL)~~ → 네이티브 C API로 교체 완료 (1차)
+- ~~SOD 파서 버퍼 오버리드 (CRITICAL)~~ → end 포인터 경계 검사 추가 (1차)
+- ~~AI 서비스 CORS 와일드카드 (CRITICAL)~~ → 명시적 origin 화이트리스트 (2차)
+- ~~예외 메시지 유출 130+건 (HIGH)~~ → internalError() 공유 유틸리티 (2차)
+- ~~std::stoi 크래시 (HIGH)~~ → safeStoi() try-catch + clamp (2차)
 
 ---
 
@@ -460,5 +478,313 @@ int returnCode = pclose(pipe.release());  // unique_ptr에서 release 후 수동
 
 상세 구현 내역: [SECURITY_FIX_ACTION_PLAN.md](SECURITY_FIX_ACTION_PLAN.md)
 
+---
+
+## 10. 2차 보안 감사 (2026-03-01)
+
+**감사 버전**: v2.25.5
+**범위**: 전체 5개 백엔드 서비스 + nginx + Docker (1차 감사 이후 추가된 코드 포함)
+**방법**: 3개 병렬 보안 감사 에이전트 + 직접 코드 검증
+- 에이전트 1: C++ 입력 검증 (SQL/LDAP Injection, 버퍼 오버플로, Path Traversal, Null Pointer, JSON, Base64, OpenSSL)
+- 에이전트 2: Python + nginx (SQL Injection, 입력 검증, 예외 처리, 의존성, CORS, Docker)
+- 에이전트 3: Auth + 데이터 흐름 (JWT, API Key, Race Condition, 업로드, DoS, 에러 유출, 세션)
+
+### 허용된 위험 (NOT FIXING)
+| 항목 | 사유 |
+|------|------|
+| JWT 로그아웃 토큰 무효화 | Redis 등 인프라 필요, 별도 기능 티켓 |
+| CSP `unsafe-inline` | React/Tailwind 필수, 제거 시 프론트엔드 깨짐 |
+| HSTS | 내부망 전용, 의도적 미적용 |
+| strtol hexToBytes 리팩토링 | 실질적 위험 없음, 선택적 개선 |
+
+---
+
+### 2C-01: AI 서비스 CORS 와일드카드 (CRITICAL)
+
+**파일**: `services/ai-analysis/app/main.py:57-63`
+**유형**: Cross-Origin Credential Theft (CWE-942)
+
+```python
+# Before (취약):
+app.add_middleware(CORSMiddleware,
+    allow_origins=["*"], allow_credentials=True, ...)
+```
+
+**설명**: `allow_origins=["*"]` + `allow_credentials=True` 조합은 RFC 6749 위반. 악의적 사이트에서 인증된 사용자의 세션으로 AI API 호출 가능 (CSRF).
+
+**영향**: 인증된 사용자 세션 탈취, 분석 데이터 무단 조회
+**해결**: 명시적 origin 화이트리스트 + `CORS_ALLOWED_ORIGINS` 환경변수 오버라이드
+
+```python
+# After (수정):
+_cors_origins = [
+    "http://localhost:13080", "http://localhost:3080",
+    "https://pkd.smartcoreinc.com", "https://dev.pkd.smartcoreinc.com",
+]
+if _env_origins := os.getenv("CORS_ALLOWED_ORIGINS"):
+    _cors_origins = [o.strip() for o in _env_origins.split(",") if o.strip()]
+```
+
+---
+
+### 2H-01: 예외 메시지 정보 유출 (HIGH, 130+ catch 블록)
+
+**파일**: 12개 핸들러 파일 (pkd-management 8, pa-service 1, pkd-relay 2, ai-analysis 1)
+**유형**: Information Exposure (CWE-209)
+
+```cpp
+// Before (유출):
+} catch (const std::exception& e) {
+    error["error"] = e.what();  // DB 에러, 파일 경로, 스택 정보 클라이언트에 노출
+    callback(resp);
+}
+
+// After (안전):
+} catch (const std::exception& e) {
+    callback(common::handler::internalError("ContextName", e));
+    // → spdlog에 실제 에러 기록, 클라이언트에 "Internal server error" 반환
+}
+```
+
+**영향**: 내부 DB 스키마, 파일 경로, 라이브러리 버전 등 공격자에게 유용한 정보 노출
+**해결**: `shared/lib/database/handler_utils.h` 신규 생성 — `internalError()` 공유 유틸리티로 12개 파일 130+ catch 블록 일괄 수정
+
+| 파일 | 수정 catch 수 |
+|------|-------------:|
+| certificate_handler.cpp | 17 |
+| upload_handler.cpp | 12 |
+| upload_stats_handler.cpp | 9 |
+| auth_handler.cpp | 8 |
+| api_client_handler.cpp | 7 |
+| code_master_handler.cpp | 6 |
+| pa_handler.cpp | 5 |
+| icao_handler.cpp | 4 |
+| sync_handler.cpp | 4 |
+| reconciliation_handler.cpp | 4 |
+| misc_handler.cpp | 3 |
+| analysis.py | 1 |
+
+---
+
+### 2H-02: std::stoi 크래시 (HIGH)
+
+**파일**: auth_handler.cpp, api_client_handler.cpp, upload_stats_handler.cpp, certificate_handler.cpp
+**유형**: Unhandled Exception (CWE-248)
+
+```cpp
+// Before (크래시):
+int limit = std::stoi(limitParam);  // "abc" → std::invalid_argument 예외 → 500 에러
+
+// After (안전):
+int limit = common::handler::safeStoi(limitParam, 100, 1, 1000);  // 범위 clamp 포함
+```
+
+**영향**: 조작된 쿼리 파라미터로 서비스 크래시 (DoS)
+**해결**: `safeStoi()` — try-catch + `std::clamp()` 적용
+
+---
+
+### 2H-03: LDAP DN 이스케이프 불일치 (HIGH)
+
+**파일**: `services/pkd-management/src/services/ldap_storage_service.cpp`
+**유형**: LDAP Injection (CWE-90)
+
+**설명**: `buildCrlDn()`, `buildMasterListDn()`은 `escapeDnComponent()` 적용, 그러나 `buildCertificateDn()`과 `buildCertificateDnV2()`는 미적용. 인증서 serialNumber/fingerprint에 RFC 4514 특수문자 포함 시 DN 구조 파괴 가능.
+
+**해결**: `buildCertificateDn()` — serialNumber, ou, countryCode에 `escapeDnComponent()` 적용
+`buildCertificateDnV2()` — fingerprint, ou, countryCode에 `escapeDnComponent()` 적용
+
+---
+
+### 2H-04: X509_NAME_oneline 스택 버퍼 오버플로 (HIGH)
+
+**파일**: `services/pa-service/src/repositories/ldap_certificate_repository.cpp:74-75`
+**유형**: Stack Buffer Overflow (CWE-121)
+
+```cpp
+// Before (위험):
+char subjectBuf[512];
+X509_NAME_oneline(subject, subjectBuf, sizeof(subjectBuf));
+// → DN 길이 > 512 시 잘림 (OpenSSL은 truncation하지만, 불완전한 DN 비교 가능)
+
+// After (안전):
+char* subjectStr = X509_NAME_oneline(subject, nullptr, 0);  // OpenSSL 동적 할당
+std::string subjectDn(subjectStr ? subjectStr : "");
+OPENSSL_free(subjectStr);
+```
+
+**영향**: 긴 DN을 가진 인증서 처리 시 DN 잘림 → 잘못된 CSCA 매칭 가능
+**해결**: 3개소 모두 동적 할당 + `OPENSSL_free()` 패턴으로 교체
+
+---
+
+### 2H-05: Upload Counter TOCTOU 레이스 컨디션 (HIGH)
+
+**파일**: `services/pkd-management/src/handlers/upload_handler.cpp:378-392`
+**유형**: Time-of-Check Time-of-Use (CWE-367)
+
+```cpp
+// Before (TOCTOU):
+if (s_activeProcessingCount.load() >= MAX_CONCURRENT) {  // 체크 (mutex 밖)
+    return 503;
+}
+std::lock_guard<std::mutex> lock(s_processingMutex);
+s_activeProcessingCount.fetch_add(1);  // 사용 (mutex 안)
+// → 두 스레드가 동시에 체크 통과 후 둘 다 처리 시작 가능
+
+// After (안전):
+std::lock_guard<std::mutex> lock(s_processingMutex);
+if (s_activeProcessingCount.load() >= MAX_CONCURRENT) {  // 체크+사용 모두 mutex 안
+    return 503;
+}
+s_activeProcessingCount.fetch_add(1);
+```
+
+**영향**: 동시 업로드 제한 우회 (MAX_CONCURRENT 초과 처리)
+**해결**: `processLdifFileAsync()` + `processMasterListFileAsync()` 2개소 모두 mutex 내부로 이동
+
+---
+
+### 2H-06: Pagination 미검증 (HIGH)
+
+**설명**: 2H-02(stoi)에 포함. `limit`, `offset`, `page` 파라미터가 검증 없이 `std::stoi()` 호출 — safeStoi()로 일괄 수정.
+
+---
+
+### 2M-01: Regex 요청당 컴파일 (MEDIUM)
+
+**파일**: `services/pkd-management/src/middleware/auth_middleware.cpp:474-487`
+**유형**: ReDoS / Performance (CWE-1333)
+
+**설명**: API Key endpoint 패턴 매칭에서 매 요청마다 `std::regex(pattern)` 재컴파일. 복잡한 패턴에서 ReDoS 가능성 + 불필요한 CPU 소모.
+
+**해결**: `static std::unordered_map<std::string, std::regex>` 캐시, `std::mutex` 보호, `std::regex::optimize` 플래그
+
+---
+
+### 2M-02: CIDR maskBits stoi 크래시 (MEDIUM)
+
+**파일**: `services/pkd-management/src/middleware/auth_middleware.cpp:513`
+**유형**: Unhandled Exception (CWE-248)
+
+**설명**: IP 화이트리스트 CIDR 파싱에서 `std::stoi(maskStr)` — 잘못된 값 시 크래시.
+**해결**: `common::handler::safeStoi(maskStr, 32, 0, 32)` 적용
+
+---
+
+### 2M-03: AI Python 예외 메시지 유출 (MEDIUM)
+
+**파일**: `services/ai-analysis/app/routers/analysis.py:144`
+**유형**: Information Exposure (CWE-209)
+
+```python
+# Before: raise HTTPException(status_code=500, detail=str(e))
+# After:  raise HTTPException(status_code=500, detail="Analysis failed. Check server logs for details.")
+```
+
+---
+
+### 2M-04: AI Python 입력 검증 부재 (MEDIUM)
+
+**파일**: `services/ai-analysis/app/routers/analysis.py`, `reports.py`
+**유형**: Improper Input Validation (CWE-20)
+
+**해결**: 정규식 검증 패턴 추가
+- SHA-256 fingerprint: `^[a-fA-F0-9]{64}$`
+- Country code: `^[A-Z]{2,3}$`
+- Certificate type: `^(CSCA|DSC|DSC_NC|MLSC|LC)$`
+- Risk level: `^(LOW|MEDIUM|HIGH|CRITICAL)$`
+- Anomaly label: `^(NORMAL|SUSPICIOUS|ANOMALOUS)$`
+
+---
+
+### 2M-05: ASN.1 seqLen 바운드 체크 부재 (MEDIUM)
+
+**파일**: `services/pkd-management/src/handlers/upload_handler.cpp:740-785`
+**유형**: Out-of-bounds Read (CWE-125)
+
+**설명**: `ASN1_get_object()` 반환 후 `seqLen > remaining` 검증 없이 포인터 이동. 조작된 ASN.1 입력으로 버퍼 오버리드 가능.
+**해결**: 3개소에 `seqLen > remaining` 검증 추가, 위반 시 에러 로그 + `false` 반환
+
+---
+
+### 2M-06: 환경변수 정수 파싱 무검증 (MEDIUM)
+
+**파일**: `services/pkd-management/src/infrastructure/app_config.h`, `services/pa-service/src/infrastructure/app_config.h`
+**유형**: Unhandled Exception (CWE-248)
+
+**설명**: `fromEnvironment()`에서 `std::stoi()` 직접 호출 — 잘못된 환경변수 값으로 서비스 시작 실패.
+**해결**: `envStoi()` static 메서드 추가 (try-catch + `std::clamp()`), 모든 정수 환경변수에 범위 적용
+
+| 환경변수 | 범위 | 기본값 |
+|----------|------|--------|
+| DB_PORT | 1~65535 | 5432 |
+| LDAP_PORT | 1~65535 | 389 |
+| SERVER_PORT | 1~65535 | 8081/8082 |
+| THREAD_NUM | 1~128 | 16/4 |
+| MAX_BODY_SIZE_MB | 1~500 | 100/50 |
+| ICAO_CHECK_SCHEDULE_HOUR | 0~23 | 6 |
+| DB_POOL_MIN/MAX | 1~100 | 2/10 |
+| LDAP_POOL_MIN/MAX | 1~100 | 2/10 |
+
+---
+
+### 2M-07: JSON 필드 존재 체크 부재 (MEDIUM)
+
+**파일**: `services/pa-service/src/handlers/pa_handler.cpp:200`
+**유형**: Null Pointer Dereference (CWE-476)
+
+```cpp
+// Before: std::string sodBase64 = (*jsonBody)["sod"].asString();  // sod 미전송 시 빈 문자열
+// After: if (!jsonBody->isMember("sod")) { callback(badRequest("SOD field required")); return; }
+```
+
+---
+
+### 2M-08: strtol endptr 미검증 (MEDIUM)
+
+**설명**: 2M-06(envStoi)에 포함. 환경변수 파싱에서 `strtol` 대신 `stoi` 사용 중이었으며, envStoi() 래퍼로 일괄 해결.
+
+---
+
+### 2차 감사 — 취약점 위치 매트릭스
+
+| 서비스 | CRITICAL | HIGH | MEDIUM |
+|--------|----------|------|--------|
+| pkd-management | - | 2H-01~06 | 2M-01, 2M-02, 2M-05, 2M-06 |
+| pa-service | - | 2H-01, 2H-04 | 2M-06, 2M-07 |
+| pkd-relay-service | - | 2H-01 | - |
+| ai-analysis | 2C-01 | 2H-01 | 2M-03, 2M-04 |
+| shared/lib | - | - | - |
+
+---
+
+### 2차 감사 — 해결 요약
+
+**모든 15건의 취약점이 v2.25.5 (2026-03-01)에서 해결 완료.**
+
+| ID | 해결 방법 | 파일 수 |
+|----|-----------|---------|
+| 2C-01 | CORS 와일드카드 → 명시적 origin 화이트리스트 | 1 |
+| 2H-01 | 130+ catch 블록 → `internalError()` 유틸리티 | 12 |
+| 2H-02 | `std::stoi()` → `safeStoi()` try-catch + clamp | 5 |
+| 2H-03 | LDAP DN `escapeDnComponent()` 누락 2개 함수 보완 | 1 |
+| 2H-04 | `X509_NAME_oneline` 512B 스택 → 동적 할당 + `OPENSSL_free` | 1 |
+| 2H-05 | TOCTOU atomic check → mutex 내부 이동 | 1 |
+| 2M-01 | Regex 요청당 컴파일 → static 캐시 | 1 |
+| 2M-02 | CIDR `stoi` → `safeStoi(maskStr, 32, 0, 32)` | 1 |
+| 2M-03 | AI `str(e)` → 고정 에러 메시지 | 1 |
+| 2M-04 | AI 입력 검증 정규식 5개 패턴 추가 | 2 |
+| 2M-05 | ASN.1 `seqLen > remaining` 바운드 체크 3개소 | 1 |
+| 2M-06 | 환경변수 `envStoi()` 범위 검증 | 2 |
+| 2M-07 | JSON `isMember("sod")` 체크 | 1 |
+
+**신규 파일**: `shared/lib/database/handler_utils.h` (~70줄)
+**변경**: 20개 파일, +353 삽입, -648 삭제 (net -295줄)
+**빌드 검증**: pkd-management, pa-service, pkd-relay, ai-analysis 4개 서비스 Docker 빌드 성공
+
+---
+
 *Report generated: 2026-02-13*
-*Resolution updated: 2026-02-17*
+*1차 해결 업데이트: 2026-02-17*
+*2차 감사 추가: 2026-03-01*
