@@ -624,6 +624,14 @@ IcaoComplianceStatus checkIcaoCompliance(X509* cert, const std::string& certType
         return status;
     }
 
+    // DSC_NC: ICAO PKD에서 표준 미준수로 분류한 인증서 — 기술 체크와 무관하게 항상 미준수
+    if (certType == "DSC_NC") {
+        status.isCompliant = false;
+        status.complianceLevel = "NON_CONFORMANT";
+        status.violations.push_back("ICAO PKD non-conformant DSC (classified by ICAO)");
+        return status;
+    }
+
     // Extract metadata using existing extractor
     x509::CertificateMetadata metadata = x509::extractMetadata(cert);
 

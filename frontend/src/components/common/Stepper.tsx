@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { cn } from '@/utils/cn';
 import { Check, X, Loader2, Upload, FileSearch, ShieldCheck, Database, Server } from 'lucide-react';
 
@@ -68,7 +69,12 @@ export function Stepper({
   const config = sizeConfig[size];
 
   // Find the active step for horizontal detail panel
+  // Keep last active step in ref to prevent flickering during stage transitions
   const activeStep = steps.find(s => s.status === 'active');
+  const lastActiveRef = useRef<Step | null>(null);
+  if (activeStep) lastActiveRef.current = activeStep;
+  const allDone = steps.every(s => s.status === 'completed' || s.status === 'idle');
+  const displayStep = activeStep || (allDone ? null : lastActiveRef.current);
 
   if (!isVertical) {
     // Horizontal layout: indicators + connectors row, then detail panel below
@@ -111,30 +117,30 @@ export function Stepper({
           })}
         </div>
 
-        {/* Active step detail panel */}
-        {showProgress && activeStep && (activeStep.progress !== undefined || activeStep.details) && (
+        {/* Active step detail panel (uses displayStep to prevent flickering during transitions) */}
+        {showProgress && displayStep && (displayStep.progress !== undefined || displayStep.details) && (
           <div className="mt-3 p-3 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30">
-            {activeStep.progress !== undefined && activeStep.progress > 0 && (
+            {displayStep.progress !== undefined && displayStep.progress > 0 && (
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                    {activeStep.progress}%
+                    {displayStep.progress}%
                   </span>
                 </div>
                 <div className="h-1.5 w-full bg-gray-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-300 ease-out"
-                    style={{ width: `${activeStep.progress}%` }}
+                    style={{ width: `${displayStep.progress}%` }}
                   />
                 </div>
               </div>
             )}
-            {activeStep.details && (
+            {displayStep.details && (
               <p className={cn(
                 'text-xs font-medium text-blue-600 dark:text-blue-400',
-                activeStep.progress !== undefined && activeStep.progress > 0 ? 'mt-1.5' : '',
+                displayStep.progress !== undefined && displayStep.progress > 0 ? 'mt-1.5' : '',
               )}>
-                {activeStep.details}
+                {displayStep.details}
               </p>
             )}
           </div>
