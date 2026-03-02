@@ -466,7 +466,7 @@ ProcessingProgress ProcessingProgress::create(
         // Scale within stage range
         int nextPercent = 100;
         if (stage == ProcessingStage::PARSING_IN_PROGRESS) nextPercent = 50;
-        else if (stage == ProcessingStage::VALIDATION_IN_PROGRESS) nextPercent = 70;
+        else if (stage == ProcessingStage::VALIDATION_IN_PROGRESS) nextPercent = 99;  // LDIF uses this single stage for entire pipeline
         else if (stage == ProcessingStage::DB_SAVING_IN_PROGRESS) nextPercent = 85;
         else if (stage == ProcessingStage::LDAP_SAVING_IN_PROGRESS) nextPercent = 100;
 

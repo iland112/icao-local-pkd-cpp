@@ -314,6 +314,8 @@ export function FileUpload() {
 
       // Stage 2: Validate & DB + LDAP (check certificate counts)
       const hasCertificates = (upload.cscaCount || 0) + (upload.dscCount || 0) + (upload.dscNcCount || 0) + (upload.mlscCount || 0) > 0;
+      const totalEntries = upload.totalEntries || 1;
+      const processedEntries = upload.processedEntries || 0;
 
       if (upload.status === 'COMPLETED' || hasCertificates) {
         // Build detailed certificate breakdown
@@ -324,14 +326,26 @@ export function FileUpload() {
         if (upload.dscNcCount) parts.push(`DSC_NC ${upload.dscNcCount.toLocaleString()}`);
         if (upload.crlCount) parts.push(`CRL ${upload.crlCount.toLocaleString()}`);
         if (upload.mlCount) parts.push(`ML ${upload.mlCount.toLocaleString()}`);
-        const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${(upload.processedEntries || upload.totalEntries)?.toLocaleString()}건 저장 (DB+LDAP)`;
 
-        setDbSaveStage({
-          status: 'COMPLETED',
-          message: 'DB 및 LDAP 저장 완료',
-          percentage: 100,
-          details
-        });
+        if (upload.status === 'PROCESSING') {
+          // In-progress: show live percentage from DB
+          const pct = Math.min(Math.round(100 * processedEntries / totalEntries), 99);
+          const details = parts.length > 0 ? `${parts.join(', ')} (${processedEntries.toLocaleString()}/${totalEntries.toLocaleString()})` : `${processedEntries.toLocaleString()}/${totalEntries.toLocaleString()}건 처리 중`;
+          setDbSaveStage({
+            status: 'IN_PROGRESS',
+            message: `처리 중 (${pct}%)`,
+            percentage: pct,
+            details
+          });
+        } else {
+          const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${(upload.processedEntries || upload.totalEntries)?.toLocaleString()}건 저장 (DB+LDAP)`;
+          setDbSaveStage({
+            status: 'COMPLETED',
+            message: 'DB 및 LDAP 저장 완료',
+            percentage: 100,
+            details
+          });
+        }
       }
 
       // Handle completion states
