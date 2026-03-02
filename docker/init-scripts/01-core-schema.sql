@@ -128,6 +128,11 @@ CREATE UNIQUE INDEX idx_certificate_unique ON certificate(certificate_type, fing
 CREATE INDEX idx_certificate_source_type ON certificate(source_type);
 CREATE INDEX idx_certificate_extracted_from ON certificate(extracted_from);
 
+-- Composite indexes for multi-column queries (v2.25.8)
+CREATE INDEX idx_certificate_stored_created ON certificate(stored_in_ldap, created_at ASC);
+CREATE INDEX idx_certificate_country_type ON certificate(country_code, certificate_type);
+CREATE INDEX idx_certificate_type_created ON certificate(certificate_type, created_at DESC);
+
 -- =============================================================================
 -- CRL Tables
 -- =============================================================================
@@ -165,6 +170,7 @@ CREATE INDEX idx_crl_upload_id ON crl(upload_id);
 CREATE INDEX idx_crl_country ON crl(country_code);
 CREATE INDEX idx_crl_issuer ON crl(issuer_dn);
 CREATE INDEX idx_crl_fingerprint ON crl(fingerprint_sha256);
+CREATE INDEX idx_crl_stored_created ON crl(stored_in_ldap, created_at ASC);
 
 -- Revoked certificates (from CRL)
 CREATE TABLE IF NOT EXISTS revoked_certificate (
@@ -319,6 +325,7 @@ CREATE INDEX idx_validation_status ON validation_result(validation_status);
 CREATE INDEX idx_validation_trust_chain ON validation_result(trust_chain_valid);
 CREATE INDEX idx_validation_timestamp ON validation_result(validation_timestamp);
 CREATE INDEX idx_validation_icao_compliant ON validation_result(icao_compliant);
+CREATE INDEX idx_validation_status_country ON validation_result(validation_status, country_code);
 
 -- =============================================================================
 -- Certificate Duplicate Tracking

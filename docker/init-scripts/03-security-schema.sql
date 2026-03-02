@@ -93,3 +93,4 @@ CREATE INDEX idx_op_audit_operation_type ON operation_audit_log(operation_type);
 CREATE INDEX idx_op_audit_resource_type ON operation_audit_log(resource_type);
 CREATE INDEX idx_op_audit_created_at ON operation_audit_log(created_at);
 CREATE INDEX idx_op_audit_success ON operation_audit_log(success);
+CREATE INDEX idx_op_audit_type_created ON operation_audit_log(operation_type, created_at DESC);

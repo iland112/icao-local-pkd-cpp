@@ -47,6 +47,7 @@ CREATE INDEX IF NOT EXISTS idx_ai_analysis_score ON ai_analysis_result(anomaly_s
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_risk_score ON ai_analysis_result(risk_score DESC);
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_forensic ON ai_analysis_result(forensic_risk_level);
 CREATE INDEX IF NOT EXISTS idx_ai_analysis_forensic_score ON ai_analysis_result(forensic_risk_score DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_analysis_label_score ON ai_analysis_result(anomaly_label, anomaly_score DESC);
 
 -- Migration: Add forensic columns to existing table (safe for re-runs)
 DO $$

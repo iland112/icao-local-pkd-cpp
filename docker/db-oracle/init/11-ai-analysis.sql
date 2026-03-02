@@ -53,6 +53,7 @@ CREATE INDEX idx_ai_score ON ai_analysis_result(anomaly_score DESC);
 CREATE INDEX idx_ai_risk_score ON ai_analysis_result(risk_score DESC);
 CREATE INDEX idx_ai_forensic ON ai_analysis_result(forensic_risk_level);
 CREATE INDEX idx_ai_forensic_score ON ai_analysis_result(forensic_risk_score DESC);
+CREATE INDEX idx_ai_analysis_label_score ON ai_analysis_result(anomaly_label, anomaly_score DESC);
 
 COMMIT;
 

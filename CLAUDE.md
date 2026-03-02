@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.7
+**Current Version**: v2.25.8
 **Last Updated**: 2026-03-02
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -579,6 +579,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.8 (2026-03-02) - SQL 인덱스 최적화 (Oracle 패리티 + 복합 인덱스)
+- **Oracle 패리티 인덱스 (2개)**: PostgreSQL에만 존재하던 `certificate.subject_dn`, `certificate.issuer_dn` 인덱스를 Oracle에 추가
+- **Oracle 중복 인덱스 제거**: `link_certificate.fingerprint_sha256` — UNIQUE 제약(`uq_lc_fingerprint`)이 이미 인덱스 역할, 중복 `CREATE INDEX` 제거
+- **복합 인덱스 (7개, 양쪽 DB)**: 단일 컬럼 인덱스로 커버되지 않던 다중 조건 쿼리 최적화
+  - `certificate(stored_in_ldap, created_at)` — Relay 동기화 쿼리 (`WHERE stored_in_ldap=FALSE ORDER BY created_at`)
+  - `certificate(country_code, certificate_type)` — 국가 통계 쿼리 (`GROUP BY country_code, certificate_type`)
+  - `certificate(certificate_type, created_at)` — CSCA 조회 (`WHERE type='CSCA' ORDER BY created_at`)
+  - `crl(stored_in_ldap, created_at)` — CRL 동기화 쿼리
+  - `validation_result(validation_status, country_code)` — 검증 통계 쿼리
+  - `operation_audit_log(operation_type, created_at)` — 감사 로그 필터 쿼리
+  - `ai_analysis_result(anomaly_label, anomaly_score DESC)` — 이상 목록 필터+정렬 쿼리
+- **마이그레이션 스크립트**: PostgreSQL (`CREATE INDEX IF NOT EXISTS`) + Oracle (PL/SQL `ORA-955`/`ORA-1408` 예외 처리) — 기존 DB 안전 적용
+- **Oracle 실측 검증**: 9개 인덱스 생성 확인 (1개는 UNIQUE 제약으로 이미 커버)
+- PostgreSQL init scripts 3개 + Oracle init scripts 3개 수정, 마이그레이션 스크립트 2개 신규
+- 8 files changed (2 new, 6 modified)
 
 ### v2.25.7 (2026-03-02) - 안정성 강화 + AI 벡터화 + 코드 품질 개선
 - **Phase 1 — 안정성 (5개 작업)**:
