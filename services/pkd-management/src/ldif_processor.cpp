@@ -124,7 +124,8 @@ CscaValidationResult validateCscaCertificate(X509* cert) {
     return result;
 }
 
-DscValidationResult validateDscCertificate(X509* dscCert, const std::string& issuerDn) {
+DscValidationResult validateDscCertificate(X509* dscCert, const std::string& issuerDn,
+                                            adapters::DbCscaProvider* sharedProvider = nullptr) {
     DscValidationResult result = {false, false, false, false, false, false, false, "", "", ""};
     if (!dscCert) { result.errorMessage = "DSC certificate is null"; return result; }
 
@@ -137,8 +138,14 @@ DscValidationResult validateDscCertificate(X509* dscCert, const std::string& iss
     }
 
     // Build and validate trust chain via icao::validation library
-    adapters::DbCscaProvider provider(g_services->certificateRepository());
-    icao::validation::TrustChainBuilder builder(&provider);
+    // Use shared provider (with cache) if available, otherwise create local one
+    std::unique_ptr<adapters::DbCscaProvider> localProvider;
+    adapters::DbCscaProvider* provider = sharedProvider;
+    if (!provider) {
+        localProvider = std::make_unique<adapters::DbCscaProvider>(g_services->certificateRepository());
+        provider = localProvider.get();
+    }
+    icao::validation::TrustChainBuilder builder(provider);
     auto chainResult = builder.build(dscCert);
 
     result.cscaFound = !chainResult.cscaSubjectDn.empty();
@@ -167,7 +174,8 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                            const LdifEntry& entry, const std::string& attrName,
                            int& cscaCount, int& dscCount, int& dscNcCount, int& ldapStoredCount,
                            ValidationStats& validationStats,
-                           common::ValidationStatistics& enhancedStats) {
+                           common::ValidationStatistics& enhancedStats,
+                           adapters::DbCscaProvider* sharedCscaProvider = nullptr) {
     std::string base64Value = entry.getFirstAttribute(attrName);
     if (base64Value.empty()) return false;
 
@@ -282,7 +290,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         spdlog::info("Detected DSC_NC certificate from nc-data path: dn={}", entry.dn);
 
         // DSC_NC - perform trust chain validation (ICAO hybrid model)
-        auto dscValidation = validateDscCertificate(cert, issuerDn);
+        auto dscValidation = validateDscCertificate(cert, issuerDn, sharedCscaProvider);
         valRecord.cscaFound = dscValidation.cscaFound;
         valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
         valRecord.signatureVerified = dscValidation.signatureValid;
@@ -352,7 +360,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
             valRecord.keyUsageValid = cscaValidation.hasKeyCertSign;
 
             // Link certificates need parent CSCA validation (ICAO hybrid model)
-            auto lcValidation = validateDscCertificate(cert, issuerDn);
+            auto lcValidation = validateDscCertificate(cert, issuerDn, sharedCscaProvider);
             valRecord.cscaFound = lcValidation.cscaFound;
             valRecord.cscaSubjectDn = lcValidation.cscaSubjectDn;
             valRecord.trustChainPath = lcValidation.trustChainPath;
@@ -409,7 +417,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
         // DSC - perform trust chain validation
         // ICAO Doc 9303 Part 12 hybrid chain model: expiration is informational
-        auto dscValidation = validateDscCertificate(cert, issuerDn);
+        auto dscValidation = validateDscCertificate(cert, issuerDn, sharedCscaProvider);
         valRecord.cscaFound = dscValidation.cscaFound;
         valRecord.cscaSubjectDn = dscValidation.cscaSubjectDn;
         valRecord.signatureVerified = dscValidation.signatureValid;
@@ -572,6 +580,13 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
 
     if (isDuplicate) {
         enhancedStats.duplicateCount++;
+    }
+
+    // Invalidate CSCA cache when a new CSCA is added to DB
+    // Next DSC validation will trigger lazy reload with the new CSCA included
+    if (!isDuplicate && (certType == "CSCA") && sharedCscaProvider) {
+        sharedCscaProvider->invalidateCache();
+        spdlog::info("New CSCA saved — CSCA cache invalidated for reload");
     }
 
     if (!certId.empty()) {
@@ -831,6 +846,11 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
     spdlog::info("Processing {} LDIF entries for upload {}", totalEntries, uploadId);
 
+    // Preload all CSCA certificates into memory cache for trust chain validation
+    // Eliminates ~30K per-DSC DB queries during processing (~845 CSCAs loaded once)
+    adapters::DbCscaProvider sharedCscaProvider(g_services->certificateRepository());
+    sharedCscaProvider.preloadAllCscas();
+
     // Process each entry
     for (const auto& entry : entries) {
         try {
@@ -838,13 +858,15 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
             if (entry.hasAttribute("userCertificate;binary")) {
                 parseCertificateEntry(ld, uploadId, entry, "userCertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
-                                    counts.ldapCertStoredCount, stats, enhancedStats);
+                                    counts.ldapCertStoredCount, stats, enhancedStats,
+                                    &sharedCscaProvider);
             }
             // Check for cACertificate;binary
             else if (entry.hasAttribute("cACertificate;binary")) {
                 parseCertificateEntry(ld, uploadId, entry, "cACertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
-                                    counts.ldapCertStoredCount, stats, enhancedStats);
+                                    counts.ldapCertStoredCount, stats, enhancedStats,
+                                    &sharedCscaProvider);
             }
 
             // Check for CRL

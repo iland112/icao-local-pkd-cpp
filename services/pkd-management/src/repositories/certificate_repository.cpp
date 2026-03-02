@@ -539,6 +539,62 @@ std::vector<X509*> CertificateRepository::findAllCscasBySubjectDn(const std::str
     }
 }
 
+std::vector<std::pair<std::string, std::vector<uint8_t>>> CertificateRepository::findAllCscas()
+{
+    spdlog::info("[CertificateRepository] Bulk loading all CSCA certificates for cache");
+
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> result;
+
+    try {
+        std::string query = "SELECT subject_dn, certificate_data FROM certificate "
+                           "WHERE certificate_type = 'CSCA'";
+
+        Json::Value rows = queryExecutor_->executeQuery(query, {});
+
+        // Helper: decode hex string (with \x prefix) to bytes
+        auto decodeHex = [](const std::string& hex, size_t start) -> std::vector<uint8_t> {
+            std::vector<uint8_t> bytes;
+            bytes.reserve((hex.size() - start) / 2);
+            for (size_t i = start; i + 1 < hex.size(); i += 2) {
+                char h[3] = {hex[i], hex[i + 1], 0};
+                bytes.push_back(static_cast<uint8_t>(strtol(h, nullptr, 16)));
+            }
+            return bytes;
+        };
+
+        for (Json::ArrayIndex i = 0; i < rows.size(); i++) {
+            std::string subjectDn = rows[i].get("subject_dn", "").asString();
+            std::string certDataHex = rows[i].get("certificate_data", "").asString();
+
+            if (subjectDn.empty() || certDataHex.empty()) continue;
+
+            // Parse hex to DER bytes (same logic as parseCertificateDataFromHex)
+            std::vector<uint8_t> derBytes;
+            if (certDataHex.size() > 2 && certDataHex[0] == '\\' && certDataHex[1] == 'x') {
+                derBytes = decodeHex(certDataHex, 2);
+                // Handle double-encoded BYTEA
+                if (derBytes.size() > 2 && derBytes[0] == 0x5C && derBytes[1] == 0x78) {
+                    std::string innerHex(derBytes.begin(), derBytes.end());
+                    derBytes = decodeHex(innerHex, 2);
+                }
+            } else if (!certDataHex.empty() && static_cast<unsigned char>(certDataHex[0]) == 0x30) {
+                derBytes.assign(certDataHex.begin(), certDataHex.end());
+            }
+
+            if (!derBytes.empty()) {
+                result.emplace_back(subjectDn, std::move(derBytes));
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Loaded {} CSCA certificates", result.size());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findAllCscas failed: {}", e.what());
+        return result;
+    }
+}
+
 Json::Value CertificateRepository::findDscForRevalidation(int limit)
 {
     spdlog::debug("[CertificateRepository] Finding DSC certificates for re-validation (limit: {})", limit);

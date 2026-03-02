@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.8
+**Current Version**: v2.25.9
 **Last Updated**: 2026-03-02
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -579,6 +579,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.9 (2026-03-02) - Oracle 업로드 성능 최적화 (CSCA 캐시 + Regex 사전컴파일)
+- **CSCA 인메모리 캐시**: LDIF 처리 시작 전 전체 CSCA (~845건)를 1회 벌크 로드하여 메모리 캐시 → DSC 29,838건 각각의 CSCA DB 조회 제거 (30K 쿼리 → 1~2회)
+- **Oracle LOB 세션 드롭 완화**: CSCA 조회 시 `certificate_data` BLOB SELECT → OCI 세션 파괴 (`OCI_SESSRLS_DROPSESS`) 반복이 캐시로 근본 해결
+- **CSCA 캐시 lazy reload**: 새 CSCA 저장 시 캐시 무효화 → 다음 DSC 조회 시 자동 재로드 (LDIF 파일 내 CSCA 추가에도 정합성 보장)
+- **Regex 사전 컴파일**: `OracleQueryExecutor`의 PostgreSQL→Oracle SQL 변환 패턴 8개를 매 쿼리 재컴파일 → static 1회 컴파일 (~150K 컴파일 제거)
+- **DbCscaProvider**: `preloadAllCscas()`, `invalidateCache()` 메서드 추가, normalized DN 기반 캐시 조회
+- **CertificateRepository**: `findAllCscas()` 벌크 조회 메서드 추가 (캐시 로드용)
+- **예상 성능**: Oracle 업로드 182ms/건 → ~32ms/건 (5.7배 개선, 5.5건/초 → ~30건/초)
+- 6 files changed (0 new, 6 modified)
 
 ### v2.25.8 (2026-03-02) - SQL 인덱스 최적화 (Oracle 패리티 + 복합 인덱스)
 - **Oracle 패리티 인덱스 (2개)**: PostgreSQL에만 존재하던 `certificate.subject_dn`, `certificate.issuer_dn` 인덱스를 Oracle에 추가

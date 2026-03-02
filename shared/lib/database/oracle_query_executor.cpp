@@ -22,6 +22,19 @@
 // Mutex for serializing OCI connection creation (OCI is not thread-safe during env setup)
 static std::mutex g_ociConnectionMutex;
 
+// Pre-compiled regex patterns for PostgreSQL→Oracle query transformation
+// Compiled once at static init instead of per-query (~150K compilations eliminated during bulk upload)
+static const std::regex s_pgPlaceholder(R"(\$(\d+))");
+static const std::regex s_nullifInteger(R"(NULLIF\(([^,]+),\s*''\s*\)::INTEGER)", std::regex::icase);
+static const std::regex s_limitOffset(R"(\s+LIMIT\s+(\d+|:\d+)\s+OFFSET\s+(\d+|:\d+)\s*$)", std::regex::icase);
+static const std::regex s_limitOnly(R"(\s+LIMIT\s+(\d+|:\d+)\s*$)", std::regex::icase);
+static const std::regex s_returningClause(R"(\s+RETURNING\s+\w+(\s+INTO\s+:\d+)?\s*$)", std::regex::icase);
+// Legacy OCI path additional patterns
+static const std::regex s_nowFunc(R"(NOW\(\))", std::regex::icase);
+static const std::regex s_currentTimestamp(R"(CURRENT_TIMESTAMP)", std::regex::icase);
+static const std::regex s_typecast(R"(::[a-zA-Z_][a-zA-Z0-9_]*)", std::regex::icase);
+static const std::regex s_onConflict(R"(\s+ON\s+CONFLICT\s*\([^)]*\)\s+DO\s+(NOTHING|UPDATE\s+SET\s+.*)$)", std::regex::icase);
+
 namespace common {
 
 // --- Constructor & Destructor ---
@@ -106,27 +119,22 @@ Json::Value OracleQueryExecutor::executeQuery(
         session = acquirePooledSession();
 
         // Convert PostgreSQL placeholders to OCI positional binding format
+        // Uses pre-compiled static regex patterns (see file top) for performance
         std::string oracleQuery = query;
-        std::regex pg_placeholder(R"(\$(\d+))");
-        oracleQuery = std::regex_replace(oracleQuery, pg_placeholder, ":$1");
+        oracleQuery = std::regex_replace(oracleQuery, s_pgPlaceholder, ":$1");
 
         // Convert PostgreSQL-specific NULLIF()::INTEGER to Oracle CASE expression
-        std::regex nullif_integer(R"(NULLIF\(([^,]+),\s*''\s*\)::INTEGER)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, nullif_integer, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
+        oracleQuery = std::regex_replace(oracleQuery, s_nullifInteger, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
 
         // Convert LIMIT/OFFSET syntax (handles both literal numbers and :N bind variables)
-        std::regex limit_offset_regex(R"(\s+LIMIT\s+(\d+|:\d+)\s+OFFSET\s+(\d+|:\d+)\s*$)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, limit_offset_regex, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
-
-        std::regex limit_regex(R"(\s+LIMIT\s+(\d+|:\d+)\s*$)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, limit_regex, " FETCH FIRST $1 ROWS ONLY");
+        oracleQuery = std::regex_replace(oracleQuery, s_limitOffset, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
+        oracleQuery = std::regex_replace(oracleQuery, s_limitOnly, " FETCH FIRST $1 ROWS ONLY");
 
         // Handle DML with RETURNING clause
         bool isDmlReturning = false;
-        std::regex returning_strip(R"(\s+RETURNING\s+\w+(\s+INTO\s+:\d+)?\s*$)", std::regex::icase);
-        if (std::regex_search(oracleQuery, returning_strip)) {
+        if (std::regex_search(oracleQuery, s_returningClause)) {
             isDmlReturning = true;
-            oracleQuery = std::regex_replace(oracleQuery, returning_strip, "");
+            oracleQuery = std::regex_replace(oracleQuery, s_returningClause, "");
             spdlog::info("[OracleQueryExecutor] Stripped RETURNING clause for Oracle DML");
         }
 
@@ -421,29 +429,16 @@ int OracleQueryExecutor::executeCommand(
         session = acquirePooledSession();
 
         // Convert PostgreSQL syntax to Oracle syntax
+        // Uses pre-compiled static regex patterns (see file top) for performance
         std::string oracleQuery = query;
-        std::regex pg_placeholder(R"(\$(\d+))");
-        oracleQuery = std::regex_replace(oracleQuery, pg_placeholder, ":$1");
-
-        // Convert NULLIF()::INTEGER to Oracle CASE expression
-        std::regex nullif_integer(R"(NULLIF\(([^,]+),\s*''\s*\)::INTEGER)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, nullif_integer, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
-
-        // Convert PostgreSQL CURRENT_TIMESTAMP to Oracle SYSTIMESTAMP
-        std::regex current_timestamp_regex(R"(CURRENT_TIMESTAMP)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, current_timestamp_regex, "SYSTIMESTAMP");
-
-        // Convert PostgreSQL NOW() to Oracle SYSDATE
-        std::regex now_regex(R"(NOW\(\))", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, now_regex, "SYSDATE");
-
-        // Remove PostgreSQL type casts (::typename)
-        std::regex typecast_regex(R"(::[a-zA-Z_][a-zA-Z0-9_]*)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, typecast_regex, "");
+        oracleQuery = std::regex_replace(oracleQuery, s_pgPlaceholder, ":$1");
+        oracleQuery = std::regex_replace(oracleQuery, s_nullifInteger, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
+        oracleQuery = std::regex_replace(oracleQuery, s_currentTimestamp, "SYSTIMESTAMP");
+        oracleQuery = std::regex_replace(oracleQuery, s_nowFunc, "SYSDATE");
+        oracleQuery = std::regex_replace(oracleQuery, s_typecast, "");
 
         // Handle PostgreSQL ON CONFLICT clause (not supported in Oracle)
-        std::regex on_conflict_regex(R"(\s+ON\s+CONFLICT\s*\([^)]*\)\s+DO\s+(NOTHING|UPDATE\s+SET\s+.*)$)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, on_conflict_regex, "");
+        oracleQuery = std::regex_replace(oracleQuery, s_onConflict, "");
 
         spdlog::debug("[OracleQueryExecutor] OCI command: {}", oracleQuery.substr(0, 300));
 
@@ -601,39 +596,23 @@ Json::Value OracleQueryExecutor::executeScalar(
 
 std::string OracleQueryExecutor::convertPlaceholders(const std::string& query)
 {
-    // Convert PostgreSQL $1, $2, $3 to Oracle :v1<char[4000]>, :v2<char[4000]>, :v3<char[4000]>
-    // Note: OTL requires typed placeholders for SELECT queries
+    // OTL legacy path: convert PostgreSQL $1 to OTL :v1<char[4000]> format
+    // Uses dedicated static patterns for OTL-specific placeholder format
+    static const std::regex s_otlPlaceholder(R"(\$(\d+))");
+    static const std::regex s_otlLimitOffset(R"(\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s+OFFSET\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
+    static const std::regex s_otlOffsetLimit(R"(\s+OFFSET\s+(\d+|:v\d+<char\[4000\]>)\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
+    static const std::regex s_otlLimitOnly(R"(\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
+
     std::string result = query;
-    std::regex placeholder_regex(R"(\$(\d+))");
-    result = std::regex_replace(result, placeholder_regex, ":v$1<char[4000]>");
+    result = std::regex_replace(result, s_otlPlaceholder, ":v$1<char[4000]>");
+    result = std::regex_replace(result, s_otlLimitOffset, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
+    result = std::regex_replace(result, s_otlOffsetLimit, " OFFSET $1 ROWS FETCH NEXT $2 ROWS ONLY");
+    result = std::regex_replace(result, s_otlLimitOnly, " FETCH FIRST $1 ROWS ONLY");
 
-    // Convert LIMIT ... OFFSET to Oracle syntax (order: LIMIT before OFFSET)
-    // Pattern: LIMIT <number> OFFSET <number>
-    std::regex limit_offset_regex(R"(\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s+OFFSET\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
-    result = std::regex_replace(result, limit_offset_regex, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
-
-    // Convert OFFSET ... LIMIT to OFFSET ... FETCH FIRST (order: OFFSET before LIMIT)
-    // Pattern: OFFSET <number> LIMIT <number>
-    std::regex offset_limit_regex(R"(\s+OFFSET\s+(\d+|:v\d+<char\[4000\]>)\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
-    result = std::regex_replace(result, offset_limit_regex, " OFFSET $1 ROWS FETCH NEXT $2 ROWS ONLY");
-
-    // Convert LIMIT clause alone to Oracle FETCH FIRST syntax
-    // Pattern: LIMIT <number> or LIMIT :param (must be after LIMIT...OFFSET patterns!)
-    std::regex limit_regex(R"(\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
-    result = std::regex_replace(result, limit_regex, " FETCH FIRST $1 ROWS ONLY");
-
-    // Convert PostgreSQL NOW() function to Oracle SYSDATE
-    std::regex now_regex(R"(NOW\(\))", std::regex::icase);
-    result = std::regex_replace(result, now_regex, "SYSDATE");
-
-    // Convert PostgreSQL CURRENT_TIMESTAMP to Oracle SYSTIMESTAMP
-    std::regex current_timestamp_regex(R"(CURRENT_TIMESTAMP)", std::regex::icase);
-    result = std::regex_replace(result, current_timestamp_regex, "SYSTIMESTAMP");
-
-    // Remove PostgreSQL type casts (::typename) - Oracle doesn't support this syntax
-    // Pattern: ::type_name (e.g., ::jsonb, ::text, ::integer)
-    std::regex typecast_regex(R"(::[a-zA-Z_][a-zA-Z0-9_]*)", std::regex::icase);
-    result = std::regex_replace(result, typecast_regex, "");
+    // Reuse shared static patterns for common transformations
+    result = std::regex_replace(result, s_nowFunc, "SYSDATE");
+    result = std::regex_replace(result, s_currentTimestamp, "SYSTIMESTAMP");
+    result = std::regex_replace(result, s_typecast, "");
 
     spdlog::debug("[OracleQueryExecutor] Converted query: {}", result);
     return result;
@@ -1297,30 +1276,22 @@ Json::Value OracleQueryExecutor::executeQueryWithOCI(
 
     try {
         // Convert PostgreSQL placeholders to OCI positional binding format
-        // $1, $2, $3 → :1, :2, :3 (NOT :v1<char[4000]> which is OTL syntax)
+        // Uses pre-compiled static regex patterns (see file top) for performance
         std::string oracleQuery = query;
-        std::regex pg_placeholder(R"(\$(\d+))");
-        oracleQuery = std::regex_replace(oracleQuery, pg_placeholder, ":$1");
+        oracleQuery = std::regex_replace(oracleQuery, s_pgPlaceholder, ":$1");
 
         // Convert LIMIT ... OFFSET to Oracle syntax
-        std::regex limit_offset_regex(R"(\s+LIMIT\s+(\d+)\s+OFFSET\s+(\d+)\s*$)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, limit_offset_regex, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
-
-        // Convert LIMIT clause alone to Oracle FETCH FIRST syntax
-        std::regex limit_regex(R"(\s+LIMIT\s+(\d+)\s*$)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, limit_regex, " FETCH FIRST $1 ROWS ONLY");
+        oracleQuery = std::regex_replace(oracleQuery, s_limitOffset, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
+        oracleQuery = std::regex_replace(oracleQuery, s_limitOnly, " FETCH FIRST $1 ROWS ONLY");
 
         // Convert PostgreSQL NOW() to Oracle SYSDATE
-        std::regex now_regex(R"(NOW\(\))", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, now_regex, "SYSDATE");
+        oracleQuery = std::regex_replace(oracleQuery, s_nowFunc, "SYSDATE");
 
         // Convert PostgreSQL CURRENT_TIMESTAMP to Oracle SYSTIMESTAMP
-        std::regex current_timestamp_regex(R"(CURRENT_TIMESTAMP)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, current_timestamp_regex, "SYSTIMESTAMP");
+        oracleQuery = std::regex_replace(oracleQuery, s_currentTimestamp, "SYSTIMESTAMP");
 
         // Remove PostgreSQL type casts (::typename)
-        std::regex typecast_regex(R"(::[a-zA-Z_][a-zA-Z0-9_]*)", std::regex::icase);
-        oracleQuery = std::regex_replace(oracleQuery, typecast_regex, "");
+        oracleQuery = std::regex_replace(oracleQuery, s_typecast, "");
 
         spdlog::debug("[OracleQueryExecutor] OCI query: {}", oracleQuery.substr(0, 200));
 

@@ -165,6 +165,17 @@ public:
     std::vector<X509*> findAllCscasBySubjectDn(const std::string& subjectDn);
 
     /**
+     * @brief Bulk load all CSCA certificates (for in-memory cache)
+     *
+     * Fetches all CSCA certificate data in a single query for preloading
+     * into DbCscaProvider cache. Avoids repeated per-DSC queries during
+     * LDIF upload processing (~845 CSCAs loaded once instead of ~30K queries).
+     *
+     * @return Vector of (subjectDn, DER bytes) pairs
+     */
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> findAllCscas();
+
+    /**
      * @brief Find DSC certificates that need re-validation
      * Retrieves DSC/DSC_NC certificates with CSCA_NOT_FOUND error for re-validation.
      *
