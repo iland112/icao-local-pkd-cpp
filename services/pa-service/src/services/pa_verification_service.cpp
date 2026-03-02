@@ -127,6 +127,10 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
             unsigned char digest[EVP_MAX_MD_SIZE];
             unsigned int digestLen = 0;
             EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+            if (!ctx) {
+                spdlog::error("EVP_MD_CTX_new() allocation failed in PA verification");
+                throw std::runtime_error("Memory allocation failed for hash computation");
+            }
             EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
             EVP_DigestUpdate(ctx, sodData.data(), sodData.size());
             EVP_DigestFinal_ex(ctx, digest, &digestLen);

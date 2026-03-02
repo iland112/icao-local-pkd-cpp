@@ -544,6 +544,11 @@ DscConformanceInfo LdapCertificateRepository::checkDscConformance(
         unsigned char hash[EVP_MAX_MD_SIZE];
         unsigned int hashLen = 0;
         EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        if (!ctx) {
+            spdlog::error("EVP_MD_CTX_new() allocation failed in checkDscConformance");
+            OPENSSL_free(derBuf);
+            return info;
+        }
         EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
         EVP_DigestUpdate(ctx, derBuf, derLen);
         EVP_DigestFinal_ex(ctx, hash, &hashLen);

@@ -67,4 +67,35 @@ inline drogon::HttpResponsePtr badRequest(const std::string& publicMessage) {
     return resp;
 }
 
+/**
+ * Create standardized JSON success response.
+ * Use for new endpoints; existing endpoints retain their format for backward compatibility.
+ */
+inline drogon::HttpResponsePtr sendJsonSuccess(
+    const Json::Value& data,
+    const std::string& message = "",
+    drogon::HttpStatusCode status = drogon::k200OK) {
+    Json::Value body;
+    body["success"] = true;
+    if (!message.empty()) {
+        body["message"] = message;
+    }
+    body["data"] = data;
+    auto resp = drogon::HttpResponse::newHttpJsonResponse(body);
+    resp->setStatusCode(status);
+    return resp;
+}
+
+/**
+ * Create standardized 404 Not Found response.
+ */
+inline drogon::HttpResponsePtr notFound(const std::string& publicMessage) {
+    Json::Value body;
+    body["success"] = false;
+    body["error"] = publicMessage;
+    auto resp = drogon::HttpResponse::newHttpJsonResponse(body);
+    resp->setStatusCode(drogon::k404NotFound);
+    return resp;
+}
+
 } // namespace common::handler

@@ -262,8 +262,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         and feature_matrix is the numpy array of features (n x 45).
     """
     from app.services.extension_rules_engine import (
-        count_missing_required,
-        count_unexpected_extensions,
+        EXPECTED_EXTENSIONS,
     )
     from app.services.issuer_profiler import (
         count_dn_fields,
@@ -368,157 +367,371 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         ).mean()
         country_risk_proxy[country] = round((1.0 - icao_ok) * 0.6 + expired * 0.4, 4)
 
-    for i, (_, row) in enumerate(df.iterrows()):
-        key_size = row.get("public_key_size") or 0
-        sig_alg = row.get("signature_algorithm") or ""
-        pub_alg = row.get("public_key_algorithm") or ""
-        cert_type = row.get("certificate_type") or ""
-        country = row.get("country_code") or ""
-        issuer_dn = str(row.get("issuer_dn") or "")
-        subject_dn = str(row.get("subject_dn") or "")
+    # =========================================================================
+    # Vectorized feature extraction (replaces per-row iterrows loop)
+    # =========================================================================
 
-        # Validity period
-        validity_days = row.get("_validity_days")
-        if safe_isna(validity_days):
-            validity_days = 0.0
+    # --- Vectorized helper: _safe_bool for a column ---
+    def _vec_safe_bool(series: pd.Series) -> np.ndarray:
+        """Vectorized _safe_bool: convert column to float 0.0/1.0."""
+        result = np.zeros(len(series), dtype=np.float64)
+        for idx, val in enumerate(series.values):
+            if val is None:
+                continue
+            if isinstance(val, bool):
+                result[idx] = 1.0 if val else 0.0
+            elif isinstance(val, (int, float)):
+                result[idx] = 1.0 if val else 0.0
+            elif isinstance(val, str):
+                result[idx] = 1.0 if val.lower() in ("true", "1", "t", "yes") else 0.0
+        return result
 
-        # Days until expiry
-        not_after = row.get("not_after")
-        if not_after and not safe_isna(not_after):
-            not_after_dt = pd.to_datetime(not_after)
-            if not_after_dt.tzinfo is None:
-                not_after_dt = not_after_dt.replace(tzinfo=timezone.utc)
-            days_until = (not_after_dt - now).total_seconds() / 86400.0
-        else:
-            days_until = 0.0
+    # --- Vectorized helper: check if column values are non-empty (truthy) ---
+    def _vec_has_value(series: pd.Series) -> np.ndarray:
+        """Return 1.0 where column has a truthy non-NaN value, else 0.0."""
+        result = np.zeros(len(series), dtype=np.float64)
+        for idx, val in enumerate(series.values):
+            if val is not None and not (isinstance(val, float) and np.isnan(val)):
+                if isinstance(val, str):
+                    if val.strip():
+                        result[idx] = 1.0
+                else:
+                    if val:
+                        result[idx] = 1.0
+        return result
 
-        is_expired = 1.0 if days_until < 0 else 0.0
+    # --- Pre-extract columns as arrays for fast access ---
+    key_size_arr = pd.to_numeric(df["public_key_size"], errors="coerce").fillna(0).values.astype(np.float64)
+    sig_alg_arr = df["signature_algorithm"].fillna("").astype(str).values
+    pub_alg_arr = df["public_key_algorithm"].fillna("").astype(str).values
+    cert_type_arr = df["certificate_type"].fillna("").astype(str).values
+    country_arr = df["country_code"].fillna("").astype(str).values
+    issuer_dn_arr = df["issuer_dn"].fillna("").astype(str).values
+    subject_dn_arr = df["subject_dn"].fillna("").astype(str).values
+    validity_days_arr = pd.to_numeric(df["_validity_days"], errors="coerce").fillna(0.0).values.astype(np.float64)
 
-        # ===== Original 25 features (indices 0-24) =====
-        features[i, 0] = key_size / max_key_size if max_key_size > 0 else 0.0
-        features[i, 1] = ALGORITHM_SCORES.get(sig_alg, 0.5)
-        features[i, 2] = 1.0 if "ecdsa" in pub_alg.lower() or "ec" == pub_alg.lower() else 0.0
-        features[i, 3] = 1.0 if "pss" in sig_alg.lower() else 0.0
-        features[i, 4] = validity_days / 365.25
-        features[i, 5] = (
-            validity_days / type_avg_validity.get(cert_type, validity_days or 1.0)
-            if validity_days > 0
-            else 0.0
-        )
-        features[i, 6] = max(days_until / 365.25, -5.0)
-        features[i, 7] = is_expired
-        features[i, 8] = _safe_bool(row.get("icao_compliant"))
-        features[i, 9] = _safe_bool(row.get("trust_chain_valid"))
-        features[i, 10] = _count_violations(row.get("icao_violations"))
-        features[i, 11] = _safe_bool(row.get("icao_key_usage_compliant"))
-        features[i, 12] = _safe_bool(row.get("icao_algorithm_compliant"))
-        features[i, 13] = _count_extensions(row)
-        features[i, 14] = 1.0 if row.get("crl_distribution_points") else 0.0
-        features[i, 15] = 1.0 if row.get("ocsp_responder_url") else 0.0
-        features[i, 16] = 1.0 if row.get("authority_key_identifier") else 0.0
-        features[i, 17] = _safe_bool(row.get("is_ca"))
-        features[i, 18] = _safe_bool(row.get("is_self_signed"))
-        features[i, 19] = float(row.get("version") or 0)
-        features[i, 20] = float(row.get("path_len_constraint") or -1)
-        country_avg_ks = country_avg_key_size.get(country, key_size or 1.0)
-        features[i, 21] = (
-            (key_size - country_avg_ks) / country_avg_ks if country_avg_ks > 0 else 0.0
-        )
-        country_avg_v = country_avg_validity.get(country, validity_days or 1.0)
-        features[i, 22] = (
-            (validity_days - country_avg_v) / country_avg_v
-            if country_avg_v > 0
-            else 0.0
-        )
-        features[i, 23] = float(country_cert_counts.get(country, 0))
-        features[i, 24] = float(CERT_TYPE_MAP.get(cert_type, -1))
+    # --- Days until expiry (vectorized) ---
+    not_after_dt = pd.to_datetime(df["not_after"], errors="coerce", utc=True)
+    days_until_arr = np.where(
+        not_after_dt.notna(),
+        (not_after_dt - now).dt.total_seconds().values / 86400.0,
+        0.0,
+    )
+    is_expired_arr = np.where(days_until_arr < 0, 1.0, 0.0)
 
-        # ===== Issuer profile (4) — indices 25-28 =====
-        issuer_info = issuer_stats.get(issuer_dn, {})
-        features[i, 25] = float(issuer_info.get("count", 0))  # issuer_cert_count
-        features[i, 26] = float(issuer_info.get("anomaly_rate", 0.5))  # issuer_anomaly_rate
-        features[i, 27] = float(issuer_info.get("type_diversity", 0))  # issuer_type_diversity
-        # issuer_country_match: do issuer C= and subject C= match?
-        issuer_country = extract_country_from_dn(issuer_dn)
-        subject_country = extract_country_from_dn(subject_dn)
-        features[i, 28] = 1.0 if (issuer_country and issuer_country == subject_country) else 0.0
+    # ===== Original 25 features (indices 0-24) =====
 
-        # ===== Temporal pattern (4) — indices 29-32 =====
-        not_before = row.get("not_before")
-        if not_before and not safe_isna(not_before):
-            nb_dt = pd.to_datetime(not_before)
-            features[i, 29] = float(nb_dt.month) / 12.0  # issuance_month (normalized)
-        else:
-            features[i, 29] = 0.0
+    # [0] key_size_normalized
+    features[:, 0] = key_size_arr / max_key_size if max_key_size > 0 else 0.0
 
-        # validity_period_zscore
-        t_avg = type_avg_validity.get(cert_type, 0)
-        t_std = type_std_validity.get(cert_type, 1.0)
-        if t_std > 0 and validity_days > 0:
-            features[i, 30] = (validity_days - t_avg) / t_std
-        else:
-            features[i, 30] = 0.0
+    # [1] algorithm_age_score
+    features[:, 1] = np.array([ALGORITHM_SCORES.get(a, 0.5) for a in sig_alg_arr], dtype=np.float64)
 
-        # issuance_rate_deviation
-        issue_year = row.get("_issue_year")
-        if country in country_issuance_rates and issue_year and not safe_isna(issue_year):
-            cr = country_issuance_rates[country]
-            year_count = cr.get("year_counts", {}).get(int(issue_year), 0)
+    # [2] is_ecdsa
+    pub_alg_lower = np.array([a.lower() for a in pub_alg_arr])
+    features[:, 2] = np.where(
+        np.char.find(pub_alg_lower, "ecdsa") >= 0,
+        1.0,
+        np.where(pub_alg_lower == "ec", 1.0, 0.0),
+    )
+
+    # [3] is_rsa_pss
+    sig_alg_lower = np.array([a.lower() for a in sig_alg_arr])
+    features[:, 3] = np.where(np.char.find(sig_alg_lower, "pss") >= 0, 1.0, 0.0)
+
+    # [4] validity_days (normalized to years)
+    features[:, 4] = validity_days_arr / 365.25
+
+    # [5] validity_ratio (vs type average)
+    type_avg_mapped = np.array(
+        [type_avg_validity.get(ct, validity_days_arr[i] or 1.0) for i, ct in enumerate(cert_type_arr)],
+        dtype=np.float64,
+    )
+    # Avoid division by zero: where validity_days > 0 AND type_avg > 0
+    safe_type_avg = np.where(type_avg_mapped > 0, type_avg_mapped, 1.0)
+    features[:, 5] = np.where(validity_days_arr > 0, validity_days_arr / safe_type_avg, 0.0)
+
+    # [6] days_until_expiry (clipped, normalized to years)
+    features[:, 6] = np.maximum(days_until_arr / 365.25, -5.0)
+
+    # [7] is_expired
+    features[:, 7] = is_expired_arr
+
+    # [8] icao_compliant
+    features[:, 8] = _vec_safe_bool(df["icao_compliant"]) if "icao_compliant" in df.columns else 0.0
+
+    # [9] trust_chain_valid
+    features[:, 9] = _vec_safe_bool(df["trust_chain_valid"]) if "trust_chain_valid" in df.columns else 0.0
+
+    # [10] icao_violation_count
+    icao_violations_arr = df["icao_violations"].fillna("").astype(str).values if "icao_violations" in df.columns else np.full(n, "")
+    features[:, 10] = np.array(
+        [len(v.split("|")) if v and v.strip() else 0 for v in icao_violations_arr],
+        dtype=np.float64,
+    )
+
+    # [11] key_usage_compliant
+    features[:, 11] = _vec_safe_bool(df["icao_key_usage_compliant"]) if "icao_key_usage_compliant" in df.columns else 0.0
+
+    # [12] algorithm_compliant
+    features[:, 12] = _vec_safe_bool(df["icao_algorithm_compliant"]) if "icao_algorithm_compliant" in df.columns else 0.0
+
+    # [13] extension_count - count of non-empty extension fields
+    ext_has_arrays = [_vec_has_value(df[f]) for f in _EXT_FIELDS]
+    features[:, 13] = np.sum(ext_has_arrays, axis=0)
+
+    # [14] has_crl_dp
+    features[:, 14] = _vec_has_value(df["crl_distribution_points"])
+
+    # [15] has_ocsp
+    features[:, 15] = _vec_has_value(df["ocsp_responder_url"])
+
+    # [16] has_aki
+    features[:, 16] = _vec_has_value(df["authority_key_identifier"])
+
+    # [17] is_ca
+    features[:, 17] = _vec_safe_bool(df["is_ca"])
+
+    # [18] is_self_signed
+    features[:, 18] = _vec_safe_bool(df["is_self_signed"])
+
+    # [19] version
+    features[:, 19] = pd.to_numeric(df["version"], errors="coerce").fillna(0).values.astype(np.float64)
+
+    # [20] path_len
+    features[:, 20] = pd.to_numeric(df["path_len_constraint"], errors="coerce").fillna(-1).values.astype(np.float64)
+
+    # [21] key_size_vs_country_avg
+    country_avg_ks_arr = np.array(
+        [country_avg_key_size.get(c, key_size_arr[i] or 1.0) for i, c in enumerate(country_arr)],
+        dtype=np.float64,
+    )
+    safe_country_avg_ks = np.where(country_avg_ks_arr > 0, country_avg_ks_arr, 1.0)
+    features[:, 21] = (key_size_arr - country_avg_ks_arr) / safe_country_avg_ks
+
+    # [22] validity_vs_country_avg
+    country_avg_v_arr = np.array(
+        [country_avg_validity.get(c, validity_days_arr[i] or 1.0) for i, c in enumerate(country_arr)],
+        dtype=np.float64,
+    )
+    safe_country_avg_v = np.where(country_avg_v_arr > 0, country_avg_v_arr, 1.0)
+    features[:, 22] = np.where(
+        country_avg_v_arr > 0,
+        (validity_days_arr - country_avg_v_arr) / safe_country_avg_v,
+        0.0,
+    )
+
+    # [23] country_cert_count
+    features[:, 23] = np.array(
+        [float(country_cert_counts.get(c, 0)) for c in country_arr], dtype=np.float64,
+    )
+
+    # [24] cert_type_encoded
+    features[:, 24] = np.array(
+        [float(CERT_TYPE_MAP.get(ct, -1)) for ct in cert_type_arr], dtype=np.float64,
+    )
+
+    # ===== Issuer profile (4) — indices 25-28 =====
+
+    # Pre-map issuer stats for all rows
+    issuer_count_arr = np.array(
+        [float(issuer_stats.get(idn, {}).get("count", 0)) for idn in issuer_dn_arr],
+        dtype=np.float64,
+    )
+    issuer_anomaly_rate_arr = np.array(
+        [float(issuer_stats.get(idn, {}).get("anomaly_rate", 0.5)) for idn in issuer_dn_arr],
+        dtype=np.float64,
+    )
+    issuer_type_diversity_arr = np.array(
+        [float(issuer_stats.get(idn, {}).get("type_diversity", 0)) for idn in issuer_dn_arr],
+        dtype=np.float64,
+    )
+
+    # [25] issuer_cert_count
+    features[:, 25] = issuer_count_arr
+
+    # [26] issuer_anomaly_rate
+    features[:, 26] = issuer_anomaly_rate_arr
+
+    # [27] issuer_type_diversity
+    features[:, 27] = issuer_type_diversity_arr
+
+    # [28] issuer_country_match
+    issuer_countries = np.array([extract_country_from_dn(idn) for idn in issuer_dn_arr])
+    subject_countries = np.array([extract_country_from_dn(sdn) for sdn in subject_dn_arr])
+    features[:, 28] = np.where(
+        (issuer_countries != "") & (issuer_countries == subject_countries),
+        1.0, 0.0,
+    )
+
+    # ===== Temporal pattern (4) — indices 29-32 =====
+
+    # [29] issuance_month (normalized)
+    not_before_dt = pd.to_datetime(df["not_before"], errors="coerce")
+    issuance_month = not_before_dt.dt.month
+    features[:, 29] = np.where(issuance_month.notna(), issuance_month.fillna(0).values / 12.0, 0.0)
+
+    # [30] validity_period_zscore
+    type_avg_for_zscore = np.array(
+        [type_avg_validity.get(ct, 0) for ct in cert_type_arr], dtype=np.float64,
+    )
+    type_std_for_zscore = np.array(
+        [type_std_validity.get(ct, 1.0) for ct in cert_type_arr], dtype=np.float64,
+    )
+    features[:, 30] = np.where(
+        (type_std_for_zscore > 0) & (validity_days_arr > 0),
+        (validity_days_arr - type_avg_for_zscore) / np.where(type_std_for_zscore > 0, type_std_for_zscore, 1.0),
+        0.0,
+    )
+
+    # [31] issuance_rate_deviation
+    issue_year_arr = df["_issue_year"].values if "_issue_year" in df.columns else np.full(n, np.nan)
+    issuance_rate_dev = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        c = country_arr[i]
+        iy = issue_year_arr[i]
+        if c in country_issuance_rates and iy is not None and not (isinstance(iy, float) and np.isnan(iy)):
+            cr = country_issuance_rates[c]
+            year_count = cr.get("year_counts", {}).get(int(iy), 0)
             avg_rate = cr.get("avg_rate", 1.0) or 1.0
-            features[i, 31] = (year_count - avg_rate) / avg_rate
-        else:
-            features[i, 31] = 0.0
+            issuance_rate_dev[i] = (year_count - avg_rate) / avg_rate
+    features[:, 31] = issuance_rate_dev
 
-        # cert_age_ratio: elapsed / total validity
-        if not_before and not safe_isna(not_before) and validity_days > 0:
-            nb_dt = pd.to_datetime(not_before)
-            if nb_dt.tzinfo is None:
-                nb_dt = nb_dt.replace(tzinfo=timezone.utc)
-            elapsed = (now - nb_dt).total_seconds() / 86400.0
-            features[i, 32] = min(max(elapsed / validity_days, 0.0), 2.0)
-        else:
-            features[i, 32] = 0.0
+    # [32] cert_age_ratio: elapsed / total validity
+    not_before_utc = pd.to_datetime(df["not_before"], errors="coerce", utc=True)
+    elapsed_days = np.where(
+        not_before_utc.notna(),
+        (now - not_before_utc).dt.total_seconds().values / 86400.0,
+        0.0,
+    )
+    features[:, 32] = np.where(
+        (not_before_utc.notna().values) & (validity_days_arr > 0),
+        np.clip(elapsed_days / np.where(validity_days_arr > 0, validity_days_arr, 1.0), 0.0, 2.0),
+        0.0,
+    )
 
-        # ===== DN structure (4) — indices 33-36 =====
-        features[i, 33] = float(count_dn_fields(subject_dn))
-        features[i, 34] = float(count_dn_fields(issuer_dn))
-        features[i, 35] = float(detect_dn_format(subject_dn))
-        features[i, 36] = 1.0 if has_email_in_dn(subject_dn) else 0.0
+    # ===== DN structure (4) — indices 33-36 =====
 
-        # ===== Extension profile (4) — indices 37-40 =====
-        features[i, 37] = _extension_set_hash(row)
-        features[i, 38] = float(count_unexpected_extensions(row))
-        features[i, 39] = float(count_missing_required(row))
-        features[i, 40] = float(_count_critical_extensions(row))
+    # [33] subject_dn_field_count
+    features[:, 33] = np.array(
+        [float(count_dn_fields(sdn)) for sdn in subject_dn_arr], dtype=np.float64,
+    )
 
-        # ===== Cross-certificate (4) — indices 41-44 =====
-        # same_issuer_key_size_dev
-        issuer_avg_ks = issuer_info.get("avg_key_size", 0)
-        issuer_std_ks = issuer_info.get("std_key_size", 0)
-        if issuer_avg_ks > 0 and key_size > 0:
-            features[i, 41] = (key_size - issuer_avg_ks) / (issuer_avg_ks or 1.0)
-        else:
-            features[i, 41] = 0.0
+    # [34] issuer_dn_field_count
+    features[:, 34] = np.array(
+        [float(count_dn_fields(idn)) for idn in issuer_dn_arr], dtype=np.float64,
+    )
 
-        # same_issuer_algo_match
-        dominant_algo = issuer_info.get("dominant_algo", "")
-        features[i, 42] = 1.0 if (sig_alg and sig_alg == dominant_algo) else 0.0
+    # [35] dn_format_type
+    features[:, 35] = np.array(
+        [float(detect_dn_format(sdn)) for sdn in subject_dn_arr], dtype=np.float64,
+    )
 
-        # country_peer_risk_avg
-        features[i, 43] = float(country_risk_proxy.get(country, 0.5))
+    # [36] subject_has_email
+    features[:, 36] = np.array(
+        [1.0 if has_email_in_dn(sdn) else 0.0 for sdn in subject_dn_arr], dtype=np.float64,
+    )
 
-        # type_peer_extension_match: how similar cert's extensions to type norm
-        ext_pattern = type_ext_pattern.get(cert_type, {})
-        if ext_pattern:
-            match_score = 0.0
-            for f in _EXT_FIELDS:
-                val = row.get(f)
-                has = 1.0 if val and not (isinstance(val, float) and safe_isna(val)) else 0.0
-                expected = ext_pattern.get(f, 0.5)
-                match_score += 1.0 - abs(has - round(expected))
-            features[i, 44] = match_score / len(_EXT_FIELDS)
-        else:
-            features[i, 44] = 0.5
+    # ===== Extension profile (4) — indices 37-40 =====
+
+    # [37] extension_set_hash (vectorized over rows)
+    # Build a 2D boolean matrix of which extensions are present, then hash per row
+    ext_presence = np.column_stack(ext_has_arrays)  # shape (n, len(_EXT_FIELDS))
+    ext_hash_arr = np.zeros(n, dtype=np.float64)
+    for i in range(n):
+        parts = "".join("1" if ext_presence[i, j] > 0.5 else "0" for j in range(len(_EXT_FIELDS)))
+        h = int(hashlib.md5(parts.encode()).hexdigest()[:8], 16)
+        ext_hash_arr[i] = (h % 1000) / 1000.0
+    features[:, 37] = ext_hash_arr
+
+    # [38] unexpected_extensions (vectorized)
+    # For each cert type, determine which extension fields are expected
+    _expected_fields_by_type = {}
+    for ct_name, ct_profile in EXPECTED_EXTENSIONS.items():
+        _expected_fields_by_type[ct_name] = set(
+            ct_profile.get("required", []) + ct_profile.get("recommended", [])
+        )
+    unexpected_arr = np.zeros(n, dtype=np.float64)
+    for j, f in enumerate(_EXT_FIELDS):
+        has_col = ext_has_arrays[j]  # 1.0 where field is present
+        for ct_name, expected_set in _expected_fields_by_type.items():
+            if f not in expected_set:
+                # This field is unexpected for this cert type — count where present
+                ct_mask = cert_type_arr == ct_name
+                unexpected_arr += has_col * ct_mask
+        # Cert types not in EXPECTED_EXTENSIONS: no expected set, skip counting
+    features[:, 38] = unexpected_arr
+
+    # [39] missing_required_extensions (vectorized)
+    missing_req_arr = np.zeros(n, dtype=np.float64)
+    is_ca_bool = _vec_safe_bool(df["is_ca"])
+    for ct_name, ct_profile in EXPECTED_EXTENSIONS.items():
+        ct_mask = cert_type_arr == ct_name
+        if not np.any(ct_mask):
+            continue
+        for req_field in ct_profile.get("required", []):
+            if req_field == "is_ca":
+                # Missing if is_ca is False (0.0)
+                missing_req_arr += ct_mask * (1.0 - is_ca_bool)
+            else:
+                # Missing if field is not present
+                f_idx = _EXT_FIELDS.index(req_field) if req_field in _EXT_FIELDS else -1
+                if f_idx >= 0:
+                    missing_req_arr += ct_mask * (1.0 - ext_has_arrays[f_idx])
+    features[:, 39] = missing_req_arr
+
+    # [40] critical_extension_count (vectorized)
+    key_usage_str_arr = df["key_usage"].fillna("").astype(str).values
+    eku_str_arr = df["extended_key_usage"].fillna("").astype(str).values
+    crit_count = np.zeros(n, dtype=np.float64)
+    crit_count += np.array([1.0 if "critical" in ku.lower() else 0.0 for ku in key_usage_str_arr])
+    crit_count += np.array([1.0 if "critical" in eku.lower() else 0.0 for eku in eku_str_arr])
+    features[:, 40] = crit_count
+
+    # ===== Cross-certificate (4) — indices 41-44 =====
+
+    # Pre-map issuer avg/std key size for all rows
+    issuer_avg_ks_arr = np.array(
+        [float(issuer_stats.get(idn, {}).get("avg_key_size", 0)) for idn in issuer_dn_arr],
+        dtype=np.float64,
+    )
+    issuer_dominant_algo_arr = np.array(
+        [issuer_stats.get(idn, {}).get("dominant_algo", "") for idn in issuer_dn_arr],
+    )
+
+    # [41] same_issuer_key_size_dev
+    safe_issuer_avg_ks = np.where(issuer_avg_ks_arr > 0, issuer_avg_ks_arr, 1.0)
+    features[:, 41] = np.where(
+        (issuer_avg_ks_arr > 0) & (key_size_arr > 0),
+        (key_size_arr - issuer_avg_ks_arr) / safe_issuer_avg_ks,
+        0.0,
+    )
+
+    # [42] same_issuer_algo_match
+    features[:, 42] = np.where(
+        (sig_alg_arr != "") & (sig_alg_arr == issuer_dominant_algo_arr),
+        1.0, 0.0,
+    )
+
+    # [43] country_peer_risk_avg
+    features[:, 43] = np.array(
+        [float(country_risk_proxy.get(c, 0.5)) for c in country_arr], dtype=np.float64,
+    )
+
+    # [44] type_peer_extension_match
+    ext_match_arr = np.full(n, 0.5, dtype=np.float64)
+    for ct_name, ext_pattern in type_ext_pattern.items():
+        ct_mask = cert_type_arr == ct_name
+        if not np.any(ct_mask):
+            continue
+        match_scores = np.zeros(n, dtype=np.float64)
+        for j, f in enumerate(_EXT_FIELDS):
+            has_col = ext_has_arrays[j]
+            expected_val = ext_pattern.get(f, 0.5)
+            match_scores += 1.0 - np.abs(has_col - round(expected_val))
+        match_scores /= len(_EXT_FIELDS)
+        ext_match_arr = np.where(ct_mask, match_scores, ext_match_arr)
+    features[:, 44] = ext_match_arr
 
     # Replace NaN/inf with 0
     features = np.nan_to_num(features, nan=0.0, posinf=0.0, neginf=0.0)

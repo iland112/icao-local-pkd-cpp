@@ -7,6 +7,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load shared library
+RUNTIME="docker"
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+
 # 옵션 파싱
 BUILD_FLAG=""
 SKIP_APP=""
@@ -36,25 +40,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Read DB_TYPE from .env
-DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
-DB_TYPE="${DB_TYPE:-postgres}"
-
-if [ "$DB_TYPE" = "oracle" ]; then
-    PROFILE_FLAG="--profile oracle"
-else
-    PROFILE_FLAG="--profile postgres"
-fi
+# Read DB_TYPE from .env (default: postgres for Docker)
+parse_db_type "postgres"
 
 # SSL 인증서 감지 (Private CA)
-SSL_DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
-if [ -f ".docker-data/ssl/server.crt" ] && [ -f ".docker-data/ssl/server.key" ]; then
+if detect_ssl; then
     export NGINX_CONF="../nginx/api-gateway-ssl.conf"
-    SSL_MODE="true"
     echo "🔒 SSL 인증서 감지 — HTTPS + HTTP 모드로 시작 ($SSL_DOMAIN)"
 else
     export NGINX_CONF="../nginx/api-gateway.conf"
-    SSL_MODE=""
     echo "⚠️  SSL 인증서 없음 — HTTP 모드로 시작"
     echo "   인증서 생성: scripts/ssl/init-cert.sh"
 fi
@@ -64,25 +58,12 @@ echo ""
 
 # 1. 필요한 디렉토리 생성
 echo "📁 디렉토리 생성 중..."
-mkdir -p ./data/uploads
-mkdir -p ./data/cert
-mkdir -p ./logs
-mkdir -p ./backups
-
-# Docker bind mount 디렉토리 생성 (권한 문제 방지)
-mkdir -p ./.docker-data/pkd-logs
-mkdir -p ./.docker-data/pkd-uploads
-mkdir -p ./.docker-data/pa-logs
-mkdir -p ./.docker-data/sync-logs
-mkdir -p ./.docker-data/monitoring-logs
-mkdir -p ./.docker-data/gateway-logs
-mkdir -p ./.docker-data/ssl
+create_directories
 
 # 권한 설정 (Docker 컨테이너에서 쓰기 가능하도록)
 echo "🔒 로그 디렉토리 권한 설정 중..."
 if [ -w ./.docker-data ]; then
-    chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs ./.docker-data/monitoring-logs ./.docker-data/gateway-logs 2>/dev/null || \
-    sudo chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs ./.docker-data/monitoring-logs ./.docker-data/gateway-logs
+    setup_permissions
 else
     echo "⚠️  .docker-data 디렉토리 쓰기 권한 필요 - sudo 사용"
     sudo chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads ./.docker-data/pa-logs ./.docker-data/sync-logs ./.docker-data/monitoring-logs ./.docker-data/gateway-logs
@@ -120,23 +101,7 @@ sleep 5
 
 # Oracle XEPDB1 PDB 준비 대기 (앱 서비스 시작 전 DB 정상화 보장)
 if [ "$DB_TYPE" = "oracle" ]; then
-    echo ""
-    echo "⏳ Oracle XEPDB1 준비 대기 중..."
-    MAX_WAIT=120
-    WAITED=0
-    while [ $WAITED -lt $MAX_WAIT ]; do
-        if docker exec icao-local-pkd-oracle bash -c \
-            "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"\$ORACLE_PWD\"@//localhost:1521/XEPDB1 as sysdba 2>/dev/null | grep -q 1" 2>/dev/null; then
-            echo "✅ Oracle XEPDB1 준비 완료 (${WAITED}초)"
-            break
-        fi
-        sleep 5
-        WAITED=$((WAITED + 5))
-        echo "   대기 중... (${WAITED}/${MAX_WAIT}초)"
-    done
-    if [ $WAITED -ge $MAX_WAIT ]; then
-        echo "⚠️  Oracle XEPDB1 타임아웃 (${MAX_WAIT}초) — 수동 확인 필요"
-    fi
+    wait_for_oracle_xepdb1
 fi
 
 echo ""
@@ -162,29 +127,7 @@ if [ -z "$SKIP_LDAP" ]; then
     docker compose -f docker/docker-compose.yaml logs ldap-init 2>/dev/null | tail -5
 fi
 
-echo ""
-echo "📌 접속 정보:"
-echo "   - Database:      DB_TYPE=$DB_TYPE"
-echo "   - PostgreSQL:    localhost:15432 (pkd/pkd)"
-if [ "$DB_TYPE" = "oracle" ]; then
-    echo "   - Oracle:        localhost:11521 (XEPDB1)"
-fi
-if [ -z "$SKIP_LDAP" ]; then
-    echo "   - OpenLDAP 1:    ldap://localhost:13891 (직접 연결)"
-    echo "   - OpenLDAP 2:    ldap://localhost:13892 (직접 연결)"
-    echo "   Note: Application uses direct connections to both LDAP servers"
-fi
-if [ -z "$SKIP_APP" ]; then
-    echo "   - Frontend:      http://localhost:13080"
-    if [ -n "$SSL_MODE" ]; then
-        echo "   - API Gateway:   https://$SSL_DOMAIN/api (HTTPS)"
-        echo "   - API Gateway:   http://$SSL_DOMAIN/api (HTTP)"
-        echo "   - API Gateway:   http://localhost:18080/api (내부용)"
-    else
-        echo "   - API Gateway:   http://localhost:18080/api"
-    fi
-    echo "   - Swagger UI:    http://localhost:18090"
-fi
+print_connection_info "$SKIP_LDAP" "$SKIP_APP"
 echo ""
 echo "🔍 로그 확인: ./docker-logs.sh [서비스명]"
 echo "🛑 중지:     ./docker-stop.sh"

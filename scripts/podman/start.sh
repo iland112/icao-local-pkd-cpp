@@ -11,6 +11,10 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load shared library
+RUNTIME="podman"
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+
 COMPOSE_FILE="docker/docker-compose.podman.yaml"
 COMPOSE="podman-compose -f $COMPOSE_FILE"
 
@@ -38,25 +42,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Read DB_TYPE from .env
-DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
-DB_TYPE="${DB_TYPE:-oracle}"
-
-if [ "$DB_TYPE" = "oracle" ]; then
-    PROFILE_FLAG="--profile oracle"
-else
-    PROFILE_FLAG="--profile postgres"
-fi
+# Read DB_TYPE from .env (default: oracle for Podman/Production)
+parse_db_type "oracle"
 
 # SSL 인증서 감지 (Private CA)
-SSL_DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
-if [ -f ".docker-data/ssl/server.crt" ] && [ -f ".docker-data/ssl/server.key" ]; then
+if detect_ssl; then
     SSL_SOURCE="nginx/api-gateway-ssl.conf"
-    SSL_MODE="true"
     echo "  SSL 인증서 감지 — HTTPS + HTTP 모드로 시작 ($SSL_DOMAIN)"
 else
     SSL_SOURCE="nginx/api-gateway.conf"
-    SSL_MODE=""
     echo "  SSL 인증서 없음 — HTTP 모드로 시작"
     echo "   인증서 생성: scripts/ssl/init-cert.sh"
 fi
@@ -68,23 +62,16 @@ echo ""
 # 1. 필요한 디렉토리 생성
 # =============================================================================
 echo "  디렉토리 생성 중..."
-mkdir -p ./data/uploads ./data/cert ./logs ./backups 2>/dev/null || true
-mkdir -p ./.docker-data/pkd-logs ./.docker-data/pkd-uploads 2>/dev/null || true
-mkdir -p ./.docker-data/pa-logs ./.docker-data/sync-logs 2>/dev/null || true
-mkdir -p ./.docker-data/monitoring-logs ./.docker-data/gateway-logs 2>/dev/null || true
-mkdir -p ./.docker-data/ssl ./.docker-data/nginx 2>/dev/null || true
+create_directories
+mkdir -p ./.docker-data/nginx 2>/dev/null || true
 mkdir -p ./.docker-data/ai-analysis-logs 2>/dev/null || true
 
 # 권한 설정
 echo "  로그 디렉토리 권한 설정 중..."
-chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads \
+setup_permissions ./.docker-data/pkd-logs ./.docker-data/pkd-uploads \
     ./.docker-data/pa-logs ./.docker-data/sync-logs \
     ./.docker-data/monitoring-logs ./.docker-data/gateway-logs \
-    ./.docker-data/ai-analysis-logs 2>/dev/null || \
-sudo chmod -R 777 ./.docker-data/pkd-logs ./.docker-data/pkd-uploads \
-    ./.docker-data/pa-logs ./.docker-data/sync-logs \
-    ./.docker-data/monitoring-logs ./.docker-data/gateway-logs \
-    ./.docker-data/ai-analysis-logs 2>/dev/null || true
+    ./.docker-data/ai-analysis-logs
 
 # SELinux context (RHEL 9 Enforcing)
 # Rootless Podman needs container_file_t type AND no MCS categories (s0 only)
@@ -161,23 +148,7 @@ sleep 5
 
 # Oracle XEPDB1 PDB 준비 대기 (앱 서비스 시작 전 DB 정상화 보장)
 if [ "$DB_TYPE" = "oracle" ]; then
-    echo ""
-    echo "  Oracle XEPDB1 준비 대기 중..."
-    MAX_WAIT=120
-    WAITED=0
-    while [ $WAITED -lt $MAX_WAIT ]; do
-        if podman exec icao-local-pkd-oracle bash -c \
-            "echo 'SELECT 1 FROM DUAL;' | sqlplus -s sys/\"\$ORACLE_PWD\"@//localhost:1521/XEPDB1 as sysdba 2>/dev/null | grep -q 1" 2>/dev/null; then
-            echo "    Oracle XEPDB1 준비 완료 (${WAITED}초)"
-            break
-        fi
-        sleep 5
-        WAITED=$((WAITED + 5))
-        echo "    대기 중... (${WAITED}/${MAX_WAIT}초)"
-    done
-    if [ $WAITED -ge $MAX_WAIT ]; then
-        echo "    Oracle XEPDB1 타임아웃 (${MAX_WAIT}초) — 수동 확인 필요"
-    fi
+    wait_for_oracle_xepdb1
 fi
 
 echo ""
@@ -198,29 +169,7 @@ if [ -z "$SKIP_LDAP" ]; then
     fi
 fi
 
-echo ""
-echo "  접속 정보:"
-echo "   - Database:      DB_TYPE=$DB_TYPE"
-if [ "$DB_TYPE" = "oracle" ]; then
-    echo "   - Oracle:        localhost:11521 (XEPDB1)"
-else
-    echo "   - PostgreSQL:    localhost:15432 (pkd/pkd)"
-fi
-if [ -z "$SKIP_LDAP" ]; then
-    echo "   - OpenLDAP 1:    ldap://localhost:13891"
-    echo "   - OpenLDAP 2:    ldap://localhost:13892"
-fi
-if [ -z "$SKIP_APP" ]; then
-    echo "   - Frontend:      http://localhost:13080"
-    if [ -n "$SSL_MODE" ]; then
-        echo "   - API Gateway:   https://$SSL_DOMAIN/api (HTTPS)"
-        echo "   - API Gateway:   http://$SSL_DOMAIN/api (HTTP)"
-        echo "   - API Gateway:   http://localhost:18080/api (internal)"
-    else
-        echo "   - API Gateway:   http://localhost:18080/api"
-    fi
-    echo "   - Swagger UI:    http://localhost:18090"
-fi
+print_connection_info "$SKIP_LDAP" "$SKIP_APP"
 echo ""
 echo "  로그 확인: scripts/podman/logs.sh [서비스명]"
 echo "  중지:     scripts/podman/stop.sh"

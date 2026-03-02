@@ -1069,7 +1069,7 @@ void AuthHandler::handleDeleteUser(
         auto response = drogon::HttpResponse::newHttpJsonResponse(resp);
         callback(response);
 
-        spdlog::info("[AuthHandler] User {} deleted by admin {}", deletedUsernameOpt.value(), adminClaims->username);
+        spdlog::info("[AuthHandler] User {} deleted by admin {}", deletedUsernameOpt.value_or("unknown"), adminClaims->username);
 
         // Audit log
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_DELETE);

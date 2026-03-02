@@ -12,7 +12,6 @@ from app.database import safe_isna
 
 import numpy as np
 import pandas as pd
-from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
@@ -124,6 +123,8 @@ def compute_issuer_anomaly_scores(
     Certificates are scored based on how much they deviate from
     their issuer's typical pattern.
 
+    Uses vectorized pandas/numpy operations instead of row iteration.
+
     Returns:
         Array of issuer_anomaly_score (0.0 ~ 1.0) per certificate.
     """
@@ -133,58 +134,76 @@ def compute_issuer_anomaly_scores(
     if "issuer_dn" not in df.columns or not profiles:
         return scores
 
-    for i, (_, row) in enumerate(df.iterrows()):
-        issuer_dn = row.get("issuer_dn")
-        if not issuer_dn or safe_isna(issuer_dn):
-            scores[i] = 0.3  # unknown issuer = moderate suspicion
-            continue
+    issuer_dns = df["issuer_dn"]
 
-        profile = profiles.get(issuer_dn)
-        if not profile:
-            scores[i] = 0.3
-            continue
+    # Map each issuer_dn to its profile (None if not found)
+    profile_series = issuer_dns.map(profiles)
 
-        score = 0.0
+    # Mask: issuer_dn is missing or not in profiles
+    dn_missing = issuer_dns.isna() | (issuer_dns.astype(str).str.strip() == "")
+    no_profile = profile_series.isna() & ~dn_missing
 
-        # 1. Rare issuer (few certs = higher risk)
-        if profile["cert_count"] < 3:
-            score += 0.15
-        elif profile["cert_count"] < 10:
-            score += 0.05
+    # Unknown / unmatched issuers get 0.3
+    scores[dn_missing.values] = 0.3
+    scores[no_profile.values] = 0.3
 
-        # 2. Key size deviation from issuer average
-        key_size = row.get("public_key_size") or 0
-        avg_ks = profile["avg_key_size"]
-        std_ks = profile["std_key_size"]
-        if avg_ks > 0 and std_ks > 0 and key_size > 0:
-            z = abs(key_size - avg_ks) / std_ks
-            if z > 3:
-                score += 0.2
-            elif z > 2:
-                score += 0.1
+    # Rows that have a valid profile
+    has_profile = ~dn_missing & ~no_profile
+    if not has_profile.any():
+        logger.info(
+            "Issuer anomaly scores: avg=%.3f, max=%.3f, >0.5=%d",
+            scores.mean(), scores.max(), int(np.sum(scores > 0.5)),
+        )
+        return scores
 
-        # 3. Algorithm mismatch from issuer dominant
-        sig_alg = row.get("signature_algorithm") or ""
-        if sig_alg and sig_alg != profile["dominant_algorithm"]:
-            if profile["algorithm_diversity"] <= 2:
-                score += 0.15  # unusual for this issuer
+    idx = has_profile.values  # boolean mask for numpy indexing
 
-        # 4. Issuer overall anomaly proxy (compliance + expiry)
-        score += profile["anomaly_proxy"] * 0.2
+    # Extract profile fields as numpy arrays for the matched subset
+    profiles_matched = profile_series[has_profile]
+    cert_counts = np.array([p["cert_count"] for p in profiles_matched], dtype=np.float64)
+    avg_key_sizes = np.array([p["avg_key_size"] for p in profiles_matched], dtype=np.float64)
+    std_key_sizes = np.array([p["std_key_size"] for p in profiles_matched], dtype=np.float64)
+    dominant_algs = np.array([p["dominant_algorithm"] for p in profiles_matched])
+    alg_diversities = np.array([p["algorithm_diversity"] for p in profiles_matched], dtype=np.float64)
+    anomaly_proxies = np.array([p["anomaly_proxy"] for p in profiles_matched], dtype=np.float64)
+    dominant_countries = np.array([p["dominant_country"] for p in profiles_matched])
+    country_counts = np.array([p["country_count"] for p in profiles_matched], dtype=np.float64)
 
-        # 5. Country mismatch (issuer issues certs outside its usual country)
-        country = row.get("country_code") or ""
-        if country and country != profile["dominant_country"]:
-            if profile["country_count"] == 1:
-                score += 0.15
+    sub_scores = np.zeros(int(np.sum(idx)), dtype=np.float64)
 
-        scores[i] = min(score, 1.0)
+    # 1. Rare issuer (few certs = higher risk)
+    sub_scores += np.where(cert_counts < 3, 0.15, np.where(cert_counts < 10, 0.05, 0.0))
+
+    # 2. Key size deviation from issuer average
+    key_sizes_col = df.loc[has_profile, "public_key_size"].fillna(0).values.astype(np.float64) \
+        if "public_key_size" in df.columns else np.zeros(int(np.sum(idx)), dtype=np.float64)
+    valid_ks = (avg_key_sizes > 0) & (std_key_sizes > 0) & (key_sizes_col > 0)
+    z_scores = np.zeros_like(sub_scores)
+    z_scores[valid_ks] = np.abs(key_sizes_col[valid_ks] - avg_key_sizes[valid_ks]) / std_key_sizes[valid_ks]
+    sub_scores += np.where(valid_ks & (z_scores > 3), 0.2, np.where(valid_ks & (z_scores > 2), 0.1, 0.0))
+
+    # 3. Algorithm mismatch from issuer dominant
+    sig_algs_col = df.loc[has_profile, "signature_algorithm"].fillna("").values \
+        if "signature_algorithm" in df.columns else np.array([""] * int(np.sum(idx)))
+    alg_mismatch = (sig_algs_col != "") & (sig_algs_col != dominant_algs) & (alg_diversities <= 2)
+    sub_scores += np.where(alg_mismatch, 0.15, 0.0)
+
+    # 4. Issuer overall anomaly proxy (compliance + expiry)
+    sub_scores += anomaly_proxies * 0.2
+
+    # 5. Country mismatch (issuer issues certs outside its usual country)
+    countries_col = df.loc[has_profile, "country_code"].fillna("").values \
+        if "country_code" in df.columns else np.array([""] * int(np.sum(idx)))
+    country_mismatch = (countries_col != "") & (countries_col != dominant_countries) & (country_counts == 1)
+    sub_scores += np.where(country_mismatch, 0.15, 0.0)
+
+    scores[idx] = np.minimum(sub_scores, 1.0)
 
     logger.info(
         "Issuer anomaly scores: avg=%.3f, max=%.3f, >0.5=%d",
         scores.mean(),
         scores.max(),
-        np.sum(scores > 0.5),
+        int(np.sum(scores > 0.5)),
     )
     return scores
 

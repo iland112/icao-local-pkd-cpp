@@ -5,23 +5,13 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
-# Load LDAP password from .env
-LDAP_BIND_DN="cn=admin,dc=ldap,dc=smartcoreinc,dc=com"
-LDAP_BIND_PW="$(grep -E '^LDAP_ADMIN_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
-LDAP_BIND_PW="${LDAP_BIND_PW:-ldap_test_password_123}"
+# Load shared library
+RUNTIME="docker"
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
-LDAP_CONFIG_PW="$(grep -E '^LDAP_CONFIG_PASSWORD=' .env 2>/dev/null | cut -d= -f2)"
-LDAP_CONFIG_PW="${LDAP_CONFIG_PW:-config_test_123}"
-
-# Read DB_TYPE from .env
-DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
-DB_TYPE="${DB_TYPE:-postgres}"
-
-if [ "$DB_TYPE" = "oracle" ]; then
-    PROFILE_FLAG="--profile oracle"
-else
-    PROFILE_FLAG="--profile postgres"
-fi
+# Load credentials and DB type
+load_credentials
+parse_db_type "postgres"
 
 echo "🏥 컨테이너 헬스 체크... (DB_TYPE=$DB_TYPE)"
 echo ""
@@ -29,7 +19,7 @@ echo ""
 # Database 체크
 if [ "$DB_TYPE" = "oracle" ]; then
     echo "🔶 Oracle:"
-    ORACLE_HEALTH=$(docker inspect icao-local-pkd-oracle --format='{{.State.Health.Status}}' 2>/dev/null || echo "not-found")
+    check_oracle_health
     if [ "$ORACLE_HEALTH" = "healthy" ]; then
         echo "  ✅ 정상 (healthy)"
     elif [ "$ORACLE_HEALTH" = "starting" ]; then
@@ -41,8 +31,8 @@ if [ "$DB_TYPE" = "oracle" ]; then
     fi
 else
     echo "🐘 PostgreSQL:"
-    if docker exec icao-local-pkd-postgres pg_isready -U pkd -d localpkd > /dev/null 2>&1; then
-        VERSION=$(docker exec icao-local-pkd-postgres psql -U pkd -d localpkd -t -c "SELECT version();" 2>/dev/null | head -1 | xargs)
+    if docker exec ${CONTAINER_PREFIX}-postgres pg_isready -U pkd -d localpkd > /dev/null 2>&1; then
+        VERSION=$(docker exec ${CONTAINER_PREFIX}-postgres psql -U pkd -d localpkd -t -c "SELECT version();" 2>/dev/null | head -1 | xargs)
         echo "  ✅ 정상 (ready to accept connections)"
         echo "     Version: $VERSION"
     else
@@ -58,25 +48,19 @@ LDAP2_OK=false
 LDAP1_COUNT=0
 LDAP2_COUNT=0
 
-if docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
-    LDAP1_RESULT=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost \
-        -D "$LDAP_BIND_DN" -w "$LDAP_BIND_PW" \
-        -b "dc=ldap,dc=smartcoreinc,dc=com" -s sub "(objectClass=*)" dn 2>/dev/null)
-    LDAP1_COUNT=$(echo "$LDAP1_RESULT" | grep "^dn:" | wc -l | xargs)
+if LDAP1_COUNT=$(check_ldap_node "openldap1"); then
     echo "  ✅ OpenLDAP1 정상 ($LDAP1_COUNT entries)"
     LDAP1_OK=true
 else
+    LDAP1_COUNT=0
     echo "  ❌ OpenLDAP1 오류"
 fi
 
-if docker exec icao-local-pkd-openldap2 ldapsearch -x -H ldap://localhost -b "" -s base > /dev/null 2>&1; then
-    LDAP2_RESULT=$(docker exec icao-local-pkd-openldap2 ldapsearch -x -H ldap://localhost \
-        -D "$LDAP_BIND_DN" -w "$LDAP_BIND_PW" \
-        -b "dc=ldap,dc=smartcoreinc,dc=com" -s sub "(objectClass=*)" dn 2>/dev/null)
-    LDAP2_COUNT=$(echo "$LDAP2_RESULT" | grep "^dn:" | wc -l | xargs)
+if LDAP2_COUNT=$(check_ldap_node "openldap2"); then
     echo "  ✅ OpenLDAP2 정상 ($LDAP2_COUNT entries)"
     LDAP2_OK=true
 else
+    LDAP2_COUNT=0
     echo "  ❌ OpenLDAP2 오류"
 fi
 
@@ -90,11 +74,7 @@ if [ "$LDAP1_OK" = true ] && [ "$LDAP2_OK" = true ]; then
         echo "  ⚠️  동기화 중 (OpenLDAP1: $LDAP1_COUNT, OpenLDAP2: $LDAP2_COUNT)"
     fi
 
-    # MMR 설정 확인
-    MMR_CONFIG=$(docker exec icao-local-pkd-openldap1 ldapsearch -x -H ldap://localhost \
-        -D "cn=admin,cn=config" -w "$LDAP_CONFIG_PW" \
-        -b "olcDatabase={1}mdb,cn=config" "(objectClass=*)" olcMirrorMode 2>/dev/null | grep "olcMirrorMode" || echo "")
-    if [ -n "$MMR_CONFIG" ]; then
+    if check_mmr_status; then
         echo "  ✅ MMR 설정 활성화됨"
     else
         echo "  ⚠️  MMR 설정 확인 필요"
@@ -106,41 +86,19 @@ fi
 # PKD Management API 체크 (via API Gateway)
 echo ""
 echo "🔧 PKD Management Service:"
-if curl -sf http://localhost:18080/api/health > /dev/null 2>&1; then
-    HEALTH=$(curl -s http://localhost:18080/api/health 2>/dev/null)
-    echo "  ✅ 정상 (via API Gateway :18080)"
-    echo "     $HEALTH"
-else
-    if docker exec icao-local-pkd-management curl -sf http://localhost:8081/api/health > /dev/null 2>&1; then
-        HEALTH=$(docker exec icao-local-pkd-management curl -s http://localhost:8081/api/health 2>/dev/null)
-        echo "  ✅ 정상 (내부 포트 8081, API Gateway 미실행)"
-        echo "     $HEALTH"
-    else
-        echo "  ❌ 오류 (not responding)"
-    fi
+if ! check_service_health "via API Gateway :18080" "http://localhost:18080/api/health" "show_body"; then
+    check_container_health "management" "http://localhost:8081/api/health" "내부 포트 8081" || true
 fi
 
 # PA Service API 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
 echo ""
 echo "🔐 PA Service:"
-if docker exec icao-local-pkd-pa-service curl -sf http://localhost:8082/api/health > /dev/null 2>&1; then
-    HEALTH=$(docker exec icao-local-pkd-pa-service curl -s http://localhost:8082/api/health 2>/dev/null)
-    echo "  ✅ 정상 (내부 포트 8082)"
-    echo "     $HEALTH"
-else
-    echo "  ❌ 오류 (not responding)"
-fi
+check_container_health "pa-service" "http://localhost:8082/api/health" "PA Service" || true
 
 # PKD Relay Service 체크 (내부 포트만 사용하므로 컨테이너 내부에서 확인)
 echo ""
 echo "🔄 PKD Relay Service:"
-if docker exec icao-local-pkd-relay curl -sf http://localhost:8083/api/sync/health > /dev/null 2>&1; then
-    HEALTH=$(docker exec icao-local-pkd-relay curl -s http://localhost:8083/api/sync/health 2>/dev/null)
-    echo "  ✅ 정상 (내부 포트 8083)"
-    echo "     $HEALTH"
-else
-    echo "  ❌ 오류 (not responding)"
-fi
+check_container_health "relay" "http://localhost:8083/api/sync/health" "PKD Relay" || true
 
 # API Gateway 체크
 echo ""

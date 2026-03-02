@@ -947,6 +947,10 @@ std::string UploadService::computeFileHash(const std::vector<uint8_t>& content)
 {
     unsigned char hash[32];
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        spdlog::error("EVP_MD_CTX_new() allocation failed in computeFileHash");
+        return "";
+    }
     EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
     EVP_DigestUpdate(ctx, content.data(), content.size());
     unsigned int len = 0;

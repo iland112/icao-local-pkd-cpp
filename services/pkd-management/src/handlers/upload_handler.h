@@ -27,9 +27,7 @@
 #include <mutex>
 #include <set>
 #include <atomic>
-
-// Forward declaration for OpenLDAP type
-typedef struct ldap LDAP;
+#include <ldap.h>
 
 // Forward declarations - repositories
 namespace repositories {
@@ -52,6 +50,21 @@ namespace common {
 }
 
 namespace handlers {
+
+/**
+ * @brief RAII guard for LDAP connections
+ *
+ * Ensures LDAP connections are properly released via ldap_unbind_ext_s()
+ * even when exceptions are thrown during processing.
+ */
+struct LdapConnectionGuard {
+    LDAP* ld;
+    explicit LdapConnectionGuard(LDAP* conn) : ld(conn) {}
+    ~LdapConnectionGuard() { if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr); }
+    LdapConnectionGuard(const LdapConnectionGuard&) = delete;
+    LdapConnectionGuard& operator=(const LdapConnectionGuard&) = delete;
+    LDAP* get() const { return ld; }
+};
 
 /**
  * @brief Upload endpoints handler

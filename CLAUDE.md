@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.6
+**Current Version**: v2.25.7
 **Last Updated**: 2026-03-02
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -579,6 +579,26 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.7 (2026-03-02) - 안정성 강화 + AI 벡터화 + 코드 품질 개선
+- **Phase 1 — 안정성 (5개 작업)**:
+  - **OpenSSL EVP_MD_CTX null 체크** (3개소): `EVP_MD_CTX_new()` 반환값 미검사 → OOM 시 segfault 방지 (upload_service.cpp, pa_verification_service.cpp, ldap_certificate_repository.cpp)
+  - **optional `.value()` 안전화**: `auth_handler.cpp` — `.value()` → `.value_or("unknown")` (예외 가능성 제거)
+  - **LDAP 커넥션 RAII 가드** (4개소): `upload_handler.cpp` — 수동 `ldap_unbind_ext_s()` 호출 → `LdapConnectionGuard` RAII 패턴 (예외 시 연결 누수 방지)
+  - **임시 파일 RAII 가드** (2개소): `certificate_service.cpp` — `mkstemp` 파일 수동 삭제 → `TempFileGuard` RAII 패턴 (예외 시 `/tmp` 잔류 방지)
+  - **Docker Compose 리소스 제한**: `docker-compose.yaml` + `docker-compose.podman.yaml` — 모든 서비스에 `deploy.resources.limits/reservations` 추가 (OOM 방지)
+- **Phase 2 — AI 성능 (4 파일 벡터화)**:
+  - **feature_engineering.py**: 45개 feature `iterrows()` 루프 → NumPy/Pandas 벡터 연산 전환
+  - **risk_scorer.py**: 10개 위험 카테고리 벡터화, findings 생성은 고위험(>20) 인증서만 루프
+  - **extension_rules_engine.py**: 결과 캐시 + `np.unique()` 집계로 중복 연산 제거
+  - **issuer_profiler.py**: `DBSCAN` 미사용 import 삭제 + `map(profiles)` 벡터 연산
+  - **성능 측정**: Oracle XE 환경에서 68초 (DB I/O 병목, 연산 자체는 개선됨)
+- **Phase 3 — 코드 품질 (2개 작업)**:
+  - **Shell 공유 라이브러리**: `scripts/lib/common.sh` (319줄, 14 함수) — Docker/Podman 스크립트 중복 85%+ 제거, start/health/backup 6개 스크립트 리팩토링
+  - **API 응답 헬퍼**: `handler_utils.h` — `sendJsonSuccess()`, `notFound()` 함수 추가 (신규 엔드포인트용)
+- Docker build 검증: pkd-management, pa-service, ai-analysis 3개 서비스 모두 성공
+- Shell 스크립트 `bash -n` 구문 검증: 7개 모두 통과
+- ~20 files changed (1 new, ~19 modified), ~1,010 lines changed
 
 ### v2.25.6 (2026-03-02) - Stepper 깜빡임 수정 + DSC_NC ICAO 준수 판정 수정
 - **Bug fix**: 업로드 진행 Stepper 수평 레이아웃 — 단계 전환 시 상세 패널 깜빡임 현상 수정

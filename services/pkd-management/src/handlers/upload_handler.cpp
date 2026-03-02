@@ -400,7 +400,8 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
 
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-        LDAP* ld = g_services->ldapStorageService()->getLdapWriteConnection();
+        LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
+        LDAP* ld = ldapGuard.get();
         if (!ld) {
             spdlog::warn("LDAP write connection unavailable for LDIF upload {} - proceeding with DB-only mode (reconciliation will sync to LDAP later)", uploadId);
             ProgressManager::getInstance().sendProgress(
@@ -446,11 +447,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
             common::updateUploadStatistics(uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
         }
-
-        // Cleanup LDAP connection
-        if (ld) {
-            ldap_unbind_ext_s(ld, nullptr, nullptr);
-        }
+        // LDAP connection auto-released by LdapConnectionGuard destructor
         // Note: No PGconn cleanup needed - Strategy Pattern uses Repository with connection pool
 
         // Clear progress cache after processing completes (DoS defense: prevent unbounded growth)
@@ -502,7 +499,8 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-        LDAP* ld = g_services->ldapStorageService()->getLdapWriteConnection();
+        LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
+        LDAP* ld = ldapGuard.get();
         if (!ld) {
             spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode (reconciliation will sync to LDAP later)", uploadId);
             ProgressManager::getInstance().sendProgress(
@@ -540,7 +538,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                     ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "Invalid CMS format", "CMS 형식 오류"));
                 g_services->uploadRepository()->updateStatus(uploadId, "FAILED", "Invalid CMS format");
                 g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
-                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                // LDAP connection auto-released by LdapConnectionGuard destructor
                 cleanupGuard();
                 return;
             }
@@ -704,7 +702,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                     spdlog::error("OpenSSL error: {}", ERR_error_string(ERR_get_error(), nullptr));
                     g_services->uploadRepository()->updateStatus(uploadId, "FAILED", "CMS/PKCS7 parsing failed");
                     g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
-                    if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                    // LDAP connection auto-released by LdapConnectionGuard destructor
                     return;
                 }
             } else {
@@ -1093,10 +1091,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
         }
 
-        // Cleanup LDAP connection
-        if (ld) {
-            ldap_unbind_ext_s(ld, nullptr, nullptr);
-        }
+        // LDAP connection auto-released by LdapConnectionGuard destructor
 
         // Clear progress cache after processing completes (DoS defense: prevent unbounded growth)
         ProgressManager::getInstance().clearProgress(uploadId);
@@ -1194,7 +1189,8 @@ void UploadHandler::handleParse(
                 spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-                LDAP* ld = this->getLdapWriteConnection();
+                LdapConnectionGuard ldapGuard(this->getLdapWriteConnection());
+                LDAP* ld = ldapGuard.get();
                 if (!ld) {
                     spdlog::warn("LDAP write connection unavailable for Master List re-parse {} - proceeding with DB-only mode", uploadId);
                 } else {
@@ -1214,8 +1210,7 @@ void UploadHandler::handleParse(
                         ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                             0, 0, "처리 실패", e.what()));
                 }
-
-                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                // LDAP connection auto-released by LdapConnectionGuard destructor
             }).detach();
         } else {
             Json::Value error;
@@ -1940,7 +1935,8 @@ void UploadHandler::handleUploadMasterList(
                 spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-                LDAP* ld = this->getLdapWriteConnection();
+                LdapConnectionGuard ldapGuard(this->getLdapWriteConnection());
+                LDAP* ld = ldapGuard.get();
                 if (!ld) {
                     spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode", uploadId);
                 } else {
@@ -1985,8 +1981,7 @@ void UploadHandler::handleUploadMasterList(
                         ProcessingProgress::create(uploadId, ProcessingStage::FAILED,
                             0, 0, "처리 실패", e.what()));
                 }
-
-                if (ld) ldap_unbind_ext_s(ld, nullptr, nullptr);
+                // LDAP connection auto-released by LdapConnectionGuard destructor
         }).detach();
 
         // Return success response

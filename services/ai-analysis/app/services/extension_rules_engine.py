@@ -4,14 +4,31 @@ Checks certificates against expected extension profiles per type.
 Produces structural_anomaly_score (0.0 ~ 1.0).
 """
 
+import hashlib
 import logging
 from collections import defaultdict
 
+import numpy as np
 import pandas as pd
 
 from app.database import safe_isna
 
 logger = logging.getLogger(__name__)
+
+# Module-level cache: maps DataFrame identity hash -> (anomalies list, per-row compliance list)
+_compliance_cache: dict[str, tuple[list[dict], list[dict]]] = {}
+_CACHE_MAX_SIZE = 4
+
+def _df_cache_key(df: pd.DataFrame) -> str:
+    """Compute a lightweight identity key for a DataFrame."""
+    # Use shape + id + first/last fingerprints for fast identity check
+    parts = [str(len(df)), str(id(df))]
+    if len(df) > 0 and "fingerprint_sha256" in df.columns:
+        first_fp = str(df.iloc[0].get("fingerprint_sha256", ""))
+        last_fp = str(df.iloc[-1].get("fingerprint_sha256", ""))
+        parts.extend([first_fp[:16], last_fp[:16]])
+    return hashlib.md5("|".join(parts).encode()).hexdigest()
+
 
 # ICAO Doc 9303 expected extensions per certificate type.
 # Each rule specifies required, recommended, and forbidden extensions.
@@ -216,32 +233,158 @@ def count_missing_required(row) -> int:
     return missing
 
 
+def _compute_all_compliance(df: pd.DataFrame) -> tuple[list[dict], list[dict]]:
+    """Compute extension compliance for every row, returning (anomalies, all_compliance).
+
+    Uses vectorized boolean masks for score pre-computation where possible,
+    then falls back to per-row detail extraction only for violating rows.
+
+    Returns:
+        (anomalies_sorted, all_compliance) where all_compliance has one entry per row.
+    """
+    n = len(df)
+    if n == 0:
+        return [], []
+
+    cert_types = df["certificate_type"].fillna("") if "certificate_type" in df.columns else pd.Series([""] * n)
+
+    # Vectorized boolean masks for field presence (non-null, non-empty-string)
+    field_present: dict[str, np.ndarray] = {}
+    for field in EXTENSION_FIELDS:
+        if field in df.columns:
+            col = df[field]
+            mask = col.notna()
+            # Also exclude empty strings
+            str_mask = col.astype(str).str.strip().ne("")
+            field_present[field] = (mask & str_mask).values
+        else:
+            field_present[field] = np.zeros(n, dtype=bool)
+
+    # is_ca boolean conversion (vectorized)
+    if "is_ca" in df.columns:
+        is_ca_vals = df["is_ca"].apply(_safe_bool).values
+    else:
+        is_ca_vals = np.zeros(n, dtype=bool)
+
+    # Pre-compute structural scores vectorized
+    scores = np.zeros(n, dtype=np.float64)
+    type_arr = cert_types.values
+
+    for cert_type, profile in EXPECTED_EXTENSIONS.items():
+        type_mask = type_arr == cert_type
+        if not np.any(type_mask):
+            continue
+
+        # Missing required count
+        missing_req_count = np.zeros(n, dtype=np.float64)
+        for field in profile.get("required", []):
+            if field == "is_ca":
+                missing_req_count += type_mask & ~is_ca_vals
+            elif field in field_present:
+                missing_req_count += type_mask & ~field_present[field]
+
+        # Forbidden violations count
+        forbidden_count = np.zeros(n, dtype=np.float64)
+        for flag, forbidden_value in profile.get("forbidden_flags", {}).items():
+            if flag == "is_ca":
+                forbidden_count += type_mask & (is_ca_vals == forbidden_value)
+
+        # Key usage violations count
+        ku_violation_count = np.zeros(n, dtype=np.float64)
+        required_bits = profile.get("required_key_usage_bits", [])
+        if required_bits and "key_usage" in df.columns:
+            ku_lower = df["key_usage"].fillna("").astype(str).str.lower()
+            for bit in required_bits:
+                bit_lower = bit.lower()
+                ku_violation_count += type_mask & ~ku_lower.str.contains(bit_lower, regex=False).values
+
+        # Missing recommended count
+        missing_rec_count = np.zeros(n, dtype=np.float64)
+        for field in profile.get("recommended", []):
+            if field in field_present:
+                missing_rec_count += type_mask & ~field_present[field]
+
+        scores += missing_req_count * 0.25 + forbidden_count * 0.30 + ku_violation_count * 0.15 + missing_rec_count * 0.05
+
+    # Handle certificates with unknown type -> fall through to DSC_NC profile
+    known_types = set(EXPECTED_EXTENSIONS.keys())
+    unknown_mask = ~np.isin(type_arr, list(known_types)) & (type_arr != "")
+    if np.any(unknown_mask):
+        dsc_nc_profile = EXPECTED_EXTENSIONS.get("DSC_NC", {})
+        # DSC_NC has no required, no forbidden_flags, no required_key_usage_bits
+        # Only recommended: authority_key_identifier, key_usage
+        for field in dsc_nc_profile.get("recommended", []):
+            if field in field_present:
+                scores += (unknown_mask & ~field_present[field]) * 0.05
+
+    scores = np.minimum(scores, 1.0)
+    scores = np.round(scores, 4)
+
+    # Build per-row compliance and anomaly results
+    # Only call the detailed check_extension_compliance() for rows with score > 0
+    all_compliance = [None] * n
+    results = []
+    violation_indices = np.where(scores > 0)[0]
+
+    # Pre-extract columns as arrays for faster row access
+    fp_col = df["fingerprint_sha256"].values if "fingerprint_sha256" in df.columns else [None] * n
+    cc_col = df["country_code"].values if "country_code" in df.columns else [""] * n
+
+    for i in violation_indices:
+        row = df.iloc[i]
+        compliance = check_extension_compliance(row)
+        # Use the vectorized score (identical logic, avoids floating-point divergence)
+        compliance["structural_score"] = float(scores[i])
+        all_compliance[i] = compliance
+        results.append({
+            "fingerprint": fp_col[i],
+            "certificate_type": type_arr[i],
+            "country_code": cc_col[i],
+            "structural_score": float(scores[i]),
+            "missing_required": compliance["missing_required"],
+            "missing_recommended": compliance["missing_recommended"],
+            "forbidden_violations": compliance["forbidden_violations"],
+            "key_usage_violations": compliance["key_usage_violations"],
+            "violations_detail": compliance["violations_detail"],
+        })
+
+    # Fill in compliant rows with empty compliance dicts
+    empty_compliance = {
+        "missing_required": [],
+        "missing_recommended": [],
+        "forbidden_violations": [],
+        "key_usage_violations": [],
+        "structural_score": 0.0,
+        "violations_detail": [],
+    }
+    for i in range(n):
+        if all_compliance[i] is None:
+            all_compliance[i] = empty_compliance
+
+    results.sort(key=lambda x: x["structural_score"], reverse=True)
+    return results, all_compliance
+
+
 def compute_extension_anomalies(df: pd.DataFrame) -> list[dict]:
     """Compute extension compliance for all certificates.
 
     Returns list of dicts with fingerprint + violation details.
+    Results are cached so repeated calls with the same DataFrame are free.
     """
-    results = []
-    violation_counts = defaultdict(int)
+    global _compliance_cache
 
-    for _, row in df.iterrows():
-        compliance = check_extension_compliance(row)
-        if compliance["structural_score"] > 0:
-            results.append({
-                "fingerprint": row.get("fingerprint_sha256"),
-                "certificate_type": row.get("certificate_type"),
-                "country_code": row.get("country_code"),
-                "structural_score": compliance["structural_score"],
-                "missing_required": compliance["missing_required"],
-                "missing_recommended": compliance["missing_recommended"],
-                "forbidden_violations": compliance["forbidden_violations"],
-                "key_usage_violations": compliance["key_usage_violations"],
-                "violations_detail": compliance["violations_detail"],
-            })
-            for v in compliance["violations_detail"]:
-                violation_counts[v["rule"]] += 1
+    cache_key = _df_cache_key(df)
+    if cache_key in _compliance_cache:
+        results, _ = _compliance_cache[cache_key]
+        return results
 
-    results.sort(key=lambda x: x["structural_score"], reverse=True)
+    results, all_compliance = _compute_all_compliance(df)
+
+    # Evict oldest entries if cache is full
+    if len(_compliance_cache) >= _CACHE_MAX_SIZE:
+        oldest_key = next(iter(_compliance_cache))
+        del _compliance_cache[oldest_key]
+    _compliance_cache[cache_key] = (results, all_compliance)
 
     logger.info(
         "Extension compliance check: %d/%d certificates with violations",
@@ -252,21 +395,50 @@ def compute_extension_anomalies(df: pd.DataFrame) -> list[dict]:
 
 
 def get_extension_anomaly_summary(df: pd.DataFrame) -> dict:
-    """Get summary of extension anomalies by type and severity."""
-    by_type = defaultdict(lambda: {"total": 0, "with_violations": 0})
-    by_severity = defaultdict(int)
+    """Get summary of extension anomalies by type and severity.
 
-    for _, row in df.iterrows():
-        cert_type = row.get("certificate_type") or "UNKNOWN"
-        by_type[cert_type]["total"] += 1
-        compliance = check_extension_compliance(row)
-        if compliance["structural_score"] > 0:
-            by_type[cert_type]["with_violations"] += 1
-            for v in compliance["violations_detail"]:
-                by_severity[v["severity"]] += 1
+    Reuses cached compliance results from compute_extension_anomalies()
+    and uses pandas groupby for aggregation instead of manual iteration.
+    """
+    if len(df) == 0:
+        return {"by_type": {}, "by_severity": {}, "total_checked": 0}
+
+    # Ensure compliance is computed (will use cache if available)
+    cache_key = _df_cache_key(df)
+    if cache_key in _compliance_cache:
+        _, all_compliance = _compliance_cache[cache_key]
+    else:
+        # Trigger computation and caching
+        compute_extension_anomalies(df)
+        _, all_compliance = _compliance_cache[cache_key]
+
+    # Build a lightweight Series of structural scores and cert types
+    cert_types = df["certificate_type"].fillna("UNKNOWN").replace("", "UNKNOWN")
+    structural_scores = np.array(
+        [c["structural_score"] for c in all_compliance], dtype=np.float64
+    )
+    has_violation = structural_scores > 0
+
+    # by_type: use pandas groupby on cert_types
+    type_series = cert_types.values
+    unique_types = np.unique(type_series)
+    by_type = {}
+    for ct in unique_types:
+        ct_mask = type_series == ct
+        by_type[ct] = {
+            "total": int(np.sum(ct_mask)),
+            "with_violations": int(np.sum(ct_mask & has_violation)),
+        }
+
+    # by_severity: aggregate from violation details of violating rows only
+    by_severity = defaultdict(int)
+    violation_indices = np.where(has_violation)[0]
+    for i in violation_indices:
+        for v in all_compliance[i]["violations_detail"]:
+            by_severity[v["severity"]] += 1
 
     return {
-        "by_type": dict(by_type),
+        "by_type": by_type,
         "by_severity": dict(by_severity),
         "total_checked": len(df),
     }

@@ -13,8 +13,23 @@
 #include <sstream>
 #include <iomanip>
 #include <algorithm>
+#include <unistd.h>
 
 namespace services {
+
+/**
+ * @brief RAII guard for temporary files
+ *
+ * Ensures temporary files are cleaned up from /tmp even when exceptions
+ * are thrown during ZIP creation or file operations.
+ */
+struct TempFileGuard {
+    std::string path;
+    bool released = false;
+    explicit TempFileGuard(const std::string& p) : path(p) {}
+    ~TempFileGuard() { if (!released) unlink(path.c_str()); }
+    void release() { released = true; }
+};
 
 // --- Constructor ---
 
@@ -234,12 +249,12 @@ std::vector<uint8_t> CertificateService::createZipArchive(
         throw std::runtime_error("Failed to create temporary file");
     }
     close(tmpFd);  // libzip will reopen it
+    TempFileGuard tmpGuard(tmpFilename);
 
     // Create ZIP archive in temporary file
     int error = 0;
     zip_t* archive = zip_open(tmpFilename, ZIP_CREATE | ZIP_TRUNCATE, &error);
     if (!archive) {
-        unlink(tmpFilename);
         throw std::runtime_error("Failed to create ZIP archive: " + std::to_string(error));
     }
 
@@ -298,21 +313,18 @@ std::vector<uint8_t> CertificateService::createZipArchive(
 
     if (addedCount == 0) {
         zip_discard(archive);
-        unlink(tmpFilename);
         throw std::runtime_error("No certificates added to ZIP archive");
     }
 
     // Close archive to finalize ZIP data
     if (zip_close(archive) != 0) {
         zip_discard(archive);
-        unlink(tmpFilename);
         throw std::runtime_error("Failed to close ZIP archive");
     }
 
     // Read ZIP file into memory
     FILE* f = fopen(tmpFilename, "rb");
     if (!f) {
-        unlink(tmpFilename);
         throw std::runtime_error("Failed to open temporary ZIP file");
     }
 
@@ -326,8 +338,7 @@ std::vector<uint8_t> CertificateService::createZipArchive(
     size_t bytesRead = fread(zipData.data(), 1, fileSize, f);
     fclose(f);
 
-    // Clean up temporary file
-    unlink(tmpFilename);
+    // Temp file auto-cleaned by TempFileGuard destructor
 
     if (bytesRead != static_cast<size_t>(fileSize)) {
         throw std::runtime_error("Failed to read complete ZIP data");
@@ -544,11 +555,11 @@ ExportResult exportAllCertificatesFromDb(
             return result;
         }
         close(tmpFd);
+        TempFileGuard tmpGuard(tmpFilename);
 
         int error = 0;
         zip_t* archive = zip_open(tmpFilename, ZIP_CREATE | ZIP_TRUNCATE, &error);
         if (!archive) {
-            unlink(tmpFilename);
             result.errorMessage = "Failed to create ZIP archive";
             return result;
         }
@@ -753,14 +764,12 @@ ExportResult exportAllCertificatesFromDb(
         // Finalize ZIP
         if (addedCount == 0) {
             zip_discard(archive);
-            unlink(tmpFilename);
             result.errorMessage = "No data found for export";
             return result;
         }
 
         if (zip_close(archive) != 0) {
             zip_discard(archive);
-            unlink(tmpFilename);
             result.errorMessage = "Failed to finalize ZIP archive";
             return result;
         }
@@ -768,7 +777,6 @@ ExportResult exportAllCertificatesFromDb(
         // Read ZIP into memory
         FILE* f = fopen(tmpFilename, "rb");
         if (!f) {
-            unlink(tmpFilename);
             result.errorMessage = "Failed to read ZIP file";
             return result;
         }
@@ -780,7 +788,7 @@ ExportResult exportAllCertificatesFromDb(
         result.data.resize(fileSize);
         size_t bytesRead = fread(result.data.data(), 1, fileSize, f);
         fclose(f);
-        unlink(tmpFilename);
+        // Temp file auto-cleaned by TempFileGuard destructor
 
         if (bytesRead != static_cast<size_t>(fileSize)) {
             result.errorMessage = "Failed to read complete ZIP data";
