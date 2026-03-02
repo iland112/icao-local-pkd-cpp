@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.5
-**Last Updated**: 2026-02-28
+**Current Version**: v2.25.6
+**Last Updated**: 2026-03-02
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -579,6 +579,15 @@ scripts/
 ---
 
 ## Version History
+
+### v2.25.6 (2026-03-02) - Stepper 깜빡임 수정 + DSC_NC ICAO 준수 판정 수정
+- **Bug fix**: 업로드 진행 Stepper 수평 레이아웃 — 단계 전환 시 상세 패널 깜빡임 현상 수정
+- **Root cause**: `activeStep`이 단계 전환 중(예: VALIDATION → DB_SAVING) `undefined`가 되면서 상세 패널(진행률 바 + 상세 메시지)이 순간 사라졌다 다시 나타남
+- **Fix**: `useRef`로 마지막 active step을 기억하여 전환 중에도 패널 유지, 모든 단계 완료 시에만 패널 제거
+- **Bug fix**: DSC_NC 인증서 ICAO 9303 준수 판정 오류 — 기술 체크(알고리즘, 키 크기, KeyUsage) 통과 시 "준수"로 잘못 분류
+- **Root cause**: `checkIcaoCompliance()`가 DSC_NC를 DSC와 동일하게 기술 체크 수행 → SHA256+RSA2048 DSC_NC 255건이 준수로 판정
+- **Fix**: DSC_NC는 ICAO PKD에서 표준 미준수로 분류한 인증서이므로 기술 체크와 무관하게 항상 `NON_CONFORMANT` 반환
+- 2 files changed (0 new, 2 modified: Stepper.tsx, progress_manager.cpp)
 
 ### v2.25.5 (2026-02-28) - 마이크로서비스 리소스 동적 확장성
 - **5개 신규 환경변수**: 하드코딩된 리소스 파라미터를 환경변수로 외부화 (docker-compose environment만 수정하면 배포 환경별 튜닝 가능)
