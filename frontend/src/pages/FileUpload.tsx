@@ -71,6 +71,12 @@ export function FileUpload() {
   // CSCA certificate count for warning banner
   const [cscaCount, setCscaCount] = useState<number | null>(null);
 
+  // Re-upload confirmation dialog
+  const [reuploadDialog, setReuploadDialog] = useState<{
+    show: boolean;
+    existingUpload?: { uploadId: string; fileName: string; status: string };
+  }>({ show: false });
+
   // Event log for SSE events (filtered: only meaningful events)
   const [eventLogEntries, setEventLogEntries] = useState<EventLogEntry[]>([]);
   const eventIdRef = useRef(0);
@@ -217,7 +223,7 @@ export function FileUpload() {
     lastValidationLogCountRef.current = 0;
   };
 
-  const handleUpload = async () => {
+  const doUpload = async (force = false) => {
     if (!selectedFile) return;
 
     setIsProcessing(true);
@@ -232,7 +238,7 @@ export function FileUpload() {
       const isLdif = selectedFile.name.toLowerCase().endsWith('.ldif');
       const uploadFn = isLdif ? uploadApi.uploadLdif : uploadApi.uploadMasterList;
 
-      const response = await uploadFn(selectedFile);
+      const response = await uploadFn(selectedFile, force);
 
       if (response.data.success && response.data.data) {
         const uploadedFile = response.data.data;
@@ -248,6 +254,7 @@ export function FileUpload() {
       if (axios.isAxiosError(error) && error.response?.status === 409) {
         const errorData = error.response.data as {
           message?: string;
+          canReupload?: boolean;
           existingUpload?: {
             uploadId: string;
             fileName: string;
@@ -256,6 +263,21 @@ export function FileUpload() {
             fileFormat: string;
           };
         };
+
+        // Re-uploadable duplicate: show confirmation dialog
+        if (errorData.canReupload && errorData.existingUpload) {
+          setIsProcessing(false);
+          setOverallStatus('IDLE');
+          setReuploadDialog({
+            show: true,
+            existingUpload: {
+              uploadId: errorData.existingUpload.uploadId,
+              fileName: errorData.existingUpload.fileName || selectedFile.name,
+              status: errorData.existingUpload.status || 'COMPLETED',
+            },
+          });
+          return;
+        }
 
         setUploadStage({ status: 'FAILED', message: '중복 파일', percentage: 0 });
         setOverallStatus('FAILED');
@@ -267,7 +289,6 @@ export function FileUpload() {
             `이 파일은 이미 업로드되었습니다 (SHA-256 해시 중복).`,
             `기존 업로드 ID: ${existing.uploadId}`,
             `파일명: ${existing.fileName}`,
-            `업로드 시간: ${new Date(existing.uploadTimestamp).toLocaleString('ko-KR')}`,
             `상태: ${existing.status}`,
             `파일 형식: ${existing.fileFormat}`,
           ]);
@@ -283,6 +304,13 @@ export function FileUpload() {
       }
       setIsProcessing(false);
     }
+  };
+
+  const handleUpload = () => doUpload(false);
+
+  const handleForceReupload = () => {
+    setReuploadDialog({ show: false });
+    doUpload(true);
   };
 
   // v1.5.5: Polling backup mechanism - sync state from DB every 30s
@@ -771,6 +799,48 @@ export function FileUpload() {
 
   return (
     <div className="w-full px-4 lg:px-6 py-4">
+      {/* Re-upload Confirmation Dialog */}
+      {reuploadDialog.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
+                <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                파일 재업로드 확인
+              </h3>
+            </div>
+            <div className="mb-5 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+              <p>이 파일은 이전에 업로드된 적이 있습니다.</p>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1">
+                <p><span className="font-medium">파일명:</span> {reuploadDialog.existingUpload?.fileName}</p>
+                <p><span className="font-medium">상태:</span> {reuploadDialog.existingUpload?.status}</p>
+                <p><span className="font-medium">업로드 ID:</span> <span className="font-mono text-xs">{reuploadDialog.existingUpload?.uploadId}</span></p>
+              </div>
+              <p className="text-amber-600 dark:text-amber-400 font-medium">
+                재업로드하면 새 업로드 레코드가 생성되고 인증서 데이터가 재처리됩니다.
+                기존 업로드 기록은 유지됩니다.
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setReuploadDialog({ show: false })}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleForceReupload}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
+              >
+                재업로드
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4">

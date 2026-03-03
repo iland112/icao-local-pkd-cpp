@@ -1625,11 +1625,42 @@ void UploadHandler::handleUploadLdif(
             username = sessionUsername.value_or("anonymous");
         }
 
-        // Call UploadService to handle upload (always AUTO mode)
+        // Check for force re-upload flag
         std::string processingMode = "AUTO";
+        auto& params = parser.getParameters();
+        auto forceIt = params.find("force");
+        if (forceIt != params.end() && forceIt->second == "true") {
+            processingMode = "FORCE";
+        }
+
         auto result = uploadService_->uploadLdif(fileName, contentBytes, processingMode, username);
 
-        // Handle duplicate file
+        // Handle re-uploadable duplicate (previous upload COMPLETED/FAILED)
+        if (result.status == "DUPLICATE_REUPLOADABLE") {
+            auto existingUpload = uploadRepository_->findById(result.uploadId);
+            Json::Value resp;
+            resp["success"] = false;
+            resp["message"] = result.message;
+            Json::Value errorDetail;
+            errorDetail["code"] = "DUPLICATE_REUPLOADABLE";
+            errorDetail["detail"] = "This file was previously uploaded. Confirm to re-upload.";
+            resp["error"] = errorDetail;
+            Json::Value existing;
+            existing["uploadId"] = result.uploadId;
+            if (existingUpload) {
+                existing["fileName"] = existingUpload->fileName;
+                existing["status"] = existingUpload->status;
+                existing["fileFormat"] = existingUpload->fileFormat;
+            }
+            resp["existingUpload"] = existing;
+            resp["canReupload"] = true;
+            auto httpResp = drogon::HttpResponse::newHttpJsonResponse(resp);
+            httpResp->setStatusCode(drogon::k409Conflict);
+            callback(httpResp);
+            return;
+        }
+
+        // Handle duplicate file (PROCESSING state - cannot re-upload)
         if (result.status == "DUPLICATE") {
             // Audit logging - FILE_UPLOAD failed (duplicate)
             {
@@ -1843,11 +1874,42 @@ void UploadHandler::handleUploadMasterList(
             username = sessionUsername.value_or("anonymous");
         }
 
-        // Call UploadService to handle upload (always AUTO mode)
+        // Check for force re-upload flag
         std::string processingMode = "AUTO";
+        auto& mlParams = parser.getParameters();
+        auto mlForceIt = mlParams.find("force");
+        if (mlForceIt != mlParams.end() && mlForceIt->second == "true") {
+            processingMode = "FORCE";
+        }
+
         auto uploadResult = uploadService_->uploadMasterList(fileName, contentBytes, processingMode, username);
 
-        // Handle duplicate file
+        // Handle re-uploadable duplicate
+        if (uploadResult.status == "DUPLICATE_REUPLOADABLE") {
+            auto existingUpload = uploadRepository_->findById(uploadResult.uploadId);
+            Json::Value resp;
+            resp["success"] = false;
+            resp["message"] = uploadResult.message;
+            Json::Value errorDetail;
+            errorDetail["code"] = "DUPLICATE_REUPLOADABLE";
+            errorDetail["detail"] = "This file was previously uploaded. Confirm to re-upload.";
+            resp["error"] = errorDetail;
+            Json::Value existing;
+            existing["uploadId"] = uploadResult.uploadId;
+            if (existingUpload) {
+                existing["fileName"] = existingUpload->fileName;
+                existing["status"] = existingUpload->status;
+                existing["fileFormat"] = existingUpload->fileFormat;
+            }
+            resp["existingUpload"] = existing;
+            resp["canReupload"] = true;
+            auto httpResp = drogon::HttpResponse::newHttpJsonResponse(resp);
+            httpResp->setStatusCode(drogon::k409Conflict);
+            callback(httpResp);
+            return;
+        }
+
+        // Handle duplicate file (PROCESSING state)
         if (uploadResult.status == "DUPLICATE") {
             // Audit logging - FILE_UPLOAD failed (duplicate)
             {

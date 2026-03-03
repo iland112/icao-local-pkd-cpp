@@ -87,9 +87,10 @@ export const uploadApi = {
    * @param file - LDIF file to upload
    * @returns Upload record with uploadId (used for SSE connection)
    */
-  uploadLdif: (file: File) => {
+  uploadLdif: (file: File, force?: boolean) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (force) formData.append('force', 'true');
 
     return relayApi.post<ApiResponse<UploadedFile>>('/upload/ldif', formData, {
       headers: { 'Content-Type': undefined }, // Let axios set multipart boundary
@@ -102,9 +103,10 @@ export const uploadApi = {
    * @param file - Master List file to upload
    * @returns Upload record with uploadId
    */
-  uploadMasterList: (file: File) => {
+  uploadMasterList: (file: File, force?: boolean) => {
     const formData = new FormData();
     formData.append('file', file);
+    if (force) formData.append('force', 'true');
 
     return relayApi.post<ApiResponse<UploadedFile>>('/upload/masterlist', formData, {
       headers: { 'Content-Type': undefined },
