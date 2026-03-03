@@ -1260,10 +1260,10 @@ void UploadHandler::handleRetry(
             return;
         }
 
-        if (uploadOpt->status != "FAILED") {
+        if (uploadOpt->status != "FAILED" && uploadOpt->status != "COMPLETED") {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Only FAILED uploads can be retried. Current status: " + uploadOpt->status;
+            error["message"] = "Only FAILED or COMPLETED uploads can be retried. Current status: " + uploadOpt->status;
             auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(drogon::k400BadRequest);
             callback(resp);

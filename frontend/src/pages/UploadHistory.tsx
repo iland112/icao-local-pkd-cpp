@@ -685,15 +685,15 @@ export function UploadHistory() {
                             <Eye className="w-4 h-4" />
                             상세
                           </button>
-                          {upload.status === 'FAILED' && (
+                          {(upload.status === 'FAILED' || upload.status === 'COMPLETED') && (
                             <button
                               onClick={() => handleRetry(upload)}
                               disabled={retryingId === upload.id}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
-                              title="실패한 업로드 재시도"
+                              title={upload.status === 'FAILED' ? '실패한 업로드 재시도' : '업로드 재처리'}
                             >
                               <RefreshCw className={cn("w-4 h-4", retryingId === upload.id && "animate-spin")} />
-                              재시도
+                              {upload.status === 'FAILED' ? '재시도' : '재처리'}
                             </button>
                           )}
                           {(upload.status === 'FAILED' || upload.status === 'PENDING') && (

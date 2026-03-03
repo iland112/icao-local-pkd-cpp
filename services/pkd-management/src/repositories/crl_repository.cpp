@@ -32,15 +32,25 @@ std::string CrlRepository::save(const std::string& uploadId,
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
 
-        // Duplicate check: skip if CRL with same fingerprint already exists
+        // Duplicate check: if CRL with same fingerprint exists, update upload_id
         {
             auto checkResult = queryExecutor_->executeQuery(
-                "SELECT id FROM crl WHERE fingerprint_sha256 = $1",
+                "SELECT id, upload_id FROM crl WHERE fingerprint_sha256 = $1",
                 {fingerprint});
             if (!checkResult.empty()) {
-                spdlog::debug("[CrlRepository] CRL duplicate skipped (fingerprint: {}...)",
-                              fingerprint.substr(0, 16));
-                return checkResult[0]["id"].asString();
+                std::string existingId = checkResult[0]["id"].asString();
+                std::string existingUploadId = checkResult[0]["upload_id"].asString();
+                if (existingUploadId != uploadId) {
+                    queryExecutor_->executeCommand(
+                        "UPDATE crl SET upload_id = $1 WHERE id = $2",
+                        {uploadId, existingId});
+                    spdlog::debug("[CrlRepository] CRL duplicate — upload_id updated to {} (fingerprint: {}...)",
+                                  uploadId.substr(0, 8), fingerprint.substr(0, 16));
+                } else {
+                    spdlog::debug("[CrlRepository] CRL duplicate skipped (fingerprint: {}...)",
+                                  fingerprint.substr(0, 16));
+                }
+                return existingId;
             }
         }
 

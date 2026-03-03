@@ -111,12 +111,18 @@ UploadService::CertificateUploadResult UploadService::uploadCertificate(
         std::string fileHash = computeFileHash(fileContent);
         auto duplicateUpload = uploadRepo_->findByFileHash(fileHash);
         if (duplicateUpload) {
-            result.success = false;
-            result.status = "DUPLICATE";
-            result.uploadId = duplicateUpload->id;
-            result.errorMessage = "Duplicate file detected. This file has already been uploaded.";
-            result.message = "File with hash " + fileHash.substr(0, 16) + "... already exists";
-            return result;
+            if (duplicateUpload->status == "COMPLETED" || duplicateUpload->status == "FAILED") {
+                spdlog::info("Re-upload allowed: clearing file_hash of previous upload {} (status: {})",
+                             duplicateUpload->id, duplicateUpload->status);
+                uploadRepo_->updateFileHash(duplicateUpload->id, "");
+            } else {
+                result.success = false;
+                result.status = "DUPLICATE";
+                result.uploadId = duplicateUpload->id;
+                result.errorMessage = "Duplicate file detected. This file has already been uploaded.";
+                result.message = "File with hash " + fileHash.substr(0, 16) + "... already exists";
+                return result;
+            }
         }
 
         // Step 2: Detect file format
@@ -558,14 +564,21 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         // Step 2: Check for duplicate file
         auto duplicateUpload = uploadRepo_->findByFileHash(fileHash);
         if (duplicateUpload) {
-            spdlog::warn("Duplicate LDIF file detected: existing upload {}", duplicateUpload->id);
-            result.success = false;
-            result.status = "DUPLICATE";
-            result.errorMessage = "Duplicate file detected. This file has already been uploaded.";
-            result.message = "File with hash " + fileHash.substr(0, 16) + "... already exists";
-            // Return existing upload ID for reference
-            result.uploadId = duplicateUpload->id;
-            return result;
+            // Allow re-upload if previous upload is COMPLETED or FAILED
+            if (duplicateUpload->status == "COMPLETED" || duplicateUpload->status == "FAILED") {
+                spdlog::info("Re-upload allowed: clearing file_hash of previous upload {} (status: {})",
+                             duplicateUpload->id, duplicateUpload->status);
+                uploadRepo_->updateFileHash(duplicateUpload->id, "");
+            } else {
+                spdlog::warn("Duplicate LDIF file detected: existing upload {} (status: {})",
+                             duplicateUpload->id, duplicateUpload->status);
+                result.success = false;
+                result.status = "DUPLICATE";
+                result.errorMessage = "Duplicate file detected. This file has already been uploaded.";
+                result.message = "File with hash " + fileHash.substr(0, 16) + "... already exists";
+                result.uploadId = duplicateUpload->id;
+                return result;
+            }
         }
 
         // Step 3: Generate upload ID
@@ -634,14 +647,21 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
         // Step 2: Check for duplicate file
         auto duplicateUpload = uploadRepo_->findByFileHash(fileHash);
         if (duplicateUpload) {
-            spdlog::warn("Duplicate Master List file detected: existing upload {}", duplicateUpload->id);
-            result.success = false;
-            result.status = "DUPLICATE";
-            result.errorMessage = "Duplicate file detected. This file has already been uploaded.";
-            result.message = "File with hash " + fileHash.substr(0, 16) + "... already exists";
-            // Return existing upload ID for reference
-            result.uploadId = duplicateUpload->id;
-            return result;
+            // Allow re-upload if previous upload is COMPLETED or FAILED
+            if (duplicateUpload->status == "COMPLETED" || duplicateUpload->status == "FAILED") {
+                spdlog::info("Re-upload allowed: clearing file_hash of previous upload {} (status: {})",
+                             duplicateUpload->id, duplicateUpload->status);
+                uploadRepo_->updateFileHash(duplicateUpload->id, "");
+            } else {
+                spdlog::warn("Duplicate Master List file detected: existing upload {} (status: {})",
+                             duplicateUpload->id, duplicateUpload->status);
+                result.success = false;
+                result.status = "DUPLICATE";
+                result.errorMessage = "Duplicate file detected. This file has already been uploaded.";
+                result.message = "File with hash " + fileHash.substr(0, 16) + "... already exists";
+                result.uploadId = duplicateUpload->id;
+                return result;
+            }
         }
 
         // Step 3: Generate upload ID
