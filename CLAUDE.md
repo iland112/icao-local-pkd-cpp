@@ -587,7 +587,9 @@ scripts/
 - **DB SELECT 폴백**: `fingerprintCacheLoaded_` 플래그로 캐시 미로드 시 기존 per-entry SELECT 유지 (안전한 폴백)
 - **`preloadExistingFingerprints()`**: `CertificateRepository`에 벌크 SELECT + `unordered_map` 캐시 구축 메서드 추가
 - **`addToFingerprintCache()`**: 신규 인증서 INSERT 후 캐시 업데이트 메서드 추가
-- **누적 성능**: v2.25.9(31.5ms, 31.7건/초) → v2.26.0(~21.5ms, ~46건/초) = **1.5배 추가 개선**, 최초 대비 **7.1배 개선**
+- **실측 성능**: v2.25.9(31.5ms, 31.7건/초) → **v2.26.0(11.1ms, 90건/초)** = **2.84배 추가 개선**, 최초 대비 **13.9배 개선**
+- **처리 시간**: 30,114건 기준 15분 49초 → **5분 35초** (10분 절감)
+- **Fingerprint 프리로드**: 1,374건 40ms (초기 업로드, 31K건 시 ~200ms 예상)
 - 3 files changed (0 new, 3 modified)
 
 ### v2.25.9 (2026-03-02) - Oracle 업로드 성능 최적화 (CSCA 캐시 + Regex 사전컴파일)
