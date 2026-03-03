@@ -61,12 +61,22 @@ export function UserManagement() {
     fetchUsers();
   }, []);
 
+  // Ensure permissions is always an array (Oracle may return JSON string or null)
+  const parsePermissions = (perms: unknown): string[] => {
+    if (Array.isArray(perms)) return perms;
+    if (typeof perms === 'string') {
+      try { const parsed = JSON.parse(perms); return Array.isArray(parsed) ? parsed : []; } catch { return []; }
+    }
+    return [];
+  };
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
       setError('');
       const { data } = await authClient.get('/users');
-      setUsers(data.data || data.users || []);
+      const rawUsers = data.data || data.users || [];
+      setUsers(rawUsers.map((u: UserData) => ({ ...u, permissions: parsePermissions(u.permissions) })));
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching users:', error);
       setError('사용자 목록을 불러오는데 실패했습니다.');
@@ -171,7 +181,7 @@ export function UserManagement() {
       email: user.email,
       full_name: user.full_name,
       is_admin: user.is_admin,
-      permissions: user.permissions,
+      permissions: parsePermissions(user.permissions),
     });
     setShowEditModal(true);
   };
