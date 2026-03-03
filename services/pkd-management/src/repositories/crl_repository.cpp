@@ -32,6 +32,18 @@ std::string CrlRepository::save(const std::string& uploadId,
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
 
+        // Duplicate check: skip if CRL with same fingerprint already exists
+        {
+            auto checkResult = queryExecutor_->executeQuery(
+                "SELECT id FROM crl WHERE fingerprint_sha256 = $1",
+                {fingerprint});
+            if (!checkResult.empty()) {
+                spdlog::debug("[CrlRepository] CRL duplicate skipped (fingerprint: {}...)",
+                              fingerprint.substr(0, 16));
+                return checkResult[0]["id"].asString();
+            }
+        }
+
         // Generate UUID (C++ for all DB types)
         std::string crlId = generateUuid();
 
