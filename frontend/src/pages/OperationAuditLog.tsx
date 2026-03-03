@@ -269,16 +269,16 @@ export function OperationAuditLog() {
             </div>
           </div>
 
-          {/* Average Duration */}
+          {/* Top Users */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">평균 소요시간</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">활성 사용자</p>
                 <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
-                  {formatDuration(statistics.averageDurationMs)}
+                  {statistics.topUsers?.length ?? 0}
                 </p>
               </div>
-              <Clock className="w-8 h-8 text-purple-500" />
+              <User className="w-8 h-8 text-purple-500" />
             </div>
           </div>
         </div>
@@ -395,9 +395,6 @@ export function OperationAuditLog() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                     결과
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-                    소요시간
-                  </th>
                   <th className="px-4 py-3 text-center text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                     상세
                   </th>
@@ -406,7 +403,7 @@ export function OperationAuditLog() {
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center">
+                    <td colSpan={7} className="px-4 py-8 text-center">
                       <div className="flex items-center justify-center space-x-2 text-gray-500 dark:text-gray-400">
                         <Clock className="w-5 h-5 animate-spin" />
                         <span>로딩 중...</span>
@@ -415,7 +412,7 @@ export function OperationAuditLog() {
                   </tr>
                 ) : auditLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
+                    <td colSpan={7} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400">
                       감사 로그가 없습니다.
                     </td>
                   </tr>
@@ -459,9 +456,6 @@ export function OperationAuditLog() {
                             실패
                           </span>
                         )}
-                      </td>
-                      <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400 font-mono">
-                        {formatDuration(log.durationMs)}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <button
