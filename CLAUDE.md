@@ -586,8 +586,9 @@ scripts/
 - **OracleQueryExecutor 배치 모드**: 세션 고정 (acquire/release 1회), OCI Statement 캐시 (`unordered_map<SQL, OCIStmt*>`), COMMIT 지연 → `endBatch()`에서 1회 커밋
 - **PostgreSQLQueryExecutor 배치 모드**: 커넥션 고정, `BEGIN`/`COMMIT` 트랜잭션 래핑
 - **ldif_processor 배치 호출**: 처리 루프 전 `beginBatch()`, 500건마다 `endBatch()`/`beginBatch()` 중간 커밋, 루프 후 `endBatch()` 최종 커밋
-- **성능 절감 예상**: Oracle 기준 세션 acquire/release 30K회→~60회, OCIStmtPrepare 30K회→~5회, OCITransCommit 30K회→~60회
-- 10 files changed (0 new, 10 modified)
+- **실측 성능**: v2.26.0(11.1ms, 90건/초) → **v2.26.1(7.3ms, 137.5건/초)** = **1.53배 추가 개선**, 최초 대비 **21.2배 개선**
+- **처리 시간**: 30,114건 기준 5분 35초 → **3분 39초** (2분 절감)
+- 12 files changed (0 new, 12 modified)
 
 ### v2.26.0 (2026-03-03) - Oracle 업로드 성능 최적화 Phase 2 (Fingerprint 프리캐시)
 - **Fingerprint 인메모리 프리캐시**: LDIF 처리 시작 전 전체 인증서 fingerprint (~31K건)를 1회 벌크 로드하여 `unordered_map` 캐시 → 매 인증서 중복체크 SELECT 제거 (30K 쿼리 → 1회)
