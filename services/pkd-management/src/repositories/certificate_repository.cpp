@@ -1019,20 +1019,30 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                   certType, countryCode, fingerprint.substr(0, 16) + "...");
 
     try {
-        // Step 1: Check if certificate already exists
-        const char* checkQuery =
-            "SELECT id, first_upload_id FROM certificate "
-            "WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
+        // Step 0: Check fingerprint cache (O(1) hash lookup, skips X.509 parsing entirely)
+        if (fingerprintCacheLoaded_) {
+            auto it = fingerprintCache_.find(fingerprint);
+            if (it != fingerprintCache_.end()) {
+                spdlog::debug("[CertificateRepository] Cache hit (duplicate): id={}, fingerprint={}",
+                             it->second.id.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
+                return std::make_pair(it->second.id, true);
+            }
+            // Cache loaded but not found → new certificate, skip DB SELECT (Step 1)
+        } else {
+            // Step 1: Fallback — DB query if cache not loaded
+            const char* checkQuery =
+                "SELECT id, first_upload_id FROM certificate "
+                "WHERE certificate_type = $1 AND fingerprint_sha256 = $2";
 
-        std::vector<std::string> checkParams = {certType, fingerprint};
-        Json::Value checkResult = queryExecutor_->executeQuery(checkQuery, checkParams);
+            std::vector<std::string> checkParams = {certType, fingerprint};
+            Json::Value checkResult = queryExecutor_->executeQuery(checkQuery, checkParams);
 
-        // If certificate exists, return existing ID with isDuplicate=true
-        if (!checkResult.empty()) {
-            std::string existingId = checkResult[0]["id"].asString();
-            spdlog::debug("[CertificateRepository] Duplicate certificate found: id={}, fingerprint={}",
-                         existingId.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
-            return std::make_pair(existingId, true);
+            if (!checkResult.empty()) {
+                std::string existingId = checkResult[0]["id"].asString();
+                spdlog::debug("[CertificateRepository] Duplicate certificate found: id={}, fingerprint={}",
+                             existingId.substr(0, 8) + "...", fingerprint.substr(0, 16) + "...");
+                return std::make_pair(existingId, true);
+            }
         }
 
         // Step 2: Extract X.509 metadata from certificate
@@ -1263,6 +1273,11 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
             newId = insertResult[0]["id"].asString();
         }
 
+        // Add to fingerprint cache (prevents duplicate within same upload batch)
+        if (fingerprintCacheLoaded_) {
+            addToFingerprintCache(fingerprint, newId, uploadId);
+        }
+
         spdlog::debug("[CertificateRepository] New certificate inserted: id={}, type={}, country={}, fingerprint={}",
                      newId.substr(0, 8) + "...", certType, countryCode, fingerprint.substr(0, 16) + "...");
 
@@ -1408,6 +1423,50 @@ Json::Value CertificateRepository::findAllForExport() {
         "ORDER BY country_code, certificate_type";
 
     return queryExecutor_->executeQuery(query);
+}
+
+// --- Fingerprint Pre-Cache (v2.26.0) ---
+
+void CertificateRepository::preloadExistingFingerprints() {
+    try {
+        auto startTime = std::chrono::steady_clock::now();
+
+        const char* query = "SELECT fingerprint_sha256, id, first_upload_id FROM certificate";
+        Json::Value rows = queryExecutor_->executeQuery(query);
+
+        fingerprintCache_.clear();
+        fingerprintCache_.reserve(rows.size());
+
+        for (const auto& row : rows) {
+            std::string fp = row["fingerprint_sha256"].asString();
+            if (!fp.empty()) {
+                fingerprintCache_[fp] = CachedFingerprintInfo{
+                    row["id"].asString(),
+                    row["first_upload_id"].asString()
+                };
+            }
+        }
+
+        fingerprintCacheLoaded_ = true;
+
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startTime).count();
+
+        spdlog::info("[CertificateRepository] Preloaded {} fingerprints into cache ({}ms)",
+                     fingerprintCache_.size(), elapsed);
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] Failed to preload fingerprints: {}", e.what());
+        fingerprintCacheLoaded_ = false;
+    }
+}
+
+void CertificateRepository::addToFingerprintCache(
+    const std::string& fingerprint,
+    const std::string& id,
+    const std::string& firstUploadId)
+{
+    fingerprintCache_[fingerprint] = CachedFingerprintInfo{id, firstUploadId};
 }
 
 } // namespace repositories

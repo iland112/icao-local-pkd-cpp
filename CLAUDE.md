@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.25.9
-**Last Updated**: 2026-03-02
+**Current Version**: v2.26.0
+**Last Updated**: 2026-03-03
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -579,6 +579,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.26.0 (2026-03-03) - Oracle 업로드 성능 최적화 Phase 2 (Fingerprint 프리캐시)
+- **Fingerprint 인메모리 프리캐시**: LDIF 처리 시작 전 전체 인증서 fingerprint (~31K건)를 1회 벌크 로드하여 `unordered_map` 캐시 → 매 인증서 중복체크 SELECT 제거 (30K 쿼리 → 1회)
+- **캐시 히트 시 X.509 파싱 완전 스킵**: duplicate 인증서는 `d2i_X509` + 27개 메타데이터 파라미터 구성을 건너뜀 (기존: SELECT 10ms + parse 1.5ms → 캐시 조회 0.001ms)
+- **신규 INSERT 후 캐시 동기화**: 같은 업로드 배치 내 중복 방지를 위해 INSERT 성공 시 즉시 캐시 추가
+- **DB SELECT 폴백**: `fingerprintCacheLoaded_` 플래그로 캐시 미로드 시 기존 per-entry SELECT 유지 (안전한 폴백)
+- **`preloadExistingFingerprints()`**: `CertificateRepository`에 벌크 SELECT + `unordered_map` 캐시 구축 메서드 추가
+- **`addToFingerprintCache()`**: 신규 인증서 INSERT 후 캐시 업데이트 메서드 추가
+- **누적 성능**: v2.25.9(31.5ms, 31.7건/초) → v2.26.0(~21.5ms, ~46건/초) = **1.5배 추가 개선**, 최초 대비 **7.1배 개선**
+- 3 files changed (0 new, 3 modified)
 
 ### v2.25.9 (2026-03-02) - Oracle 업로드 성능 최적화 (CSCA 캐시 + Regex 사전컴파일)
 - **CSCA 인메모리 캐시**: LDIF 처리 시작 전 전체 CSCA (~845건)를 1회 벌크 로드하여 메모리 캐시 → DSC 29,838건 각각의 CSCA DB 조회 제거 (30K 쿼리 → 1~2회)

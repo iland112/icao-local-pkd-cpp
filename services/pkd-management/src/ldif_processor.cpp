@@ -851,6 +851,10 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     adapters::DbCscaProvider sharedCscaProvider(g_services->certificateRepository());
     sharedCscaProvider.preloadAllCscas();
 
+    // Preload existing fingerprints for O(1) duplicate detection (v2.26.0)
+    // Eliminates ~30K per-entry SELECT queries during processing
+    g_services->certificateRepository()->preloadExistingFingerprints();
+
     // Process each entry
     for (const auto& entry : entries) {
         try {

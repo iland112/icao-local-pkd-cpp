@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <optional>
+#include <unordered_map>
 #include <json/json.h>
 #include "i_query_executor.h"
 #include <openssl/x509.h>
@@ -18,6 +19,15 @@
  */
 
 namespace repositories {
+
+/**
+ * @brief Cached fingerprint info for duplicate detection
+ * Used by fingerprint pre-cache to avoid per-entry SELECT queries.
+ */
+struct CachedFingerprintInfo {
+    std::string id;
+    std::string firstUploadId;
+};
 
 /**
  * @brief Certificate Search Filter
@@ -345,8 +355,41 @@ public:
      */
     X509* parseCertificateDataFromHex(const std::string& hexData);
 
+    /// @}
+
+    /// @name Fingerprint Pre-Cache (v2.26.0)
+    /// @{
+
+    /**
+     * @brief Preload all existing certificate fingerprints into memory cache
+     *
+     * Bulk-loads fingerprint_sha256, id, first_upload_id from certificate table
+     * into an in-memory unordered_map. Replaces ~30K per-entry SELECT queries
+     * with O(1) hash lookups during LDIF processing.
+     *
+     * @note Safe to call multiple times (reloads on each call)
+     * @note Memory: ~5MB for ~31K certificates
+     */
+    void preloadExistingFingerprints();
+
+    /**
+     * @brief Add a newly inserted certificate to the fingerprint cache
+     * @param fingerprint SHA-256 fingerprint (64-char hex)
+     * @param id Certificate UUID
+     * @param firstUploadId First upload ID
+     */
+    void addToFingerprintCache(const std::string& fingerprint,
+                               const std::string& id,
+                               const std::string& firstUploadId);
+
+    /// @}
+
 private:
     common::IQueryExecutor* queryExecutor_;  // Query executor (non-owning)
+
+    // Fingerprint pre-cache: fingerprint → {id, firstUploadId}
+    std::unordered_map<std::string, CachedFingerprintInfo> fingerprintCache_;
+    bool fingerprintCacheLoaded_ = false;
 
     // DN normalization helpers (for CSCA lookup)
     std::string extractDnAttribute(const std::string& dn, const std::string& attr);
