@@ -642,12 +642,14 @@ export function FileUpload() {
         // Map 10-50 to 0-100
         return Math.min(100, Math.max(0, Math.round((overallPercent - 10) * 100 / 40)));
       } else if (stageStr.startsWith('VALIDATION') || stageStr.startsWith('DB_SAVING')) {
-        // Combined VALIDATION (55-70) + DB_SAVING (72-85) mapped to 0-100
-        // VALIDATION: 55-70 -> 0-50, DB_SAVING: 72-85 -> 50-100
+        // LDIF processing sends entire range as VALIDATION_IN_PROGRESS (60-99%)
+        // DB+LDAP save happens inline, no separate DB_SAVING/LDAP_SAVING stages
         if (stageStr.startsWith('VALIDATION')) {
-          return Math.min(50, Math.max(0, Math.round((overallPercent - 55) * 50 / 15)));
+          // Map 60-99 -> 0-100
+          return Math.min(100, Math.max(0, Math.round((overallPercent - 60) * 100 / 39)));
         } else {
-          return Math.min(100, Math.max(50, 50 + Math.round((overallPercent - 72) * 50 / 13)));
+          // DB_SAVING fallback (used by non-LDIF upload flows)
+          return Math.min(100, Math.max(0, Math.round((overallPercent - 72) * 100 / 13)));
         }
       } else if (stageStr.startsWith('LDAP_SAVING')) {
         // Map 87-100 to 0-100
