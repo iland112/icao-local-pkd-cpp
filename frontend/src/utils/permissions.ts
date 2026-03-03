@@ -32,6 +32,12 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { value: 'pa:read', label: 'PA 이력/통계', desc: 'PA 검증 이력 및 통계 조회' },
     ],
   },
+  {
+    label: 'Admin & Security',
+    permissions: [
+      { value: 'api-client:manage', label: 'API 클라이언트 관리', desc: 'API 클라이언트 생성, 수정, 삭제, 키 재발급' },
+    ],
+  },
 ];
 
 /** Flat list of all permissions */

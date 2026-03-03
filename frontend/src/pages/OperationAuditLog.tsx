@@ -14,6 +14,17 @@ import {
   Download,
   Activity,
   Trash2,
+  Upload,
+  RefreshCw,
+  KeyRound,
+  Settings,
+  UserPlus,
+  UserCog,
+  UserX,
+  Lock,
+  Globe,
+  Database,
+  BookOpen,
 } from 'lucide-react';
 import {
   getAuditLogs,
@@ -27,19 +38,63 @@ import { cn } from '@/utils/cn';
 // Operation type labels
 const OPERATION_TYPE_LABELS: Record<OperationType, string> = {
   FILE_UPLOAD: '파일 업로드',
+  CERT_UPLOAD: '인증서 업로드',
   CERT_EXPORT: '인증서 내보내기',
   UPLOAD_DELETE: '업로드 삭제',
+  UPLOAD_RETRY: '업로드 재시도',
   PA_VERIFY: 'PA 검증',
+  PA_PARSE_SOD: 'SOD 파싱',
+  PA_PARSE_DG1: 'DG1 파싱',
+  PA_PARSE_DG2: 'DG2 파싱',
+  API_CLIENT_CREATE: 'API 클라이언트 생성',
+  API_CLIENT_UPDATE: 'API 클라이언트 수정',
+  API_CLIENT_DELETE: 'API 클라이언트 삭제',
+  API_CLIENT_KEY_REGEN: 'API 키 재발급',
+  CODE_MASTER_CREATE: '코드 마스터 생성',
+  CODE_MASTER_UPDATE: '코드 마스터 수정',
+  CODE_MASTER_DELETE: '코드 마스터 삭제',
+  USER_CREATE: '사용자 생성',
+  USER_UPDATE: '사용자 수정',
+  USER_DELETE: '사용자 삭제',
+  PASSWORD_CHANGE: '비밀번호 변경',
+  ICAO_CHECK: 'ICAO 버전 확인',
   SYNC_TRIGGER: '동기화 트리거',
+  SYNC_CHECK: '동기화 체크',
+  RECONCILE: '재조정',
+  REVALIDATE: '재검증',
+  TRIGGER_DAILY_SYNC: '일일 동기화',
+  CONFIG_UPDATE: '설정 변경',
 };
 
 // Operation type icons
 const OPERATION_TYPE_ICONS: Record<OperationType, React.ReactNode> = {
   FILE_UPLOAD: <FileText className="w-4 h-4" />,
+  CERT_UPLOAD: <Upload className="w-4 h-4" />,
   CERT_EXPORT: <Download className="w-4 h-4" />,
   UPLOAD_DELETE: <Trash2 className="w-4 h-4" />,
+  UPLOAD_RETRY: <RefreshCw className="w-4 h-4" />,
   PA_VERIFY: <ShieldCheck className="w-4 h-4" />,
+  PA_PARSE_SOD: <FileText className="w-4 h-4" />,
+  PA_PARSE_DG1: <FileText className="w-4 h-4" />,
+  PA_PARSE_DG2: <FileText className="w-4 h-4" />,
+  API_CLIENT_CREATE: <KeyRound className="w-4 h-4" />,
+  API_CLIENT_UPDATE: <KeyRound className="w-4 h-4" />,
+  API_CLIENT_DELETE: <KeyRound className="w-4 h-4" />,
+  API_CLIENT_KEY_REGEN: <KeyRound className="w-4 h-4" />,
+  CODE_MASTER_CREATE: <BookOpen className="w-4 h-4" />,
+  CODE_MASTER_UPDATE: <BookOpen className="w-4 h-4" />,
+  CODE_MASTER_DELETE: <BookOpen className="w-4 h-4" />,
+  USER_CREATE: <UserPlus className="w-4 h-4" />,
+  USER_UPDATE: <UserCog className="w-4 h-4" />,
+  USER_DELETE: <UserX className="w-4 h-4" />,
+  PASSWORD_CHANGE: <Lock className="w-4 h-4" />,
+  ICAO_CHECK: <Globe className="w-4 h-4" />,
   SYNC_TRIGGER: <Activity className="w-4 h-4" />,
+  SYNC_CHECK: <Database className="w-4 h-4" />,
+  RECONCILE: <RefreshCw className="w-4 h-4" />,
+  REVALIDATE: <ShieldCheck className="w-4 h-4" />,
+  TRIGGER_DAILY_SYNC: <Activity className="w-4 h-4" />,
+  CONFIG_UPDATE: <Settings className="w-4 h-4" />,
 };
 
 export function OperationAuditLog() {
@@ -380,9 +435,9 @@ export function OperationAuditLog() {
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <div className="flex items-center space-x-2">
-                          {OPERATION_TYPE_ICONS[log.operationType]}
+                          {OPERATION_TYPE_ICONS[log.operationType] || <Activity className="w-4 h-4" />}
                           <span className="text-gray-900 dark:text-gray-100">
-                            {OPERATION_TYPE_LABELS[log.operationType]}
+                            {OPERATION_TYPE_LABELS[log.operationType] || log.operationType}
                           </span>
                         </div>
                       </td>

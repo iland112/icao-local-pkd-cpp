@@ -18,9 +18,31 @@ import axios, { type AxiosError, type AxiosResponse } from 'axios';
 export type OperationType =
   | 'FILE_UPLOAD'
   | 'CERT_EXPORT'
+  | 'CERT_UPLOAD'
   | 'UPLOAD_DELETE'
+  | 'UPLOAD_RETRY'
   | 'PA_VERIFY'
-  | 'SYNC_TRIGGER';
+  | 'PA_PARSE_SOD'
+  | 'PA_PARSE_DG1'
+  | 'PA_PARSE_DG2'
+  | 'API_CLIENT_CREATE'
+  | 'API_CLIENT_UPDATE'
+  | 'API_CLIENT_DELETE'
+  | 'API_CLIENT_KEY_REGEN'
+  | 'CODE_MASTER_CREATE'
+  | 'CODE_MASTER_UPDATE'
+  | 'CODE_MASTER_DELETE'
+  | 'USER_CREATE'
+  | 'USER_UPDATE'
+  | 'USER_DELETE'
+  | 'PASSWORD_CHANGE'
+  | 'ICAO_CHECK'
+  | 'SYNC_TRIGGER'
+  | 'SYNC_CHECK'
+  | 'RECONCILE'
+  | 'REVALIDATE'
+  | 'TRIGGER_DAILY_SYNC'
+  | 'CONFIG_UPDATE';
 
 /**
  * Audit log entry
