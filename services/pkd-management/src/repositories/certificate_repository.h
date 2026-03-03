@@ -7,6 +7,7 @@
 #include <json/json.h>
 #include "i_query_executor.h"
 #include <openssl/x509.h>
+#include "../common/x509_metadata_extractor.h"
 
 /**
  * @file certificate_repository.h
@@ -246,7 +247,8 @@ public:
         const std::string& notAfter,
         const std::vector<uint8_t>& certData,
         const std::string& validationStatus = "UNKNOWN",
-        const std::string& validationMessage = ""
+        const std::string& validationMessage = "",
+        const x509::CertificateMetadata* preExtractedMetadata = nullptr
     );
 
     /**

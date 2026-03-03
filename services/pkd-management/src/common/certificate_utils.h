@@ -12,6 +12,7 @@
 #include <libpq-fe.h>
 #include <openssl/x509.h>
 #include <openssl/asn1.h>
+#include "x509_metadata_extractor.h"
 
 namespace certificate_utils {
 
@@ -175,7 +176,8 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     const std::string& notAfter,
     const std::vector<uint8_t>& certData,
     const std::string& validationStatus = "UNKNOWN",
-    const std::string& validationMessage = ""
+    const std::string& validationMessage = "",
+    const x509::CertificateMetadata* preExtractedMetadata = nullptr
 );
 
 /**

@@ -568,14 +568,17 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     auto endTime = std::chrono::high_resolution_clock::now();
     valRecord.validationDurationMs = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
 
+    // Extract full X.509 metadata before freeing cert (avoids re-parsing in repository)
+    x509::CertificateMetadata x509meta = x509::extractMetadata(cert);
+
     X509_free(cert);
 
-    // 1. Save to DB with validation status
+    // 1. Save to DB with validation status (pass pre-extracted metadata to skip d2i_X509 in repository)
     auto [certId, isDuplicate] = certificate_utils::saveCertificateWithDuplicateCheck(
         uploadId, certType, countryCode,
         subjectDn, issuerDn, serialNumber, fingerprint,
         notBefore, notAfter, derBytes,
-        validationStatus, validationMessage
+        validationStatus, validationMessage, &x509meta
     );
 
     if (isDuplicate) {
@@ -855,6 +858,11 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     // Eliminates ~30K per-entry SELECT queries during processing
     g_services->certificateRepository()->preloadExistingFingerprints();
 
+    // Begin batch mode for bulk DB operations (v2.26.1)
+    // Session pinning + statement cache + deferred commit (500-entry intervals)
+    auto* queryExecutor = g_services->queryExecutor();
+    queryExecutor->beginBatch();
+
     // Process each entry
     for (const auto& entry : entries) {
         try {
@@ -903,6 +911,10 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
         // Update DB progress every 500 entries (for upload history/detail page)
         if (g_services->uploadRepository() && (processedEntries % 500 == 0 || processedEntries == totalEntries)) {
+            // Mid-batch commit: flush pending operations so progress is visible
+            queryExecutor->endBatch();
+            queryExecutor->beginBatch();
+
             g_services->uploadRepository()->updateProgress(uploadId, totalEntries, processedEntries);
             g_services->uploadRepository()->updateStatistics(uploadId,
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
@@ -988,6 +1000,9 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                         counts.mlCount, counts.ldapMlStoredCount);
         }
     }
+
+    // End batch mode — final commit + release resources
+    queryExecutor->endBatch();
 
     spdlog::info("LDIF processing completed: {} CSCA, {} DSC, {} DSC_NC, {} CRLs, {} MLs",
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount, counts.mlCount);

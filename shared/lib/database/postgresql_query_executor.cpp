@@ -84,12 +84,21 @@ int PostgreSQLQueryExecutor::executeCommand(
     const std::vector<std::string>& params
 )
 {
-    spdlog::debug("[PostgreSQLQueryExecutor] Executing command");
+    // Determine which connection to use
+    PGconn* pgconn = nullptr;
+    DbConnection* normalConn = nullptr;
+    std::unique_ptr<DbConnection> connHolder;
 
-    // Acquire connection from pool (RAII - held until function returns)
-    auto conn = pool_->acquire();
-    if (!conn.isValid()) {
-        throw std::runtime_error("[PostgreSQLQueryExecutor] Failed to acquire connection from pool");
+    if (batchMode_ && batchConn_ && batchConn_->isValid()) {
+        // Batch mode: use pinned connection (no acquire/release per call)
+        pgconn = batchConn_->get();
+    } else {
+        // Normal mode: acquire from pool (RAII - released when connHolder destructs)
+        connHolder = std::make_unique<DbConnection>(pool_->acquire());
+        if (!connHolder->isValid()) {
+            throw std::runtime_error("[PostgreSQLQueryExecutor] Failed to acquire connection from pool");
+        }
+        pgconn = connHolder->get();
     }
 
     // Prepare parameter values for libpq
@@ -101,7 +110,7 @@ int PostgreSQLQueryExecutor::executeCommand(
 
     // Execute parameterized query
     PGresult* res = PQexecParams(
-        conn.get(),
+        pgconn,
         query.c_str(),
         params.size(),
         nullptr,
@@ -118,7 +127,7 @@ int PostgreSQLQueryExecutor::executeCommand(
     // Check execution status
     ExecStatusType status = PQresultStatus(res);
     if (status != PGRES_COMMAND_OK && status != PGRES_TUPLES_OK) {
-        std::string error = PQerrorMessage(conn.get());
+        std::string error = PQerrorMessage(pgconn);
         PQclear(res);
         throw std::runtime_error("[PostgreSQLQueryExecutor] Query failed: " + error);
     }
@@ -131,10 +140,57 @@ int PostgreSQLQueryExecutor::executeCommand(
     }
 
     PQclear(res);
-    // conn automatically returned to pool here
+    // In normal mode, connHolder destructs here and returns connection to pool
 
     spdlog::debug("[PostgreSQLQueryExecutor] Command executed, affected rows: {}", affectedRows);
     return affectedRows;
+}
+
+// ── Batch mode lifecycle ──
+
+void PostgreSQLQueryExecutor::beginBatch() {
+    if (batchMode_) {
+        spdlog::debug("[PostgreSQLQueryExecutor] beginBatch called but already in batch mode — ignoring");
+        return;
+    }
+
+    batchConn_ = std::make_unique<DbConnection>(pool_->acquire());
+    if (!batchConn_->isValid()) {
+        batchConn_.reset();
+        spdlog::warn("[PostgreSQLQueryExecutor] beginBatch: failed to acquire connection — batch mode disabled");
+        return;
+    }
+
+    // Start transaction
+    PGresult* res = PQexec(batchConn_->get(), "BEGIN");
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        std::string error = PQerrorMessage(batchConn_->get());
+        PQclear(res);
+        batchConn_.reset();
+        throw std::runtime_error("[PostgreSQLQueryExecutor] BEGIN failed: " + error);
+    }
+    PQclear(res);
+
+    batchMode_ = true;
+    spdlog::info("[PostgreSQLQueryExecutor] Batch mode started (connection pinned, transaction BEGIN)");
+}
+
+void PostgreSQLQueryExecutor::endBatch() {
+    if (!batchMode_) return;
+
+    // Commit transaction
+    if (batchConn_ && batchConn_->isValid()) {
+        PGresult* res = PQexec(batchConn_->get(), "COMMIT");
+        if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+            spdlog::error("[PostgreSQLQueryExecutor] COMMIT failed: {}", PQerrorMessage(batchConn_->get()));
+        }
+        PQclear(res);
+    }
+
+    // Release connection back to pool (RAII via unique_ptr reset)
+    batchConn_.reset();
+    batchMode_ = false;
+    spdlog::info("[PostgreSQLQueryExecutor] Batch mode ended (committed + connection released)");
 }
 
 Json::Value PostgreSQLQueryExecutor::executeScalar(

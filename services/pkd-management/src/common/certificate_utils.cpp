@@ -35,7 +35,8 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     const std::string& notAfter,
     const std::vector<uint8_t>& certData,
     const std::string& validationStatus,
-    const std::string& validationMessage
+    const std::string& validationMessage,
+    const x509::CertificateMetadata* preExtractedMetadata
 ) {
     // Delegate to CertificateRepository
     if (!g_services->certificateRepository()) {
@@ -46,7 +47,7 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     return g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
         uploadId, certType, countryCode, subjectDn, issuerDn,
         serialNumber, fingerprint, notBefore, notAfter, certData,
-        validationStatus, validationMessage
+        validationStatus, validationMessage, preExtractedMetadata
     );
 }
 

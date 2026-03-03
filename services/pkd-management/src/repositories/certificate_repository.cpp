@@ -1012,7 +1012,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
     const std::string& notAfter,
     const std::vector<uint8_t>& certData,
     const std::string& validationStatus,
-    const std::string& validationMessage
+    const std::string& validationMessage,
+    const x509::CertificateMetadata* preExtractedMetadata
 )
 {
     spdlog::debug("[CertificateRepository] Saving certificate: type={}, country={}, fingerprint={}",
@@ -1046,17 +1047,26 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
         }
 
         // Step 2: Extract X.509 metadata from certificate
-        const unsigned char* certPtr = certData.data();
-        X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
-
+        // If preExtractedMetadata is provided (from ldif_processor), skip d2i_X509 + extractMetadata
         x509::CertificateMetadata x509meta;
+        if (preExtractedMetadata) {
+            x509meta = *preExtractedMetadata;
+        } else {
+            const unsigned char* certPtr = certData.data();
+            X509* x509cert = d2i_X509(nullptr, &certPtr, static_cast<long>(certData.size()));
+            if (x509cert) {
+                x509meta = x509::extractMetadata(x509cert);
+                X509_free(x509cert);
+            } else {
+                spdlog::warn("[CertificateRepository] Failed to parse X509 certificate for metadata extraction (fallback)");
+            }
+        }
+
         std::string versionStr, sigAlg, sigHashAlg, pubKeyAlg, pubKeySizeStr;
         std::string pubKeyCurve, keyUsageStr, extKeyUsageStr, isCaStr;
         std::string pathLenStr, ski, aki, crlDpStr, ocspUrl, isSelfSignedStr;
 
-        if (x509cert) {
-            x509meta = x509::extractMetadata(x509cert);
-            X509_free(x509cert);
+        if (preExtractedMetadata || x509meta.version > 0) {
 
             // Convert metadata to SQL strings
             versionStr = std::to_string(x509meta.version);

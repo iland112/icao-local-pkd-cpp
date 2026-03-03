@@ -91,6 +91,28 @@ public:
      * @return "postgres" or "oracle"
      */
     virtual std::string getDatabaseType() const = 0;
+
+    /**
+     * @brief Begin batch mode for bulk operations
+     *
+     * Optimizes repeated INSERT/UPDATE operations by:
+     * - Oracle: Pinning a session, caching prepared statements, deferring COMMIT
+     * - PostgreSQL: Starting a transaction (BEGIN), pinning a connection
+     *
+     * Call endBatch() when done. Safe to call multiple times (for mid-batch commits).
+     * Default implementation is empty (backward compatible).
+     */
+    virtual void beginBatch() {}
+
+    /**
+     * @brief End batch mode and commit pending operations
+     *
+     * - Oracle: Commits once, frees cached statements, releases session
+     * - PostgreSQL: Commits transaction (COMMIT), releases connection
+     *
+     * Default implementation is empty (backward compatible).
+     */
+    virtual void endBatch() {}
 };
 
 /**

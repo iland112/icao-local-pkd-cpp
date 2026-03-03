@@ -16,6 +16,7 @@
 
 // OCI (Oracle Call Interface) headers
 #include <oci.h>
+#include <unordered_map>
 
 // Suppress OTL library warnings (third-party code)
 #pragma GCC diagnostic push
@@ -103,6 +104,16 @@ public:
      * @return "oracle"
      */
     std::string getDatabaseType() const override { return "oracle"; }
+
+    /**
+     * @brief Begin batch mode — pin session, cache statements, defer commits
+     */
+    void beginBatch() override;
+
+    /**
+     * @brief End batch mode — commit once, free cached stmts, release session
+     */
+    void endBatch() override;
 
 private:
     OracleConnectionPool* pool_;  ///< Oracle connection pool (for executeScalar via OTL)
@@ -213,6 +224,12 @@ private:
      * @return JSON array of result rows
      */
     Json::Value otlStreamToJson(otl_stream& otlStream);
+
+    /// @name Batch mode (v2.26.1 — session pinning + statement cache + deferred commit)
+
+    bool batchMode_ = false;                              ///< Whether batch mode is active
+    PooledSession batchSession_;                           ///< Pinned session for batch mode
+    std::unordered_map<std::string, OCIStmt*> stmtCache_;  ///< Cached prepared statements (SQL → stmt)
 };
 
 } // namespace common

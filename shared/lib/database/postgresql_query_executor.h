@@ -3,6 +3,7 @@
 #include "i_query_executor.h"
 #include "db_connection_pool.h"
 #include <libpq-fe.h>
+#include <memory>
 
 /**
  * @file postgresql_query_executor.h
@@ -82,6 +83,16 @@ public:
      */
     std::string getDatabaseType() const override { return "postgres"; }
 
+    /**
+     * @brief Begin batch mode — pin connection, start transaction
+     */
+    void beginBatch() override;
+
+    /**
+     * @brief End batch mode — commit transaction, release connection
+     */
+    void endBatch() override;
+
 private:
     DbConnectionPool* pool_;  ///< PostgreSQL connection pool
 
@@ -115,6 +126,11 @@ private:
         const std::string& query,
         const std::vector<std::string>& params
     );
+
+    /// @name Batch mode (v2.26.1 — connection pinning + transaction wrapping)
+
+    bool batchMode_ = false;                                    ///< Whether batch mode is active
+    std::unique_ptr<DbConnection> batchConn_;                   ///< Pinned connection for batch mode
 };
 
 } // namespace common

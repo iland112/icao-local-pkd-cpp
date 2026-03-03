@@ -420,6 +420,124 @@ int OracleQueryExecutor::executeCommand(
         }
     }
 
+    // Convert PostgreSQL syntax to Oracle syntax
+    // Uses pre-compiled static regex patterns (see file top) for performance
+    std::string oracleQuery = query;
+    oracleQuery = std::regex_replace(oracleQuery, s_pgPlaceholder, ":$1");
+    oracleQuery = std::regex_replace(oracleQuery, s_nullifInteger, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
+    oracleQuery = std::regex_replace(oracleQuery, s_currentTimestamp, "SYSTIMESTAMP");
+    oracleQuery = std::regex_replace(oracleQuery, s_nowFunc, "SYSDATE");
+    oracleQuery = std::regex_replace(oracleQuery, s_typecast, "");
+
+    // Handle PostgreSQL ON CONFLICT clause (not supported in Oracle)
+    oracleQuery = std::regex_replace(oracleQuery, s_onConflict, "");
+
+    // ── Batch mode: pinned session + cached statement + deferred commit ──
+    if (batchMode_) {
+        try {
+            // Look up cached statement or prepare new one
+            OCIStmt* stmt = nullptr;
+            auto cacheIt = stmtCache_.find(oracleQuery);
+            if (cacheIt != stmtCache_.end()) {
+                stmt = cacheIt->second;
+            } else {
+                sword status = OCIHandleAlloc(poolEnv_, reinterpret_cast<void**>(&stmt),
+                                              OCI_HTYPE_STMT, 0, nullptr);
+                if (status != OCI_SUCCESS) {
+                    throw std::runtime_error("Failed to allocate OCI statement handle (batch)");
+                }
+                status = OCIStmtPrepare(stmt, batchSession_.err,
+                                        reinterpret_cast<const OraText*>(oracleQuery.c_str()),
+                                        oracleQuery.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
+                if (status != OCI_SUCCESS) {
+                    OCIHandleFree(stmt, OCI_HTYPE_STMT);
+                    throw std::runtime_error("Failed to prepare OCI statement (batch)");
+                }
+                stmtCache_[oracleQuery] = stmt;
+            }
+
+            // Bind parameters
+            std::vector<char*> paramBuffers;
+            std::vector<std::vector<uint8_t>> binaryBuffers;
+            std::vector<std::string> bindNames;
+
+            for (size_t i = 0; i < params.size(); ++i) {
+                OCIBind* bind = nullptr;
+                bindNames.push_back(":" + std::to_string(i + 1));
+                const std::string& bindName = bindNames.back();
+
+                bool isBinary = false;
+                size_t hexStart = 0;
+                if (params[i].size() > 3 && params[i][0] == '\\' && params[i][1] == '\\' && params[i][2] == 'x') {
+                    isBinary = true;
+                    hexStart = 3;
+                } else if (params[i].size() > 2 && params[i][0] == '\\' && params[i][1] == 'x') {
+                    isBinary = true;
+                    hexStart = 2;
+                }
+
+                sword status;
+                if (isBinary) {
+                    std::vector<uint8_t> rawBytes;
+                    rawBytes.reserve((params[i].size() - hexStart) / 2);
+                    for (size_t j = hexStart; j + 1 < params[i].size(); j += 2) {
+                        char hex[3] = { params[i][j], params[i][j + 1], '\0' };
+                        rawBytes.push_back(static_cast<uint8_t>(strtol(hex, nullptr, 16)));
+                    }
+                    binaryBuffers.push_back(std::move(rawBytes));
+                    auto& buf = binaryBuffers.back();
+                    status = OCIBindByName(stmt, &bind, batchSession_.err,
+                                          reinterpret_cast<const OraText*>(bindName.c_str()),
+                                          static_cast<sb4>(bindName.length()),
+                                          buf.data(), static_cast<sb4>(buf.size()),
+                                          SQLT_LBI, nullptr, nullptr, nullptr,
+                                          0, nullptr, OCI_DEFAULT);
+                } else {
+                    char* buffer = new char[params[i].length() + 1];
+                    strcpy(buffer, params[i].c_str());
+                    paramBuffers.push_back(buffer);
+                    status = OCIBindByName(stmt, &bind, batchSession_.err,
+                                          reinterpret_cast<const OraText*>(bindName.c_str()),
+                                          static_cast<sb4>(bindName.length()),
+                                          buffer, params[i].length() + 1,
+                                          SQLT_STR, nullptr, nullptr, nullptr,
+                                          0, nullptr, OCI_DEFAULT);
+                }
+
+                if (status != OCI_SUCCESS) {
+                    for (char* buf : paramBuffers) delete[] buf;
+                    throw std::runtime_error("Failed to bind parameter " + std::to_string(i + 1) + " (batch)");
+                }
+            }
+
+            // Execute (no commit — deferred to endBatch)
+            sword status = OCIStmtExecute(batchSession_.svcCtx, stmt, batchSession_.err, 1, 0,
+                                          nullptr, nullptr, OCI_DEFAULT);
+            if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
+                char errbuf[512];
+                sb4 errcode = 0;
+                OCIErrorGet(batchSession_.err, 1, nullptr, &errcode,
+                           reinterpret_cast<OraText*>(errbuf), sizeof(errbuf), OCI_HTYPE_ERROR);
+                for (char* buf : paramBuffers) delete[] buf;
+                throw std::runtime_error(std::string("OCI batch execution failed: ") + errbuf);
+            }
+
+            ub4 affectedRows = 0;
+            OCIAttrGet(stmt, OCI_HTYPE_STMT, &affectedRows, nullptr,
+                      OCI_ATTR_ROW_COUNT, batchSession_.err);
+
+            // Cleanup bind buffers only (stmt is cached, session is pinned)
+            for (char* buf : paramBuffers) delete[] buf;
+
+            return static_cast<int>(affectedRows);
+
+        } catch (const std::exception& e) {
+            spdlog::error("[OracleQueryExecutor] Batch command exception: {}", e.what());
+            throw;
+        }
+    }
+
+    // ── Normal mode: acquire session per call, commit per call ──
     spdlog::debug("[OracleQueryExecutor] Executing command via session pool");
 
     PooledSession session;
@@ -427,18 +545,6 @@ int OracleQueryExecutor::executeCommand(
     try {
         // Acquire pre-authenticated session from pool
         session = acquirePooledSession();
-
-        // Convert PostgreSQL syntax to Oracle syntax
-        // Uses pre-compiled static regex patterns (see file top) for performance
-        std::string oracleQuery = query;
-        oracleQuery = std::regex_replace(oracleQuery, s_pgPlaceholder, ":$1");
-        oracleQuery = std::regex_replace(oracleQuery, s_nullifInteger, "CASE WHEN $1 IS NULL OR $1 = '' THEN NULL ELSE TO_NUMBER($1) END");
-        oracleQuery = std::regex_replace(oracleQuery, s_currentTimestamp, "SYSTIMESTAMP");
-        oracleQuery = std::regex_replace(oracleQuery, s_nowFunc, "SYSDATE");
-        oracleQuery = std::regex_replace(oracleQuery, s_typecast, "");
-
-        // Handle PostgreSQL ON CONFLICT clause (not supported in Oracle)
-        oracleQuery = std::regex_replace(oracleQuery, s_onConflict, "");
 
         spdlog::debug("[OracleQueryExecutor] OCI command: {}", oracleQuery.substr(0, 300));
 
@@ -561,6 +667,43 @@ int OracleQueryExecutor::executeCommand(
     }
 
     return 0;
+}
+
+// ── Batch mode lifecycle ──
+
+void OracleQueryExecutor::beginBatch() {
+    if (batchMode_) {
+        spdlog::debug("[OracleQueryExecutor] beginBatch called but already in batch mode — ignoring");
+        return;
+    }
+    if (!sessionPoolReady_) {
+        spdlog::warn("[OracleQueryExecutor] beginBatch: session pool not ready — batch mode disabled");
+        return;
+    }
+
+    batchSession_ = acquirePooledSession();
+    batchMode_ = true;
+    spdlog::info("[OracleQueryExecutor] Batch mode started (session pinned, commit deferred)");
+}
+
+void OracleQueryExecutor::endBatch() {
+    if (!batchMode_) return;
+
+    // Commit all pending operations
+    if (batchSession_.svcCtx && batchSession_.err) {
+        OCITransCommit(batchSession_.svcCtx, batchSession_.err, OCI_DEFAULT);
+    }
+
+    // Free all cached statements
+    for (auto& [sql, stmt] : stmtCache_) {
+        if (stmt) OCIHandleFree(stmt, OCI_HTYPE_STMT);
+    }
+    stmtCache_.clear();
+
+    // Release pinned session
+    releasePooledSession(batchSession_);
+    batchMode_ = false;
+    spdlog::info("[OracleQueryExecutor] Batch mode ended (committed + session released)");
 }
 
 Json::Value OracleQueryExecutor::executeScalar(

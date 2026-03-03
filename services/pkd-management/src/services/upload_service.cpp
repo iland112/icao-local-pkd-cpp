@@ -42,15 +42,7 @@
 extern infrastructure::ServiceContainer* g_services;
 
 // Certificate save utility
-namespace certificate_utils {
-    extern std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
-        const std::string& uploadId, const std::string& certType,
-        const std::string& countryCode, const std::string& subjectDn,
-        const std::string& issuerDn, const std::string& serialNumber,
-        const std::string& fingerprint, const std::string& notBefore,
-        const std::string& notAfter, const std::vector<uint8_t>& certData,
-        const std::string& validationStatus, const std::string& validationMessage);
-}
+#include "../common/certificate_utils.h"
 
 namespace services {
 
