@@ -106,7 +106,12 @@ export default function ApiClientManagement() {
                     }
                     fetchClients();
                   } catch (e) {
-                    console.error('Regenerate failed', e);
+                    const axiosErr = e as { response?: { status?: number } };
+                    if (axiosErr.response?.status === 503 || axiosErr.response?.status === 429) {
+                      alert('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+                    } else {
+                      alert('API Key 재발급에 실패했습니다.');
+                    }
                   }
                 }}
               />
@@ -249,18 +254,29 @@ function CreateDialog({ onClose, onCreated }: {
   });
   const [ipsText, setIpsText] = useState('');
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async () => {
     if (!form.client_name.trim()) return;
     setSaving(true);
+    setError('');
     try {
       const req = { ...form, allowed_ips: ipsText ? ipsText.split(',').map(s => s.trim()).filter(Boolean) : [] };
       const res = await apiClientApi.create(req);
       if (res.success && res.client.api_key) {
         onCreated(res.client, res.client.api_key);
+      } else {
+        setError('API Key 생성에 실패했습니다.');
       }
-    } catch (e) {
-      console.error('Create failed', e);
+    } catch (e: unknown) {
+      const axiosErr = e as { response?: { status?: number; data?: { message?: string } } };
+      if (axiosErr.response?.status === 503 || axiosErr.response?.status === 429) {
+        setError('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+      } else if (axiosErr.response?.data?.message) {
+        setError(axiosErr.response.data.message);
+      } else {
+        setError('API Key 생성 중 오류가 발생했습니다.');
+      }
     } finally {
       setSaving(false);
     }
@@ -302,6 +318,12 @@ function CreateDialog({ onClose, onCreated }: {
           <InputField label="일당 제한" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
         </div>
       </div>
+
+      {error && (
+        <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+        </div>
+      )}
 
       <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">취소</button>

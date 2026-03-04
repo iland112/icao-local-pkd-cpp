@@ -135,35 +135,16 @@ echo ""
 # =============================================================================
 echo -e "${YELLOW}[Step 4/7] Generating nginx config (Podman DNS)...${NC}"
 
-# SSL 감지
-SSL_DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
-if [ -f ".docker-data/ssl/server.crt" ] && [ -f ".docker-data/ssl/server.key" ]; then
-    SSL_SOURCE="nginx/api-gateway-ssl.conf"
-    echo "  SSL mode: HTTPS + HTTP"
-else
-    SSL_SOURCE="nginx/api-gateway.conf"
-    echo "  SSL mode: HTTP only"
-fi
-
-# 임시 DNS — 네트워크 생성 후 업데이트
-PODMAN_DNS="10.89.0.1"
-
-# Podman 네트워크 생성 (podman-compose 프로젝트명: docker → docker_pkd-network)
+# Podman 네트워크 생성
 NETWORK_NAME="docker_pkd-network"
 podman network create "$NETWORK_NAME" 2>/dev/null || true
 
-# 실제 DNS IP 감지
-DETECTED_DNS=$(podman network inspect "$NETWORK_NAME" 2>/dev/null | \
-    python3 -c "import sys,json; nets=json.load(sys.stdin); print(nets[0]['subnets'][0]['gateway'])" 2>/dev/null || echo "")
-if [ -n "$DETECTED_DNS" ]; then
-    PODMAN_DNS="$DETECTED_DNS"
-fi
-echo "  Podman DNS resolver: $PODMAN_DNS"
+# Load shared library for generate_podman_nginx_conf
+RUNTIME="podman"
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
 
-sed "s|resolver 127.0.0.11|resolver $PODMAN_DNS|g" \
-    "$SSL_SOURCE" > ".docker-data/nginx/api-gateway.conf"
-
-export NGINX_CONF="../.docker-data/nginx/api-gateway.conf"
+# 공통 함수로 nginx 설정 생성 (Podman DNS resolver 자동 감지 + 교체)
+generate_podman_nginx_conf
 echo -e "${GREEN}  nginx config generated${NC}"
 echo ""
 

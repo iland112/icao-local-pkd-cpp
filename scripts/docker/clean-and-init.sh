@@ -57,12 +57,25 @@ echo -e "${GREEN}✓ All containers stopped and removed${NC}"
 echo ""
 
 # =============================================================================
-# Step 2: Remove all data
+# Step 2: Remove all data (preserve SSL certificates)
 # =============================================================================
 echo -e "${YELLOW}[Step 2/6] Removing all data directories...${NC}"
 if [ -d ".docker-data" ]; then
+    # Preserve SSL certificates if they exist
+    if [ -d ".docker-data/ssl" ] && [ -f ".docker-data/ssl/server.crt" ]; then
+        echo "  Preserving SSL certificates (.docker-data/ssl/)"
+        sudo cp -a .docker-data/ssl /tmp/icao-ssl-backup
+    fi
+
     echo "  Removing .docker-data/*"
     sudo rm -rf .docker-data/*
+
+    # Restore SSL certificates
+    if [ -d "/tmp/icao-ssl-backup" ]; then
+        sudo mv /tmp/icao-ssl-backup .docker-data/ssl
+        echo -e "${GREEN}✓ SSL certificates restored${NC}"
+    fi
+
     echo -e "${GREEN}✓ Data directories removed${NC}"
 else
     echo "  .docker-data does not exist, skipping"
@@ -331,9 +344,17 @@ docker compose -f docker/docker-compose.yaml $PROFILE_FLAG ps
 echo ""
 echo -e "${GREEN}✓ System is ready for use (DB_TYPE=$DB_TYPE)${NC}"
 echo ""
+
+# Detect SSL mode from .env
+NGINX_CONF=$(grep -E '^NGINX_CONF=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
 echo "Access URLs:"
-echo "  - Frontend: http://localhost:13080"
-echo "  - API Gateway: http://localhost:18080/api"
+if [[ "$NGINX_CONF" == *"ssl"* ]] && [ -f ".docker-data/ssl/server.crt" ]; then
+    echo "  - Frontend: https://dev.pkd.smartcoreinc.com"
+    echo "  - API Gateway: https://dev.pkd.smartcoreinc.com/api"
+else
+    echo "  - Frontend: http://localhost:13080"
+    echo "  - API Gateway: http://localhost:18080/api"
+fi
 echo "  - API Documentation: http://localhost:18090"
 if [ "$DB_TYPE" = "oracle" ]; then
     echo "  - Oracle: localhost:11521 (SYS/SYSTEM)"

@@ -92,36 +92,14 @@ fi
 echo "  nginx 설정 생성 중 (Podman DNS)..."
 
 # Podman 네트워크 생성 (없으면)
-# podman-compose 프로젝트명: docker (compose 파일 디렉토리명) → docker_pkd-network
 NETWORK_NAME="docker_pkd-network"
 if ! podman network exists "$NETWORK_NAME" 2>/dev/null; then
     podman network create "$NETWORK_NAME" 2>/dev/null || true
 fi
 
-# Podman aardvark-dns gateway IP 감지
-PODMAN_DNS=""
-if podman network exists "$NETWORK_NAME" 2>/dev/null; then
-    PODMAN_DNS=$(podman network inspect "$NETWORK_NAME" 2>/dev/null | \
-        python3 -c "import sys,json; nets=json.load(sys.stdin); print(nets[0]['subnets'][0]['gateway'])" 2>/dev/null || echo "")
-fi
-
-if [ -z "$PODMAN_DNS" ]; then
-    # 네트워크 아직 없으면 기본 Podman DNS 사용
-    # podman-compose 첫 실행 시 네트워크 자동 생성됨
-    PODMAN_DNS="10.89.0.1"
-    echo "  Podman DNS 자동 감지 실패 — 기본값 사용: $PODMAN_DNS"
-else
-    echo "  Podman DNS: $PODMAN_DNS"
-fi
-
-# Docker용 nginx 설정을 복사하고 resolver만 교체
-sed "s|resolver 127.0.0.11|resolver $PODMAN_DNS|g" \
-    "$SSL_SOURCE" > ".docker-data/nginx/api-gateway.conf"
-
+# 공통 함수로 nginx 설정 생성 (Podman DNS resolver 자동 감지 + 교체)
+generate_podman_nginx_conf
 echo "  nginx 설정 생성 완료: .docker-data/nginx/api-gateway.conf"
-
-# NGINX_CONF를 생성된 설정으로 지정
-export NGINX_CONF="../.docker-data/nginx/api-gateway.conf"
 
 # =============================================================================
 # 3. Podman Compose 시작

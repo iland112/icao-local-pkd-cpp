@@ -135,6 +135,51 @@ wait_for_oracle_xepdb1() {
 }
 
 # =============================================================================
+# generate_podman_nginx_conf - Generate nginx config with Podman DNS resolver
+# =============================================================================
+# Podman uses aardvark-dns (not Docker's 127.0.0.11).
+# This function generates .docker-data/nginx/api-gateway.conf with the correct
+# DNS resolver IP, and sets NGINX_CONF for podman-compose to use.
+# Must be called before any podman-compose up that includes api-gateway.
+#
+# Sets: NGINX_CONF (exported global)
+generate_podman_nginx_conf() {
+    # Only for Podman environments
+    if [ "$RUNTIME" != "podman" ]; then
+        return 0
+    fi
+
+    mkdir -p .docker-data/nginx 2>/dev/null || true
+
+    # Determine source nginx config (SSL or HTTP)
+    local ssl_source
+    if [ -f ".docker-data/ssl/server.crt" ] && [ -f ".docker-data/ssl/server.key" ]; then
+        ssl_source="nginx/api-gateway-ssl.conf"
+    else
+        ssl_source="nginx/api-gateway.conf"
+    fi
+
+    # Detect Podman network DNS (aardvark-dns gateway IP)
+    local network_name="docker_pkd-network"
+    local podman_dns=""
+
+    if podman network exists "$network_name" 2>/dev/null; then
+        podman_dns=$(podman network inspect "$network_name" 2>/dev/null | \
+            python3 -c "import sys,json; nets=json.load(sys.stdin); print(nets[0]['subnets'][0]['gateway'])" 2>/dev/null || echo "")
+    fi
+
+    if [ -z "$podman_dns" ]; then
+        podman_dns="10.89.0.1"
+    fi
+
+    # Generate config with Podman DNS resolver
+    sed "s|resolver 127.0.0.11|resolver $podman_dns|g" \
+        "$ssl_source" > ".docker-data/nginx/api-gateway.conf"
+
+    export NGINX_CONF="../.docker-data/nginx/api-gateway.conf"
+}
+
+# =============================================================================
 # check_service_health - HTTP health check with curl
 # =============================================================================
 # Arguments:

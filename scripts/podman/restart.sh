@@ -4,17 +4,16 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$SCRIPT_DIR"
 
+# Load shared library
+RUNTIME="podman"
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/common.sh"
+
+COMPOSE_FILE="docker/docker-compose.podman.yaml"
+
 # Read DB_TYPE from .env
-DB_TYPE=$(grep -E '^DB_TYPE=' .env 2>/dev/null | cut -d= -f2 | tr -d ' "'"'"'')
-DB_TYPE="${DB_TYPE:-oracle}"
+parse_db_type "oracle"
 
-if [ "$DB_TYPE" = "oracle" ]; then
-    PROFILE_FLAG="--profile oracle"
-else
-    PROFILE_FLAG="--profile postgres"
-fi
-
-COMPOSE="podman-compose -f docker/docker-compose.podman.yaml $PROFILE_FLAG"
+COMPOSE="podman-compose -f $COMPOSE_FILE $PROFILE_FLAG"
 SERVICE=${1:-}
 
 echo "  ICAO PKD Podman 컨테이너 재시작... (DB_TYPE=$DB_TYPE)"
@@ -27,6 +26,13 @@ if [ -z "$SERVICE" ]; then
     bash "$SCRIPT_DIR/scripts/podman/start.sh"
 else
     echo "   서비스: $SERVICE"
+
+    # api-gateway 재시작 시 Podman DNS resolver 설정 자동 적용
+    if [ "$SERVICE" = "api-gateway" ]; then
+        echo "  nginx 설정 생성 (Podman DNS resolver)..."
+        generate_podman_nginx_conf
+    fi
+
     $COMPOSE restart $SERVICE
 
     echo ""

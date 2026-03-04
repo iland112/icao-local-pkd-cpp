@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.27.0
+**Current Version**: v2.27.1
 **Last Updated**: 2026-03-04
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -579,6 +579,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.27.1 (2026-03-04) - API Client Rate Limit 분리 + Podman DNS Resolver 영구 수정
+- **nginx Rate Limit 분리**: `/api/auth/api-clients` 별도 location 블록 추가 — API 클라이언트 관리 엔드포인트에 `api_limit`(100r/s) 적용 (기존 `login_limit` 5r/m로 인해 API Key 발급 버튼 503 오류)
+- **Root cause**: `/api/auth` location이 `login_limit`(5r/m)을 사용하여 API 클라이언트 관리 포함 모든 auth 엔드포인트에 로그인 rate limit 적용 → 페이지 로드 GET이 rate limit 소모 → POST 발급 요청 차단
+- **Frontend 에러 표시**: ApiClientManagement CreateDialog에 에러 state + 빨간 배너 추가, Regenerate 핸들러에 alert 추가 (기존 `console.error` 사일런트 실패 → 사용자 피드백)
+- **Podman DNS Resolver 공유 함수**: `scripts/lib/common.sh`에 `generate_podman_nginx_conf()` 추가 — Podman aardvark-dns 게이트웨이 IP 자동 감지 후 nginx resolver 치환
+- **Root cause**: Production Podman 환경에서 nginx `resolver 127.0.0.11`(Docker DNS) 사용으로 `auth_request` 서브리퀘스트 DNS 해석 타임아웃 → PA 서비스 500 오류
+- **Podman 스크립트 통합**: `start.sh`, `restart.sh`, `clean-and-init.sh` 모두 `generate_podman_nginx_conf()` 공유 함수 사용으로 인라인 DNS 감지 코드 제거 (~50줄 중복 삭제)
+- **restart.sh api-gateway 자동 적용**: api-gateway 단독 재시작 시에도 `generate_podman_nginx_conf()` 자동 호출 (DNS resolver 누락 방지)
+- **docker-compose.podman.yaml 기본값 수정**: `NGINX_CONF` 기본값을 존재하지 않는 `api-gateway-podman-ssl.conf` → 생성 파일 `.docker-data/nginx/api-gateway.conf`로 변경
+- **Docker clean-and-init SSL 보존**: `.docker-data` 삭제 시 SSL 인증서(`server.crt/key`) 백업 후 복원, SSL 모드 감지 시 HTTPS URL 표시
+- nginx 3개 파일 수정 (api-gateway-ssl.conf, api-gateway.conf, api-gateway-luckfox.conf)
+- 10 files changed (0 new, 10 modified)
 
 ### v2.27.0 (2026-03-04) - FAILED 이어하기 재처리 + COMPLETED 재업로드 차단 + SAVEPOINT 에러 격리
 - **FAILED 이어하기 재처리**: FAILED 업로드 retry 시 기존 데이터 유지, fingerprint 캐시 기반으로 이미 처리된 인증서 스킵 (~15초 vs 기존 3분 35초)

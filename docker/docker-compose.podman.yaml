@@ -31,7 +31,7 @@ services:
     ports:
       - "${HTTPS_PORT:-443}:443"
     volumes:
-      - ${NGINX_CONF:-../nginx/api-gateway-podman-ssl.conf}:/etc/nginx/nginx.conf:ro
+      - ${NGINX_CONF:-../.docker-data/nginx/api-gateway.conf}:/etc/nginx/nginx.conf:ro
       - ../nginx/proxy_params:/etc/nginx/proxy_params:ro
       - ../docs/openapi:/etc/nginx/openapi:ro
       - ../.docker-data/gateway-logs:/var/log/nginx
