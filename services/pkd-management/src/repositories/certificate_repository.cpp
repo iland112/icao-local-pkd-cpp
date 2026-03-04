@@ -1479,4 +1479,8 @@ void CertificateRepository::addToFingerprintCache(
     fingerprintCache_[fingerprint] = CachedFingerprintInfo{id, firstUploadId};
 }
 
+bool CertificateRepository::isFingerprintCached(const std::string& fingerprint) const {
+    return fingerprintCacheLoaded_ && fingerprintCache_.count(fingerprint) > 0;
+}
+
 } // namespace repositories

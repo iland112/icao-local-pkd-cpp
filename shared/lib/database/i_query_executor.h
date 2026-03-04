@@ -113,6 +113,30 @@ public:
      * Default implementation is empty (backward compatible).
      */
     virtual void endBatch() {}
+
+    /**
+     * @brief Create a savepoint within current batch transaction
+     *
+     * PostgreSQL: Creates SAVEPOINT for error recovery within transaction.
+     * When a query fails in a PostgreSQL transaction, the entire transaction
+     * enters "aborted" state and all subsequent queries fail. SAVEPOINT allows
+     * rolling back to a clean state without losing the entire batch.
+     *
+     * Oracle: No-op (Oracle transactions don't abort on individual statement failure).
+     *
+     * @param name Savepoint name (e.g., "sp_entry")
+     */
+    virtual void savepoint(const std::string& /*name*/) {}
+
+    /**
+     * @brief Rollback to a previously created savepoint
+     *
+     * PostgreSQL: Restores transaction to clean state after a query failure.
+     * Oracle: No-op.
+     *
+     * @param name Savepoint name to rollback to
+     */
+    virtual void rollbackToSavepoint(const std::string& /*name*/) {}
 };
 
 /**

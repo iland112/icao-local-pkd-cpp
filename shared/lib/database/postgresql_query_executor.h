@@ -93,6 +93,16 @@ public:
      */
     void endBatch() override;
 
+    /**
+     * @brief Create SAVEPOINT within batch transaction for error recovery
+     */
+    void savepoint(const std::string& name) override;
+
+    /**
+     * @brief ROLLBACK TO SAVEPOINT to recover from query failure in transaction
+     */
+    void rollbackToSavepoint(const std::string& name) override;
+
 private:
     DbConnectionPool* pool_;  ///< PostgreSQL connection pool
 

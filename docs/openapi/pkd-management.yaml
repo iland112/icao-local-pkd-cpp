@@ -449,11 +449,12 @@ paths:
   /api/upload/{uploadId}/retry:
     post:
       tags: [Upload]
-      summary: Retry failed upload
+      summary: Retry failed upload (resume mode)
       description: |
-        Retry a previously failed upload. Cleans up partial data (certificates, CRLs,
-        validation results, duplicates) and re-triggers processing.
-        Only applicable to uploads with FAILED status.
+        Retry a previously failed upload using resume mode.
+        Skips already-processed certificates via fingerprint cache and continues
+        from the failure point. Only applicable to uploads with FAILED status.
+        COMPLETED uploads cannot be retried or re-uploaded.
       operationId: retryUpload
       security:
         - bearerAuth: []

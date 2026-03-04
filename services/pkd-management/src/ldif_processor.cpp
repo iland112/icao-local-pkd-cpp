@@ -216,6 +216,16 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         countryCode = extractCountryCode(issuerDn);
     }
 
+    // Early fingerprint cache check: skip entire processing for already-processed certificates.
+    // During resume mode (FAILED retry), most certificates are already in DB.
+    // Without this check, each duplicate still triggers X.509 validation + LDAP write (~10ms/cert).
+    // With this check, duplicates are skipped in ~0.001ms (hash lookup only).
+    if (g_services->certificateRepository()->isFingerprintCached(fingerprint)) {
+        X509_free(cert);
+        enhancedStats.duplicateCount++;
+        return true;  // Already processed — skip validation, DB save, and LDAP write
+    }
+
     // Extract comprehensive certificate metadata for progress tracking
     // Note: This extraction is done early (before validation) so metadata is available
     // for enhanced progress updates. ICAO compliance will be checked after cert type is determined.
@@ -865,6 +875,11 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
     // Process each entry
     for (const auto& entry : entries) {
+        // Create SAVEPOINT before each entry for PostgreSQL error recovery.
+        // PostgreSQL transactions abort on any query failure — SAVEPOINT allows
+        // rolling back just the failed entry without losing the entire batch.
+        queryExecutor->savepoint("sp_entry");
+
         try {
             // Check for userCertificate;binary
             if (entry.hasAttribute("userCertificate;binary")) {
@@ -902,6 +917,11 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
             }
 
         } catch (const std::exception& e) {
+            // Rollback to SAVEPOINT to recover PostgreSQL transaction state.
+            // Without this, all subsequent queries in the batch would fail with
+            // "current transaction is aborted, commands ignored until end of transaction block"
+            queryExecutor->rollbackToSavepoint("sp_entry");
+
             spdlog::warn("Error processing entry {}: {}", entry.dn, e.what());
             common::addProcessingError(enhancedStats, "ENTRY_PROCESSING_EXCEPTION",
                 entry.dn, "", "", "", std::string("Exception: ") + e.what());
@@ -911,14 +931,15 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
         // Update DB progress every 500 entries (for upload history/detail page)
         if (g_services->uploadRepository() && (processedEntries % 500 == 0 || processedEntries == totalEntries)) {
-            // Mid-batch commit: flush pending operations so progress is visible
-            queryExecutor->endBatch();
-            queryExecutor->beginBatch();
-
+            // Update progress BEFORE endBatch so it's committed in the same batch
             g_services->uploadRepository()->updateProgress(uploadId, totalEntries, processedEntries);
             g_services->uploadRepository()->updateStatistics(uploadId,
                 counts.cscaCount, counts.dscCount, counts.dscNcCount, counts.crlCount,
                 counts.mlscCount, counts.mlCount);
+
+            // Mid-batch commit: flush pending operations (including progress) so state is visible
+            queryExecutor->endBatch();
+            queryExecutor->beginBatch();
         }
 
         // Send progress update to frontend every 50 entries

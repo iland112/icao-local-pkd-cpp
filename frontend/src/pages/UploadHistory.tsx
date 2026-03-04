@@ -78,6 +78,10 @@ export function UploadHistory() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [uploadToDelete, setUploadToDelete] = useState<UploadedFile | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Retry confirmation dialog state
+  const [retryDialogOpen, setRetryDialogOpen] = useState(false);
+  const [uploadToRetry, setUploadToRetry] = useState<UploadedFile | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   // Tab state for detail dialog
@@ -165,6 +169,27 @@ export function UploadHistory() {
   }, [uploads, totalElements]);
 
   // Parse PostgreSQL timestamp format: "2025-12-31 09:04:28.432487+09"
+  const formatDuration = (startStr: string, endStr: string): string => {
+    if (!startStr || !endStr) return '-';
+    try {
+      const toIso = (s: string) => s.replace(' ', 'T').replace(/\+(\d{2})$/, '+$1:00');
+      const start = new Date(toIso(startStr));
+      const end = new Date(toIso(endStr));
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return '-';
+      const diffMs = end.getTime() - start.getTime();
+      if (diffMs < 0) return '-';
+      const totalSec = Math.floor(diffMs / 1000);
+      const hours = Math.floor(totalSec / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const seconds = totalSec % 60;
+      if (hours > 0) return `${hours}시간 ${minutes}분 ${seconds}초`;
+      if (minutes > 0) return `${minutes}분 ${seconds}초`;
+      return `${seconds}초`;
+    } catch {
+      return '-';
+    }
+  };
+
   const formatDate = (dateString: string): string => {
     if (!dateString) return '-';
     try {
@@ -325,11 +350,23 @@ export function UploadHistory() {
     }
   };
 
-  const handleRetry = async (upload: UploadedFile) => {
-    setRetryingId(upload.id);
+  const handleRetryClick = (upload: UploadedFile) => {
+    setUploadToRetry(upload);
+    setRetryDialogOpen(true);
+  };
+
+  const closeRetryDialog = () => {
+    setRetryDialogOpen(false);
+    setUploadToRetry(null);
+  };
+
+  const handleRetryConfirm = async () => {
+    if (!uploadToRetry) return;
+
+    setRetryingId(uploadToRetry.id);
+    closeRetryDialog();
     try {
-      await uploadApi.retryUpload(upload.id);
-      // Refresh the list to show updated status
+      await uploadApi.retryUpload(uploadToRetry.id);
       await fetchUploads();
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to retry upload:', error);
@@ -605,6 +642,9 @@ export function UploadHistory() {
                       업로드 일시
                     </th>
                     <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
+                      완료 시각
+                    </th>
+                    <th className="px-6 py-3 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
                       액션
                     </th>
                   </tr>
@@ -638,7 +678,7 @@ export function UploadHistory() {
                               CSCA {upload.cscaCount || upload.certificateCount}
                             </span>
                           )}
-                          {upload.mlscCount && upload.mlscCount > 0 && (
+                          {(upload.mlscCount ?? 0) > 0 && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
                               <FileText className="w-3 h-3" />
                               MLSC {upload.mlscCount}
@@ -676,6 +716,9 @@ export function UploadHistory() {
                       <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
                         {formatDate(upload.createdAt ?? '')}
                       </td>
+                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-gray-400">
+                        {upload.status === 'COMPLETED' ? formatDate(upload.completedAt ?? upload.updatedAt ?? '') : '-'}
+                      </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <button
@@ -685,15 +728,15 @@ export function UploadHistory() {
                             <Eye className="w-4 h-4" />
                             상세
                           </button>
-                          {(upload.status === 'FAILED' || upload.status === 'COMPLETED') && (
+                          {upload.status === 'FAILED' && (
                             <button
-                              onClick={() => handleRetry(upload)}
+                              onClick={() => handleRetryClick(upload)}
                               disabled={retryingId === upload.id}
                               className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
-                              title={upload.status === 'FAILED' ? '실패한 업로드 재시도' : '업로드 재처리'}
+                              title="실패한 업로드 재시도"
                             >
                               <RefreshCw className={cn("w-4 h-4", retryingId === upload.id && "animate-spin")} />
-                              {upload.status === 'FAILED' ? '재시도' : '재처리'}
+                              재시도
                             </button>
                           )}
                           {(upload.status === 'FAILED' || upload.status === 'PENDING') && (
@@ -918,7 +961,7 @@ export function UploadHistory() {
                   )}
 
                   {/* Certificate & File Info Grid - Compact */}
-                  <div className="grid grid-cols-5 gap-2">
+                  <div className="grid grid-cols-6 gap-2">
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">형식</span>
                       <div className="mt-0.5">{getFormatBadge(selectedUpload.fileFormat)}</div>
@@ -944,7 +987,15 @@ export function UploadHistory() {
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">완료</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
-                        {formatDate(selectedUpload.updatedAt ?? '')}
+                        {formatDate(selectedUpload.completedAt ?? selectedUpload.updatedAt ?? '')}
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
+                      <span className="text-xs text-blue-500 dark:text-blue-400">처리시간</span>
+                      <p className="text-sm font-bold text-blue-700 dark:text-blue-300 mt-0.5">
+                        {selectedUpload.status === 'COMPLETED'
+                          ? formatDuration(selectedUpload.createdAt ?? '', selectedUpload.completedAt ?? selectedUpload.updatedAt ?? '')
+                          : '-'}
                       </p>
                     </div>
                   </div>
@@ -1213,6 +1264,95 @@ export function UploadHistory() {
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Retry Confirmation Dialog */}
+      {retryDialogOpen && uploadToRetry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={closeRetryDialog}
+          />
+
+          {/* Dialog Content */}
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4">
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                <RefreshCw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  업로드 재처리
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  실패 지점부터 이어서 재처리
+                </p>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="p-5 space-y-4">
+              <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300">이어하기 모드</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                      이미 처리된 인증서는 건너뛰고 실패 지점부터 이어서 재처리합니다.
+                    </p>
+                    {(uploadToRetry.processedEntries ?? 0) > 0 && (
+                      <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
+                        처리 완료: <span className="font-semibold">{(uploadToRetry.processedEntries ?? 0).toLocaleString()}</span> / {(uploadToRetry.totalEntries ?? 0).toLocaleString()} 건
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">파일명</span>
+                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate ml-4 max-w-[200px]">
+                    {uploadToRetry.fileName}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">상태</span>
+                  <span className="text-sm font-medium text-red-600 dark:text-red-400">실패</span>
+                </div>
+                {uploadToRetry.errorMessage && (
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">오류</span>
+                    <span className="text-xs text-red-600 dark:text-red-400 ml-4 text-right break-all max-w-[220px]">
+                      {uploadToRetry.errorMessage.length > 80
+                        ? uploadToRetry.errorMessage.substring(0, 80) + '...'
+                        : uploadToRetry.errorMessage}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={closeRetryDialog}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleRetryConfirm}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                이어서 재처리
               </button>
             </div>
           </div>

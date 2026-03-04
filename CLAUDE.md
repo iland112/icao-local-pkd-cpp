@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.26.1
-**Last Updated**: 2026-03-03
+**Current Version**: v2.27.0
+**Last Updated**: 2026-03-04
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -203,7 +203,7 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `POST /api/upload/certificate/preview` - Preview certificate (parse only, no save)
 - `GET /api/upload/history` - Upload history (paginated)
 - `GET /api/upload/detail/{id}` - Upload detail by ID
-- `POST /api/upload/{id}/retry` - Retry failed upload
+- `POST /api/upload/{id}/retry` - Retry failed upload (FAILED only, resume mode)
 - `DELETE /api/upload/{id}` - Delete upload
 - `GET /api/upload/statistics` - Upload statistics summary
 - `GET /api/upload/countries` - Country statistics (dashboard)
@@ -579,6 +579,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.27.0 (2026-03-04) - FAILED 이어하기 재처리 + COMPLETED 재업로드 차단 + SAVEPOINT 에러 격리
+- **FAILED 이어하기 재처리**: FAILED 업로드 retry 시 기존 데이터 유지, fingerprint 캐시 기반으로 이미 처리된 인증서 스킵 (~15초 vs 기존 3분 35초)
+- **COMPLETED 재업로드 완전 차단**: COMPLETED 파일 retry 불가(400), 동일 파일 재업로드 불가(409 DUPLICATE_FILE)
+- **재처리 확인 다이얼로그**: 재처리 클릭 시 확인 팝업 표시 (파일명, 상태, 진행률, 이어하기 모드 안내)
+- **SAVEPOINT 에러 격리**: PostgreSQL 배치 트랜잭션 내 개별 엔트리 실패 시 `SAVEPOINT`/`ROLLBACK TO SAVEPOINT`로 전체 트랜잭션 보호 (cascade abort 방지)
+- **IQueryExecutor 인터페이스 확장**: `savepoint()`, `rollbackToSavepoint()` 가상 메서드 추가 (빈 기본 구현, backward compatible)
+- **PostgreSQLQueryExecutor SAVEPOINT 구현**: 배치 모드 pinned connection에서 SAVEPOINT/ROLLBACK TO SAVEPOINT 실행
+- **Early fingerprint cache check**: `parseCertificateEntry()`에서 fingerprint 계산 직후 캐시 확인 → 히트 시 X.509 파싱/검증/DB/LDAP 전체 스킵
+- **DB 통계 재집계**: resume 모드 처리 완료 후 DB에서 certificate/validation_result 기반 정확한 최종 통계 재계산
+- **validation_result 중복 방지**: PostgreSQL `ON CONFLICT (certificate_id, upload_id) DO NOTHING`, Oracle `MERGE INTO` 적용
+- **실패 핸들러 통계 보존**: 처리 실패 시 기존 통계를 0으로 리셋하지 않고 상태만 FAILED로 변경
+- Backend: upload_handler.cpp (retry FAILED-only), upload_service.cpp (COMPLETED→DUPLICATE), processing_strategy.cpp (DB 재집계)
+- Shared: i_query_executor.h, postgresql_query_executor.h/.cpp (SAVEPOINT)
+- Frontend: UploadHistory.tsx (재처리 다이얼로그, FAILED-only 버튼)
+- 10 files changed (0 new, 10 modified)
 
 ### v2.26.1 (2026-03-03) - 3단계 성능 최적화 (X.509 이중 파싱 제거 + Statement 캐시 + 배치 커밋)
 - **X.509 이중 파싱 제거**: 동일 인증서에 대해 `d2i_X509()` + `extractMetadata()`가 2회 발생하던 것을 1회로 줄임 — `ldif_processor.cpp`에서 추출한 `CertificateMetadata`를 `saveCertificateWithDuplicateCheck()`에 직접 전달

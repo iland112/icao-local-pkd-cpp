@@ -97,8 +97,11 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
             std::string revocationStatus = result.crlCheckStatus;
             std::string id = generateUuid();
 
+            // Oracle: Use MERGE to handle duplicate (certificate_id, upload_id) gracefully
             query =
-                "INSERT INTO validation_result ("
+                "MERGE INTO validation_result vr USING (SELECT $3 AS cert_id, $2 AS upl_id FROM DUAL) src "
+                "ON (vr.certificate_id = src.cert_id AND vr.upload_id = src.upl_id) "
+                "WHEN NOT MATCHED THEN INSERT ("
                 "id, upload_id, certificate_id, certificate_type, country_code, "
                 "subject_dn, issuer_dn, serial_number, "
                 "trust_chain_valid, trust_chain_message, csca_subject_dn, csca_found, "
@@ -167,7 +170,7 @@ bool ValidationRepository::save(const domain::models::ValidationResult& result)
                 ") VALUES ("
                 "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, "
                 "$20, $21, $22, $23, $24, $25, $26, $27"
-                ")";
+                ") ON CONFLICT (certificate_id, upload_id) DO NOTHING";
 
             params = {
                 result.uploadId,                                          // $1

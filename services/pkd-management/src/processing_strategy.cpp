@@ -66,6 +66,86 @@ void AutoProcessingStrategy::processLdifEntries(
     // Process all entries (save to DB, validate, upload to LDAP) with total counts for progress display
     auto counts = LdifProcessor::processEntries(uploadId, entries, ld, stats, enhancedStats, &totalCounts);
 
+    // If duplicates were skipped (resume mode), recalculate statistics from DB for accuracy.
+    // The in-memory counts only reflect newly processed certificates, not previously processed ones.
+    bool hasSkippedDuplicates = (enhancedStats.duplicateCount > 0);
+
+    if (hasSkippedDuplicates && g_services->queryExecutor()) {
+        spdlog::info("Resume mode: {} duplicates skipped — recalculating statistics from DB", enhancedStats.duplicateCount);
+
+        try {
+            // Recalculate certificate counts by type from DB
+            auto certCounts = g_services->queryExecutor()->executeQuery(
+                "SELECT certificate_type, COUNT(*) as cnt FROM certificate WHERE upload_id = $1 GROUP BY certificate_type",
+                {uploadId});
+
+            int dbCscaCount = 0, dbDscCount = 0, dbDscNcCount = 0;
+            for (const auto& row : certCounts) {
+                std::string type = row["certificate_type"].asString();
+                int cnt = row["cnt"].asInt();
+                if (type == "CSCA") dbCscaCount = cnt;
+                else if (type == "DSC") dbDscCount = cnt;
+                else if (type == "DSC_NC") dbDscNcCount = cnt;
+            }
+
+            // Recalculate CRL count from DB
+            auto crlCountResult = g_services->queryExecutor()->executeScalar(
+                "SELECT COUNT(*) FROM crl WHERE upload_id = $1", {uploadId});
+            int dbCrlCount = crlCountResult.asInt();
+
+            counts.cscaCount = dbCscaCount;
+            counts.dscCount = dbDscCount;
+            counts.dscNcCount = dbDscNcCount;
+            counts.crlCount = dbCrlCount;
+
+            spdlog::info("Resume mode: DB counts — CSCA={}, DSC={}, DSC_NC={}, CRL={}",
+                        dbCscaCount, dbDscCount, dbDscNcCount, dbCrlCount);
+
+            // Recalculate validation statistics from DB
+            auto valCounts = g_services->queryExecutor()->executeQuery(
+                "SELECT validation_status, COUNT(*) as cnt FROM validation_result WHERE upload_id = $1 GROUP BY validation_status",
+                {uploadId});
+
+            enhancedStats.validCount = 0;
+            enhancedStats.invalidCount = 0;
+            enhancedStats.pendingCount = 0;
+            enhancedStats.expiredValidCount = 0;
+            for (const auto& row : valCounts) {
+                std::string status = row["validation_status"].asString();
+                int cnt = row["cnt"].asInt();
+                if (status == "VALID") enhancedStats.validCount = cnt;
+                else if (status == "INVALID") enhancedStats.invalidCount = cnt;
+                else if (status == "PENDING") enhancedStats.pendingCount = cnt;
+                else if (status == "EXPIRED_VALID") enhancedStats.expiredValidCount = cnt;
+            }
+
+            // Recalculate trust chain and ICAO compliance counts
+            auto tcValid = g_services->queryExecutor()->executeScalar(
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND trust_chain_valid = TRUE", {uploadId});
+            enhancedStats.trustChainValidCount = tcValid.asInt();
+
+            auto cscaNotFound = g_services->queryExecutor()->executeScalar(
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND validation_status = 'PENDING' AND csca_found = FALSE", {uploadId});
+            enhancedStats.cscaNotFoundCount = cscaNotFound.asInt();
+
+            enhancedStats.trustChainInvalidCount = enhancedStats.invalidCount;
+
+            auto icaoCompliant = g_services->queryExecutor()->executeScalar(
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = TRUE", {uploadId});
+            enhancedStats.icaoCompliantCount = icaoCompliant.asInt();
+
+            auto icaoNonCompliant = g_services->queryExecutor()->executeScalar(
+                "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = FALSE", {uploadId});
+            enhancedStats.icaoNonCompliantCount = icaoNonCompliant.asInt();
+
+            spdlog::info("Resume mode: Validation counts — valid={}, invalid={}, pending={}, expired_valid={}",
+                        enhancedStats.validCount, enhancedStats.invalidCount,
+                        enhancedStats.pendingCount, enhancedStats.expiredValidCount);
+        } catch (const std::exception& e) {
+            spdlog::warn("Resume mode: DB statistics recalculation failed (using in-memory counts): {}", e.what());
+        }
+    }
+
     // Update database statistics
     int totalItems = counts.cscaCount + counts.dscCount + counts.dscNcCount + counts.crlCount + counts.mlCount;
     common::updateUploadStatistics(uploadId, "COMPLETED",

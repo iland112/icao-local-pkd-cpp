@@ -558,7 +558,7 @@ UploadService::LdifUploadResult UploadService::uploadLdif(
         // Step 2: Check for duplicate file
         auto duplicateUpload = uploadRepo_->findByFileHash(fileHash);
         if (duplicateUpload) {
-            bool canReupload = (duplicateUpload->status == "COMPLETED" || duplicateUpload->status == "FAILED");
+            bool canReupload = (duplicateUpload->status == "FAILED");
             if (canReupload && uploadMode == "FORCE") {
                 spdlog::info("Force re-upload: clearing file_hash of previous upload {} (status: {})",
                              duplicateUpload->id, duplicateUpload->status);
@@ -650,7 +650,7 @@ UploadService::MasterListUploadResult UploadService::uploadMasterList(
         // Step 2: Check for duplicate file
         auto duplicateUpload = uploadRepo_->findByFileHash(fileHash);
         if (duplicateUpload) {
-            bool canReupload = (duplicateUpload->status == "COMPLETED" || duplicateUpload->status == "FAILED");
+            bool canReupload = (duplicateUpload->status == "FAILED");
             if (canReupload && uploadMode == "FORCE") {
                 spdlog::info("Force re-upload: clearing file_hash of previous upload {} (status: {})",
                              duplicateUpload->id, duplicateUpload->status);

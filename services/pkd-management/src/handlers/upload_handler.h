@@ -130,8 +130,9 @@ public:
      *
      * @param uploadId Upload record UUID
      * @param content Raw LDIF file content
+     * @param resumeMode If true, skip already-processed certificates via fingerprint cache (no cleanup)
      */
-    void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
+    void processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content, bool resumeMode = false);
 
     /**
      * @brief Process Master List file asynchronously (CMS parsing + DB + LDAP)
@@ -142,8 +143,9 @@ public:
      *
      * @param uploadId Upload record UUID
      * @param content Raw Master List file content
+     * @param resumeMode If true, skip already-processed certificates via fingerprint cache (no cleanup)
      */
-    void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content);
+    void processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content, bool resumeMode = false);
 
 private:
     // --- Dependencies (non-owning pointers) ---

@@ -366,7 +366,7 @@ LDAP* UploadHandler::getLdapWriteConnection() {
 // Helper: processLdifFileAsync
 // =============================================================================
 
-void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
+void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content, bool resumeMode) {
     // Atomic check+register: prevent duplicate threads AND enforce concurrent limit under single mutex
     {
         std::lock_guard<std::mutex> lock(s_processingMutex);
@@ -389,7 +389,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         s_activeProcessingCount.fetch_add(1);
     }
 
-    std::thread([uploadId, content]() {
+    std::thread([uploadId, content, resumeMode]() {
         // Ensure cleanup on thread exit
         auto cleanupGuard = [&uploadId]() {
             std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
@@ -397,7 +397,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
             UploadHandler::s_activeProcessingCount.fetch_sub(1);
         };
 
-        spdlog::info("Starting async LDIF processing for upload: {}", uploadId);
+        spdlog::info("Starting async LDIF processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
 
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
         LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
@@ -415,9 +415,10 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
             std::string contentStr(content.begin(), content.end());
 
             // Send parsing started progress
+            std::string parseMsg = resumeMode ? "LDIF 파일 파싱 중... (이어하기 모드)" : "LDIF 파일 파싱 중...";
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::PARSING_IN_PROGRESS,
-                    0, 100, "LDIF 파일 파싱 중..."));
+                    0, 100, parseMsg));
 
             // Parse LDIF content using LdifProcessor
             std::vector<LdifEntry> entries = LdifProcessor::parseLdifContent(contentStr);
@@ -428,11 +429,14 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
             // Update DB record: status = PROCESSING, total_entries populated
             if (g_services && g_services->uploadRepository()) {
                 g_services->uploadRepository()->updateStatus(uploadId, "PROCESSING", "");
-                g_services->uploadRepository()->updateProgress(uploadId, totalEntries, 0);
-                spdlog::info("Upload {} status updated to PROCESSING (total_entries={})", uploadId, totalEntries);
+                if (!resumeMode) {
+                    g_services->uploadRepository()->updateProgress(uploadId, totalEntries, 0);
+                }
+                spdlog::info("Upload {} status updated to PROCESSING (total_entries={}, resumeMode={})", uploadId, totalEntries, resumeMode);
             }
 
             // Process all entries (AUTO mode: parse → validate → save to DB + LDAP)
+            // In resume mode, fingerprint pre-cache will skip already-processed certificates
             AutoProcessingStrategy strategy;
             strategy.processLdifEntries(uploadId, entries, ld);
 
@@ -445,7 +449,10 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 
         } catch (const std::exception& e) {
             spdlog::error("LDIF processing failed for upload {}: {}", uploadId, e.what());
-            common::updateUploadStatistics(uploadId, "FAILED", 0, 0, 0, 0, 0, 0, e.what());
+            // Only update status to FAILED with error message — preserve existing statistics
+            if (g_services && g_services->uploadRepository()) {
+                g_services->uploadRepository()->updateStatus(uploadId, "FAILED", e.what());
+            }
         }
         // LDAP connection auto-released by LdapConnectionGuard destructor
         // Note: No PGconn cleanup needed - Strategy Pattern uses Repository with connection pool
@@ -462,7 +469,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 // Helper: processMasterListFileAsync
 // =============================================================================
 
-void UploadHandler::processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content) {
+void UploadHandler::processMasterListFileAsync(const std::string& uploadId, const std::vector<uint8_t>& content, bool resumeMode) {
     // Atomic check+register: prevent duplicate threads AND enforce concurrent limit under single mutex
     {
         std::lock_guard<std::mutex> lock(s_processingMutex);
@@ -488,7 +495,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
     // Capture trustAnchorPath for use in detached thread
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
 
-    std::thread([uploadId, content, trustAnchorPath]() {
+    std::thread([uploadId, content, trustAnchorPath, resumeMode]() {
         // Ensure cleanup on thread exit
         auto cleanupGuard = [&uploadId]() {
             std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
@@ -496,7 +503,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             UploadHandler::s_activeProcessingCount.fetch_sub(1);
         };
 
-        spdlog::info("Starting async Master List processing for upload: {}", uploadId);
+        spdlog::info("Starting async Master List processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
 
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
         LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
@@ -1260,10 +1267,10 @@ void UploadHandler::handleRetry(
             return;
         }
 
-        if (uploadOpt->status != "FAILED" && uploadOpt->status != "COMPLETED") {
+        if (uploadOpt->status != "FAILED") {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Only FAILED or COMPLETED uploads can be retried. Current status: " + uploadOpt->status;
+            error["message"] = "Only FAILED uploads can be retried. Current status: " + uploadOpt->status;
             auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(drogon::k400BadRequest);
             callback(resp);
@@ -1286,15 +1293,10 @@ void UploadHandler::handleRetry(
             return;
         }
 
-        // 4. Clean up partial data from previous attempt
-        cleanupPartialData(uploadId);
-
-        // 5. Reset upload status to PENDING, clear error message and counters
+        // 4. FAILED only — Resume mode: keep existing data, skip already-processed via fingerprint cache
+        bool resumeMode = true;
         uploadRepository_->updateStatus(uploadId, "PENDING", "");
-        uploadRepository_->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
-        uploadRepository_->updateProgress(uploadId, 0, 0);
-
-        spdlog::info("Upload {} reset to PENDING for retry", uploadId);
+        spdlog::info("Upload {} reset to PENDING for resume retry (keeping existing data)", uploadId);
 
         // 6. Read file from disk
         std::ifstream inFile(filePath, std::ios::binary | std::ios::ate);
@@ -1316,12 +1318,12 @@ void UploadHandler::handleRetry(
 
         // 7. Re-trigger async processing
         if (fileFormat == "ML") {
-            processMasterListFileAsync(uploadId, contentBytes);
+            processMasterListFileAsync(uploadId, contentBytes, resumeMode);
         } else {
-            processLdifFileAsync(uploadId, contentBytes);
+            processLdifFileAsync(uploadId, contentBytes, resumeMode);
         }
 
-        spdlog::info("Retry processing started for upload {} (format: {})", uploadId, fileFormat);
+        spdlog::info("Retry processing started for upload {} (format: {}, resumeMode: {})", uploadId, fileFormat, resumeMode);
 
         // 8. Return success
         Json::Value result;

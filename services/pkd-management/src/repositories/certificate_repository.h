@@ -384,6 +384,17 @@ public:
                                const std::string& id,
                                const std::string& firstUploadId);
 
+    /**
+     * @brief Check if fingerprint exists in pre-loaded cache
+     *
+     * Used by parseCertificateEntry to skip entire processing for already-processed
+     * certificates during resume mode (FAILED retry).
+     *
+     * @param fingerprint SHA-256 fingerprint to check
+     * @return true if fingerprint is in cache (certificate already processed)
+     */
+    bool isFingerprintCached(const std::string& fingerprint) const;
+
     /// @}
 
 private:

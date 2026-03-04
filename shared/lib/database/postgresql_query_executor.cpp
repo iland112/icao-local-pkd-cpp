@@ -193,6 +193,26 @@ void PostgreSQLQueryExecutor::endBatch() {
     spdlog::info("[PostgreSQLQueryExecutor] Batch mode ended (committed + connection released)");
 }
 
+void PostgreSQLQueryExecutor::savepoint(const std::string& name) {
+    if (!batchMode_ || !batchConn_ || !batchConn_->isValid()) return;
+
+    PGresult* res = PQexec(batchConn_->get(), ("SAVEPOINT " + name).c_str());
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::warn("[PostgreSQLQueryExecutor] SAVEPOINT {} failed: {}", name, PQerrorMessage(batchConn_->get()));
+    }
+    PQclear(res);
+}
+
+void PostgreSQLQueryExecutor::rollbackToSavepoint(const std::string& name) {
+    if (!batchMode_ || !batchConn_ || !batchConn_->isValid()) return;
+
+    PGresult* res = PQexec(batchConn_->get(), ("ROLLBACK TO SAVEPOINT " + name).c_str());
+    if (PQresultStatus(res) != PGRES_COMMAND_OK) {
+        spdlog::warn("[PostgreSQLQueryExecutor] ROLLBACK TO SAVEPOINT {} failed: {}", name, PQerrorMessage(batchConn_->get()));
+    }
+    PQclear(res);
+}
+
 Json::Value PostgreSQLQueryExecutor::executeScalar(
     const std::string& query,
     const std::vector<std::string>& params
