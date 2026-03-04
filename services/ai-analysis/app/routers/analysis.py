@@ -15,7 +15,7 @@ _FINGERPRINT_RE = re.compile(r"^[a-fA-F0-9]{64}$")  # SHA-256 hex
 _COUNTRY_RE = re.compile(r"^[A-Z]{2,3}$")
 _CERT_TYPE_RE = re.compile(r"^(CSCA|DSC|DSC_NC|MLSC|LC)$")
 _RISK_LEVEL_RE = re.compile(r"^(LOW|MEDIUM|HIGH|CRITICAL)$")
-_ANOMALY_LABEL_RE = re.compile(r"^(normal|suspicious|anomalous)$")
+_ANOMALY_LABEL_RE = re.compile(r"^(NORMAL|SUSPICIOUS|ANOMALOUS)$", re.IGNORECASE)
 
 from app.config import get_settings
 from app.database import safe_json_loads, sync_engine
@@ -453,10 +453,10 @@ async def list_anomalies(
         params["cert_type"] = cert_type
     if label:
         conditions.append("anomaly_label = :label")
-        params["label"] = label
+        params["label"] = label.upper()
     if risk_level:
         conditions.append("risk_level = :risk_level")
-        params["risk_level"] = risk_level
+        params["risk_level"] = risk_level.upper()
 
     where = " AND ".join(conditions) if conditions else "1=1"
     offset = (page - 1) * size

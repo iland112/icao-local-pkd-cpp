@@ -113,10 +113,9 @@ check_container_health "relay" "http://localhost:8083/api/sync/health" "PKD Rela
 # API Gateway 체크
 echo ""
 echo "  API Gateway:"
-if curl -sf http://localhost/health > /dev/null 2>&1; then
-    echo "    정상 (http://localhost:80)"
-elif curl -sf http://localhost:18080/health > /dev/null 2>&1; then
-    echo "    정상 (http://localhost:18080)"
+SSL_DOMAIN="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
+if curl -skf https://localhost/health > /dev/null 2>&1; then
+    echo "    정상 (https://$SSL_DOMAIN)"
 else
     echo "    오류 (not responding)"
 fi

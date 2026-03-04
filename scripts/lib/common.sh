@@ -308,8 +308,10 @@ print_connection_info() {
         echo "   - Frontend:      http://localhost:13080"
         if [ -n "$SSL_MODE" ]; then
             echo "   - API Gateway:   https://$SSL_DOMAIN/api (HTTPS)"
-            echo "   - API Gateway:   http://$SSL_DOMAIN/api (HTTP)"
-            echo "   - API Gateway:   http://localhost:18080/api (internal)"
+            if [ "$RUNTIME" = "docker" ]; then
+                echo "   - API Gateway:   http://$SSL_DOMAIN/api (HTTP)"
+                echo "   - API Gateway:   http://localhost:18080/api (internal)"
+            fi
         else
             echo "   - API Gateway:   http://localhost:18080/api"
         fi
