@@ -24,6 +24,7 @@ void MonitoringConfig::loadFromEnv() {
     if (auto e = std::getenv("SERVICE_PKD_MANAGEMENT")) serviceEndpoints["pkd-management"] = e;
     if (auto e = std::getenv("SERVICE_PA_SERVICE")) serviceEndpoints["pa-service"] = e;
     if (auto e = std::getenv("SERVICE_SYNC_SERVICE")) serviceEndpoints["pkd-relay"] = e;
+    if (auto e = std::getenv("SERVICE_AI_ANALYSIS")) serviceEndpoints["ai-analysis"] = e;
 }
 
 // --- SystemMetricsCollector ---

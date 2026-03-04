@@ -543,47 +543,47 @@ export default function DscNcReport() {
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">국가</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">발급년도</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">서명 알고리즘</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">공개키</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">유효기간</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">상태</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">비준수 코드</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">국가</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">발급년도</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">서명 알고리즘</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">공개키</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">유효기간</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">상태</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">비준수 코드</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {data.certificates.items.map((cert) => (
                 <tr key={cert.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* 국가 */}
-                  <td className="px-5 py-3 whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-2">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-1.5">
                       {getFlagSvgPath(cert.countryCode) && (
                         <img
                           src={getFlagSvgPath(cert.countryCode)}
                           alt={cert.countryCode}
-                          className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
+                          className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }}
                         />
                       )}
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{cert.countryCode}</span>
+                      <span className="text-xs font-medium text-gray-900 dark:text-white">{cert.countryCode}</span>
                     </div>
                   </td>
                   {/* 발급년도 */}
-                  <td className="px-5 py-3 text-center whitespace-nowrap">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                       {cert.notBefore ? new Date(cert.notBefore).getFullYear() : '-'}
                     </span>
                   </td>
                   {/* 서명 알고리즘 */}
-                  <td className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 whitespace-nowrap">
                     {formatAlgorithm(cert.signatureAlgorithm)}
                   </td>
                   {/* 공개키 알고리즘 + 크기 */}
-                  <td className="px-5 py-3 text-center whitespace-nowrap">
-                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
+                    <span className="text-xs text-gray-600 dark:text-gray-300">
                       {cert.publicKeyAlgorithm || '-'}
                     </span>
                     {cert.publicKeySize != null && (
@@ -598,7 +598,7 @@ export default function DscNcReport() {
                     )}
                   </td>
                   {/* 유효기간 */}
-                  <td className="px-5 py-3 text-center whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <span className="text-xs text-gray-600 dark:text-gray-300">
                       {cert.notBefore ? new Date(cert.notBefore).toLocaleDateString() : '-'}
                       <span className="text-gray-400 dark:text-gray-500 mx-1">~</span>
@@ -606,11 +606,11 @@ export default function DscNcReport() {
                     </span>
                   </td>
                   {/* 상태 */}
-                  <td className="px-5 py-3 text-center whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <ValidityBadge validity={cert.validity} />
                   </td>
                   {/* 비준수 코드 + ? 도움말 */}
-                  <td className="px-5 py-3 whitespace-nowrap">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs text-amber-700 dark:text-amber-400 font-mono">
                         {cert.pkdConformanceCode || '-'}
@@ -630,7 +630,7 @@ export default function DscNcReport() {
               ))}
               {data.certificates.items.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-5 py-16 text-center">
+                  <td colSpan={7} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
                       <p className="text-lg font-medium">검색 결과 없음</p>
@@ -779,7 +779,7 @@ function ValidityBadge({ validity }: { validity: string }) {
   const style = config[validity] || config.UNKNOWN;
 
   return (
-    <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium', style.bg, style.text)}>
+    <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
       {style.icon}
       {validity}
     </span>

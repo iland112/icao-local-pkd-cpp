@@ -17,13 +17,15 @@ interface InfraHealth {
   errorMessage?: string;
 }
 
-const SERVICE_DEFS = [
-  { name: 'PKD Management', url: '/api/health', port: 8081, desc: '업로드, 인증서 관리, 인증' },
-  { name: 'PA Service', url: '/api/pa/health', port: 8082, desc: '여권 Passive Authentication' },
-  { name: 'PKD Relay', url: '/api/sync/health', port: 8083, desc: 'DB-LDAP 동기화' },
-  { name: 'Monitoring', url: '/api/monitoring/health', port: 8084, desc: '시스템 메트릭 수집' },
-  { name: 'AI Analysis', url: '/api/ai/health', port: 8085, desc: 'ML 이상 탐지 분석' },
-];
+const SERVICE_ORDER = ['pkd-management', 'pa-service', 'pkd-relay', 'Monitoring', 'ai-analysis'];
+
+const SERVICE_DEFS: Record<string, { label: string; port: number; desc: string }> = {
+  'pkd-management': { label: 'PKD Management', port: 8081, desc: '업로드, 인증서 관리, 인증' },
+  'pa-service': { label: 'PA Service', port: 8082, desc: '여권 Passive Authentication' },
+  'pkd-relay': { label: 'PKD Relay', port: 8083, desc: 'DB-LDAP 동기화' },
+  'Monitoring': { label: 'Monitoring', port: 8084, desc: '시스템 메트릭 수집' },
+  'ai-analysis': { label: 'AI Analysis', port: 8085, desc: 'ML 이상 탐지, 포렌식 분석' },
+};
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -42,27 +44,6 @@ export default function MonitoringDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  const checkServiceHealth = async (name: string, url: string): Promise<ServiceHealth> => {
-    const startTime = Date.now();
-    try {
-      await fetch(url, { method: 'GET', signal: AbortSignal.timeout(5000) });
-      return {
-        serviceName: name,
-        status: 'UP',
-        responseTimeMs: Date.now() - startTime,
-        checkedAt: new Date().toISOString(),
-      };
-    } catch (err) {
-      return {
-        serviceName: name,
-        status: 'DOWN',
-        responseTimeMs: Date.now() - startTime,
-        errorMessage: err instanceof Error ? err.message : 'Connection failed',
-        checkedAt: new Date().toISOString(),
-      };
-    }
-  };
-
   const fetchData = async () => {
     try {
       setError(null);
@@ -71,11 +52,21 @@ export default function MonitoringDashboard() {
       const metricsResponse = await monitoringServiceApi.getSystemOverview();
       setMetrics(metricsResponse.data as any);
 
-      // Health checks — all 5 services
-      const serviceResults = await Promise.all(
-        SERVICE_DEFS.map(s => checkServiceHealth(s.name, s.url))
-      );
-      setServices(serviceResults);
+      // Service health — from backend monitoring service (server-side checks)
+      try {
+        const healthResponse = await monitoringServiceApi.getServicesHealth();
+        const results = healthResponse.data;
+        // Monitoring service doesn't check itself — if we got a response, it's UP
+        results.push({
+          serviceName: 'Monitoring',
+          status: 'UP',
+          responseTimeMs: 0,
+          checkedAt: new Date().toISOString(),
+        });
+        setServices(results);
+      } catch {
+        setServices([]);
+      }
 
       // Infrastructure health (Database + LDAP)
       const infra: InfraHealth[] = [];
@@ -361,10 +352,14 @@ export default function MonitoringDashboard() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {services.map((service) => {
-                  const def = SERVICE_DEFS.find(d => d.name === service.serviceName);
+                {[...services].sort((a, b) => {
+                  const ai = SERVICE_ORDER.indexOf(a.serviceName);
+                  const bi = SERVICE_ORDER.indexOf(b.serviceName);
+                  return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+                }).map((service) => {
+                  const def = SERVICE_DEFS[service.serviceName];
                   return (
-                    <ServiceCard key={service.serviceName} service={service} port={def?.port} description={def?.desc} />
+                    <ServiceCard key={service.serviceName} service={service} label={def?.label} port={def?.port} description={def?.desc} />
                   );
                 })}
               </div>
@@ -441,11 +436,12 @@ function MetricCard({ title, icon, value, unit, details, percentage }: MetricCar
 // Service Card Component
 interface ServiceCardProps {
   service: ServiceHealth;
+  label?: string;
   port?: number;
   description?: string;
 }
 
-function ServiceCard({ service, port, description }: ServiceCardProps) {
+function ServiceCard({ service, label, port, description }: ServiceCardProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'UP':
@@ -491,7 +487,7 @@ function ServiceCard({ service, port, description }: ServiceCardProps) {
         <div className="flex items-center gap-2">
           {getStatusIcon(service.status)}
           <div>
-            <h4 className="font-semibold text-gray-800 dark:text-white">{service.serviceName}</h4>
+            <h4 className="font-semibold text-gray-800 dark:text-white">{label || service.serviceName}</h4>
           </div>
         </div>
         <span className={`px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(service.status)}`}>

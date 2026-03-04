@@ -724,22 +724,22 @@ export default function AiAnalysisDashboard() {
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">국가</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">유형</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">이상 점수</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">이상 수준</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">위험 점수</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">위험 수준</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">주요 위험 요인</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">분석 시간</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">국가</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">유형</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">이상 점수</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">이상 수준</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">위험 점수</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">위험 수준</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">주요 위험 요인</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">분석 시간</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {anomalies.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
                       <p className="text-lg font-medium">
@@ -754,44 +754,44 @@ export default function AiAnalysisDashboard() {
               ) : (
                 anomalies.map((item) => (
                   <tr key={item.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-5 py-3 whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="px-3 py-2.5 whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
                         {item.country_code && getFlagSvgPath(item.country_code) && (
                           <img
                             src={getFlagSvgPath(item.country_code)}
                             alt={item.country_code}
-                            className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
+                            className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
                         )}
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">{item.country_code || '-'}</span>
+                        <span className="text-xs font-medium text-gray-900 dark:text-white">{item.country_code || '-'}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap">
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                         {item.certificate_type || '-'}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap font-mono text-sm">
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap font-mono text-xs">
                       {item.anomaly_score.toFixed(3)}
                     </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap">
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
                       <AnomalyBadge label={item.anomaly_label} />
                     </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap font-mono text-sm">
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap font-mono text-xs">
                       {item.risk_score.toFixed(1)}
                     </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap">
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap">
                       <RiskBadge level={item.risk_level} />
                     </td>
-                    <td className="px-5 py-3 max-w-[240px] truncate text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2.5 max-w-[240px] truncate text-xs text-gray-500 dark:text-gray-400">
                       {Object.entries(item.risk_factors)
                         .sort(([, a], [, b]) => b - a)
                         .slice(0, 3)
                         .map(([k, v]) => `${k}(${v})`)
                         .join(', ')}
                     </td>
-                    <td className="px-5 py-3 text-center whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                       {item.analyzed_at
                         ? new Date(item.analyzed_at).toLocaleDateString('ko-KR')
                         : '-'}
@@ -924,7 +924,7 @@ function AnomalyBadge({ label }: { label: string }) {
   const style = config[label] || { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-400' };
 
   return (
-    <span className={cn('inline-flex items-center px-2 py-1 rounded-full text-xs font-medium', style.bg, style.text)}>
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
       {ANOMALY_LABELS_KO[label] || label}
     </span>
   );
@@ -940,7 +940,7 @@ function RiskBadge({ level }: { level: string }) {
   const style = config[level] || { bg: 'bg-gray-100 dark:bg-gray-700', text: 'text-gray-600 dark:text-gray-400' };
 
   return (
-    <span className={cn('inline-flex items-center px-2 py-1 rounded-full text-xs font-medium', style.bg, style.text)}>
+    <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
       {RISK_LABELS_KO[level] || level}
     </span>
   );

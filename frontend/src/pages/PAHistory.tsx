@@ -186,7 +186,7 @@ export function PAHistory() {
     }[status];
 
     return (
-      <span className={cn('inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium', style.bg, style.text)}>
+      <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
         {style.icon}
         {label}
       </span>
@@ -483,27 +483,27 @@ export function PAHistory() {
           <>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 dark:bg-gray-700/50">
+                <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       검증 ID
                     </th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       국가
                     </th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       여권번호
                     </th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       결과
                     </th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       검증 시각
                     </th>
-                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       요청자
                     </th>
-                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       상세
                     </th>
                   </tr>
@@ -514,25 +514,25 @@ export function PAHistory() {
                       key={item.verificationId}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                     >
-                      <td className="px-5 py-3">
+                      <td className="px-3 py-2.5">
                         <span className="font-mono text-xs text-gray-600 dark:text-gray-300">
                           {item.verificationId ? `${item.verificationId.substring(0, 8)}...` : '-'}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-3 py-2.5">
                         {item.issuingCountry ? (
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             {getFlagSvgPath(item.issuingCountry) && (
                               <img
                                 src={getFlagSvgPath(item.issuingCountry)}
                                 alt={item.issuingCountry}
-                                className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
+                                className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600"
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
                                 }}
                               />
                             )}
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                               {item.issuingCountry}
                             </span>
                           </div>
@@ -540,17 +540,17 @@ export function PAHistory() {
                           <span className="text-gray-400">-</span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-sm text-gray-600 dark:text-gray-300 font-mono">
+                      <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 font-mono">
                         {item.documentNumber || '-'}
                       </td>
-                      <td className="px-5 py-3">{getStatusBadge(item.status)}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-3 py-2.5">{getStatusBadge(item.status)}</td>
+                      <td className="px-3 py-2.5">
                         <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                           <Calendar className="w-3 h-3" />
                           {formatDate(item.verificationTimestamp)}
                         </span>
                       </td>
-                      <td className="px-5 py-3 text-xs text-gray-500 dark:text-gray-400">
+                      <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">
                         {item.requestedBy ? (
                           <span>{item.requestedBy}</span>
                         ) : (
@@ -564,10 +564,10 @@ export function PAHistory() {
                           </div>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-3 py-2.5 text-right">
                         <button
                           onClick={() => openDetailModal(item)}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                         >
                           <Eye className="w-3 h-3" />
                           보기

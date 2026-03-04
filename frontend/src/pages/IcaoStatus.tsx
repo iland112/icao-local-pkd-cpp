@@ -307,38 +307,38 @@ export default function IcaoStatus() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">버전 감지 이력</h2>
             <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                  <thead className="bg-gray-50 dark:bg-gray-800">
+                <table className="w-full">
+                  <thead className="bg-slate-100 dark:bg-gray-700">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                         Collection
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                         File Name
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                         Version
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                         Status
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                         Detected At
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                     {versionHistory.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                        <td colSpan={5} className="px-3 py-8 text-center text-xs text-gray-500 dark:text-gray-400">
                           버전 이력이 없습니다
                         </td>
                       </tr>
                     ) : (
                       versionHistory.map((version) => (
                         <tr key={version.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="text-xs font-medium text-gray-900 dark:text-white">
                               {version.collection_type === 'DSC_CRL'
                                 ? 'DSC/CRL'
                                 : version.collection_type === 'DSC_NC'
@@ -346,17 +346,17 @@ export default function IcaoStatus() {
                                 : 'Master List'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-gray-700 dark:text-gray-300 font-mono">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="text-xs text-gray-700 dark:text-gray-300 font-mono">
                               {version.file_name}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
                               {version.file_version.toString().padStart(6, '0')}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="px-3 py-2.5 whitespace-nowrap">
                             <span
                               className={cn(
                                 "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-xs font-medium",
@@ -376,7 +376,7 @@ export default function IcaoStatus() {
                               {version.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                          <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
                             {formatTimestamp(version.detected_at)}
                           </td>
                         </tr>

@@ -479,62 +479,62 @@ export default function CrlReport() {
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-gray-50 dark:bg-gray-700/50">
+            <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">국가</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">발급자 (CN)</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">발급일</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">만료일</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">상태</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">폐기 수</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">알고리즘</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider"></th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">국가</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">발급자 (CN)</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">발급일</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">만료일</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">상태</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">폐기 수</th>
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">알고리즘</th>
+                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
               {reportData.crls.items.map(crl => (
                 <tr key={crl.id} onClick={() => handleRowClick(crl)}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
-                  <td className="px-5 py-3 whitespace-nowrap">
-                    <div className="flex items-center justify-center gap-2">
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    <div className="flex items-center justify-center gap-1.5">
                       {getFlagSvgPath(crl.countryCode) && (
                         <img src={getFlagSvgPath(crl.countryCode)} alt={crl.countryCode}
-                          className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
+                          className="w-5 h-3.5 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500"
                           onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       )}
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">{crl.countryCode}</span>
+                      <span className="text-xs font-medium text-gray-900 dark:text-white">{crl.countryCode}</span>
                     </div>
                   </td>
-                  <td className="px-5 py-3 max-w-[220px]" title={crl.issuerDn}>
-                    <span className="text-sm text-gray-600 dark:text-gray-300">{extractCn(crl.issuerDn)}</span>
+                  <td className="px-3 py-2.5 max-w-[220px]" title={crl.issuerDn}>
+                    <span className="text-xs text-gray-600 dark:text-gray-300">{extractCn(crl.issuerDn)}</span>
                   </td>
-                  <td className="px-5 py-3 text-center whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{crl.thisUpdate?.slice(0, 10)}</td>
-                  <td className="px-5 py-3 text-center whitespace-nowrap text-sm text-gray-600 dark:text-gray-400">{crl.nextUpdate?.slice(0, 10) || '-'}</td>
-                  <td className="px-5 py-3 text-center whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">{crl.thisUpdate?.slice(0, 10)}</td>
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-600 dark:text-gray-400">{crl.nextUpdate?.slice(0, 10) || '-'}</td>
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <StatusBadge status={crl.status} />
                   </td>
-                  <td className="px-5 py-3 text-center whitespace-nowrap">
+                  <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     {crl.revokedCount > 0 ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
                         <XCircle className="w-3 h-3" />
                         {crl.revokedCount.toLocaleString()}
                       </span>
-                    ) : <span className="text-sm text-gray-400">0</span>}
+                    ) : <span className="text-xs text-gray-400">0</span>}
                   </td>
-                  <td className="px-5 py-3 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">{formatAlgorithm(crl.signatureAlgorithm)}</td>
-                  <td className="px-5 py-3 whitespace-nowrap text-right">
+                  <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-600 dark:text-gray-300">{formatAlgorithm(crl.signatureAlgorithm)}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap text-right">
                     <div className="flex items-center justify-end gap-1.5">
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRowClick(crl); }}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors border border-transparent hover:border-blue-200 dark:hover:border-blue-700"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                         title="상세보기"
                       >
-                        <Eye className="w-4 h-4" />
+                        <Eye className="w-3.5 h-3.5" />
                         상세
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDownloadCrl(crl); }}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-transparent hover:border-green-200 dark:hover:border-green-700"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
                         title="CRL 파일 다운로드"
                       >
                         <Download className="w-3.5 h-3.5" />
@@ -546,7 +546,7 @@ export default function CrlReport() {
               ))}
               {reportData.crls.items.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-16 text-center">
+                  <td colSpan={8} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
                       <p className="text-lg font-medium">검색 결과 없음</p>
@@ -668,21 +668,21 @@ export default function CrlReport() {
                     ) : (
                       <div className="max-h-[400px] overflow-y-auto border border-gray-200 dark:border-gray-600 rounded-xl">
                         <table className="w-full">
-                          <thead className="bg-gray-50 dark:bg-gray-700/50 sticky top-0">
+                          <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                             <tr>
-                              <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 dark:text-gray-400 w-12">#</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">시리얼 번호</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">폐기 일자</th>
-                              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 dark:text-gray-400">폐기 사유</th>
+                              <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 w-12">#</th>
+                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200">시리얼 번호</th>
+                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200">폐기 일자</th>
+                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200">폐기 사유</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {detailData.revokedCertificates.items.map((rev, i) => (
                               <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                                <td className="px-4 py-2 text-center text-xs text-gray-400">{i + 1}</td>
-                                <td className="px-4 py-2 font-mono text-sm text-gray-900 dark:text-white">{rev.serialNumber}</td>
-                                <td className="px-4 py-2 text-sm text-gray-600 dark:text-gray-400">{rev.revocationDate}</td>
-                                <td className="px-4 py-2">
+                                <td className="px-3 py-2.5 text-center text-xs text-gray-400">{i + 1}</td>
+                                <td className="px-3 py-2.5 font-mono text-xs text-gray-900 dark:text-white">{rev.serialNumber}</td>
+                                <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">{rev.revocationDate}</td>
+                                <td className="px-3 py-2.5">
                                   <span className={cn(
                                     'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
                                     rev.revocationReason === 'keyCompromise' || rev.revocationReason === 'cACompromise'
@@ -792,7 +792,7 @@ function StatusBadge({ status }: { status: string }) {
   const isValid = status === 'VALID';
   return (
     <span className={cn(
-      'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
       isValid
         ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
         : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',

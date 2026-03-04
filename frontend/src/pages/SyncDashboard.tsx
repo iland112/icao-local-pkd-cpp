@@ -456,25 +456,25 @@ export function SyncDashboard() {
           </div>
           {status?.dbCounts && status?.ldapCounts ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-gray-200 dark:border-gray-700">
-                    <th className="text-left py-2 px-3 font-medium text-gray-500 dark:text-gray-400">
+              <table className="w-full text-xs">
+                <thead className="bg-slate-100 dark:bg-gray-700">
+                  <tr>
+                    <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                       인증서 타입
                     </th>
-                    <th className="text-right py-2 px-3 font-medium text-blue-600 dark:text-blue-400">
+                    <th className="text-right py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        <Database className="w-4 h-4" />
+                        <Database className="w-3.5 h-3.5" />
                         PostgreSQL
                       </div>
                     </th>
-                    <th className="text-right py-2 px-3 font-medium text-green-600 dark:text-green-400">
+                    <th className="text-right py-2.5 px-3 font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
-                        <Server className="w-4 h-4" />
+                        <Server className="w-3.5 h-3.5" />
                         LDAP
                       </div>
                     </th>
-                    <th className="text-right py-2 px-3 font-medium text-gray-500 dark:text-gray-400">
+                    <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                       차이
                     </th>
                   </tr>
@@ -670,25 +670,25 @@ export function SyncDashboard() {
 
         {history.length > 0 ? (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-100 dark:bg-gray-700">
+                <tr>
+                  <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     검사 시간
                   </th>
-                  <th className="text-center py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-center py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     상태
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     DB 총계
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     LDAP 총계
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     불일치
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     소요 시간
                   </th>
                 </tr>
@@ -699,10 +699,10 @@ export function SyncDashboard() {
                     key={item.id}
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
-                    <td className="py-3 px-4 text-gray-900 dark:text-white">
+                    <td className="py-2.5 px-3 text-gray-900 dark:text-white">
                       {formatTime(item.checkedAt)}
                     </td>
-                    <td className="py-3 px-4 text-center">
+                    <td className="py-2.5 px-3 text-center">
                       <span
                         className={cn(
                           'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium',
@@ -712,13 +712,13 @@ export function SyncDashboard() {
                         {getStatusLabel(item.status)}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-gray-700 dark:text-gray-300">
+                    <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.dbTotal?.toLocaleString()}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-gray-700 dark:text-gray-300">
+                    <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.ldapTotal?.toLocaleString()}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-2.5 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -730,7 +730,7 @@ export function SyncDashboard() {
                         {item.totalDiscrepancy}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right text-gray-500 dark:text-gray-400">
+                    <td className="py-2.5 px-3 text-right text-gray-500 dark:text-gray-400">
                       {item.checkDurationMs}ms
                     </td>
                   </tr>
@@ -758,28 +758,28 @@ export function SyncDashboard() {
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="text-left py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+            <table className="w-full text-xs">
+              <thead className="bg-slate-100 dark:bg-gray-700">
+                <tr>
+                  <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     실행 시간
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     처리된 인증서
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     새로 만료
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     새로 유효
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     변경 없음
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     오류
                   </th>
-                  <th className="text-right py-3 px-4 font-medium text-gray-500 dark:text-gray-400">
+                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     소요 시간
                   </th>
                 </tr>
@@ -790,13 +790,13 @@ export function SyncDashboard() {
                     key={item.id}
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
-                    <td className="py-3 px-4 text-gray-900 dark:text-white">
+                    <td className="py-2.5 px-3 text-gray-900 dark:text-white">
                       {formatTime(item.executedAt)}
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-gray-700 dark:text-gray-300">
+                    <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.totalProcessed.toLocaleString()}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-2.5 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -808,7 +808,7 @@ export function SyncDashboard() {
                         {item.newlyExpired}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-2.5 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -820,10 +820,10 @@ export function SyncDashboard() {
                         {item.newlyValid}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right font-mono text-gray-500 dark:text-gray-400">
+                    <td className="py-2.5 px-3 text-right font-mono text-gray-500 dark:text-gray-400">
                       {item.unchanged.toLocaleString()}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-2.5 px-3 text-right">
                       <span
                         className={cn(
                           'font-mono font-semibold',
@@ -835,7 +835,7 @@ export function SyncDashboard() {
                         {item.errors}
                       </span>
                     </td>
-                    <td className="py-3 px-4 text-right text-gray-500 dark:text-gray-400">
+                    <td className="py-2.5 px-3 text-right text-gray-500 dark:text-gray-400">
                       {item.durationMs}ms
                     </td>
                   </tr>

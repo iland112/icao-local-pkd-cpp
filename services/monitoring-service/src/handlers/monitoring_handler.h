@@ -130,6 +130,7 @@ struct MonitoringConfig {
         {"pkd-management", "http://pkd-management:8081/api/health"},
         {"pa-service", "http://pa-service:8082/api/pa/health"},
         {"pkd-relay", "http://pkd-relay:8083/api/sync/health"},
+        {"ai-analysis", "http://ai-analysis:8085/api/ai/health"},
     };
 
     void loadFromEnv();
