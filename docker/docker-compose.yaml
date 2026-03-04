@@ -463,7 +463,7 @@ services:
     container_name: icao-local-pkd-oracle
     ports:
       - "11521:1521"  # External: 11521, Internal: 1521
-      - "15500:5500"  # Oracle Enterprise Manager Express
+      # OEM Express (5500) not exposed — admin interface should not be publicly accessible
     environment:
       - ORACLE_PWD=${ORACLE_PASSWORD}          # From .env file (SYS/SYSTEM password)
       - ORACLE_CHARACTERSET=AL32UTF8           # UTF-8 encoding

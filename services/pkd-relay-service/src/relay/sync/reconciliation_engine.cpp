@@ -50,9 +50,13 @@ std::vector<unsigned char> ReconciliationEngine::parseHexBinary(const std::strin
         // Parse hex format: \x414243...
         for (size_t j = 2; j < hexStr.size(); j += 2) {
             if (j + 1 < hexStr.size()) {
-                unsigned char byte = (unsigned char)std::stoi(
-                    hexStr.substr(j, 2), nullptr, 16);
-                result.push_back(byte);
+                try {
+                    unsigned char byte = (unsigned char)std::stoi(
+                        hexStr.substr(j, 2), nullptr, 16);
+                    result.push_back(byte);
+                } catch (const std::exception&) {
+                    break;  // stop on invalid hex
+                }
             }
         }
     }
@@ -128,6 +132,8 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
             int rc = ldap_search_ext_s(ldRead, cert.ldapDn.c_str(), LDAP_SCOPE_BASE,
                                   "(objectClass=*)", const_cast<char**>(attrs), 0,
                                   nullptr, nullptr, &timeout, 0, &searchRes);
+            // Free immediately — we only need the return code for existence check
+            if (searchRes) ldap_msgfree(searchRes);
 
             if (rc == LDAP_NO_SUCH_OBJECT) {
                 // Entry does not exist in LDAP - parse binary certificate data
@@ -137,7 +143,6 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
                 result.push_back(cert);
 
                 if (result.size() >= static_cast<size_t>(limit)) {
-                    if (searchRes) ldap_msgfree(searchRes);
                     break;
                 }
             } else if (rc == LDAP_SUCCESS) {
@@ -146,8 +151,6 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
             } else {
                 spdlog::warn("LDAP search error for {}: {}", cert.ldapDn, ldap_err2string(rc));
             }
-
-            if (searchRes) ldap_msgfree(searchRes);
         }
         // Pool connection auto-released when ldapConn goes out of scope
 
@@ -497,12 +500,13 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
             int rc = ldap_search_ext_s(ldRead, crl.ldapDn.c_str(), LDAP_SCOPE_BASE,
                                   "(objectClass=*)", const_cast<char**>(attrs), 0,
                                   nullptr, nullptr, &timeout, 0, &searchRes);
+            // Free immediately — we only need the return code for existence check
+            if (searchRes) ldap_msgfree(searchRes);
 
             if (rc == LDAP_NO_SUCH_OBJECT) {
                 result.push_back(crl);
 
                 if (result.size() >= static_cast<size_t>(limit)) {
-                    if (searchRes) ldap_msgfree(searchRes);
                     break;
                 }
             } else if (rc == LDAP_SUCCESS) {
@@ -511,8 +515,6 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
             } else {
                 spdlog::warn("LDAP search error for CRL {}: {}", crl.ldapDn, ldap_err2string(rc));
             }
-
-            if (searchRes) ldap_msgfree(searchRes);
         }
         // Pool connection auto-released when ldapConn goes out of scope
 

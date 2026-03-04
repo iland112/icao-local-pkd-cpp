@@ -58,6 +58,7 @@ export function FileUpload() {
   const [sseConnected, setSseConnected] = useState(false);
   const sseRef = useRef<EventSource | null>(null);
   const pollingIntervalRef = useRef<number | null>(null);
+  const isProcessingRef = useRef(false);
 
   // Phase 4.4: Enhanced metadata tracking
   const [statistics, setStatistics] = useState<ValidationStatistics | null>(null);
@@ -86,6 +87,9 @@ export function FileUpload() {
   const lastValidationReasonsRef = useRef<Record<string, number>>({});
   const lastMilestoneRef = useRef(0);
   const lastValidationLogCountRef = useRef(0);
+
+  // Keep isProcessingRef in sync for SSE reconnection closure
+  useEffect(() => { isProcessingRef.current = isProcessing; }, [isProcessing]);
 
   // Fetch CSCA count on page load
   useEffect(() => {
@@ -487,7 +491,7 @@ export function FileUpload() {
       eventSource.close();
 
       // Try to reconnect if not too many attempts
-      if (reconnectAttempts < maxReconnectAttempts && isProcessing) {
+      if (reconnectAttempts < maxReconnectAttempts && isProcessingRef.current) {
         reconnectAttempts++;
         if (import.meta.env.DEV) console.log(`[SSE] Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts}`);
         setTimeout(() => connectToProgressStream(id), 1000);

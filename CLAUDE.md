@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.28.0
+**Current Version**: v2.28.1
 **Last Updated**: 2026-03-04
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -579,6 +579,17 @@ scripts/
 ---
 
 ## Version History
+
+### v2.28.1 (2026-03-04) - 메모리 안전 + 예외 처리 + 보안 강화
+- **CRITICAL FIX — CMS_ContentInfo 메모리 누수**: Master List 처리 시 CMS 성공 경로에서 `CMS_ContentInfo_free(cms)` 미호출 → `if (!cms)` 블록 밖으로 이동하여 모든 경로에서 해제
+- **BIO_new_mem_buf size_t→int 오버플로 방지**: `content.size()` > `INT_MAX` 검증 추가 (upload_handler.cpp)
+- **stoi() 예외 안전**: `MAX_CONCURRENT_UPLOADS` static 초기화에서 잘못된 환경변수 값 시 기본값 3 반환 (upload_handler.cpp)
+- **stoi() 예외 안전**: `parseHexBinary()` hex 파싱에 try-catch 추가 — 잘못된 hex 문자열 시 파싱 중단 (reconciliation_engine.cpp)
+- **LDAP message 즉시 해제**: `ldap_search_ext_s()` 반환 후 즉시 `ldap_msgfree()` 호출 — 이후 코드에서 예외 발생 시에도 메모리 누수 방지 (reconciliation_engine.cpp 2개소)
+- **Audit catch 로깅**: 9개 빈 `catch (...) {}` 블록에 `spdlog::warn("Audit log failed: {}")` 추가 — 감사 로깅 실패 시 디버깅 가능 (api_client_handler 4개, auth_handler 4개, pa_handler 1개)
+- **Oracle OEM 포트 제거**: `15500:5500` 포트 매핑 제거 — 관리 인터페이스 외부 노출 방지 (docker-compose.yaml + podman)
+- **SSE stale closure 수정**: `isProcessingRef` (useRef) 도입 — SSE 재연결 시 최신 처리 상태 참조 (FileUpload.tsx)
+- 8 files changed (0 new, 8 modified)
 
 ### v2.28.0 (2026-03-04) - 전체 코드 품질 개선 + 테스트 인프라 구축
 - **코드 분석 139건 이슈 체계적 수정** (CRITICAL 13, HIGH 37, MEDIUM 59, LOW 30)

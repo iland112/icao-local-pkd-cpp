@@ -1,8 +1,8 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.28.0
+**Current Version**: v2.28.1
 **Period**: 2026-01-21 ~ 2026-03-04
-**Total Releases**: 56+
+**Total Releases**: 57+
 
 ---
 
@@ -10,6 +10,7 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.28.1 | 03-04 | Fix | 메모리 안전 + 예외 처리 + 보안 강화 (CMS 누수, LDAP 즉시 해제, OEM 포트 제거) |
 | v2.28.0 | 03-04 | Quality | 전체 코드 품질 개선 (139건 이슈 수정) + 테스트 인프라 구축 (438 test cases) |
 | v2.27.1 | 03-04 | Fix | API Client Rate Limit 분리 + Podman DNS Resolver 영구 수정 |
 | v2.27.0 | 03-04 | Feature | FAILED 이어하기 재처리 + COMPLETED 재업로드 차단 + SAVEPOINT 에러 격리 |
@@ -77,6 +78,26 @@
 ---
 
 ## 2026-03 (March)
+
+### v2.28.1 (2026-03-04) - 메모리 안전 + 예외 처리 + 보안 강화
+
+2차 코드 리뷰에서 발견된 메모리 안전, 예외 처리, 보안 이슈 수정
+
+#### CRITICAL
+- **CMS_ContentInfo 메모리 누수**: Master List CMS 성공 경로에서 `CMS_ContentInfo_free(cms)` 미호출 — `if (!cms)` 블록 밖으로 이동하여 모든 경로에서 해제
+- **BIO_new_mem_buf size_t→int 오버플로**: `content.size()` > `INT_MAX` 사전 검증 추가
+
+#### HIGH
+- **stoi() 예외 안전 2건**: `MAX_CONCURRENT_UPLOADS` static 초기화 + `parseHexBinary()` hex 파싱에 try-catch 추가
+- **LDAP message 즉시 해제**: reconciliation_engine에서 `ldap_search_ext_s()` 직후 `ldap_msgfree()` 호출 — 이후 예외 발생 시 메모리 누수 방지 (인증서 + CRL 2개소)
+- **Oracle OEM 포트 제거**: `15500:5500` 매핑 제거 — 관리 인터페이스 외부 노출 방지 (Docker + Podman)
+- **SSE stale closure**: `isProcessingRef` (useRef) 도입 — 재연결 시 최신 처리 상태 참조
+
+#### MEDIUM
+- **Audit catch 로깅**: 9개 빈 `catch (...) {}` 블록에 `spdlog::warn` 추가 (api_client_handler 4건, auth_handler 4건, pa_handler 1건)
+
+**수정 파일**: upload_handler.cpp, reconciliation_engine.cpp, api_client_handler.cpp, auth_handler.cpp, pa_handler.cpp, docker-compose.yaml, docker-compose.podman.yaml, FileUpload.tsx
+**검증**: 4개 서비스 빌드 성공, AI 201 테스트 통과, 11개 컨테이너 healthy
 
 ### v2.28.0 (2026-03-04) - 전체 코드 품질 개선 + 테스트 인프라 구축
 

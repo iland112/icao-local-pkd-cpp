@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <sstream>
 #include <iomanip>
+#include <limits>
 
 // OpenLDAP header
 #include <ldap.h>
@@ -167,7 +168,10 @@ std::mutex UploadHandler::s_processingMutex;
 std::set<std::string> UploadHandler::s_processingUploads;
 std::atomic<int> UploadHandler::s_activeProcessingCount{0};
 int UploadHandler::MAX_CONCURRENT_PROCESSING = []() {
-    if (auto* v = std::getenv("MAX_CONCURRENT_UPLOADS")) return std::stoi(v);
+    if (auto* v = std::getenv("MAX_CONCURRENT_UPLOADS")) {
+        try { return std::stoi(v); }
+        catch (...) { return 3; }
+    }
     return 3;
 }();
 
@@ -503,6 +507,10 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             }
 
             // Parse as CMS SignedData using OpenSSL CMS API
+            if (content.size() > static_cast<size_t>(std::numeric_limits<int>::max())) {
+                spdlog::error("Master List file too large for BIO: {} bytes", content.size());
+                throw std::runtime_error("Master List file exceeds maximum size");
+            }
             BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
             CMS_ContentInfo* cms = nullptr;
             if (bio) {
@@ -992,8 +1000,11 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                     }
                 }
 
-                CMS_ContentInfo_free(cms);
             }
+
+            // Free CMS object regardless of which path was taken
+            // (CMS_ContentInfo_free handles nullptr safely)
+            CMS_ContentInfo_free(cms);
 
             // Update statistics
             g_services->uploadRepository()->updateStatus(uploadId, "COMPLETED", "");
