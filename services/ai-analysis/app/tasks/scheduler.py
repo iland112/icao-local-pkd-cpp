@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 _scheduler: BackgroundScheduler | None = None
 
 
-def _run_scheduled_analysis():
+def _run_scheduled_analysis() -> None:
     """Run analysis as a scheduled job."""
     logger.info("Scheduled analysis triggered")
     try:
@@ -22,7 +22,7 @@ def _run_scheduled_analysis():
         logger.error("Scheduled analysis failed: %s", e, exc_info=True)
 
 
-def start_scheduler():
+def start_scheduler() -> None:
     """Start the background analysis scheduler."""
     global _scheduler
     settings = get_settings()
@@ -48,7 +48,7 @@ def start_scheduler():
     )
 
 
-def stop_scheduler():
+def stop_scheduler() -> None:
     """Stop the background scheduler."""
     global _scheduler
     if _scheduler:

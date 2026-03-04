@@ -301,18 +301,33 @@ std::string DscAutoRegistrationService::x509NameToString(X509_NAME* name) {
 std::string DscAutoRegistrationService::asn1TimeToString(const ASN1_TIME* t) {
     if (!t) return "";
 
-    BIO* bio = BIO_new(BIO_s_mem());
-    if (!bio) return "";
+    const char* str = reinterpret_cast<const char*>(t->data);
+    size_t len = t->length;
+    struct tm tm = {};
 
-    ASN1_TIME_print(bio, t);
-    char* data = nullptr;
-    long len = BIO_get_mem_data(bio, &data);
-    std::string result(data, len);
-    BIO_free(bio);
+    if (t->type == V_ASN1_UTCTIME && len >= 12) {
+        int year = (str[0] - '0') * 10 + (str[1] - '0');
+        tm.tm_year = (year >= 50 ? 1900 : 2000) + year - 1900;
+        tm.tm_mon = (str[2] - '0') * 10 + (str[3] - '0') - 1;
+        tm.tm_mday = (str[4] - '0') * 10 + (str[5] - '0');
+        tm.tm_hour = (str[6] - '0') * 10 + (str[7] - '0');
+        tm.tm_min = (str[8] - '0') * 10 + (str[9] - '0');
+        tm.tm_sec = (str[10] - '0') * 10 + (str[11] - '0');
+    } else if (t->type == V_ASN1_GENERALIZEDTIME && len >= 14) {
+        tm.tm_year = (str[0] - '0') * 1000 + (str[1] - '0') * 100 +
+                     (str[2] - '0') * 10 + (str[3] - '0') - 1900;
+        tm.tm_mon = (str[4] - '0') * 10 + (str[5] - '0') - 1;
+        tm.tm_mday = (str[6] - '0') * 10 + (str[7] - '0');
+        tm.tm_hour = (str[8] - '0') * 10 + (str[9] - '0');
+        tm.tm_min = (str[10] - '0') * 10 + (str[11] - '0');
+        tm.tm_sec = (str[12] - '0') * 10 + (str[13] - '0');
+    } else {
+        return "";
+    }
 
-    // Convert "Jan 15 10:30:00 2024 GMT" → ISO-like for PostgreSQL TIMESTAMP
-    // PostgreSQL can parse ASN1_TIME_print output directly
-    return result;
+    char buffer[32];
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm);
+    return std::string(buffer);
 }
 
 std::string DscAutoRegistrationService::generateUuid() {

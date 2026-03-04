@@ -137,8 +137,8 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
             발견 사항 ({findings.length}건)
           </h4>
           <div className="space-y-2">
-            {findings.map((f, idx) => (
-              <div key={idx} className={`flex items-start gap-2 px-3 py-2 rounded-md ${SEVERITY_COLORS[f.severity] || ''}`}>
+            {findings.map((f) => (
+              <div key={`${f.category}-${f.message}`} className={`flex items-start gap-2 px-3 py-2 rounded-md ${SEVERITY_COLORS[f.severity] || ''}`}>
                 <SeverityIcon severity={f.severity} />
                 <div className="flex-1">
                   <span className="text-sm">{f.message}</span>
@@ -155,8 +155,8 @@ export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisP
         <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <h4 className="text-sm font-semibold mb-3 dark:text-white">ML 이상 탐지 설명</h4>
           <ul className="space-y-1">
-            {detail.anomaly_explanations.map((exp, idx) => (
-              <li key={idx} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
+            {detail.anomaly_explanations.map((exp) => (
+              <li key={exp} className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0" />
                 {exp}
               </li>

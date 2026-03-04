@@ -30,6 +30,9 @@ add_header Pragma "no-cache" always;
 add_header Expires "0" always;
 
 # Error handling
+# NOTE: Only retry on GET/HEAD — POST retry can cause duplicate data.
+# For write operations (upload, PA verify), location blocks should override
+# with `proxy_next_upstream off;`
 proxy_next_upstream error timeout http_502 http_503 http_504;
 proxy_next_upstream_tries 2;
 proxy_next_upstream_timeout 10s;
@@ -47,6 +50,6 @@ proxy_hide_header access-control-max-age;
 # CORS headers (dynamic origin — set by $cors_origin map in api-gateway*.conf)
 add_header 'Access-Control-Allow-Origin' $cors_origin always;
 add_header 'Access-Control-Allow-Methods' 'GET, POST, PUT, DELETE, OPTIONS, PATCH' always;
-add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization' always;
+add_header 'Access-Control-Allow-Headers' 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key' always;
 add_header 'Access-Control-Allow-Credentials' 'true' always;
 add_header 'Access-Control-Max-Age' '86400' always;

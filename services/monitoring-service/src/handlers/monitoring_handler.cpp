@@ -377,7 +377,8 @@ void MonitoringHandler::handleSystemOverview(
     // Timestamp (ISO 8601 format)
     auto now = std::chrono::system_clock::now();
     auto now_time_t = std::chrono::system_clock::to_time_t(now);
-    std::tm tm = *std::localtime(&now_time_t);
+    std::tm tm{};
+    localtime_r(&now_time_t, &tm);
     char timestamp[32];
     std::strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%S", &tm);
     response["timestamp"] = timestamp;
@@ -447,7 +448,9 @@ void MonitoringHandler::handleServicesHealth(
 
                 auto timeT = std::chrono::system_clock::to_time_t(health.checkedAt);
                 std::ostringstream oss;
-                oss << std::put_time(std::gmtime(&timeT), "%Y-%m-%d %H:%M:%S");
+                std::tm gmBuf{};
+                gmtime_r(&timeT, &gmBuf);
+                oss << std::put_time(&gmBuf, "%Y-%m-%d %H:%M:%S");
                 serviceJson["checkedAt"] = oss.str();
 
                 services.append(serviceJson);
@@ -468,7 +471,9 @@ void MonitoringHandler::handleServicesHealth(
 static std::string formatTimestamp(std::chrono::system_clock::time_point tp) {
     auto time_t = std::chrono::system_clock::to_time_t(tp);
     char buf[32];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", std::localtime(&time_t));
+    std::tm tm_buf{};
+    localtime_r(&time_t, &tm_buf);
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &tm_buf);
     return buf;
 }
 
@@ -478,8 +483,8 @@ void MonitoringHandler::handleLoadSnapshot(
 
     if (!collector_ || !collector_->hasData()) {
         Json::Value err;
-        err["error"] = "No metrics data collected yet";
-        err["message"] = "Metrics collection starts after service initialization. Please retry in 10 seconds.";
+        err["success"] = false;
+        err["error"] = "No metrics data collected yet. Please retry in 10 seconds.";
         auto resp = drogon::HttpResponse::newHttpJsonResponse(err);
         resp->setStatusCode(drogon::k503ServiceUnavailable);
         callback(resp);

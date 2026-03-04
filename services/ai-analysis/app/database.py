@@ -1,10 +1,12 @@
 import json
 import logging
+from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import get_settings
 
@@ -27,7 +29,7 @@ def safe_isna(val) -> bool:
         return False
 
 
-def safe_json_loads(value, default=None):
+def safe_json_loads(value: Any, default: Any = None) -> Any:
     """Safely parse JSON from DB value (PostgreSQL JSONB dict or Oracle CLOB string).
 
     PostgreSQL JSONB columns return Python dict/list directly.
@@ -81,7 +83,7 @@ sync_engine = create_engine(
 SyncSessionLocal = sessionmaker(bind=sync_engine)
 
 
-async def get_async_session():
+async def get_async_session() -> AsyncIterator[AsyncSession]:
     """Dependency for async endpoints (PostgreSQL)."""
     if AsyncSessionLocal is None:
         raise RuntimeError("Async sessions not available for Oracle. Use sync session.")
@@ -89,7 +91,7 @@ async def get_async_session():
         yield session
 
 
-def get_sync_session():
+def get_sync_session() -> Iterator[Session]:
     """Get synchronous session for batch operations."""
     session = SyncSessionLocal()
     try:
@@ -99,7 +101,7 @@ def get_sync_session():
 
 
 @asynccontextmanager
-async def get_managed_async_session():
+async def get_managed_async_session() -> AsyncIterator[AsyncSession]:
     """Context manager for async sessions outside FastAPI dependency injection."""
     if AsyncSessionLocal is None:
         raise RuntimeError("Async sessions not available for Oracle.")

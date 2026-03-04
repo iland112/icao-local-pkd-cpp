@@ -73,13 +73,13 @@ ENV DB_HOST=postgres
 ENV DB_PORT=5432
 ENV DB_NAME=localpkd
 ENV DB_USER=pkd
-ENV DB_PASSWORD=pkd123
+# DB_PASSWORD must be provided at runtime via docker-compose .env or -e flag (not baked into image)
 ENV LDAP_HOST=haproxy
 ENV LDAP_PORT=389
 ENV LDAP_WRITE_HOST=openldap1
 ENV LDAP_WRITE_PORT=389
 ENV LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-ENV LDAP_BIND_PASSWORD=admin
+# LDAP_BIND_PASSWORD must be provided at runtime via docker-compose .env or -e flag (not baked into image)
 
 EXPOSE 8083
 

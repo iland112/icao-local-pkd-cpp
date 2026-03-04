@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS duplicate_certificate (
 
     -- Duplicate detection info
     duplicate_count INTEGER DEFAULT 1,
-    detection_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    detection_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     -- Indexes for performance
     CONSTRAINT duplicate_certificate_upload_fingerprint_unique UNIQUE (upload_id, fingerprint_sha256, certificate_type)

@@ -253,13 +253,8 @@ export function UploadDetail() {
                 <div>
                   <label className="text-sm text-gray-500 dark:text-gray-400">처리 모드</label>
                   <p className="font-medium text-gray-900 dark:text-white">
-                    <span className={cn(
-                      'px-2 py-1 rounded text-xs',
-                      upload.processingMode === 'AUTO'
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'
-                    )}>
-                      {upload.processingMode === 'AUTO' ? '자동' : '수동'}
+                    <span className="px-2 py-1 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+                      자동
                     </span>
                   </p>
                 </div>

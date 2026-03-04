@@ -675,3 +675,5 @@ export function OperationAuditLog() {
     </div>
   );
 }
+
+export default OperationAuditLog;

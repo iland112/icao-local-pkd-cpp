@@ -1,6 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2, Brain } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import {
+  formatDate,
+  formatVersion,
+  getActualCertType,
+  isLinkCertificate,
+  isMasterListSignerCertificate,
+} from '@/utils/certificateDisplayUtils';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 import type { ValidationResult } from '@/types/validation';
 import type { Doc9303ChecklistResult } from '@/types';
@@ -65,12 +72,6 @@ interface CertificateDetailDialogProps {
   validationResult: ValidationResult | null;
   validationLoading: boolean;
   exportCertificate: (dn: string, format: 'der' | 'pem') => void;
-  formatDate: (dateStr: string) => string;
-  formatVersion: (version: number | undefined) => string;
-
-  isLinkCertificate: (cert: Certificate) => boolean;
-  isMasterListSignerCertificate: (cert: Certificate) => boolean;
-  getActualCertType: (cert: Certificate) => 'CSCA' | 'DSC' | 'DSC_NC' | 'MLSC' | 'UNKNOWN';
   getCertTypeBadge: (certType: string, cert?: Certificate) => React.ReactElement;
 }
 
@@ -83,11 +84,6 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
   validationResult,
   validationLoading,
   exportCertificate,
-  formatDate,
-  formatVersion,
-  isLinkCertificate,
-  isMasterListSignerCertificate,
-  getActualCertType,
   getCertTypeBadge,
 }) => {
   // Doc 9303 checklist lazy loading state
@@ -352,7 +348,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                 인증서 상세 정보
               </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md">
+              <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md" title={`${selectedCert.country} - ${selectedCert.subjectDnComponents?.organization || selectedCert.cn}`}>
                 {selectedCert.country} - {selectedCert.subjectDnComponents?.organization || selectedCert.cn}
               </p>
               {/* Certificate Type Badges */}
@@ -380,6 +376,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
           <button
             onClick={() => setShowDetailDialog(false)}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="닫기"
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -522,15 +519,9 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 pb-1.5 border-b border-gray-200 dark:border-gray-700">Fingerprints</h3>
                   <div className="space-y-2">
                     <div className="grid grid-cols-[80px_1fr] gap-2">
-                      <span className="text-xs text-gray-600 dark:text-gray-400">SHA1:</span>
+                      <span className="text-xs text-gray-600 dark:text-gray-400">SHA-256:</span>
                       <span className="text-xs text-gray-900 dark:text-white font-mono break-all">
-                        {selectedCert.fingerprint.substring(0, 40) || 'N/A'}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-[80px_1fr] gap-2">
-                      <span className="text-xs text-gray-600 dark:text-gray-400">MD5:</span>
-                      <span className="text-xs text-gray-900 dark:text-white font-mono break-all">
-                        {selectedCert.fingerprint.substring(0, 32) || 'N/A'}
+                        {selectedCert.fingerprint || 'N/A'}
                       </span>
                     </div>
                   </div>

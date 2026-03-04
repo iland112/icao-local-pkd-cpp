@@ -3,6 +3,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <deque>
 #include <mutex>
 #include <functional>
 #include <optional>
@@ -257,7 +258,7 @@ struct ValidationStatistics {
 
     // Per-certificate validation logs (for real-time EventLog display)
     int totalValidationLogCount = 0;  // Monotonically increasing counter
-    std::vector<ValidationLogEntry> recentValidationLogs;  // Last N logs (bounded)
+    std::deque<ValidationLogEntry> recentValidationLogs;  // Last N logs (bounded, O(1) front removal)
     static constexpr int MAX_RECENT_VALIDATION_LOGS = 200;
 
     // Error tracking (processing failures only, not validation outcomes)
@@ -265,7 +266,7 @@ struct ValidationStatistics {
     int parseErrorCount = 0;       // BASE64_DECODE_FAILED + CERT_PARSE_FAILED + CRL_PARSE_FAILED + ML_PARSE_FAILED
     int dbSaveErrorCount = 0;      // DB_SAVE_FAILED
     int ldapSaveErrorCount = 0;    // LDAP_SAVE_FAILED
-    std::vector<ProcessingError> recentErrors;  // Last N errors (bounded)
+    std::deque<ProcessingError> recentErrors;  // Last N errors (bounded, O(1) front removal)
     static constexpr int MAX_RECENT_ERRORS = 100;
 
     /**

@@ -717,8 +717,11 @@ void AuthHandler::handleGetUser(
         auto updatedTime = std::chrono::system_clock::to_time_t(user.getUpdatedAt());
 
         char createdBuf[64], updatedBuf[64];
-        std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&createdTime));
-        std::strftime(updatedBuf, sizeof(updatedBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&updatedTime));
+        std::tm gmBuf{};
+        gmtime_r(&createdTime, &gmBuf);
+        std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
+        gmtime_r(&updatedTime, &gmBuf);
+        std::strftime(updatedBuf, sizeof(updatedBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
 
         userObj["created_at"] = createdBuf;
         userObj["updated_at"] = updatedBuf;
@@ -726,7 +729,8 @@ void AuthHandler::handleGetUser(
         if (user.getLastLoginAt().has_value()) {
             auto lastLoginTime = std::chrono::system_clock::to_time_t(user.getLastLoginAt().value());
             char lastLoginBuf[64];
-            std::strftime(lastLoginBuf, sizeof(lastLoginBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&lastLoginTime));
+            gmtime_r(&lastLoginTime, &gmBuf);
+            std::strftime(lastLoginBuf, sizeof(lastLoginBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
             userObj["last_login_at"] = lastLoginBuf;
         } else {
             userObj["last_login_at"] = "";
@@ -831,7 +835,9 @@ void AuthHandler::handleCreateUser(
             // Timestamp (convert to ISO 8601 string using strftime)
             auto createdTime = std::chrono::system_clock::to_time_t(createdUser.getCreatedAt());
             char createdBuf[64];
-            std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&createdTime));
+            std::tm gmBuf{};
+            gmtime_r(&createdTime, &gmBuf);
+            std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
             userObj["created_at"] = createdBuf;
 
             Json::Value resp;
@@ -989,8 +995,11 @@ void AuthHandler::handleUpdateUser(
         auto updatedTime = std::chrono::system_clock::to_time_t(user.getUpdatedAt());
 
         char createdBuf[64], updatedBuf[64];
-        std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&createdTime));
-        std::strftime(updatedBuf, sizeof(updatedBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&updatedTime));
+        std::tm gmBuf{};
+        gmtime_r(&createdTime, &gmBuf);
+        std::strftime(createdBuf, sizeof(createdBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
+        gmtime_r(&updatedTime, &gmBuf);
+        std::strftime(updatedBuf, sizeof(updatedBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
 
         userObj["created_at"] = createdBuf;
         userObj["updated_at"] = updatedBuf;

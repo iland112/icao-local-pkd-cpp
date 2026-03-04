@@ -167,9 +167,29 @@ private:
     static std::atomic<int> s_activeProcessingCount;
     static int MAX_CONCURRENT_PROCESSING;
 
+    /**
+     * @brief RAII guard for processing slot management
+     *
+     * Ensures s_activeProcessingCount is decremented and the upload ID is
+     * removed from s_processingUploads when the guard goes out of scope,
+     * even if exceptions occur during processing.
+     */
+    struct ProcessingSlotGuard {
+        std::string uploadId;
+        explicit ProcessingSlotGuard(const std::string& id) : uploadId(id) {}
+        ~ProcessingSlotGuard() {
+            std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
+            UploadHandler::s_processingUploads.erase(uploadId);
+            UploadHandler::s_activeProcessingCount.fetch_sub(1);
+        }
+        ProcessingSlotGuard(const ProcessingSlotGuard&) = delete;
+        ProcessingSlotGuard& operator=(const ProcessingSlotGuard&) = delete;
+    };
+
     // --- DoS defense: file size limits ---
     static constexpr int64_t MAX_LDIF_FILE_SIZE = 100LL * 1024 * 1024;   // 100MB
     static constexpr int64_t MAX_ML_FILE_SIZE   =  30LL * 1024 * 1024;   // 30MB
+    static constexpr int64_t MAX_CERT_FILE_SIZE =  10LL * 1024 * 1024;   // 10MB
 
     // --- Handler methods ---
 
@@ -279,12 +299,6 @@ private:
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
 
     // --- Helper methods ---
-
-    /**
-     * @brief Get LDAP connection for write operations
-     * @return LDAP connection pointer or nullptr on failure
-     */
-    LDAP* getLdapWriteConnection();
 
     /**
      * @brief Clean up partial data from a failed upload

@@ -60,7 +60,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch Master List structure');
-      console.error('Failed to fetch Master List structure:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch Master List structure:', err);
     } finally {
       setLoading(false);
     }

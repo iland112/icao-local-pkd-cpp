@@ -1,4 +1,4 @@
-import { Menu, Bell, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home } from 'lucide-react';
+import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { authApi } from '@/services/api';
@@ -42,7 +42,7 @@ export function Header() {
       await authApi.logout();
       navigate('/login');
     } catch (error) {
-      console.error('Logout failed:', error);
+      if (import.meta.env.DEV) console.error('Logout failed:', error);
       // Force logout even if API fails
       localStorage.clear();
       navigate('/login');
@@ -87,7 +87,7 @@ export function Header() {
               {breadcrumbs.map((item, index) => {
                 const isLast = index === breadcrumbs.length - 1;
                 return (
-                  <span key={index} className="flex items-center gap-1 min-w-0">
+                  <span key={item.label} className="flex items-center gap-1 min-w-0">
                     <ChevronRight className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" />
                     {item.path && !isLast ? (
                       <Link to={item.path} className="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate">
@@ -112,6 +112,7 @@ export function Header() {
             onClick={toggleTheme}
             className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             title={darkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
+            aria-label={darkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
           >
             {darkMode ? (
               <Sun className="w-4 h-4 text-yellow-500" />
@@ -120,18 +121,14 @@ export function Header() {
             )}
           </button>
 
-          {/* Notifications */}
-          <button className="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <Bell className="w-4 h-4 text-gray-600 dark:text-gray-300" />
-            <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 bg-red-500 rounded-full"></span>
-          </button>
-
           {/* User Menu */}
           <div className="relative inline-flex" ref={dropdownRef}>
             <button
               type="button"
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              aria-label="사용자 메뉴"
+              aria-expanded={isUserMenuOpen}
             >
               <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
                 <User className="w-3 h-3 text-white" />
@@ -235,7 +232,7 @@ export function Header() {
       <div className="space-y-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">ICAO Local PKD</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Version: 2.22.1</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Version: {__APP_VERSION__}</p>
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
           <p>ICAO 전자여권 PKD 관리 및 Passive Authentication 시스템</p>

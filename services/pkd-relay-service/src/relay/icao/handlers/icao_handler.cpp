@@ -101,7 +101,7 @@ void IcaoHandler::handleCheckUpdates(
 
         Json::Value error;
         error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
+        error["error"] = "Internal server error";
 
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
@@ -136,7 +136,7 @@ void IcaoHandler::handleGetLatest(
 
         Json::Value error;
         error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
+        error["error"] = "Internal server error";
 
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
@@ -173,7 +173,7 @@ void IcaoHandler::handleGetHistory(
 
         Json::Value error;
         error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
+        error["error"] = "Internal server error";
 
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);
@@ -233,7 +233,7 @@ void IcaoHandler::handleGetStatus(
 
         Json::Value error;
         error["success"] = false;
-        error["message"] = std::string("Error: ") + e.what();
+        error["error"] = "Internal server error";
 
         auto resp = HttpResponse::newHttpJsonResponse(error);
         resp->setStatusCode(k500InternalServerError);

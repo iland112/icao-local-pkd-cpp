@@ -165,7 +165,7 @@ export const aiAnalysisApi = {
     risk_level?: string;
     page?: number;
     size?: number;
-  }) => pkdApi.get<AnomalyListResponse>('/ai/anomalies', { params }),
+  }, signal?: AbortSignal) => pkdApi.get<AnomalyListResponse>('/ai/anomalies', { params, signal }),
 
   // Get overall statistics
   getStatistics: () => pkdApi.get<AnalysisStatistics>('/ai/statistics'),

@@ -142,9 +142,17 @@ _EXT_FIELDS = [
 ]
 
 
-def load_certificate_data(engine) -> pd.DataFrame:
-    """Load certificate + validation_result data from DB via SQL JOIN."""
+def load_certificate_data(engine, upload_id: str = None) -> pd.DataFrame:
+    """Load certificate + validation_result data from DB via SQL JOIN.
+
+    Args:
+        engine: SQLAlchemy engine.
+        upload_id: Optional upload ID to filter certificates by upload.
+                   When provided, only certificates associated with the given
+                   upload (via validation_result.upload_id) are loaded.
+    """
     settings = get_settings()
+    params = {}
 
     # v2.19.0: Added subject_dn, issuer_dn, serial_number for forensic features
     if settings.db_type == "oracle":
@@ -168,6 +176,9 @@ def load_certificate_data(engine) -> pd.DataFrame:
             LEFT JOIN validation_result v ON c.fingerprint_sha256 = v.certificate_id
             WHERE c.certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')
         """
+        if upload_id:
+            query += " AND c.fingerprint_sha256 IN (SELECT certificate_id FROM validation_result WHERE upload_id = :upload_id)"
+            params["upload_id"] = upload_id
     else:
         # PostgreSQL: validation_result.certificate_id is UUID FK → certificate.id
         # Must JOIN on c.id = v.certificate_id (UUID = UUID), not fingerprint = UUID
@@ -189,9 +200,12 @@ def load_certificate_data(engine) -> pd.DataFrame:
             LEFT JOIN validation_result v ON c.id = v.certificate_id
             WHERE c.certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')
         """
+        if upload_id:
+            query += " AND c.id IN (SELECT certificate_id FROM validation_result WHERE upload_id = :upload_id)"
+            params["upload_id"] = upload_id
 
-    logger.info("Loading certificate data from DB...")
-    df = pd.read_sql(text(query), engine)
+    logger.info("Loading certificate data from DB%s...", f" (upload_id={upload_id})" if upload_id else "")
+    df = pd.read_sql(text(query), engine, params=params)
     # Deduplicate: PostgreSQL LEFT JOIN may produce multiple rows per certificate
     # when multiple validation_results exist (UNIQUE on certificate_id + upload_id)
     orig_len = len(df)
@@ -200,58 +214,6 @@ def load_certificate_data(engine) -> pd.DataFrame:
         logger.info("Deduplicated %d → %d certificates", orig_len, len(df))
     logger.info("Loaded %d certificates", len(df))
     return df
-
-
-def _safe_bool(val) -> float:
-    """Convert various boolean representations to float (0.0 or 1.0)."""
-    if val is None:
-        return 0.0
-    if isinstance(val, bool):
-        return 1.0 if val else 0.0
-    if isinstance(val, (int, float)):
-        return 1.0 if val else 0.0
-    if isinstance(val, str):
-        return 1.0 if val.lower() in ("true", "1", "t", "yes") else 0.0
-    return 0.0
-
-
-def _count_extensions(row) -> int:
-    """Count present extension fields."""
-    count = 0
-    for f in _EXT_FIELDS:
-        val = row.get(f)
-        if val and not safe_isna(val):
-            count += 1
-    return count
-
-
-def _count_violations(violations_str) -> int:
-    """Count ICAO violations from pipe-separated string."""
-    if not violations_str or safe_isna(violations_str):
-        return 0
-    return len(str(violations_str).split("|"))
-
-
-def _extension_set_hash(row) -> float:
-    """Compute a hash-based identifier for the combination of extensions present."""
-    parts = []
-    for f in _EXT_FIELDS:
-        val = row.get(f)
-        parts.append("1" if val and not safe_isna(val) else "0")
-    h = int(hashlib.md5("".join(parts).encode()).hexdigest()[:8], 16)
-    return (h % 1000) / 1000.0  # normalize to 0~1
-
-
-def _count_critical_extensions(row) -> int:
-    """Count extensions marked as critical (from key_usage string)."""
-    count = 0
-    ku = str(row.get("key_usage") or "")
-    if "critical" in ku.lower():
-        count += 1
-    eku = str(row.get("extended_key_usage") or "")
-    if "critical" in eku.lower():
-        count += 1
-    return count
 
 
 def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
@@ -283,7 +245,7 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
     country_cert_counts = df["country_code"].value_counts().to_dict()
 
     # Compute validity days
-    df["_validity_days"] = pd.NaT
+    df["_validity_days"] = np.nan
     valid_mask = df["not_before"].notna() & df["not_after"].notna()
     if valid_mask.any():
         df.loc[valid_mask, "_validity_days"] = (
@@ -373,32 +335,30 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
 
     # --- Vectorized helper: _safe_bool for a column ---
     def _vec_safe_bool(series: pd.Series) -> np.ndarray:
-        """Vectorized _safe_bool: convert column to float 0.0/1.0."""
-        result = np.zeros(len(series), dtype=np.float64)
-        for idx, val in enumerate(series.values):
-            if val is None:
-                continue
-            if isinstance(val, bool):
-                result[idx] = 1.0 if val else 0.0
-            elif isinstance(val, (int, float)):
-                result[idx] = 1.0 if val else 0.0
-            elif isinstance(val, str):
-                result[idx] = 1.0 if val.lower() in ("true", "1", "t", "yes") else 0.0
-        return result
+        """Vectorized _safe_bool: convert column to float 0.0/1.0.
+
+        Handles bool, int/float, and string columns without Python for-loops.
+        """
+        s = series.fillna("")
+        # Convert to string uniformly for vectorized comparison
+        str_vals = s.astype(str).str.lower()
+        return np.where(
+            str_vals.isin(["true", "1", "1.0", "t", "yes"]),
+            1.0,
+            0.0,
+        ).astype(np.float64)
 
     # --- Vectorized helper: check if column values are non-empty (truthy) ---
     def _vec_has_value(series: pd.Series) -> np.ndarray:
-        """Return 1.0 where column has a truthy non-NaN value, else 0.0."""
-        result = np.zeros(len(series), dtype=np.float64)
-        for idx, val in enumerate(series.values):
-            if val is not None and not (isinstance(val, float) and np.isnan(val)):
-                if isinstance(val, str):
-                    if val.strip():
-                        result[idx] = 1.0
-                else:
-                    if val:
-                        result[idx] = 1.0
-        return result
+        """Return 1.0 where column has a truthy non-NaN value, else 0.0.
+
+        Uses pandas vectorized string ops instead of Python for-loops.
+        """
+        not_null = series.notna()
+        # For string columns: also check non-empty after strip
+        str_vals = series.astype(str).str.strip()
+        non_empty = str_vals.ne("") & str_vals.ne("None") & str_vals.ne("nan")
+        return np.where(not_null & non_empty, 1.0, 0.0).astype(np.float64)
 
     # --- Pre-extract columns as arrays for fast access ---
     key_size_arr = pd.to_numeric(df["public_key_size"], errors="coerce").fillna(0).values.astype(np.float64)

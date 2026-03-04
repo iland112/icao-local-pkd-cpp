@@ -154,9 +154,9 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
               <div>
                 <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Key Usage:</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {certificate.keyUsage.map((usage, index) => (
+                  {certificate.keyUsage.map((usage) => (
                     <span
-                      key={index}
+                      key={usage}
                       className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-700"
                     >
                       {usage}
@@ -169,9 +169,9 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
               <div>
                 <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Extended Key Usage:</span>
                 <div className="flex flex-wrap gap-1.5">
-                  {certificate.extendedKeyUsage.map((usage, index) => (
+                  {certificate.extendedKeyUsage.map((usage) => (
                     <span
-                      key={index}
+                      key={usage}
                       className="inline-flex items-center px-2 py-1 text-xs font-medium rounded bg-purple-50 dark:bg-purple-900/20 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800"
                     >
                       {usage}
@@ -285,9 +285,9 @@ const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certi
               <div>
                 <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">CRL Distribution Points:</span>
                 <div className="space-y-1">
-                  {certificate.crlDistributionPoints.map((url, index) => (
+                  {certificate.crlDistributionPoints.map((url) => (
                     <a
-                      key={index}
+                      key={url}
                       href={url}
                       target="_blank"
                       rel="noopener noreferrer"

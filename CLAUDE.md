@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.27.1
+**Current Version**: v2.28.0
 **Last Updated**: 2026-03-04
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -579,6 +579,59 @@ scripts/
 ---
 
 ## Version History
+
+### v2.28.0 (2026-03-04) - 전체 코드 품질 개선 + 테스트 인프라 구축
+- **코드 분석 139건 이슈 체계적 수정** (CRITICAL 13, HIGH 37, MEDIUM 59, LOW 30)
+- **Phase 1 — Security & Stability (CRITICAL)**:
+  - C++ ProgressManager mutex 교착 위험 해소 (콜백을 lock 밖으로 이동)
+  - C++ ReconciliationEngine LDAP 풀 미사용 → `ldapPool_->acquire()` 전환
+  - C++ OracleQueryExecutor 원시 메모리 → RAII (`std::vector`) + 데드 코드 587줄 제거
+  - Frontend React.lazy() 코드 스플리팅 (22개 페이지 lazy load + PageLoader fallback)
+  - Frontend CertificateSearch 이중 API 호출 제거
+  - Python async 엔드포인트 sync I/O → `asyncio.to_thread()` 래핑 (~15개)
+  - Python `_compliance_cache` 스레드 안전 (`threading.Lock`)
+  - Python 분석 작업 race condition 수정
+  - 인프라 하드코딩 비밀번호 제거 (Dockerfile, ARM64/Luckfox compose)
+  - Oracle 과잉 권한 제거 (`SELECT/INSERT/UPDATE/DELETE ANY TABLE`)
+- **Phase 2 — Thread Safety (HIGH C++)**:
+  - `localtime`/`gmtime` → thread-safe `localtime_r`/`gmtime_r` 전환 (13+ 파일)
+  - AuthMiddleware `addPublicEndpoint()` compiledPatterns_ 동기화
+  - `s_activeProcessingCount` RAII guard 패턴 적용
+  - PA 검증 TODO 스텁 필드 실제 데이터 반영
+  - `g_services` null 체크 5개소 추가
+- **Phase 3 — Frontend Architecture (HIGH)**:
+  - `window.location.href` → 이벤트 기반 로그아웃 전환
+  - PrivateRoute JWT 토큰 만료 검사 추가
+  - `alert()`/`confirm()` → ConfirmDialog 컴포넌트 전환
+  - AbortController 적용 (CertificateSearch, AiAnalysisDashboard)
+  - pkdApi JWT 인터셉터 추가
+- **Phase 4 — AI Service Reliability (HIGH Python)**:
+  - SQL 문자열 보간 → 파라미터화 쿼리
+  - Feature engineering 벡터화 최적화
+  - DB 비밀번호 URL 노출 → `URL.create()` 전환
+  - JSONB → generic JSON 타입
+- **Phase 5 — Infrastructure (HIGH)**:
+  - HTTP nginx PA `auth_request` 추가
+  - `proxy_next_upstream` POST 재시도 방지
+  - nginx 이미지 태그 고정 (`nginx:1.27-alpine`)
+  - Legacy `docker/Dockerfile` 삭제
+  - CORS `X-API-Key` 헤더 추가
+  - `limit_req_status 429` 설정
+- **Phase 6 — Code Quality (MEDIUM 59건)**:
+  - C++: ApiRateLimiter 주기적 cleanup, IPv6 정규화, ProgressManager deque 전환, EmailSender 데드 코드 제거, regex 캐시 LRU 제한
+  - Frontend: AiAnalysisDashboard 폴링 stale closure 수정, UploadHistory interval cleanup, ProcessingMode MANUAL 제거, console.error DEV 가드, Recharts 타입 수정, key={index} → unique key 14건
+  - Python: 데드 코드 10+ 함수 제거, Pydantic v2 `ConfigDict` 전환, Country report DB-level 필터 최적화, HTTPException(503) 에러 핸들링, `engine.dispose()` shutdown
+  - Infra: TIMESTAMP → TIMESTAMPTZ 8개 스키마, proxy_buffering 충돌 해결, Docker/Podman 스크립트 shared library 통합, Frontend healthcheck 추가
+- **Phase 7 — Polish (LOW 30건)**:
+  - C++: 에러 메시지 필드 일관성, `#pragma once`, 매직 넘버 상수화, `isExpired` TODO 구현
+  - Frontend: `__APP_VERSION__` 컴파일 타임 버전, 알림 벨 제거, aria-label 접근성 추가, SHA-256 핑거프린트 라벨 수정
+  - Python: health 엔드포인트 DB 연결 체크 확장, pytest 기본 인프라 구축
+- **테스트 인프라 구축 (신규)**:
+  - Frontend: Vitest + React Testing Library 설정, 11개 테스트 파일 (114 passed, 1 skipped)
+  - AI Analysis: pytest 8개 테스트 파일 (201 passed)
+  - C++ certificate-parser: GTest 5개 테스트 파일 (122 test cases)
+  - 총 438 테스트 케이스 작성
+- 125 files changed (14 new, 110 modified, 1 deleted), +4,063 / -2,226 lines
 
 ### v2.27.1 (2026-03-04) - API Client Rate Limit 분리 + Podman DNS Resolver 영구 수정
 - **nginx Rate Limit 분리**: `/api/auth/api-clients` 별도 location 블록 추가 — API 클라이언트 관리 엔드포인트에 `api_limit`(100r/s) 적용 (기존 `login_limit` 5r/m로 인해 API Key 발급 버튼 503 오류)

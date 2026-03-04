@@ -333,9 +333,12 @@ void CertificateHandler::handleSearch(
             auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
             auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
             char timeBuf[32];
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
+            std::tm gmBuf{};
+            gmtime_r(&validFrom, &gmBuf);
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
             certJson["validFrom"] = timeBuf;
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
+            gmtime_r(&validTo, &gmBuf);
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
             certJson["validTo"] = timeBuf;
 
             // Validity status
@@ -504,9 +507,12 @@ void CertificateHandler::handleDetail(
         auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
         auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
         char timeBuf[32];
-        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
+        std::tm gmBuf{};
+        gmtime_r(&validFrom, &gmBuf);
+        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
         response["validFrom"] = timeBuf;
-        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
+        gmtime_r(&validTo, &gmBuf);
+        std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
         response["validTo"] = timeBuf;
 
         // Validity status
@@ -1067,9 +1073,12 @@ void CertificateHandler::handleDscNcReport(
             char timeBuf[32];
             auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
             auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validFrom));
+            std::tm gmBuf{};
+            gmtime_r(&validFrom, &gmBuf);
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
             certJson["notBefore"] = timeBuf;
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", std::gmtime(&validTo));
+            gmtime_r(&validTo, &gmBuf);
+            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
             certJson["notAfter"] = timeBuf;
 
             // Validity

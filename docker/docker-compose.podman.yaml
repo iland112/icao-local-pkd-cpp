@@ -26,7 +26,7 @@ services:
   # API Gateway (Nginx - Unified API Entry Point)
   # ---------------------------------------------------------------------------
   api-gateway:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: icao-local-pkd-api-gateway
     ports:
       - "${HTTPS_PORT:-443}:443"
@@ -82,6 +82,12 @@ services:
           memory: 256M
         reservations:
           memory: 64M
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:80 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # ---------------------------------------------------------------------------
   # PKD Management Service (File Upload, Parsing, Certificate Validation)
@@ -137,7 +143,7 @@ services:
       - ICAO_SCHEDULER_ENABLED=${ICAO_SCHEDULER_ENABLED:-true}
     depends_on:
       - openldap1
-      - openldap2
+      # openldap2 removed: hardware failure, single-node (openldap1) operation
     volumes:
       - ../.docker-data/pkd-logs:/app/logs
       - ../.docker-data/pkd-uploads:/app/uploads
@@ -198,7 +204,7 @@ services:
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - openldap1
-      - openldap2
+      # openldap2 removed: hardware failure, single-node (openldap1) operation
     volumes:
       - ../.docker-data/pa-logs:/app/logs
     networks:
@@ -263,7 +269,7 @@ services:
       - MAX_RECONCILE_BATCH_SIZE=100
     depends_on:
       - openldap1
-      - openldap2
+      # openldap2 removed: hardware failure, single-node (openldap1) operation
     volumes:
       - ../.docker-data/sync-logs:/app/logs
     networks:
@@ -399,7 +405,7 @@ services:
       retries: 10
       start_period: 300s
     restart: unless-stopped
-    shm_size: 2g
+    shm_size: 1g  # Oracle XE can't use SGA >1GB (ORA-56752)
     deploy:
       resources:
         limits:
@@ -524,7 +530,7 @@ services:
   # Swagger UI (API Documentation)
   # ---------------------------------------------------------------------------
   swagger-ui:
-    image: swaggerapi/swagger-ui:latest
+    image: swaggerapi/swagger-ui:v5.17.14
     container_name: icao-local-pkd-swagger
     ports:
       - "18090:8080"

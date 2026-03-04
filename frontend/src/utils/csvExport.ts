@@ -5,7 +5,7 @@ import type { UploadDuplicate } from '../types';
  */
 export const exportDuplicatesToCsv = (duplicates: UploadDuplicate[], filename: string = 'duplicate-certificates.csv') => {
   if (duplicates.length === 0) {
-    console.warn('No duplicates to export');
+    if (import.meta.env.DEV) console.warn('No duplicates to export');
     return;
   }
 
@@ -125,7 +125,7 @@ export const exportDscNcReportToCsv = (
   filename: string = 'dsc-nc-report.csv'
 ) => {
   if (certificates.length === 0) {
-    console.warn('No DSC_NC certificates to export');
+    if (import.meta.env.DEV) console.warn('No DSC_NC certificates to export');
     return;
   }
 

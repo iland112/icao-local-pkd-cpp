@@ -9,8 +9,7 @@
  * which handles certificate extraction and database storage.
  */
 
-#ifndef LDIF_PARSER_H
-#define LDIF_PARSER_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -138,5 +137,3 @@ private:
 
 }  // namespace ldif
 }  // namespace icao
-
-#endif  // LDIF_PARSER_H

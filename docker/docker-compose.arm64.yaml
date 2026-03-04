@@ -52,14 +52,14 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       # Native LDAP on host (accessed via host.docker.internal or host IP)
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
     depends_on:
@@ -96,11 +96,11 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       postgres:
@@ -134,13 +134,13 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=admin
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - SYNC_INTERVAL_MINUTES=5
       - AUTO_RECONCILE=true

@@ -422,7 +422,7 @@ export function FileUpload() {
 
     // Start polling every 30 seconds
     if (import.meta.env.DEV) console.log('[Polling] Starting 30s interval backup for uploadId:', id);
-    pollingIntervalRef.current = setInterval(() => {
+    pollingIntervalRef.current = window.setInterval(() => {
       if (!sseConnected) {
         if (import.meta.env.DEV) console.log('[Polling] SSE disconnected, using polling as primary source');
       }

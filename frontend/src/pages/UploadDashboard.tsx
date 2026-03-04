@@ -544,7 +544,7 @@ export function UploadDashboard() {
                       color: '#F9FAFB',
                     }}
                     labelStyle={{ color: '#F9FAFB', fontWeight: 'bold' }}
-                    formatter={(value: number | undefined) => value?.toLocaleString() || '0'}
+                    formatter={(value) => Number(value).toLocaleString()}
                   />
                   <Legend
                     wrapperStyle={{ paddingTop: '20px' }}

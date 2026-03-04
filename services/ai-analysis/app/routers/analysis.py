@@ -1,5 +1,6 @@
 """Analysis API endpoints: trigger analysis, get results, list anomalies."""
 
+import asyncio
 import logging
 import re
 import threading
@@ -20,6 +21,7 @@ _ANOMALY_LABEL_RE = re.compile(r"^(NORMAL|SUSPICIOUS|ANOMALOUS)$", re.IGNORECASE
 from app.config import get_settings
 from app.database import safe_json_loads, sync_engine
 from app.schemas.analysis import (
+    ActionResponse,
     AnalysisJobStatus,
     AnalysisStatistics,
     AnomalyListResponse,
@@ -43,23 +45,18 @@ _job_status = {
 }
 
 
-def _run_analysis():
+def _run_analysis(upload_id: str | None = None) -> None:
     """Execute full analysis pipeline in background thread."""
     global _job_status
     settings = get_settings()
 
     try:
         with _job_lock:
-            _job_status["status"] = "RUNNING"
-            _job_status["progress"] = 0.0
-            _job_status["started_at"] = datetime.now(timezone.utc).isoformat()
             _job_status["completed_at"] = None
-            _job_status["error_message"] = None
 
         import numpy as np
 
         from app.services.anomaly_detector import AnomalyDetector, classify_anomaly
-        from app.services.extension_rules_engine import check_extension_compliance
         from app.services.feature_engineering import (
             FEATURE_NAMES,
             engineer_features,
@@ -72,8 +69,8 @@ def _run_analysis():
         from app.services.risk_scorer import classify_risk, compute_risk_scores
 
         # Step 1: Load data
-        logger.info("Analysis: loading certificate data...")
-        df = load_certificate_data(sync_engine)
+        logger.info("Analysis: loading certificate data%s...", f" (upload_id={upload_id})" if upload_id else "")
+        df = load_certificate_data(sync_engine, upload_id=upload_id)
         total = len(df)
 
         with _job_lock:
@@ -103,12 +100,14 @@ def _run_analysis():
         with _job_lock:
             _job_status["progress"] = 0.45
 
-        # Step 4: Extension rules engine
+        # Step 4: Extension rules engine (vectorized via _compute_all_compliance)
         logger.info("Analysis: checking extension compliance...")
-        structural_scores = np.zeros(total, dtype=np.float64)
-        for i, (_, row) in enumerate(df.iterrows()):
-            compliance = check_extension_compliance(row)
-            structural_scores[i] = compliance["structural_score"]
+        from app.services.extension_rules_engine import _compute_all_compliance
+        _, all_compliance = _compute_all_compliance(df)
+        structural_scores = np.array(
+            [c["structural_score"] for c in all_compliance],
+            dtype=np.float64,
+        )
         with _job_lock:
             _job_status["progress"] = 0.55
 
@@ -158,7 +157,7 @@ def _save_results(
     forensic_scores, forensic_findings,
     structural_scores, issuer_scores,
     model_version,
-):
+) -> None:
     """Batch upsert analysis results into ai_analysis_result table."""
     import json
 
@@ -311,17 +310,22 @@ def _save_results(
         logger.info("Saved %d analysis results to DB", n)
 
 
-@router.post("/analyze")
+@router.post("/analyze", response_model=ActionResponse)
 async def trigger_analysis():
     """Trigger full certificate analysis (runs in background)."""
     with _job_lock:
         if _job_status["status"] == "RUNNING":
             raise HTTPException(status_code=409, detail="Analysis already running")
+        # Set RUNNING inside lock before releasing to prevent race condition
+        _job_status["status"] = "RUNNING"
+        _job_status["started_at"] = datetime.now(timezone.utc).isoformat()
+        _job_status["progress"] = 0.0
+        _job_status["error_message"] = None
 
     thread = threading.Thread(target=_run_analysis, daemon=True)
     thread.start()
 
-    return {"success": True, "message": "Analysis started"}
+    return ActionResponse(success=True, message="Analysis started")
 
 
 @router.get("/analyze/status", response_model=AnalysisJobStatus)
@@ -336,13 +340,21 @@ async def get_certificate_analysis(fingerprint: str):
     """Get AI analysis result for a specific certificate."""
     if not _FINGERPRINT_RE.match(fingerprint):
         raise HTTPException(status_code=400, detail="Invalid fingerprint format (expected SHA-256 hex)")
-    with sync_engine.connect() as conn:
-        result = conn.execute(
-            text(
-                "SELECT * FROM ai_analysis_result WHERE certificate_fingerprint = :fp"
-            ),
-            {"fp": fingerprint},
-        ).fetchone()
+
+    def _query():
+        with sync_engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT * FROM ai_analysis_result WHERE certificate_fingerprint = :fp"
+                ),
+                {"fp": fingerprint},
+            ).fetchone()
+
+    try:
+        result = await asyncio.to_thread(_query)
+    except Exception as e:
+        logger.error("Failed to query certificate analysis: %s", e)
+        raise HTTPException(status_code=503, detail="Database query failed")
 
     if not result:
         raise HTTPException(status_code=404, detail="Analysis not found for this certificate")
@@ -371,13 +383,21 @@ async def get_certificate_forensic(fingerprint: str):
     """Get detailed forensic analysis for a specific certificate."""
     if not _FINGERPRINT_RE.match(fingerprint):
         raise HTTPException(status_code=400, detail="Invalid fingerprint format (expected SHA-256 hex)")
-    with sync_engine.connect() as conn:
-        result = conn.execute(
-            text(
-                "SELECT * FROM ai_analysis_result WHERE certificate_fingerprint = :fp"
-            ),
-            {"fp": fingerprint},
-        ).fetchone()
+
+    def _query():
+        with sync_engine.connect() as conn:
+            return conn.execute(
+                text(
+                    "SELECT * FROM ai_analysis_result WHERE certificate_fingerprint = :fp"
+                ),
+                {"fp": fingerprint},
+            ).fetchone()
+
+    try:
+        result = await asyncio.to_thread(_query)
+    except Exception as e:
+        logger.error("Failed to query certificate forensic: %s", e)
+        raise HTTPException(status_code=503, detail="Database query failed")
 
     if not result:
         raise HTTPException(status_code=404, detail="Analysis not found for this certificate")
@@ -408,17 +428,22 @@ async def get_certificate_forensic(fingerprint: str):
     )
 
 
-@router.post("/analyze/incremental")
+@router.post("/analyze/incremental", response_model=ActionResponse)
 async def trigger_incremental_analysis(upload_id: str | None = None):
     """Trigger incremental analysis for newly uploaded certificates."""
     with _job_lock:
         if _job_status["status"] == "RUNNING":
             raise HTTPException(status_code=409, detail="Analysis already running")
+        # Set RUNNING inside lock before releasing to prevent race condition
+        _job_status["status"] = "RUNNING"
+        _job_status["started_at"] = datetime.now(timezone.utc).isoformat()
+        _job_status["progress"] = 0.0
+        _job_status["error_message"] = None
 
-    thread = threading.Thread(target=_run_analysis, daemon=True)
+    thread = threading.Thread(target=_run_analysis, args=(upload_id,), daemon=True)
     thread.start()
 
-    return {"success": True, "message": "Incremental analysis started", "upload_id": upload_id}
+    return ActionResponse(success=True, message="Incremental analysis started", upload_id=upload_id)
 
 
 @router.get("/anomalies", response_model=AnomalyListResponse)
@@ -461,24 +486,36 @@ async def list_anomalies(
     where = " AND ".join(conditions) if conditions else "1=1"
     offset = (page - 1) * size
 
+    # Build fully parameterized SQL (no f-string interpolation for values)
+    params["_limit"] = size
+    params["_offset"] = offset
+
+    # WHERE clause is safe: built from whitelisted column names and :param placeholders only
+    count_sql = f"SELECT COUNT(*) FROM ai_analysis_result WHERE {where}"
     if settings.db_type == "oracle":
-        pagination = f"OFFSET {offset} ROWS FETCH NEXT {size} ROWS ONLY"
+        data_sql = (
+            f"SELECT * FROM ai_analysis_result WHERE {where} "
+            "ORDER BY anomaly_score DESC "
+            "OFFSET :_offset ROWS FETCH NEXT :_limit ROWS ONLY"
+        )
     else:
-        pagination = f"LIMIT {size} OFFSET {offset}"
+        data_sql = (
+            f"SELECT * FROM ai_analysis_result WHERE {where} "
+            "ORDER BY anomaly_score DESC "
+            "LIMIT :_limit OFFSET :_offset"
+        )
 
-    with sync_engine.connect() as conn:
-        count_result = conn.execute(
-            text(f"SELECT COUNT(*) FROM ai_analysis_result WHERE {where}"),
-            params,
-        ).scalar()
+    def _query():
+        with sync_engine.connect() as conn:
+            count_val = conn.execute(text(count_sql), params).scalar()
+            row_list = conn.execute(text(data_sql), params).fetchall()
+            return count_val, row_list
 
-        rows = conn.execute(
-            text(
-                f"SELECT * FROM ai_analysis_result WHERE {where} "
-                f"ORDER BY anomaly_score DESC {pagination}"
-            ),
-            params,
-        ).fetchall()
+    try:
+        count_result, rows = await asyncio.to_thread(_query)
+    except Exception as e:
+        logger.error("Failed to query anomaly list: %s", e)
+        raise HTTPException(status_code=503, detail="Database query failed")
 
     items = []
     for row in rows:
@@ -515,82 +552,98 @@ async def get_statistics():
     """Get overall analysis statistics."""
     settings = get_settings()
 
-    with sync_engine.connect() as conn:
-        total = conn.execute(text("SELECT COUNT(*) FROM ai_analysis_result")).scalar() or 0
-        normal = conn.execute(
-            text("SELECT COUNT(*) FROM ai_analysis_result WHERE anomaly_label = 'NORMAL'")
-        ).scalar() or 0
-        suspicious = conn.execute(
-            text("SELECT COUNT(*) FROM ai_analysis_result WHERE anomaly_label = 'SUSPICIOUS'")
-        ).scalar() or 0
-        anomalous = conn.execute(
-            text("SELECT COUNT(*) FROM ai_analysis_result WHERE anomaly_label = 'ANOMALOUS'")
-        ).scalar() or 0
+    def _query():
+        with sync_engine.connect() as conn:
+            # Single aggregation query for basic counts + averages (replaces 5 separate queries)
+            summary_row = conn.execute(
+                text("""
+                    SELECT
+                        COUNT(*) AS total,
+                        SUM(CASE WHEN anomaly_label = 'NORMAL' THEN 1 ELSE 0 END) AS normal_cnt,
+                        SUM(CASE WHEN anomaly_label = 'SUSPICIOUS' THEN 1 ELSE 0 END) AS suspicious_cnt,
+                        SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) AS anomalous_cnt,
+                        AVG(risk_score) AS avg_risk,
+                        AVG(CASE WHEN forensic_risk_score IS NOT NULL THEN forensic_risk_score END) AS avg_forensic,
+                        MAX(analyzed_at) AS last_at
+                    FROM ai_analysis_result
+                """)
+            ).fetchone()
+            sm = summary_row._mapping
+            total = int(sm["total"] or 0)
+            normal = int(sm["normal_cnt"] or 0)
+            suspicious = int(sm["suspicious_cnt"] or 0)
+            anomalous = int(sm["anomalous_cnt"] or 0)
+            avg_risk = float(sm["avg_risk"] or 0.0)
+            avg_forensic = float(sm["avg_forensic"]) if sm["avg_forensic"] is not None else None
+            last_at = sm["last_at"]
 
-        risk_rows = conn.execute(
-            text("SELECT risk_level, COUNT(*) as cnt FROM ai_analysis_result GROUP BY risk_level")
-        ).fetchall()
-        risk_dist = {row._mapping["risk_level"]: int(row._mapping["cnt"]) for row in risk_rows}
+            # Risk level distribution (GROUP BY needed for dict)
+            risk_rows = conn.execute(
+                text("SELECT risk_level, COUNT(*) as cnt FROM ai_analysis_result GROUP BY risk_level")
+            ).fetchall()
+            risk_dist = {row._mapping["risk_level"]: int(row._mapping["cnt"]) for row in risk_rows}
 
-        avg_risk = conn.execute(
-            text("SELECT AVG(risk_score) FROM ai_analysis_result")
-        ).scalar() or 0.0
+            # Top anomalous countries
+            top_countries_rows = conn.execute(
+                text("""
+                    SELECT country_code,
+                           COUNT(*) as total,
+                           SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) as anomalous_count
+                    FROM ai_analysis_result
+                    GROUP BY country_code
+                    HAVING SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) > 0
+                    ORDER BY SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) DESC
+                """)
+            ).fetchall()
 
-        top_countries_rows = conn.execute(
-            text("""
-                SELECT country_code,
-                       COUNT(*) as total,
-                       SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) as anomalous_count
-                FROM ai_analysis_result
-                GROUP BY country_code
-                HAVING SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) > 0
-                ORDER BY SUM(CASE WHEN anomaly_label = 'ANOMALOUS' THEN 1 ELSE 0 END) DESC
-            """)
-        ).fetchall()
+            top_countries = [
+                {
+                    "country": row._mapping["country_code"],
+                    "total": int(row._mapping["total"]),
+                    "anomalous": int(row._mapping["anomalous_count"]),
+                    "anomaly_rate": round(
+                        int(row._mapping["anomalous_count"]) / max(int(row._mapping["total"]), 1), 4
+                    ),
+                }
+                for row in top_countries_rows[:10]
+            ]
 
-        top_countries = [
-            {
-                "country": row._mapping["country_code"],
-                "total": int(row._mapping["total"]),
-                "anomalous": int(row._mapping["anomalous_count"]),
-                "anomaly_rate": round(
-                    int(row._mapping["anomalous_count"]) / max(int(row._mapping["total"]), 1), 4
-                ),
+            # Forensic level distribution
+            forensic_rows = conn.execute(
+                text(
+                    "SELECT forensic_risk_level, COUNT(*) as cnt "
+                    "FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL "
+                    "GROUP BY forensic_risk_level"
+                )
+            ).fetchall()
+            forensic_dist = {
+                row._mapping["forensic_risk_level"]: int(row._mapping["cnt"])
+                for row in forensic_rows
+            } if forensic_rows else None
+
+            return {
+                "total": total, "normal": normal, "suspicious": suspicious,
+                "anomalous": anomalous, "risk_dist": risk_dist, "avg_risk": avg_risk,
+                "top_countries": top_countries, "last_at": last_at,
+                "forensic_dist": forensic_dist, "avg_forensic": avg_forensic,
             }
-            for row in top_countries_rows[:10]
-        ]
 
-        last_at = conn.execute(
-            text("SELECT MAX(analyzed_at) FROM ai_analysis_result")
-        ).scalar()
-
-        # Forensic statistics
-        forensic_rows = conn.execute(
-            text(
-                "SELECT forensic_risk_level, COUNT(*) as cnt "
-                "FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL "
-                "GROUP BY forensic_risk_level"
-            )
-        ).fetchall()
-        forensic_dist = {
-            row._mapping["forensic_risk_level"]: int(row._mapping["cnt"])
-            for row in forensic_rows
-        } if forensic_rows else None
-
-        avg_forensic = conn.execute(
-            text("SELECT AVG(forensic_risk_score) FROM ai_analysis_result WHERE forensic_risk_score IS NOT NULL")
-        ).scalar()
+    try:
+        stats = await asyncio.to_thread(_query)
+    except Exception as e:
+        logger.error("Failed to query analysis statistics: %s", e)
+        raise HTTPException(status_code=503, detail="Database query failed")
 
     return AnalysisStatistics(
-        total_analyzed=total,
-        normal_count=normal,
-        suspicious_count=suspicious,
-        anomalous_count=anomalous,
-        risk_distribution=risk_dist,
-        avg_risk_score=round(float(avg_risk), 2),
-        top_anomalous_countries=top_countries,
-        last_analysis_at=last_at,
+        total_analyzed=stats["total"],
+        normal_count=stats["normal"],
+        suspicious_count=stats["suspicious"],
+        anomalous_count=stats["anomalous"],
+        risk_distribution=stats["risk_dist"],
+        avg_risk_score=round(float(stats["avg_risk"]), 2),
+        top_anomalous_countries=stats["top_countries"],
+        last_analysis_at=stats["last_at"],
         model_version=settings.model_version,
-        forensic_level_distribution=forensic_dist,
-        avg_forensic_score=round(float(avg_forensic), 2) if avg_forensic else None,
+        forensic_level_distribution=stats["forensic_dist"],
+        avg_forensic_score=round(float(stats["avg_forensic"]), 2) if stats["avg_forensic"] else None,
     )

@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS uploaded_file (
 
     CONSTRAINT chk_file_format CHECK (file_format IN ('LDIF', 'ML', 'PEM', 'DER', 'CER', 'P7B', 'DL', 'CRL')),
     CONSTRAINT chk_status CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')),
-    CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO', 'MANUAL'))
+    CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('AUTO'))
 );
 
 CREATE INDEX idx_uploaded_file_status ON uploaded_file(status);
@@ -101,13 +101,13 @@ CREATE TABLE IF NOT EXISTS certificate (
     duplicate_count INTEGER NOT NULL DEFAULT 0,
     first_upload_id UUID REFERENCES uploaded_file(id),
     last_seen_upload_id UUID REFERENCES uploaded_file(id),
-    last_seen_at TIMESTAMP,
+    last_seen_at TIMESTAMP WITH TIME ZONE,
 
     -- Source tracking (v2.8.0)
     source_type VARCHAR(50) DEFAULT 'FILE_UPLOAD',
     source_context JSONB,
     extracted_from VARCHAR(100),
-    registered_at TIMESTAMP DEFAULT NOW(),
+    registered_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
 
     CONSTRAINT chk_certificate_type CHECK (certificate_type IN ('CSCA', 'DSC', 'DSC_NC', 'MLSC')),
     CONSTRAINT chk_validation_status CHECK (validation_status IN ('VALID', 'INVALID', 'PENDING', 'EXPIRED', 'EXPIRED_VALID', 'REVOKED', 'UNKNOWN')),
@@ -314,7 +314,7 @@ CREATE TABLE IF NOT EXISTS validation_result (
     icao_validity_period_compliant BOOLEAN DEFAULT NULL,
     icao_extensions_compliant BOOLEAN DEFAULT NULL,
 
-    validation_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    validation_timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     UNIQUE(certificate_id, upload_id)
 );
@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS certificate_duplicates (
     source_country VARCHAR(3),
     source_entry_dn TEXT,
     source_file_name VARCHAR(255),
-    detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    detected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(certificate_id, upload_id, source_type)
 );
 

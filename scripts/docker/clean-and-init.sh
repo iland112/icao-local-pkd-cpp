@@ -98,6 +98,8 @@ mkdir -p .docker-data/pa-logs
 mkdir -p .docker-data/sync-logs
 mkdir -p .docker-data/monitoring-logs
 mkdir -p .docker-data/gateway-logs
+mkdir -p .docker-data/ai-analysis-logs
+mkdir -p .docker-data/nginx
 
 # Oracle uses named volume (oracle-data), but remove it for clean init
 if [ "$DB_TYPE" = "oracle" ]; then

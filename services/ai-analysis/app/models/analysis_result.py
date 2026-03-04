@@ -1,7 +1,6 @@
 """SQLAlchemy model for ai_analysis_result table (READ-WRITE)."""
 
-from sqlalchemy import Column, DateTime, Float, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import Column, DateTime, Float, JSON, String, func
 
 from app.database import Base
 
@@ -25,18 +24,18 @@ class AnalysisResult(Base):
     # Risk Scoring
     risk_score = Column(Float)
     risk_level = Column(String(20))  # LOW / MEDIUM / HIGH / CRITICAL
-    risk_factors = Column(JSONB)
+    risk_factors = Column(JSON)
 
     # Forensic Scores (v2.19.0)
     forensic_risk_score = Column(Float)
     forensic_risk_level = Column(String(20))
-    forensic_findings = Column(JSONB)
+    forensic_findings = Column(JSON)
     structural_anomaly_score = Column(Float)
     issuer_anomaly_score = Column(Float)
     temporal_anomaly_score = Column(Float)
 
     # Analysis Metadata
-    feature_vector = Column(JSONB)
-    anomaly_explanations = Column(JSONB)
+    feature_vector = Column(JSON)
+    anomaly_explanations = Column(JSON)
     analysis_version = Column(String(20))
     analyzed_at = Column(DateTime(timezone=True), server_default=func.now())

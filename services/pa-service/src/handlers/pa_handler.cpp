@@ -438,8 +438,8 @@ void PaHandler::handleDetail(
         if (result.isNull() || result.empty()) {
             // Not found
             Json::Value notFound;
-            notFound["status"] = "NOT_FOUND";
-            notFound["message"] = "PA verification record not found";
+            notFound["success"] = false;
+            notFound["error"] = "PA verification record not found";
             auto resp = drogon::HttpResponse::newHttpJsonResponse(notFound);
             resp->setStatusCode(drogon::k404NotFound);
             callback(resp);

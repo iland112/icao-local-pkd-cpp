@@ -51,9 +51,9 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
     try {
       await navigator.clipboard.writeText(text);
       // You might want to add a toast notification here
-      console.log(`${label} copied to clipboard`);
+      if (import.meta.env.DEV) console.log(`${label} copied to clipboard`);
     } catch (err) {
-      console.error('Failed to copy:', err);
+      if (import.meta.env.DEV) console.error('Failed to copy:', err);
     }
   };
 

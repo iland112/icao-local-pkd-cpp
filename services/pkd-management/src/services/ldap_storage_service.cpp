@@ -83,9 +83,9 @@ LDAP* LdapStorageService::getLdapReadConnection() {
     ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
 
     // DoS defense: network timeout to prevent blocking on unresponsive LDAP
-    int writeTimeoutSec = 10;
-    if (auto* v = std::getenv("LDAP_WRITE_TIMEOUT")) writeTimeoutSec = std::stoi(v);
-    struct timeval ldapTimeout = {writeTimeoutSec, 0};
+    int networkTimeoutSec = 5;
+    if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) networkTimeoutSec = std::stoi(v);
+    struct timeval ldapTimeout = {networkTimeoutSec, 0};
     ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
 
     struct berval cred;

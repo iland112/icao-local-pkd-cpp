@@ -13,7 +13,7 @@
 
 CREATE TABLE IF NOT EXISTS revalidation_history (
     id SERIAL PRIMARY KEY,
-    executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     total_processed INTEGER DEFAULT 0 NOT NULL,
     newly_expired INTEGER DEFAULT 0 NOT NULL,
     newly_valid INTEGER DEFAULT 0 NOT NULL,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS sync_config (
     auto_reconcile BOOLEAN DEFAULT FALSE NOT NULL,
     revalidate_certs_on_sync BOOLEAN DEFAULT TRUE NOT NULL,
     max_reconcile_batch_size INTEGER DEFAULT 100 NOT NULL,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(100),
     CONSTRAINT single_config_row CHECK (id = 1)
 );
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS crl_revocation_log (
     crl_issuer_dn TEXT,
     crl_this_update VARCHAR(50),
     crl_next_update VARCHAR(50),
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     check_duration_ms INTEGER
 );
 

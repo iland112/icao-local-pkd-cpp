@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Brain,
   AlertCircle,
@@ -32,6 +32,7 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import { toast } from '@/stores/toastStore';
 import { aiAnalysisApi } from '@/services/aiAnalysisApi';
 import type {
   AnalysisStatistics,
@@ -116,7 +117,10 @@ export default function AiAnalysisDashboard() {
   const [page, setPage] = useState(1);
   const pageSize = 15;
 
-  const fetchData = async () => {
+  // AbortController ref for cancelling stale anomaly list requests
+  const anomalyAbortRef = useRef<AbortController | null>(null);
+
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [statsRes, statusRes, maturityRes, trendsRes, riskRes, keySizeRes, forensicRes] = await Promise.allSettled([
@@ -137,12 +141,19 @@ export default function AiAnalysisDashboard() {
       if (keySizeRes.status === 'fulfilled') setKeySizeDist(keySizeRes.value.data);
       if (forensicRes.status === 'fulfilled') setForensicSummary(forensicRes.value.data);
     } catch (e) {
-      console.error('Failed to fetch AI analysis data', e);
+      if (import.meta.env.DEV) console.error('Failed to fetch AI analysis data', e);
     }
     setLoading(false);
-  };
+  }, []);
 
-  const fetchAnomalies = async () => {
+  const fetchAnomalies = useCallback(async () => {
+    // Abort previous pending anomaly request
+    if (anomalyAbortRef.current) {
+      anomalyAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    anomalyAbortRef.current = abortController;
+
     try {
       const params: Record<string, string | number> = { page, size: pageSize };
       if (filterCountry) params.country = filterCountry;
@@ -150,21 +161,29 @@ export default function AiAnalysisDashboard() {
       if (filterLabel) params.label = filterLabel;
       if (filterRisk) params.risk_level = filterRisk;
 
-      const res = await aiAnalysisApi.getAnomalies(params);
+      const res = await aiAnalysisApi.getAnomalies(params, abortController.signal);
       setAnomalies(res.data.items);
       setAnomalyTotal(res.data.total);
-    } catch {
+    } catch (err) {
+      // Ignore aborted requests — a newer request superseded this one
+      if (err instanceof Error && err.name === 'CanceledError') return;
       // Analysis might not have run yet
     }
-  };
+  }, [page, filterCountry, filterType, filterLabel, filterRisk]);
+
+  // Refs to hold latest fetch functions for polling interval (avoids stale closures)
+  const fetchDataRef = useRef(fetchData);
+  fetchDataRef.current = fetchData;
+  const fetchAnomaliesRef = useRef(fetchAnomalies);
+  fetchAnomaliesRef.current = fetchAnomalies;
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   useEffect(() => {
     fetchAnomalies();
-  }, [page, filterCountry, filterType, filterLabel, filterRisk]);
+  }, [fetchAnomalies]);
 
   // Polling during analysis
   useEffect(() => {
@@ -175,8 +194,8 @@ export default function AiAnalysisDashboard() {
         setJobStatus(res.data);
         if (res.data.status === 'COMPLETED' || res.data.status === 'FAILED') {
           setAnalyzing(false);
-          fetchData();
-          fetchAnomalies();
+          fetchDataRef.current();
+          fetchAnomaliesRef.current();
         }
       } catch {
         /* ignore */
@@ -191,7 +210,7 @@ export default function AiAnalysisDashboard() {
       setAnalyzing(true);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '분석 시작 실패';
-      alert(msg);
+      toast.error('분석 실패', msg);
     }
   };
 
@@ -466,7 +485,7 @@ export default function AiAnalysisDashboard() {
             <div className="mt-4 space-y-1.5">
               <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">주요 발견 사항</h4>
               {forensicSummary.top_findings.slice(0, 5).map((f, i) => (
-                <div key={i} className="flex items-center gap-2 text-xs">
+                <div key={f.message} className="flex items-center gap-2 text-xs">
                   <span className="px-1.5 py-0.5 rounded font-medium text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/20">
                     #{i + 1}
                   </span>
@@ -618,7 +637,7 @@ export default function AiAnalysisDashboard() {
                   contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#F3F4F6' }}
                   itemStyle={{ color: '#F3F4F6' }}
-                  formatter={(value?: number | string) => [`${Number(value ?? 0).toLocaleString()}건`, '인증서']}
+                  formatter={(value) => [`${Number(value).toLocaleString()}건`, '인증서']}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -784,7 +803,13 @@ export default function AiAnalysisDashboard() {
                     <td className="px-3 py-2.5 text-center whitespace-nowrap">
                       <RiskBadge level={item.risk_level} />
                     </td>
-                    <td className="px-3 py-2.5 max-w-[240px] truncate text-xs text-gray-500 dark:text-gray-400">
+                    <td
+                      className="px-3 py-2.5 max-w-[240px] truncate text-xs text-gray-500 dark:text-gray-400"
+                      title={Object.entries(item.risk_factors)
+                        .sort(([, a], [, b]) => b - a)
+                        .map(([k, v]) => `${k}(${v})`)
+                        .join(', ')}
+                    >
                       {Object.entries(item.risk_factors)
                         .sort(([, a], [, b]) => b - a)
                         .slice(0, 3)

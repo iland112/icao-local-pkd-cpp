@@ -70,6 +70,21 @@ RateLimitInfo ApiRateLimiter::checkAndIncrement(
     cw.hour.count++;
     cw.day.count++;
 
+    // Periodic cleanup of expired entries to prevent unbounded memory growth
+    if (++checkCount_ >= CLEANUP_INTERVAL) {
+        checkCount_ = 0;
+        for (auto it = windows_.begin(); it != windows_.end(); ) {
+            if (&it->second == &cw) { ++it; continue; }
+            auto& w = it->second;
+            bool allExpired = (now - w.day.start > std::chrono::hours(24));
+            if (allExpired) {
+                it = windows_.erase(it);
+            } else {
+                ++it;
+            }
+        }
+    }
+
     int remaining = limitPerMin > 0 ? (limitPerMin - static_cast<int>(cw.minute.count)) : 999;
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - cw.minute.start);
     int64_t resetAt = std::chrono::system_clock::to_time_t(

@@ -1,8 +1,8 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.27.1
+**Current Version**: v2.28.0
 **Period**: 2026-01-21 ~ 2026-03-04
-**Total Releases**: 55+
+**Total Releases**: 56+
 
 ---
 
@@ -10,6 +10,7 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.28.0 | 03-04 | Quality | 전체 코드 품질 개선 (139건 이슈 수정) + 테스트 인프라 구축 (438 test cases) |
 | v2.27.1 | 03-04 | Fix | API Client Rate Limit 분리 + Podman DNS Resolver 영구 수정 |
 | v2.27.0 | 03-04 | Feature | FAILED 이어하기 재처리 + COMPLETED 재업로드 차단 + SAVEPOINT 에러 격리 |
 | v2.26.1 | 03-03 | Performance | 3단계 성능 최적화 (X.509 이중 파싱 제거 + Statement 캐시 + 배치 커밋) |
@@ -76,6 +77,44 @@
 ---
 
 ## 2026-03 (March)
+
+### v2.28.0 (2026-03-04) - 전체 코드 품질 개선 + 테스트 인프라 구축
+
+**코드 분석 139건 이슈 체계적 수정** (CRITICAL 13, HIGH 37, MEDIUM 59, LOW 30) + 테스트 인프라 구축
+
+#### Security & Stability (CRITICAL)
+- C++ ProgressManager mutex 교착 위험 해소 — 콜백을 lock 밖으로 이동
+- C++ ReconciliationEngine LDAP raw 연결 → `ldapPool_->acquire()` 전환
+- C++ OracleQueryExecutor 원시 메모리 → RAII + 데드 코드 587줄 제거
+- Frontend React.lazy() 코드 스플리팅 (22개 페이지 lazy load)
+- Python async sync I/O 블로킹 → `asyncio.to_thread()` 래핑 (~15개 엔드포인트)
+- Python `_compliance_cache` 스레드 안전, 분석 작업 race condition 수정
+- 인프라 하드코딩 비밀번호 제거, Oracle 과잉 권한 제거
+
+#### Thread Safety & Architecture (HIGH)
+- C++ `localtime`/`gmtime` → `localtime_r`/`gmtime_r` (13+ 파일)
+- C++ `s_activeProcessingCount` RAII guard, `g_services` null 체크
+- Frontend PrivateRoute JWT 만료 검사, `alert()` → ConfirmDialog, AbortController 적용
+- Python SQL 파라미터화, DB URL.create(), JSONB generic 타입
+- Infra HTTP nginx PA auth_request, POST 재시도 방지, nginx 이미지 태그 고정
+
+#### Code Quality (MEDIUM)
+- C++ ApiRateLimiter cleanup, IPv6 정규화, ProgressManager deque 전환, EmailSender 제거
+- Frontend 폴링 stale closure 수정, MANUAL 모드 제거, console.error DEV 가드, unique key 14건
+- Python 데드 코드 10+ 함수 제거, Pydantic v2 ConfigDict 전환, DB 필터 최적화
+- Infra TIMESTAMPTZ 전환, Docker/Podman 스크립트 통합, Legacy Dockerfile 삭제
+
+#### Polish (LOW)
+- `__APP_VERSION__` 컴파일 타임 버전, 접근성 aria-label, SHA-256 라벨 수정
+- health 엔드포인트 DB 체크 확장, `isExpired` TODO 구현
+
+#### 테스트 인프라 (신규)
+- Frontend: Vitest + RTL — 11 파일, 114 passed + 1 skipped
+- AI Analysis: pytest — 8 파일, 201 passed
+- C++ certificate-parser: GTest — 5 파일, 122 test cases
+- **총 438 테스트 케이스 작성**
+
+125 files changed (14 new, 110 modified, 1 deleted), +4,063 / -2,226 lines
 
 ### v2.27.1 (2026-03-04) - API Client Rate Limit 분리 + Podman DNS Resolver 영구 수정
 

@@ -368,7 +368,7 @@ export function PADashboard() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number | undefined, name: string | undefined) => [`${(value ?? 0).toLocaleString()}건`, name ?? '']}
+                        formatter={(value, name) => [`${Number(value).toLocaleString()}건`, name]}
                         contentStyle={{
                           backgroundColor: darkMode ? '#1F2937' : '#FFFFFF',
                           border: `1px solid ${darkMode ? '#374151' : '#E5E7EB'}`,
@@ -521,7 +521,7 @@ export function PADashboard() {
                           borderRadius: '8px',
                           color: darkMode ? '#F3F4F6' : '#1F2937',
                         }}
-                        formatter={(value: number | undefined, name: string | undefined) => [`${(value ?? 0).toLocaleString()}건`, name ?? '']}
+                        formatter={(value, name) => [`${Number(value).toLocaleString()}건`, name]}
                         labelFormatter={(label) => `${label}`}
                       />
                       <Legend

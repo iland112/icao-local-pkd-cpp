@@ -319,7 +319,9 @@ paths:
             auto now = std::chrono::system_clock::now();
             auto time_t = std::chrono::system_clock::to_time_t(now);
             std::stringstream ss;
-            ss << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+            std::tm tm_buf{};
+            localtime_r(&time_t, &tm_buf);
+            ss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S");
             result["timestamp"] = ss.str();
 
             if (g_services && g_services->dbPool()) {

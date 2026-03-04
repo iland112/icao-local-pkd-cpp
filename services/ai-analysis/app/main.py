@@ -1,3 +1,5 @@
+"""ICAO PKD AI Analysis Service -- ML-based certificate anomaly detection and forensic analysis."""
+
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -44,6 +46,17 @@ async def lifespan(application: FastAPI):
         from app.tasks.scheduler import stop_scheduler
 
         stop_scheduler()
+    except Exception:
+        pass
+
+    # Dispose database engines to release all pooled connections
+    try:
+        from app.database import async_engine, sync_engine
+
+        sync_engine.dispose()
+        if async_engine is not None:
+            await async_engine.dispose()
+        logger.info("Database engines disposed")
     except Exception:
         pass
 

@@ -678,7 +678,7 @@ export default function CrlReport() {
                           </thead>
                           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                             {detailData.revokedCertificates.items.map((rev, i) => (
-                              <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                              <tr key={rev.serialNumber} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                 <td className="px-3 py-2.5 text-center text-xs text-gray-400">{i + 1}</td>
                                 <td className="px-3 py-2.5 font-mono text-xs text-gray-900 dark:text-white">{rev.serialNumber}</td>
                                 <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-400">{rev.revocationDate}</td>

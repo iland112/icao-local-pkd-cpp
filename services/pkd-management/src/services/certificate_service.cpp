@@ -797,9 +797,10 @@ ExportResult exportAllCertificatesFromDb(
 
         // Generate filename with timestamp
         auto now = std::time(nullptr);
-        auto* tm = std::localtime(&now);
+        std::tm tm_buf{};
+        localtime_r(&now, &tm_buf);
         std::ostringstream ts;
-        ts << std::put_time(tm, "%Y%m%d-%H%M%S");
+        ts << std::put_time(&tm_buf, "%Y%m%d-%H%M%S");
 
         result.filename = "ICAO-PKD-Export-" + ts.str() + ".zip";
         result.contentType = "application/zip";

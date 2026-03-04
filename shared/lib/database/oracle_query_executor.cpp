@@ -1,15 +1,9 @@
 /**
  * @file oracle_query_executor.cpp
- * @brief Oracle Query Executor implementation using OCI and OTL
+ * @brief Oracle Query Executor implementation using OCI Session Pool
  */
 
-// Suppress OTL library warnings (third-party code)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstringop-truncation"
-
 #include "oracle_query_executor.h"
-
-#pragma GCC diagnostic pop
 
 #include <spdlog/spdlog.h>
 #include <stdexcept>
@@ -17,10 +11,6 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
-#include <mutex>
-
-// Mutex for serializing OCI connection creation (OCI is not thread-safe during env setup)
-static std::mutex g_ociConnectionMutex;
 
 // Pre-compiled regex patterns for PostgreSQL→Oracle query transformation
 // Compiled once at static init instead of per-query (~150K compilations eliminated during bulk upload)
@@ -29,7 +19,7 @@ static const std::regex s_nullifInteger(R"(NULLIF\(([^,]+),\s*''\s*\)::INTEGER)"
 static const std::regex s_limitOffset(R"(\s+LIMIT\s+(\d+|:\d+)\s+OFFSET\s+(\d+|:\d+)\s*$)", std::regex::icase);
 static const std::regex s_limitOnly(R"(\s+LIMIT\s+(\d+|:\d+)\s*$)", std::regex::icase);
 static const std::regex s_returningClause(R"(\s+RETURNING\s+\w+(\s+INTO\s+:\d+)?\s*$)", std::regex::icase);
-// Legacy OCI path additional patterns
+// DML command additional patterns (used in executeCommand)
 static const std::regex s_nowFunc(R"(NOW\(\))", std::regex::icase);
 static const std::regex s_currentTimestamp(R"(CURRENT_TIMESTAMP)", std::regex::icase);
 static const std::regex s_typecast(R"(::[a-zA-Z_][a-zA-Z0-9_]*)", std::regex::icase);
@@ -74,8 +64,8 @@ OracleQueryExecutor::OracleQueryExecutor(OracleConnectionPool* pool)
     try {
         initializeSessionPool();
     } catch (const std::exception& e) {
-        spdlog::warn("[OracleQueryExecutor] Session pool init failed (falling back to per-query): {}", e.what());
-        // Non-fatal: will fall back to per-query createOciConnection()
+        spdlog::warn("[OracleQueryExecutor] Session pool init failed: {}", e.what());
+        // Non-fatal at construction, but executeQuery/executeCommand will throw if !sessionPoolReady_
     }
 }
 
@@ -92,22 +82,8 @@ Json::Value OracleQueryExecutor::executeQuery(
     const std::vector<std::string>& params
 )
 {
-    // Use session pool if available, otherwise fall back to per-query connection
     if (!sessionPoolReady_) {
-        spdlog::debug("[OracleQueryExecutor] Session pool not ready, using per-query connection");
-        // Fallback to legacy per-query connection
-        OciConnection ociConn;
-        try {
-            createOciConnection(ociConn);
-            // ... (legacy code would go here, but pool should always be ready)
-            disconnectOci(ociConn);
-            freeOciHandles(ociConn);
-            throw std::runtime_error("Session pool not available and legacy fallback not implemented");
-        } catch (...) {
-            disconnectOci(ociConn);
-            freeOciHandles(ociConn);
-            throw;
-        }
+        throw std::runtime_error("OCI session pool is not available");
     }
 
     spdlog::debug("[OracleQueryExecutor] Executing SELECT query via session pool");
@@ -167,9 +143,13 @@ Json::Value OracleQueryExecutor::executeQuery(
         }
 
         // Bind parameters using OCIBindByName (handles duplicate named binds correctly)
-        std::vector<char*> paramBuffers;
+        // RAII: paramStringBuffers and binaryBuffers own the memory; no manual delete needed
+        std::vector<std::string> paramStringBuffers;
         std::vector<std::vector<uint8_t>> binaryBuffers;
         std::vector<std::string> bindNames;
+        paramStringBuffers.reserve(params.size());
+        binaryBuffers.reserve(params.size());
+        bindNames.reserve(params.size());
 
         for (size_t i = 0; i < params.size(); ++i) {
             OCIBind* bind = nullptr;
@@ -209,20 +189,18 @@ Json::Value OracleQueryExecutor::executeQuery(
                                       SQLT_LBI, nullptr, nullptr, nullptr,
                                       0, nullptr, OCI_DEFAULT);
             } else {
-                char* buffer = new char[params[i].length() + 1];
-                strcpy(buffer, params[i].c_str());
-                paramBuffers.push_back(buffer);
+                paramStringBuffers.push_back(params[i]);
+                std::string& strBuf = paramStringBuffers.back();
 
                 status = OCIBindByName(stmt, &bind, session.err,
                                       reinterpret_cast<const OraText*>(bindName.c_str()),
                                       static_cast<sb4>(bindName.length()),
-                                      buffer, params[i].length() + 1,
+                                      strBuf.data(), static_cast<sb4>(strBuf.size() + 1),
                                       SQLT_STR, nullptr, nullptr, nullptr,
                                       0, nullptr, OCI_DEFAULT);
             }
 
             if (status != OCI_SUCCESS) {
-                for (char* buf : paramBuffers) delete[] buf;
                 OCIHandleFree(stmt, OCI_HTYPE_STMT);
                 throw std::runtime_error("Failed to bind parameter " + std::to_string(i + 1));
             }
@@ -238,7 +216,6 @@ Json::Value OracleQueryExecutor::executeQuery(
             OCIErrorGet(session.err, 1, nullptr, &errcode,
                        reinterpret_cast<OraText*>(errbuf), sizeof(errbuf), OCI_HTYPE_ERROR);
 
-            for (char* buf : paramBuffers) delete[] buf;
             OCIHandleFree(stmt, OCI_HTYPE_STMT);
             throw std::runtime_error(std::string("OCI statement execution failed (code ") +
                                    std::to_string(errcode) + "): " + errbuf);
@@ -247,7 +224,6 @@ Json::Value OracleQueryExecutor::executeQuery(
         // For DML with stripped RETURNING: commit and return empty result
         if (isDmlReturning) {
             OCITransCommit(session.svcCtx, session.err, OCI_DEFAULT);
-            for (char* buf : paramBuffers) delete[] buf;
             OCIHandleFree(stmt, OCI_HTYPE_STMT);
             releasePooledSession(session);
             spdlog::info("[OracleQueryExecutor] DML executed successfully (RETURNING stripped)");
@@ -377,7 +353,6 @@ Json::Value OracleQueryExecutor::executeQuery(
                 OCIDescriptorFree(lobLocators[i], OCI_DTYPE_LOB);
             }
         }
-        for (char* buf : paramBuffers) delete[] buf;
         OCIHandleFree(stmt, OCI_HTYPE_STMT);
 
         // Release session back to pool. If LOB operations occurred, drop the session
@@ -395,8 +370,6 @@ Json::Value OracleQueryExecutor::executeQuery(
         releasePooledSession(session, true);
         throw;
     }
-
-    return Json::arrayValue;
 }
 
 int OracleQueryExecutor::executeCommand(
@@ -404,20 +377,8 @@ int OracleQueryExecutor::executeCommand(
     const std::vector<std::string>& params
 )
 {
-    // Use session pool if available, otherwise fall back to per-query connection
     if (!sessionPoolReady_) {
-        spdlog::debug("[OracleQueryExecutor] Session pool not ready, using per-query connection for command");
-        OciConnection ociConn;
-        try {
-            createOciConnection(ociConn);
-            disconnectOci(ociConn);
-            freeOciHandles(ociConn);
-            throw std::runtime_error("Session pool not available and legacy fallback not implemented");
-        } catch (...) {
-            disconnectOci(ociConn);
-            freeOciHandles(ociConn);
-            throw;
-        }
+        throw std::runtime_error("OCI session pool is not available");
     }
 
     // Convert PostgreSQL syntax to Oracle syntax
@@ -457,9 +418,13 @@ int OracleQueryExecutor::executeCommand(
             }
 
             // Bind parameters
-            std::vector<char*> paramBuffers;
+            // RAII: paramStringBuffers and binaryBuffers own the memory; no manual delete needed
+            std::vector<std::string> paramStringBuffers;
             std::vector<std::vector<uint8_t>> binaryBuffers;
             std::vector<std::string> bindNames;
+            paramStringBuffers.reserve(params.size());
+            binaryBuffers.reserve(params.size());
+            bindNames.reserve(params.size());
 
             for (size_t i = 0; i < params.size(); ++i) {
                 OCIBind* bind = nullptr;
@@ -493,19 +458,17 @@ int OracleQueryExecutor::executeCommand(
                                           SQLT_LBI, nullptr, nullptr, nullptr,
                                           0, nullptr, OCI_DEFAULT);
                 } else {
-                    char* buffer = new char[params[i].length() + 1];
-                    strcpy(buffer, params[i].c_str());
-                    paramBuffers.push_back(buffer);
+                    paramStringBuffers.push_back(params[i]);
+                    std::string& strBuf = paramStringBuffers.back();
                     status = OCIBindByName(stmt, &bind, batchSession_.err,
                                           reinterpret_cast<const OraText*>(bindName.c_str()),
                                           static_cast<sb4>(bindName.length()),
-                                          buffer, params[i].length() + 1,
+                                          strBuf.data(), static_cast<sb4>(strBuf.size() + 1),
                                           SQLT_STR, nullptr, nullptr, nullptr,
                                           0, nullptr, OCI_DEFAULT);
                 }
 
                 if (status != OCI_SUCCESS) {
-                    for (char* buf : paramBuffers) delete[] buf;
                     throw std::runtime_error("Failed to bind parameter " + std::to_string(i + 1) + " (batch)");
                 }
             }
@@ -518,16 +481,12 @@ int OracleQueryExecutor::executeCommand(
                 sb4 errcode = 0;
                 OCIErrorGet(batchSession_.err, 1, nullptr, &errcode,
                            reinterpret_cast<OraText*>(errbuf), sizeof(errbuf), OCI_HTYPE_ERROR);
-                for (char* buf : paramBuffers) delete[] buf;
                 throw std::runtime_error(std::string("OCI batch execution failed: ") + errbuf);
             }
 
             ub4 affectedRows = 0;
             OCIAttrGet(stmt, OCI_HTYPE_STMT, &affectedRows, nullptr,
                       OCI_ATTR_ROW_COUNT, batchSession_.err);
-
-            // Cleanup bind buffers only (stmt is cached, session is pinned)
-            for (char* buf : paramBuffers) delete[] buf;
 
             return static_cast<int>(affectedRows);
 
@@ -566,9 +525,13 @@ int OracleQueryExecutor::executeCommand(
         }
 
         // Bind parameters using OCIBindByName
-        std::vector<char*> paramBuffers;
+        // RAII: paramStringBuffers and binaryBuffers own the memory; no manual delete needed
+        std::vector<std::string> paramStringBuffers;
         std::vector<std::vector<uint8_t>> binaryBuffers;
         std::vector<std::string> bindNames;
+        paramStringBuffers.reserve(params.size());
+        binaryBuffers.reserve(params.size());
+        bindNames.reserve(params.size());
 
         for (size_t i = 0; i < params.size(); ++i) {
             OCIBind* bind = nullptr;
@@ -608,20 +571,18 @@ int OracleQueryExecutor::executeCommand(
                                       SQLT_LBI, nullptr, nullptr, nullptr,
                                       0, nullptr, OCI_DEFAULT);
             } else {
-                char* buffer = new char[params[i].length() + 1];
-                strcpy(buffer, params[i].c_str());
-                paramBuffers.push_back(buffer);
+                paramStringBuffers.push_back(params[i]);
+                std::string& strBuf = paramStringBuffers.back();
 
                 status = OCIBindByName(stmt, &bind, session.err,
                                       reinterpret_cast<const OraText*>(bindName.c_str()),
                                       static_cast<sb4>(bindName.length()),
-                                      buffer, params[i].length() + 1,
+                                      strBuf.data(), static_cast<sb4>(strBuf.size() + 1),
                                       SQLT_STR, nullptr, nullptr, nullptr,
                                       0, nullptr, OCI_DEFAULT);
             }
 
             if (status != OCI_SUCCESS) {
-                for (char* buf : paramBuffers) delete[] buf;
                 OCIHandleFree(stmt, OCI_HTYPE_STMT);
                 throw std::runtime_error("Failed to bind parameter " + std::to_string(i + 1));
             }
@@ -636,7 +597,6 @@ int OracleQueryExecutor::executeCommand(
             OCIErrorGet(session.err, 1, nullptr, &errcode,
                        reinterpret_cast<OraText*>(errbuf), sizeof(errbuf), OCI_HTYPE_ERROR);
 
-            for (char* buf : paramBuffers) delete[] buf;
             OCIHandleFree(stmt, OCI_HTYPE_STMT);
             throw std::runtime_error(std::string("OCI statement execution failed: ") + errbuf);
         }
@@ -649,8 +609,6 @@ int OracleQueryExecutor::executeCommand(
         // Commit transaction
         OCITransCommit(session.svcCtx, session.err, OCI_DEFAULT);
 
-        // Cleanup buffers
-        for (char* buf : paramBuffers) delete[] buf;
         OCIHandleFree(stmt, OCI_HTYPE_STMT);
 
         // Release session back to pool
@@ -665,8 +623,6 @@ int OracleQueryExecutor::executeCommand(
         releasePooledSession(session);
         throw;
     }
-
-    return 0;
 }
 
 // ── Batch mode lifecycle ──
@@ -735,311 +691,7 @@ Json::Value OracleQueryExecutor::executeScalar(
     return firstRow[members[0]];
 }
 
-// --- Private Implementation ---
-
-std::string OracleQueryExecutor::convertPlaceholders(const std::string& query)
-{
-    // OTL legacy path: convert PostgreSQL $1 to OTL :v1<char[4000]> format
-    // Uses dedicated static patterns for OTL-specific placeholder format
-    static const std::regex s_otlPlaceholder(R"(\$(\d+))");
-    static const std::regex s_otlLimitOffset(R"(\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s+OFFSET\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
-    static const std::regex s_otlOffsetLimit(R"(\s+OFFSET\s+(\d+|:v\d+<char\[4000\]>)\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
-    static const std::regex s_otlLimitOnly(R"(\s+LIMIT\s+(\d+|:v\d+<char\[4000\]>)\s*$)", std::regex::icase);
-
-    std::string result = query;
-    result = std::regex_replace(result, s_otlPlaceholder, ":v$1<char[4000]>");
-    result = std::regex_replace(result, s_otlLimitOffset, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
-    result = std::regex_replace(result, s_otlOffsetLimit, " OFFSET $1 ROWS FETCH NEXT $2 ROWS ONLY");
-    result = std::regex_replace(result, s_otlLimitOnly, " FETCH FIRST $1 ROWS ONLY");
-
-    // Reuse shared static patterns for common transformations
-    result = std::regex_replace(result, s_nowFunc, "SYSDATE");
-    result = std::regex_replace(result, s_currentTimestamp, "SYSTIMESTAMP");
-    result = std::regex_replace(result, s_typecast, "");
-
-    spdlog::debug("[OracleQueryExecutor] Converted query: {}", result);
-    return result;
-}
-
-Json::Value OracleQueryExecutor::otlStreamToJson(otl_stream& otlStream)
-{
-    Json::Value array = Json::arrayValue;
-
-    // Get column descriptions
-    int colCount = 0;
-    otl_column_desc* desc = otlStream.describe_select(colCount);
-
-    // Read all rows
-    while (!otlStream.eof()) {
-        Json::Value row;
-
-        for (int i = 0; i < colCount; ++i) {
-            std::string colName = desc[i].name;
-            int dbtype = desc[i].dbtype;
-
-            // Debug: log column name and type
-            spdlog::debug("[OracleQueryExecutor] Column '{}' has dbtype={}", colName, dbtype);
-
-            try {
-                // Read value based on Oracle data type to avoid "Incompatible data types" error
-                // Oracle NUMBER types (including COUNT(*), SUM, etc.)
-                if (dbtype == otl_var_int || dbtype == otl_var_unsigned_int ||
-                    dbtype == otl_var_long_int || dbtype == otl_var_bigint) {
-                    long value;
-                    otlStream >> value;
-
-                    if (otlStream.is_null()) {
-                        row[colName] = Json::nullValue;
-                    } else {
-                        row[colName] = Json::Value(static_cast<int>(value));
-                    }
-                }
-                else if (dbtype == otl_var_double || dbtype == otl_var_float) {
-                    double value;
-                    otlStream >> value;
-
-                    if (otlStream.is_null()) {
-                        row[colName] = Json::nullValue;
-                    } else {
-                        row[colName] = Json::Value(value);
-                    }
-                }
-                else {
-                    // VARCHAR2, CHAR, CLOB, DATE, TIMESTAMP, etc. - read as string
-                    // Note: TIMESTAMP handling removed - treating as string
-                    std::string value;
-                    otlStream >> value;
-
-                    if (otlStream.is_null()) {
-                        row[colName] = Json::nullValue;
-                    } else {
-                        row[colName] = Json::Value(value);
-                    }
-                }
-            } catch (const otl_exception& e) {
-                spdlog::warn("[OracleQueryExecutor] Error reading column {}: {}",
-                            colName, reinterpret_cast<const char*>(e.msg));
-                row[colName] = Json::nullValue;
-            }
-        }
-
-        array.append(row);
-    }
-
-    return array;
-}
-
-// Currently unused - logic is in otlStreamToJson above
-// Kept for potential future refactoring
-// Json::Value OracleQueryExecutor::otlValueToJson(otl_stream& otlStream, int colIndex, int colType)
-// {
-//     return Json::nullValue;
-// }
-
-// --- OCI Thread-Safe Connection Management (Per-Query) ---
-
-void OracleQueryExecutor::createOciConnection(OciConnection& conn)
-{
-    // Serialize OCI connection creation to prevent SIGSEGV from concurrent env setup
-    std::lock_guard<std::mutex> lock(g_ociConnectionMutex);
-
-    sword status;
-
-    // Create OCI environment handle (OCI_THREADED for multi-threaded safety)
-    status = OCIEnvCreate(&conn.env, OCI_THREADED, nullptr, nullptr, nullptr, nullptr, 0, nullptr);
-    if (status != OCI_SUCCESS) {
-        throw std::runtime_error("Failed to create OCI environment");
-    }
-
-    // Allocate OCI error handle
-    status = OCIHandleAlloc(conn.env, reinterpret_cast<void**>(&conn.err),
-                           OCI_HTYPE_ERROR, 0, nullptr);
-    if (status != OCI_SUCCESS) {
-        OCIHandleFree(conn.env, OCI_HTYPE_ENV);
-        throw std::runtime_error("Failed to allocate OCI error handle");
-    }
-
-    // Allocate service context handle
-    status = OCIHandleAlloc(conn.env, reinterpret_cast<void**>(&conn.svcCtx),
-                           OCI_HTYPE_SVCCTX, 0, nullptr);
-    if (status != OCI_SUCCESS) {
-        OCIHandleFree(conn.err, OCI_HTYPE_ERROR);
-        OCIHandleFree(conn.env, OCI_HTYPE_ENV);
-        throw std::runtime_error("Failed to allocate OCI service context");
-    }
-
-    // Allocate server handle
-    status = OCIHandleAlloc(conn.env, reinterpret_cast<void**>(&conn.server),
-                           OCI_HTYPE_SERVER, 0, nullptr);
-    if (status != OCI_SUCCESS) {
-        OCIHandleFree(conn.svcCtx, OCI_HTYPE_SVCCTX);
-        OCIHandleFree(conn.err, OCI_HTYPE_ERROR);
-        OCIHandleFree(conn.env, OCI_HTYPE_ENV);
-        throw std::runtime_error("Failed to allocate OCI server handle");
-    }
-
-    // Allocate session handle
-    status = OCIHandleAlloc(conn.env, reinterpret_cast<void**>(&conn.session),
-                           OCI_HTYPE_SESSION, 0, nullptr);
-    if (status != OCI_SUCCESS) {
-        OCIHandleFree(conn.server, OCI_HTYPE_SERVER);
-        OCIHandleFree(conn.svcCtx, OCI_HTYPE_SVCCTX);
-        OCIHandleFree(conn.err, OCI_HTYPE_ERROR);
-        OCIHandleFree(conn.env, OCI_HTYPE_ENV);
-        throw std::runtime_error("Failed to allocate OCI session handle");
-    }
-
-    // Connect to Oracle server (parse connection string for host:port/service)
-    size_t atPos = connString_.find('@');
-    if (atPos == std::string::npos) {
-        freeOciHandles(conn);
-        throw std::runtime_error("Invalid connection string format (missing @)");
-    }
-
-    std::string dbString = connString_.substr(atPos + 1); // host:port/service
-    status = OCIServerAttach(conn.server, conn.err,
-                            reinterpret_cast<const OraText*>(dbString.c_str()),
-                            dbString.length(), OCI_DEFAULT);
-    if (status != OCI_SUCCESS) {
-        freeOciHandles(conn);
-        throw std::runtime_error("Failed to attach to Oracle server");
-    }
-
-    // Set server handle in service context
-    status = OCIAttrSet(conn.svcCtx, OCI_HTYPE_SVCCTX, conn.server, 0,
-                       OCI_ATTR_SERVER, conn.err);
-    if (status != OCI_SUCCESS) {
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-        freeOciHandles(conn);
-        throw std::runtime_error("Failed to set server in service context");
-    }
-
-    // Parse username and password from connection string
-    std::string credentials = connString_.substr(0, atPos); // user/password
-    size_t slashPos = credentials.find('/');
-    if (slashPos == std::string::npos) {
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-        freeOciHandles(conn);
-        throw std::runtime_error("Invalid connection string format (missing /)");
-    }
-
-    std::string username = credentials.substr(0, slashPos);
-    std::string password = credentials.substr(slashPos + 1);
-
-    // Set username in session
-    status = OCIAttrSet(conn.session, OCI_HTYPE_SESSION,
-                       const_cast<char*>(username.c_str()), username.length(),
-                       OCI_ATTR_USERNAME, conn.err);
-    if (status != OCI_SUCCESS) {
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-        freeOciHandles(conn);
-        throw std::runtime_error("Failed to set username");
-    }
-
-    // Set password in session
-    status = OCIAttrSet(conn.session, OCI_HTYPE_SESSION,
-                       const_cast<char*>(password.c_str()), password.length(),
-                       OCI_ATTR_PASSWORD, conn.err);
-    if (status != OCI_SUCCESS) {
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-        freeOciHandles(conn);
-        throw std::runtime_error("Failed to set password");
-    }
-
-    // Begin session
-    status = OCISessionBegin(conn.svcCtx, conn.err, conn.session,
-                            OCI_CRED_RDBMS, OCI_DEFAULT);
-    if (status != OCI_SUCCESS) {
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-        freeOciHandles(conn);
-        throw std::runtime_error("Failed to begin Oracle session");
-    }
-
-    // Set session handle in service context
-    status = OCIAttrSet(conn.svcCtx, OCI_HTYPE_SVCCTX, conn.session, 0,
-                       OCI_ATTR_SESSION, conn.err);
-    if (status != OCI_SUCCESS) {
-        OCISessionEnd(conn.svcCtx, conn.err, conn.session, OCI_DEFAULT);
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-        freeOciHandles(conn);
-        throw std::runtime_error("Failed to set session in service context");
-    }
-
-    // Set NLS session parameters for consistent date/timestamp handling
-    // OpenSSL ASN1_TIME_print outputs "Jan 15 10:30:00 2024 GMT" format
-    // We convert to ISO format in repository code, so set Oracle to expect ISO
-    {
-        OCIStmt* nlsStmt = nullptr;
-        sword nlsStatus = OCIHandleAlloc(conn.env, reinterpret_cast<void**>(&nlsStmt),
-                                          OCI_HTYPE_STMT, 0, nullptr);
-        if (nlsStatus == OCI_SUCCESS) {
-            // Set timestamp format to ISO 8601
-            const char* nlsTs = "ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS'";
-            nlsStatus = OCIStmtPrepare(nlsStmt, conn.err,
-                                       reinterpret_cast<const OraText*>(nlsTs),
-                                       strlen(nlsTs), OCI_NTV_SYNTAX, OCI_DEFAULT);
-            if (nlsStatus == OCI_SUCCESS) {
-                OCIStmtExecute(conn.svcCtx, nlsStmt, conn.err, 1, 0, nullptr, nullptr, OCI_DEFAULT);
-            }
-
-            // Also set date format for DATE columns
-            const char* nlsDt = "ALTER SESSION SET NLS_DATE_FORMAT = 'YYYY-MM-DD HH24:MI:SS'";
-            nlsStatus = OCIStmtPrepare(nlsStmt, conn.err,
-                                       reinterpret_cast<const OraText*>(nlsDt),
-                                       strlen(nlsDt), OCI_NTV_SYNTAX, OCI_DEFAULT);
-            if (nlsStatus == OCI_SUCCESS) {
-                OCIStmtExecute(conn.svcCtx, nlsStmt, conn.err, 1, 0, nullptr, nullptr, OCI_DEFAULT);
-            }
-
-            OCIHandleFree(nlsStmt, OCI_HTYPE_STMT);
-        }
-    }
-
-    spdlog::debug("[OracleQueryExecutor] Created new OCI connection for current thread");
-}
-
-void OracleQueryExecutor::disconnectOci(OciConnection& conn)
-{
-    // End session
-    if (conn.session && conn.svcCtx && conn.err) {
-        OCISessionEnd(conn.svcCtx, conn.err, conn.session, OCI_DEFAULT);
-    }
-
-    // Detach from server
-    if (conn.server && conn.err) {
-        OCIServerDetach(conn.server, conn.err, OCI_DEFAULT);
-    }
-}
-
-void OracleQueryExecutor::freeOciHandles(OciConnection& conn)
-{
-    if (conn.session) {
-        OCIHandleFree(conn.session, OCI_HTYPE_SESSION);
-        conn.session = nullptr;
-    }
-
-    if (conn.server) {
-        OCIHandleFree(conn.server, OCI_HTYPE_SERVER);
-        conn.server = nullptr;
-    }
-
-    if (conn.svcCtx) {
-        OCIHandleFree(conn.svcCtx, OCI_HTYPE_SVCCTX);
-        conn.svcCtx = nullptr;
-    }
-
-    if (conn.err) {
-        OCIHandleFree(conn.err, OCI_HTYPE_ERROR);
-        conn.err = nullptr;
-    }
-
-    if (conn.env) {
-        OCIHandleFree(conn.env, OCI_HTYPE_ENV);
-        conn.env = nullptr;
-    }
-}
-
-// --- OCI Implementation (Legacy - for executeQueryWithOCI) ---
+// --- OCI Startup Connectivity Check ---
 
 void OracleQueryExecutor::initializeOCI()
 {
@@ -1405,183 +1057,6 @@ void OracleQueryExecutor::releasePooledSession(PooledSession& session, bool drop
     if (session.err) {
         OCIHandleFree(session.err, OCI_HTYPE_ERROR);
         session.err = nullptr;
-    }
-}
-
-// --- Legacy OCI Query Implementation ---
-
-Json::Value OracleQueryExecutor::executeQueryWithOCI(
-    const std::string& query,
-    const std::vector<std::string>& params
-)
-{
-    spdlog::debug("[OracleQueryExecutor] executeQueryWithOCI called");
-
-    try {
-        // Convert PostgreSQL placeholders to OCI positional binding format
-        // Uses pre-compiled static regex patterns (see file top) for performance
-        std::string oracleQuery = query;
-        oracleQuery = std::regex_replace(oracleQuery, s_pgPlaceholder, ":$1");
-
-        // Convert LIMIT ... OFFSET to Oracle syntax
-        oracleQuery = std::regex_replace(oracleQuery, s_limitOffset, " OFFSET $2 ROWS FETCH NEXT $1 ROWS ONLY");
-        oracleQuery = std::regex_replace(oracleQuery, s_limitOnly, " FETCH FIRST $1 ROWS ONLY");
-
-        // Convert PostgreSQL NOW() to Oracle SYSDATE
-        oracleQuery = std::regex_replace(oracleQuery, s_nowFunc, "SYSDATE");
-
-        // Convert PostgreSQL CURRENT_TIMESTAMP to Oracle SYSTIMESTAMP
-        oracleQuery = std::regex_replace(oracleQuery, s_currentTimestamp, "SYSTIMESTAMP");
-
-        // Remove PostgreSQL type casts (::typename)
-        oracleQuery = std::regex_replace(oracleQuery, s_typecast, "");
-
-        spdlog::debug("[OracleQueryExecutor] OCI query: {}", oracleQuery.substr(0, 200));
-
-        // Allocate statement handle
-        OCIStmt* ociStmt = nullptr;
-        sword status = OCIHandleAlloc(ociEnv_, reinterpret_cast<void**>(&ociStmt),
-                                     OCI_HTYPE_STMT, 0, nullptr);
-        if (status != OCI_SUCCESS) {
-            throw std::runtime_error("Failed to allocate OCI statement handle");
-        }
-
-        // Prepare statement
-        status = OCIStmtPrepare(ociStmt, ociErr_,
-                               reinterpret_cast<const OraText*>(oracleQuery.c_str()),
-                               oracleQuery.length(), OCI_NTV_SYNTAX, OCI_DEFAULT);
-        if (status != OCI_SUCCESS) {
-            OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-            throw std::runtime_error("Failed to prepare OCI statement");
-        }
-
-        // Bind parameters (if any)
-        for (size_t i = 0; i < params.size(); ++i) {
-            OCIBind* bindHandle = nullptr;
-            const std::string& param = params[i];
-
-            status = OCIBindByPos(ociStmt, &bindHandle, ociErr_, i + 1,
-                                 const_cast<char*>(param.c_str()), param.length(),
-                                 SQLT_STR, nullptr, nullptr, nullptr, 0, nullptr, OCI_DEFAULT);
-            if (status != OCI_SUCCESS) {
-                OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-                throw std::runtime_error("Failed to bind parameter " + std::to_string(i + 1));
-            }
-        }
-
-        // Execute query
-        status = OCIStmtExecute(ociSvcCtx_, ociStmt, ociErr_, 0, 0, nullptr, nullptr, OCI_DEFAULT);
-        if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
-            // Get detailed Oracle error message
-            char errbuf[512];
-            sb4 errcode = 0;
-            OCIErrorGet(ociErr_, 1, nullptr, &errcode,
-                       reinterpret_cast<OraText*>(errbuf), sizeof(errbuf), OCI_HTYPE_ERROR);
-
-            OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-            throw std::runtime_error(std::string("OCI query execution failed (code ") +
-                                   std::to_string(errcode) + "): " + errbuf);
-        }
-
-        // Get column count
-        ub4 colCount = 0;
-        status = OCIAttrGet(ociStmt, OCI_HTYPE_STMT, &colCount, nullptr,
-                           OCI_ATTR_PARAM_COUNT, ociErr_);
-        if (status != OCI_SUCCESS) {
-            OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-            throw std::runtime_error("Failed to get column count");
-        }
-
-        spdlog::debug("[OracleQueryExecutor] OCI query has {} columns", colCount);
-
-        // Get column names and prepare defines
-        std::vector<std::string> colNames;
-        std::vector<char*> colBuffers;
-        std::vector<sb2> indicators;
-
-        for (ub4 i = 1; i <= colCount; ++i) {
-            OCIParam* colParam = nullptr;
-            status = OCIParamGet(ociStmt, OCI_HTYPE_STMT, ociErr_,
-                                reinterpret_cast<void**>(&colParam), i);
-            if (status != OCI_SUCCESS) {
-                for (auto buf : colBuffers) delete[] buf;
-                OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-                throw std::runtime_error("Failed to get column parameter");
-            }
-
-            // Get column name
-            OraText* colName = nullptr;
-            ub4 colNameLen = 0;
-            status = OCIAttrGet(colParam, OCI_DTYPE_PARAM, &colName, &colNameLen,
-                               OCI_ATTR_NAME, ociErr_);
-            if (status == OCI_SUCCESS) {
-                colNames.push_back(std::string(reinterpret_cast<char*>(colName), colNameLen));
-            } else {
-                colNames.push_back("COL" + std::to_string(i));
-            }
-
-            // Allocate buffer for column data (4000 bytes for VARCHAR2)
-            char* buffer = new char[4001];
-            colBuffers.push_back(buffer);
-            indicators.push_back(0);
-
-            // Define column
-            OCIDefine* defHandle = nullptr;
-            status = OCIDefineByPos(ociStmt, &defHandle, ociErr_, i,
-                                   buffer, 4000, SQLT_STR,
-                                   &indicators[i - 1], nullptr, nullptr, OCI_DEFAULT);
-            if (status != OCI_SUCCESS) {
-                for (auto buf : colBuffers) delete[] buf;
-                OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-                throw std::runtime_error("Failed to define column " + std::to_string(i));
-            }
-        }
-
-        // Fetch rows and build JSON result
-        Json::Value result = Json::arrayValue;
-        int rowCount = 0;
-
-        while (true) {
-            status = OCIStmtFetch2(ociStmt, ociErr_, 1, OCI_FETCH_NEXT, 0, OCI_DEFAULT);
-
-            if (status == OCI_NO_DATA) {
-                break;  // No more rows
-            }
-
-            if (status != OCI_SUCCESS && status != OCI_SUCCESS_WITH_INFO) {
-                for (auto buf : colBuffers) delete[] buf;
-                OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-                throw std::runtime_error("Failed to fetch row");
-            }
-
-            Json::Value row;
-            for (size_t i = 0; i < colCount; ++i) {
-                if (indicators[i] == -1) {
-                    // NULL value
-                    row[colNames[i]] = Json::nullValue;
-                } else {
-                    // String value (VARCHAR2, TIMESTAMP converted to string)
-                    row[colNames[i]] = Json::Value(colBuffers[i]);
-                }
-            }
-
-            result.append(row);
-            rowCount++;
-        }
-
-        spdlog::debug("[OracleQueryExecutor] OCI fetched {} rows", rowCount);
-
-        // Cleanup
-        for (auto buf : colBuffers) {
-            delete[] buf;
-        }
-        OCIHandleFree(ociStmt, OCI_HTYPE_STMT);
-
-        return result;
-
-    } catch (const std::exception& e) {
-        spdlog::error("[OracleQueryExecutor] OCI query failed: {}", e.what());
-        throw std::runtime_error("OCI query failed: " + std::string(e.what()));
     }
 }
 

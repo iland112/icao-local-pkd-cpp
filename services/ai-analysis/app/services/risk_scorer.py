@@ -9,7 +9,6 @@ import logging
 import numpy as np
 import pandas as pd
 
-from app.database import safe_isna  # noqa: F401 — kept for backward compatibility
 
 logger = logging.getLogger(__name__)
 

@@ -254,7 +254,7 @@ export function Login() {
 
             {/* Error Alert */}
             {error && (
-              <div className="mb-5 p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3">
+              <div className="mb-5 p-3.5 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 flex items-start gap-3" role="alert">
                 <AlertCircle className="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-red-700 dark:text-red-200">{error}</p>
               </div>
@@ -374,7 +374,7 @@ export function Login() {
           {/* Footer */}
           <div className="mt-6 text-center" style={stagger(0.3)}>
             <p className="text-xs text-gray-400 dark:text-gray-500">
-              v2.20.2 &middot; &copy; 2026 SmartCore Inc. All rights reserved.
+              v{__APP_VERSION__} &middot; &copy; 2026 SmartCore Inc. All rights reserved.
             </p>
           </div>
         </div>

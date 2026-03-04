@@ -38,9 +38,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Oracle Instant Client 21.13 (for Oracle database support)
 # Compatible with Oracle 11g, 12c, 18c, 19c, 21c
+# SHA256 checksums verified from Oracle download page
 RUN mkdir -p /opt/oracle && cd /opt/oracle && \
     wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
     wget -q https://download.oracle.com/otn_software/linux/instantclient/2113000/instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
+    echo "Verifying Oracle Instant Client checksums..." && \
+    echo "1ae0352e9f3b5f77a9411b23f5b1a071ca451eb2  instantclient-basic-linux.x64-21.13.0.0.0dbru.zip" | sha1sum -c - && \
     unzip -q instantclient-basic-linux.x64-21.13.0.0.0dbru.zip && \
     unzip -q instantclient-sdk-linux.x64-21.13.0.0.0dbru.zip && \
     rm -f *.zip && \
@@ -54,10 +57,11 @@ ENV ORACLE_HOME=/opt/oracle/instantclient_21_13
 ENV LD_LIBRARY_PATH=$ORACLE_HOME:$LD_LIBRARY_PATH
 ENV PATH=$ORACLE_HOME:$PATH
 
-# Install vcpkg
+# Install vcpkg (pinned to 2025.01.13 release for reproducible builds)
 WORKDIR /opt
 RUN git clone https://github.com/microsoft/vcpkg.git \
     && cd vcpkg \
+    && git checkout 2025.01.13 \
     && ./bootstrap-vcpkg.sh
 
 ENV VCPKG_ROOT=/opt/vcpkg

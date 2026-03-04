@@ -135,7 +135,8 @@ bool ReconciliationRepository::updateSummary(const domain::ReconciliationSummary
         if (summary.getCompletedAt().has_value()) {
             auto tp = summary.getCompletedAt().value();
             std::time_t t = std::chrono::system_clock::to_time_t(tp);
-            std::tm tm = *std::localtime(&t);
+            std::tm tm{};
+            localtime_r(&t, &tm);
             char buf[32];
             std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", &tm);
             completedAtStr = buf;

@@ -26,7 +26,7 @@ export function ReconciliationHistory() {
       const response = await syncServiceApi.getReconciliationHistory({ limit: 20 });
       setHistory(response.data?.history ?? []);
     } catch (err) {
-      console.error('Failed to fetch reconciliation history:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch reconciliation history:', err);
       setHistory([]);  // Set empty array on error
     } finally {
       setLoading(false);
@@ -44,7 +44,7 @@ export function ReconciliationHistory() {
       const response = await syncServiceApi.getReconciliationDetails(item.id);
       setLogs(response.data?.logs ?? []);
     } catch (err) {
-      console.error('Failed to fetch reconciliation details:', err);
+      if (import.meta.env.DEV) console.error('Failed to fetch reconciliation details:', err);
       setLogs([]);  // Set empty array on error
     } finally {
       setLoadingDetails(false);
@@ -365,7 +365,7 @@ export function ReconciliationHistory() {
                           <td className="px-3 py-2 text-xs text-gray-600 dark:text-gray-400">
                             {log.countryCode || '-'}
                           </td>
-                          <td className="px-3 py-2 text-xs text-gray-900 dark:text-white max-w-md truncate">
+                          <td className="px-3 py-2 text-xs text-gray-900 dark:text-white max-w-md truncate" title={log.subject || '-'}>
                             {log.subject || '-'}
                           </td>
                           <td className="px-3 py-2 text-center">

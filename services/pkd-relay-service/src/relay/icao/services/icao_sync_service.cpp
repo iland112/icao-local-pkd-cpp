@@ -12,11 +12,9 @@ namespace services {
 IcaoSyncService::IcaoSyncService(
     std::shared_ptr<repositories::IcaoVersionRepository> repo,
     std::shared_ptr<infrastructure::http::HttpClient> httpClient,
-    std::shared_ptr<infrastructure::notification::EmailSender> emailSender,
     const Config& config)
     : repo_(repo)
     , httpClient_(httpClient)
-    , emailSender_(emailSender)
     , config_(config) {
 
     spdlog::info("[IcaoSyncService] Initialized");
@@ -175,58 +173,19 @@ bool IcaoSyncService::saveNewVersions(
 bool IcaoSyncService::sendNotification(
     const std::vector<domain::models::IcaoVersion>& newVersions) {
 
-    auto message = buildNotificationMessage(newVersions);
-
-    bool sent = emailSender_->send(message);
-
-    if (sent) {
-        // Mark notifications as sent in database
-        for (const auto& version : newVersions) {
-            repo_->markNotificationSent(version.fileName);
-        }
+    spdlog::info("[IcaoSyncService] ICAO PKD update notification:");
+    spdlog::info("[IcaoSyncService] To: {}", config_.notificationEmail);
+    spdlog::info("[IcaoSyncService] Subject: [ICAO PKD] New Certificate Updates Available");
+    for (const auto& version : newVersions) {
+        spdlog::info("[IcaoSyncService] New version: {} (v{}, type: {})",
+                     version.fileName, version.fileVersion, version.collectionType);
     }
-
-    return sent;
-}
-
-infrastructure::notification::EmailSender::EmailMessage
-IcaoSyncService::buildNotificationMessage(
-    const std::vector<domain::models::IcaoVersion>& newVersions) {
-
-    infrastructure::notification::EmailSender::EmailMessage message;
-
-    message.toAddresses = { config_.notificationEmail };
-    message.subject = "[ICAO PKD] New Certificate Updates Available";
-
-    // Build email body
-    std::ostringstream body;
-
-    body << "Dear Administrator,\n\n";
-    body << "The ICAO PKD monitoring system has detected new certificate updates:\n\n";
-    body << "NEW VERSIONS DETECTED:\n";
 
     for (const auto& version : newVersions) {
-        body << "- " << version.fileName
-             << " (Version " << version.fileVersion << ")\n";
-        body << "  Type: " << version.collectionType << "\n";
-        body << "  Detected: " << version.detectedAt << "\n\n";
+        repo_->markNotificationSent(version.fileName);
     }
 
-    body << "ACTION REQUIRED:\n";
-    body << "1. Download the new files from: " << config_.icaoPortalUrl << "\n";
-    body << "2. Upload to Local PKD system: http://localhost:3000/upload\n";
-    body << "3. Verify import completion in Upload History\n\n";
-
-    body << "DASHBOARD:\n";
-    body << "View current status: http://localhost:3000/\n\n";
-
-    body << "---\n";
-    body << "This is an automated notification from ICAO Local PKD v1.7.0\n";
-    body << "For support, contact your system administrator\n";
-
-    message.body = body.str();
-
-    return message;
+    return true;
 }
 
 } // namespace services

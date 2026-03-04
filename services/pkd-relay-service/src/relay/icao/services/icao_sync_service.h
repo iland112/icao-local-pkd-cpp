@@ -10,7 +10,6 @@
 #include "../domain/models/icao_version.h"
 #include "../repositories/icao_version_repository.h"
 #include "../infrastructure/http/http_client.h"
-#include "../infrastructure/notification/email_sender.h"
 #include "../utils/html_parser.h"
 
 namespace services {
@@ -46,7 +45,6 @@ public:
 
     IcaoSyncService(std::shared_ptr<repositories::IcaoVersionRepository> repo,
                     std::shared_ptr<infrastructure::http::HttpClient> httpClient,
-                    std::shared_ptr<infrastructure::notification::EmailSender> emailSender,
                     const Config& config);
 
     ~IcaoSyncService();
@@ -78,7 +76,6 @@ public:
 private:
     std::shared_ptr<repositories::IcaoVersionRepository> repo_;
     std::shared_ptr<infrastructure::http::HttpClient> httpClient_;
-    std::shared_ptr<infrastructure::notification::EmailSender> emailSender_;
     Config config_;
 
     /**
@@ -102,12 +99,6 @@ private:
      * @brief Send notification email to administrator
      */
     bool sendNotification(const std::vector<domain::models::IcaoVersion>& newVersions);
-
-    /**
-     * @brief Build notification email message
-     */
-    infrastructure::notification::EmailSender::EmailMessage buildNotificationMessage(
-        const std::vector<domain::models::IcaoVersion>& newVersions);
 };
 
 } // namespace services

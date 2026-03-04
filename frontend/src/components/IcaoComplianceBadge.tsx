@@ -87,8 +87,8 @@ export function IcaoComplianceBadge({
         <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 space-y-1">
           <div className="font-medium">위반 항목:</div>
           <ul className="list-disc list-inside space-y-0.5">
-            {compliance.violations.map((violation, idx) => (
-              <li key={idx}>{violation}</li>
+            {compliance.violations.map((violation) => (
+              <li key={violation}>{violation}</li>
             ))}
           </ul>
           {compliance.pkdConformanceCode && (

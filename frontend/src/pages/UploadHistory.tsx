@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Clock,
@@ -26,6 +26,7 @@ import {
 import { uploadApi, uploadHistoryApi } from '@/services/api';
 import type { UploadedFile, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
 import { cn } from '@/utils/cn';
+import { toast } from '@/stores/toastStore';
 import { MasterListStructure } from '@/components/MasterListStructure';
 import { LdifStructure } from '@/components/LdifStructure';
 import { DuplicateCertificatesTree } from '@/components/DuplicateCertificatesTree';
@@ -88,21 +89,47 @@ export function UploadHistory() {
 
   const pageSize = 10;
 
-  useEffect(() => {
-    fetchUploads();
+  const fetchUploads = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await uploadApi.getHistory({
+        page,
+        size: pageSize,
+        sort: 'createdAt',
+        direction: 'DESC',
+      });
+      const data = response.data;
+      setUploads(data.content);
+      setTotalPages(data.totalPages);
+      setTotalElements(data.totalElements);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Failed to fetch upload history:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [page]);
 
-  // Auto-refresh when any upload is in progress (5s interval)
   useEffect(() => {
-    const hasInProgress = uploads.some(u => IN_PROGRESS_STATUSES.includes(u.status));
+    fetchUploads();
+  }, [fetchUploads]);
+
+  // Auto-refresh when any upload is in progress (5s interval)
+  const hasInProgress = useMemo(
+    () => uploads.some(u => IN_PROGRESS_STATUSES.includes(u.status)),
+    [uploads]
+  );
+  const fetchUploadsRef = useRef(fetchUploads);
+  fetchUploadsRef.current = fetchUploads;
+
+  useEffect(() => {
     if (!hasInProgress) return;
 
     const interval = setInterval(() => {
-      fetchUploads();
+      fetchUploadsRef.current();
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [uploads]);
+  }, [hasInProgress]);
 
   // Fetch upload issues when detail dialog is opened (v2.1.2.2)
   useEffect(() => {
@@ -126,26 +153,6 @@ export function UploadHistory() {
 
     fetchUploadIssues();
   }, [selectedUpload, dialogOpen]);
-
-  const fetchUploads = async () => {
-    setLoading(true);
-    try {
-      const response = await uploadApi.getHistory({
-        page,
-        size: pageSize,
-        sort: 'createdAt',
-        direction: 'DESC',
-      });
-      const data = response.data;
-      setUploads(data.content);
-      setTotalPages(data.totalPages);
-      setTotalElements(data.totalElements);
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Failed to fetch upload history:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Calculate statistics from current page data
   const stats = useMemo(() => {
@@ -330,7 +337,7 @@ export function UploadHistory() {
       if (import.meta.env.DEV) console.log('Upload deleted successfully');
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to delete upload:', error);
-      alert('업로드 삭제에 실패했습니다.');
+      toast.error('삭제 실패', '업로드 삭제에 실패했습니다.');
     } finally {
       setDeleting(false);
     }
@@ -356,7 +363,7 @@ export function UploadHistory() {
       await fetchUploads();
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to retry upload:', error);
-      alert('재시도에 실패했습니다.');
+      toast.error('재시도 실패', '업로드 재시도에 실패했습니다.');
     } finally {
       setRetryingId(null);
     }
@@ -705,6 +712,7 @@ export function UploadHistory() {
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label="이전 페이지"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -715,6 +723,7 @@ export function UploadHistory() {
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label="다음 페이지"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1256,7 +1265,7 @@ export function UploadHistory() {
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600 dark:text-gray-400">파일명</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate ml-4 max-w-[200px]">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white truncate ml-4 max-w-[200px]" title={uploadToRetry.fileName}>
                     {uploadToRetry.fileName}
                   </span>
                 </div>

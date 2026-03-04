@@ -10,7 +10,7 @@
 -- SQL*Plus settings
 SET SQLBLANKLINES ON
 
--- Connect to XEPDB1 (pluggable database — Oracle EE 21c default)
+-- Connect to XEPDB1 (pluggable database — Oracle XE 21c)
 ALTER SESSION SET CONTAINER = XEPDB1;
 
 -- Create tablespace (skip if exists)
@@ -33,6 +33,8 @@ DECLARE
 BEGIN
   SELECT COUNT(*) INTO v_count FROM dba_users WHERE username = 'PKD_USER';
   IF v_count = 0 THEN
+    -- NOTE: Password is hardcoded here because Oracle SQL scripts cannot reference
+    -- environment variables directly. Change this value for production deployments.
     EXECUTE IMMEDIATE 'CREATE USER pkd_user IDENTIFIED BY pkd_password DEFAULT TABLESPACE pkd_data TEMPORARY TABLESPACE temp QUOTA UNLIMITED ON pkd_data';
     DBMS_OUTPUT.PUT_LINE('User PKD_USER created');
   ELSE
@@ -42,6 +44,8 @@ END;
 /
 
 -- Grant privileges (idempotent - re-granting is safe)
+-- NOTE: pkd_user accesses only its own schema tables (auto-accessible via RESOURCE role)
+-- ANY TABLE privileges removed to follow principle of least privilege
 GRANT CONNECT TO pkd_user;
 GRANT RESOURCE TO pkd_user;
 GRANT CREATE SESSION TO pkd_user;
@@ -50,10 +54,6 @@ GRANT CREATE VIEW TO pkd_user;
 GRANT CREATE SEQUENCE TO pkd_user;
 GRANT CREATE PROCEDURE TO pkd_user;
 GRANT CREATE TRIGGER TO pkd_user;
-GRANT SELECT ANY TABLE TO pkd_user;
-GRANT INSERT ANY TABLE TO pkd_user;
-GRANT UPDATE ANY TABLE TO pkd_user;
-GRANT DELETE ANY TABLE TO pkd_user;
 GRANT UNLIMITED TABLESPACE TO pkd_user;
 GRANT EXECUTE ON DBMS_OUTPUT TO pkd_user;
 

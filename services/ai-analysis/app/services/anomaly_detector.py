@@ -233,7 +233,6 @@ class AnomalyDetector:
     ) -> list[list[str]]:
         """Generate human-readable explanations for anomalous certificates."""
         explanations = []
-        n_features = scaled_features.shape[1]
         mean = scaled_features.mean(axis=0)
         std = scaled_features.std(axis=0)
         std[std < 1e-10] = 1.0

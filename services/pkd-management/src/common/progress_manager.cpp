@@ -253,7 +253,9 @@ void addProcessingError(
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
+    std::tm tm_buf{};
+    localtime_r(&time, &tm_buf);
+    ss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S");
     error.timestamp = ss.str();
     error.errorType = errorType;
     error.entryDn = entryDn;
@@ -262,9 +264,9 @@ void addProcessingError(
     error.certificateType = certificateType;
     error.message = message;
 
-    // Append to bounded list
+    // Append to bounded deque (O(1) front removal)
     if (static_cast<int>(stats.recentErrors.size()) >= ValidationStatistics::MAX_RECENT_ERRORS) {
-        stats.recentErrors.erase(stats.recentErrors.begin());
+        stats.recentErrors.pop_front();
     }
     stats.recentErrors.push_back(std::move(error));
 }
@@ -285,7 +287,9 @@ void addValidationLog(
     auto now = std::chrono::system_clock::now();
     auto time = std::chrono::system_clock::to_time_t(now);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
+    std::tm tm_buf{};
+    localtime_r(&time, &tm_buf);
+    ss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S");
     entry.timestamp = ss.str();
     entry.certificateType = certificateType;
     entry.countryCode = countryCode;
@@ -300,9 +304,9 @@ void addValidationLog(
     // Increment monotonic counter
     stats.totalValidationLogCount++;
 
-    // Append to bounded list
+    // Append to bounded deque (O(1) front removal)
     if (static_cast<int>(stats.recentValidationLogs.size()) >= ValidationStatistics::MAX_RECENT_VALIDATION_LOGS) {
-        stats.recentValidationLogs.erase(stats.recentValidationLogs.begin());
+        stats.recentValidationLogs.pop_front();
     }
     stats.recentValidationLogs.push_back(std::move(entry));
 }
@@ -419,7 +423,9 @@ std::string ProcessingProgress::toJson() const {
     // Timestamp
     auto time = std::chrono::system_clock::to_time_t(updatedAt);
     std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%Y-%m-%dT%H:%M:%S");
+    std::tm tm_buf{};
+    localtime_r(&time, &tm_buf);
+    ss << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S");
     json["updatedAt"] = ss.str();
 
     // Enhanced metadata fields
@@ -532,51 +538,73 @@ void ProgressManager::cleanupStaleEntries(int maxAgeMinutes) {
 }
 
 void ProgressManager::sendProgress(const ProcessingProgress& progress) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    progressCache_[progress.uploadId] = progress;
+    std::function<void(const std::string&)> callbackCopy;
+    std::string uploadIdShort = progress.uploadId.substr(0, 8);
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        progressCache_[progress.uploadId] = progress;
 
-    // Periodic stale entry cleanup (every 100 calls)
-    if (++sendProgressCallCount_ >= 100) {
-        sendProgressCallCount_ = 0;
-        cleanupStaleEntries();
+        // Periodic stale entry cleanup (every 100 calls)
+        if (++sendProgressCallCount_ >= 100) {
+            sendProgressCallCount_ = 0;
+            cleanupStaleEntries();
+        }
+
+        // Copy callback reference while holding lock
+        auto it = sseCallbacks_.find(progress.uploadId);
+        if (it != sseCallbacks_.end()) {
+            callbackCopy = it->second;
+        }
     }
-
-    // Send to SSE callback if registered
-    auto it = sseCallbacks_.find(progress.uploadId);
-    if (it != sseCallbacks_.end()) {
+    // Call callback OUTSIDE lock scope to prevent deadlock
+    if (callbackCopy) {
         try {
             std::string sseData = "event: progress\ndata: " + progress.toJson() + "\n\n";
-            it->second(sseData);
+            callbackCopy(sseData);
             spdlog::info("[SSE] Sent event: {} - {} ({}%) processed={}/{}",
-                progress.uploadId.substr(0, 8), stageToString(progress.stage),
+                uploadIdShort, stageToString(progress.stage),
                 progress.percentage, progress.processedCount, progress.totalCount);
         } catch (const std::exception& e) {
-            spdlog::warn("[SSE] Callback failed for {}: {}", progress.uploadId.substr(0, 8), e.what());
-            sseCallbacks_.erase(it);
+            spdlog::warn("[SSE] Callback failed for {}: {}", uploadIdShort, e.what());
+            std::lock_guard<std::mutex> lock(mutex_);
+            sseCallbacks_.erase(progress.uploadId);
         } catch (...) {
-            spdlog::warn("[SSE] Callback failed for {} (unknown error)", progress.uploadId.substr(0, 8));
-            sseCallbacks_.erase(it);
+            spdlog::warn("[SSE] Callback failed for {} (unknown error)", uploadIdShort);
+            std::lock_guard<std::mutex> lock(mutex_);
+            sseCallbacks_.erase(progress.uploadId);
         }
     } else {
         spdlog::debug("[SSE] No callback registered for {} - {} ({}%)",
-            progress.uploadId.substr(0, 8), stageToString(progress.stage), progress.percentage);
+            uploadIdShort, stageToString(progress.stage), progress.percentage);
     }
 
     spdlog::debug("Progress: {} - {} ({}%)", progress.uploadId, stageToString(progress.stage), progress.percentage);
 }
 
 void ProgressManager::registerSseCallback(const std::string& uploadId, std::function<void(const std::string&)> callback) {
-    std::lock_guard<std::mutex> lock(mutex_);
-    sseCallbacks_[uploadId] = callback;
-    spdlog::info("[SSE] Callback registered for upload: {}", uploadId.substr(0, 8));
+    std::string cachedSseData;
+    std::string cachedStage;
+    int cachedPercentage = 0;
+    bool hasCached = false;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sseCallbacks_[uploadId] = callback;
+        spdlog::info("[SSE] Callback registered for upload: {}", uploadId.substr(0, 8));
 
-    // Send cached progress if available
-    auto it = progressCache_.find(uploadId);
-    if (it != progressCache_.end()) {
-        std::string sseData = "event: progress\ndata: " + it->second.toJson() + "\n\n";
-        callback(sseData);
+        // Prepare cached progress data while holding lock
+        auto it = progressCache_.find(uploadId);
+        if (it != progressCache_.end()) {
+            cachedSseData = "event: progress\ndata: " + it->second.toJson() + "\n\n";
+            cachedStage = stageToString(it->second.stage);
+            cachedPercentage = it->second.percentage;
+            hasCached = true;
+        }
+    }
+    // Send cached progress OUTSIDE lock scope to prevent deadlock
+    if (hasCached) {
+        callback(cachedSseData);
         spdlog::info("[SSE] Sent cached progress: {} - {} ({}%)",
-            uploadId.substr(0, 8), stageToString(it->second.stage), it->second.percentage);
+            uploadId.substr(0, 8), cachedStage, cachedPercentage);
     } else {
         spdlog::info("[SSE] No cached progress for {}", uploadId.substr(0, 8));
     }

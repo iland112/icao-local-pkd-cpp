@@ -194,7 +194,9 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
         std::ostringstream tsStream;
-        tsStream << std::put_time(std::localtime(&time_t), "%Y-%m-%dT%H:%M:%S");
+        std::tm tm_buf{};
+        localtime_r(&time_t, &tm_buf);
+        tsStream << std::put_time(&tm_buf, "%Y-%m-%dT%H:%M:%S");
 
         // Build response data
         Json::Value data;

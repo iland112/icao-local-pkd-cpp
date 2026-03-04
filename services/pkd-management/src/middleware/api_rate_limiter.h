@@ -59,6 +59,8 @@ private:
 
     std::unordered_map<std::string, ClientWindows> windows_;
     mutable std::shared_mutex mutex_;
+    int checkCount_ = 0;
+    static constexpr int CLEANUP_INTERVAL = 100;
 
     void resetIfExpired(Window& w, std::chrono::seconds duration);
 };

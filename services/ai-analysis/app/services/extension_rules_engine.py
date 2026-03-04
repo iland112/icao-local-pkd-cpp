@@ -6,7 +6,7 @@ Produces structural_anomaly_score (0.0 ~ 1.0).
 
 import hashlib
 import logging
-from collections import defaultdict
+import threading
 
 import numpy as np
 import pandas as pd
@@ -17,16 +17,30 @@ logger = logging.getLogger(__name__)
 
 # Module-level cache: maps DataFrame identity hash -> (anomalies list, per-row compliance list)
 _compliance_cache: dict[str, tuple[list[dict], list[dict]]] = {}
+_cache_lock = threading.Lock()
 _CACHE_MAX_SIZE = 4
 
 def _df_cache_key(df: pd.DataFrame) -> str:
-    """Compute a lightweight identity key for a DataFrame."""
-    # Use shape + id + first/last fingerprints for fast identity check
-    parts = [str(len(df)), str(id(df))]
-    if len(df) > 0 and "fingerprint_sha256" in df.columns:
-        first_fp = str(df.iloc[0].get("fingerprint_sha256", ""))
-        last_fp = str(df.iloc[-1].get("fingerprint_sha256", ""))
-        parts.extend([first_fp[:16], last_fp[:16]])
+    """Compute a lightweight content-based key for a DataFrame.
+
+    Uses shape, column names, and sampled fingerprints for a content-based
+    identity check. Avoids id(df) which relies on object memory address and
+    can be invalidated by garbage collection or return stale results if a
+    new object is allocated at the same address.
+    """
+    n = len(df)
+    parts = [str(n), str(df.shape[1])]
+    if n > 0 and "fingerprint_sha256" in df.columns:
+        fp_col = df["fingerprint_sha256"]
+        first_fp = str(fp_col.iloc[0] or "")
+        last_fp = str(fp_col.iloc[-1] or "")
+        # Also sample a middle fingerprint for extra collision resistance
+        mid_fp = str(fp_col.iloc[n // 2] or "") if n > 2 else ""
+        parts.extend([first_fp[:16], last_fp[:16], mid_fp[:16]])
+    if n > 0 and "certificate_type" in df.columns:
+        # Include type distribution as lightweight content signature
+        type_counts = df["certificate_type"].value_counts()
+        parts.append(str(sorted(type_counts.items())))
     return hashlib.md5("|".join(parts).encode()).hexdigest()
 
 
@@ -205,34 +219,6 @@ def check_extension_compliance(row) -> dict:
     }
 
 
-def count_unexpected_extensions(row) -> int:
-    """Count extensions present that are unusual for the certificate type."""
-    cert_type = row.get("certificate_type") or ""
-    profile = EXPECTED_EXTENSIONS.get(cert_type, {})
-    expected = set(profile.get("required", []) + profile.get("recommended", []))
-
-    unexpected = 0
-    for field in EXTENSION_FIELDS:
-        if _has_field(row, field) and field not in expected:
-            unexpected += 1
-    return unexpected
-
-
-def count_missing_required(row) -> int:
-    """Count required extensions missing for this certificate type."""
-    cert_type = row.get("certificate_type") or ""
-    profile = EXPECTED_EXTENSIONS.get(cert_type, {})
-
-    missing = 0
-    for field in profile.get("required", []):
-        if field == "is_ca":
-            if not _safe_bool(row.get("is_ca")):
-                missing += 1
-        elif not _has_field(row, field):
-            missing += 1
-    return missing
-
-
 def _compute_all_compliance(df: pd.DataFrame) -> tuple[list[dict], list[dict]]:
     """Compute extension compliance for every row, returning (anomalies, all_compliance).
 
@@ -371,20 +357,20 @@ def compute_extension_anomalies(df: pd.DataFrame) -> list[dict]:
     Returns list of dicts with fingerprint + violation details.
     Results are cached so repeated calls with the same DataFrame are free.
     """
-    global _compliance_cache
-
     cache_key = _df_cache_key(df)
-    if cache_key in _compliance_cache:
-        results, _ = _compliance_cache[cache_key]
-        return results
+    with _cache_lock:
+        if cache_key in _compliance_cache:
+            results, _ = _compliance_cache[cache_key]
+            return results
 
     results, all_compliance = _compute_all_compliance(df)
 
-    # Evict oldest entries if cache is full
-    if len(_compliance_cache) >= _CACHE_MAX_SIZE:
-        oldest_key = next(iter(_compliance_cache))
-        del _compliance_cache[oldest_key]
-    _compliance_cache[cache_key] = (results, all_compliance)
+    with _cache_lock:
+        # Evict oldest entries if cache is full
+        if len(_compliance_cache) >= _CACHE_MAX_SIZE:
+            oldest_key = next(iter(_compliance_cache))
+            del _compliance_cache[oldest_key]
+        _compliance_cache[cache_key] = (results, all_compliance)
 
     logger.info(
         "Extension compliance check: %d/%d certificates with violations",
@@ -394,51 +380,3 @@ def compute_extension_anomalies(df: pd.DataFrame) -> list[dict]:
     return results
 
 
-def get_extension_anomaly_summary(df: pd.DataFrame) -> dict:
-    """Get summary of extension anomalies by type and severity.
-
-    Reuses cached compliance results from compute_extension_anomalies()
-    and uses pandas groupby for aggregation instead of manual iteration.
-    """
-    if len(df) == 0:
-        return {"by_type": {}, "by_severity": {}, "total_checked": 0}
-
-    # Ensure compliance is computed (will use cache if available)
-    cache_key = _df_cache_key(df)
-    if cache_key in _compliance_cache:
-        _, all_compliance = _compliance_cache[cache_key]
-    else:
-        # Trigger computation and caching
-        compute_extension_anomalies(df)
-        _, all_compliance = _compliance_cache[cache_key]
-
-    # Build a lightweight Series of structural scores and cert types
-    cert_types = df["certificate_type"].fillna("UNKNOWN").replace("", "UNKNOWN")
-    structural_scores = np.array(
-        [c["structural_score"] for c in all_compliance], dtype=np.float64
-    )
-    has_violation = structural_scores > 0
-
-    # by_type: use pandas groupby on cert_types
-    type_series = cert_types.values
-    unique_types = np.unique(type_series)
-    by_type = {}
-    for ct in unique_types:
-        ct_mask = type_series == ct
-        by_type[ct] = {
-            "total": int(np.sum(ct_mask)),
-            "with_violations": int(np.sum(ct_mask & has_violation)),
-        }
-
-    # by_severity: aggregate from violation details of violating rows only
-    by_severity = defaultdict(int)
-    violation_indices = np.where(has_violation)[0]
-    for i in violation_indices:
-        for v in all_compliance[i]["violations_detail"]:
-            by_severity[v["severity"]] += 1
-
-    return {
-        "by_type": by_type,
-        "by_severity": dict(by_severity),
-        "total_checked": len(df),
-    }

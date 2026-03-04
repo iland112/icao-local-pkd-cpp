@@ -84,32 +84,13 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
             return result;
         }
 
-        // Connect to LDAP for existence checks
-        LDAP* ldRead = nullptr;
-        int rc = ldap_initialize(&ldRead, ("ldap://" + config_.ldapWriteHost + ":" +
-                                           std::to_string(config_.ldapWritePort)).c_str());
-
-        if (rc != LDAP_SUCCESS) {
-            spdlog::error("Failed to initialize LDAP for existence check: {}", ldap_err2string(rc));
+        // Acquire LDAP connection from pool (RAII — auto-release on scope exit)
+        auto ldapConn = ldapPool_->acquire();
+        if (!ldapConn.isValid()) {
+            spdlog::error("Failed to acquire LDAP connection from pool for existence check");
             return result;
         }
-
-        int version = LDAP_VERSION3;
-        ldap_set_option(ldRead, LDAP_OPT_PROTOCOL_VERSION, &version);
-        ldap_set_option(ldRead, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
-
-        // Bind
-        struct berval cred;
-        cred.bv_val = const_cast<char*>(config_.ldapBindPassword.c_str());
-        cred.bv_len = config_.ldapBindPassword.length();
-        rc = ldap_sasl_bind_s(ldRead, config_.ldapBindDn.c_str(), LDAP_SASL_SIMPLE,
-                             &cred, nullptr, nullptr, nullptr);
-
-        if (rc != LDAP_SUCCESS) {
-            spdlog::error("Failed to bind LDAP for existence check: {}", ldap_err2string(rc));
-            ldap_unbind_ext_s(ldRead, nullptr, nullptr);
-            return result;
-        }
+        LDAP* ldRead = ldapConn.get();
 
         for (const auto& row : rows) {
             CertificateInfo cert;
@@ -144,7 +125,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
             const char* attrs[] = {"dn", nullptr};
             struct timeval timeout = {5, 0};
 
-            rc = ldap_search_ext_s(ldRead, cert.ldapDn.c_str(), LDAP_SCOPE_BASE,
+            int rc = ldap_search_ext_s(ldRead, cert.ldapDn.c_str(), LDAP_SCOPE_BASE,
                                   "(objectClass=*)", const_cast<char**>(attrs), 0,
                                   nullptr, nullptr, &timeout, 0, &searchRes);
 
@@ -168,8 +149,7 @@ std::vector<CertificateInfo> ReconciliationEngine::findMissingInLdap(
 
             if (searchRes) ldap_msgfree(searchRes);
         }
-
-        ldap_unbind_ext_s(ldRead, nullptr, nullptr);
+        // Pool connection auto-released when ldapConn goes out of scope
 
     } catch (const std::exception& e) {
         spdlog::error("Failed to find missing {} in LDAP: {}", certType, e.what());
@@ -487,32 +467,13 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
             return result;
         }
 
-        // Connect to LDAP for existence checks
-        LDAP* ldRead = nullptr;
-        int rc = ldap_initialize(&ldRead, ("ldap://" + config_.ldapWriteHost + ":" +
-                                           std::to_string(config_.ldapWritePort)).c_str());
-
-        if (rc != LDAP_SUCCESS) {
-            spdlog::error("Failed to initialize LDAP for CRL existence check: {}", ldap_err2string(rc));
+        // Acquire LDAP connection from pool (RAII — auto-release on scope exit)
+        auto ldapConn = ldapPool_->acquire();
+        if (!ldapConn.isValid()) {
+            spdlog::error("Failed to acquire LDAP connection from pool for CRL existence check");
             return result;
         }
-
-        int version = LDAP_VERSION3;
-        ldap_set_option(ldRead, LDAP_OPT_PROTOCOL_VERSION, &version);
-        ldap_set_option(ldRead, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
-
-        // Bind
-        struct berval cred;
-        cred.bv_val = const_cast<char*>(config_.ldapBindPassword.c_str());
-        cred.bv_len = config_.ldapBindPassword.length();
-        rc = ldap_sasl_bind_s(ldRead, config_.ldapBindDn.c_str(), LDAP_SASL_SIMPLE,
-                             &cred, nullptr, nullptr, nullptr);
-
-        if (rc != LDAP_SUCCESS) {
-            spdlog::error("Failed to bind to LDAP for CRL existence check: {}", ldap_err2string(rc));
-            ldap_unbind_ext_s(ldRead, nullptr, nullptr);
-            return result;
-        }
+        LDAP* ldRead = ldapConn.get();
 
         for (const auto& row : rows) {
             CrlInfo crl;
@@ -533,7 +494,7 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
             const char* attrs[] = {"dn", nullptr};
             struct timeval timeout = {5, 0};
 
-            rc = ldap_search_ext_s(ldRead, crl.ldapDn.c_str(), LDAP_SCOPE_BASE,
+            int rc = ldap_search_ext_s(ldRead, crl.ldapDn.c_str(), LDAP_SCOPE_BASE,
                                   "(objectClass=*)", const_cast<char**>(attrs), 0,
                                   nullptr, nullptr, &timeout, 0, &searchRes);
 
@@ -553,8 +514,7 @@ std::vector<CrlInfo> ReconciliationEngine::findMissingCrlsInLdap(
 
             if (searchRes) ldap_msgfree(searchRes);
         }
-
-        ldap_unbind_ext_s(ldRead, nullptr, nullptr);
+        // Pool connection auto-released when ldapConn goes out of scope
 
     } catch (const std::exception& e) {
         spdlog::error("Failed to find missing CRLs in LDAP: {}", e.what());

@@ -50,9 +50,8 @@
 #include "../handlers/code_master_handler.h"
 #include "../handlers/api_client_handler.h"
 
-// HTTP and Notification infrastructure
+// HTTP infrastructure
 #include "../infrastructure/http/http_client.h"
-#include "../infrastructure/notification/email_sender.h"
 
 #include <spdlog/spdlog.h>
 
@@ -243,13 +242,6 @@ bool ServiceContainer::initialize(const AppConfig& config) {
 
     auto httpClient = std::make_shared<infrastructure::http::HttpClient>();
 
-    infrastructure::notification::EmailSender::EmailConfig emailConfig;
-    emailConfig.smtpHost = "localhost";
-    emailConfig.smtpPort = 25;
-    emailConfig.fromAddress = config.notificationEmail;
-    emailConfig.useTls = false;
-    auto emailSender = std::make_shared<infrastructure::notification::EmailSender>(emailConfig);
-
     services::IcaoSyncService::Config icaoConfig;
     icaoConfig.icaoPortalUrl = config.icaoPortalUrl;
     icaoConfig.notificationEmail = config.notificationEmail;
@@ -257,7 +249,7 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     icaoConfig.httpTimeoutSeconds = config.icaoHttpTimeout;
 
     impl_->icaoSyncService = std::make_shared<services::IcaoSyncService>(
-        impl_->icaoVersionRepository, httpClient, emailSender, icaoConfig
+        impl_->icaoVersionRepository, httpClient, icaoConfig
     );
 
     impl_->icaoHandler = std::make_shared<handlers::IcaoHandler>(impl_->icaoSyncService);

@@ -117,7 +117,6 @@ add_executable(${PROJECT_NAME}
 
     # ICAO Auto Sync Module (NEW - v1.7.0)
     src/infrastructure/http/http_client.cpp
-    src/infrastructure/notification/email_sender.cpp
     src/utils/html_parser.cpp
     src/repositories/icao_version_repository.cpp
     src/services/icao_sync_service.cpp

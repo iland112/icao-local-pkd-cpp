@@ -1,6 +1,6 @@
 """SQLAlchemy model for existing validation_result table (READ-ONLY)."""
 
-from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, String, Text
 
 from app.database import Base
 

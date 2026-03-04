@@ -365,6 +365,14 @@ void AuthMiddleware::doFilter(
 
 void AuthMiddleware::addPublicEndpoint(const std::string& pattern) {
     publicEndpoints_.insert(pattern);
+    // Also add to compiled patterns if they've already been initialized
+    // (call_once has already run). This ensures dynamically added patterns
+    // are matched in isPublicEndpoint().
+    try {
+        compiledPatterns_.emplace_back(pattern, std::regex::optimize);
+    } catch (const std::regex_error& e) {
+        spdlog::error("[AuthMiddleware] Invalid regex pattern '{}': {}", pattern, e.what());
+    }
     spdlog::info("[AuthMiddleware] Added public endpoint pattern: {}", pattern);
 }
 
@@ -476,6 +484,7 @@ std::optional<domain::models::ApiClient> AuthMiddleware::validateApiKey(
         // Cache compiled regexes to avoid recompilation per request (ReDoS prevention)
         static std::mutex s_regexCacheMutex;
         static std::unordered_map<std::string, std::optional<std::regex>> s_regexCache;
+        static constexpr size_t MAX_REGEX_CACHE_SIZE = 256;
 
         bool endpointAllowed = false;
         for (const auto& pattern : client->allowedEndpoints) {
@@ -491,7 +500,9 @@ std::optional<domain::models::ApiClient> AuthMiddleware::validateApiKey(
                     } catch (const std::regex_error&) {
                         cachedRegex = std::nullopt;
                     }
-                    s_regexCache[pattern] = cachedRegex;
+                    if (s_regexCache.size() < MAX_REGEX_CACHE_SIZE) {
+                        s_regexCache[pattern] = cachedRegex;
+                    }
                 }
             }
             if (cachedRegex && std::regex_match(path, *cachedRegex)) {
@@ -518,15 +529,30 @@ bool AuthMiddleware::isIpAllowed(
     // Empty list = all IPs allowed
     if (allowedIps.empty()) return true;
 
-    for (const auto& allowed : allowedIps) {
-        // Exact match
-        if (allowed == clientIp) return true;
+    // Normalize IPv6 localhost and IPv4-mapped IPv6 addresses
+    std::string normalizedIp = clientIp;
+    if (normalizedIp == "::1") {
+        normalizedIp = "127.0.0.1";
+    } else if (normalizedIp.substr(0, 7) == "::ffff:" && normalizedIp.length() > 7) {
+        normalizedIp = normalizedIp.substr(7);
+    }
 
-        // CIDR match (e.g., "10.0.0.0/8" matches "10.89.1.42")
-        auto slashPos = allowed.find('/');
+    for (const auto& allowed : allowedIps) {
+        std::string normalizedAllowed = allowed;
+        if (normalizedAllowed == "::1") {
+            normalizedAllowed = "127.0.0.1";
+        } else if (normalizedAllowed.substr(0, 7) == "::ffff:" && normalizedAllowed.length() > 7) {
+            normalizedAllowed = normalizedAllowed.substr(7);
+        }
+
+        // Exact match
+        if (normalizedAllowed == normalizedIp) return true;
+
+        // CIDR match (e.g., "10.0.0.0/8" matches "10.89.1.42") — IPv4 only
+        auto slashPos = normalizedAllowed.find('/');
         if (slashPos != std::string::npos) {
-            std::string network = allowed.substr(0, slashPos);
-            int maskBits = common::handler::safeStoi(allowed.substr(slashPos + 1), 32, 0, 32);
+            std::string network = normalizedAllowed.substr(0, slashPos);
+            int maskBits = common::handler::safeStoi(normalizedAllowed.substr(slashPos + 1), 32, 0, 32);
 
             // Parse IP addresses to 32-bit integers
             auto parseIp = [](const std::string& ip) -> uint32_t {
@@ -547,14 +573,14 @@ bool AuthMiddleware::isIpAllowed(
 
             uint32_t mask = maskBits > 0 ? ~((1U << (32 - maskBits)) - 1) : 0;
             uint32_t networkAddr = parseIp(network);
-            uint32_t clientAddr = parseIp(clientIp);
+            uint32_t clientAddr = parseIp(normalizedIp);
 
             if ((clientAddr & mask) == (networkAddr & mask)) return true;
         }
 
         // Simple prefix match (e.g., "192.168.1." matches "192.168.1.100")
-        if (allowed.back() == '.') {
-            if (clientIp.find(allowed) == 0) return true;
+        if (normalizedAllowed.back() == '.') {
+            if (normalizedIp.find(normalizedAllowed) == 0) return true;
         }
     }
 

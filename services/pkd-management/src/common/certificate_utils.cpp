@@ -39,8 +39,8 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     const x509::CertificateMetadata* preExtractedMetadata
 ) {
     // Delegate to CertificateRepository
-    if (!g_services->certificateRepository()) {
-        spdlog::error("[CertUtils] certificateRepository is null");
+    if (!g_services || !g_services->certificateRepository()) {
+        spdlog::error("[CertUtils] g_services or certificateRepository is null");
         return std::make_pair(std::string(""), false);
     }
 
@@ -60,8 +60,8 @@ bool trackCertificateDuplicate(
     const std::string& sourceFileName
 ) {
     // Delegate to CertificateRepository
-    if (!g_services->certificateRepository()) {
-        spdlog::error("[CertUtils] certificateRepository is null");
+    if (!g_services || !g_services->certificateRepository()) {
+        spdlog::error("[CertUtils] g_services or certificateRepository is null");
         return false;
     }
 
@@ -76,8 +76,8 @@ bool incrementDuplicateCount(
     const std::string& uploadId
 ) {
     // Delegate to CertificateRepository
-    if (!g_services->certificateRepository()) {
-        spdlog::error("[CertUtils] certificateRepository is null");
+    if (!g_services || !g_services->certificateRepository()) {
+        spdlog::error("[CertUtils] g_services or certificateRepository is null");
         return false;
     }
 
@@ -96,8 +96,8 @@ bool updateCscaExtractionStats(
     //          csca_duplicates = csca_duplicates + duplicateCount
     //      WHERE id = uploadId
 
-    if (!g_services->uploadRepository()) {
-        spdlog::error("[CertUtils] uploadRepository is null");
+    if (!g_services || !g_services->uploadRepository()) {
+        spdlog::error("[CertUtils] g_services or uploadRepository is null");
         return false;
     }
 
@@ -116,8 +116,8 @@ bool updateCertificateLdapStatus(
     // Delegate to CertificateRepository
     // This method updates stored_in_ldap, ldap_dn_v2, and stored_at fields
 
-    if (!g_services->certificateRepository()) {
-        spdlog::error("[CertUtils] certificateRepository is null");
+    if (!g_services || !g_services->certificateRepository()) {
+        spdlog::error("[CertUtils] g_services or certificateRepository is null");
         return false;
     }
 

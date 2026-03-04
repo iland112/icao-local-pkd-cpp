@@ -30,9 +30,6 @@ namespace infrastructure {
 namespace http {
     class HttpClient;
 }
-namespace notification {
-    class EmailSender;
-}
 }
 namespace utils {
     class HtmlParser;

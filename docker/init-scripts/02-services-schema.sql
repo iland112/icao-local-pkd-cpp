@@ -13,7 +13,7 @@
 -- Sync status tracking (periodic sync check results)
 CREATE TABLE IF NOT EXISTS sync_status (
     id SERIAL PRIMARY KEY,
-    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    checked_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 
     -- DB statistics
     db_csca_count INTEGER NOT NULL DEFAULT 0,
@@ -56,7 +56,7 @@ CREATE INDEX idx_sync_status_status ON sync_status(status);
 -- System metrics tracking
 CREATE TABLE IF NOT EXISTS system_metrics (
     id SERIAL PRIMARY KEY,
-    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    timestamp TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     metric_name VARCHAR(100) NOT NULL,
     metric_value NUMERIC NOT NULL,
     metric_unit VARCHAR(20),
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS service_health (
     id SERIAL PRIMARY KEY,
     service_name VARCHAR(50) NOT NULL UNIQUE,
     status VARCHAR(20) NOT NULL DEFAULT 'UNKNOWN',
-    last_check_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_check_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     error_message TEXT,
     uptime_seconds BIGINT,
     metadata JSONB
@@ -94,8 +94,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_summary (
     status VARCHAR(20) NOT NULL DEFAULT 'IN_PROGRESS',
 
     -- Execution details
-    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE,
     duration_ms INTEGER,
 
     -- Results
@@ -127,8 +127,8 @@ CREATE TABLE IF NOT EXISTS reconciliation_log (
     fingerprint_sha256 VARCHAR(64),
     status VARCHAR(20) NOT NULL,
     error_message TEXT,
-    started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP,
+    started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP WITH TIME ZONE,
     duration_ms INTEGER
 );
 

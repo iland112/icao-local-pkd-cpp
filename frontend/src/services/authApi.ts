@@ -98,17 +98,11 @@ authApiClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Token expired or invalid - redirect to login
       const currentPath = window.location.pathname;
-
-      // Only redirect if not already on login page
       if (currentPath !== '/login') {
-        // Clear stored auth data
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-
-        // Redirect to login
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('auth:expired'));
       }
     }
 
@@ -155,7 +149,7 @@ export const createAuthenticatedClient = (baseURL: string = '/api') => {
         if (currentPath !== '/login') {
           localStorage.removeItem('access_token');
           localStorage.removeItem('user');
-          window.location.href = '/login';
+          window.dispatchEvent(new CustomEvent('auth:expired'));
         }
       }
       return Promise.reject(error);

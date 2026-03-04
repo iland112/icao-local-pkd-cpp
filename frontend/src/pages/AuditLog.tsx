@@ -335,6 +335,7 @@ export function AuditLog() {
                           setDialogOpen(true);
                         }}
                         className="inline-flex items-center justify-center w-7 h-7 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                        aria-label="상세 보기"
                       >
                         <Eye className="w-3.5 h-3.5" />
                       </button>
@@ -357,6 +358,7 @@ export function AuditLog() {
                 onClick={() => setPage(page - 1)}
                 disabled={page === 1}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="이전 페이지"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -367,6 +369,7 @@ export function AuditLog() {
                 onClick={() => setPage(page + 1)}
                 disabled={page === totalPages}
                 className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                aria-label="다음 페이지"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>

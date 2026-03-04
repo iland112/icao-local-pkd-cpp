@@ -26,7 +26,7 @@ mkdir -p ./.docker-data/pkd-uploads
 mkdir -p ./.docker-data/pkd-logs
 mkdir -p ./.docker-data/pa-logs
 mkdir -p ./.docker-data/sync-logs
-chmod 777 ./.docker-data/postgres ./.docker-data/pkd-uploads 2>/dev/null || true
+chmod 755 ./.docker-data/postgres ./.docker-data/pkd-uploads 2>/dev/null || true
 
 # 2. Docker Compose 시작
 echo "[2/3] Starting Docker Compose..."

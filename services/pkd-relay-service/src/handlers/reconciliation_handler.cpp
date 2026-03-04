@@ -151,7 +151,7 @@ void ReconciliationHandler::handleReconciliationDetails(const HttpRequestPtr& re
         if (reconciliationIdStr.empty()) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Missing reconciliation ID";
+            error["error"] = "Missing reconciliation ID";
 
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k400BadRequest);

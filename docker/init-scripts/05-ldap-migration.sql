@@ -42,8 +42,8 @@ CREATE TABLE IF NOT EXISTS ldap_dn_migration_status (
     total_records INTEGER NOT NULL DEFAULT 0,
     migrated_records INTEGER NOT NULL DEFAULT 0,
     failed_records INTEGER NOT NULL DEFAULT 0,
-    migration_started_at TIMESTAMP,
-    migration_completed_at TIMESTAMP,
+    migration_started_at TIMESTAMP WITH TIME ZONE,
+    migration_completed_at TIMESTAMP WITH TIME ZONE,
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     error_message TEXT,
     UNIQUE(table_name)

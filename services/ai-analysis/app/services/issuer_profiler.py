@@ -6,13 +6,11 @@ then flags certificates that deviate from their issuer's typical pattern.
 
 import logging
 import re
-from collections import defaultdict
 
 from app.database import safe_isna
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +63,7 @@ def _has_email_in_dn(dn: str) -> bool:
     return "emailaddress=" in dn_lower or "email=" in dn_lower or "e=" in dn_lower
 
 
-def build_issuer_profiles(df: pd.DataFrame) -> dict:
+def build_issuer_profiles(df: pd.DataFrame) -> dict[str, dict]:
     """Build behavioral profiles for each issuer.
 
     Returns:
@@ -208,7 +206,7 @@ def compute_issuer_anomaly_scores(
     return scores
 
 
-def get_issuer_profile_report(df: pd.DataFrame, profiles: dict) -> list[dict]:
+def get_issuer_profile_report(df: pd.DataFrame, profiles: dict[str, dict]) -> list[dict[str, object]]:
     """Generate issuer profile report for API.
 
     Returns sorted list of issuer profiles with anomaly indicators.

@@ -257,7 +257,8 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
     // Format timestamp as ISO 8601
     auto tp = syncStatus.getCheckedAt();
     std::time_t t = std::chrono::system_clock::to_time_t(tp);
-    std::tm tm = *std::gmtime(&t);
+    std::tm tm{};
+    gmtime_r(&t, &tm);
     std::ostringstream oss;
     oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
     json["checkedAt"] = oss.str();

@@ -324,45 +324,6 @@ void UploadHandler::registerRoutes(drogon::HttpAppFramework& app) {
 }
 
 // =============================================================================
-// Helper: getLdapWriteConnection
-// =============================================================================
-
-LDAP* UploadHandler::getLdapWriteConnection() {
-    LDAP* ld = nullptr;
-    std::string uri = "ldap://" + ldapConfig_.writeHost + ":" + std::to_string(ldapConfig_.writePort);
-
-    int rc = ldap_initialize(&ld, uri.c_str());
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP write connection initialize failed: {}", ldap_err2string(rc));
-        return nullptr;
-    }
-
-    int version = LDAP_VERSION3;
-    ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
-
-    // Direct connection, no referral chasing needed
-    ldap_set_option(ld, LDAP_OPT_REFERRALS, LDAP_OPT_OFF);
-
-    // DoS defense: network timeout to prevent blocking on unresponsive LDAP
-    struct timeval ldapTimeout = {10, 0};  // 10 seconds
-    ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
-
-    struct berval cred;
-    cred.bv_val = const_cast<char*>(ldapConfig_.bindPassword.c_str());
-    cred.bv_len = ldapConfig_.bindPassword.length();
-
-    rc = ldap_sasl_bind_s(ld, ldapConfig_.bindDn.c_str(), LDAP_SASL_SIMPLE, &cred, nullptr, nullptr, nullptr);
-    if (rc != LDAP_SUCCESS) {
-        spdlog::error("LDAP write connection bind failed: {}", ldap_err2string(rc));
-        ldap_unbind_ext_s(ld, nullptr, nullptr);
-        return nullptr;
-    }
-
-    spdlog::debug("LDAP write: Connected successfully to {}:{}", ldapConfig_.writeHost, ldapConfig_.writePort);
-    return ld;
-}
-
-// =============================================================================
 // Helper: processLdifFileAsync
 // =============================================================================
 
@@ -390,12 +351,8 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
     }
 
     std::thread([uploadId, content, resumeMode]() {
-        // Ensure cleanup on thread exit
-        auto cleanupGuard = [&uploadId]() {
-            std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
-            UploadHandler::s_processingUploads.erase(uploadId);
-            UploadHandler::s_activeProcessingCount.fetch_sub(1);
-        };
+        // RAII guard ensures cleanup on any exit path (including exceptions)
+        ProcessingSlotGuard slotGuard(uploadId);
 
         spdlog::info("Starting async LDIF processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
 
@@ -460,8 +417,7 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
         // Clear progress cache after processing completes (DoS defense: prevent unbounded growth)
         ProgressManager::getInstance().clearProgress(uploadId);
 
-        // Remove from processing set
-        cleanupGuard();
+        // ProcessingSlotGuard destructor handles cleanup automatically
     }).detach();
 }
 
@@ -496,12 +452,8 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
     std::string trustAnchorPath = ldapConfig_.trustAnchorPath;
 
     std::thread([uploadId, content, trustAnchorPath, resumeMode]() {
-        // Ensure cleanup on thread exit
-        auto cleanupGuard = [&uploadId]() {
-            std::lock_guard<std::mutex> lock(UploadHandler::s_processingMutex);
-            UploadHandler::s_processingUploads.erase(uploadId);
-            UploadHandler::s_activeProcessingCount.fetch_sub(1);
-        };
+        // RAII guard ensures cleanup on any exit path (including exceptions)
+        ProcessingSlotGuard slotGuard(uploadId);
 
         spdlog::info("Starting async Master List processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
 
@@ -546,7 +498,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                 g_services->uploadRepository()->updateStatus(uploadId, "FAILED", "Invalid CMS format");
                 g_services->uploadRepository()->updateStatistics(uploadId, 0, 0, 0, 0, 0, 0);
                 // LDAP connection auto-released by LdapConnectionGuard destructor
-                cleanupGuard();
+                // ProcessingSlotGuard destructor handles cleanup automatically
                 return;
             }
 
@@ -1103,8 +1055,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         // Clear progress cache after processing completes (DoS defense: prevent unbounded growth)
         ProgressManager::getInstance().clearProgress(uploadId);
 
-        // Remove from processing set
-        cleanupGuard();
+        // ProcessingSlotGuard destructor handles cleanup automatically
     }).detach();
 }
 
@@ -1196,7 +1147,7 @@ void UploadHandler::handleParse(
                 spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-                LdapConnectionGuard ldapGuard(this->getLdapWriteConnection());
+                LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
                 LDAP* ld = ldapGuard.get();
                 if (!ld) {
                     spdlog::warn("LDAP write connection unavailable for Master List re-parse {} - proceeding with DB-only mode", uploadId);
@@ -1999,7 +1950,7 @@ void UploadHandler::handleUploadMasterList(
                 spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-                LdapConnectionGuard ldapGuard(this->getLdapWriteConnection());
+                LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
                 LDAP* ld = ldapGuard.get();
                 if (!ld) {
                     spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode", uploadId);
@@ -2135,11 +2086,11 @@ void UploadHandler::handleUploadCertificate(
 
         spdlog::info("Certificate file: name={}, size={}", fileName, fileSize);
 
-        // Validate file size (max 10MB for individual cert files)
-        if (fileSize > 10 * 1024 * 1024) {
+        // Validate file size
+        if (fileSize > static_cast<size_t>(MAX_CERT_FILE_SIZE)) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "File too large. Maximum size is 10MB for certificate files.";
+            error["error"] = "File too large. Maximum size is 10MB for certificate files.";
             auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(drogon::k400BadRequest);
             callback(resp);
@@ -2255,11 +2206,11 @@ void UploadHandler::handlePreviewCertificate(
         auto fileContent = file.fileContent();
         size_t fileSize = file.fileLength();
 
-        // Validate file size (max 10MB)
-        if (fileSize > 10 * 1024 * 1024) {
+        // Validate file size
+        if (fileSize > static_cast<size_t>(MAX_CERT_FILE_SIZE)) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "File too large. Maximum size is 10MB for certificate files.";
+            error["error"] = "File too large. Maximum size is 10MB for certificate files.";
             auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(drogon::k400BadRequest);
             callback(resp);

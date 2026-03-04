@@ -295,7 +295,8 @@ Json::Value ReconciliationService::summaryToJson(const domain::ReconciliationSum
     // Format timestamps as ISO 8601
     auto formatTimestamp = [](const std::chrono::system_clock::time_point& tp) -> std::string {
         std::time_t t = std::chrono::system_clock::to_time_t(tp);
-        std::tm tm = *std::gmtime(&t);
+        std::tm tm{};
+        gmtime_r(&t, &tm);
         std::ostringstream oss;
         oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
         return oss.str();
@@ -343,7 +344,8 @@ Json::Value ReconciliationService::logToJson(const domain::ReconciliationLog& lo
 
     // Format timestamp
     std::time_t t = std::chrono::system_clock::to_time_t(log.getCreatedAt());
-    std::tm tm = *std::gmtime(&t);
+    std::tm tm{};
+    gmtime_r(&t, &tm);
     std::ostringstream oss;
     oss << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
     json["createdAt"] = oss.str();

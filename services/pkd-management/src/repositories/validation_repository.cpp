@@ -9,9 +9,27 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <ctime>
 #include <ldap.h>
 
 namespace repositories {
+
+static std::string getCurrentIso8601() {
+    auto now = std::time(nullptr);
+    struct tm tm_buf;
+    gmtime_r(&now, &tm_buf);
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tm_buf);
+    return buf;
+}
+
+static void computeValidityFlags(Json::Value& result) {
+    std::string nowStr = getCurrentIso8601();
+    std::string notAfter = result.get("notAfter", "").asString();
+    std::string notBefore = result.get("notBefore", "").asString();
+    result["isExpired"] = (!notAfter.empty() && notAfter < nowStr);
+    result["isNotYetValid"] = (!notBefore.empty() && notBefore > nowStr);
+}
 
 /** @brief Thread-local UUID v4 generator */
 static std::string generateUuid() {
@@ -455,10 +473,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
 
         result["notBefore"] = row.get("not_before", Json::nullValue);
         result["notAfter"] = row.get("not_after", Json::nullValue);
-
-        // Compute isExpired and isNotYetValid from timestamps
-        result["isExpired"] = false;  // TODO: compute from notAfter
-        result["isNotYetValid"] = false;  // TODO: compute from notBefore
+        computeValidityFlags(result);
 
         result["crlCheckStatus"] = row.get("revocation_status", Json::nullValue);
 
@@ -670,8 +685,7 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
 
         result["notBefore"] = row.get("not_before", Json::nullValue);
         result["notAfter"] = row.get("not_after", Json::nullValue);
-        result["isExpired"] = false;
-        result["isNotYetValid"] = false;
+        computeValidityFlags(result);
         result["crlCheckStatus"] = row.get("revocation_status", Json::nullValue);
 
         Json::Value ccVal = row.get("crl_checked", false);

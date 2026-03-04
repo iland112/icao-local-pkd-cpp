@@ -67,7 +67,7 @@ relayApi.interceptors.response.use(
       if (currentPath !== '/login') {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
-        window.location.href = '/login';
+        window.dispatchEvent(new CustomEvent('auth:expired'));
       }
     }
     if (import.meta.env.DEV) console.error('[Relay API Error]:', error.response?.data || error.message);

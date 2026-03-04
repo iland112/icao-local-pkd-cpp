@@ -219,7 +219,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
           setError(response.data.error || 'Failed to load LDIF structure');
         }
       } catch (err: any) {
-        console.error('LDIF structure fetch error:', err);
+        if (import.meta.env.DEV) console.error('LDIF structure fetch error:', err);
         setError(err.message || 'Network error');
       } finally {
         setLoading(false);

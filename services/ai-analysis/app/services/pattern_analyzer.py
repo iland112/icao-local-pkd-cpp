@@ -4,7 +4,6 @@ v2.19.0: Added forensic summary computation.
 """
 
 import logging
-from collections import defaultdict
 
 import pandas as pd
 
@@ -107,7 +106,7 @@ def compute_country_maturity(df: pd.DataFrame) -> list[dict]:
     return results
 
 
-def compute_algorithm_trends(df: pd.DataFrame) -> list[dict]:
+def compute_algorithm_trends(df: pd.DataFrame) -> list[dict[str, object]]:
     """Compute algorithm distribution by issuance year."""
     df_copy = df.copy()
     df_copy["year"] = pd.to_datetime(df_copy["not_before"], errors="coerce").dt.year
@@ -131,7 +130,7 @@ def compute_algorithm_trends(df: pd.DataFrame) -> list[dict]:
     return results
 
 
-def compute_key_size_distribution(df: pd.DataFrame) -> list[dict]:
+def compute_key_size_distribution(df: pd.DataFrame) -> list[dict[str, object]]:
     """Compute key size distribution by algorithm family."""
     results = []
     total = len(df)
@@ -153,78 +152,5 @@ def compute_key_size_distribution(df: pd.DataFrame) -> list[dict]:
     return results
 
 
-def compute_country_detail(df: pd.DataFrame, country_code: str) -> dict | None:
-    """Compute detailed analysis for a specific country."""
-    country_df = df[df["country_code"] == country_code]
-    if country_df.empty:
-        return None
-
-    type_dist = country_df["certificate_type"].value_counts().to_dict()
-    alg_dist = country_df["signature_algorithm"].value_counts().to_dict()
-    ks_dist = country_df["public_key_size"].dropna().astype(int).value_counts().to_dict()
-
-    return {
-        "country_code": country_code,
-        "total_certificates": len(country_df),
-        "type_distribution": {str(k): int(v) for k, v in type_dist.items()},
-        "algorithm_distribution": {str(k): int(v) for k, v in alg_dist.items()},
-        "key_size_distribution": {str(k): int(v) for k, v in ks_dist.items()},
-    }
 
 
-def compute_forensic_summary(df: pd.DataFrame, forensic_findings: list[dict]) -> dict:
-    """Compute forensic analysis summary across all certificates.
-
-    Args:
-        df: Certificate DataFrame
-        forensic_findings: List of forensic finding dicts from risk_scorer
-
-    Returns:
-        Summary dict with distributions and top findings.
-    """
-    if not forensic_findings:
-        return {
-            "total_analyzed": len(df),
-            "forensic_level_distribution": {},
-            "category_avg_scores": {},
-            "top_findings_by_severity": {},
-        }
-
-    # Level distribution
-    level_dist = defaultdict(int)
-    for f in forensic_findings:
-        level_dist[f.get("level", "LOW")] += 1
-
-    # Average scores per category
-    category_totals = defaultdict(float)
-    category_counts = defaultdict(int)
-    for f in forensic_findings:
-        for cat, score in f.get("categories", {}).items():
-            category_totals[cat] += score
-            category_counts[cat] += 1
-
-    category_avgs = {
-        cat: round(category_totals[cat] / max(category_counts[cat], 1), 2)
-        for cat in category_totals
-    }
-
-    # Top findings by severity
-    severity_counts = defaultdict(int)
-    for f in forensic_findings:
-        for finding in f.get("findings", []):
-            severity_counts[finding.get("severity", "LOW")] += 1
-
-    # Most common findings
-    finding_freq = defaultdict(int)
-    for f in forensic_findings:
-        for finding in f.get("findings", []):
-            finding_freq[finding.get("message", "")] += 1
-    top_findings = sorted(finding_freq.items(), key=lambda x: -x[1])[:10]
-
-    return {
-        "total_analyzed": len(df),
-        "forensic_level_distribution": dict(level_dist),
-        "category_avg_scores": category_avgs,
-        "severity_distribution": dict(severity_counts),
-        "top_findings": [{"message": m, "count": c} for m, c in top_findings],
-    }

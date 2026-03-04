@@ -1,5 +1,6 @@
 """Report API endpoints: country maturity, algorithm trends, etc."""
 
+import asyncio
 import logging
 import re
 from typing import Optional
@@ -15,7 +16,6 @@ from app.config import get_settings
 from app.database import safe_json_loads, sync_engine
 from app.schemas.analysis import (
     AlgorithmTrend,
-    CountryDetail,
     CountryMaturity,
     ExtensionAnomaly,
     ForensicSummary,
@@ -34,13 +34,15 @@ async def get_country_maturity():
     from app.services.feature_engineering import load_certificate_data
     from app.services.pattern_analyzer import compute_country_maturity
 
-    try:
+    def _compute():
         df = load_certificate_data(sync_engine)
+        return compute_country_maturity(df)
+
+    try:
+        results = await asyncio.to_thread(_compute)
     except Exception as e:
         logger.error("Failed to load data: %s", e)
         raise HTTPException(status_code=500, detail="Failed to load certificate data")
-
-    results = compute_country_maturity(df)
 
     return [
         CountryMaturity(
@@ -64,8 +66,17 @@ async def get_algorithm_trends():
     from app.services.feature_engineering import load_certificate_data
     from app.services.pattern_analyzer import compute_algorithm_trends
 
-    df = load_certificate_data(sync_engine)
-    return [AlgorithmTrend(**r) for r in compute_algorithm_trends(df)]
+    def _compute():
+        df = load_certificate_data(sync_engine)
+        return compute_algorithm_trends(df)
+
+    try:
+        results = await asyncio.to_thread(_compute)
+    except Exception as e:
+        logger.error("Failed to compute algorithm trends: %s", e)
+        raise HTTPException(status_code=503, detail="Failed to load certificate data")
+
+    return [AlgorithmTrend(**r) for r in results]
 
 
 @router.get("/reports/key-size-distribution", response_model=list[KeySizeDistribution])
@@ -74,32 +85,53 @@ async def get_key_size_distribution():
     from app.services.feature_engineering import load_certificate_data
     from app.services.pattern_analyzer import compute_key_size_distribution
 
-    df = load_certificate_data(sync_engine)
-    return [KeySizeDistribution(**r) for r in compute_key_size_distribution(df)]
+    def _compute():
+        df = load_certificate_data(sync_engine)
+        return compute_key_size_distribution(df)
+
+    try:
+        results = await asyncio.to_thread(_compute)
+    except Exception as e:
+        logger.error("Failed to compute key size distribution: %s", e)
+        raise HTTPException(status_code=503, detail="Failed to load certificate data")
+
+    return [KeySizeDistribution(**r) for r in results]
 
 
 @router.get("/reports/risk-distribution", response_model=list[RiskDistribution])
 async def get_risk_distribution():
     """Get risk level distribution from analysis results."""
-    with sync_engine.connect() as conn:
-        total = conn.execute(text("SELECT COUNT(*) FROM ai_analysis_result")).scalar() or 0
-        if total == 0:
-            return []
 
-        rows = conn.execute(
-            text("""
-                SELECT risk_level, COUNT(*) as cnt, AVG(anomaly_score) as avg_anomaly
-                FROM ai_analysis_result
-                GROUP BY risk_level
-                ORDER BY CASE risk_level
-                    WHEN 'CRITICAL' THEN 1
-                    WHEN 'HIGH' THEN 2
-                    WHEN 'MEDIUM' THEN 3
-                    WHEN 'LOW' THEN 4
-                    ELSE 5
-                END
-            """)
-        ).fetchall()
+    def _query():
+        with sync_engine.connect() as conn:
+            total = conn.execute(text("SELECT COUNT(*) FROM ai_analysis_result")).scalar() or 0
+            if total == 0:
+                return 0, []
+
+            rows = conn.execute(
+                text("""
+                    SELECT risk_level, COUNT(*) as cnt, AVG(anomaly_score) as avg_anomaly
+                    FROM ai_analysis_result
+                    GROUP BY risk_level
+                    ORDER BY CASE risk_level
+                        WHEN 'CRITICAL' THEN 1
+                        WHEN 'HIGH' THEN 2
+                        WHEN 'MEDIUM' THEN 3
+                        WHEN 'LOW' THEN 4
+                        ELSE 5
+                    END
+                """)
+            ).fetchall()
+            return total, rows
+
+    try:
+        total, rows = await asyncio.to_thread(_query)
+    except Exception as e:
+        logger.error("Failed to query risk distribution: %s", e)
+        raise HTTPException(status_code=503, detail="Database query failed")
+
+    if total == 0:
+        return []
 
     return [
         RiskDistribution(
@@ -117,43 +149,129 @@ async def get_country_report(code: str):
     """Get detailed analysis for a specific country."""
     if not _COUNTRY_RE.match(code.upper()):
         raise HTTPException(status_code=400, detail="Invalid country code format")
-    from app.services.feature_engineering import load_certificate_data
-    from app.services.pattern_analyzer import compute_country_detail, compute_country_maturity
 
-    df = load_certificate_data(sync_engine)
-    detail = compute_country_detail(df, code.upper())
+    country_upper = code.upper()
+
+    def _query_country_detail():
+        with sync_engine.connect() as conn:
+            # DB-level aggregation for country detail (avoids loading all certificates)
+            total = conn.execute(
+                text("SELECT COUNT(*) FROM certificate WHERE country_code = :cc"),
+                {"cc": country_upper},
+            ).scalar() or 0
+            if total == 0:
+                return None
+
+            type_rows = conn.execute(
+                text(
+                    "SELECT certificate_type, COUNT(*) as cnt FROM certificate "
+                    "WHERE country_code = :cc GROUP BY certificate_type"
+                ),
+                {"cc": country_upper},
+            ).fetchall()
+
+            alg_rows = conn.execute(
+                text(
+                    "SELECT signature_algorithm, COUNT(*) as cnt FROM certificate "
+                    "WHERE country_code = :cc GROUP BY signature_algorithm"
+                ),
+                {"cc": country_upper},
+            ).fetchall()
+
+            ks_rows = conn.execute(
+                text(
+                    "SELECT public_key_size, COUNT(*) as cnt FROM certificate "
+                    "WHERE country_code = :cc AND public_key_size IS NOT NULL "
+                    "GROUP BY public_key_size"
+                ),
+                {"cc": country_upper},
+            ).fetchall()
+
+            return {
+                "country_code": country_upper,
+                "total_certificates": total,
+                "type_distribution": {
+                    str(r._mapping["certificate_type"]): int(r._mapping["cnt"])
+                    for r in type_rows
+                },
+                "algorithm_distribution": {
+                    str(r._mapping["signature_algorithm"]): int(r._mapping["cnt"])
+                    for r in alg_rows
+                },
+                "key_size_distribution": {
+                    str(int(r._mapping["public_key_size"])): int(r._mapping["cnt"])
+                    for r in ks_rows
+                },
+            }
+
+    try:
+        detail = await asyncio.to_thread(_query_country_detail)
+    except Exception as e:
+        logger.error("Failed to query country detail for %s: %s", code, e)
+        raise HTTPException(status_code=500, detail="Database query failed")
+
     if not detail:
         raise HTTPException(status_code=404, detail=f"No data for country {code}")
 
+    # Compute maturity (requires full dataset for relative scoring)
+    def _compute_maturity():
+        from app.services.feature_engineering import load_certificate_data
+        from app.services.pattern_analyzer import compute_country_maturity
+
+        df = load_certificate_data(sync_engine)
+        maturity_list = compute_country_maturity(df)
+        return next((m for m in maturity_list if m["country_code"] == country_upper), None)
+
+    try:
+        maturity = await asyncio.to_thread(_compute_maturity)
+    except Exception:
+        maturity = None
+
     # Get risk/anomaly distribution from analysis results
-    with sync_engine.connect() as conn:
-        risk_rows = conn.execute(
-            text(
-                "SELECT risk_level, COUNT(*) as cnt FROM ai_analysis_result "
-                "WHERE country_code = :cc GROUP BY risk_level"
-            ),
-            {"cc": code.upper()},
-        ).fetchall()
-        risk_dist = {r._mapping["risk_level"]: int(r._mapping["cnt"]) for r in risk_rows}
+    def _query_analysis():
+        with sync_engine.connect() as conn:
+            risk_rows = conn.execute(
+                text(
+                    "SELECT risk_level, COUNT(*) as cnt FROM ai_analysis_result "
+                    "WHERE country_code = :cc GROUP BY risk_level"
+                ),
+                {"cc": country_upper},
+            ).fetchall()
+            risk_dist = {r._mapping["risk_level"]: int(r._mapping["cnt"]) for r in risk_rows}
 
-        anomaly_rows = conn.execute(
-            text(
-                "SELECT anomaly_label, COUNT(*) as cnt FROM ai_analysis_result "
-                "WHERE country_code = :cc GROUP BY anomaly_label"
-            ),
-            {"cc": code.upper()},
-        ).fetchall()
-        anomaly_dist = {r._mapping["anomaly_label"]: int(r._mapping["cnt"]) for r in anomaly_rows}
+            anomaly_rows = conn.execute(
+                text(
+                    "SELECT anomaly_label, COUNT(*) as cnt FROM ai_analysis_result "
+                    "WHERE country_code = :cc GROUP BY anomaly_label"
+                ),
+                {"cc": country_upper},
+            ).fetchall()
+            anomaly_dist = {r._mapping["anomaly_label"]: int(r._mapping["cnt"]) for r in anomaly_rows}
 
-        # Top anomalies
-        top_rows = conn.execute(
-            text(
-                "SELECT * FROM ai_analysis_result "
-                "WHERE country_code = :cc ORDER BY anomaly_score DESC "
-                + ("FETCH FIRST 5 ROWS ONLY" if get_settings().db_type == "oracle" else "LIMIT 5")
-            ),
-            {"cc": code.upper()},
-        ).fetchall()
+            # Top anomalies (parameterized limit)
+            if get_settings().db_type == "oracle":
+                top_sql = (
+                    "SELECT * FROM ai_analysis_result "
+                    "WHERE country_code = :cc ORDER BY anomaly_score DESC "
+                    "FETCH FIRST :top_n ROWS ONLY"
+                )
+            else:
+                top_sql = (
+                    "SELECT * FROM ai_analysis_result "
+                    "WHERE country_code = :cc ORDER BY anomaly_score DESC "
+                    "LIMIT :top_n"
+                )
+            top_rows = conn.execute(
+                text(top_sql),
+                {"cc": country_upper, "top_n": 5},
+            ).fetchall()
+            return risk_dist, anomaly_dist, top_rows
+
+    try:
+        risk_dist, anomaly_dist, top_rows = await asyncio.to_thread(_query_analysis)
+    except Exception as e:
+        logger.error("Failed to query analysis for %s: %s", code, e)
+        raise HTTPException(status_code=500, detail="Database query failed")
 
     top_anomalies = []
     for r in top_rows:
@@ -173,10 +291,6 @@ async def get_country_report(code: str):
             "analyzed_at": str(rm.get("analyzed_at") or ""),
         })
 
-    # Maturity for this country
-    maturity_list = compute_country_maturity(df)
-    maturity = next((m for m in maturity_list if m["country_code"] == code.upper()), None)
-
     detail["risk_distribution"] = risk_dist
     detail["anomaly_distribution"] = anomaly_dist
     detail["maturity"] = maturity
@@ -191,14 +305,16 @@ async def get_issuer_profiles():
     from app.services.feature_engineering import load_certificate_data
     from app.services.issuer_profiler import build_issuer_profiles, get_issuer_profile_report
 
-    try:
+    def _compute():
         df = load_certificate_data(sync_engine)
+        profiles = build_issuer_profiles(df)
+        return get_issuer_profile_report(df, profiles)
+
+    try:
+        report = await asyncio.to_thread(_compute)
     except Exception as e:
         logger.error("Failed to load data: %s", e)
         raise HTTPException(status_code=500, detail="Failed to load certificate data")
-
-    profiles = build_issuer_profiles(df)
-    report = get_issuer_profile_report(df, profiles)
 
     return [IssuerProfile(**r) for r in report]
 
@@ -206,65 +322,81 @@ async def get_issuer_profiles():
 @router.get("/reports/forensic-summary", response_model=ForensicSummary)
 async def get_forensic_summary():
     """Get forensic analysis summary from stored results."""
-    with sync_engine.connect() as conn:
-        total = conn.execute(
-            text("SELECT COUNT(*) FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL")
-        ).scalar() or 0
 
-        if total == 0:
-            return ForensicSummary(
-                total_analyzed=0,
-                forensic_level_distribution={},
-                category_avg_scores={},
-            )
+    def _query():
+        with sync_engine.connect() as conn:
+            total = conn.execute(
+                text("SELECT COUNT(*) FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL")
+            ).scalar() or 0
 
-        # Level distribution
-        level_rows = conn.execute(
-            text(
-                "SELECT forensic_risk_level, COUNT(*) as cnt "
-                "FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL "
-                "GROUP BY forensic_risk_level"
-            )
-        ).fetchall()
-        level_dist = {
-            r._mapping["forensic_risk_level"]: int(r._mapping["cnt"])
-            for r in level_rows
-        }
+            if total == 0:
+                return None
 
-        # Average scores per category from forensic_findings (JSONB on PostgreSQL, CLOB on Oracle)
-        # Unified Python-side parsing — works for both databases
-        findings_rows = conn.execute(
-            text("SELECT forensic_findings FROM ai_analysis_result WHERE forensic_findings IS NOT NULL")
-        ).fetchall()
+            # Level distribution
+            level_rows = conn.execute(
+                text(
+                    "SELECT forensic_risk_level, COUNT(*) as cnt "
+                    "FROM ai_analysis_result WHERE forensic_risk_level IS NOT NULL "
+                    "GROUP BY forensic_risk_level"
+                )
+            ).fetchall()
+            level_dist = {
+                r._mapping["forensic_risk_level"]: int(r._mapping["cnt"])
+                for r in level_rows
+            }
 
-        from collections import defaultdict
-        cat_totals = defaultdict(float)
-        cat_counts = defaultdict(int)
-        sev_counts = defaultdict(int)
-        finding_freq = defaultdict(int)
+            # Average scores per category from forensic_findings (JSONB on PostgreSQL, CLOB on Oracle)
+            # Unified Python-side parsing — works for both databases
+            findings_rows = conn.execute(
+                text("SELECT forensic_findings FROM ai_analysis_result WHERE forensic_findings IS NOT NULL")
+            ).fetchall()
 
-        for row in findings_rows:
-            ff = safe_json_loads(row._mapping.get("forensic_findings"), {})
-            for cat, score in ff.get("categories", {}).items():
-                if isinstance(score, (int, float)):
-                    cat_totals[cat] += score
-                    cat_counts[cat] += 1
-            for f in ff.get("findings", []):
-                sev_counts[f.get("severity", "LOW")] += 1
-                finding_freq[f.get("message", "")] += 1
+            from collections import defaultdict
+            cat_totals = defaultdict(float)
+            cat_counts = defaultdict(int)
+            sev_counts = defaultdict(int)
+            finding_freq = defaultdict(int)
 
-        cat_avgs = {
-            cat: round(cat_totals[cat] / max(cat_counts[cat], 1), 2)
-            for cat in cat_totals
-        }
-        top_findings = sorted(finding_freq.items(), key=lambda x: -x[1])[:10]
+            for row in findings_rows:
+                ff = safe_json_loads(row._mapping.get("forensic_findings"), {})
+                for cat, score in ff.get("categories", {}).items():
+                    if isinstance(score, (int, float)):
+                        cat_totals[cat] += score
+                        cat_counts[cat] += 1
+                for f in ff.get("findings", []):
+                    sev_counts[f.get("severity", "LOW")] += 1
+                    finding_freq[f.get("message", "")] += 1
+
+            cat_avgs = {
+                cat: round(cat_totals[cat] / max(cat_counts[cat], 1), 2)
+                for cat in cat_totals
+            }
+            top_findings = sorted(finding_freq.items(), key=lambda x: -x[1])[:10]
+
+            return {
+                "total": total, "level_dist": level_dist, "cat_avgs": cat_avgs,
+                "sev_counts": dict(sev_counts), "top_findings": top_findings,
+            }
+
+    try:
+        result = await asyncio.to_thread(_query)
+    except Exception as e:
+        logger.error("Failed to query forensic summary: %s", e)
+        raise HTTPException(status_code=503, detail="Database query failed")
+
+    if result is None:
+        return ForensicSummary(
+            total_analyzed=0,
+            forensic_level_distribution={},
+            category_avg_scores={},
+        )
 
     return ForensicSummary(
-        total_analyzed=total,
-        forensic_level_distribution=level_dist,
-        category_avg_scores=cat_avgs,
-        severity_distribution=dict(sev_counts) if sev_counts else None,
-        top_findings=[{"message": m, "count": c} for m, c in top_findings] if top_findings else None,
+        total_analyzed=result["total"],
+        forensic_level_distribution=result["level_dist"],
+        category_avg_scores=result["cat_avgs"],
+        severity_distribution=result["sev_counts"] if result["sev_counts"] else None,
+        top_findings=[{"message": m, "count": c} for m, c in result["top_findings"]] if result["top_findings"] else None,
     )
 
 
@@ -284,17 +416,20 @@ async def get_extension_anomalies(
     from app.services.extension_rules_engine import compute_extension_anomalies
     from app.services.feature_engineering import load_certificate_data
 
-    try:
+    def _compute():
         df = load_certificate_data(sync_engine)
+        if cert_type:
+            filtered_df = df[df["certificate_type"] == cert_type]
+        else:
+            filtered_df = df
+        if country:
+            filtered_df = filtered_df[filtered_df["country_code"] == country.upper()]
+        return compute_extension_anomalies(filtered_df)
+
+    try:
+        results = await asyncio.to_thread(_compute)
     except Exception as e:
         logger.error("Failed to load data: %s", e)
         raise HTTPException(status_code=500, detail="Failed to load certificate data")
-
-    if cert_type:
-        df = df[df["certificate_type"] == cert_type]
-    if country:
-        df = df[df["country_code"] == country.upper()]
-
-    results = compute_extension_anomalies(df)
 
     return [ExtensionAnomaly(**r) for r in results[:limit]]

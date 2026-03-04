@@ -6,8 +6,7 @@
  * tree view with TLV (Tag-Length-Value) information.
  */
 
-#ifndef ASN1_PARSER_H
-#define ASN1_PARSER_H
+#pragma once
 
 #include <string>
 #include <vector>
@@ -57,5 +56,3 @@ Json::Value parseAsn1Output(const std::string& asn1ParseOutput);
 
 } // namespace asn1
 } // namespace icao
-
-#endif // ASN1_PARSER_H

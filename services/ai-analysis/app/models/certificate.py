@@ -1,7 +1,6 @@
 """SQLAlchemy model for existing certificate table (READ-ONLY)."""
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
-from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 
 from app.database import Base
 

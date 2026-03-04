@@ -92,7 +92,7 @@ export const TrustChainVisualization: React.FC<TrustChainVisualizationProps> = (
     return (
       <div className={`flex items-center gap-1 text-xs ${className}`}>
         {nodes.map((node, index) => (
-          <React.Fragment key={index}>
+          <React.Fragment key={node.dn}>
             {index > 0 && (
               <ChevronRight className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" />
             )}
@@ -137,7 +137,7 @@ export const TrustChainVisualization: React.FC<TrustChainVisualizationProps> = (
       {/* Trust Chain Nodes */}
       <div className="space-y-2">
         {nodes.map((node, index) => (
-          <div key={index} className="relative">
+          <div key={node.dn} className="relative">
             {/* Connecting Line (except for last node) */}
             {index < nodes.length - 1 && (
               <div className="absolute left-4 top-10 bottom-0 w-0.5 bg-gradient-to-b from-blue-300 to-green-300 dark:from-blue-600 dark:to-green-600" />

@@ -202,7 +202,7 @@ function CertificateCard({ cert, index, deviations = [] }: { cert: CertificatePr
               {cert.certificateType}
             </span>
             <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">{cert.countryCode}</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[280px]">{cert.subjectDn}</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[280px]" title={cert.subjectDn}>{cert.subjectDn}</span>
             {cert.isExpired && (
               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
                 <XCircle className="w-3 h-3" /> Expired
@@ -626,7 +626,7 @@ export default function CertificateUpload() {
                     const certDeviations = (previewResult.deviations || []).filter(
                       dev => dev.certificateIssuerDn === cert.issuerDn || dev.certificateIssuerDn === cert.subjectDn
                     );
-                    return <CertificateCard key={i} cert={cert} index={i} deviations={certDeviations} />;
+                    return <CertificateCard key={cert.fingerprintSha256} cert={cert} index={i} deviations={certDeviations} />;
                   })}
                   {previewResult.certificates.length === 0 && (
                     <p className="text-sm text-gray-500 text-center py-6">인증서가 없습니다</p>

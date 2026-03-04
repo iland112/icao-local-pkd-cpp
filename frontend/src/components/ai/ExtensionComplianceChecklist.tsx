@@ -36,7 +36,7 @@ interface Props {
 export default function ExtensionComplianceChecklist({ certType, country }: Props) {
   const [anomalies, setAnomalies] = useState<ExtensionAnomaly[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState(certType || '');
   const [filterCountry, setFilterCountry] = useState(country || '');
 
@@ -51,11 +51,11 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
       .finally(() => setLoading(false));
   }, [filterType, filterCountry]);
 
-  const toggleRow = (idx: number) => {
+  const toggleRow = (key: string) => {
     setExpandedRows(prev => {
       const next = new Set(prev);
-      if (next.has(idx)) next.delete(idx);
-      else next.add(idx);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -140,16 +140,16 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
 
           {/* Rows */}
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {anomalies.slice(0, 100).map((a, idx) => {
-              const isExpanded = expandedRows.has(idx);
+            {anomalies.slice(0, 100).map((a) => {
+              const isExpanded = expandedRows.has(a.fingerprint);
               const sev = deriveSeverity(a.structural_score);
               const Icon = SEVERITY_ICON[sev] || AlertTriangle;
               const violationCount = totalViolations(a);
               return (
-                <div key={idx}>
+                <div key={a.fingerprint}>
                   <div
                     className="grid grid-cols-[24px_1fr_56px_40px_72px_48px_40px] gap-1 items-center py-1.5 px-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-750"
-                    onClick={() => toggleRow(idx)}
+                    onClick={() => toggleRow(a.fingerprint)}
                   >
                     <div>
                       {isExpanded ? (

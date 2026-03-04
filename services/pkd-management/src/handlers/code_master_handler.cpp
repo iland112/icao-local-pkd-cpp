@@ -162,7 +162,7 @@ void CodeMasterHandler::handleGetById(
         if (!item.has_value()) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Code not found: " + id;
+            error["error"] = "Code not found: " + id;
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k404NotFound);
             callback(resp);
@@ -190,7 +190,7 @@ void CodeMasterHandler::handleCreate(
         if (!body) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Invalid JSON body";
+            error["error"] = "Invalid JSON body";
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k400BadRequest);
             callback(resp);
@@ -205,7 +205,7 @@ void CodeMasterHandler::handleCreate(
         if (item.category.empty() || item.code.empty() || item.nameKo.empty()) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "category, code, and nameKo are required";
+            error["error"] = "category, code, and nameKo are required";
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k400BadRequest);
             callback(resp);
@@ -258,7 +258,7 @@ void CodeMasterHandler::handleUpdate(
         if (!body) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Invalid JSON body";
+            error["error"] = "Invalid JSON body";
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k400BadRequest);
             callback(resp);
@@ -270,7 +270,7 @@ void CodeMasterHandler::handleUpdate(
         if (!existing.has_value()) {
             Json::Value error;
             error["success"] = false;
-            error["message"] = "Code not found: " + id;
+            error["error"] = "Code not found: " + id;
             auto resp = HttpResponse::newHttpJsonResponse(error);
             resp->setStatusCode(k404NotFound);
             callback(resp);

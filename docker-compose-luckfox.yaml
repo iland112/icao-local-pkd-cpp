@@ -14,7 +14,7 @@ services:
   # API Gateway (Nginx)
   # ---------------------------------------------------------------------------
   api-gateway:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: icao-pkd-api-gateway
     network_mode: host
     volumes:
@@ -57,18 +57,18 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       # LDAP - Direct connections to both servers
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=core
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
       - TRUST_ANCHOR_PATH=/app/data/cert/UN_CSCA_2.pem
       # JWT Authentication
-      - JWT_SECRET_KEY=5cb9e9868c2cd76bbb643be294171838dfce7aa80dc98fe132f5f1c6c3c4d91c
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - JWT_ISSUER=icao-pkd
       - JWT_EXPIRATION_SECONDS=3600
       - AUTH_ENABLED=true
@@ -96,12 +96,12 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       # LDAP
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=core
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - postgres
@@ -125,14 +125,14 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       # LDAP
       - LDAP_HOST=192.168.100.10
       - LDAP_PORT=389
       - LDAP_WRITE_HOST=192.168.100.10
       - LDAP_WRITE_PORT=389
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
-      - LDAP_BIND_PASSWORD=core
+      - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
     depends_on:
       - postgres
@@ -176,7 +176,7 @@ services:
       - DB_PORT=5432
       - DB_NAME=localpkd
       - DB_USER=pkd
-      - DB_PASSWORD=pkd
+      - DB_PASSWORD=${DB_PASSWORD}
       - ANALYSIS_SCHEDULE_HOUR=3
       - ANALYSIS_ENABLED=true
     depends_on:
@@ -189,7 +189,7 @@ services:
   # Swagger UI (API Documentation)
   # ---------------------------------------------------------------------------
   swagger-ui:
-    image: swaggerapi/swagger-ui:latest
+    image: swaggerapi/swagger-ui:v5.17.14
     container_name: icao-pkd-swagger
     network_mode: host
     environment:
@@ -211,7 +211,7 @@ services:
     network_mode: host
     environment:
       - POSTGRES_USER=pkd
-      - POSTGRES_PASSWORD=pkd
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=localpkd
       - TZ=Asia/Seoul
     volumes:

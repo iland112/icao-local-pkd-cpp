@@ -18,12 +18,12 @@ CREATE TABLE IF NOT EXISTS icao_pkd_versions (
     file_version VARCHAR(50) NOT NULL,
     download_url TEXT,
     file_size_mb NUMERIC(10, 2),
-    detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    detected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(20) NOT NULL DEFAULT 'DETECTED',
-    notified_at TIMESTAMP,
-    downloaded_at TIMESTAMP,
+    notified_at TIMESTAMP WITH TIME ZONE,
+    downloaded_at TIMESTAMP WITH TIME ZONE,
     import_upload_id UUID REFERENCES uploaded_file(id) ON DELETE SET NULL,
-    imported_at TIMESTAMP,
+    imported_at TIMESTAMP WITH TIME ZONE,
     metadata JSONB,
     UNIQUE(collection_type, file_version)
 );
@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS link_certificate (
     subject_key_identifier VARCHAR(255),
     ldap_dn VARCHAR(512),
     stored_in_ldap BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_lc_country ON link_certificate(country_code);
@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS link_certificate_issuers (
     issuer_subject_dn TEXT NOT NULL,
     issuer_serial_number VARCHAR(255),
     signature_valid BOOLEAN DEFAULT FALSE,
-    verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    verified_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(link_cert_id, issuer_csca_id)
 );
 

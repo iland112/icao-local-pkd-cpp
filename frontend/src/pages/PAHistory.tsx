@@ -589,6 +589,7 @@ export function PAHistory() {
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label="이전 페이지"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -599,6 +600,7 @@ export function PAHistory() {
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  aria-label="다음 페이지"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>

@@ -108,15 +108,15 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             verification.dscSubject,                                         // $7
             verification.dscSerialNumber,                                    // $8
             verification.dscIssuer,                                          // $9
-            "",                                                              // $10: dsc_fingerprint (TODO)
+            "",                                                              // $10: dsc_fingerprint (not available in domain model)
             verification.cscaSubject,                                        // $11
-            "",                                                              // $12: csca_fingerprint (TODO)
+            "",                                                              // $12: csca_fingerprint (not available in domain model)
             boolStr(verification.certificateChainValid),                     // $13
-            "",                                                              // $14: trust_chain_message (TODO)
+            verification.validationErrors.value_or(""),                      // $14: trust_chain_message
             boolStr(verification.sodSignatureValid),                         // $15
-            "",                                                              // $16: sod_signature_message (TODO)
+            verification.sodSignatureValid ? "SOD signature valid" : "SOD signature invalid",  // $16: sod_signature_message
             boolStr(verification.dataGroupsValid),                           // $17
-            "",                                                              // $18: dg_hashes_message (TODO)
+            verification.dataGroupsValid ? "All data group hashes valid" : "Data group hash mismatch",  // $18: dg_hashes_message
             verification.crlStatus,                                          // $19
             verification.crlMessage.value_or(""),                            // $20
             verification.validationErrors.value_or(""),                      // $21

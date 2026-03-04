@@ -23,14 +23,14 @@ CREATE TABLE IF NOT EXISTS api_clients (
 
     -- Status
     is_active BOOLEAN DEFAULT true,
-    expires_at TIMESTAMP,
-    last_used_at TIMESTAMP,
+    expires_at TIMESTAMP WITH TIME ZONE,
+    last_used_at TIMESTAMP WITH TIME ZONE,
     total_requests BIGINT DEFAULT 0,
 
     -- Audit
     created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_api_clients_key_hash ON api_clients(api_key_hash);
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS api_client_usage_log (
     response_time_ms INTEGER,
     ip_address VARCHAR(45),
     user_agent TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_usage_log_client_time ON api_client_usage_log(client_id, created_at);

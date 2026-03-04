@@ -20,9 +20,9 @@ CREATE TABLE IF NOT EXISTS users (
     permissions JSONB DEFAULT '[]'::jsonb,
     is_active BOOLEAN DEFAULT true,
     is_admin BOOLEAN DEFAULT false,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_login_at TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_users_username ON users(username);
@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS auth_audit_log (
     user_agent TEXT,
     success BOOLEAN DEFAULT true,
     error_message TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_auth_audit_user_id ON auth_audit_log(user_id);
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS operation_audit_log (
     error_code VARCHAR(50),
     metadata JSONB,
     duration_ms INTEGER,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX idx_op_audit_user_id ON operation_audit_log(user_id);

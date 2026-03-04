@@ -1,10 +1,18 @@
 from datetime import datetime
-from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+
+class ActionResponse(BaseModel):
+    """Generic action response for trigger endpoints."""
+    success: bool
+    message: str
+    upload_id: str | None = None
 
 
 class CertificateAnalysis(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     fingerprint: str
     certificate_type: str | None = None
     country_code: str | None = None
@@ -16,12 +24,11 @@ class CertificateAnalysis(BaseModel):
     anomaly_explanations: list[str]
     analyzed_at: datetime | None = None
 
-    class Config:
-        from_attributes = True
-
 
 class ForensicDetail(BaseModel):
     """Detailed forensic analysis for a single certificate."""
+    model_config = ConfigDict(from_attributes=True)
+
     fingerprint: str
     certificate_type: str | None = None
     country_code: str | None = None
@@ -38,9 +45,6 @@ class ForensicDetail(BaseModel):
     issuer_anomaly_score: float = 0
     temporal_anomaly_score: float = 0
     analyzed_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
 
 
 class AnalysisStatistics(BaseModel):

@@ -11,7 +11,7 @@
  * @version 2.0.0
  */
 
-import axios, { type AxiosError, type AxiosResponse } from 'axios';
+import axios, { type AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios';
 import type {
   ApiResponse,
   HealthStatus,
@@ -40,10 +40,30 @@ const pkdApi = axios.create({
   },
 });
 
+// Request interceptor: Inject JWT token from localStorage
+pkdApi.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem('access_token');
+    if (token && config.headers) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
 // Response interceptor for error handling
 pkdApi.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {
+    if (error.response?.status === 401) {
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/login') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user');
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+      }
+    }
     if (import.meta.env.DEV) console.error('[PKD API Error]:', error.response?.data || error.message);
     return Promise.reject(error);
   }

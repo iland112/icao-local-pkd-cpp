@@ -135,8 +135,8 @@ export default function IssuerProfileCard() {
                 {profiles
                   .filter(p => p.risk_indicator === 'HIGH')
                   .slice(0, 5)
-                  .map((p, idx) => (
-                    <tr key={idx} className="border-t border-gray-100 dark:border-gray-700">
+                  .map((p) => (
+                    <tr key={p.issuer_dn} className="border-t border-gray-100 dark:border-gray-700">
                       <td className="py-1.5 text-gray-700 dark:text-gray-300" title={p.issuer_dn}>
                         {truncateDn(p.issuer_dn, 50)}
                       </td>

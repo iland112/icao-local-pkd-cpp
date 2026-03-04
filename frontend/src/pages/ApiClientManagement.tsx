@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff, BarChart3 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { apiClientApi, type ApiClient, type UsageStats, type CreateApiClientRequest, type UpdateApiClientRequest } from '@/api/apiClientApi';
+import { toast } from '@/stores/toastStore';
+import { ConfirmDialog } from '@/components/common';
 
 const AVAILABLE_PERMISSIONS = [
   { value: 'cert:read', label: '인증서 검색' },
@@ -25,6 +27,24 @@ export default function ApiClientManagement() {
   const [showDelete, setShowDelete] = useState<ApiClient | null>(null);
   const [showKey, setShowKey] = useState<{ client: ApiClient; key: string } | null>(null);
   const [showUsage, setShowUsage] = useState<ApiClient | null>(null);
+  const [showRegenConfirm, setShowRegenConfirm] = useState<ApiClient | null>(null);
+
+  const handleRegenerateConfirm = async (client: ApiClient) => {
+    try {
+      const res = await apiClientApi.regenerate(client.id);
+      if (res.client.api_key) {
+        setShowKey({ client: res.client, key: res.client.api_key });
+      }
+      fetchClients();
+    } catch (e) {
+      const axiosErr = e as { response?: { status?: number } };
+      if (axiosErr.response?.status === 503 || axiosErr.response?.status === 429) {
+        toast.warning('요청 제한', '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        toast.error('재발급 실패', 'API Key 재발급에 실패했습니다.');
+      }
+    }
+  };
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -33,7 +53,7 @@ export default function ApiClientManagement() {
       setClients(res.clients || []);
       setTotal(res.total || 0);
     } catch (e) {
-      console.error('Failed to fetch clients', e);
+      if (import.meta.env.DEV) console.error('Failed to fetch clients', e);
     } finally {
       setLoading(false);
     }
@@ -97,23 +117,7 @@ export default function ApiClientManagement() {
                 onEdit={() => setShowEdit(client)}
                 onDelete={() => setShowDelete(client)}
                 onUsage={() => setShowUsage(client)}
-                onRegenerate={async () => {
-                  if (!confirm('API Key를 재발급하시겠습니까? 기존 키는 즉시 무효화됩니다.')) return;
-                  try {
-                    const res = await apiClientApi.regenerate(client.id);
-                    if (res.client.api_key) {
-                      setShowKey({ client: res.client, key: res.client.api_key });
-                    }
-                    fetchClients();
-                  } catch (e) {
-                    const axiosErr = e as { response?: { status?: number } };
-                    if (axiosErr.response?.status === 503 || axiosErr.response?.status === 429) {
-                      alert('요청이 너무 많습니다. 잠시 후 다시 시도해주세요.');
-                    } else {
-                      alert('API Key 재발급에 실패했습니다.');
-                    }
-                  }
-                }}
+                onRegenerate={() => setShowRegenConfirm(client)}
               />
             ))}
           </div>
@@ -121,6 +125,17 @@ export default function ApiClientManagement() {
       </div>
 
       {/* Dialogs */}
+      <ConfirmDialog
+        isOpen={showRegenConfirm !== null}
+        onClose={() => setShowRegenConfirm(null)}
+        onConfirm={() => {
+          if (showRegenConfirm) handleRegenerateConfirm(showRegenConfirm);
+        }}
+        title="API Key 재발급"
+        message="API Key를 재발급하시겠습니까? 기존 키는 즉시 무효화됩니다."
+        confirmLabel="재발급"
+        variant="warning"
+      />
       {showCreate && (
         <CreateDialog
           onClose={() => setShowCreate(false)}
@@ -360,7 +375,7 @@ function EditDialog({ client, onClose, onUpdated }: {
       await apiClientApi.update(client.id, req);
       onUpdated();
     } catch (e) {
-      console.error('Update failed', e);
+      if (import.meta.env.DEV) console.error('Update failed', e);
     } finally {
       setSaving(false);
     }
@@ -442,7 +457,7 @@ function DeleteDialog({ client, onClose, onDeleted }: {
           onClick={async () => {
             setDeleting(true);
             try { await apiClientApi.deactivate(client.id); onDeleted(); }
-            catch (e) { console.error('Delete failed', e); }
+            catch (e) { if (import.meta.env.DEV) console.error('Delete failed', e); }
             finally { setDeleting(false); }
           }}
           disabled={deleting}

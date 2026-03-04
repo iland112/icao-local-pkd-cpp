@@ -1,9 +1,9 @@
 /**
  * @file oracle_query_executor.h
- * @brief Oracle Query Executor - OTL-based implementation
+ * @brief Oracle Query Executor - OCI Session Pool implementation
  *
- * Implements IQueryExecutor using Oracle OTL (Oracle Template Library).
- * Handles connection acquisition from pool, query execution with OTL streams,
+ * Implements IQueryExecutor using OCI (Oracle Call Interface) Session Pool.
+ * Handles session acquisition from pool, query execution with OCI statements,
  * result parsing, and JSON conversion.
  *
  * @date 2026-02-04
@@ -18,30 +18,14 @@
 #include <oci.h>
 #include <unordered_map>
 
-// Suppress OTL library warnings (third-party code)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstringop-truncation"
-
-// Define OTL configuration before including otlv4.h
-#define OTL_ORA11G_R2  // Oracle 11g Release 2 and higher
-#define OTL_ORA_TIMESTAMP  // Enable Oracle TIMESTAMP support
-#define OTL_STL        // Enable STL features
-#define OTL_ANSI_CPP   // Enable ANSI C++ mode
-#include "external/otl/otlv4.h"
-
-#pragma GCC diagnostic pop
-
 namespace common {
 
 /**
  * @brief Oracle-specific query executor
  *
- * Uses OracleConnectionPool for connection management and OTL for query execution.
- * Converts OTL otlStream results to Json::Value for database-agnostic Repository code.
- *
- * OTL Query Syntax:
- * - Parameterized queries use :param1<char[100]>, :param2<int>, etc.
- * - PostgreSQL $1, $2 syntax must be converted to :1, :2 for Oracle
+ * Uses OCI Session Pool for high-performance connection reuse.
+ * Converts PostgreSQL-style $1, $2 placeholders to Oracle :1, :2 format.
+ * Results are returned as Json::Value for database-agnostic Repository code.
  */
 class OracleQueryExecutor : public IQueryExecutor {
 public:
@@ -61,7 +45,7 @@ public:
      * @brief Execute SELECT query with parameterized binding
      *
      * Converts PostgreSQL-style $1, $2 placeholders to Oracle :1, :2 format.
-     * Uses OTL otlStreams for query execution and result parsing.
+     * Uses OCI Session Pool for query execution and result parsing.
      *
      * @param query SQL query (PostgreSQL $1 syntax, auto-converted to Oracle :1)
      * @param params Query parameters
@@ -78,7 +62,7 @@ public:
      *
      * @param query SQL command (PostgreSQL $1 syntax, auto-converted)
      * @param params Query parameters
-     * @return Number of affected rows (from OTL otlStream)
+     * @return Number of affected rows
      * @throws std::runtime_error on execution failure
      */
     int executeCommand(
@@ -116,7 +100,7 @@ public:
     void endBatch() override;
 
 private:
-    OracleConnectionPool* pool_;  ///< Oracle connection pool (for executeScalar via OTL)
+    OracleConnectionPool* pool_;  ///< Oracle connection pool
 
     // Legacy OCI handles (for startup connectivity check)
     OCIEnv* ociEnv_;
@@ -176,22 +160,6 @@ private:
      */
     void releasePooledSession(PooledSession& session, bool dropSession = false);
 
-    /// @name Legacy per-query connection methods (kept as fallback)
-
-    struct OciConnection {
-        OCIEnv* env = nullptr;
-        OCIError* err = nullptr;
-        OCISvcCtx* svcCtx = nullptr;
-        OCIServer* server = nullptr;
-        OCISession* session = nullptr;
-    };
-
-    /** @brief Create a new OCI connection with full handle setup */
-    void createOciConnection(OciConnection& conn);
-    /** @brief Disconnect OCI session and detach from server */
-    void disconnectOci(OciConnection& conn);
-    /** @brief Free all OCI handles in the connection */
-    void freeOciHandles(OciConnection& conn);
 
     /// @name OCI lifecycle and helpers
 
@@ -200,30 +168,6 @@ private:
     /** @brief Clean up OCI connection and free handles */
     void cleanupOCI();
 
-    /**
-     * @brief Execute query using legacy OCI direct connection
-     * @param query SQL query string
-     * @param params Query parameters
-     * @return JSON array of result rows
-     */
-    Json::Value executeQueryWithOCI(
-        const std::string& query,
-        const std::vector<std::string>& params
-    );
-
-    /**
-     * @brief Convert PostgreSQL $N placeholders to OTL :vN<char[4000]> format
-     * @param query SQL query with PostgreSQL-style placeholders
-     * @return Converted query string for OTL
-     */
-    std::string convertPlaceholders(const std::string& query);
-
-    /**
-     * @brief Convert OTL stream results to JSON array
-     * @param otlStream OTL stream with query results
-     * @return JSON array of result rows
-     */
-    Json::Value otlStreamToJson(otl_stream& otlStream);
 
     /// @name Batch mode (v2.26.1 — session pinning + statement cache + deferred commit)
 

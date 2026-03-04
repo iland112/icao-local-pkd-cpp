@@ -22,7 +22,7 @@ export interface HealthStatus {
 // Upload types
 export type FileFormat = 'LDIF' | 'ML' | 'MASTER_LIST' | 'PEM' | 'DER' | 'CER' | 'P7B' | 'DL' | 'CRL';  // Backend uses 'ML', some places use 'MASTER_LIST'
 export type UploadStatus = 'PENDING' | 'UPLOADING' | 'PARSING' | 'PROCESSING' | 'VALIDATING' | 'SAVING_DB' | 'SAVING_LDAP' | 'COMPLETED' | 'FAILED';
-export type ProcessingMode = 'AUTO' | 'MANUAL';
+export type ProcessingMode = 'AUTO';
 
 export interface UploadedFile {
   id: string;
