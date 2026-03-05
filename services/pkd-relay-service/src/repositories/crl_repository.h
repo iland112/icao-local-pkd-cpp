@@ -69,6 +69,13 @@ public:
      */
     bool markStoredInLdap(const std::string& fingerprint);
 
+    /**
+     * @brief Find most recent CRL by country code
+     * @param countryCode ISO 3166-1 alpha-2 country code
+     * @return JSON with crl_binary (hex), this_update, next_update; or null if not found
+     */
+    Json::Value findCrlByCountryCode(const std::string& countryCode);
+
 private:
     /**
      * @brief Convert database result row (JSON) to Crl domain object

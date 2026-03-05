@@ -349,7 +349,10 @@ Json::Value getRevalidationHistory(common::IQueryExecutor* executor, int limit) 
     try {
         std::string dbType = executor->getDatabaseType();
         std::string query = "SELECT id, executed_at, total_processed, newly_expired, newly_valid, "
-            "unchanged, errors, duration_ms FROM revalidation_history "
+            "unchanged, errors, duration_ms, "
+            "tc_processed, tc_newly_valid, tc_still_pending, tc_errors, "
+            "crl_checked, crl_revoked, crl_unavailable, crl_expired, crl_errors "
+            "FROM revalidation_history "
             "ORDER BY executed_at DESC " +
             common::db::limitClause(dbType, limit);
 
@@ -372,6 +375,20 @@ Json::Value getRevalidationHistory(common::IQueryExecutor* executor, int limit) 
             item["unchanged"] = getInt(row["unchanged"]);
             item["errors"] = getInt(row["errors"]);
             item["durationMs"] = getInt(row["duration_ms"]);
+
+            // Step 2: Trust Chain re-validation
+            item["tcProcessed"] = getInt(row["tc_processed"]);
+            item["tcNewlyValid"] = getInt(row["tc_newly_valid"]);
+            item["tcStillPending"] = getInt(row["tc_still_pending"]);
+            item["tcErrors"] = getInt(row["tc_errors"]);
+
+            // Step 3: CRL re-check
+            item["crlChecked"] = getInt(row["crl_checked"]);
+            item["crlRevoked"] = getInt(row["crl_revoked"]);
+            item["crlUnavailable"] = getInt(row["crl_unavailable"]);
+            item["crlExpired"] = getInt(row["crl_expired"]);
+            item["crlErrors"] = getInt(row["crl_errors"]);
+
             result.append(item);
         }
     } catch (const std::exception& e) {

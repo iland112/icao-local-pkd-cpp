@@ -143,7 +143,9 @@ bool ServiceContainer::initialize(icao::relay::Config& config) {
         );
 
         impl_->validationService = std::make_shared<icao::relay::services::ValidationService>(
-            impl_->validationRepo.get()
+            impl_->validationRepo.get(),
+            impl_->certificateRepo.get(),
+            impl_->crlRepo.get()
         );
 
         spdlog::info("All PKD Relay Service dependencies initialized successfully");

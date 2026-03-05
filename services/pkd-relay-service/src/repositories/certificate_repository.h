@@ -74,6 +74,12 @@ public:
      */
     bool markStoredInLdap(const std::string& fingerprint);
 
+    /**
+     * @brief Bulk load all CSCA certificates (subject_dn + DER bytes)
+     * @return Vector of (subjectDn, DER bytes) pairs
+     */
+    std::vector<std::pair<std::string, std::vector<uint8_t>>> findAllCscas();
+
 private:
     /**
      * @brief Convert database result row (JSON) to Certificate domain object

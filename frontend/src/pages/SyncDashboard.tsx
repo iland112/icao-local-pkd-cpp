@@ -39,6 +39,10 @@ export function SyncDashboard() {
   const [editedConfig, setEditedConfig] = useState<UpdateSyncConfigRequest>({});
   const [saving, setSaving] = useState(false);
   const [revalidationResult, setRevalidationResult] = useState<RevalidationResult | null>(null);
+  const [syncCheckResult, setSyncCheckResult] = useState<SyncStatusResponse | null>(null);
+  const [configSaveResult, setConfigSaveResult] = useState<SyncConfigResponse | null>(null);
+  const [triggeringDailySync, setTriggeringDailySync] = useState(false);
+  const [dailySyncResult, setDailySyncResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -81,15 +85,14 @@ export function SyncDashboard() {
     setChecking(true);
     setError(null);
     try {
-      // Trigger sync check and get immediate result
       const checkResult = await syncServiceApi.triggerCheck();
 
-      // Update status immediately with check result
       if (checkResult.data && checkResult.data.success) {
-        setStatus(checkResult.data?.data ?? null);  // Extract nested data field
+        const resultData = checkResult.data?.data ?? null;
+        setStatus(resultData);
+        setSyncCheckResult(resultData);
       }
 
-      // Fetch full data to update history and other states
       await fetchData();
     } catch (err) {
       if (import.meta.env.DEV) console.error('Manual check failed:', err);
@@ -108,7 +111,7 @@ export function SyncDashboard() {
       await fetchData();
     } catch (err) {
       if (import.meta.env.DEV) console.error('Revalidation failed:', err);
-      setError('인증서 만료 상태 갱신 실패');
+      setError('인증서 재검증 실패');
     } finally {
       setRevalidating(false);
     }
@@ -131,15 +134,32 @@ export function SyncDashboard() {
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      await syncServiceApi.updateConfig(editedConfig);
+      const res = await syncServiceApi.updateConfig(editedConfig);
       await fetchData();
       setShowConfigDialog(false);
       setError(null);
+      if (res.data?.config) {
+        setConfigSaveResult(res.data.config);
+      }
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to update config:', err);
       setError('설정 업데이트 실패');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTriggerDailySync = async () => {
+    setTriggeringDailySync(true);
+    setError(null);
+    try {
+      const res = await syncServiceApi.triggerDailySync();
+      setDailySyncResult(res.data);
+    } catch (err) {
+      if (import.meta.env.DEV) console.error('Daily sync trigger failed:', err);
+      setDailySyncResult({ success: false, message: '수동 동기화 트리거 실패' });
+    } finally {
+      setTriggeringDailySync(false);
     }
   };
 
@@ -263,6 +283,23 @@ export function SyncDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <button
+            onClick={handleTriggerDailySync}
+            disabled={triggeringDailySync}
+            className={cn(
+              'flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors',
+              triggeringDailySync
+                ? 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
+                : 'bg-green-500 hover:bg-green-600 text-white'
+            )}
+          >
+            {triggeringDailySync ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <CalendarClock className="w-4 h-4" />
+            )}
+            {triggeringDailySync ? '실행 중...' : '수동 동기화'}
+          </button>
+          <button
             onClick={handleRevalidation}
             disabled={revalidating}
             className={cn(
@@ -277,7 +314,7 @@ export function SyncDashboard() {
             ) : (
               <ShieldCheck className="w-4 h-4" />
             )}
-            {revalidating ? '갱신 중...' : '만료 상태 갱신'}
+            {revalidating ? '검증 중...' : '인증서 재검증'}
           </button>
           <button
             onClick={handleManualCheck}
@@ -330,7 +367,7 @@ export function SyncDashboard() {
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <ShieldCheck className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">만료 상태 자동 갱신</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">인증서 자동 재검증</span>
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
                 {config.revalidateCertsOnSync ? '활성화' : '비활성화'}
@@ -756,7 +793,7 @@ export function SyncDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <ShieldCheck className="w-5 h-5 text-green-500" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              만료 상태 갱신 이력
+              인증서 재검증 이력
             </h3>
           </div>
 
@@ -781,6 +818,18 @@ export function SyncDashboard() {
                   </th>
                   <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     오류
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap">
+                    TC 대상
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap">
+                    TC VALID
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                    CRL 검사
+                  </th>
+                  <th className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap">
+                    CRL 폐기
                   </th>
                   <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
                     소요 시간
@@ -838,6 +887,22 @@ export function SyncDashboard() {
                         {item.errors}
                       </span>
                     </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-blue-600 dark:text-blue-400">
+                      {(item.tcProcessed ?? 0).toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className={cn('font-mono font-semibold', (item.tcNewlyValid ?? 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400')}>
+                        {(item.tcNewlyValid ?? 0).toLocaleString()}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3 text-right font-mono text-purple-600 dark:text-purple-400">
+                      {(item.crlChecked ?? 0).toLocaleString()}
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <span className={cn('font-mono font-semibold', (item.crlRevoked ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400')}>
+                        {item.crlRevoked ?? 0}
+                      </span>
+                    </td>
                     <td className="py-2.5 px-3 text-right text-gray-500 dark:text-gray-400">
                       {item.durationMs}ms
                     </td>
@@ -859,7 +924,7 @@ export function SyncDashboard() {
         <div className="flex items-start gap-3">
           <Activity className="w-5 h-5 text-blue-500 mt-0.5" />
           <div className="text-sm text-blue-700 dark:text-blue-300">
-            <p className="font-medium mb-1">일일 동기화 및 만료 상태 갱신</p>
+            <p className="font-medium mb-1">일일 동기화 및 인증서 재검증</p>
             {config?.dailySyncEnabled ? (
               <div>
                 <p className="mb-1">
@@ -868,7 +933,7 @@ export function SyncDashboard() {
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
                   <li>PostgreSQL과 LDAP의 데이터 일관성을 검사합니다.</li>
                   {config.revalidateCertsOnSync && (
-                    <li>인증서 만료 상태를 자동으로 갱신합니다.</li>
+                    <li>인증서 만료 상태 갱신 + Trust Chain 재검증 + CRL 폐기 검사를 자동으로 수행합니다.</li>
                   )}
                 </ul>
               </div>
@@ -887,8 +952,8 @@ export function SyncDashboard() {
         <Dialog
           isOpen={!!revalidationResult}
           onClose={() => setRevalidationResult(null)}
-          title="인증서 만료 상태 갱신 완료"
-          size="md"
+          title="인증서 재검증 완료"
+          size="lg"
         >
           <div className="space-y-4">
             {/* Status Banner */}
@@ -911,79 +976,97 @@ export function SyncDashboard() {
               )}>
                 {revalidationResult.success
                   ? `${revalidationResult.totalProcessed.toLocaleString()}건의 인증서를 검증했습니다.`
-                  : '만료 상태 갱신 중 오류가 발생했습니다.'}
+                  : '인증서 재검증 중 오류가 발생했습니다.'}
+              </span>
+              <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
+                {revalidationResult.durationMs < 1000
+                  ? `${revalidationResult.durationMs}ms`
+                  : `${(revalidationResult.durationMs / 1000).toFixed(1)}초`}
               </span>
             </div>
 
-            {/* Result Grid */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400">처리된 인증서</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                  {revalidationResult.totalProcessed.toLocaleString()}
-                </p>
+            {/* Step 1: Expiration Check */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                Step 1: 만료 상태 검사
+              </h4>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">처리</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.totalProcessed.toLocaleString()}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', revalidationResult.newlyExpired > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">새로 만료</p>
+                  <p className={cn('text-base font-bold', revalidationResult.newlyExpired > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.newlyExpired}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', revalidationResult.newlyValid > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">새로 유효</p>
+                  <p className={cn('text-base font-bold', revalidationResult.newlyValid > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.newlyValid}</p>
+                </div>
               </div>
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400">소요 시간</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                  {revalidationResult.durationMs < 1000
-                    ? `${revalidationResult.durationMs}ms`
-                    : `${(revalidationResult.durationMs / 1000).toFixed(1)}초`}
-                </p>
+              <div className="grid grid-cols-2 gap-2 mt-2 text-center">
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">변경 없음</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.unchanged.toLocaleString()}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', revalidationResult.errors > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">오류</p>
+                  <p className={cn('text-base font-bold', revalidationResult.errors > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.errors}</p>
+                </div>
               </div>
-              <div className={cn(
-                'rounded-lg p-3 text-center',
-                revalidationResult.newlyExpired > 0
-                  ? 'bg-orange-50 dark:bg-orange-900/20'
-                  : 'bg-gray-50 dark:bg-gray-700/50'
-              )}>
-                <p className="text-xs text-gray-500 dark:text-gray-400">새로 만료</p>
-                <p className={cn(
-                  'text-xl font-bold mt-1',
-                  revalidationResult.newlyExpired > 0
-                    ? 'text-orange-600 dark:text-orange-400'
-                    : 'text-gray-900 dark:text-white'
-                )}>
-                  {revalidationResult.newlyExpired}
-                </p>
+            </div>
+
+            {/* Step 2: Trust Chain Re-validation */}
+            <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-3">
+                Step 2: Trust Chain 재검증
+              </h4>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">대상</p>
+                  <p className="text-base font-bold text-blue-700 dark:text-blue-300">{(revalidationResult.tcProcessed ?? 0).toLocaleString()}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', (revalidationResult.tcNewlyValid ?? 0) > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">VALID 전환</p>
+                  <p className={cn('text-base font-bold', (revalidationResult.tcNewlyValid ?? 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white')}>{(revalidationResult.tcNewlyValid ?? 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">여전히 PENDING</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">{(revalidationResult.tcStillPending ?? 0).toLocaleString()}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', (revalidationResult.tcErrors ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">오류</p>
+                  <p className={cn('text-base font-bold', (revalidationResult.tcErrors ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.tcErrors ?? 0}</p>
+                </div>
               </div>
-              <div className={cn(
-                'rounded-lg p-3 text-center',
-                revalidationResult.newlyValid > 0
-                  ? 'bg-green-50 dark:bg-green-900/20'
-                  : 'bg-gray-50 dark:bg-gray-700/50'
-              )}>
-                <p className="text-xs text-gray-500 dark:text-gray-400">새로 유효</p>
-                <p className={cn(
-                  'text-xl font-bold mt-1',
-                  revalidationResult.newlyValid > 0
-                    ? 'text-green-600 dark:text-green-400'
-                    : 'text-gray-900 dark:text-white'
-                )}>
-                  {revalidationResult.newlyValid}
-                </p>
-              </div>
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
-                <p className="text-xs text-gray-500 dark:text-gray-400">변경 없음</p>
-                <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
-                  {revalidationResult.unchanged.toLocaleString()}
-                </p>
-              </div>
-              <div className={cn(
-                'rounded-lg p-3 text-center',
-                revalidationResult.errors > 0
-                  ? 'bg-red-50 dark:bg-red-900/20'
-                  : 'bg-gray-50 dark:bg-gray-700/50'
-              )}>
-                <p className="text-xs text-gray-500 dark:text-gray-400">오류</p>
-                <p className={cn(
-                  'text-xl font-bold mt-1',
-                  revalidationResult.errors > 0
-                    ? 'text-red-600 dark:text-red-400'
-                    : 'text-gray-900 dark:text-white'
-                )}>
-                  {revalidationResult.errors}
-                </p>
+            </div>
+
+            {/* Step 3: CRL Re-check */}
+            <div className="border border-purple-200 dark:border-purple-800 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3">
+                Step 3: CRL 폐기 재검사
+              </h4>
+              <div className="grid grid-cols-5 gap-2 text-center">
+                <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">검사</p>
+                  <p className="text-base font-bold text-purple-700 dark:text-purple-300">{(revalidationResult.crlChecked ?? 0).toLocaleString()}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', (revalidationResult.crlRevoked ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">폐기</p>
+                  <p className={cn('text-base font-bold', (revalidationResult.crlRevoked ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.crlRevoked ?? 0}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">CRL 없음</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">{(revalidationResult.crlUnavailable ?? 0).toLocaleString()}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">CRL 만료</p>
+                  <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.crlExpired ?? 0}</p>
+                </div>
+                <div className={cn('rounded-lg p-2', (revalidationResult.crlErrors ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">오류</p>
+                  <p className={cn('text-base font-bold', (revalidationResult.crlErrors ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.crlErrors ?? 0}</p>
+                </div>
               </div>
             </div>
 
@@ -991,6 +1074,261 @@ export function SyncDashboard() {
             <div className="flex justify-end pt-2">
               <button
                 onClick={() => setRevalidationResult(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Sync Check Result Dialog */}
+      {syncCheckResult && (
+        <Dialog
+          isOpen={!!syncCheckResult}
+          onClose={() => setSyncCheckResult(null)}
+          title="동기화 검사 완료"
+          size="lg"
+        >
+          <div className="space-y-4">
+            {/* Status Banner */}
+            <div className={cn(
+              'flex items-center gap-3 p-3 rounded-lg',
+              syncCheckResult.status === 'SYNCED'
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                : syncCheckResult.status === 'DISCREPANCY'
+                  ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800'
+                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            )}>
+              {syncCheckResult.status === 'SYNCED' ? (
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+              ) : syncCheckResult.status === 'DISCREPANCY' ? (
+                <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              )}
+              <span className={cn(
+                'text-sm font-medium',
+                syncCheckResult.status === 'SYNCED'
+                  ? 'text-green-800 dark:text-green-300'
+                  : syncCheckResult.status === 'DISCREPANCY'
+                    ? 'text-yellow-800 dark:text-yellow-300'
+                    : 'text-red-800 dark:text-red-300'
+              )}>
+                {syncCheckResult.status === 'SYNCED'
+                  ? 'DB와 LDAP이 완전히 동기화되어 있습니다.'
+                  : syncCheckResult.status === 'DISCREPANCY'
+                    ? `${syncCheckResult.discrepancies?.total ?? 0}건의 불일치가 감지되었습니다.`
+                    : '동기화 검사 중 오류가 발생했습니다.'}
+              </span>
+              {syncCheckResult.checkDurationMs && (
+                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
+                  {syncCheckResult.checkDurationMs < 1000
+                    ? `${syncCheckResult.checkDurationMs}ms`
+                    : `${(syncCheckResult.checkDurationMs / 1000).toFixed(1)}초`}
+                </span>
+              )}
+            </div>
+
+            {/* DB vs LDAP Counts */}
+            {syncCheckResult.dbCounts && syncCheckResult.ldapCounts && (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <ArrowRightLeft className="w-4 h-4 text-purple-500" />
+                  DB ↔ LDAP 인증서 수량 비교
+                </h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-slate-100 dark:bg-gray-700">
+                      <tr>
+                        <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">유형</th>
+                        <th className="text-right py-2 px-3 font-semibold text-blue-600 dark:text-blue-400">DB</th>
+                        <th className="text-right py-2 px-3 font-semibold text-green-600 dark:text-green-400">LDAP</th>
+                        <th className="text-right py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">차이</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {([
+                        { key: 'csca' as const, label: 'CSCA' },
+                        { key: 'mlsc' as const, label: 'MLSC' },
+                        { key: 'dsc' as const, label: 'DSC' },
+                        { key: 'dscNc' as const, label: 'DSC_NC' },
+                        { key: 'crl' as const, label: 'CRL' },
+                      ]).map(({ key, label }) => {
+                        const dbCount = syncCheckResult.dbCounts?.[key] ?? 0;
+                        const ldapCount = syncCheckResult.ldapCounts?.[key] ?? 0;
+                        const diff = syncCheckResult.discrepancies?.[key] ?? 0;
+                        return (
+                          <tr key={key} className="border-b border-gray-100 dark:border-gray-700/50">
+                            <td className="py-2 px-3 text-gray-700 dark:text-gray-300 font-medium">{label}</td>
+                            <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                              {dbCount.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-semibold text-gray-900 dark:text-white">
+                              {ldapCount.toLocaleString()}
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              {diff !== 0 ? (
+                                <span className={cn('font-mono font-semibold', diff > 0 ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400')}>
+                                  {diff > 0 ? '+' : ''}{diff}
+                                </span>
+                              ) : (
+                                <span className="text-green-600 dark:text-green-400 font-semibold">✓</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Close Button */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSyncCheckResult(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Daily Sync Trigger Result Dialog */}
+      {dailySyncResult && (
+        <Dialog
+          isOpen={!!dailySyncResult}
+          onClose={() => setDailySyncResult(null)}
+          title="수동 동기화"
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className={cn(
+              'flex items-center gap-3 p-3 rounded-lg',
+              dailySyncResult.success
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            )}>
+              {dailySyncResult.success ? (
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              )}
+              <span className={cn(
+                'text-sm font-medium',
+                dailySyncResult.success
+                  ? 'text-green-800 dark:text-green-300'
+                  : 'text-red-800 dark:text-red-300'
+              )}>
+                {dailySyncResult.success
+                  ? '일일 동기화가 트리거되었습니다.'
+                  : dailySyncResult.message}
+              </span>
+            </div>
+
+            {dailySyncResult.success && (
+              <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-blue-500" />
+                  실행 작업
+                </h4>
+                <div className="space-y-2">
+                  {[
+                    { icon: <Play className="w-3.5 h-3.5 text-blue-500" />, label: '동기화 상태 검사 (DB ↔ LDAP)' },
+                    { icon: <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />, label: '인증서 재검증 (만료·Trust Chain·CRL)', note: config?.revalidateCertsOnSync ? '활성화' : '비활성화' },
+                    { icon: <RotateCcw className="w-3.5 h-3.5 text-orange-500" />, label: '불일치 자동 조정 (Reconciliation)', note: config?.autoReconcile ? '활성화' : '비활성화' },
+                  ].map((step, i) => (
+                    <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="flex items-center justify-center w-6 h-6 bg-white dark:bg-gray-600 rounded-full text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm">
+                        {i + 1}
+                      </div>
+                      {step.icon}
+                      <span className="text-sm text-gray-700 dark:text-gray-300 flex-1">{step.label}</span>
+                      {step.note && (
+                        <span className={cn(
+                          'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                          step.note === '활성화'
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                            : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+                        )}>
+                          {step.note}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+                  백그라운드에서 실행됩니다. 완료 후 이력에서 결과를 확인할 수 있습니다.
+                </p>
+              </div>
+            )}
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setDailySyncResult(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Config Save Result Dialog */}
+      {configSaveResult && (
+        <Dialog
+          isOpen={!!configSaveResult}
+          onClose={() => setConfigSaveResult(null)}
+          title="설정 저장 완료"
+          size="md"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+              <span className="text-sm font-medium text-green-800 dark:text-green-300">
+                동기화 서비스 설정이 저장되었습니다.
+              </span>
+            </div>
+
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg divide-y divide-gray-200 dark:divide-gray-700">
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-2">
+                  <CalendarClock className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">일일 동기화</span>
+                </div>
+                <span className={cn('text-sm font-semibold', configSaveResult.dailySyncEnabled ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500')}>
+                  {configSaveResult.dailySyncEnabled ? `매일 ${configSaveResult.dailySyncTime}` : '비활성화'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-green-500" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">인증서 자동 재검증</span>
+                </div>
+                <span className={cn('text-sm font-semibold', configSaveResult.revalidateCertsOnSync ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500')}>
+                  {configSaveResult.revalidateCertsOnSync ? '활성화' : '비활성화'}
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4 text-orange-500" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">불일치 자동 조정</span>
+                </div>
+                <span className={cn('text-sm font-semibold', configSaveResult.autoReconcile ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-gray-500')}>
+                  {configSaveResult.autoReconcile ? '활성화' : '비활성화'}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setConfigSaveResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 확인
@@ -1082,7 +1420,7 @@ export function SyncDashboard() {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <ShieldCheck className="w-5 h-5 text-green-500" />
-                만료 상태 자동 갱신
+                인증서 자동 재검증
               </label>
               <button
                 type="button"

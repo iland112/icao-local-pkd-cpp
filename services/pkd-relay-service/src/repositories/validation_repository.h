@@ -73,6 +73,42 @@ public:
         int durationMs
     );
 
+    /**
+     * @brief Save extended revalidation history with trust chain and CRL results
+     */
+    bool saveRevalidationHistoryExtended(
+        int totalProcessed, int newlyExpired, int newlyValid,
+        int unchanged, int errors, int durationMs,
+        int tcProcessed, int tcNewlyValid, int tcStillPending, int tcErrors,
+        int crlChecked, int crlRevoked, int crlUnavailable, int crlExpired, int crlErrors
+    );
+
+    /**
+     * @brief Find DSCs for trust chain re-validation
+     * Returns DSC validation_result rows where csca_found = FALSE (PENDING/INVALID)
+     * @return JSON array with id, certificate_id, country_code, certificate_data
+     */
+    Json::Value findDscsForTrustChainRevalidation();
+
+    /**
+     * @brief Find DSCs for CRL re-check
+     * Returns VALID/EXPIRED_VALID DSC validation_result rows
+     * @return JSON array with id, certificate_id, country_code, certificate_data
+     */
+    Json::Value findDscsForCrlRecheck();
+
+    /**
+     * @brief Update trust chain status after re-validation
+     */
+    bool updateTrustChainStatus(const std::string& id, const std::string& newStatus,
+                                 bool cscaFound, const std::string& trustChainMessage);
+
+    /**
+     * @brief Update CRL check status (mark as INVALID if revoked)
+     */
+    bool updateCrlStatus(const std::string& id, const std::string& newStatus,
+                          const std::string& crlMessage);
+
 private:
     common::IQueryExecutor* queryExecutor_;
 };

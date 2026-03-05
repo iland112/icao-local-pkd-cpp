@@ -282,6 +282,17 @@ export interface RevalidationResult {
   unchanged: number;
   errors: number;
   durationMs: number;
+  // Step 2: Trust Chain re-validation
+  tcProcessed: number;
+  tcNewlyValid: number;
+  tcStillPending: number;
+  tcErrors: number;
+  // Step 3: CRL re-check
+  crlChecked: number;
+  crlRevoked: number;
+  crlUnavailable: number;
+  crlExpired: number;
+  crlErrors: number;
 }
 
 export interface RevalidationHistoryItem {
@@ -293,6 +304,17 @@ export interface RevalidationHistoryItem {
   unchanged: number;
   errors: number;
   durationMs: number;
+  // Step 2: Trust Chain re-validation
+  tcProcessed: number;
+  tcNewlyValid: number;
+  tcStillPending: number;
+  tcErrors: number;
+  // Step 3: CRL re-check
+  crlChecked: number;
+  crlRevoked: number;
+  crlUnavailable: number;
+  crlExpired: number;
+  crlErrors: number;
 }
 
 /**

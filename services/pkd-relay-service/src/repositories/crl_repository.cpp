@@ -124,6 +124,31 @@ bool CrlRepository::markStoredInLdap(const std::string& fingerprint) {
     }
 }
 
+Json::Value CrlRepository::findCrlByCountryCode(const std::string& countryCode) {
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string storedFlag = common::db::boolLiteral(dbType, true);
+
+        // Oracle: DBMS_LOB.SUBSTR to avoid LOB truncation
+        std::string crlBinExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(crl_binary, DBMS_LOB.GETLENGTH(crl_binary), 1)) as crl_binary"
+            : "crl_binary";
+        std::string query =
+            "SELECT " + crlBinExpr + ", this_update, next_update "
+            "FROM crl WHERE country_code = $1 AND stored_in_ldap = " + storedFlag + " "
+            "ORDER BY this_update DESC" + common::db::limitClause(dbType, 1);
+
+        Json::Value results = queryExecutor_->executeQuery(query, {countryCode});
+        if (results.isArray() && results.size() > 0) {
+            return results[0];
+        }
+        return Json::nullValue;
+    } catch (const std::exception& e) {
+        spdlog::error("[CrlRepository] findCrlByCountryCode failed for {}: {}", countryCode, e.what());
+        return Json::nullValue;
+    }
+}
+
 domain::Crl CrlRepository::jsonToCrl(const Json::Value& row) {
     // Parse string fields
     std::string id = row["id"].asString();
