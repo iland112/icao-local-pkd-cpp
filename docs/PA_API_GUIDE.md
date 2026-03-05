@@ -1717,9 +1717,10 @@ API Key를 사용하는 경우 발생할 수 있는 추가 에러:
 - PA 검증 시 SOD에서 추출한 DSC를 자동으로 Local PKD의 certificate 테이블에 등록
 - `source_type='PA_EXTRACTED'` 로 등록 출처 추적
 - SHA-256 fingerprint 기반 중복 검사 (이미 등록된 DSC 재등록 방지)
+- **대부분의 DSC는 ICAO PKD에서 이미 수신한 인증서와 동일**하므로 중복 검사에 의해 저장되지 않음. ICAO PKD에 없는 신규 DSC만 실제로 저장됨
 - X.509 메타데이터 전체 추출 (signature_algorithm, public_key_algorithm, public_key_size, is_self_signed 등)
 - 응답에 `dscAutoRegistration` 필드 추가
-- `stored_in_ldap=false`로 등록되며, PKD Relay reconciliation을 통해 LDAP에 동기화
+- `stored_in_ldap=false`로 등록되며, PKD Relay reconciliation을 통해 **ICAO PKD DSC와 동일한 LDAP DIT 경로**(`o=dsc,c={COUNTRY},dc=data,...`)에 동기화. 출처별 DIT 분리 없음 (ICAO 표준 및 Keyfactor NPKD 관행 준수, 자세한 내용은 [CERTIFICATE_SOURCE_MANAGEMENT.md](CERTIFICATE_SOURCE_MANAGEMENT.md) 참조)
 
 **DG2 JPEG2000 → JPEG 자동 변환**:
 - 브라우저에서 JPEG2000을 렌더링할 수 없으므로 서버에서 자동 변환

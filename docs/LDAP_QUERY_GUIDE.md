@@ -90,6 +90,16 @@ dc=ldap,dc=smartcoreinc,dc=com (Base DN)
                 └── o=dsc                     # DSC_NC certificates
 ```
 
+### 인증서 출처와 DIT 경로
+
+LDAP DIT 위치는 **인증서 유형(type)과 국가(country)**에 의해 결정되며, 인증서 출처(source)와 무관하다.
+ICAO PKD에서 수신한 DSC, PA 검증에서 추출한 DSC, 개별 업로드한 DSC 모두 동일한 `o=dsc,c={COUNTRY},dc=data,...` 경로에 저장된다.
+
+출처 추적은 DB의 `certificate.source_type` 컬럼으로 관리한다 (`LDIF_PARSED`, `ML_PARSED`, `FILE_UPLOAD`, `PA_EXTRACTED`, `DL_PARSED`).
+
+> 이 정책은 ICAO 표준, Keyfactor NPKD(상용), JMRTD(오픈소스) 등 주요 구현체의 관행과 일치한다.
+> 자세한 내용은 [CERTIFICATE_SOURCE_MANAGEMENT.md](CERTIFICATE_SOURCE_MANAGEMENT.md) 참조.
+
 ## 일반적인 조회 예제
 
 ### 1. 특정 국가의 모든 인증서 조회

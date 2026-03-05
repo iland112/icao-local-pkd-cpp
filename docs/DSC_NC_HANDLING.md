@@ -153,6 +153,10 @@ LdapCertificateRepository.findDscBySubjectDn()
 
 **A**: ICAO가 2021년에 nc-data를 deprecated했으므로, Reconciliation 범위에서 DSC_NC는 제외한다. DSC_NC의 LDAP 동기화 상태(`stored_in_ldap`)는 업로드 시 설정되며, 이후 변경하지 않는다.
 
+### Q: PA 검증에서 추출한 DSC는 LDAP DIT의 어디에 저장되는가?
+
+**A**: PA_EXTRACTED DSC는 ICAO PKD에서 수신한 DSC와 **동일한 LDAP DIT 경로**에 저장된다: `cn={FINGERPRINT},o=dsc,c={COUNTRY},dc=data,...`. ICAO 표준 및 Keyfactor NPKD 레퍼런스 구현 모두 인증서 출처(source)에 의한 DIT 분리를 하지 않으며, 출처 추적은 DB의 `source_type` 컬럼으로 관리한다. 단, PA에서 추출한 DSC는 대부분 ICAO PKD DSC와 동일한 인증서(동일 fingerprint)이므로 중복 검사에 의해 저장되지 않으며, **ICAO PKD에 없는 신규 DSC만** 실제로 DB + LDAP에 저장된다. 자세한 내용은 [CERTIFICATE_SOURCE_MANAGEMENT.md](CERTIFICATE_SOURCE_MANAGEMENT.md) 참조.
+
 ---
 
 ## 7. 운영 데이터 현황
