@@ -222,6 +222,7 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // With this check, duplicates are skipped in ~0.001ms (hash lookup only).
     if (g_services->certificateRepository()->isFingerprintCached(fingerprint)) {
         X509_free(cert);
+        enhancedStats.totalCertificates++;
         enhancedStats.duplicateCount++;
         return true;  // Already processed — skip validation, DB save, and LDAP write
     }
