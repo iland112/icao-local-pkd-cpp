@@ -20,7 +20,7 @@ import {
   Save,
   X as CloseIcon,
 } from 'lucide-react';
-import { syncServiceApi, type SyncConfigResponse, type RevalidationHistoryItem, type UpdateSyncConfigRequest } from '@/services/api';
+import { syncServiceApi, type SyncConfigResponse, type RevalidationHistoryItem, type RevalidationResult, type UpdateSyncConfigRequest } from '@/services/api';
 import type { SyncStatusResponse, SyncHistoryItem, SyncStatusType } from '@/types';
 import { cn } from '@/utils/cn';
 import { Dialog } from '@/components/common/Dialog';
@@ -38,6 +38,7 @@ export function SyncDashboard() {
   const [showConfigDialog, setShowConfigDialog] = useState(false);
   const [editedConfig, setEditedConfig] = useState<UpdateSyncConfigRequest>({});
   const [saving, setSaving] = useState(false);
+  const [revalidationResult, setRevalidationResult] = useState<RevalidationResult | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -101,7 +102,9 @@ export function SyncDashboard() {
   const handleRevalidation = async () => {
     setRevalidating(true);
     try {
-      await syncServiceApi.triggerRevalidation();
+      const res = await syncServiceApi.triggerRevalidation();
+      const result = res.data as RevalidationResult;
+      setRevalidationResult(result);
       await fetchData();
     } catch (err) {
       if (import.meta.env.DEV) console.error('Revalidation failed:', err);
@@ -879,6 +882,124 @@ export function SyncDashboard() {
       </div>
 
       {/* Config Edit Dialog */}
+      {/* Revalidation Result Dialog */}
+      {revalidationResult && (
+        <Dialog
+          isOpen={!!revalidationResult}
+          onClose={() => setRevalidationResult(null)}
+          title="인증서 재검증 완료"
+          size="md"
+        >
+          <div className="space-y-4">
+            {/* Status Banner */}
+            <div className={cn(
+              'flex items-center gap-3 p-3 rounded-lg',
+              revalidationResult.success
+                ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+            )}>
+              {revalidationResult.success ? (
+                <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
+              )}
+              <span className={cn(
+                'text-sm font-medium',
+                revalidationResult.success
+                  ? 'text-green-800 dark:text-green-300'
+                  : 'text-red-800 dark:text-red-300'
+              )}>
+                {revalidationResult.success
+                  ? `${revalidationResult.totalProcessed.toLocaleString()}건의 인증서를 검증했습니다.`
+                  : '재검증 처리 중 오류가 발생했습니다.'}
+              </span>
+            </div>
+
+            {/* Result Grid */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400">처리된 인증서</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
+                  {revalidationResult.totalProcessed.toLocaleString()}
+                </p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400">소요 시간</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
+                  {revalidationResult.durationMs < 1000
+                    ? `${revalidationResult.durationMs}ms`
+                    : `${(revalidationResult.durationMs / 1000).toFixed(1)}초`}
+                </p>
+              </div>
+              <div className={cn(
+                'rounded-lg p-3 text-center',
+                revalidationResult.newlyExpired > 0
+                  ? 'bg-orange-50 dark:bg-orange-900/20'
+                  : 'bg-gray-50 dark:bg-gray-700/50'
+              )}>
+                <p className="text-xs text-gray-500 dark:text-gray-400">새로 만료</p>
+                <p className={cn(
+                  'text-xl font-bold mt-1',
+                  revalidationResult.newlyExpired > 0
+                    ? 'text-orange-600 dark:text-orange-400'
+                    : 'text-gray-900 dark:text-white'
+                )}>
+                  {revalidationResult.newlyExpired}
+                </p>
+              </div>
+              <div className={cn(
+                'rounded-lg p-3 text-center',
+                revalidationResult.newlyValid > 0
+                  ? 'bg-green-50 dark:bg-green-900/20'
+                  : 'bg-gray-50 dark:bg-gray-700/50'
+              )}>
+                <p className="text-xs text-gray-500 dark:text-gray-400">새로 유효</p>
+                <p className={cn(
+                  'text-xl font-bold mt-1',
+                  revalidationResult.newlyValid > 0
+                    ? 'text-green-600 dark:text-green-400'
+                    : 'text-gray-900 dark:text-white'
+                )}>
+                  {revalidationResult.newlyValid}
+                </p>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 text-center">
+                <p className="text-xs text-gray-500 dark:text-gray-400">변경 없음</p>
+                <p className="text-xl font-bold text-gray-900 dark:text-white mt-1">
+                  {revalidationResult.unchanged.toLocaleString()}
+                </p>
+              </div>
+              <div className={cn(
+                'rounded-lg p-3 text-center',
+                revalidationResult.errors > 0
+                  ? 'bg-red-50 dark:bg-red-900/20'
+                  : 'bg-gray-50 dark:bg-gray-700/50'
+              )}>
+                <p className="text-xs text-gray-500 dark:text-gray-400">오류</p>
+                <p className={cn(
+                  'text-xl font-bold mt-1',
+                  revalidationResult.errors > 0
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-gray-900 dark:text-white'
+                )}>
+                  {revalidationResult.errors}
+                </p>
+              </div>
+            </div>
+
+            {/* Close Button */}
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setRevalidationResult(null)}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
       {showConfigDialog && config && (
         <Dialog
           isOpen={showConfigDialog}
