@@ -1,6 +1,6 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.29.0
+**Current Version**: v2.29.1
 **Period**: 2026-01-21 ~ 2026-03-05
 **Total Releases**: 59+
 
@@ -10,6 +10,7 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.29.1 | 03-05 | Fix | SSE HTTP/2 프로토콜 에러 수정 + 업로드 통계 totalCertificates 누락 수정 |
 | v2.29.0 | 03-05 | Feature | 실시간 알림 시스템 (SSE) + DSC 재검증 + source_type 수정 |
 | v2.28.2 | 03-05 | Fix | 코드 안정성 강화 3차 (CRITICAL 4건 + HIGH 4건) |
 | v2.28.1 | 03-04 | Fix | 메모리 안전 + 예외 처리 + 보안 강화 (CMS 누수, LDAP 즉시 해제, OEM 포트 제거) |
@@ -80,6 +81,20 @@
 ---
 
 ## 2026-03 (March)
+
+### v2.29.1 (2026-03-05) - SSE HTTP/2 프로토콜 에러 수정 + 업로드 통계 누락 수정
+
+**nginx SSE + HTTP/2 호환성 수정**
+- **증상**: HTTPS(HTTP/2) 환경에서 SSE 스트림 연결 시 `ERR_HTTP2_PROTOCOL_ERROR 200 (OK)` 콘솔 에러
+- **원인**: nginx HTTP/2에서 SSE의 chunked transfer encoding이 호환되지 않음
+- **수정**: SSE location 블록 4곳(`/api/progress`, `/api/sync/notifications`)에 `chunked_transfer_encoding off;` 추가
+- 대상 파일: `api-gateway-ssl.conf`, `api-gateway.conf`
+
+**LDIF 업로드 totalCertificates 통계 수정**
+- **증상**: 이미 업로드된 LDIF 파일 재업로드 시 결과 카드에 "파일 전체: 0, 중복: 30,047, 신규 처리: 0"으로 표시 — 상세 통계 섹션 전체 미표시
+- **원인**: `ldif_processor.cpp`의 fingerprint 캐시 히트(중복) 조기 반환 경로에서 `enhancedStats.totalCertificates++` 누락 (v2.26.0 성능 최적화에서 유입)
+- **수정**: 중복 인증서 조기 반환 전 `totalCertificates++` 추가 → 모든 인증서가 중복이어도 정확한 총 수 표시
+- 3 files changed
 
 ### v2.29.0 (2026-03-05) - 실시간 알림 시스템 + DSC 재검증 + source_type 수정
 

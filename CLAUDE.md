@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.0
+**Current Version**: v2.29.1
 **Last Updated**: 2026-03-05
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -583,6 +583,11 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.1 (2026-03-05) - SSE HTTP/2 프로토콜 에러 수정 + 업로드 통계 누락 수정
+- **SSE HTTP/2 호환성**: nginx SSE location 블록에 `chunked_transfer_encoding off;` 추가 — HTTPS(HTTP/2) 환경에서 `ERR_HTTP2_PROTOCOL_ERROR` 해결
+- **LDIF 업로드 totalCertificates 수정**: fingerprint 캐시 히트(중복) 조기 반환 시 `totalCertificates++` 누락 수정 — 모든 인증서가 중복일 때 결과 카드 상세 통계 미표시 문제 해결
+- 3 files changed (nginx/api-gateway-ssl.conf, nginx/api-gateway.conf, ldif_processor.cpp)
 
 ### v2.29.0 (2026-03-05) - 실시간 알림 시스템 + DSC 재검증 + source_type 수정
 - **실시간 알림 시스템**: SSE 기반 `NotificationManager` singleton (thread-safe, copy-release-execute 패턴) — Daily Sync/Revalidation/Reconciliation 완료 시 프론트엔드 실시간 알림 전송

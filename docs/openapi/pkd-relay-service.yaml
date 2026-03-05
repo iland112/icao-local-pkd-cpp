@@ -7,13 +7,15 @@ info:
     performs auto-reconciliation, and certificate expiration re-validation.
 
     ## Changelog
+    - **v2.29.1** (2026-03-05): SSE HTTP/2 호환성 수정, 알림 스트림 chunked_transfer_encoding off
+    - **v2.29.0** (2026-03-05): 실시간 알림 시스템 (SSE Notification stream), 3단계 DSC 재검증 (만료+Trust Chain+CRL), revalidation-history 확장
     - **v2.25.5** (2026-03-01): Sync statistics + Reconciliation statistics endpoints 추가
     - **v2.0.0** (2026-02-06): Oracle + PostgreSQL multi-DBMS support, UUID primary keys
     - **v1.6.0** (2026-01-14): Auto Reconcile feature complete (Phase 1-6)
     - **v1.2.0** (2026-01-07): Remove interval sync, keep only daily scheduler
     - **v1.1.0** (2026-01-06): Daily scheduler, certificate re-validation
     - **v1.0.0** (2026-01-03): Initial release
-  version: 2.25.5
+  version: 2.29.1
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -33,6 +35,8 @@ tags:
     description: Auto reconciliation (missing LDAP entries)
   - name: Revalidation
     description: Certificate trust chain re-validation
+  - name: Notifications
+    description: Real-time SSE notification stream
   - name: Config
     description: Service configuration
 
@@ -207,12 +211,22 @@ paths:
   /api/sync/revalidate:
     post:
       tags: [Revalidation]
-      summary: Trigger certificate re-validation
-      description: Re-validate DSC trust chains against CSCA certificates.
+      summary: Trigger 3-step certificate re-validation
+      description: |
+        3단계 인증서 재검증:
+        1. **만료 상태 검사**: 인증서 유효기간 확인 후 상태 업데이트 (VALID ↔ EXPIRED_VALID)
+        2. **Trust Chain 재검증**: PENDING 상태 DSC의 CSCA 서명 재검증
+        3. **CRL 재확인**: 인증서 폐기 상태 재확인
       operationId: triggerRevalidation
       responses:
         '200':
           description: Revalidation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RevalidationResult'
+        '500':
+          description: Revalidation failed
 
   /api/sync/revalidation-history:
     get:
@@ -224,10 +238,60 @@ paths:
           in: query
           schema:
             type: integer
-            default: 20
+            default: 10
       responses:
         '200':
           description: Revalidation history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RevalidationHistoryItem'
+
+  # ============================================
+  # Notifications (SSE)
+  # ============================================
+  /api/sync/notifications/stream:
+    get:
+      tags: [Notifications]
+      summary: SSE notification stream
+      description: |
+        Server-Sent Events 스트림으로 실시간 시스템 알림을 수신한다.
+        연결 즉시 `connected` 이벤트를 수신하며, 이후 백그라운드 작업 완료 시
+        `notification` 이벤트가 브로드캐스트된다.
+
+        ### 이벤트 타입
+        | event | type 필드 | 발생 시점 |
+        |-------|-----------|----------|
+        | `connected` | — | SSE 연결 성공 |
+        | `notification` | `SYNC_CHECK_COMPLETE` | DB-LDAP 동기화 검사 완료 |
+        | `notification` | `REVALIDATION_COMPLETE` | 인증서 재검증 완료 |
+        | `notification` | `RECONCILE_COMPLETE` | Reconciliation 완료 |
+        | `notification` | `DAILY_SYNC_COMPLETE` | 일일 동기화 전체 완료 |
+
+        ### 사용 예시
+        ```javascript
+        const es = new EventSource('/api/sync/notifications/stream');
+        es.addEventListener('notification', (e) => {
+          const data = JSON.parse(e.data);
+          console.log(data.type, data.title, data.message);
+        });
+        ```
+      operationId: getNotificationStream
+      responses:
+        '200':
+          description: SSE stream established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |
+                  SSE 형식 스트림. 각 이벤트는 다음 포맷:
+                  ```
+                  event: notification
+                  data: {"type":"REVALIDATION_COMPLETE","title":"인증서 재검증 완료","message":"30,549건 처리됨","timestamp":"2026-03-05T17:00:00","data":{...}}
+                  ```
 
   # ============================================
   # Configuration & Scheduler
@@ -428,3 +492,114 @@ components:
                 type: integer
               failed:
                 type: integer
+
+    RevalidationResult:
+      type: object
+      description: 3단계 재검증 결과
+      properties:
+        success:
+          type: boolean
+        totalProcessed:
+          type: integer
+          description: Step 1 — 만료 검사 대상 인증서 수
+        newlyExpired:
+          type: integer
+          description: Step 1 — 새로 만료된 인증서 수
+        newlyValid:
+          type: integer
+          description: Step 1 — 새로 유효해진 인증서 수
+        unchanged:
+          type: integer
+          description: Step 1 — 변경 없는 인증서 수
+        errors:
+          type: integer
+          description: Step 1 — 처리 오류 수
+        durationMs:
+          type: integer
+          description: 전체 재검증 소요 시간 (ms)
+        tcProcessed:
+          type: integer
+          description: Step 2 — Trust Chain 재검증 대상 수
+        tcNewlyValid:
+          type: integer
+          description: Step 2 — 새로 검증 성공한 수
+        tcStillPending:
+          type: integer
+          description: Step 2 — 여전히 PENDING인 수
+        tcErrors:
+          type: integer
+          description: Step 2 — Trust Chain 검증 오류 수
+        crlChecked:
+          type: integer
+          description: Step 3 — CRL 확인 대상 수
+        crlRevoked:
+          type: integer
+          description: Step 3 — 폐기된 인증서 수
+        crlUnavailable:
+          type: integer
+          description: Step 3 — CRL 조회 불가 수
+        crlExpired:
+          type: integer
+          description: Step 3 — CRL 만료 수
+        crlErrors:
+          type: integer
+          description: Step 3 — CRL 확인 오류 수
+
+    RevalidationHistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        executedAt:
+          type: string
+          format: date-time
+        totalProcessed:
+          type: integer
+        newlyExpired:
+          type: integer
+        newlyValid:
+          type: integer
+        unchanged:
+          type: integer
+        errors:
+          type: integer
+        durationMs:
+          type: integer
+        tcProcessed:
+          type: integer
+        tcNewlyValid:
+          type: integer
+        tcStillPending:
+          type: integer
+        tcErrors:
+          type: integer
+        crlChecked:
+          type: integer
+        crlRevoked:
+          type: integer
+        crlUnavailable:
+          type: integer
+        crlExpired:
+          type: integer
+        crlErrors:
+          type: integer
+
+    NotificationEvent:
+      type: object
+      description: SSE 알림 이벤트 데이터
+      properties:
+        type:
+          type: string
+          enum: [SYNC_CHECK_COMPLETE, REVALIDATION_COMPLETE, RECONCILE_COMPLETE, DAILY_SYNC_COMPLETE]
+        title:
+          type: string
+          example: 인증서 재검증 완료
+        message:
+          type: string
+          example: 30,549건 처리됨
+        timestamp:
+          type: string
+          format: date-time
+        data:
+          type: object
+          description: 이벤트 타입별 상세 데이터
