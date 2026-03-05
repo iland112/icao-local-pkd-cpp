@@ -108,7 +108,7 @@ export function SyncDashboard() {
       await fetchData();
     } catch (err) {
       if (import.meta.env.DEV) console.error('Revalidation failed:', err);
-      setError('인증서 재검증 실패');
+      setError('인증서 만료 상태 갱신 실패');
     } finally {
       setRevalidating(false);
     }
@@ -277,7 +277,7 @@ export function SyncDashboard() {
             ) : (
               <ShieldCheck className="w-4 h-4" />
             )}
-            {revalidating ? '재검증 중...' : '인증서 재검증'}
+            {revalidating ? '갱신 중...' : '만료 상태 갱신'}
           </button>
           <button
             onClick={handleManualCheck}
@@ -330,7 +330,7 @@ export function SyncDashboard() {
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <ShieldCheck className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">인증서 자동 재검증</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">만료 상태 자동 갱신</span>
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
                 {config.revalidateCertsOnSync ? '활성화' : '비활성화'}
@@ -756,7 +756,7 @@ export function SyncDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <ShieldCheck className="w-5 h-5 text-green-500" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              인증서 재검증 이력
+              만료 상태 갱신 이력
             </h3>
           </div>
 
@@ -859,7 +859,7 @@ export function SyncDashboard() {
         <div className="flex items-start gap-3">
           <Activity className="w-5 h-5 text-blue-500 mt-0.5" />
           <div className="text-sm text-blue-700 dark:text-blue-300">
-            <p className="font-medium mb-1">일일 동기화 및 인증서 재검증</p>
+            <p className="font-medium mb-1">일일 동기화 및 만료 상태 갱신</p>
             {config?.dailySyncEnabled ? (
               <div>
                 <p className="mb-1">
@@ -868,7 +868,7 @@ export function SyncDashboard() {
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
                   <li>PostgreSQL과 LDAP의 데이터 일관성을 검사합니다.</li>
                   {config.revalidateCertsOnSync && (
-                    <li>인증서 만료 상태를 자동으로 재검증합니다.</li>
+                    <li>인증서 만료 상태를 자동으로 갱신합니다.</li>
                   )}
                 </ul>
               </div>
@@ -887,7 +887,7 @@ export function SyncDashboard() {
         <Dialog
           isOpen={!!revalidationResult}
           onClose={() => setRevalidationResult(null)}
-          title="인증서 재검증 완료"
+          title="인증서 만료 상태 갱신 완료"
           size="md"
         >
           <div className="space-y-4">
@@ -911,7 +911,7 @@ export function SyncDashboard() {
               )}>
                 {revalidationResult.success
                   ? `${revalidationResult.totalProcessed.toLocaleString()}건의 인증서를 검증했습니다.`
-                  : '재검증 처리 중 오류가 발생했습니다.'}
+                  : '만료 상태 갱신 중 오류가 발생했습니다.'}
               </span>
             </div>
 
@@ -1082,7 +1082,7 @@ export function SyncDashboard() {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <ShieldCheck className="w-5 h-5 text-green-500" />
-                인증서 자동 재검증
+                만료 상태 자동 갱신
               </label>
               <button
                 type="button"
