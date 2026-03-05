@@ -1013,7 +1013,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
     const std::vector<uint8_t>& certData,
     const std::string& validationStatus,
     const std::string& validationMessage,
-    const x509::CertificateMetadata* preExtractedMetadata
+    const x509::CertificateMetadata* preExtractedMetadata,
+    const std::string& sourceType
 )
 {
     spdlog::debug("[CertificateRepository] Saving certificate: type={}, country={}, fingerprint={}",
@@ -1159,7 +1160,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
                 "not_before, not_after, certificate_data, "
                 "validation_status, validation_message, "
-                "duplicate_count, first_upload_id, created_at, "
+                "duplicate_count, first_upload_id, created_at, source_type, "
                 "version, signature_algorithm, signature_hash_algorithm, "
                 "public_key_algorithm, public_key_size, public_key_curve, "
                 "key_usage, extended_key_usage, "
@@ -1170,7 +1171,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 "$1, $2, $3, $4, $5, $6, $7, $8, "
                 "CASE WHEN $9 IS NULL OR $9 = '' THEN NULL ELSE TO_TIMESTAMP($9, 'YYYY-MM-DD HH24:MI:SS') END, "
                 "CASE WHEN $10 IS NULL OR $10 = '' THEN NULL ELSE TO_TIMESTAMP($10, 'YYYY-MM-DD HH24:MI:SS') END, "
-                "$11, $12, $13, 0, $2, SYSTIMESTAMP, "
+                "$11, $12, $13, 0, $2, SYSTIMESTAMP, $29, "
                 "TO_NUMBER(NULLIF($14, '')), $15, $16, "
                 "$17, TO_NUMBER(NULLIF($18, '')), $19, "
                 "$20, $21, "
@@ -1213,7 +1214,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 aki,                                     // $25
                 crlDpStr,                                // $26
                 ocspUrl,                                 // $27
-                isSelfSignedStr                          // $28
+                isSelfSignedStr,                         // $28
+                sourceType                               // $29
             };
 
             queryExecutor_->executeCommand(insertQuery, insertParams);
@@ -1226,7 +1228,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
                 "not_before, not_after, certificate_data, "
                 "validation_status, validation_message, "
-                "duplicate_count, first_upload_id, created_at, "
+                "duplicate_count, first_upload_id, created_at, source_type, "
                 "version, signature_algorithm, signature_hash_algorithm, "
                 "public_key_algorithm, public_key_size, public_key_curve, "
                 "key_usage, extended_key_usage, "
@@ -1234,7 +1236,7 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 "subject_key_identifier, authority_key_identifier, "
                 "crl_distribution_points, ocsp_responder_url, is_self_signed"
                 ") VALUES ("
-                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1, CURRENT_TIMESTAMP, "
+                "$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 0, $1, CURRENT_TIMESTAMP, $28, "
                 "$13, $14, $15, "
                 "$16, NULLIF($17, '')::INTEGER, $18, "
                 "$19, $20, "
@@ -1270,7 +1272,8 @@ std::pair<std::string, bool> CertificateRepository::saveCertificateWithDuplicate
                 aki,                                     // $24
                 crlDpStr,                                // $25
                 ocspUrl,                                 // $26
-                isSelfSignedStr                          // $27
+                isSelfSignedStr,                         // $27
+                sourceType                               // $28
             };
 
             Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);

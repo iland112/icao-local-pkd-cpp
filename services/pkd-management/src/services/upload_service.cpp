@@ -1047,7 +1047,8 @@ void UploadService::processSingleCertificate(CertificateUploadResult& result, X5
         result.uploadId, certType, countryCode,
         subjectDn, issuerDn, serialNumber, fingerprint,
         notBefore, notAfter, derBytes,
-        "UNKNOWN", ""  // Validation will be done separately
+        "UNKNOWN", "", nullptr,  // Validation will be done separately
+        "FILE_UPLOAD"
     );
 
     if (certId.empty()) {

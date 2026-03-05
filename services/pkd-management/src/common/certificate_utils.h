@@ -177,7 +177,8 @@ std::pair<std::string, bool> saveCertificateWithDuplicateCheck(
     const std::vector<uint8_t>& certData,
     const std::string& validationStatus = "UNKNOWN",
     const std::string& validationMessage = "",
-    const x509::CertificateMetadata* preExtractedMetadata = nullptr
+    const x509::CertificateMetadata* preExtractedMetadata = nullptr,
+    const std::string& sourceType = "FILE_UPLOAD"
 );
 
 /**

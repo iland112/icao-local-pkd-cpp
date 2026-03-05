@@ -588,7 +588,8 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         uploadId, certType, countryCode,
         subjectDn, issuerDn, serialNumber, fingerprint,
         notBefore, notAfter, derBytes,
-        validationStatus, validationMessage, &x509meta
+        validationStatus, validationMessage, &x509meta,
+        "LDIF_PARSED"
     );
 
     if (isDuplicate) {

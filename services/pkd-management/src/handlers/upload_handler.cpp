@@ -650,7 +650,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                             // Save certificate using Repository Pattern
                             auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
-                                fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
+                                fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage, nullptr, "ML_PARSED");
 
                             if (!certId.empty()) {
                                 if (isDuplicate) {
@@ -850,7 +850,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                                         // Save to DB with validation status using Repository Pattern
                                         auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                             uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
-                                            fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
+                                            fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage, nullptr, "ML_PARSED");
 
                                         if (!certId.empty()) {
                                             if (isDuplicate) {
@@ -983,7 +983,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                             // Save certificate using Repository Pattern
                             auto [certId, isDuplicate] = g_services->certificateRepository()->saveCertificateWithDuplicateCheck(
                                 uploadId, certType, countryCode, subjectDn, issuerDn, serialNumber,
-                                fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage);
+                                fingerprint, notBefore, notAfter, derBytes, validationStatus, validationMessage, nullptr, "ML_PARSED");
 
                             if (!certId.empty()) {
                                 if (isDuplicate) {

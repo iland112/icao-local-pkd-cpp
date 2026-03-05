@@ -251,7 +251,8 @@ bool parseMasterListEntryV2(
                     uploadId, "MLSC", certCountryCode,
                     meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
                     meta.notBefore, meta.notAfter, meta.derData,
-                    "UNKNOWN", ""
+                    "UNKNOWN", "", nullptr,
+                    "ML_PARSED"
                 );
 
                 if (certId.empty()) {
@@ -715,7 +716,8 @@ bool processMasterListFile(
                     uploadId, "MLSC", countryCode,
                     meta.subjectDn, meta.issuerDn, meta.serialNumber, meta.fingerprint,
                     meta.notBefore, meta.notAfter, meta.derData,
-                    "UNKNOWN", ""
+                    "UNKNOWN", "", nullptr,
+                    "ML_PARSED"
                 );
 
                 if (!certId.empty()) {
