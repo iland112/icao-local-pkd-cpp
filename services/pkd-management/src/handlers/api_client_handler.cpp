@@ -224,7 +224,7 @@ void ApiClientHandler::handleCreate(
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::API_CLIENT_CREATE);
         auditEntry.success = false;
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("ApiClientHandler::create", e));
     }
@@ -390,7 +390,7 @@ void ApiClientHandler::handleUpdate(
         auditEntry.resourceId = id;
         auditEntry.resourceType = "API_CLIENT";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("ApiClientHandler::update", e));
     }
@@ -433,7 +433,7 @@ void ApiClientHandler::handleDelete(
         auditEntry.resourceId = id;
         auditEntry.resourceType = "API_CLIENT";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("ApiClientHandler::delete", e));
     }
@@ -494,7 +494,7 @@ void ApiClientHandler::handleRegenerate(
         auditEntry.resourceId = id;
         auditEntry.resourceType = "API_CLIENT";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("ApiClientHandler::regenerate", e));
     }

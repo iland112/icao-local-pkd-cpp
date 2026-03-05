@@ -224,7 +224,8 @@ async def get_country_report(code: str):
 
     try:
         maturity = await asyncio.to_thread(_compute_maturity)
-    except Exception:
+    except Exception as e:
+        logger.warning("Failed to compute maturity for %s: %s", code, e)
         maturity = None
 
     # Get risk/anomaly distribution from analysis results

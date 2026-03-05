@@ -103,7 +103,7 @@ std::string DataGroupRepository::insert(
         if (dg.dgNumber.find("DG") == 0) {
             dgNumber = std::stoi(dg.dgNumber.substr(2));
         } else {
-            try { dgNumber = std::stoi(dg.dgNumber); } catch (...) {}
+            try { dgNumber = std::stoi(dg.dgNumber); } catch (...) { /* non-critical: use default */ }
         }
 
         // Step 1: Generate UUID using database-specific function

@@ -243,7 +243,7 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
                 cert["publicKeyAlgorithm"] = row["public_key_algorithm"].asString();
             if (!row.get("public_key_size", Json::nullValue).isNull()) {
                 std::string pks = row.get("public_key_size", "").asString();
-                try { cert["publicKeySize"] = std::stoi(pks); } catch (...) {}
+                try { cert["publicKeySize"] = std::stoi(pks); } catch (...) { /* non-critical: use default */ }
             }
 
             certificates.append(cert);

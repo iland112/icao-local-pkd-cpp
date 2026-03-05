@@ -554,8 +554,8 @@ void MonitoringHandler::handleLoadHistory(
     int minutes = 30;
     auto minutesParam = req->getParameter("minutes");
     if (!minutesParam.empty()) {
-        try { minutes = std::stoi(minutesParam); }
-        catch (...) {}
+        try { minutes = std::max(1, std::min(1440, std::stoi(minutesParam))); }
+        catch (...) { /* non-critical: use default */ }
     }
 
     auto history = collector_->getHistory(minutes);

@@ -365,6 +365,12 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
             return;
         }
 
+        // Validate service dependencies before use
+        if (!g_services->ldapStorageService()) {
+            spdlog::error("LdapStorageService not available for upload {}", uploadId);
+            return;
+        }
+
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
         LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
         LDAP* ld = ldapGuard.get();

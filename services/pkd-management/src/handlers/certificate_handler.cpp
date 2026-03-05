@@ -1432,8 +1432,8 @@ void CertificateHandler::handleCrlReport(
         std::string countryFilter = req->getParameter("country");
         std::string statusFilter = req->getParameter("status");
         int page = 1, size = 50;
-        try { page = std::max(1, std::stoi(req->getParameter("page"))); } catch (...) {}
-        try { size = std::max(1, std::min(200, std::stoi(req->getParameter("size")))); } catch (...) {}
+        try { page = std::max(1, std::min(10000, std::stoi(req->getParameter("page")))); } catch (const std::exception&) { page = 1; }
+        try { size = std::max(1, std::min(200, std::stoi(req->getParameter("size")))); } catch (const std::exception&) { size = 50; }
 
         // Fetch ALL CRLs for aggregation (no filter, reasonable limit)
         Json::Value allCrls = crlRepository_->findAll("", "", 1000, 0);

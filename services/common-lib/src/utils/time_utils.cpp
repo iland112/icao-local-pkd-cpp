@@ -54,11 +54,23 @@ std::chrono::system_clock::time_point asn1TimeToTimePoint(const ASN1_TIME* asn1_
     struct tm tm_time;
     std::memset(&tm_time, 0, sizeof(tm_time));
 
-    // Parse ASN1_TIME
-    const char* str = reinterpret_cast<const char*>(asn1_time->data);
+    // Validate ASN1_TIME data length before parsing
+    if (!asn1_time->data || asn1_time->length < 12) {
+        throw std::runtime_error("ASN1_TIME data too short or null");
+    }
+
+    // Copy to null-terminated buffer for safe sscanf
+    char timeBuf[32];
+    int copyLen = std::min(static_cast<int>(sizeof(timeBuf) - 1), asn1_time->length);
+    std::memcpy(timeBuf, asn1_time->data, copyLen);
+    timeBuf[copyLen] = '\0';
+    const char* str = timeBuf;
 
     if (asn1_time->type == V_ASN1_UTCTIME) {
-        // YYMMDDhhmmssZ
+        // YYMMDDhhmmssZ (minimum 12 chars)
+        if (asn1_time->length < 12) {
+            throw std::runtime_error("UTCTIME too short");
+        }
         int scanned = sscanf(str, "%2d%2d%2d%2d%2d%2d",
                              &tm_time.tm_year, &tm_time.tm_mon, &tm_time.tm_mday,
                              &tm_time.tm_hour, &tm_time.tm_min, &tm_time.tm_sec);
@@ -69,7 +81,10 @@ std::chrono::system_clock::time_point asn1TimeToTimePoint(const ASN1_TIME* asn1_
 
         tm_time.tm_year += (tm_time.tm_year < 50) ? 100 : 0; // Y2K adjustment
     } else if (asn1_time->type == V_ASN1_GENERALIZEDTIME) {
-        // YYYYMMDDhhmmssZ
+        // YYYYMMDDhhmmssZ (minimum 14 chars)
+        if (asn1_time->length < 14) {
+            throw std::runtime_error("GENERALIZEDTIME too short");
+        }
         int scanned = sscanf(str, "%4d%2d%2d%2d%2d%2d",
                              &tm_time.tm_year, &tm_time.tm_mon, &tm_time.tm_mday,
                              &tm_time.tm_hour, &tm_time.tm_min, &tm_time.tm_sec);

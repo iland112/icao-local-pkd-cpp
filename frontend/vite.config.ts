@@ -7,7 +7,10 @@ import path from 'path'
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   define: {
-    __APP_VERSION__: JSON.stringify(process.env.VITE_APP_VERSION || '2.27.1'),
+    __APP_VERSION__: JSON.stringify(process.env.VITE_APP_VERSION || '2.29.2'),
+  },
+  build: {
+    sourcemap: true,
   },
   resolve: {
     alias: {

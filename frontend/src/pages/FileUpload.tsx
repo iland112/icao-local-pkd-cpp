@@ -183,11 +183,15 @@ export function FileUpload() {
     return '';
   }, []);
 
+  const MAX_FILE_SIZE_MB = 100;
   const handleFileSelect = (file: File) => {
-    if (isValidFileType(file)) {
-      setSelectedFile(file);
-      resetStages();
+    if (!isValidFileType(file)) return;
+    if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+      setErrorMessages([`파일 크기가 너무 큽니다 (${formatFileSize(file.size)}). 최대 ${MAX_FILE_SIZE_MB}MB까지 업로드 가능합니다.`]);
+      return;
     }
+    setSelectedFile(file);
+    resetStages();
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -808,7 +812,7 @@ export function FileUpload() {
     <div className="w-full px-4 lg:px-6 py-4">
       {/* Re-upload Confirmation Dialog */}
       {reuploadDialog.show && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">

@@ -349,6 +349,7 @@ export default function DscNcReport() {
                 width={65}
                 tick={((props: any) => {
                   const { x, y, payload } = props;
+                  if (!payload) return null;
                   const code = payload.value;
                   const flagPath = getFlagSvgPath(code);
                   return (

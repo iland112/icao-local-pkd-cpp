@@ -882,7 +882,7 @@ void AuthHandler::handleCreateUser(
         auto auditEntry = icao::audit::createAuditEntryFromRequest(req, icao::audit::OperationType::USER_CREATE);
         auditEntry.success = false;
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("AuthHandler::createUser", e));
     }
@@ -1029,7 +1029,7 @@ void AuthHandler::handleUpdateUser(
         auditEntry.resourceId = userId;
         auditEntry.resourceType = "USER";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("AuthHandler::updateUser", e));
     }
@@ -1095,7 +1095,7 @@ void AuthHandler::handleDeleteUser(
         auditEntry.resourceId = userId;
         auditEntry.resourceType = "USER";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("AuthHandler::deleteUser", e));
     }
@@ -1239,7 +1239,7 @@ void AuthHandler::handleChangePassword(
         auditEntry.resourceId = userId;
         auditEntry.resourceType = "USER";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("AuthHandler::changePassword", e));
     }

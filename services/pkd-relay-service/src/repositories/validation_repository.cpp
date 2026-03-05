@@ -113,7 +113,7 @@ int ValidationRepository::countExpiredByUploadId(const std::string& uploadId) {
             int count = 0;
             const auto& v = result[0]["count"];
             if (v.isInt()) count = v.asInt();
-            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) {} }
+            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) { /* non-critical: use default */ } }
             spdlog::debug("[ValidationRepository] Found {} expired certificates for upload {}", count, uploadId);
             return count;
         }

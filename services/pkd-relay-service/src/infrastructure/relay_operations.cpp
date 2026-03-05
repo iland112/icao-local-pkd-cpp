@@ -76,7 +76,7 @@ icao::relay::DbStats getDbStats(common::IQueryExecutor* executor) {
             int count = 0;
             const auto& v = row["cnt"];
             if (v.isInt()) count = v.asInt();
-            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) {} }
+            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) { /* non-critical: use default */ } }
 
             if (type == "DSC") stats.dscCount = count;
             else if (type == "DSC_NC") stats.dscNcCount = count;
@@ -105,7 +105,7 @@ icao::relay::DbStats getDbStats(common::IQueryExecutor* executor) {
             int count = 0;
             const auto& v = row["cnt"];
             if (v.isInt()) count = v.asInt();
-            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) {} }
+            else if (v.isString()) { try { count = std::stoi(v.asString()); } catch (...) { /* non-critical: use default */ } }
 
             if (type == "CSCA") stats.countryStats[country]["csca"] = count;
             else if (type == "DSC") stats.countryStats[country]["dsc"] = count;

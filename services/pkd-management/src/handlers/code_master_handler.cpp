@@ -96,10 +96,10 @@ void CodeMasterHandler::handleGetAll(
         auto sizeParam = req->getParameter("size");
         int page = 1, size = 200;
         if (!pageParam.empty()) {
-            try { page = std::stoi(pageParam); if (page < 1) page = 1; } catch (...) {}
+            try { page = std::max(1, std::min(10000, std::stoi(pageParam))); } catch (const std::exception&) { page = 1; }
         }
         if (!sizeParam.empty()) {
-            try { size = std::stoi(sizeParam); if (size < 1) size = 20; if (size > 1000) size = 1000; } catch (...) {}
+            try { size = std::max(1, std::min(1000, std::stoi(sizeParam))); } catch (const std::exception&) { size = 200; }
         }
         int offset = (page - 1) * size;
 

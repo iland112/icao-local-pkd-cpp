@@ -372,7 +372,7 @@ void PaHandler::handleVerify(
         auditEntry.success = false;
         auditEntry.resourceType = "PA_VERIFICATION";
         auditEntry.errorMessage = e.what();
-        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) {}
+        try { icao::audit::logOperation(queryExecutor_, auditEntry); } catch (const std::exception& ex) { spdlog::warn("Audit log failed: {}", ex.what()); } catch (...) { spdlog::warn("Unexpected exception in catch-all"); }
 
         callback(common::handler::internalError("PaHandler::handleVerify", e));
     }

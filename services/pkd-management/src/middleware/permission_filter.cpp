@@ -35,17 +35,17 @@ void PermissionFilter::doFilter(
     std::string permsJson;
 
     auto attrs = req->getAttributes();
-    try { username = attrs->get<std::string>("username"); } catch (...) {}
-    try { isAdmin = attrs->get<bool>("is_admin"); } catch (...) {}
-    try { permsJson = attrs->get<std::string>("permissions"); } catch (...) {}
+    try { username = attrs->get<std::string>("username"); } catch (...) { /* non-critical: use default */ }
+    try { isAdmin = attrs->get<bool>("is_admin"); } catch (...) { /* non-critical: use default */ }
+    try { permsJson = attrs->get<std::string>("permissions"); } catch (...) { /* non-critical: use default */ }
 
     // Fall back to session if attributes not available
     if (username.empty()) {
         auto session = req->getSession();
         if (session) {
-            try { username = session->get<std::string>("username"); } catch (...) {}
-            try { isAdmin = session->get<bool>("is_admin"); } catch (...) {}
-            try { permsJson = session->get<std::string>("permissions"); } catch (...) {}
+            try { username = session->get<std::string>("username"); } catch (...) { /* non-critical: use default */ }
+            try { isAdmin = session->get<bool>("is_admin"); } catch (...) { /* non-critical: use default */ }
+            try { permsJson = session->get<std::string>("permissions"); } catch (...) { /* non-critical: use default */ }
         }
     }
 

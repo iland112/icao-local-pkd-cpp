@@ -217,7 +217,7 @@ NginxStatus MetricsCollector::parseNginxStubStatus(const std::string& body) {
         auto pos = line.find(':');
         if (pos != std::string::npos) {
             try { status.activeConnections = std::stoi(line.substr(pos + 1)); }
-            catch (...) {}
+            catch (...) { /* non-critical: use default */ }
         }
     }
 

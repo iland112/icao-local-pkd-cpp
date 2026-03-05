@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.1
-**Last Updated**: 2026-03-05
+**Current Version**: v2.29.2
+**Last Updated**: 2026-03-06
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -583,6 +583,26 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.2 (2026-03-06) - 4차 코드 안정성 강화 + SSE HTTP/2 완전 수정 + 프론트엔드 UI 수정
+- **SSE HTTP/2 완전 수정**: `proxy_hide_header Transfer-Encoding;` 추가 — Drogon 백엔드가 보내는 `transfer-encoding: chunked` 헤더를 nginx에서 제거 (HTTP/2에서 금지된 헤더, RFC 7540)
+- **nginx HTTP/2 문법 업데이트**: `listen 443 ssl http2;` (deprecated) → `listen 443 ssl;` + `http2 on;` (nginx 1.25+)
+- **다이얼로그 z-index 수정**: 8개 파일의 모달 다이얼로그 `z-50` → `z-[70]` (사이드바 `z-[60]` 뒤에 숨기는 문제 해결)
+  - UploadHistory (상세/재시도/삭제 3개), FileUpload, PAHistory, CrlReport, UploadDetail, ApiClientManagement, CertificateDetailDialog, CountryStatisticsDialog
+- **Recharts payload null guard**: 3개 파일의 커스텀 YAxis tick 렌더러에 `if (!payload) return null;` 가드 추가 (AiAnalysisDashboard, DscNcReport, CrlReport)
+- **프론트엔드 파일 크기 검증**: FileUpload 클라이언트측 100MB 제한 추가 (서버 거부 전 사용자 피드백)
+- **ASN1_TIME 버퍼 안전성**: `time_utils.cpp` — `asn1_time->data` 직접 포인터 사용 → null-terminated 버퍼 복사 + 길이 검증 (UTCTIME 12자, GENERALIZEDTIME 14자 최소)
+- **DG2 JPEG2000 이미지 크기 검증**: `dg_parser.cpp` — 10000×10000 최대 치수 + `int` 오버플로 방지 (`int64_t` 안전 곱셈)
+- **JWT 만료시간 검증**: `auth_middleware.cpp` — `atoi()` → `stoi()` + 최소 60초 하한 + 예외 처리
+- **IP 파서 안전 강화**: `isIpAllowed()` IPv4 파서에 옥텟 범위(0-255), 점 개수(3), 유효 문자 검증 추가 + `std::optional` 반환
+- **ReDoS 방어**: API 클라이언트 endpoint 패턴 200자 초과 시 스킵 + regex 컴파일 실패 로깅
+- **페이지네이션 상한**: `page` 파라미터 최대 10000, `maxLines` 파라미터 최대 100000 제한 (CrlReport, CodeMaster, UploadStats)
+- **catch-all 로깅**: 14개소 빈 `catch (...) {}` → `catch (...) { spdlog::warn(...) }` 또는 `/* non-critical */` 주석 (감사 로그, 파라미터 파싱 등)
+- **서비스 의존성 null 체크**: `upload_handler.cpp` LDIF 처리 시 `ldapStorageService()` null 검증 추가
+- **AI 스레드 시작 실패 처리**: `analysis.py` — `threading.Thread.start()` 예외 시 job_status FAILED 설정 + HTTP 500
+- **AI 헬스체크 로깅**: DB 연결 실패 시 예외 메시지 포함, country report maturity 계산 실패 경고 로깅
+- **Monitoring 파라미터 제한**: `minutes` 파라미터 1~1440 범위 제한
+- 33 files changed (0 new, 33 modified), +145 / -62 lines
 
 ### v2.29.1 (2026-03-05) - SSE HTTP/2 프로토콜 에러 수정 + 업로드 통계 누락 수정
 - **SSE HTTP/2 호환성**: nginx SSE location 블록에 `chunked_transfer_encoding off;` 추가 — HTTPS(HTTP/2) 환경에서 `ERR_HTTP2_PROTOCOL_ERROR` 해결

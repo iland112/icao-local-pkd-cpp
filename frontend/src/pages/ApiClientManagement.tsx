@@ -662,7 +662,7 @@ function DialogWrapper({ children, onClose, title, small }: {
   small?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl ${small ? 'max-w-md' : 'max-w-2xl'} w-full mx-4 p-6`}>
         <div className="flex items-center justify-between mb-4">

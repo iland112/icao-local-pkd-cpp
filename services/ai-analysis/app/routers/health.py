@@ -24,8 +24,8 @@ async def health_check():
         with sync_engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         db_connected = True
-    except Exception:
-        logger.warning("Health check: database not reachable")
+    except Exception as e:
+        logger.warning("Health check: database not reachable: %s", e)
 
     return HealthResponse(
         status="healthy",

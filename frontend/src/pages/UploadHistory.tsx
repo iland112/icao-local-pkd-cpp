@@ -735,7 +735,7 @@ export function UploadHistory() {
 
       {/* Detail Dialog */}
       {dialogOpen && selectedUpload && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1219,7 +1219,7 @@ export function UploadHistory() {
 
       {/* Retry Confirmation Dialog */}
       {retryDialogOpen && uploadToRetry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -1308,7 +1308,7 @@ export function UploadHistory() {
 
       {/* Delete Confirmation Dialog */}
       {deleteDialogOpen && uploadToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center">
           {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"

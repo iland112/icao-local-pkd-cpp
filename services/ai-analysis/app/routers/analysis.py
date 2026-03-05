@@ -341,8 +341,15 @@ async def trigger_analysis():
         _job_status["progress"] = 0.0
         _job_status["error_message"] = None
 
-    thread = threading.Thread(target=_run_analysis, daemon=True)
-    thread.start()
+    try:
+        thread = threading.Thread(target=_run_analysis, daemon=True)
+        thread.start()
+    except Exception as e:
+        logger.error("Failed to start analysis thread: %s", e)
+        with _job_lock:
+            _job_status["status"] = "FAILED"
+            _job_status["error_message"] = f"Thread start failed: {e}"
+        raise HTTPException(status_code=500, detail="Failed to start analysis thread")
 
     return ActionResponse(success=True, message="Analysis started")
 

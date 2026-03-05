@@ -433,7 +433,7 @@ void UploadStatsHandler::handleGetMasterListStructure(
         if (auto ml = req->getParameter("maxLines"); !ml.empty()) {
             try {
                 maxLines = std::stoi(ml);
-                if (maxLines < 0) maxLines = asn1MaxLines_;
+                if (maxLines < 0 || maxLines > 100000) maxLines = asn1MaxLines_;
             } catch (...) {
                 maxLines = asn1MaxLines_;
             }

@@ -126,7 +126,16 @@ AuthMiddleware::AuthMiddleware() {
 
     int jwtExpiration = 3600; // Default: 1 hour
     if (jwtExpirationStr) {
-        jwtExpiration = std::atoi(jwtExpirationStr);
+        try {
+            jwtExpiration = std::stoi(jwtExpirationStr);
+            if (jwtExpiration < 60) {
+                spdlog::warn("JWT_EXPIRATION_SECONDS too low ({}), using minimum 60s", jwtExpiration);
+                jwtExpiration = 60;
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("Invalid JWT_EXPIRATION_SECONDS '{}': {}, using default 3600s", jwtExpirationStr, e.what());
+            jwtExpiration = 3600;
+        }
     }
 
     // Initialize JWT service
@@ -488,6 +497,11 @@ std::optional<domain::models::ApiClient> AuthMiddleware::validateApiKey(
 
         bool endpointAllowed = false;
         for (const auto& pattern : client->allowedEndpoints) {
+            // ReDoS defense: reject overly long or complex patterns
+            if (pattern.size() > 200) {
+                spdlog::warn("Skipping endpoint pattern too long ({} chars): {}...", pattern.size(), pattern.substr(0, 50));
+                continue;
+            }
             std::optional<std::regex> cachedRegex;
             {
                 std::lock_guard<std::mutex> lock(s_regexCacheMutex);
@@ -498,6 +512,7 @@ std::optional<domain::models::ApiClient> AuthMiddleware::validateApiKey(
                     try {
                         cachedRegex = std::regex(pattern, std::regex::optimize);
                     } catch (const std::regex_error&) {
+                        spdlog::warn("Invalid regex pattern for endpoint: {}", pattern);
                         cachedRegex = std::nullopt;
                     }
                     if (s_regexCache.size() < MAX_REGEX_CACHE_SIZE) {
@@ -554,28 +569,37 @@ bool AuthMiddleware::isIpAllowed(
             std::string network = normalizedAllowed.substr(0, slashPos);
             int maskBits = common::handler::safeStoi(normalizedAllowed.substr(slashPos + 1), 32, 0, 32);
 
-            // Parse IP addresses to 32-bit integers
-            auto parseIp = [](const std::string& ip) -> uint32_t {
+            // Parse IPv4 address to 32-bit integer with validation
+            auto parseIp = [](const std::string& ip) -> std::optional<uint32_t> {
                 uint32_t result = 0;
-                int octet = 0, shift = 24;
+                int octet = 0, shift = 24, dotCount = 0;
+                bool hasDigit = false;
                 for (char c : ip) {
                     if (c == '.') {
-                        result |= (octet << shift);
+                        if (!hasDigit || octet > 255 || dotCount >= 3) return std::nullopt;
+                        result |= (static_cast<uint32_t>(octet) << shift);
                         shift -= 8;
                         octet = 0;
-                    } else {
+                        hasDigit = false;
+                        dotCount++;
+                    } else if (c >= '0' && c <= '9') {
                         octet = octet * 10 + (c - '0');
+                        if (octet > 255) return std::nullopt;
+                        hasDigit = true;
+                    } else {
+                        return std::nullopt; // Invalid character
                     }
                 }
-                result |= (octet << shift);
+                if (!hasDigit || octet > 255 || dotCount != 3) return std::nullopt;
+                result |= static_cast<uint32_t>(octet);
                 return result;
             };
 
             uint32_t mask = maskBits > 0 ? ~((1U << (32 - maskBits)) - 1) : 0;
-            uint32_t networkAddr = parseIp(network);
-            uint32_t clientAddr = parseIp(normalizedIp);
+            auto networkAddr = parseIp(network);
+            auto clientAddr = parseIp(normalizedIp);
 
-            if ((clientAddr & mask) == (networkAddr & mask)) return true;
+            if (networkAddr && clientAddr && ((*clientAddr & mask) == (*networkAddr & mask))) return true;
         }
 
         // Simple prefix match (e.g., "192.168.1." matches "192.168.1.100")

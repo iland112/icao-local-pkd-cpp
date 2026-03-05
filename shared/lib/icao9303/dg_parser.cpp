@@ -12,6 +12,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 #ifdef HAS_OPENJPEG
 #include <openjpeg.h>
@@ -124,8 +125,22 @@ static std::vector<uint8_t> convertJp2ToJpeg(const std::vector<uint8_t>& jp2Data
     spdlog::debug("[DG2] JPEG2000 decoded: {}x{}, {} components, color_space={}",
         width, height, numComps, static_cast<int>(image->color_space));
 
+    // Prevent integer overflow in buffer allocation (max 10000x10000 = 300MB)
+    constexpr int MAX_DIM = 10000;
+    if (width <= 0 || height <= 0 || width > MAX_DIM || height > MAX_DIM) {
+        opj_image_destroy(image);
+        spdlog::error("[DG2] Invalid image dimensions: {}x{} (max {}x{})", width, height, MAX_DIM, MAX_DIM);
+        return {};
+    }
+    // Safe multiplication check: width * height * 3 must not overflow int
+    if (static_cast<int64_t>(width) * height * 3 > static_cast<int64_t>(std::numeric_limits<int>::max())) {
+        opj_image_destroy(image);
+        spdlog::error("[DG2] Image too large for buffer allocation: {}x{}", width, height);
+        return {};
+    }
+
     // Build RGB buffer
-    std::vector<uint8_t> rgbBuf(width * height * 3);
+    std::vector<uint8_t> rgbBuf(static_cast<size_t>(width) * height * 3);
     for (int y = 0; y < height; y++) {
         for (int x = 0; x < width; x++) {
             int idx = y * width + x;
