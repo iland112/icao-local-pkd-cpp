@@ -61,10 +61,13 @@ set(SOURCE_FILES
     src/infrastructure/service_container.cpp
     src/infrastructure/sync_scheduler.cpp
     src/infrastructure/relay_operations.cpp
+    # Common
+    src/common/notification_manager.cpp
     # Handlers
     src/handlers/health_handler.cpp
     src/handlers/sync_handler.cpp
     src/handlers/reconciliation_handler.cpp
+    src/handlers/notification_handler.cpp
     # Repository Pattern - Domain Models
     src/domain/models/validation_result.cpp
     # Repository Pattern - Repositories
@@ -77,6 +80,9 @@ set(SOURCE_FILES
     src/services/sync_service.cpp
     src/services/reconciliation_service.cpp
     src/services/validation_service.cpp
+    # Adapters (ICscaProvider / ICrlProvider implementations)
+    src/adapters/relay_csca_provider.cpp
+    src/adapters/relay_crl_provider.cpp
 )
 
 set(HEADER_FILES
@@ -88,10 +94,13 @@ set(HEADER_FILES
     src/infrastructure/service_container.h
     src/infrastructure/sync_scheduler.h
     src/infrastructure/relay_operations.h
+    # Common
+    src/common/notification_manager.h
     # Handlers
     src/handlers/health_handler.h
     src/handlers/sync_handler.h
     src/handlers/reconciliation_handler.h
+    src/handlers/notification_handler.h
     # Repository Pattern - Domain Models
     src/domain/models/sync_status.h
     src/domain/models/reconciliation_summary.h
@@ -109,6 +118,9 @@ set(HEADER_FILES
     src/services/sync_service.h
     src/services/reconciliation_service.h
     src/services/validation_service.h
+    # Adapters
+    src/adapters/relay_csca_provider.h
+    src/adapters/relay_crl_provider.h
 )
 
 # =============================================================================
@@ -133,6 +145,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     icao::config         # Shared configuration management library (NEW - v2.4.3)
     icao::exception      # Shared exception handling library (NEW - v2.4.3)
     icao::logging        # Shared structured logging library (NEW - v2.4.3)
+    icao::validation     # Shared ICAO 9303 validation library (trust chain, CRL)
     Drogon::Drogon
     OpenSSL::SSL
     OpenSSL::Crypto

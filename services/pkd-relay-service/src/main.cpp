@@ -35,6 +35,10 @@
 #include "handlers/health_handler.h"
 #include "handlers/sync_handler.h"
 #include "handlers/reconciliation_handler.h"
+#include "handlers/notification_handler.h"
+
+// Notification
+#include "common/notification_manager.h"
 
 // Reconciliation engine (for scheduler daily sync callback)
 #include "relay/sync/reconciliation_engine.h"
@@ -53,6 +57,7 @@ infrastructure::SyncScheduler g_scheduler;
 std::unique_ptr<handlers::HealthHandler> g_healthHandler;
 std::unique_ptr<handlers::SyncHandler> g_syncHandler;
 std::unique_ptr<handlers::ReconciliationHandler> g_reconciliationHandler;
+std::unique_ptr<handlers::NotificationHandler> g_notificationHandler;
 
 // --- Logging Setup ---
 void setupLogging() {
@@ -164,6 +169,12 @@ void registerRoutes() {
         [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
             g_syncHandler->handleTriggerDailySync(req, std::move(cb));
         }, {Post});
+
+    // Notification SSE stream
+    app().registerHandler("/api/sync/notifications/stream",
+        [](const HttpRequestPtr& req, std::function<void(const HttpResponsePtr&)>&& cb) {
+            g_notificationHandler->handleStream(req, std::move(cb));
+        }, {Get});
 
     // OpenAPI specification endpoint
     app().registerHandler("/api/openapi.yaml",
@@ -415,6 +426,8 @@ int main() {
         g_services->ldapPool(),
         g_config);
 
+    g_notificationHandler = std::make_unique<handlers::NotificationHandler>();
+
     // Register HTTP routes
     registerRoutes();
 
@@ -425,11 +438,22 @@ int main() {
 
     // Set scheduler callbacks
     g_scheduler.setSyncCheckFn([&]() {
-        infrastructure::performSyncCheck(
+        auto result = infrastructure::performSyncCheck(
             g_services->queryExecutor(),
             g_services->ldapPool(),
             g_config,
             g_services->syncStatusRepository());
+
+        // Broadcast notification
+        Json::Value data;
+        data["totalDiscrepancy"] = result.totalDiscrepancy;
+        data["status"] = result.status;
+        data["checkDurationMs"] = result.checkDurationMs;
+        notification::NotificationManager::getInstance().broadcast(
+            "SYNC_CHECK_COMPLETE",
+            "DB-LDAP \ub3d9\uae30\ud654 \uac80\uc0ac \uc644\ub8cc",
+            "\uBD88\uc77c\uce58 " + std::to_string(result.totalDiscrepancy) + "\uac74",
+            data);
     });
 
     g_scheduler.setRevalidateFn([&]() {
@@ -440,6 +464,13 @@ int main() {
             spdlog::warn("[Daily] Re-validation had issues: {}",
                         revalResult.get("error", "unknown").asString());
         }
+
+        // Broadcast notification
+        notification::NotificationManager::getInstance().broadcast(
+            "REVALIDATION_COMPLETE",
+            "\uc778\uc99d\uc11c \uc7ac\uac80\uc99d \uc644\ub8cc",
+            std::to_string(revalResult.get("totalProcessed", 0).asInt()) + "\uac74 \ucc98\ub9ac\ub428",
+            revalResult);
     });
 
     g_scheduler.setReconcileFn([&](int syncStatusId) {
@@ -465,6 +496,19 @@ int main() {
             } else {
                 spdlog::error("[Daily] Auto reconcile failed: {}", reconResult.errorMessage);
             }
+
+            // Broadcast notification
+            Json::Value data;
+            data["totalProcessed"] = reconResult.totalProcessed;
+            data["successCount"] = reconResult.successCount;
+            data["failedCount"] = reconResult.failedCount;
+            data["success"] = reconResult.success;
+            notification::NotificationManager::getInstance().broadcast(
+                "RECONCILE_COMPLETE",
+                "Reconciliation \uc644\ub8cc",
+                std::to_string(reconResult.totalProcessed) + "\uac74 \ucc98\ub9ac, " +
+                std::to_string(reconResult.failedCount) + "\uac74 \uc2e4\ud328",
+                data);
         } else {
             spdlog::info("[Daily] No discrepancies detected, skipping auto reconcile");
         }
@@ -487,6 +531,7 @@ int main() {
     g_healthHandler.reset();
     g_syncHandler.reset();
     g_reconciliationHandler.reset();
+    g_notificationHandler.reset();
     g_queryExecutor = nullptr;
     g_services->shutdown();
     g_services.reset();

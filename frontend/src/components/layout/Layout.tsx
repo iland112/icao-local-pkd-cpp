@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Footer } from './Footer';
+import { NotificationListener } from '@/components/notification/NotificationListener';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { cn } from '@/utils/cn';
 
@@ -10,6 +11,9 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Global SSE Notification Listener */}
+      <NotificationListener />
+
       {/* Sidebar */}
       <Sidebar />
 

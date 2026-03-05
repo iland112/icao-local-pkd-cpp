@@ -7,6 +7,7 @@
  */
 
 #include "sync_scheduler.h"
+#include "common/notification_manager.h"
 #include <spdlog/spdlog.h>
 #include <chrono>
 #include <ctime>
@@ -146,8 +147,23 @@ void SyncScheduler::start() {
                         }
 
                         spdlog::info("=== Daily Sync Tasks Completed ===");
+
+                        // Broadcast daily sync completion
+                        icao::relay::notification::NotificationManager::getInstance().broadcast(
+                            "DAILY_SYNC_COMPLETE",
+                            "\uc77c\uc77c \ub3d9\uae30\ud654 \uc644\ub8cc",
+                            "\uc804\uccb4 \ub3d9\uae30\ud654 \uc6cc\ud06c\ud50c\ub85c\uac00 \uc644\ub8cc\ub418\uc5c8\uc2b5\ub2c8\ub2e4");
                     } catch (const std::exception& e) {
                         spdlog::error("Daily sync failed: {}", e.what());
+
+                        // Broadcast daily sync failure
+                        Json::Value errData;
+                        errData["error"] = e.what();
+                        icao::relay::notification::NotificationManager::getInstance().broadcast(
+                            "DAILY_SYNC_FAILED",
+                            "\uc77c\uc77c \ub3d9\uae30\ud654 \uc2e4\ud328",
+                            std::string("\uc624\ub958: ") + e.what(),
+                            errData);
                     }
                 }
             }

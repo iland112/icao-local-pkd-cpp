@@ -1,6 +1,7 @@
-import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home } from 'lucide-react';
+import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home, Bell, CheckCheck, Trash2, RefreshCw, Database, ShieldCheck, GitMerge, Calendar } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
+import { useNotificationStore, type SystemNotification } from '@/stores/notificationStore';
 import { authApi } from '@/services/api';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
@@ -25,17 +26,51 @@ const OPEN_SOURCE_LICENSES = [
   { name: 'scikit-learn', version: '1.x', license: 'BSD-3', url: 'https://scikit-learn.org' },
 ];
 
+/** Get icon and color for notification type */
+function getNotificationMeta(type: string) {
+  switch (type) {
+    case 'SYNC_CHECK_COMPLETE':
+      return { icon: Database, color: 'text-blue-500', bg: 'bg-blue-100 dark:bg-blue-900/30' };
+    case 'REVALIDATION_COMPLETE':
+      return { icon: ShieldCheck, color: 'text-green-500', bg: 'bg-green-100 dark:bg-green-900/30' };
+    case 'RECONCILE_COMPLETE':
+      return { icon: GitMerge, color: 'text-purple-500', bg: 'bg-purple-100 dark:bg-purple-900/30' };
+    case 'DAILY_SYNC_COMPLETE':
+      return { icon: Calendar, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
+    case 'DAILY_SYNC_FAILED':
+      return { icon: RefreshCw, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' };
+    default:
+      return { icon: Bell, color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-800' };
+  }
+}
+
+/** Format relative time in Korean */
+function formatRelativeTime(timestamp: string): string {
+  const diff = Date.now() - new Date(timestamp).getTime();
+  const seconds = Math.floor(diff / 1000);
+  if (seconds < 60) return '방금 전';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  return `${days}일 전`;
+}
+
 export function Header() {
   const { toggleMobile } = useSidebarStore();
   const { darkMode, toggleTheme } = useThemeStore();
+  const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const user = authApi.getStoredUser();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showLicenses, setShowLicenses] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const notificationRef = useRef<HTMLDivElement>(null);
 
   const handleLogout = async () => {
     try {
@@ -49,11 +84,14 @@ export function Header() {
     }
   };
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
+      }
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setIsNotificationOpen(false);
       }
     };
 
@@ -107,6 +145,96 @@ export function Header() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1">
+          {/* Notification Bell */}
+          <div className="relative inline-flex" ref={notificationRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotificationOpen(!isNotificationOpen);
+                setIsUserMenuOpen(false);
+              }}
+              className="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              title="알림"
+              aria-label="알림"
+            >
+              <Bell className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {isNotificationOpen && (
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 z-50">
+                {/* Header */}
+                <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">알림</span>
+                  <div className="flex items-center gap-1">
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllAsRead}
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        title="모두 읽음"
+                      >
+                        <CheckCheck className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                      </button>
+                    )}
+                    {notifications.length > 0 && (
+                      <button
+                        onClick={clearAll}
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                        title="전체 삭제"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Notification List */}
+                <div className="max-h-80 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-8 text-center">
+                      <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500 dark:text-gray-400">알림이 없습니다</p>
+                    </div>
+                  ) : (
+                    notifications.map((n: SystemNotification) => {
+                      const meta = getNotificationMeta(n.type);
+                      const IconComponent = meta.icon;
+                      return (
+                        <button
+                          key={n.id}
+                          onClick={() => markAsRead(n.id)}
+                          className={`w-full text-left px-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
+                            !n.read ? 'bg-blue-50/50 dark:bg-blue-900/10' : ''
+                          }`}
+                        >
+                          <div className="flex gap-2.5">
+                            <div className={`flex-shrink-0 w-7 h-7 rounded-full ${meta.bg} flex items-center justify-center mt-0.5`}>
+                              <IconComponent className={`w-3.5 h-3.5 ${meta.color}`} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-medium text-gray-900 dark:text-white truncate">{n.title}</p>
+                                {!n.read && (
+                                  <span className="flex-shrink-0 w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                                )}
+                              </div>
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5">{n.message}</p>
+                              <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5">{formatRelativeTime(n.timestamp)}</p>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
