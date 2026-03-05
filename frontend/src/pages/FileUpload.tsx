@@ -529,9 +529,12 @@ export function FileUpload() {
       const ts = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}.${String(now.getMilliseconds()).padStart(3, '0')}`;
 
       const addEntry = (eventName: string, detail: string, status: EventLogEntry['status']) => {
-        setEventLogEntries(prev => [...prev, {
-          id: ++eventIdRef.current, timestamp: ts, eventName, detail, status,
-        }]);
+        setEventLogEntries(prev => {
+          const next = [...prev, {
+            id: ++eventIdRef.current, timestamp: ts, eventName, detail, status,
+          }];
+          return next.length > 500 ? next.slice(-500) : next;
+        });
       };
 
       // 1) Errors always logged

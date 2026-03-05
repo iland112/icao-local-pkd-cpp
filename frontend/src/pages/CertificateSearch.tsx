@@ -121,9 +121,16 @@ const CertificateSearch: React.FC = () => {
     fetchCountries();
   }, []);
 
-  // Search when criteria changes
+  // Search when criteria changes (AbortController covers pagination too via criteria.offset)
   useEffect(() => {
     searchCertificates();
+
+    // Cleanup: abort in-flight request when criteria changes or component unmounts
+    return () => {
+      if (searchAbortRef.current) {
+        searchAbortRef.current.abort();
+      }
+    };
   }, [criteria.country, criteria.certType, criteria.validity, criteria.source, criteria.searchTerm, criteria.limit, criteria.offset]);
 
   // Handle search button click

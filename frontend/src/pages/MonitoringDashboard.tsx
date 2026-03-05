@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, CheckCircle2, XCircle, Clock, RefreshCw, Loader2, Gauge, Database, Globe } from 'lucide-react';
 import { monitoringServiceApi, type SystemMetrics, type ServiceHealth, type LoadSnapshot, type HistoryPoint } from '@/services/monitoringApi';
 import { healthApi } from '@/services/pkdApi';
@@ -44,17 +44,21 @@ export default function MonitoringDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
 
-  const fetchData = async () => {
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const fetchData = async (signal?: AbortSignal) => {
     try {
       setError(null);
 
       // Fetch system metrics
       const metricsResponse = await monitoringServiceApi.getSystemOverview();
+      if (signal?.aborted) return;
       setMetrics(metricsResponse.data as any);
 
       // Service health — from backend monitoring service (server-side checks)
       try {
         const healthResponse = await monitoringServiceApi.getServicesHealth();
+        if (signal?.aborted) return;
         const results = healthResponse.data;
         // Monitoring service doesn't check itself — if we got a response, it's UP
         results.push({
@@ -65,7 +69,7 @@ export default function MonitoringDashboard() {
         });
         setServices(results);
       } catch {
-        setServices([]);
+        if (!signal?.aborted) setServices([]);
       }
 
       // Infrastructure health (Database + LDAP)
@@ -97,6 +101,7 @@ export default function MonitoringDashboard() {
         infra.push({ name: 'LDAP', status: 'DOWN', responseTimeMs: 0, errorMessage: 'Connection failed' });
       }
 
+      if (signal?.aborted) return;
       setInfraHealth(infra);
 
       // Fetch load metrics (non-blocking — don't fail the whole page)
@@ -105,25 +110,34 @@ export default function MonitoringDashboard() {
           monitoringServiceApi.getLoadSnapshot(),
           monitoringServiceApi.getLoadHistory(30),
         ]);
-        setLoadSnapshot(snapRes.data);
-        setLoadHistory(histRes.data?.data ?? []);
+        if (!signal?.aborted) {
+          setLoadSnapshot(snapRes.data);
+          setLoadHistory(histRes.data?.data ?? []);
+        }
       } catch {
         // Load metrics are supplementary — don't show error
       }
 
-      setLastUpdate(new Date());
+      if (!signal?.aborted) setLastUpdate(new Date());
     } catch (err) {
+      if (signal?.aborted) return;
       if (import.meta.env.DEV) console.error('Failed to fetch monitoring data:', err);
       setError('모니터링 데이터를 불러오는데 실패했습니다.');
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    fetchData(controller.signal);
+    const interval = setInterval(() => fetchData(controller.signal), 10000);
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, []);
 
   const upCount = services.filter(s => s.status === 'UP').length;
@@ -151,7 +165,7 @@ export default function MonitoringDashboard() {
               <span>{lastUpdate.toLocaleTimeString('ko-KR')}</span>
             </div>
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(abortControllerRef.current?.signal)}
               disabled={loading}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
@@ -172,7 +186,7 @@ export default function MonitoringDashboard() {
             <p className="text-xl text-gray-800 dark:text-white mb-2">모니터링 데이터 로드 실패</p>
             <p className="text-gray-600 dark:text-gray-400 mb-4">{error || '알 수 없는 오류가 발생했습니다.'}</p>
             <button
-              onClick={fetchData}
+              onClick={() => fetchData(abortControllerRef.current?.signal)}
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               다시 시도

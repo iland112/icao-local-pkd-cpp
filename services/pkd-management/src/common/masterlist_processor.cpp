@@ -591,6 +591,11 @@ bool processMasterListFile(
 ) {
     spdlog::info("[ML-FILE] Processing Master List file: {} bytes", content.size());
 
+    if (!g_services) {
+        spdlog::error("[ML-FILE] ServiceContainer not initialized");
+        return false;
+    }
+
     // Reset stats
     stats = MasterListStats();
 

@@ -40,7 +40,9 @@ LDAP* LdapStorageService::getLdapWriteConnection() {
 
     // DoS defense: network timeout to prevent blocking on unresponsive LDAP
     int writeTimeoutSec = 10;
-    if (auto* v = std::getenv("LDAP_WRITE_TIMEOUT")) writeTimeoutSec = std::stoi(v);
+    if (auto* v = std::getenv("LDAP_WRITE_TIMEOUT")) {
+        try { writeTimeoutSec = std::stoi(v); } catch (...) { spdlog::warn("Invalid LDAP_WRITE_TIMEOUT '{}', using default {}", v, writeTimeoutSec); }
+    }
     struct timeval ldapTimeout = {writeTimeoutSec, 0};
     ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
 
@@ -84,7 +86,9 @@ LDAP* LdapStorageService::getLdapReadConnection() {
 
     // DoS defense: network timeout to prevent blocking on unresponsive LDAP
     int networkTimeoutSec = 5;
-    if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) networkTimeoutSec = std::stoi(v);
+    if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) {
+        try { networkTimeoutSec = std::stoi(v); } catch (...) { spdlog::warn("Invalid LDAP_NETWORK_TIMEOUT '{}', using default {}", v, networkTimeoutSec); }
+    }
     struct timeval ldapTimeout = {networkTimeoutSec, 0};
     ldap_set_option(ld, LDAP_OPT_NETWORK_TIMEOUT, &ldapTimeout);
 

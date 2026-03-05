@@ -144,6 +144,16 @@ def _run_analysis(upload_id: str | None = None) -> None:
 
         logger.info("Analysis complete: %d certificates processed", total)
 
+        # Invalidate data cache so report endpoints load fresh results
+        from app.services.feature_engineering import invalidate_certificate_data_cache
+        invalidate_certificate_data_cache()
+
+        # Free large objects to reduce memory footprint
+        del df, metadata, features, combined_scores, if_scores, lof_scores
+        del explanations, risk_scores, risk_factors, forensic_scores, forensic_findings
+        import gc
+        gc.collect()
+
     except Exception as e:
         logger.error("Analysis failed: %s", e, exc_info=True)
         with _job_lock:
@@ -213,95 +223,104 @@ def _save_results(
             if not values:
                 continue
 
+            failed_count = 0
             if settings.db_type == "oracle":
-                for v in values:
-                    conn.execute(
-                        text("""
-                            MERGE INTO ai_analysis_result t
-                            USING (SELECT :certificate_fingerprint AS cf FROM DUAL) s
-                            ON (t.certificate_fingerprint = s.cf)
-                            WHEN MATCHED THEN UPDATE SET
-                                anomaly_score = :anomaly_score,
-                                anomaly_label = :anomaly_label,
-                                isolation_forest_score = :isolation_forest_score,
-                                lof_score = :lof_score,
-                                risk_score = :risk_score,
-                                risk_level = :risk_level,
-                                risk_factors = :risk_factors,
-                                feature_vector = :feature_vector,
-                                anomaly_explanations = :anomaly_explanations,
-                                forensic_risk_score = :forensic_risk_score,
-                                forensic_risk_level = :forensic_risk_level,
-                                forensic_findings = :forensic_findings,
-                                structural_anomaly_score = :structural_anomaly_score,
-                                issuer_anomaly_score = :issuer_anomaly_score,
-                                temporal_anomaly_score = :temporal_anomaly_score,
-                                analysis_version = :analysis_version,
-                                analyzed_at = SYSTIMESTAMP
-                            WHEN NOT MATCHED THEN INSERT (
-                                id, certificate_fingerprint, certificate_type, country_code,
-                                anomaly_score, anomaly_label, isolation_forest_score, lof_score,
-                                risk_score, risk_level, risk_factors,
-                                feature_vector, anomaly_explanations,
-                                forensic_risk_score, forensic_risk_level, forensic_findings,
-                                structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score,
-                                analysis_version
-                            ) VALUES (
-                                :id, :certificate_fingerprint, :certificate_type, :country_code,
-                                :anomaly_score, :anomaly_label, :isolation_forest_score, :lof_score,
-                                :risk_score, :risk_level, :risk_factors,
-                                :feature_vector, :anomaly_explanations,
-                                :forensic_risk_score, :forensic_risk_level, :forensic_findings,
-                                :structural_anomaly_score, :issuer_anomaly_score, :temporal_anomaly_score,
-                                :analysis_version
-                            )
-                        """),
-                        v,
+                oracle_sql = text("""
+                    MERGE INTO ai_analysis_result t
+                    USING (SELECT :certificate_fingerprint AS cf FROM DUAL) s
+                    ON (t.certificate_fingerprint = s.cf)
+                    WHEN MATCHED THEN UPDATE SET
+                        anomaly_score = :anomaly_score,
+                        anomaly_label = :anomaly_label,
+                        isolation_forest_score = :isolation_forest_score,
+                        lof_score = :lof_score,
+                        risk_score = :risk_score,
+                        risk_level = :risk_level,
+                        risk_factors = :risk_factors,
+                        feature_vector = :feature_vector,
+                        anomaly_explanations = :anomaly_explanations,
+                        forensic_risk_score = :forensic_risk_score,
+                        forensic_risk_level = :forensic_risk_level,
+                        forensic_findings = :forensic_findings,
+                        structural_anomaly_score = :structural_anomaly_score,
+                        issuer_anomaly_score = :issuer_anomaly_score,
+                        temporal_anomaly_score = :temporal_anomaly_score,
+                        analysis_version = :analysis_version,
+                        analyzed_at = SYSTIMESTAMP
+                    WHEN NOT MATCHED THEN INSERT (
+                        id, certificate_fingerprint, certificate_type, country_code,
+                        anomaly_score, anomaly_label, isolation_forest_score, lof_score,
+                        risk_score, risk_level, risk_factors,
+                        feature_vector, anomaly_explanations,
+                        forensic_risk_score, forensic_risk_level, forensic_findings,
+                        structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score,
+                        analysis_version
+                    ) VALUES (
+                        :id, :certificate_fingerprint, :certificate_type, :country_code,
+                        :anomaly_score, :anomaly_label, :isolation_forest_score, :lof_score,
+                        :risk_score, :risk_level, :risk_factors,
+                        :feature_vector, :anomaly_explanations,
+                        :forensic_risk_score, :forensic_risk_level, :forensic_findings,
+                        :structural_anomaly_score, :issuer_anomaly_score, :temporal_anomaly_score,
+                        :analysis_version
                     )
+                """)
+                for v in values:
+                    try:
+                        conn.execute(oracle_sql, v)
+                    except Exception as row_err:
+                        failed_count += 1
+                        if failed_count <= 5:
+                            logger.warning("Failed to save result for %s: %s", v.get("certificate_fingerprint", "?"), row_err)
             else:
-                for v in values:
-                    conn.execute(
-                        text("""
-                            INSERT INTO ai_analysis_result (
-                                id, certificate_fingerprint, certificate_type, country_code,
-                                anomaly_score, anomaly_label, isolation_forest_score, lof_score,
-                                risk_score, risk_level, risk_factors,
-                                feature_vector, anomaly_explanations,
-                                forensic_risk_score, forensic_risk_level, forensic_findings,
-                                structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score,
-                                analysis_version
-                            ) VALUES (
-                                :id, :certificate_fingerprint, :certificate_type, :country_code,
-                                :anomaly_score, :anomaly_label, :isolation_forest_score, :lof_score,
-                                :risk_score, :risk_level, CAST(:risk_factors AS JSONB),
-                                CAST(:feature_vector AS JSONB), CAST(:anomaly_explanations AS JSONB),
-                                :forensic_risk_score, :forensic_risk_level, CAST(:forensic_findings AS JSONB),
-                                :structural_anomaly_score, :issuer_anomaly_score, :temporal_anomaly_score,
-                                :analysis_version
-                            )
-                            ON CONFLICT (certificate_fingerprint) DO UPDATE SET
-                                anomaly_score = EXCLUDED.anomaly_score,
-                                anomaly_label = EXCLUDED.anomaly_label,
-                                isolation_forest_score = EXCLUDED.isolation_forest_score,
-                                lof_score = EXCLUDED.lof_score,
-                                risk_score = EXCLUDED.risk_score,
-                                risk_level = EXCLUDED.risk_level,
-                                risk_factors = EXCLUDED.risk_factors,
-                                feature_vector = EXCLUDED.feature_vector,
-                                anomaly_explanations = EXCLUDED.anomaly_explanations,
-                                forensic_risk_score = EXCLUDED.forensic_risk_score,
-                                forensic_risk_level = EXCLUDED.forensic_risk_level,
-                                forensic_findings = EXCLUDED.forensic_findings,
-                                structural_anomaly_score = EXCLUDED.structural_anomaly_score,
-                                issuer_anomaly_score = EXCLUDED.issuer_anomaly_score,
-                                temporal_anomaly_score = EXCLUDED.temporal_anomaly_score,
-                                analysis_version = EXCLUDED.analysis_version,
-                                analyzed_at = NOW()
-                        """),
-                        v,
+                pg_sql = text("""
+                    INSERT INTO ai_analysis_result (
+                        id, certificate_fingerprint, certificate_type, country_code,
+                        anomaly_score, anomaly_label, isolation_forest_score, lof_score,
+                        risk_score, risk_level, risk_factors,
+                        feature_vector, anomaly_explanations,
+                        forensic_risk_score, forensic_risk_level, forensic_findings,
+                        structural_anomaly_score, issuer_anomaly_score, temporal_anomaly_score,
+                        analysis_version
+                    ) VALUES (
+                        :id, :certificate_fingerprint, :certificate_type, :country_code,
+                        :anomaly_score, :anomaly_label, :isolation_forest_score, :lof_score,
+                        :risk_score, :risk_level, CAST(:risk_factors AS JSONB),
+                        CAST(:feature_vector AS JSONB), CAST(:anomaly_explanations AS JSONB),
+                        :forensic_risk_score, :forensic_risk_level, CAST(:forensic_findings AS JSONB),
+                        :structural_anomaly_score, :issuer_anomaly_score, :temporal_anomaly_score,
+                        :analysis_version
                     )
+                    ON CONFLICT (certificate_fingerprint) DO UPDATE SET
+                        anomaly_score = EXCLUDED.anomaly_score,
+                        anomaly_label = EXCLUDED.anomaly_label,
+                        isolation_forest_score = EXCLUDED.isolation_forest_score,
+                        lof_score = EXCLUDED.lof_score,
+                        risk_score = EXCLUDED.risk_score,
+                        risk_level = EXCLUDED.risk_level,
+                        risk_factors = EXCLUDED.risk_factors,
+                        feature_vector = EXCLUDED.feature_vector,
+                        anomaly_explanations = EXCLUDED.anomaly_explanations,
+                        forensic_risk_score = EXCLUDED.forensic_risk_score,
+                        forensic_risk_level = EXCLUDED.forensic_risk_level,
+                        forensic_findings = EXCLUDED.forensic_findings,
+                        structural_anomaly_score = EXCLUDED.structural_anomaly_score,
+                        issuer_anomaly_score = EXCLUDED.issuer_anomaly_score,
+                        temporal_anomaly_score = EXCLUDED.temporal_anomaly_score,
+                        analysis_version = EXCLUDED.analysis_version,
+                        analyzed_at = NOW()
+                """)
+                for v in values:
+                    try:
+                        conn.execute(pg_sql, v)
+                    except Exception as row_err:
+                        failed_count += 1
+                        if failed_count <= 5:
+                            logger.warning("Failed to save result for %s: %s", v.get("certificate_fingerprint", "?"), row_err)
 
             conn.commit()
+            if failed_count > 0:
+                logger.warning("Batch %d-%d: %d/%d rows failed", start, end, failed_count, end - start)
 
             with _job_lock:
                 _job_status["processed_certificates"] = end

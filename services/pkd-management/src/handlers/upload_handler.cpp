@@ -360,6 +360,11 @@ void UploadHandler::processLdifFileAsync(const std::string& uploadId, const std:
 
         spdlog::info("Starting async LDIF processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
 
+        if (!g_services) {
+            spdlog::error("ServiceContainer not initialized — cannot process LDIF upload {}", uploadId);
+            return;
+        }
+
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
         LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
         LDAP* ld = ldapGuard.get();
@@ -460,6 +465,11 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
         ProcessingSlotGuard slotGuard(uploadId);
 
         spdlog::info("Starting async Master List processing for upload: {} (resumeMode: {})", uploadId, resumeMode);
+
+        if (!g_services) {
+            spdlog::error("ServiceContainer not initialized — cannot process Master List upload {}", uploadId);
+            return;
+        }
 
         // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
         LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
@@ -1152,9 +1162,7 @@ void UploadHandler::handleParse(
             processLdifFileAsync(uploadId, contentBytes);
         } else if (fileFormatStr == "ML") {
             // Use Strategy Pattern for Master List processing
-            // Capture member pointers for use in detached thread
-            auto* uploadRepo = uploadRepository_;
-            std::thread([this, uploadId, contentBytes, uploadRepo]() {
+            std::thread([uploadId, contentBytes]() {
                 spdlog::info("Starting async Master List processing via Strategy for upload: {}", uploadId);
 
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)

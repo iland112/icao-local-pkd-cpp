@@ -86,7 +86,9 @@ LDAP* connectLdap(const AppConfig& config) {
         ldap_set_option(ld, LDAP_OPT_PROTOCOL_VERSION, &version);
 
         int networkTimeoutSec = 5;
-        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) networkTimeoutSec = std::stoi(v);
+        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) {
+            try { networkTimeoutSec = std::stoi(v); } catch (...) { spdlog::warn("Invalid LDAP_NETWORK_TIMEOUT '{}', using default {}", v, networkTimeoutSec); }
+        }
         struct timeval timeout;
         timeout.tv_sec = networkTimeoutSec;
         timeout.tv_usec = 0;

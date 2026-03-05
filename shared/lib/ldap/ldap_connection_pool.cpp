@@ -111,9 +111,16 @@ LdapConnection LdapConnectionPool::acquire() {
             lock.lock();
 
             if (ld) {
-                totalConnections_++;
-                spdlog::info("Created new LDAP connection (total={})", totalConnections_.load());
-                return LdapConnection(ld, this);
+                // Re-check after re-acquiring lock — another thread may have filled the pool
+                if (totalConnections_ < maxSize_) {
+                    totalConnections_++;
+                    spdlog::info("Created new LDAP connection (total={})", totalConnections_.load());
+                    return LdapConnection(ld, this);
+                } else {
+                    // Pool was filled by another thread while we were creating — discard
+                    spdlog::debug("LDAP pool filled by another thread, discarding new connection");
+                    ldap_unbind_ext_s(ld, nullptr, nullptr);
+                }
             } else {
                 spdlog::error("Failed to create new LDAP connection");
             }

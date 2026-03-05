@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.28.1
-**Last Updated**: 2026-03-04
+**Current Version**: v2.28.2
+**Last Updated**: 2026-03-05
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -579,6 +579,25 @@ scripts/
 ---
 
 ## Version History
+
+### v2.28.2 (2026-03-05) - 코드 안정성 강화 (3차 코드 리뷰: CRITICAL 4건 + HIGH 4건)
+- **CRITICAL FIX — BN_bn2hex null 체크**: `certificate_utils.cpp` `BN_bn2hex()` 반환값 null 검사 추가 — OOM 시 nullptr dereference 방지
+- **CRITICAL FIX — LDAP 풀 race condition**: `ldap_connection_pool.cpp` `acquire()` — mutex 재획득 후 `totalConnections_ < maxSize_` 재검증, 초과 시 `ldap_unbind_ext_s()` 정리 (2개 스레드 동시 생성 시 풀 오버플로 방지)
+- **CRITICAL FIX — nginx POST 재시도 차단**: `proxy_params` 기본값 `proxy_next_upstream off` — POST/PUT/DELETE 자동 재시도로 인한 데이터 중복 실행 방지, GET 전용 읽기 엔드포인트만 선택적 retry 허용
+- **CRITICAL FIX — detached thread this 캡처 제거**: `upload_handler.cpp` detached thread에서 `this` + `uploadRepo` 캡처 제거 — 핸들러 소멸 후 dangling pointer 접근 방지 (값 캡처 `uploadId`, `contentBytes`만 유지)
+- **nginx 구조 개선**: `api-gateway.conf` + `api-gateway-ssl.conf` — upload/PA location에서 중복 `proxy_next_upstream off` 제거 (proxy_params에서 상속), certificate export 별도 location 분리 (`export_limit` rate limiting)
+- **std::stoi() 예외 안전 (14개소)**: 환경변수 파싱 전체 try-catch + 기본값 폴백 — `safeStoi` 람다 패턴 적용
+  - `pkd-management/service_container.cpp` (5개: LDAP 풀/타임아웃)
+  - `pkd-relay/service_container.cpp` (5개: LDAP 풀/타임아웃)
+  - `pa-service/service_container.cpp` (1개: LDAP 타임아웃)
+  - `ldap_storage_service.cpp` (2개: LDAP 쓰기/네트워크 타임아웃)
+  - `pkd-relay/main.cpp`, `monitoring/main.cpp` (각 1개: THREAD_NUM)
+  - `monitoring_handler.cpp` (3개: 서버 포트/메트릭 간격)
+- **Oracle asInt() → scalarToInt() 전환**: `processing_strategy.cpp` — `.asInt()` 8개소를 `common::db::scalarToInt()`로 교체 (Oracle 문자열→정수 안전 변환)
+- **Frontend AbortController 적용 (3개 페이지)**: `DscNcReport`, `CrlReport`, `MonitoringDashboard` — 필터/페이지 변경 시 이전 API 요청 취소로 race condition 방지
+- **AI 데이터 캐시 TTL**: `feature_engineering.py` — `load_certificate_data()` 5분 TTL 인메모리 캐시 + `threading.Lock` (31K건 반복 로드 방지)
+- **AI 결과 저장 per-row 에러 격리**: `analysis.py` — `_save_results()` 개별 행 try-except + 실패 카운트 로깅 (1건 실패 시 전체 롤백 방지)
+- 25 files changed (0 new, 25 modified), +400 / -205 lines
 
 ### v2.28.1 (2026-03-04) - 메모리 안전 + 예외 처리 + 보안 강화
 - **CRITICAL FIX — CMS_ContentInfo 메모리 누수**: Master List 처리 시 CMS 성공 경로에서 `CMS_ContentInfo_free(cms)` 미호출 → `if (!cms)` 블록 밖으로 이동하여 모든 경로에서 해제

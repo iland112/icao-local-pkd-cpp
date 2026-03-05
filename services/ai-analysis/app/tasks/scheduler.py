@@ -12,11 +12,22 @@ _scheduler: BackgroundScheduler | None = None
 
 
 def _run_scheduled_analysis() -> None:
-    """Run analysis as a scheduled job."""
+    """Run analysis as a scheduled job (guards against concurrent execution)."""
+    from app.routers.analysis import _job_lock, _job_status, _run_analysis
+
+    with _job_lock:
+        if _job_status["status"] == "RUNNING":
+            logger.warning("Scheduled analysis skipped: another analysis is already running")
+            return
+        _job_status["status"] = "RUNNING"
+        _job_status["started_at"] = __import__("datetime").datetime.now(
+            __import__("datetime").timezone.utc
+        ).isoformat()
+        _job_status["progress"] = 0.0
+        _job_status["error_message"] = None
+
     logger.info("Scheduled analysis triggered")
     try:
-        from app.routers.analysis import _run_analysis
-
         _run_analysis()
     except Exception as e:
         logger.error("Scheduled analysis failed: %s", e, exc_info=True)
@@ -40,6 +51,7 @@ def start_scheduler() -> None:
         id="daily_analysis",
         name="Daily Certificate Analysis",
         replace_existing=True,
+        max_instances=1,
     )
     _scheduler.start()
     logger.info(

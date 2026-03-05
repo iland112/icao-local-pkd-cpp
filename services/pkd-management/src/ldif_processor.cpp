@@ -859,6 +859,11 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
 
     spdlog::info("Processing {} LDIF entries for upload {}", totalEntries, uploadId);
 
+    if (!g_services) {
+        spdlog::error("ServiceContainer not initialized — cannot process LDIF entries");
+        throw std::runtime_error("ServiceContainer not initialized");
+    }
+
     // Preload all CSCA certificates into memory cache for trust chain validation
     // Eliminates ~30K per-DSC DB queries during processing (~845 CSCAs loaded once)
     adapters::DbCscaProvider sharedCscaProvider(g_services->certificateRepository());

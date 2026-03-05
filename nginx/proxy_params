@@ -30,12 +30,10 @@ add_header Pragma "no-cache" always;
 add_header Expires "0" always;
 
 # Error handling
-# NOTE: Only retry on GET/HEAD — POST retry can cause duplicate data.
-# For write operations (upload, PA verify), location blocks should override
-# with `proxy_next_upstream off;`
-proxy_next_upstream error timeout http_502 http_503 http_504;
-proxy_next_upstream_tries 2;
-proxy_next_upstream_timeout 10s;
+# Default: disable upstream retry to prevent POST/PUT/DELETE duplicate execution.
+# GET-only read endpoints can selectively override with:
+#   proxy_next_upstream error timeout http_502 http_503 http_504;
+proxy_next_upstream off;
 
 # Hide upstream headers that shouldn't be exposed
 proxy_hide_header X-Powered-By;

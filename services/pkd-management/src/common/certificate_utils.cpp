@@ -158,6 +158,10 @@ std::string asn1IntegerToHex(const ASN1_INTEGER* asn1Int) {
     if (!bn) return "";
 
     char* hex = BN_bn2hex(bn);
+    if (!hex) {
+        BN_free(bn);
+        return "";
+    }
     std::string result(hex);
     OPENSSL_free(hex);
     BN_free(bn);

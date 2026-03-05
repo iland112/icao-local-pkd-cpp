@@ -18,6 +18,7 @@
 #include "infrastructure/service_container.h"
 #include "services/ldap_storage_service.h"
 #include "repositories/upload_repository.h"
+#include "query_helpers.h"
 #include "repositories/validation_repository.h"
 #include "i_query_executor.h"
 #include <drogon/HttpTypes.h>
@@ -43,6 +44,11 @@ void AutoProcessingStrategy::processLdifEntries(
     LDAP* ld
 ) {
     spdlog::info("AUTO mode: Processing {} LDIF entries for upload {}", entries.size(), uploadId);
+
+    if (!g_services) {
+        spdlog::error("ServiceContainer not initialized — cannot process LDIF entries");
+        throw std::runtime_error("ServiceContainer not initialized");
+    }
 
     ValidationStats stats;  // Existing validation statistics (legacy)
     common::ValidationStatistics enhancedStats{};  // Enhanced statistics with metadata tracking
@@ -82,7 +88,7 @@ void AutoProcessingStrategy::processLdifEntries(
             int dbCscaCount = 0, dbDscCount = 0, dbDscNcCount = 0;
             for (const auto& row : certCounts) {
                 std::string type = row["certificate_type"].asString();
-                int cnt = row["cnt"].asInt();
+                int cnt = common::db::scalarToInt(row["cnt"]);
                 if (type == "CSCA") dbCscaCount = cnt;
                 else if (type == "DSC") dbDscCount = cnt;
                 else if (type == "DSC_NC") dbDscNcCount = cnt;
@@ -91,7 +97,7 @@ void AutoProcessingStrategy::processLdifEntries(
             // Recalculate CRL count from DB
             auto crlCountResult = g_services->queryExecutor()->executeScalar(
                 "SELECT COUNT(*) FROM crl WHERE upload_id = $1", {uploadId});
-            int dbCrlCount = crlCountResult.asInt();
+            int dbCrlCount = common::db::scalarToInt(crlCountResult);
 
             counts.cscaCount = dbCscaCount;
             counts.dscCount = dbDscCount;
@@ -112,7 +118,7 @@ void AutoProcessingStrategy::processLdifEntries(
             enhancedStats.expiredValidCount = 0;
             for (const auto& row : valCounts) {
                 std::string status = row["validation_status"].asString();
-                int cnt = row["cnt"].asInt();
+                int cnt = common::db::scalarToInt(row["cnt"]);
                 if (status == "VALID") enhancedStats.validCount = cnt;
                 else if (status == "INVALID") enhancedStats.invalidCount = cnt;
                 else if (status == "PENDING") enhancedStats.pendingCount = cnt;
@@ -122,21 +128,21 @@ void AutoProcessingStrategy::processLdifEntries(
             // Recalculate trust chain and ICAO compliance counts
             auto tcValid = g_services->queryExecutor()->executeScalar(
                 "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND trust_chain_valid = TRUE", {uploadId});
-            enhancedStats.trustChainValidCount = tcValid.asInt();
+            enhancedStats.trustChainValidCount = common::db::scalarToInt(tcValid);
 
             auto cscaNotFound = g_services->queryExecutor()->executeScalar(
                 "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND validation_status = 'PENDING' AND csca_found = FALSE", {uploadId});
-            enhancedStats.cscaNotFoundCount = cscaNotFound.asInt();
+            enhancedStats.cscaNotFoundCount = common::db::scalarToInt(cscaNotFound);
 
             enhancedStats.trustChainInvalidCount = enhancedStats.invalidCount;
 
             auto icaoCompliant = g_services->queryExecutor()->executeScalar(
                 "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = TRUE", {uploadId});
-            enhancedStats.icaoCompliantCount = icaoCompliant.asInt();
+            enhancedStats.icaoCompliantCount = common::db::scalarToInt(icaoCompliant);
 
             auto icaoNonCompliant = g_services->queryExecutor()->executeScalar(
                 "SELECT COUNT(*) FROM validation_result WHERE upload_id = $1 AND icao_compliant = FALSE", {uploadId});
-            enhancedStats.icaoNonCompliantCount = icaoNonCompliant.asInt();
+            enhancedStats.icaoNonCompliantCount = common::db::scalarToInt(icaoNonCompliant);
 
             spdlog::info("Resume mode: Validation counts — valid={}, invalid={}, pending={}, expired_valid={}",
                         enhancedStats.validCount, enhancedStats.invalidCount,

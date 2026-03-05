@@ -157,11 +157,14 @@ bool ServiceContainer::initialize(const AppConfig& config) {
         // Read LDAP pool sizes from environment (default: min=2, max=10, timeout=5)
         int ldapPoolMin = 2, ldapPoolMax = 10, ldapPoolTimeout = 5;
         int ldapNetworkTimeout = 5, ldapHealthCheckTimeout = 2;
-        if (auto* v = std::getenv("LDAP_POOL_MIN")) ldapPoolMin = std::stoi(v);
-        if (auto* v = std::getenv("LDAP_POOL_MAX")) ldapPoolMax = std::stoi(v);
-        if (auto* v = std::getenv("LDAP_POOL_TIMEOUT")) ldapPoolTimeout = std::stoi(v);
-        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) ldapNetworkTimeout = std::stoi(v);
-        if (auto* v = std::getenv("LDAP_HEALTH_CHECK_TIMEOUT")) ldapHealthCheckTimeout = std::stoi(v);
+        auto safeStoi = [](const char* v, int defaultVal) {
+            try { return std::stoi(v); } catch (...) { spdlog::warn("Invalid env value '{}', using default {}", v, defaultVal); return defaultVal; }
+        };
+        if (auto* v = std::getenv("LDAP_POOL_MIN")) ldapPoolMin = safeStoi(v, ldapPoolMin);
+        if (auto* v = std::getenv("LDAP_POOL_MAX")) ldapPoolMax = safeStoi(v, ldapPoolMax);
+        if (auto* v = std::getenv("LDAP_POOL_TIMEOUT")) ldapPoolTimeout = safeStoi(v, ldapPoolTimeout);
+        if (auto* v = std::getenv("LDAP_NETWORK_TIMEOUT")) ldapNetworkTimeout = safeStoi(v, ldapNetworkTimeout);
+        if (auto* v = std::getenv("LDAP_HEALTH_CHECK_TIMEOUT")) ldapHealthCheckTimeout = safeStoi(v, ldapHealthCheckTimeout);
 
         impl_->ldapPool = std::make_shared<common::LdapConnectionPool>(
             ldapWriteUri,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   AlertCircle, AlertTriangle, CheckCircle, Download, Globe,
   Loader2, RefreshCw, FileWarning, X, ChevronLeft, ChevronRight,
@@ -121,25 +121,39 @@ export default function CrlReport() {
   const [detailData, setDetailData] = useState<CrlDetailData | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const fetchReport = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params: Record<string, string | number> = { page, size: pageSize };
-      if (countryFilter) params.country = countryFilter;
-      if (statusFilter) params.status = statusFilter;
-      const res = await certificateApi.getCrlReport(params as any);
-      setReportData(res.data);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Failed to load CRL report';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const fetchReport = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params: Record<string, string | number> = { page, size: pageSize };
+        if (countryFilter) params.country = countryFilter;
+        if (statusFilter) params.status = statusFilter;
+        const res = await certificateApi.getCrlReport(params as any);
+        if (!controller.signal.aborted) {
+          setReportData(res.data);
+        }
+      } catch (e: unknown) {
+        if (!controller.signal.aborted) {
+          const message = e instanceof Error ? e.message : 'Failed to load CRL report';
+          setError(message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchReport();
+    return () => controller.abort();
   }, [countryFilter, statusFilter, page]);
-
-  useEffect(() => { fetchReport(); }, [fetchReport]);
 
   const handleRowClick = async (crl: CrlItem) => {
     setSelectedCrl(crl);

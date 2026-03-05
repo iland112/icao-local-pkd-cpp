@@ -16,9 +16,12 @@ static size_t discardWriteCallback(void* /*contents*/, size_t size, size_t nmemb
 // --- MonitoringConfig ---
 
 void MonitoringConfig::loadFromEnv() {
-    if (auto e = std::getenv("SERVER_PORT")) serverPort = std::stoi(e);
-    if (auto e = std::getenv("SYSTEM_METRICS_INTERVAL")) systemMetricsInterval = std::stoi(e);
-    if (auto e = std::getenv("SERVICE_HEALTH_INTERVAL")) serviceHealthInterval = std::stoi(e);
+    auto safeStoi = [](const char* v, int defaultVal) {
+        try { return std::stoi(v); } catch (...) { spdlog::warn("Invalid env value '{}', using default {}", v, defaultVal); return defaultVal; }
+    };
+    if (auto e = std::getenv("SERVER_PORT")) serverPort = safeStoi(e, serverPort);
+    if (auto e = std::getenv("SYSTEM_METRICS_INTERVAL")) systemMetricsInterval = safeStoi(e, systemMetricsInterval);
+    if (auto e = std::getenv("SERVICE_HEALTH_INTERVAL")) serviceHealthInterval = safeStoi(e, serviceHealthInterval);
 
     // Load service endpoints
     if (auto e = std::getenv("SERVICE_PKD_MANAGEMENT")) serviceEndpoints["pkd-management"] = e;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AlertCircle,
   AlertTriangle,
@@ -133,30 +133,42 @@ export default function DscNcReport() {
   const [codeFilter, setCodeFilter] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 50;
-
-  const fetchReport = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params: { country?: string; conformanceCode?: string; page: number; size: number } = {
-        page,
-        size: pageSize,
-      };
-      if (countryFilter) params.country = countryFilter;
-      if (codeFilter) params.conformanceCode = codeFilter;
-
-      const response = await certificateApi.getDscNcReport(params);
-      setData(response.data as DscNcReportData);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to load report';
-      setError(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    abortControllerRef.current?.abort();
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const fetchReport = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params: { country?: string; conformanceCode?: string; page: number; size: number } = {
+          page,
+          size: pageSize,
+        };
+        if (countryFilter) params.country = countryFilter;
+        if (codeFilter) params.conformanceCode = codeFilter;
+
+        const response = await certificateApi.getDscNcReport(params);
+        if (!controller.signal.aborted) {
+          setData(response.data as DscNcReportData);
+        }
+      } catch (err: unknown) {
+        if (!controller.signal.aborted) {
+          const message = err instanceof Error ? err.message : 'Failed to load report';
+          setError(message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    };
+
     fetchReport();
+    return () => controller.abort();
   }, [page, countryFilter, codeFilter]);
 
   const handleExportCsv = async () => {

@@ -2,6 +2,8 @@
 
 import hashlib
 import logging
+import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timezone
 
@@ -13,6 +15,10 @@ from app.config import get_settings
 from app.database import safe_isna
 
 logger = logging.getLogger(__name__)
+
+# TTL cache for load_certificate_data() — avoids reloading 31K rows on every report request
+_data_cache: dict = {"df": None, "timestamp": 0.0, "ttl": 300}  # 5 minutes
+_data_cache_lock = threading.Lock()
 
 # Algorithm quality scores (higher = better/newer)
 ALGORITHM_SCORES = {
@@ -142,8 +148,19 @@ _EXT_FIELDS = [
 ]
 
 
+def invalidate_certificate_data_cache():
+    """Invalidate cached data — call after analysis run or data change."""
+    with _data_cache_lock:
+        _data_cache["df"] = None
+        _data_cache["timestamp"] = 0.0
+    logger.debug("Certificate data cache invalidated")
+
+
 def load_certificate_data(engine, upload_id: str = None) -> pd.DataFrame:
     """Load certificate + validation_result data from DB via SQL JOIN.
+
+    Uses a TTL cache (5 min) for full-dataset loads to avoid repeated 31K row queries.
+    Incremental loads (upload_id) always bypass cache.
 
     Args:
         engine: SQLAlchemy engine.
@@ -151,6 +168,14 @@ def load_certificate_data(engine, upload_id: str = None) -> pd.DataFrame:
                    When provided, only certificates associated with the given
                    upload (via validation_result.upload_id) are loaded.
     """
+    # Cache hit for full-dataset loads
+    if upload_id is None:
+        with _data_cache_lock:
+            if _data_cache["df"] is not None and (time.time() - _data_cache["timestamp"]) < _data_cache["ttl"]:
+                logger.debug("Using cached certificate data (%d rows, age=%.0fs)",
+                             len(_data_cache["df"]), time.time() - _data_cache["timestamp"])
+                return _data_cache["df"].copy()
+
     settings = get_settings()
     params = {}
 
@@ -212,8 +237,24 @@ def load_certificate_data(engine, upload_id: str = None) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["fingerprint_sha256"], keep="first")
     if len(df) < orig_len:
         logger.info("Deduplicated %d → %d certificates", orig_len, len(df))
+    # Reset index after dedup to ensure position-based alignment with numpy arrays
+    df = df.reset_index(drop=True)
     logger.info("Loaded %d certificates", len(df))
+
+    # Cache full-dataset loads
+    if upload_id is None:
+        with _data_cache_lock:
+            _data_cache["df"] = df.copy()
+            _data_cache["timestamp"] = time.time()
+        logger.debug("Certificate data cached (%d rows)", len(df))
+
     return df
+
+
+_REQUIRED_COLUMNS = [
+    "fingerprint_sha256", "certificate_type", "country_code",
+    "public_key_size", "signature_algorithm", "not_before", "not_after",
+]
 
 
 def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
@@ -232,6 +273,11 @@ def engineer_features(df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
         extract_country_from_dn,
         has_email_in_dn,
     )
+
+    # Validate required columns
+    missing = [c for c in _REQUIRED_COLUMNS if c not in df.columns]
+    if missing:
+        raise ValueError(f"Missing required columns: {missing}")
 
     now = datetime.now(timezone.utc)
     n = len(df)
