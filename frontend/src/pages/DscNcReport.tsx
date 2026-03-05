@@ -134,6 +134,8 @@ export default function DscNcReport() {
   const [page, setPage] = useState(1);
   const pageSize = 50;
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleRefresh = () => setRefreshKey(k => k + 1);
 
   useEffect(() => {
     abortControllerRef.current?.abort();
@@ -169,7 +171,7 @@ export default function DscNcReport() {
 
     fetchReport();
     return () => controller.abort();
-  }, [page, countryFilter, codeFilter]);
+  }, [page, countryFilter, codeFilter, refreshKey]);
 
   const handleExportCsv = async () => {
     try {
@@ -209,7 +211,7 @@ export default function DscNcReport() {
   if (error && !data) {
     return (
       <div className="w-full px-4 lg:px-6 py-4 space-y-6">
-        <PageHeader onRefresh={fetchReport} onExport={handleExportCsv} loading={loading} />
+        <PageHeader onRefresh={handleRefresh} onExport={handleExportCsv} loading={loading} />
         <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div>
@@ -226,7 +228,7 @@ export default function DscNcReport() {
   return (
     <div className="w-full px-4 lg:px-6 py-4 space-y-6">
       {/* Header */}
-      <PageHeader onRefresh={fetchReport} onExport={handleExportCsv} loading={loading} />
+      <PageHeader onRefresh={handleRefresh} onExport={handleExportCsv} loading={loading} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

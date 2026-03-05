@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AlertCircle, AlertTriangle, CheckCircle, Download, Globe,
   Loader2, RefreshCw, FileWarning, X, ChevronLeft, ChevronRight,
@@ -122,6 +122,8 @@ export default function CrlReport() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const handleRefresh = () => setRefreshKey(k => k + 1);
 
   useEffect(() => {
     abortControllerRef.current?.abort();
@@ -153,7 +155,7 @@ export default function CrlReport() {
 
     fetchReport();
     return () => controller.abort();
-  }, [countryFilter, statusFilter, page]);
+  }, [countryFilter, statusFilter, page, refreshKey]);
 
   const handleRowClick = async (crl: CrlItem) => {
     setSelectedCrl(crl);
@@ -227,7 +229,7 @@ export default function CrlReport() {
   if (error && !reportData) {
     return (
       <div className="w-full px-4 lg:px-6 py-4 space-y-6">
-        <PageHeader onRefresh={fetchReport} onExport={handleExport} loading={loading} />
+        <PageHeader onRefresh={handleRefresh} onExport={handleExport} loading={loading} />
         <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div>
@@ -244,7 +246,7 @@ export default function CrlReport() {
   return (
     <div className="w-full px-4 lg:px-6 py-4 space-y-6">
       {/* Header */}
-      <PageHeader onRefresh={fetchReport} onExport={handleExport} loading={loading} />
+      <PageHeader onRefresh={handleRefresh} onExport={handleExport} loading={loading} />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
