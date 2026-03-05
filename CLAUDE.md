@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.28.2
+**Current Version**: v2.29.0
 **Last Updated**: 2026-03-05
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -141,6 +141,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Passive Authentication verification (ICAO 9303 Part 10 & 11)
 - Lightweight PA lookup: DSC subject DN or fingerprint → pre-computed trust chain result (no SOD/DG upload)
 - DSC auto-registration from PA verification (source_type='PA_EXTRACTED')
+- **Real-time notification system**: SSE-based backend event broadcasting (NotificationManager singleton, Header Bell UI with unread badge + dropdown panel)
+- **DSC expiration revalidation**: Bulk trust chain re-evaluation for expired DSC certificates (Relay ValidationService + SyncDashboard result dialog)
 - DB-LDAP sync monitoring with auto-reconciliation
 - Certificate search & export (country/type/status/source filters, full DIT-structured ZIP)
 - Certificate source tracking and dashboard statistics (bySource)
@@ -284,6 +286,8 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/sync/reconcile/history` - Reconciliation history
 - `GET /api/sync/reconcile/{id}` - Reconciliation detail
 - `GET /api/sync/reconcile/stats` - Reconciliation statistics
+- `POST /api/sync/revalidate` - Trigger DSC expiration revalidation
+- `GET /api/sync/notifications/stream` - Real-time notification SSE stream
 
 ### AI Analysis Service (via :8080/api/ai)
 
@@ -579,6 +583,21 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.0 (2026-03-05) - 실시간 알림 시스템 + DSC 재검증 + source_type 수정
+- **실시간 알림 시스템**: SSE 기반 `NotificationManager` singleton (thread-safe, copy-release-execute 패턴) — Daily Sync/Revalidation/Reconciliation 완료 시 프론트엔드 실시간 알림 전송
+- **NotificationHandler**: `GET /api/sync/notifications/stream` SSE 엔드포인트 (Drogon AsyncStreamResponse)
+- **Header Bell UI**: Lucide Bell 아이콘 + unread 뱃지 + 드롭다운 알림 패널 (최대 50건, 읽음/전체삭제)
+- **NotificationListener**: 전역 SSE 리스너 (Layout mount, 자동 재연결 최대 3회 → 30초 간격)
+- **notificationStore**: Zustand 스토어 (notifications[], unreadCount, add/markRead/clear + toast.info 연동)
+- **DSC 만료 상태 재검증**: `POST /api/sync/revalidate` — 만료된 DSC 인증서 trust chain 재평가 (Relay ValidationService)
+- **Relay ValidationService**: `revalidateExpiredDsc()` — CSCA/CRL provider 어댑터 기반 trust chain 재구축 + validation_result DB 업데이트
+- **SyncDashboard 재검증 UI**: "만료 상태 갱신" 버튼 + 결과 다이얼로그 (처리 건수, 상태 변경 건수, 처리 시간)
+- **Reconciliation 버그 수정**: `reconciliation_log` INSERT 컬럼명 오류 + UUID 시퀀스 문제 수정
+- **source_type 컬럼 누락 수정**: `saveCertificateWithDuplicateCheck()` INSERT에 `source_type` 컬럼 미포함 → 모든 인증서 `FILE_UPLOAD`로 저장되던 버그. LDIF→`LDIF_PARSED`, ML→`ML_PARSED`, 개별업로드→`FILE_UPLOAD` 정확 전달
+- **nginx SSE 설정**: `/api/sync/notifications` location 블록 추가 (proxy_buffering off, read_timeout 3600s)
+- **DB 스키마**: `revalidation_trust_chain` 테이블 신규 (PostgreSQL + Oracle)
+- 48 files changed (20 new, 28 modified), +3,240 / -114 lines
 
 ### v2.28.2 (2026-03-05) - 코드 안정성 강화 (3차 코드 리뷰: CRITICAL 4건 + HIGH 4건)
 - **CRITICAL FIX — BN_bn2hex null 체크**: `certificate_utils.cpp` `BN_bn2hex()` 반환값 null 검사 추가 — OOM 시 nullptr dereference 방지

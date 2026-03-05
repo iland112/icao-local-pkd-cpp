@@ -1,8 +1,8 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.28.1
-**Period**: 2026-01-21 ~ 2026-03-04
-**Total Releases**: 57+
+**Current Version**: v2.29.0
+**Period**: 2026-01-21 ~ 2026-03-05
+**Total Releases**: 59+
 
 ---
 
@@ -10,6 +10,8 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.29.0 | 03-05 | Feature | 실시간 알림 시스템 (SSE) + DSC 재검증 + source_type 수정 |
+| v2.28.2 | 03-05 | Fix | 코드 안정성 강화 3차 (CRITICAL 4건 + HIGH 4건) |
 | v2.28.1 | 03-04 | Fix | 메모리 안전 + 예외 처리 + 보안 강화 (CMS 누수, LDAP 즉시 해제, OEM 포트 제거) |
 | v2.28.0 | 03-04 | Quality | 전체 코드 품질 개선 (139건 이슈 수정) + 테스트 인프라 구축 (438 test cases) |
 | v2.27.1 | 03-04 | Fix | API Client Rate Limit 분리 + Podman DNS Resolver 영구 수정 |
@@ -78,6 +80,54 @@
 ---
 
 ## 2026-03 (March)
+
+### v2.29.0 (2026-03-05) - 실시간 알림 시스템 + DSC 재검증 + source_type 수정
+
+백엔드 이벤트를 프론트엔드에 실시간 전달하는 SSE 알림 시스템, DSC 인증서 만료 상태 재검증 기능, 그리고 인증서 출처 타입 저장 버그 수정
+
+#### 실시간 알림 시스템
+- **NotificationManager** (singleton, thread-safe): SSE 클라이언트 관리 + broadcast, copy-release-execute 패턴 (ProgressManager 패턴 재사용)
+- **NotificationHandler**: `GET /api/sync/notifications/stream` SSE 엔드포인트 (Drogon AsyncStreamResponse)
+- **SyncScheduler 알림 통합**: Daily Sync, Revalidation, Reconciliation 완료 시 `NotificationManager::broadcast()` 호출
+- **알림 타입 4종**: `SYNC_CHECK_COMPLETE`, `REVALIDATION_COMPLETE`, `RECONCILE_COMPLETE`, `DAILY_SYNC_COMPLETE`
+- **Header Bell UI**: Lucide Bell 아이콘 + unread 뱃지(빨간 원) + 드롭다운 알림 패널 (최대 50건, 읽음 처리, 전체 삭제)
+- **NotificationListener**: 전역 SSE 리스너 (Layout에 mount, 자동 재연결 최대 3회 → 30초 간격)
+- **notificationStore** (Zustand): notifications[], unreadCount, add/markRead/clear + toast.info() 연동
+- **nginx SSE 설정**: `/api/sync/notifications` location 블록 (proxy_buffering off, proxy_cache off, read_timeout 3600s)
+
+#### DSC 만료 상태 재검증
+- **Relay ValidationService**: `revalidateExpiredDsc()` — 만료된 DSC 인증서 trust chain 재평가
+- **CSCA/CRL Provider 어댑터**: `RelayCscaProvider`, `RelayCrlProvider` — Relay 서비스의 DB 기반 CSCA/CRL 조회 어댑터
+- **Trust chain 재구축**: `icao::validation` 라이브러리 활용, CSCA 조회 → trust chain 검증 → CRL 확인 → validation_result DB 업데이트
+- **`POST /api/sync/revalidate`** 엔드포인트: 만료 DSC 일괄 재검증 트리거
+- **SyncDashboard UI**: "만료 상태 갱신" 버튼 + 결과 다이얼로그 (처리 건수, 상태 변경 건수, 처리 시간)
+- **DB 스키마**: `revalidation_trust_chain` 테이블 신규 (PostgreSQL + Oracle)
+
+#### 버그 수정
+- **source_type 컬럼 누락**: `saveCertificateWithDuplicateCheck()` INSERT에 `source_type` 컬럼 미포함 → 모든 인증서가 DB DEFAULT `FILE_UPLOAD`로 저장. `sourceType` 파라미터 추가하여 LDIF→`LDIF_PARSED`, ML→`ML_PARSED`, 개별업로드→`FILE_UPLOAD` 정확 전달
+- **Reconciliation 버그**: `reconciliation_log` INSERT 컬럼명 오류 (`certificate_type` → `entity_type`) + UUID 시퀀스 문제 수정
+
+#### 기타
+- **Frontend 수정**: CrlReport/DscNcReport `fetchReport` 스코프 오류 수정, "인증서 재검증" → "만료 상태 갱신" 용어 통일
+- **문서**: `CERTIFICATE_SOURCE_MANAGEMENT.md` 신규, `DSC_NC_HANDLING.md`/`LDAP_QUERY_GUIDE.md`/`PA_API_GUIDE.md` 업데이트, `PAGE_FUNCTIONALITY_GUIDE.md` 신규
+- 48 files changed (20 new, 28 modified), +3,240 / -114 lines
+
+### v2.28.2 (2026-03-05) - 코드 안정성 강화 (3차 코드 리뷰: CRITICAL 4건 + HIGH 4건)
+
+3차 코드 리뷰에서 발견된 안전성 이슈 수정
+
+#### CRITICAL
+- **BN_bn2hex null 체크**: `certificate_utils.cpp` — OOM 시 nullptr dereference 방지
+- **LDAP 풀 race condition**: `ldap_connection_pool.cpp` `acquire()` — mutex 재획득 후 `totalConnections_` 재검증
+- **nginx POST 재시도 차단**: `proxy_params` 기본값 `proxy_next_upstream off` — 데이터 중복 실행 방지
+- **detached thread this 캡처 제거**: `upload_handler.cpp` — 핸들러 소멸 후 dangling pointer 방지
+
+#### HIGH
+- **std::stoi() 예외 안전 (14개소)**: 환경변수 파싱 전체 try-catch + 기본값 폴백
+- **Oracle asInt() → scalarToInt() 전환**: `processing_strategy.cpp` 8개소
+- **Frontend AbortController 적용 (3개 페이지)**: DscNcReport, CrlReport, MonitoringDashboard
+- **AI 데이터 캐시 TTL + 결과 저장 per-row 에러 격리**
+- 25 files changed (0 new, 25 modified), +400 / -205 lines
 
 ### v2.28.1 (2026-03-04) - 메모리 안전 + 예외 처리 + 보안 강화
 
