@@ -28,26 +28,25 @@ ReconciliationRepository::ReconciliationRepository(common::IQueryExecutor* execu
 
 bool ReconciliationRepository::createSummary(domain::ReconciliationSummary& summary) {
     try {
-        // Step 1: Generate integer ID using database-specific sequence
-        // PostgreSQL: nextval('reconciliation_summary_id_seq')
-        // Oracle: seq_reconciliation_summary.NEXTVAL
+        // Step 1: Generate UUID using database-specific function
+        // PostgreSQL: uuid_generate_v4()
+        // Oracle: SYS_GUID()
         std::string dbType = queryExecutor_->getDatabaseType();
         std::string idQuery;
 
         if (dbType == "postgres") {
-            idQuery = "SELECT nextval('reconciliation_summary_id_seq') as id";
+            idQuery = "SELECT uuid_generate_v4()::text as id";
         } else {
-            // Oracle: Use sequence
-            idQuery = "SELECT SEQ_RECON_SUMMARY.NEXTVAL as id FROM DUAL";
+            // Oracle: SYS_GUID returns RAW(16), convert to standard UUID format
+            idQuery = "SELECT LOWER(RAWTOHEX(SYS_GUID())) as id FROM DUAL";
         }
 
         Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
         if (idResult.empty()) {
-            spdlog::error("[ReconciliationRepository] Failed to generate ID");
+            spdlog::error("[ReconciliationRepository] Failed to generate UUID");
             return false;
         }
-        // OracleQueryExecutor converts column names to lowercase
-        std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
+        std::string generatedId = idResult[0]["id"].asString();
 
         // Step 2: Insert with generated ID and current timestamp (no RETURNING clause)
         std::string tsFunc = common::db::currentTimestamp(dbType);

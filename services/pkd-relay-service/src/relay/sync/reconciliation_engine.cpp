@@ -316,20 +316,20 @@ std::string ReconciliationEngine::createReconciliationSummary(
     int syncStatusId) const {
 
     try {
-        // Generate ID using database-specific sequence (same pattern as ReconciliationRepository)
+        // Generate UUID using database-specific function
         std::string idQuery;
         if (dbType_ == "postgres") {
-            idQuery = "SELECT nextval('reconciliation_summary_id_seq') as id";
+            idQuery = "SELECT uuid_generate_v4()::text as id";
         } else {
-            idQuery = "SELECT SEQ_RECON_SUMMARY.NEXTVAL as id FROM DUAL";
+            idQuery = "SELECT LOWER(RAWTOHEX(SYS_GUID())) as id FROM DUAL";
         }
 
         Json::Value idResult = queryExecutor_->executeQuery(idQuery, {});
         if (idResult.empty()) {
-            spdlog::error("Failed to generate reconciliation_summary ID");
+            spdlog::error("Failed to generate reconciliation_summary UUID");
             return "";
         }
-        std::string generatedId = std::to_string(getInt(idResult[0], "id", 0));
+        std::string generatedId = idResult[0]["id"].asString();
 
         // Insert with generated ID (no RETURNING clause - works with both PostgreSQL and Oracle)
         std::string query =
@@ -422,9 +422,9 @@ void ReconciliationEngine::logReconciliationOperation(
         // v2.0.5: Use cert_fingerprint instead of cert_id (UUID type incompatibility fix)
         std::string query =
             "INSERT INTO reconciliation_log "
-            "(reconciliation_id, operation, cert_type, cert_fingerprint, "
-            "country_code, subject, issuer, ldap_dn, status, error_message, duration_ms) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)";
+            "(summary_id, operation, certificate_type, fingerprint_sha256, "
+            "country_code, subject_dn, status, error_message, duration_ms) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)";
 
         std::vector<std::string> params = {
             reconciliationId,
@@ -433,8 +433,6 @@ void ReconciliationEngine::logReconciliationOperation(
             cert.fingerprint,
             cert.countryCode,
             cert.subject,
-            cert.issuer,
-            cert.ldapDn,
             status,
             errorMsg,
             std::to_string(durationMs)
