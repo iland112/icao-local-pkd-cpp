@@ -489,6 +489,7 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
             spdlog::info("LDAP write connection established for Master List upload {}", uploadId);
         }
 
+        CMS_ContentInfo* cms = nullptr;  // Declared outside try for cleanup in catch
         try {
             int cscaCount = 0;
             int dscCount = 0;
@@ -528,7 +529,6 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                 throw std::runtime_error("Master List file exceeds maximum size");
             }
             BIO* bio = BIO_new_mem_buf(content.data(), static_cast<int>(content.size()));
-            CMS_ContentInfo* cms = nullptr;
             if (bio) {
                 cms = d2i_CMS_bio(bio, nullptr);
                 BIO_free(bio);
@@ -1070,6 +1070,8 @@ void UploadHandler::processMasterListFileAsync(const std::string& uploadId, cons
                         uploadId, cscaCount, dscCount, ldapStoredCount, skippedDuplicates);
 
         } catch (const std::exception& e) {
+            CMS_ContentInfo_free(cms);  // Free CMS on exception (nullptr-safe)
+            cms = nullptr;
             spdlog::error("Master List processing failed for upload {}: {}", uploadId, e.what());
             ProgressManager::getInstance().sendProgress(
                 ProcessingProgress::create(uploadId, ProcessingStage::FAILED, 0, 0, "처리 실패", e.what()));

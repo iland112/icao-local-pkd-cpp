@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.3
+**Current Version**: v2.29.4
 **Last Updated**: 2026-03-06
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -583,6 +583,14 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.4 (2026-03-06) - OpenSSL 메모리 누수 수정 (CRITICAL 1건 + HIGH 4건)
+- **CRITICAL FIX — CMS_ContentInfo 예외 경로 누수**: `upload_handler.cpp` Master List 처리 중 예외 발생 시 `CMS_ContentInfo*` 미해제 → `cms` 선언을 try 블록 밖으로 이동 + catch 블록에서 `CMS_ContentInfo_free(cms)` 추가
+- **HIGH FIX — X509 벡터 예외 경로 누수 (인증서 업로드)**: `upload_service.cpp` 인증서 처리 루프 중 예외 시 나머지 `X509*` 미해제 → 인덱스 기반 루프 + catch에서 잔여 인증서 전체 해제
+- **HIGH FIX — X509 벡터 예외 경로 누수 (미리보기)**: `upload_service.cpp` 미리보기 루프 중 예외 시 나머지 `X509*` 미해제 → 동일 패턴 적용
+- **HIGH FIX — X509_CRL RAII 전환**: `upload_service.cpp` `processCrlFile()` 수동 `X509_CRL_free()` → `std::unique_ptr<X509_CRL, decltype(&X509_CRL_free)>` RAII 가드 (모든 예외 경로 자동 해제)
+- **HIGH FIX — PA allCscas 예외 경로 누수**: `certificate_validation_service.cpp` PA 검증 중 예외 시 CSCA 벡터 미해제 → 선언을 try 밖으로 이동 + catch에서 전체 `X509_free()` + `clear()`
+- 4 files changed (0 new, 4 modified)
 
 ### v2.29.3 (2026-03-06) - 5차 코드 보안 + 안정성 강화 (CRITICAL 6건 + HIGH 8건 + MEDIUM 7건)
 - **CRITICAL FIX — SQL 인젝션 방어**: `processing_strategy.cpp` PGconn 8개 쿼리 문자열 연결 → `PQexecParams()` 파라미터화 (uploadId 직접 삽입 제거)

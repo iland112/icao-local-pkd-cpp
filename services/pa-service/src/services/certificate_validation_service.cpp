@@ -78,6 +78,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
 
     spdlog::info("Validating certificate chain for country: {}", countryCode);
 
+    std::vector<X509*> allCscas;  // Declared outside try for cleanup in catch
     try {
         // Extract DSC information (using library)
         result.dscSubject = icao::validation::getSubjectDn(dscCert);
@@ -136,7 +137,7 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         result.countryCode = effectiveCountry;
 
         // Find CSCA certificate (multi-CSCA key rollover support)
-        std::vector<X509*> allCscas = certRepo_->findAllCscasByCountry(effectiveCountry);
+        allCscas = certRepo_->findAllCscasByCountry(effectiveCountry);
         if (allCscas.empty()) {
             result.valid = false;
             result.errorCode = "CSCA_NOT_FOUND";
@@ -339,6 +340,9 @@ domain::models::CertificateChainValidation CertificateValidationService::validat
         for (X509* c : allCscas) X509_free(c);
 
     } catch (const std::exception& e) {
+        // Free CSCA candidates on exception path (prevent memory leak)
+        for (X509* c : allCscas) X509_free(c);
+        allCscas.clear();
         spdlog::error("Certificate chain validation failed: {}", e.what());
         result.valid = false;
         result.validationErrors = e.what();

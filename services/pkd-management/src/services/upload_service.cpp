@@ -14,6 +14,7 @@
 #include <thread>
 #include <cstdlib>
 #include <optional>
+#include <memory>
 #include <openssl/evp.h>
 #include <openssl/x509.h>
 #include <openssl/pem.h>
@@ -198,10 +199,17 @@ UploadService::CertificateUploadResult UploadService::uploadCertificate(
             if (!certs.empty()) {
                 spdlog::info("[UploadService] Parsed {} certificates from {} file", certs.size(), result.fileFormat);
 
-                // Process each certificate
-                for (auto* cert : certs) {
-                    processSingleCertificate(result, cert, fileContent, ld);
-                    X509_free(cert);
+                // Process each certificate (with exception-safe cleanup)
+                for (size_t i = 0; i < certs.size(); ++i) {
+                    try {
+                        processSingleCertificate(result, certs[i], fileContent, ld);
+                    } catch (...) {
+                        // Free current and remaining certs before re-throwing
+                        for (size_t j = i; j < certs.size(); ++j) X509_free(certs[j]);
+                        certs.clear();
+                        throw;
+                    }
+                    X509_free(certs[i]);
                 }
                 certs.clear();
             }
@@ -450,71 +458,79 @@ UploadService::CertificatePreviewResult UploadService::previewCertificate(
                 }
             }
 
-            // Extract metadata from each certificate
-            for (auto* cert : certs) {
-                CertificatePreviewItem item;
-                item.subjectDn = x509NameToString(X509_get_subject_name(cert));
-                item.issuerDn = x509NameToString(X509_get_issuer_name(cert));
-                item.serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
-                item.countryCode = extractCountryCode(item.subjectDn);
-                if (item.countryCode == "XX") item.countryCode = extractCountryCode(item.issuerDn);
-                item.notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
-                item.notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
+            // Extract metadata from each certificate (with exception-safe cleanup)
+            for (size_t i = 0; i < certs.size(); ++i) {
+                auto* cert = certs[i];
+                try {
+                    CertificatePreviewItem item;
+                    item.subjectDn = x509NameToString(X509_get_subject_name(cert));
+                    item.issuerDn = x509NameToString(X509_get_issuer_name(cert));
+                    item.serialNumber = asn1IntegerToHex(X509_get_serialNumber(cert));
+                    item.countryCode = extractCountryCode(item.subjectDn);
+                    if (item.countryCode == "XX") item.countryCode = extractCountryCode(item.issuerDn);
+                    item.notBefore = asn1TimeToIso8601(X509_get0_notBefore(cert));
+                    item.notAfter = asn1TimeToIso8601(X509_get0_notAfter(cert));
 
-                auto certInfo = CertTypeDetector::detectType(cert);
-                switch (certInfo.type) {
-                    case CertificateType::CSCA:
-                    case CertificateType::LINK_CERT:
-                        item.certificateType = "CSCA";
-                        break;
-                    case CertificateType::DSC:
-                        item.certificateType = "DSC";
-                        break;
-                    case CertificateType::DSC_NC:
-                        item.certificateType = "DSC_NC";
-                        break;
-                    case CertificateType::MLSC:
-                        item.certificateType = "MLSC";
-                        break;
-                    default:
-                        item.certificateType = "DSC";
-                        break;
+                    auto certInfo = CertTypeDetector::detectType(cert);
+                    switch (certInfo.type) {
+                        case CertificateType::CSCA:
+                        case CertificateType::LINK_CERT:
+                            item.certificateType = "CSCA";
+                            break;
+                        case CertificateType::DSC:
+                            item.certificateType = "DSC";
+                            break;
+                        case CertificateType::DSC_NC:
+                            item.certificateType = "DSC_NC";
+                            break;
+                        case CertificateType::MLSC:
+                            item.certificateType = "MLSC";
+                            break;
+                        default:
+                            item.certificateType = "DSC";
+                            break;
+                    }
+                    item.isSelfSigned = certInfo.is_self_signed;
+                    item.isLinkCertificate = (certInfo.type == CertificateType::LINK_CERT);
+
+                    // Check expiration
+                    if (X509_cmp_current_time(X509_get0_notAfter(cert)) < 0) {
+                        item.isExpired = true;
+                    }
+
+                    // Key info
+                    EVP_PKEY* pkey = X509_get0_pubkey(cert);
+                    if (pkey) {
+                        item.keySize = EVP_PKEY_bits(pkey);
+                        int pkeyId = EVP_PKEY_id(pkey);
+                        if (pkeyId == EVP_PKEY_RSA) item.publicKeyAlgorithm = "RSA";
+                        else if (pkeyId == EVP_PKEY_EC) item.publicKeyAlgorithm = "EC";
+                        else item.publicKeyAlgorithm = "Unknown";
+                    }
+
+                    // Signature algorithm
+                    int sigNid = X509_get_signature_nid(cert);
+                    item.signatureAlgorithm = OBJ_nid2sn(sigNid);
+
+                    // Fingerprint
+                    unsigned char* derBuf = nullptr;
+                    int derLen = i2d_X509(cert, &derBuf);
+                    if (derLen > 0 && derBuf) {
+                        std::vector<uint8_t> derBytes(derBuf, derBuf + derLen);
+                        OPENSSL_free(derBuf);
+                        item.fingerprintSha256 = computeFileHash(derBytes);
+                    }
+
+                    // Doc 9303 compliance checklist
+                    item.doc9303Checklist = common::runDoc9303Checklist(cert, item.certificateType);
+
+                    result.certificates.push_back(item);
+                } catch (...) {
+                    // Free current and remaining certs before re-throwing
+                    for (size_t j = i; j < certs.size(); ++j) X509_free(certs[j]);
+                    certs.clear();
+                    throw;
                 }
-                item.isSelfSigned = certInfo.is_self_signed;
-                item.isLinkCertificate = (certInfo.type == CertificateType::LINK_CERT);
-
-                // Check expiration
-                if (X509_cmp_current_time(X509_get0_notAfter(cert)) < 0) {
-                    item.isExpired = true;
-                }
-
-                // Key info
-                EVP_PKEY* pkey = X509_get0_pubkey(cert);
-                if (pkey) {
-                    item.keySize = EVP_PKEY_bits(pkey);
-                    int pkeyId = EVP_PKEY_id(pkey);
-                    if (pkeyId == EVP_PKEY_RSA) item.publicKeyAlgorithm = "RSA";
-                    else if (pkeyId == EVP_PKEY_EC) item.publicKeyAlgorithm = "EC";
-                    else item.publicKeyAlgorithm = "Unknown";
-                }
-
-                // Signature algorithm
-                int sigNid = X509_get_signature_nid(cert);
-                item.signatureAlgorithm = OBJ_nid2sn(sigNid);
-
-                // Fingerprint
-                unsigned char* derBuf = nullptr;
-                int derLen = i2d_X509(cert, &derBuf);
-                if (derLen > 0 && derBuf) {
-                    std::vector<uint8_t> derBytes(derBuf, derBuf + derLen);
-                    OPENSSL_free(derBuf);
-                    item.fingerprintSha256 = computeFileHash(derBytes);
-                }
-
-                // Doc 9303 compliance checklist
-                item.doc9303Checklist = common::runDoc9303Checklist(cert, item.certificateType);
-
-                result.certificates.push_back(item);
                 X509_free(cert);
             }
         }
@@ -1104,6 +1120,9 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
         throw std::runtime_error("Failed to parse CRL file (neither DER nor PEM format)");
     }
 
+    // RAII guard: ensure X509_CRL is freed on all paths (including exceptions)
+    auto crlGuard = std::unique_ptr<X509_CRL, decltype(&X509_CRL_free)>(crl, X509_CRL_free);
+
     // Extract CRL metadata
     std::string issuerDn = x509NameToString(X509_CRL_get_issuer(crl));
     std::string thisUpdate = asn1TimeToIso8601(X509_CRL_get0_lastUpdate(crl));
@@ -1185,7 +1204,7 @@ void UploadService::processCrlFile(CertificateUploadResult& result,
         }
     }
 
-    X509_CRL_free(crl);
+    // crlGuard RAII handles X509_CRL_free(crl) automatically
 }
 
 // --- Private Helpers - DL (Deviation List) Processing ---
