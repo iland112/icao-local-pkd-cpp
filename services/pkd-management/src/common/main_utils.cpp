@@ -150,6 +150,7 @@ std::string generateUuid() {
  */
 std::string computeFileHash(const std::vector<uint8_t>& content) {
     unsigned char hash[32];
+    unsigned int len = 0;
     EVP_MD_CTX* ctx = EVP_MD_CTX_new();
     if (!ctx) {
         spdlog::error("Failed to create EVP_MD_CTX");

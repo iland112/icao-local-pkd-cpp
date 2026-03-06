@@ -89,6 +89,8 @@ Json::Value OracleQueryExecutor::executeQuery(
     spdlog::debug("[OracleQueryExecutor] Executing SELECT query via session pool");
 
     PooledSession session;
+    std::vector<char*> colBuffers;       // Declared outside try for cleanup in catch
+    std::vector<OCILobLocator*> lobLocators;  // Declared outside try for cleanup in catch
 
     try {
         // Acquire pre-authenticated session from pool (1 round-trip vs 8-10)
@@ -239,11 +241,11 @@ Json::Value OracleQueryExecutor::executeQuery(
         Json::Value result = Json::arrayValue;
 
         // Define output buffers for each column (with BLOB/CLOB LOB locator support)
-        std::vector<char*> colBuffers(colCount, nullptr);
+        colBuffers.assign(colCount, nullptr);
         std::vector<sb2> indicators(colCount);
         std::vector<std::string> colNames(colCount);
         std::vector<ub2> colTypes(colCount, 0);
-        std::vector<OCILobLocator*> lobLocators(colCount, nullptr);
+        lobLocators.assign(colCount, nullptr);
 
         for (ub4 i = 0; i < colCount; ++i) {
             OCIParam* col = nullptr;
