@@ -101,7 +101,7 @@ std::string DataGroupRepository::insert(
         // Extract DG number from string (supports "DG1" -> 1 or "1" -> 1)
         int dgNumber = 0;
         if (dg.dgNumber.find("DG") == 0) {
-            dgNumber = std::stoi(dg.dgNumber.substr(2));
+            try { dgNumber = std::stoi(dg.dgNumber.substr(2)); } catch (const std::exception&) { /* use default 0 */ }
         } else {
             try { dgNumber = std::stoi(dg.dgNumber); } catch (...) { /* non-critical: use default */ }
         }

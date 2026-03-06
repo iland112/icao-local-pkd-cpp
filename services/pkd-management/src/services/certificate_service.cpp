@@ -595,22 +595,33 @@ ExportResult exportAllCertificatesFromDb(
                 } else {
                     isSelfSigned = row.get("is_self_signed", true).asBool();
                 }
+                // Validate country code (ISO 3166-1 alpha-2/3, defense-in-depth against path traversal)
+                std::string safeCountry;
+                for (char c : country) {
+                    if (std::isalpha(static_cast<unsigned char>(c))) {
+                        safeCountry += c;
+                    }
+                }
+                if (safeCountry.empty() || safeCountry.size() > 3) safeCountry = "XX";
+
                 std::string folder;
                 if (certType == "DSC_NC") {
-                    folder = "nc-data/" + country + "/dsc/";
+                    folder = "nc-data/" + safeCountry + "/dsc/";
                 } else {
                     std::string typeFolder = "csca";
                     if (certType == "DSC") typeFolder = "dsc";
                     else if (certType == "MLSC") typeFolder = "mlsc";
                     else if (certType == "CSCA" && !isSelfSigned) typeFolder = "lc";
                     else if (certType == "CSCA") typeFolder = "csca";
-                    folder = "data/" + country + "/" + typeFolder + "/";
+                    folder = "data/" + safeCountry + "/" + typeFolder + "/";
                 }
 
                 // Generate filename: CN_fingerprint8.ext
                 std::string cn = extractCnFromDn(subjectDn);
                 std::string safeName = cn.empty() ? certType : sanitizeForFilename(cn);
-                std::string fp8 = fingerprint.substr(0, 8);
+                // Ensure no path traversal in sanitized name
+                if (safeName.find("..") != std::string::npos) safeName = certType;
+                std::string fp8 = fingerprint.substr(0, std::min(fingerprint.size(), size_t(8)));
                 std::string ext = (format == ExportFormat::PEM) ? ".pem" : ".der";
                 std::string filePath = folder + safeName + "_" + fp8 + ext;
 

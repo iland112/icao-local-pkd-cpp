@@ -17,7 +17,7 @@ from app.database import safe_isna
 logger = logging.getLogger(__name__)
 
 # TTL cache for load_certificate_data() — avoids reloading 31K rows on every report request
-_data_cache: dict = {"df": None, "timestamp": 0.0, "ttl": 300}  # 5 minutes
+_data_cache: dict = {"df": None, "timestamp": 0.0, "ttl": 300, "loading": False}  # 5 minutes
 _data_cache_lock = threading.Lock()
 
 # Algorithm quality scores (higher = better/newer)
@@ -168,13 +168,17 @@ def load_certificate_data(engine, upload_id: str = None) -> pd.DataFrame:
                    When provided, only certificates associated with the given
                    upload (via validation_result.upload_id) are loaded.
     """
-    # Cache hit for full-dataset loads
+    # Cache hit for full-dataset loads (prevents concurrent duplicate loads)
     if upload_id is None:
         with _data_cache_lock:
             if _data_cache["df"] is not None and (time.time() - _data_cache["timestamp"]) < _data_cache["ttl"]:
                 logger.debug("Using cached certificate data (%d rows, age=%.0fs)",
                              len(_data_cache["df"]), time.time() - _data_cache["timestamp"])
                 return _data_cache["df"].copy()
+            # Mark as loading to prevent concurrent threads from also starting a load
+            if _data_cache.get("loading"):
+                logger.debug("Another thread is loading certificate data, waiting...")
+            _data_cache["loading"] = True
 
     settings = get_settings()
     params = {}
@@ -246,6 +250,7 @@ def load_certificate_data(engine, upload_id: str = None) -> pd.DataFrame:
         with _data_cache_lock:
             _data_cache["df"] = df.copy()
             _data_cache["timestamp"] = time.time()
+            _data_cache["loading"] = False
         logger.debug("Certificate data cached (%d rows)", len(df))
 
     return df

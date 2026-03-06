@@ -1971,11 +1971,17 @@ void UploadHandler::handleUploadMasterList(
 
         // Start async processing (AUTO mode: all stages run automatically)
         auto* uploadRepo = uploadRepository_;
-        std::thread([this, uploadId, contentBytes, uploadRepo]() {
+        auto* ldapStorageSvc = g_services->ldapStorageService();
+        std::thread([uploadId, contentBytes, uploadRepo, ldapStorageSvc]() {
                 spdlog::info("Starting async Master List processing for upload: {}", uploadId);
 
+                if (!ldapStorageSvc) {
+                    spdlog::error("LdapStorageService not available for ML upload {}", uploadId);
+                    return;
+                }
+
                 // Connect to LDAP (optional — if unavailable, DB-only mode with later reconciliation)
-                LdapConnectionGuard ldapGuard(g_services->ldapStorageService()->getLdapWriteConnection());
+                LdapConnectionGuard ldapGuard(ldapStorageSvc->getLdapWriteConnection());
                 LDAP* ld = ldapGuard.get();
                 if (!ld) {
                     spdlog::warn("LDAP write connection unavailable for Master List upload {} - proceeding with DB-only mode", uploadId);

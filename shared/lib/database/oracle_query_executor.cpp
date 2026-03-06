@@ -366,6 +366,13 @@ Json::Value OracleQueryExecutor::executeQuery(
 
     } catch (const std::exception& e) {
         spdlog::error("[OracleQueryExecutor] OCI exception: {}", e.what());
+        // Cleanup allocated column buffers and LOB locators to prevent memory leak
+        for (ub4 i = 0; i < colBuffers.size(); ++i) {
+            if (colBuffers[i]) delete[] colBuffers[i];
+            if (i < lobLocators.size() && lobLocators[i]) {
+                OCIDescriptorFree(lobLocators[i], OCI_DTYPE_LOB);
+            }
+        }
         // Ensure session is released back to pool on exception (drop to be safe)
         releasePooledSession(session, true);
         throw;

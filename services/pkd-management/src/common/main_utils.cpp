@@ -155,10 +155,13 @@ std::string computeFileHash(const std::vector<uint8_t>& content) {
         spdlog::error("Failed to create EVP_MD_CTX");
         return "";
     }
-    EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
-    EVP_DigestUpdate(ctx, content.data(), content.size());
-    unsigned int len = 0;
-    EVP_DigestFinal_ex(ctx, hash, &len);
+    if (EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr) != 1 ||
+        EVP_DigestUpdate(ctx, content.data(), content.size()) != 1 ||
+        EVP_DigestFinal_ex(ctx, hash, &len) != 1) {
+        spdlog::error("EVP_Digest operation failed");
+        EVP_MD_CTX_free(ctx);
+        return "";
+    }
     EVP_MD_CTX_free(ctx);
 
     std::stringstream ss;

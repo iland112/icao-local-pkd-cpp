@@ -25,4 +25,4 @@ ENV PYTHONDONTWRITEBYTECODE=1
 
 EXPOSE 8085
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8085 --log-level info --workers ${UVICORN_WORKERS:-1}"]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8085 --log-level info --workers \"${UVICORN_WORKERS:-1}\""]

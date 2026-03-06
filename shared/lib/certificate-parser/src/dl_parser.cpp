@@ -68,6 +68,7 @@ namespace {
 
     // Read an OID and return dotted notation
     std::string readOid(const unsigned char* data, long len) {
+        if (len <= 0 || len > 255) return "";  // OIDs are short; guard against overflow
         // Build a minimal DER-encoded OID (tag + length + content) for d2i_ASN1_OBJECT
         std::vector<unsigned char> derOid;
         derOid.push_back(0x06);  // OID tag

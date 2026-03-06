@@ -367,14 +367,18 @@ function EditDialog({ client, onClose, onUpdated }: {
   });
   const [ipsText, setIpsText] = useState(client.allowed_ips.join(', '));
   const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   const handleSubmit = async () => {
     setSaving(true);
+    setEditError('');
     try {
       const req = { ...form, allowed_ips: ipsText ? ipsText.split(',').map(s => s.trim()).filter(Boolean) : [] };
       await apiClientApi.update(client.id, req);
       onUpdated();
-    } catch (e) {
+    } catch (e: any) {
+      const msg = e?.response?.data?.message || e?.message || '수정에 실패했습니다.';
+      setEditError(msg);
       if (import.meta.env.DEV) console.error('Update failed', e);
     } finally {
       setSaving(false);
@@ -383,6 +387,9 @@ function EditDialog({ client, onClose, onUpdated }: {
 
   return (
     <DialogWrapper onClose={onClose} title="클라이언트 수정">
+      {editError && (
+        <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">{editError}</div>
+      )}
       <div className="space-y-4">
         <InputField label="클라이언트 이름" value={form.client_name || ''} onChange={v => setForm({ ...form, client_name: v })} />
         <InputField label="설명" value={form.description || ''} onChange={v => setForm({ ...form, description: v })} />
@@ -439,9 +446,13 @@ function DeleteDialog({ client, onClose, onDeleted }: {
   onDeleted: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   return (
     <DialogWrapper onClose={onClose} title="클라이언트 비활성화" small>
+      {deleteError && (
+        <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">{deleteError}</div>
+      )}
       <div className="text-center py-4">
         <div className="w-14 h-14 mx-auto bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
           <Trash2 className="w-7 h-7 text-red-600" />
@@ -456,8 +467,13 @@ function DeleteDialog({ client, onClose, onDeleted }: {
         <button
           onClick={async () => {
             setDeleting(true);
+            setDeleteError('');
             try { await apiClientApi.deactivate(client.id); onDeleted(); }
-            catch (e) { if (import.meta.env.DEV) console.error('Delete failed', e); }
+            catch (e: any) {
+              const msg = e?.response?.data?.message || e?.message || '비활성화에 실패했습니다.';
+              setDeleteError(msg);
+              if (import.meta.env.DEV) console.error('Delete failed', e);
+            }
             finally { setDeleting(false); }
           }}
           disabled={deleting}

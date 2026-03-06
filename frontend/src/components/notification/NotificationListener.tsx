@@ -45,13 +45,12 @@ export function NotificationListener() {
       eventSource.addEventListener('notification', (event) => {
         try {
           const data = JSON.parse(event.data);
-          addNotificationRef.current({
-            type: data.type || 'UNKNOWN',
-            title: data.title || 'System Notification',
-            message: data.message || '',
-            data: data.data,
-            timestamp: data.timestamp || new Date().toISOString(),
-          });
+          // Validate expected fields are strings (defense against malformed server data)
+          const type = typeof data.type === 'string' ? data.type : 'UNKNOWN';
+          const title = typeof data.title === 'string' ? data.title.slice(0, 200) : 'System Notification';
+          const message = typeof data.message === 'string' ? data.message.slice(0, 1000) : '';
+          const timestamp = typeof data.timestamp === 'string' ? data.timestamp : new Date().toISOString();
+          addNotificationRef.current({ type, title, message, data: data.data, timestamp });
         } catch (e) {
           if (import.meta.env.DEV) {
             console.error('[Notification] Failed to parse event:', e);

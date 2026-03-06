@@ -519,7 +519,7 @@ int main() {
     // Start HTTP server
     int threadNum = 4;
     if (auto* v = std::getenv("THREAD_NUM")) {
-        try { threadNum = std::stoi(v); } catch (...) { spdlog::warn("Invalid THREAD_NUM '{}', using default {}", v, threadNum); }
+        try { threadNum = std::max(1, std::min(256, std::stoi(v))); } catch (...) { spdlog::warn("Invalid THREAD_NUM '{}', using default {}", v, threadNum); }
     }
     spdlog::info("Starting HTTP server on port {} with {} threads...", g_config.serverPort, threadNum);
     app().addListener("0.0.0.0", g_config.serverPort)

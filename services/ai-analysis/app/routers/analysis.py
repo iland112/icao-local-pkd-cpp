@@ -159,6 +159,10 @@ def _run_analysis(upload_id: str | None = None) -> None:
         with _job_lock:
             _job_status["status"] = "FAILED"
             _job_status["error_message"] = "Analysis failed. Check server logs for details."
+    finally:
+        # Ensure large objects are freed even on exception
+        import gc
+        gc.collect()
 
 
 def _save_results(

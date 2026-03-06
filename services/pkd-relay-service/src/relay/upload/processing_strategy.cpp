@@ -329,9 +329,10 @@ void ManualProcessingStrategy::processMasterListContent(
     // Save to temp file
     saveMasterListToTempFile(uploadId, content);
 
-    // Update upload status
-    std::string updateQuery = "UPDATE uploaded_file SET status = 'PENDING' WHERE id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, updateQuery.c_str());
+    // Update upload status (parameterized query to prevent SQL injection)
+    const char* paramValues[1] = { uploadId.c_str() };
+    PGresult* res = PQexecParams(conn, "UPDATE uploaded_file SET status = 'PENDING' WHERE id = $1",
+                                 1, nullptr, paramValues, nullptr, nullptr, 0);
     PQclear(res);
 
     spdlog::info("MANUAL mode Stage 1: Completed, waiting for user to trigger validation");
@@ -343,9 +344,10 @@ void ManualProcessingStrategy::validateAndSaveToDb(
 ) {
     spdlog::info("MANUAL mode Stage 2: Validating and saving to DB + LDAP for upload {}", uploadId);
 
-    // Check upload status and file format
-    std::string checkQuery = "SELECT file_format, status FROM uploaded_file WHERE id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, checkQuery.c_str());
+    // Check upload status and file format (parameterized query)
+    const char* checkParams[1] = { uploadId.c_str() };
+    PGresult* res = PQexecParams(conn, "SELECT file_format, status FROM uploaded_file WHERE id = $1",
+                                 1, nullptr, checkParams, nullptr, nullptr, 0);
     if (PQresultStatus(res) != PGRES_TUPLES_OK || PQntuples(res) == 0) {
         PQclear(res);
         throw std::runtime_error("Upload not found: " + uploadId);
@@ -411,9 +413,10 @@ void ManualProcessingStrategy::validateAndSaveToDb(
 
         // Update ML count if any
         if (counts.mlCount > 0) {
-            std::string mlUpdateQuery = "UPDATE uploaded_file SET ml_count = " + std::to_string(counts.mlCount) +
-                                       " WHERE id = '" + uploadId + "'";
-            PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
+            std::string mlCountStr = std::to_string(counts.mlCount);
+            const char* mlParams[2] = { mlCountStr.c_str(), uploadId.c_str() };
+            PGresult* mlRes = PQexecParams(conn, "UPDATE uploaded_file SET ml_count = $1 WHERE id = $2",
+                                           2, nullptr, mlParams, nullptr, nullptr, 0);
             PQclear(mlRes);
         }
 
@@ -448,10 +451,11 @@ void ManualProcessingStrategy::validateAndSaveToDb(
         spdlog::info("MANUAL mode Stage 2: Processing Master List ({} bytes)", content.size());
         processMasterListToDbAndLdap(uploadId, content, conn, ld);
 
-        // Update upload status to COMPLETED
-        std::string mlUpdateQuery = "UPDATE uploaded_file SET status = 'COMPLETED', completed_timestamp = NOW() "
-                                   " WHERE id = '" + uploadId + "'";
-        PGresult* mlRes = PQexec(conn, mlUpdateQuery.c_str());
+        // Update upload status to COMPLETED (parameterized query)
+        const char* mlCompParams[1] = { uploadId.c_str() };
+        PGresult* mlRes = PQexecParams(conn,
+            "UPDATE uploaded_file SET status = 'COMPLETED', completed_timestamp = NOW() WHERE id = $1",
+            1, nullptr, mlCompParams, nullptr, nullptr, 0);
         PQclear(mlRes);
 
         spdlog::info("MANUAL mode Stage 2: Master List processing completed");
@@ -474,9 +478,12 @@ void ManualProcessingStrategy::cleanupFailedUpload(
 ) {
     spdlog::info("Cleaning up failed upload: {}", uploadId);
 
+    // Parameterized delete queries to prevent SQL injection
+    const char* delParams[1] = { uploadId.c_str() };
+
     // Delete certificates
-    std::string deleteCerts = "DELETE FROM certificate WHERE upload_id = '" + uploadId + "'";
-    PGresult* res = PQexec(conn, deleteCerts.c_str());
+    PGresult* res = PQexecParams(conn, "DELETE FROM certificate WHERE upload_id = $1",
+                                 1, nullptr, delParams, nullptr, nullptr, 0);
     int certsDeleted = 0;
     if (PQresultStatus(res) == PGRES_COMMAND_OK) {
         certsDeleted = atoi(PQcmdTuples(res));
@@ -484,8 +491,8 @@ void ManualProcessingStrategy::cleanupFailedUpload(
     PQclear(res);
 
     // Delete CRLs
-    std::string deleteCrls = "DELETE FROM crl WHERE upload_id = '" + uploadId + "'";
-    res = PQexec(conn, deleteCrls.c_str());
+    res = PQexecParams(conn, "DELETE FROM crl WHERE upload_id = $1",
+                       1, nullptr, delParams, nullptr, nullptr, 0);
     int crlsDeleted = 0;
     if (PQresultStatus(res) == PGRES_COMMAND_OK) {
         crlsDeleted = atoi(PQcmdTuples(res));
@@ -493,8 +500,8 @@ void ManualProcessingStrategy::cleanupFailedUpload(
     PQclear(res);
 
     // Delete master lists
-    std::string deleteMls = "DELETE FROM master_list WHERE upload_id = '" + uploadId + "'";
-    res = PQexec(conn, deleteMls.c_str());
+    res = PQexecParams(conn, "DELETE FROM master_list WHERE upload_id = $1",
+                       1, nullptr, delParams, nullptr, nullptr, 0);
     int mlsDeleted = 0;
     if (PQresultStatus(res) == PGRES_COMMAND_OK) {
         mlsDeleted = atoi(PQcmdTuples(res));
@@ -502,8 +509,8 @@ void ManualProcessingStrategy::cleanupFailedUpload(
     PQclear(res);
 
     // Delete upload record
-    std::string deleteUpload = "DELETE FROM uploaded_file WHERE id = '" + uploadId + "'";
-    res = PQexec(conn, deleteUpload.c_str());
+    res = PQexecParams(conn, "DELETE FROM uploaded_file WHERE id = $1",
+                       1, nullptr, delParams, nullptr, nullptr, 0);
     PQclear(res);
 
     // Delete temp files

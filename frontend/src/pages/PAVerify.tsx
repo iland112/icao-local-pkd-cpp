@@ -586,8 +586,10 @@ export function PAVerify() {
         if (requestedBy === 'anonymous') {
           const token = localStorage.getItem('access_token');
           if (token) {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            requestedBy = payload.username || payload.sub || 'anonymous';
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              requestedBy = payload.username || payload.sub || 'anonymous';
+            } catch { /* malformed token — use anonymous */ }
           }
         }
       } catch { /* ignore */ }

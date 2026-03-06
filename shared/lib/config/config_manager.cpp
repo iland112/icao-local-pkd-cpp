@@ -67,7 +67,8 @@ bool ConfigManager::getBool(const std::string& key, bool defaultValue) const {
 
     // Convert to lowercase for comparison
     std::string lowerValue = value;
-    std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(), ::tolower);
+    std::transform(lowerValue.begin(), lowerValue.end(), lowerValue.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
 
     if (lowerValue == "true" || lowerValue == "1" || lowerValue == "yes" || lowerValue == "on") {
         return true;

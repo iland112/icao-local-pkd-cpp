@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.2
+**Current Version**: v2.29.3
 **Last Updated**: 2026-03-06
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -583,6 +583,28 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.3 (2026-03-06) - 5차 코드 보안 + 안정성 강화 (CRITICAL 6건 + HIGH 8건 + MEDIUM 7건)
+- **CRITICAL FIX — SQL 인젝션 방어**: `processing_strategy.cpp` PGconn 8개 쿼리 문자열 연결 → `PQexecParams()` 파라미터화 (uploadId 직접 삽입 제거)
+- **CRITICAL FIX — detached thread `this` 캡처 제거**: `upload_handler.cpp` LDIF 처리 스레드에서 `this` 포인터 캡처 → `ldapStorageSvc` 값 캡처 + null 체크 (핸들러 소멸 후 dangling pointer 방지)
+- **CRITICAL FIX — EVP_Digest 반환값 검증**: `main_utils.cpp` SHA-256 해시 계산 시 `EVP_DigestInit_ex`/`EVP_DigestUpdate`/`EVP_DigestFinal_ex` 반환값 미검사 → 실패 시 빈 문자열 반환 + 리소스 해제
+- **CRITICAL FIX — Oracle OCI 예외 경로 메모리 누수**: `oracle_query_executor.cpp` catch 블록에서 `colBuffers`/`lobLocators` 미해제 → 예외 발생 시에도 `delete[]` + `OCIDescriptorFree` 정리
+- **CRITICAL FIX — dl_parser OID 버퍼 오버플로**: `readOid()` length 필드 검증 누락 → `len <= 0 || len > 255` 가드 추가
+- **HIGH FIX — PA JSON 필드 검증**: `pa_handler.cpp` DG 파싱 루프에 `isMember("number"/"data")` 존재 체크 + Base64 디코드 결과 empty 검증
+- **HIGH FIX — data_group stoi 예외 안전**: `data_group_repository.cpp` `std::stoi()` try-catch 추가 (잘못된 DG 번호 문자열 시 기본값 0)
+- **HIGH FIX — Frontend EditDialog/DeleteDialog 에러 표시**: `ApiClientManagement.tsx` 수정/삭제 다이얼로그에 에러 state + 빨간 배너 추가 (기존 사일런트 실패)
+- **HIGH FIX — JWT 디코드 안전**: `PAVerify.tsx` `JSON.parse(atob(token.split('.')[1]))` try-catch 래핑 (malformed 토큰 방어)
+- **HIGH FIX — Python AI 분석 메모리 정리**: `analysis.py` `_run_analysis()` finally 블록에 `gc.collect()` 추가
+- **HIGH FIX — Python feature engineering 캐시 동시성**: `feature_engineering.py` `"loading"` 플래그 추가 — 중복 DB 로드 방지
+- **HIGH FIX — HSTS 만료시간**: `api-gateway-ssl.conf` `max-age=86400`(1일) → `max-age=31536000`(1년)
+- **HIGH FIX — Swagger CORS 와일드카드**: `swagger-nginx.conf` `Access-Control-Allow-Origin '*'` → `'$http_origin'`, CSP `frame-ancestors 'self'` only
+- **MEDIUM FIX — ZIP export 경로 탐색 방지**: `certificate_service.cpp` country 코드 알파벳만 허용(ISO 3166-1), safeName `..` 포함 시 certType 대체, fingerprint `substr` 범위 검증
+- **MEDIUM FIX — `::tolower` signed char UB**: `config_manager.cpp` `::tolower` → `[](unsigned char c) { return std::tolower(c); }` 람다 (음수 바이트 UB 방지)
+- **MEDIUM FIX — SSE 알림 필드 검증**: `NotificationListener.tsx` 파싱된 JSON 필드에 `typeof` 타입 체크 + `slice()` 길이 제한 (title 200자, message 1000자)
+- **MEDIUM FIX — Relay THREAD_NUM 범위 제한**: `pkd-relay/main.cpp` `std::max(1, std::min(256, ...))` 바운드 검증
+- **MEDIUM FIX — Luckfox Swagger CORS**: `api-gateway-luckfox.conf` `/api/docs/` CORS `'*'` → `'$http_origin'`
+- **MEDIUM FIX — AI Dockerfile CMD 인젝션 방지**: `CMD` shell form에서 `${UVICORN_WORKERS}` 환경변수 인용 + `exec` 접두사
+- ~15 files changed (0 new, ~15 modified)
 
 ### v2.29.2 (2026-03-06) - 4차 코드 안정성 강화 + SSE HTTP/2 완전 수정 + 프론트엔드 UI 수정
 - **SSE HTTP/2 완전 수정**: `proxy_hide_header Transfer-Encoding;` 추가 — Drogon 백엔드가 보내는 `transfer-encoding: chunked` 헤더를 nginx에서 제거 (HTTP/2에서 금지된 헤더, RFC 7540)

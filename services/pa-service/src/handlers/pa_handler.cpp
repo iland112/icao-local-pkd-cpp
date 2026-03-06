@@ -231,11 +231,21 @@ void PaHandler::handleVerify(
             if ((*jsonBody)["dataGroups"].isArray()) {
                 // Array format: [{number: "DG1", data: "base64..."}, ...]
                 for (const auto& dg : (*jsonBody)["dataGroups"]) {
+                    if (!dg.isMember("number") || !dg.isMember("data")) {
+                        spdlog::warn("Skipping DG entry missing 'number' or 'data' field");
+                        continue;
+                    }
                     std::string dgNumStr = dg["number"].asString();
                     std::string dgData = dg["data"].asString();
+                    if (dgData.empty()) continue;
                     // Extract number from "DG1" -> "1"
                     std::string dgKey = dgNumStr.length() > 2 ? dgNumStr.substr(2) : dgNumStr;
-                    dataGroups[dgKey] = base64Decode(dgData);
+                    auto decoded = base64Decode(dgData);
+                    if (decoded.empty()) {
+                        spdlog::warn("Base64 decode failed for DG {}", dgKey);
+                        continue;
+                    }
+                    dataGroups[dgKey] = std::move(decoded);
                 }
             } else if ((*jsonBody)["dataGroups"].isObject()) {
                 // Object format: {"DG1": "base64...", "DG2": "base64..."} OR {"1": "base64...", "2": "base64..."}
