@@ -26,6 +26,8 @@ import { cn } from '@/utils/cn';
 import { formatDateTime } from '@/utils/dateFormat';
 import { Dialog } from '@/components/common/Dialog';
 import { ReconciliationHistory } from '@/components/sync/ReconciliationHistory';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 
 export function SyncDashboard() {
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
@@ -44,6 +46,9 @@ export function SyncDashboard() {
   const [configSaveResult, setConfigSaveResult] = useState<SyncConfigResponse | null>(null);
   const [triggeringDailySync, setTriggeringDailySync] = useState(false);
   const [dailySyncResult, setDailySyncResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const { sortedData: sortedHistory, sortConfig: historySortConfig, requestSort: requestHistorySort } = useSortableTable(history);
+  const { sortedData: sortedRevalidation, sortConfig: revalSortConfig, requestSort: requestRevalSort } = useSortableTable(revalidationHistory);
 
   const fetchData = useCallback(async () => {
     try {
@@ -679,28 +684,22 @@ export function SyncDashboard() {
             <table className="w-full text-xs">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    검사 시간
-                  </th>
-                  <th className="text-center py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    상태
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    DB 총계
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    LDAP 총계
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    불일치
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    소요 시간
-                  </th>
+                  <SortableHeader label="검사 시간" sortKey="checkedAt" sortConfig={historySortConfig} onSort={requestHistorySort}
+                    className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="상태" sortKey="status" sortConfig={historySortConfig} onSort={requestHistorySort}
+                    className="text-center py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="DB 총계" sortKey="dbTotal" sortConfig={historySortConfig} onSort={requestHistorySort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="LDAP 총계" sortKey="ldapTotal" sortConfig={historySortConfig} onSort={requestHistorySort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="불일치" sortKey="totalDiscrepancy" sortConfig={historySortConfig} onSort={requestHistorySort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="소요 시간" sortKey="checkDurationMs" sortConfig={historySortConfig} onSort={requestHistorySort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody>
-                {history.map((item) => (
+                {sortedHistory.map((item) => (
                   <tr
                     key={item.id}
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
@@ -767,43 +766,32 @@ export function SyncDashboard() {
             <table className="w-full text-xs">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    실행 시간
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    처리된 인증서
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    새로 만료
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    새로 유효
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    변경 없음
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    오류
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap">
-                    TC 대상
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap">
-                    TC VALID
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap">
-                    CRL 검사
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap">
-                    CRL 폐기
-                  </th>
-                  <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                    소요 시간
-                  </th>
+                  <SortableHeader label="실행 시간" sortKey="executedAt" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="처리된 인증서" sortKey="totalProcessed" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="새로 만료" sortKey="newlyExpired" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="새로 유효" sortKey="newlyValid" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="변경 없음" sortKey="unchanged" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="오류" sortKey="errors" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
+                  <SortableHeader label="TC 대상" sortKey="tcProcessed" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" />
+                  <SortableHeader label="TC VALID" sortKey="tcNewlyValid" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" />
+                  <SortableHeader label="CRL 검사" sortKey="crlChecked" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap" />
+                  <SortableHeader label="CRL 폐기" sortKey="crlRevoked" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap" />
+                  <SortableHeader label="소요 시간" sortKey="durationMs" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                    className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
                 </tr>
               </thead>
               <tbody>
-                {revalidationHistory.map((item) => (
+                {sortedRevalidation.map((item) => (
                   <tr
                     key={item.id}
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"

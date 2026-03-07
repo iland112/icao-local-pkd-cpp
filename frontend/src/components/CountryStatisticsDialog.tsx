@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { X, Globe, Download, Loader2 } from 'lucide-react';
 import { uploadHistoryApi } from '@/services/pkdApi';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 
 interface CountryStatistics {
   countryCode: string;
@@ -81,6 +83,8 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
     { mlsc: 0, cscaSelfSigned: 0, cscaLinkCert: 0, dsc: 0, dscNc: 0, crl: 0, totalCerts: 0 }
   );
 
+  const { sortedData, sortConfig, requestSort } = useSortableTable(data, { key: 'totalCerts', direction: 'desc' });
+
   if (!isOpen) return null;
 
   return (
@@ -146,34 +150,26 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                     <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
                       #
                     </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-16">
-                      국가
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-purple-600 dark:text-purple-300 border-b-2 border-gray-300 dark:border-gray-600">
-                      MLSC
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-blue-600 dark:text-blue-300 border-b-2 border-gray-300 dark:border-gray-600">
-                      CSCA(SS)
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-cyan-600 dark:text-cyan-300 border-b-2 border-gray-300 dark:border-gray-600">
-                      CSCA(LC)
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-green-600 dark:text-green-300 border-b-2 border-gray-300 dark:border-gray-600">
-                      DSC
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-amber-600 dark:text-amber-300 border-b-2 border-gray-300 dark:border-gray-600">
-                      DSC_NC
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-red-600 dark:text-red-300 border-b-2 border-gray-300 dark:border-gray-600">
-                      CRL
-                    </th>
-                    <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600">
-                      총계
-                    </th>
+                    <SortableHeader label="국가" sortKey="countryCode" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-16" />
+                    <SortableHeader label="MLSC" sortKey="mlsc" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-purple-600 dark:text-purple-300 border-b-2 border-gray-300 dark:border-gray-600" />
+                    <SortableHeader label="CSCA(SS)" sortKey="cscaSelfSigned" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-blue-600 dark:text-blue-300 border-b-2 border-gray-300 dark:border-gray-600" />
+                    <SortableHeader label="CSCA(LC)" sortKey="cscaLinkCert" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-cyan-600 dark:text-cyan-300 border-b-2 border-gray-300 dark:border-gray-600" />
+                    <SortableHeader label="DSC" sortKey="dsc" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-green-600 dark:text-green-300 border-b-2 border-gray-300 dark:border-gray-600" />
+                    <SortableHeader label="DSC_NC" sortKey="dscNc" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-amber-600 dark:text-amber-300 border-b-2 border-gray-300 dark:border-gray-600" />
+                    <SortableHeader label="CRL" sortKey="crl" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-red-600 dark:text-red-300 border-b-2 border-gray-300 dark:border-gray-600" />
+                    <SortableHeader label="총계" sortKey="totalCerts" sortConfig={sortConfig} onSort={requestSort}
+                      className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600" />
                   </tr>
                 </thead>
                 <tbody>
-                  {data.map((row, index) => (
+                  {sortedData.map((row, index) => (
                     <tr
                       key={row.countryCode}
                       className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"

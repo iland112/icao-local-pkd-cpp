@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { ShieldAlert, CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import { aiAnalysisApi, type ExtensionAnomaly } from '@/services/aiAnalysisApi';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 
 const SEVERITY_STYLE: Record<string, string> = {
   CRITICAL: 'text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-900/30',
@@ -71,6 +73,17 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
     );
   }
 
+  // Enrich anomalies with computed sort fields
+  const enrichedAnomalies = useMemo(() =>
+    anomalies.slice(0, 100).map(a => ({
+      ...a,
+      _violationCount: totalViolations(a),
+      _severityOrder: a.structural_score, // higher score = more severe, sort by score directly
+    })),
+  [anomalies]);
+
+  const { sortedData: sortedAnomalies, sortConfig: anomalySortConfig, requestSort: requestAnomalySort } = useSortableTable(enrichedAnomalies, { key: 'structural_score', direction: 'desc' });
+
   // Severity distribution based on structural_score
   const severityDist = anomalies.reduce((acc, a) => {
     const sev = deriveSeverity(a.structural_score);
@@ -130,21 +143,21 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
           {/* Header */}
           <div className="grid grid-cols-[24px_1fr_56px_40px_72px_48px_40px] gap-1 text-xs text-gray-500 dark:text-gray-400 font-medium pb-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10 px-1">
             <div />
-            <div>인증서</div>
-            <div className="text-center">유형</div>
-            <div className="text-center">국가</div>
-            <div className="text-center">심각도</div>
-            <div className="text-center">위반</div>
-            <div className="text-center">점수</div>
+            <SortableHeader as="div" label="인증서" sortKey="fingerprint" sortConfig={anomalySortConfig} onSort={requestAnomalySort} />
+            <SortableHeader as="div" label="유형" sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label="국가" sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label="심각도" sortKey="_severityOrder" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label="위반" sortKey="_violationCount" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label="점수" sortKey="structural_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
           </div>
 
           {/* Rows */}
           <div className="divide-y divide-gray-100 dark:divide-gray-700">
-            {anomalies.slice(0, 100).map((a) => {
+            {sortedAnomalies.map((a) => {
               const isExpanded = expandedRows.has(a.fingerprint);
               const sev = deriveSeverity(a.structural_score);
               const Icon = SEVERITY_ICON[sev] || AlertTriangle;
-              const violationCount = totalViolations(a);
+              const violationCount = a._violationCount;
               return (
                 <div key={a.fingerprint}>
                   <div

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Users, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import aiAnalysisApi, { type IssuerProfile } from '@/services/aiAnalysisApi';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 const RISK_COLORS: Record<string, string> = {
   HIGH: '#ef4444',
   MEDIUM: '#f59e0b',
@@ -62,6 +64,9 @@ export default function IssuerProfileCard() {
     MEDIUM: profiles.filter(p => p.risk_indicator === 'MEDIUM').length,
     LOW: profiles.filter(p => p.risk_indicator === 'LOW').length,
   };
+
+  const highRiskProfiles = profiles.filter(p => p.risk_indicator === 'HIGH').slice(0, 5);
+  const { sortedData: sortedHighRisk, sortConfig: highRiskSortConfig, requestSort: requestHighRiskSort } = useSortableTable(highRiskProfiles);
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden">
@@ -125,17 +130,18 @@ export default function IssuerProfileCard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-gray-500 dark:text-gray-400 text-left">
-                  <th className="pb-1 font-medium">발급자 DN</th>
-                  <th className="pb-1 font-medium text-center">인증서</th>
-                  <th className="pb-1 font-medium text-center">준수율</th>
-                  <th className="pb-1 font-medium text-center">만료율</th>
+                  <SortableHeader label="발급자 DN" sortKey="issuer_dn" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                    className="pb-1 font-medium" />
+                  <SortableHeader label="인증서" sortKey="cert_count" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                    className="pb-1 font-medium text-center" />
+                  <SortableHeader label="준수율" sortKey="compliance_rate" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                    className="pb-1 font-medium text-center" />
+                  <SortableHeader label="만료율" sortKey="expired_rate" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                    className="pb-1 font-medium text-center" />
                 </tr>
               </thead>
               <tbody>
-                {profiles
-                  .filter(p => p.risk_indicator === 'HIGH')
-                  .slice(0, 5)
-                  .map((p) => (
+                {sortedHighRisk.map((p) => (
                     <tr key={p.issuer_dn} className="border-t border-gray-100 dark:border-gray-700">
                       <td className="py-1.5 text-gray-700 dark:text-gray-300" title={p.issuer_dn}>
                         {truncateDn(p.issuer_dn, 50)}
