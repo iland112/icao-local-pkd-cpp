@@ -37,6 +37,7 @@ import { uploadApi } from '@/services/api';
 import { uploadHistoryApi } from '@/services/pkdApi';
 import type { UploadStatisticsOverview, UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatDateTime, formatDate } from '@/utils/dateFormat';
 import { getFlagSvgPath } from '@/utils/countryCode';
 
 interface ValidationReasonEntry {
@@ -121,11 +122,8 @@ export function UploadDashboard() {
   // Transform data for timeline chart
   const chartData = recentChanges
     .map((change) => ({
-      date: new Date(change.uploadTime).toLocaleDateString('ko-KR', {
-        month: 'short',
-        day: 'numeric',
-      }),
-      fullDate: new Date(change.uploadTime).toLocaleDateString('ko-KR'),
+      date: formatDate(change.uploadTime),
+      fullDate: formatDate(change.uploadTime),
       DSC: change.counts.dsc,
       CSCA: change.counts.csca,
       CRL: change.counts.crl,
@@ -332,7 +330,7 @@ export function UploadDashboard() {
           {/* Certificate Breakdown + Source Statistics - 2 column layout */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
             {/* Certificate Type Breakdown - 2/3 width */}
-            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+            <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <Shield className="w-5 h-5 text-violet-500" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 유형별 현황</h3>
@@ -438,7 +436,7 @@ export function UploadDashboard() {
             </div>
 
             {/* Source Statistics - 1/3 width */}
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <PackageOpen className="w-5 h-5 text-amber-500" />
                 <h3 className="text-lg font-bold text-gray-900 dark:text-white">출처별 현황</h3>
@@ -631,7 +629,7 @@ export function UploadDashboard() {
                         </span>
                       </div>
                       <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                        <span>{new Date(change.uploadTime).toLocaleString('ko-KR')}</span>
+                        <span>{formatDateTime(change.uploadTime)}</span>
                         {change.previousUpload && (
                           <span className="text-gray-400 dark:text-gray-500">
                             vs {change.previousUpload.fileName}

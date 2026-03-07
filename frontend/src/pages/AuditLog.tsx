@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Shield, Filter, User, Activity, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { createAuthenticatedClient } from '@/services/authApi';
+import { formatDateTime } from '@/utils/dateFormat';
 
 const authClient = createAuthenticatedClient('/api/auth');
 
@@ -96,18 +97,6 @@ export function AuditLog() {
     if (eventType === 'LOGOUT') return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
     if (eventType === 'TOKEN_REFRESH') return 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300';
     return 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
   };
 
   return (
@@ -297,7 +286,7 @@ export function AuditLog() {
                 logs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30">
                     <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-900 dark:text-white">
-                      {formatDate(log.createdAt)}
+                      {formatDateTime(log.createdAt)}
                     </td>
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <div className="flex items-center gap-1.5">
@@ -407,7 +396,7 @@ export function AuditLog() {
                   </div>
                   <div>
                     <dt className="text-xs text-gray-500 dark:text-gray-400">생성 시간</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{formatDate(selectedLog.createdAt)}</dd>
+                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{formatDateTime(selectedLog.createdAt)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs text-gray-500 dark:text-gray-400">사용자 ID</dt>

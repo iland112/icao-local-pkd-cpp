@@ -20,6 +20,7 @@ import {
 import { uploadApi } from '@/services/api';
 import type { UploadedFile, UploadStatus, FileFormat } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 import { validationApi } from '@/api/validationApi';
 import type { ValidationResult } from '@/types/validation';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
@@ -169,17 +170,6 @@ export function UploadDetail() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
   if (loading) {
     return (
       <div className="w-full px-4 lg:px-6 py-4">
@@ -291,7 +281,7 @@ export function UploadDetail() {
                 </div>
                 <div>
                   <p className="font-medium text-gray-900 dark:text-white">업로드 시작</p>
-                  <p className="text-sm text-gray-500">{formatDate(upload.uploadedAt || upload.createdAt || '')}</p>
+                  <p className="text-sm text-gray-500">{formatDateTime(upload.uploadedAt || upload.createdAt || '')}</p>
                 </div>
               </div>
               {/* Processing in-progress timeline entry */}
@@ -330,7 +320,7 @@ export function UploadDetail() {
                     <p className="font-medium text-gray-900 dark:text-white">
                       {upload.status === 'COMPLETED' ? '처리 완료' : '처리 실패'}
                     </p>
-                    <p className="text-sm text-gray-500">{formatDate(upload.completedAt)}</p>
+                    <p className="text-sm text-gray-500">{formatDateTime(upload.completedAt)}</p>
                   </div>
                 </div>
               )}

@@ -4,6 +4,7 @@
 
 #include "validation_repository.h"
 #include "query_helpers.h"
+#include <icao/validation/cert_ops.h>
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <random>
@@ -523,12 +524,23 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
 
 Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
 {
-    spdlog::debug("[ValidationRepository] Finding by subject DN: {}...", subjectDn.substr(0, 60));
+    // Trim leading/trailing whitespace from input DN
+    std::string trimmedDn = subjectDn;
+    auto start = trimmedDn.find_first_not_of(" \t\r\n");
+    auto end = trimmedDn.find_last_not_of(" \t\r\n");
+    if (start != std::string::npos && end != std::string::npos) {
+        trimmedDn = trimmedDn.substr(start, end - start + 1);
+    } else if (start == std::string::npos) {
+        return Json::nullValue; // empty/whitespace-only input
+    }
+
+    spdlog::debug("[ValidationRepository] Finding by subject DN: {}...", trimmedDn.substr(0, 60));
 
     try {
         std::string dbType = queryExecutor_->getDatabaseType();
 
-        // Step 1: Find certificate by subject_dn (case-insensitive)
+        // Step 1: Find certificate by subject_dn
+        // First try exact match (case-insensitive), then fallback to DN-normalized comparison
         std::string certQuery;
         if (dbType == "oracle") {
             certQuery =
@@ -546,8 +558,49 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
                 "LIMIT 1";
         }
 
-        std::vector<std::string> certParams = {subjectDn};
+        std::vector<std::string> certParams = {trimmedDn};
         Json::Value certResult = queryExecutor_->executeQuery(certQuery, certParams);
+
+        // Fallback: DN format mismatch (slash vs RFC 2253) — extract CN and search by keyword
+        if (certResult.empty()) {
+            std::string cn = icao::validation::extractDnAttribute(trimmedDn, "CN");
+            if (!cn.empty()) {
+                spdlog::debug("[ValidationRepository] Exact DN match failed, trying CN-based lookup: {}", cn);
+                std::string fallbackQuery;
+                if (dbType == "oracle") {
+                    fallbackQuery =
+                        "SELECT id, fingerprint_sha256, subject_dn FROM certificate "
+                        "WHERE certificate_type IN ('DSC', 'DSC_NC') "
+                        "AND LOWER(subject_dn) LIKE '%' || LOWER($1) || '%' "
+                        "ORDER BY created_at DESC "
+                        "OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY";
+                } else {
+                    fallbackQuery =
+                        "SELECT id, fingerprint_sha256, subject_dn FROM certificate "
+                        "WHERE certificate_type IN ('DSC', 'DSC_NC') "
+                        "AND LOWER(subject_dn) LIKE '%' || LOWER($1) || '%' "
+                        "ORDER BY created_at DESC "
+                        "LIMIT 20";
+                }
+                std::vector<std::string> fallbackParams = {cn};
+                Json::Value candidates = queryExecutor_->executeQuery(fallbackQuery, fallbackParams);
+
+                // Normalize input DN and compare with each candidate
+                std::string inputNormalized = icao::validation::normalizeDnForComparison(trimmedDn);
+                for (Json::ArrayIndex i = 0; i < candidates.size(); i++) {
+                    std::string dbDn = candidates[i].get("subject_dn", "").asString();
+                    if (!dbDn.empty() &&
+                        icao::validation::normalizeDnForComparison(dbDn) == inputNormalized) {
+                        // Build single-element result matching the expected format
+                        certResult.append(Json::Value());
+                        certResult[0]["id"] = candidates[i]["id"];
+                        certResult[0]["fingerprint_sha256"] = candidates[i]["fingerprint_sha256"];
+                        spdlog::debug("[ValidationRepository] DN normalized match found: {}", dbDn.substr(0, 60));
+                        break;
+                    }
+                }
+            }
+        }
 
         if (certResult.empty()) {
             spdlog::debug("[ValidationRepository] No certificate found for subject DN: {}...",

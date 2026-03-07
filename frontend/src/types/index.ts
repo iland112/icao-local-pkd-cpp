@@ -285,7 +285,7 @@ export interface Certificate {
 }
 
 // PA types
-export type PAStatus = 'VALID' | 'INVALID' | 'ERROR';
+export type PAStatus = 'VALID' | 'INVALID' | 'ERROR' | 'EXPIRED_VALID';
 export type DataGroupNumber = 'DG1' | 'DG2' | 'DG3' | 'DG4' | 'DG5' | 'DG6' | 'DG7' | 'DG8' | 'DG9' | 'DG10' | 'DG11' | 'DG12' | 'DG13' | 'DG14' | 'DG15' | 'DG16';
 
 export interface PAVerificationRequest {
@@ -454,6 +454,8 @@ export interface PAHistoryItem {
   dscNonConformant?: boolean;
   pkdConformanceCode?: string;
   pkdConformanceText?: string;
+  // Verification type
+  verificationType?: 'FULL' | 'LOOKUP';
 }
 
 // Upload history item

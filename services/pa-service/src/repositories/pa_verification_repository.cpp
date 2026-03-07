@@ -204,7 +204,7 @@ Json::Value PaVerificationRepository::findAll(
         std::string dbType = queryExecutor_->getDatabaseType();
         std::ostringstream dataQuery;
         if (dbType == "oracle") {
-            dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+            dataQuery << "SELECT id, document_number, issuing_country, verification_status, verification_type, sod_hash, "
                       << "DBMS_LOB.SUBSTR(dsc_subject_dn, 4000, 1) AS dsc_subject_dn, dsc_serial_number, "
                       << "DBMS_LOB.SUBSTR(dsc_issuer_dn, 4000, 1) AS dsc_issuer_dn, dsc_fingerprint, "
                       << "DBMS_LOB.SUBSTR(csca_subject_dn, 4000, 1) AS csca_subject_dn, csca_fingerprint, "
@@ -218,7 +218,7 @@ Json::Value PaVerificationRepository::findAll(
                       << "requested_by, dsc_non_conformant, pkd_conformance_code, pkd_conformance_text "
                       << "FROM pa_verification";
         } else {
-            dataQuery << "SELECT id, document_number, issuing_country, verification_status, sod_hash, "
+            dataQuery << "SELECT id, document_number, issuing_country, verification_status, verification_type, sod_hash, "
                       << "dsc_subject_dn, dsc_serial_number, dsc_issuer_dn, dsc_fingerprint, "
                       << "csca_subject_dn, csca_fingerprint, "
                       << "trust_chain_valid, trust_chain_message, "
@@ -444,7 +444,8 @@ Json::Value PaVerificationRepository::toCamelCase(const Json::Value& dbRow) {
         {"requested_by", "requestedBy"},
         {"dsc_non_conformant", "dscNonConformant"},
         {"pkd_conformance_code", "pkdConformanceCode"},
-        {"pkd_conformance_text", "pkdConformanceText"}
+        {"pkd_conformance_text", "pkdConformanceText"},
+        {"verification_type", "verificationType"}
     };
 
     Json::Value camelCaseRow;

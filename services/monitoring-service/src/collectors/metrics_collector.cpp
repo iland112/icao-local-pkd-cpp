@@ -6,7 +6,10 @@
 #include <spdlog/spdlog.h>
 
 #include <sstream>
+#include <fstream>
 #include <algorithm>
+#include <set>
+#include <ctime>
 
 namespace handlers {
 
@@ -158,13 +161,16 @@ void MetricsCollector::collectOnce() {
         snapshot.services.push_back(std::move(svcMetrics));
     }
 
-    // 5. Store in ring buffer
+    // 5. Count unique users from nginx access log
+    snapshot.uniqueUsers = countUniqueUsers(5);
+
+    // 6. Store in ring buffer
     history_.push(snapshot);
     dataCollected_ = true;
 
-    spdlog::debug("Metrics collected: nginx active={}, rps={:.1f}, services={}",
+    spdlog::debug("Metrics collected: nginx active={}, rps={:.1f}, users={}, services={}",
                   snapshot.nginx.activeConnections, snapshot.requestsPerSecond,
-                  snapshot.services.size());
+                  snapshot.uniqueUsers, snapshot.services.size());
 }
 
 LoadSnapshot MetricsCollector::getLatestSnapshot() const {
@@ -288,6 +294,109 @@ PoolStats MetricsCollector::parsePoolStats(const Json::Value& json) {
     if (json.isMember("total")) stats.total = json["total"].asUInt();
     if (json.isMember("max")) stats.max = json["max"].asUInt();
     return stats;
+}
+
+// =============================================================
+// Unique user counting from nginx access log
+// =============================================================
+
+bool MetricsCollector::parseNginxTimestamp(const std::string& ts, std::tm& result) {
+    // Format: "07/Mar/2026:13:08:07 +0000"
+    static const char* months[] = {
+        "Jan","Feb","Mar","Apr","May","Jun",
+        "Jul","Aug","Sep","Oct","Nov","Dec"
+    };
+
+    if (ts.size() < 20) return false;
+
+    std::memset(&result, 0, sizeof(result));
+
+    try {
+        result.tm_mday = std::stoi(ts.substr(0, 2));
+
+        std::string mon = ts.substr(3, 3);
+        result.tm_mon = -1;
+        for (int i = 0; i < 12; i++) {
+            if (mon == months[i]) { result.tm_mon = i; break; }
+        }
+        if (result.tm_mon < 0) return false;
+
+        result.tm_year = std::stoi(ts.substr(7, 4)) - 1900;
+        result.tm_hour = std::stoi(ts.substr(12, 2));
+        result.tm_min  = std::stoi(ts.substr(15, 2));
+        result.tm_sec  = std::stoi(ts.substr(18, 2));
+    } catch (...) {
+        return false;
+    }
+
+    return true;
+}
+
+int MetricsCollector::countUniqueUsers(int windowMinutes) {
+    std::string logPath = "/var/log/nginx/access.log";
+    if (auto e = std::getenv("NGINX_ACCESS_LOG")) logPath = e;
+
+    std::ifstream file(logPath);
+    if (!file.is_open()) {
+        spdlog::debug("Cannot open nginx access log: {}", logPath);
+        return 0;
+    }
+
+    // Calculate cutoff time (UTC)
+    auto now = std::chrono::system_clock::now();
+    auto cutoff = now - std::chrono::minutes(windowMinutes);
+    auto cutoffTimeT = std::chrono::system_clock::to_time_t(cutoff);
+    std::tm cutoffTm;
+    gmtime_r(&cutoffTimeT, &cutoffTm);
+    time_t cutoffEpoch = timegm(&cutoffTm);
+
+    // Exclude loopback only — internal service endpoints use access_log off
+    auto isInternalIp = [](const std::string& ip) -> bool {
+        return ip == "127.0.0.1" || ip == "::1";
+    };
+
+    std::set<std::string> uniqueIps;
+
+    // Read from end of file — seek to last ~256KB for efficiency
+    file.seekg(0, std::ios::end);
+    auto fileSize = file.tellg();
+    const std::streamoff readSize = 256 * 1024;
+    if (fileSize > readSize) {
+        file.seekg(-readSize, std::ios::end);
+        // Skip partial first line
+        std::string discard;
+        std::getline(file, discard);
+    } else {
+        file.seekg(0);
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        // Extract IP (first space-delimited field)
+        auto spacePos = line.find(' ');
+        if (spacePos == std::string::npos) continue;
+        std::string ip = line.substr(0, spacePos);
+
+        // Skip internal service IPs
+        if (isInternalIp(ip)) continue;
+
+        // Extract timestamp: between [ and ]
+        auto bracketStart = line.find('[');
+        auto bracketEnd = line.find(']');
+        if (bracketStart == std::string::npos || bracketEnd == std::string::npos) continue;
+
+        std::string tsStr = line.substr(bracketStart + 1, bracketEnd - bracketStart - 1);
+
+        std::tm logTm;
+        if (!parseNginxTimestamp(tsStr, logTm)) continue;
+
+        time_t logEpoch = timegm(&logTm);
+        if (logEpoch >= cutoffEpoch) {
+            uniqueIps.insert(ip);
+        }
+    }
+
+    return static_cast<int>(uniqueIps.size());
 }
 
 } // namespace handlers

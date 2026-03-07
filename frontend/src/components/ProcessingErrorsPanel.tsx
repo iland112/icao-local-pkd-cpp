@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ProcessingError } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatTime } from '@/utils/dateFormat';
 
 interface ProcessingErrorsPanelProps {
   errors: ProcessingError[];
@@ -34,15 +35,6 @@ const ERROR_TYPE_CONFIG: Record<string, { label: string; color: string; bgColor:
 
 function getErrorConfig(errorType: string) {
   return ERROR_TYPE_CONFIG[errorType] ?? { label: errorType, color: 'text-gray-700 dark:text-gray-300', bgColor: 'bg-gray-100 dark:bg-gray-900/30' };
-}
-
-function formatTimestamp(ts: string) {
-  try {
-    const d = new Date(ts);
-    return d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  } catch {
-    return ts;
-  }
 }
 
 export function ProcessingErrorsPanel({
@@ -140,7 +132,7 @@ export function ProcessingErrorsPanel({
                 <div key={idx} className="px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
                   <div className="flex items-start gap-2">
                     <span className="text-xs text-gray-400 dark:text-gray-500 font-mono whitespace-nowrap mt-0.5">
-                      {formatTimestamp(error.timestamp)}
+                      {formatTime(error.timestamp)}
                     </span>
                     <span className={cn(
                       'inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium whitespace-nowrap',

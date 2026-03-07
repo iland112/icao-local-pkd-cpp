@@ -529,6 +529,9 @@ void MonitoringHandler::handleLoadSnapshot(
     }
     response["services"] = servicesArr;
 
+    // unique users
+    response["uniqueUsers"] = snapshot.uniqueUsers;
+
     // system
     response["system"]["cpuPercent"] = snapshot.cpuPercent;
     response["system"]["memoryPercent"] = snapshot.memoryPercent;
@@ -571,6 +574,7 @@ void MonitoringHandler::handleLoadHistory(
 
         point["nginx"]["activeConnections"] = snap.nginx.activeConnections;
         point["nginx"]["requestsPerSecond"] = snap.requestsPerSecond;
+        point["uniqueUsers"] = snap.uniqueUsers;
 
         // Per-service latency
         Json::Value latency;

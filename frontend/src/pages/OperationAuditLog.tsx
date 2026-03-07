@@ -34,6 +34,7 @@ import {
   type OperationType,
 } from '@/services/auditApi';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 
 // Operation type labels
 const OPERATION_TYPE_LABELS: Record<OperationType, string> = {
@@ -187,19 +188,6 @@ export function OperationAuditLog() {
       setPage(0);
     }
   }, [operationTypeFilter, usernameFilter, successFilter, startDate, endDate]);
-
-  // Format timestamp
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
 
   // Format duration
   const formatDuration = (ms: number | null) => {
@@ -420,7 +408,7 @@ export function OperationAuditLog() {
                   auditLogs.map((log) => (
                     <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-3 py-2.5 text-xs text-gray-900 dark:text-gray-100">
-                        {formatTimestamp(log.createdAt)}
+                        {formatDateTime(log.createdAt)}
                       </td>
                       <td className="px-3 py-2.5 text-xs">
                         <div className="flex items-center space-x-1.5">
@@ -545,7 +533,7 @@ export function OperationAuditLog() {
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500 dark:text-gray-400">생성 시간</dt>
-                      <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{formatTimestamp(selectedLog.createdAt)}</dd>
+                      <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{formatDateTime(selectedLog.createdAt)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-gray-500 dark:text-gray-400">사용자 ID</dt>

@@ -23,6 +23,7 @@ import {
 import { syncServiceApi, type SyncConfigResponse, type RevalidationHistoryItem, type RevalidationResult, type UpdateSyncConfigRequest } from '@/services/api';
 import type { SyncStatusResponse, SyncHistoryItem, SyncStatusType } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 import { Dialog } from '@/components/common/Dialog';
 import { ReconciliationHistory } from '@/components/sync/ReconciliationHistory';
 
@@ -204,41 +205,6 @@ export function SyncDashboard() {
     }
   };
 
-  const formatTime = (timestamp: string | undefined) => {
-    if (!timestamp) return '-';
-    try {
-      // PostgreSQL TIMESTAMP WITH TIME ZONE 형식 처리
-      // 예: "2026-01-07 08:30:00+00" -> ISO 8601 형식으로 변환
-      let isoTimestamp = timestamp;
-
-      // PostgreSQL 형식을 ISO 8601로 변환 (공백을 T로, +00을 +00:00으로)
-      if (timestamp.includes(' ') && !timestamp.includes('T')) {
-        isoTimestamp = timestamp.replace(' ', 'T');
-      }
-      // +00 또는 +09 형식을 +00:00 또는 +09:00으로 변환
-      if (/[+-]\d{2}$/.test(isoTimestamp)) {
-        isoTimestamp = isoTimestamp + ':00';
-      }
-
-      const date = new Date(isoTimestamp);
-      if (isNaN(date.getTime())) {
-        return timestamp;
-      }
-
-      return date.toLocaleString('ko-KR', {
-        timeZone: 'Asia/Seoul',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-    } catch {
-      return timestamp;
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -389,7 +355,7 @@ export function SyncDashboard() {
       {/* Status Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Current Status Card */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               현재 상태
@@ -476,7 +442,7 @@ export function SyncDashboard() {
             )}
 
             <div className="text-xs text-gray-500 dark:text-gray-400">
-              마지막 검사: {formatTime(status?.checkedAt)}
+              마지막 검사: {formatDateTime(status?.checkedAt)}
             </div>
             {status?.checkDurationMs && (
               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -487,7 +453,7 @@ export function SyncDashboard() {
         </div>
 
         {/* DB vs LDAP Comparison Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:col-span-2">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 md:col-span-2 h-full">
           <div className="flex items-center gap-2 mb-4">
             <ArrowRightLeft className="w-5 h-5 text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -740,7 +706,7 @@ export function SyncDashboard() {
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
                     <td className="py-2.5 px-3 text-gray-900 dark:text-white">
-                      {formatTime(item.checkedAt)}
+                      {formatDateTime(item.checkedAt)}
                     </td>
                     <td className="py-2.5 px-3 text-center">
                       <span
@@ -843,7 +809,7 @@ export function SyncDashboard() {
                     className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30"
                   >
                     <td className="py-2.5 px-3 text-gray-900 dark:text-white">
-                      {formatTime(item.executedAt)}
+                      {formatDateTime(item.executedAt)}
                     </td>
                     <td className="py-2.5 px-3 text-right font-mono text-gray-700 dark:text-gray-300">
                       {item.totalProcessed.toLocaleString()}

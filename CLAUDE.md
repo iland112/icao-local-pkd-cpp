@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.5
+**Current Version**: v2.29.6
 **Last Updated**: 2026-03-07
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -583,6 +583,22 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.6 (2026-03-07) - 시스템 모니터링 고유 접속자 + 전체 대시보드 그리드 높이 정렬
+- **모니터링 고유 접속자 수**: nginx access log 기반 최근 5분 고유 IP 카운트 (접속 현황 카드 주 지표), TCP 연결 수는 부수 정보로 표시
+- **nginx stub_status 접근 수정**: allow `172.16.0.0/12` → Docker bridge 172.18.x.x 대역 포함 (기존 172.16.0.0/16에서 403 Forbidden)
+- **모니터링 서비스 nginx 로그 볼륨**: `gateway-logs:/var/log/nginx:ro` 공유 볼륨 추가 (access log 읽기용)
+- **ActiveConnectionsCard 리디자인**: 고유 접속자 수 ("N명 접속 중") 주 지표 + TCP 연결 수 보조 정보 바
+- **전체 대시보드 그리드 높이 정렬** (8개 페이지):
+  - MonitoringDashboard: MetricCard, ServiceCard, InfraCard, ConnectionPoolChart에 `h-full`
+  - IcaoStatus: 3개 버전 카드 `h-full flex flex-col` + 내부 `flex-1` + Status Message `mt-auto`
+  - PADashboard: Pie 차트 + 국가 리스트 카드 `h-full flex flex-col flex-1`, `max-h-72` → `flex-1 overflow-y-auto`
+  - UploadDashboard: 인증서 유형별(2/3) + 출처별(1/3) 카드 `h-full`
+  - AiAnalysisDashboard: 알고리즘 트렌드 + 키 크기 분포 차트 `h-full`, 발급자+확장 프로파일 그리드 `lg:max-h-[600px]`
+  - SyncDashboard: 현재 상태 + DB↔LDAP 비교 카드 `h-full`
+- **IssuerProfileCard/ExtensionComplianceChecklist**: `h-full flex flex-col overflow-hidden` + 리스트 `flex-1 overflow-y-auto`
+- **auditApi JWT 인터셉터 누락 수정**: `auditApi.ts`에 JWT request interceptor 추가 (운영 감사 로그 401 오류 수정)
+- ~15 files changed (0 new, ~15 modified)
 
 ### v2.29.5 (2026-03-07) - 인증서 업로드 결과 다이얼로그 + ICAO 버전 확인 다이얼로그 + 프론트엔드 UX 개선
 - **인증서 업로드 결과 다이얼로그**: 업로드 완료 후 UploadDetail 페이지 이동 대신 인라인 결과 Dialog 표시 (파일 정보, 타입별 카운트, LDAP 저장 상태)

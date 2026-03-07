@@ -185,21 +185,31 @@ void IcaoHandler::handleGetStatus(
             int detectedVersion = std::get<1>(comp);
             int uploadedVersion = std::get<2>(comp);
             item["version_diff"] = detectedVersion - uploadedVersion;
-            bool needsUpdate = (detectedVersion > uploadedVersion);
-            item["needs_update"] = needsUpdate;
-            if (needsUpdate) anyNeedsUpdate = true;
 
             // Status message
             if (uploadedVersion == 0) {
                 item["status"] = "NOT_UPLOADED";
                 item["status_message"] = "No upload found for this collection";
+                item["needs_update"] = true;
+                anyNeedsUpdate = true;
             } else if (detectedVersion > uploadedVersion) {
                 item["status"] = "UPDATE_NEEDED";
                 item["status_message"] = "New version available (+" +
                     std::to_string(detectedVersion - uploadedVersion) + " versions behind)";
+                item["needs_update"] = true;
+                anyNeedsUpdate = true;
+            } else if (uploadedVersion > detectedVersion) {
+                // Uploaded version is newer than last detected — detection is stale
+                item["status"] = "DETECTION_STALE";
+                item["status_message"] = "Detected version is outdated (uploaded " +
+                    std::to_string(uploadedVersion) + " > detected " +
+                    std::to_string(detectedVersion) + "). Please re-check.";
+                item["needs_update"] = true;
+                anyNeedsUpdate = true;
             } else {
                 item["status"] = "UP_TO_DATE";
                 item["status_message"] = "System is up to date";
+                item["needs_update"] = false;
             }
 
             statusArray.append(item);

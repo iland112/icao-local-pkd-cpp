@@ -1,6 +1,7 @@
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Timer } from 'lucide-react';
 import type { HistoryPoint } from '@/services/monitoringApi';
+import { formatTime } from '@/utils/dateFormat';
 
 interface Props {
   data: HistoryPoint[];
@@ -26,7 +27,7 @@ export default function LatencyTrendChart({ data }: Props) {
   data.forEach(p => Object.keys(p.latency).forEach(k => serviceNames.add(k)));
 
   const chartData = data.map(p => ({
-    time: new Date(p.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: formatTime(p.timestamp),
     ...p.latency,
   }));
 

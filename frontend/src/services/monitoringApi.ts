@@ -99,6 +99,7 @@ export interface LoadSnapshot {
   timestamp: string;
   nginx: NginxStatus;
   services: ServiceLoadMetrics[];
+  uniqueUsers: number;
   system: {
     cpuPercent: number;
     memoryPercent: number;
@@ -111,6 +112,7 @@ export interface HistoryPoint {
     activeConnections: number;
     requestsPerSecond: number;
   };
+  uniqueUsers?: number;
   latency: Record<string, number>;
   system: {
     cpuPercent: number;

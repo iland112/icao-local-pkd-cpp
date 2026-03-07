@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <array>
 #include <mutex>
 #include <chrono>
@@ -63,6 +64,7 @@ struct LoadSnapshot {
     float cpuPercent = 0.0f;
     float memoryPercent = 0.0f;
     double requestsPerSecond = 0.0;
+    int uniqueUsers = 0;        // Unique client IPs in recent window
 };
 
 // --- Ring buffer for time-series ---
@@ -114,6 +116,12 @@ private:
 
     /// Parse JSON pool stats from service response
     PoolStats parsePoolStats(const Json::Value& json);
+
+    /// Count unique client IPs from nginx access log (last N minutes)
+    int countUniqueUsers(int windowMinutes = 5);
+
+    /// Parse nginx log timestamp: "07/Mar/2026:13:08:07 +0000"
+    bool parseNginxTimestamp(const std::string& ts, std::tm& result);
 
     /// Helper: curl GET with timeout, returns response body
     std::string curlGet(const std::string& url, int timeoutSec = 3);

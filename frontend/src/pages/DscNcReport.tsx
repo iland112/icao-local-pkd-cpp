@@ -33,6 +33,7 @@ import {
 import { certificateApi } from '@/services/pkdApi';
 import { exportDscNcReportToCsv } from '@/utils/csvExport';
 import { cn } from '@/utils/cn';
+import { formatDate } from '@/utils/dateFormat';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import countries from 'i18n-iso-countries';
 import ko from 'i18n-iso-countries/langs/ko.json';
@@ -615,9 +616,9 @@ export default function DscNcReport() {
                   {/* 유효기간 */}
                   <td className="px-3 py-2.5 text-center whitespace-nowrap">
                     <span className="text-xs text-gray-600 dark:text-gray-300">
-                      {cert.notBefore ? new Date(cert.notBefore).toLocaleDateString() : '-'}
+                      {formatDate(cert.notBefore)}
                       <span className="text-gray-400 dark:text-gray-500 mx-1">~</span>
-                      {cert.notAfter ? new Date(cert.notAfter).toLocaleDateString() : '-'}
+                      {formatDate(cert.notAfter)}
                     </span>
                   </td>
                   {/* 상태 */}

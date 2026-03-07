@@ -130,6 +130,17 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
             where << " AND source_type = $" << paramIdx++;
             params.push_back(*filter.sourceType);
         }
+        if (filter.validityStatus.has_value() && !filter.validityStatus->empty()) {
+            const auto& vs = *filter.validityStatus;
+            std::string now = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+            if (vs == "VALID") {
+                where << " AND not_before <= " << now << " AND not_after >= " << now;
+            } else if (vs == "EXPIRED" || vs == "EXPIRED_VALID") {
+                where << " AND not_after < " << now;
+            } else if (vs == "NOT_YET_VALID") {
+                where << " AND not_before > " << now;
+            }
+        }
         if (filter.searchTerm.has_value() && !filter.searchTerm->empty()) {
             std::string term = "%" + *filter.searchTerm + "%";
             std::string p = "$" + std::to_string(paramIdx);
@@ -222,11 +233,35 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
             cert["subjectDnComponents"] = parseDnComponents(row.get("subject_dn", "").asString());
             cert["issuerDnComponents"] = parseDnComponents(row.get("issuer_dn", "").asString());
 
-            // Validation status → validity
-            std::string valStatus = row.get("validation_status", "UNKNOWN").asString();
-            if (valStatus == "VALID") cert["validity"] = "VALID";
-            else if (valStatus == "EXPIRED") cert["validity"] = "EXPIRED";
-            else cert["validity"] = "UNKNOWN";
+            // Validity based on certificate dates (not_before / not_after)
+            {
+                std::string nb = row.get("not_before", "").asString();
+                std::string na = row.get("not_after", "").asString();
+                auto now = std::chrono::system_clock::now();
+                auto parseTs = [](const std::string& s) -> std::chrono::system_clock::time_point {
+                    std::tm tm{};
+                    // Handle ISO "2026-03-07T..." and PG "2026-03-07 ..." formats
+                    if (s.size() >= 19) {
+                        tm.tm_year = std::stoi(s.substr(0, 4)) - 1900;
+                        tm.tm_mon  = std::stoi(s.substr(5, 2)) - 1;
+                        tm.tm_mday = std::stoi(s.substr(8, 2));
+                        tm.tm_hour = std::stoi(s.substr(11, 2));
+                        tm.tm_min  = std::stoi(s.substr(14, 2));
+                        tm.tm_sec  = std::stoi(s.substr(17, 2));
+                        return std::chrono::system_clock::from_time_t(timegm(&tm));
+                    }
+                    return std::chrono::system_clock::time_point{};
+                };
+                try {
+                    auto tBefore = parseTs(nb);
+                    auto tAfter  = parseTs(na);
+                    if (now < tBefore) cert["validity"] = "NOT_YET_VALID";
+                    else if (now > tAfter) cert["validity"] = "EXPIRED";
+                    else cert["validity"] = "VALID";
+                } catch (...) {
+                    cert["validity"] = "UNKNOWN";
+                }
+            }
 
             // Boolean fields
             std::string selfSigned = row.get("is_self_signed", "").asString();
@@ -250,20 +285,25 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
         }
         response["certificates"] = certificates;
 
-        // Validity statistics query (same WHERE clause)
-        std::string statsSql = "SELECT validation_status, COUNT(*) as cnt FROM certificate WHERE 1=1" + whereStr + " GROUP BY validation_status";
-        Json::Value statsRows = queryExecutor_->executeQuery(statsSql, params);
+        // Validity statistics based on certificate dates (not validation_status)
+        std::string now = (dbType == "oracle") ? "SYSTIMESTAMP" : "NOW()";
+        std::string statsSql =
+            "SELECT "
+            "SUM(CASE WHEN not_before <= " + now + " AND not_after >= " + now + " THEN 1 ELSE 0 END) as valid_cnt, "
+            "SUM(CASE WHEN not_after < " + now + " THEN 1 ELSE 0 END) as expired_cnt, "
+            "SUM(CASE WHEN not_before > " + now + " THEN 1 ELSE 0 END) as not_yet_valid_cnt "
+            "FROM certificate WHERE 1=1" + whereStr;
+        Json::Value statsRow = queryExecutor_->executeQuery(statsSql, params);
 
-        int valid = 0, expired = 0, notYetValid = 0, unknown = 0;
-        for (const auto& srow : statsRows) {
-            std::string vs = srow.get("validation_status", "").asString();
-            int cnt = common::db::getInt(srow, "cnt");
-
-            if (vs == "VALID") valid = cnt;
-            else if (vs == "EXPIRED") expired = cnt;
-            else if (vs == "NOT_YET_VALID") notYetValid = cnt;
-            else unknown += cnt;
+        int valid = 0, expired = 0, notYetValid = 0;
+        if (statsRow.isArray() && statsRow.size() > 0) {
+            valid = common::db::getInt(statsRow[0], "valid_cnt");
+            expired = common::db::getInt(statsRow[0], "expired_cnt");
+            notYetValid = common::db::getInt(statsRow[0], "not_yet_valid_cnt");
         }
+
+        int unknown = total - valid - expired - notYetValid;
+        if (unknown < 0) unknown = 0;
 
         Json::Value stats;
         stats["total"] = total;

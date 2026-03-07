@@ -42,7 +42,7 @@ export default function ConnectionPoolChart({ services }: Props) {
 
   if (chartData.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full">
         <div className="flex items-center gap-2 mb-4">
           <Database className="w-5 h-5 text-indigo-500" />
           <h3 className="font-semibold text-gray-800 dark:text-white">커넥션 풀 사용량</h3>
@@ -61,13 +61,13 @@ export default function ConnectionPoolChart({ services }: Props) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full flex flex-col">
       <div className="flex items-center gap-2 mb-4">
         <Database className="w-5 h-5 text-indigo-500" />
         <h3 className="font-semibold text-gray-800 dark:text-white">커넥션 풀 사용량</h3>
       </div>
 
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" className="flex-1 min-h-[220px]">
         <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
           <XAxis type="number" tick={{ fontSize: 10 }} stroke="#9ca3af" />

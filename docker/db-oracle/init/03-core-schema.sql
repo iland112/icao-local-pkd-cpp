@@ -421,9 +421,12 @@ CREATE TABLE pa_verification (
     date_of_birth DATE,
     date_of_expiry DATE,
 
+    -- Verification type
+    verification_type VARCHAR2(20) DEFAULT 'FULL',
+
     -- SOD info
-    sod_binary BLOB NOT NULL,
-    sod_hash VARCHAR2(64) NOT NULL,
+    sod_binary BLOB,
+    sod_hash VARCHAR2(64),
 
     -- DSC info (extracted from SOD)
     dsc_subject_dn VARCHAR2(4000),

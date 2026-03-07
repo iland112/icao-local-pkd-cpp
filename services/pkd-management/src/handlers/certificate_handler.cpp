@@ -43,6 +43,8 @@
 
 // Audit logging (shared library)
 #include <icao/audit/audit_log.h>
+// Query helpers (boolLiteral, etc.)
+#include "query_helpers.h"
 
 // Bring in audit types for cleaner code
 using icao::audit::AuditLogEntry;
@@ -265,12 +267,13 @@ void CertificateHandler::handleSearch(
         spdlog::info("Certificate search: country={}, certType={}, validity={}, source={}, search={}, limit={}, offset={}",
                     country, certTypeStr, validityStr, sourceFilter, searchTerm, limit, offset);
 
-        // When source filter is specified, use DB-based search
-        if (!sourceFilter.empty()) {
+        // DB-based search (fast indexed queries, no X.509 parsing overhead)
+        {
             repositories::CertificateSearchFilter filter;
             if (!country.empty()) filter.countryCode = country;
             if (!certTypeStr.empty()) filter.certificateType = certTypeStr;
-            filter.sourceType = sourceFilter;
+            if (!sourceFilter.empty()) filter.sourceType = sourceFilter;
+            if (validityStr != "all") filter.validityStatus = validityStr;
             if (!searchTerm.empty()) filter.searchTerm = searchTerm;
             filter.limit = limit;
             filter.offset = offset;
@@ -278,187 +281,7 @@ void CertificateHandler::handleSearch(
             Json::Value dbResult = certificateRepository_->search(filter);
             auto resp = drogon::HttpResponse::newHttpJsonResponse(dbResult);
             callback(resp);
-            return;
         }
-
-        // Default: LDAP-based search (existing behavior)
-        // Build search criteria
-        domain::models::CertificateSearchCriteria criteria;
-        if (!country.empty()) criteria.country = country;
-        if (!searchTerm.empty()) criteria.searchTerm = searchTerm;
-        criteria.limit = limit;
-        criteria.offset = offset;
-
-        // Parse certificate type
-        if (!certTypeStr.empty()) {
-            if (certTypeStr == "CSCA") criteria.certType = domain::models::CertificateType::CSCA;
-            else if (certTypeStr == "MLSC") criteria.certType = domain::models::CertificateType::MLSC;
-            else if (certTypeStr == "DSC") criteria.certType = domain::models::CertificateType::DSC;
-            else if (certTypeStr == "DSC_NC") criteria.certType = domain::models::CertificateType::DSC_NC;
-            else if (certTypeStr == "CRL") criteria.certType = domain::models::CertificateType::CRL;
-            else if (certTypeStr == "ML") criteria.certType = domain::models::CertificateType::ML;
-        }
-
-        // Parse validity status
-        if (validityStr != "all") {
-            if (validityStr == "VALID") criteria.validity = domain::models::ValidityStatus::VALID;
-            else if (validityStr == "EXPIRED") criteria.validity = domain::models::ValidityStatus::EXPIRED;
-            else if (validityStr == "NOT_YET_VALID") criteria.validity = domain::models::ValidityStatus::NOT_YET_VALID;
-        }
-
-        // Execute LDAP search
-        auto result = certificateService_->searchCertificates(criteria);
-
-        // Build JSON response
-        Json::Value response;
-        response["success"] = true;
-        response["total"] = result.total;
-        response["limit"] = result.limit;
-        response["offset"] = result.offset;
-
-        Json::Value certs(Json::arrayValue);
-        for (const auto& cert : result.certificates) {
-            Json::Value certJson;
-            certJson["dn"] = cert.getDn();
-            certJson["cn"] = cert.getCn();
-            certJson["sn"] = cert.getSn();
-            certJson["country"] = cert.getCountry();
-            certJson["type"] = cert.getCertTypeString();  // Changed from certType to type for frontend compatibility
-            certJson["subjectDn"] = cert.getSubjectDn();
-            certJson["issuerDn"] = cert.getIssuerDn();
-            certJson["fingerprint"] = cert.getFingerprint();
-            certJson["isSelfSigned"] = cert.isSelfSigned();
-
-            // Convert time_point to ISO 8601 string
-            auto validFrom = std::chrono::system_clock::to_time_t(cert.getValidFrom());
-            auto validTo = std::chrono::system_clock::to_time_t(cert.getValidTo());
-            char timeBuf[32];
-            std::tm gmBuf{};
-            gmtime_r(&validFrom, &gmBuf);
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
-            certJson["validFrom"] = timeBuf;
-            gmtime_r(&validTo, &gmBuf);
-            std::strftime(timeBuf, sizeof(timeBuf), "%Y-%m-%dT%H:%M:%SZ", &gmBuf);
-            certJson["validTo"] = timeBuf;
-
-            // Validity status
-            auto status = cert.getValidityStatus();
-            if (status == domain::models::ValidityStatus::VALID) certJson["validity"] = "VALID";
-            else if (status == domain::models::ValidityStatus::EXPIRED) certJson["validity"] = "EXPIRED";
-            else if (status == domain::models::ValidityStatus::NOT_YET_VALID) certJson["validity"] = "NOT_YET_VALID";
-            else certJson["validity"] = "UNKNOWN";
-
-            // DSC_NC specific attributes (optional)
-            if (cert.getPkdConformanceCode().has_value()) {
-                certJson["pkdConformanceCode"] = *cert.getPkdConformanceCode();
-            }
-            if (cert.getPkdConformanceText().has_value()) {
-                certJson["pkdConformanceText"] = *cert.getPkdConformanceText();
-            }
-            if (cert.getPkdVersion().has_value()) {
-                certJson["pkdVersion"] = *cert.getPkdVersion();
-            }
-
-            // X.509 Metadata - 15 fields
-            certJson["version"] = cert.getVersion();
-            if (cert.getSignatureAlgorithm().has_value()) {
-                certJson["signatureAlgorithm"] = *cert.getSignatureAlgorithm();
-            }
-            if (cert.getSignatureHashAlgorithm().has_value()) {
-                certJson["signatureHashAlgorithm"] = *cert.getSignatureHashAlgorithm();
-            }
-            if (cert.getPublicKeyAlgorithm().has_value()) {
-                certJson["publicKeyAlgorithm"] = *cert.getPublicKeyAlgorithm();
-            }
-            if (cert.getPublicKeySize().has_value()) {
-                certJson["publicKeySize"] = *cert.getPublicKeySize();
-            }
-            if (cert.getPublicKeyCurve().has_value()) {
-                certJson["publicKeyCurve"] = *cert.getPublicKeyCurve();
-            }
-            if (!cert.getKeyUsage().empty()) {
-                Json::Value keyUsageArray(Json::arrayValue);
-                for (const auto& usage : cert.getKeyUsage()) {
-                    keyUsageArray.append(usage);
-                }
-                certJson["keyUsage"] = keyUsageArray;
-            }
-            if (!cert.getExtendedKeyUsage().empty()) {
-                Json::Value extKeyUsageArray(Json::arrayValue);
-                for (const auto& usage : cert.getExtendedKeyUsage()) {
-                    extKeyUsageArray.append(usage);
-                }
-                certJson["extendedKeyUsage"] = extKeyUsageArray;
-            }
-            if (cert.getIsCA().has_value()) {
-                certJson["isCA"] = *cert.getIsCA();
-            }
-            if (cert.getPathLenConstraint().has_value()) {
-                certJson["pathLenConstraint"] = *cert.getPathLenConstraint();
-            }
-            if (cert.getSubjectKeyIdentifier().has_value()) {
-                certJson["subjectKeyIdentifier"] = *cert.getSubjectKeyIdentifier();
-            }
-            if (cert.getAuthorityKeyIdentifier().has_value()) {
-                certJson["authorityKeyIdentifier"] = *cert.getAuthorityKeyIdentifier();
-            }
-            if (!cert.getCrlDistributionPoints().empty()) {
-                Json::Value crlDpArray(Json::arrayValue);
-                for (const auto& url : cert.getCrlDistributionPoints()) {
-                    crlDpArray.append(url);
-                }
-                certJson["crlDistributionPoints"] = crlDpArray;
-            }
-            if (cert.getOcspResponderUrl().has_value()) {
-                certJson["ocspResponderUrl"] = *cert.getOcspResponderUrl();
-            }
-            if (cert.getIsCertSelfSigned().has_value()) {
-                certJson["isCertSelfSigned"] = *cert.getIsCertSelfSigned();
-            }
-
-            // DN Components (shared library) - for clean UI display
-            if (cert.getSubjectDnComponents().has_value()) {
-                const auto& subjectDnComp = *cert.getSubjectDnComponents();
-                Json::Value subjectDnJson;
-                if (subjectDnComp.commonName.has_value()) subjectDnJson["commonName"] = *subjectDnComp.commonName;
-                if (subjectDnComp.organization.has_value()) subjectDnJson["organization"] = *subjectDnComp.organization;
-                if (subjectDnComp.organizationalUnit.has_value()) subjectDnJson["organizationalUnit"] = *subjectDnComp.organizationalUnit;
-                if (subjectDnComp.locality.has_value()) subjectDnJson["locality"] = *subjectDnComp.locality;
-                if (subjectDnComp.stateOrProvince.has_value()) subjectDnJson["stateOrProvince"] = *subjectDnComp.stateOrProvince;
-                if (subjectDnComp.country.has_value()) subjectDnJson["country"] = *subjectDnComp.country;
-                if (subjectDnComp.email.has_value()) subjectDnJson["email"] = *subjectDnComp.email;
-                if (subjectDnComp.serialNumber.has_value()) subjectDnJson["serialNumber"] = *subjectDnComp.serialNumber;
-                certJson["subjectDnComponents"] = subjectDnJson;
-            }
-            if (cert.getIssuerDnComponents().has_value()) {
-                const auto& issuerDnComp = *cert.getIssuerDnComponents();
-                Json::Value issuerDnJson;
-                if (issuerDnComp.commonName.has_value()) issuerDnJson["commonName"] = *issuerDnComp.commonName;
-                if (issuerDnComp.organization.has_value()) issuerDnJson["organization"] = *issuerDnComp.organization;
-                if (issuerDnComp.organizationalUnit.has_value()) issuerDnJson["organizationalUnit"] = *issuerDnComp.organizationalUnit;
-                if (issuerDnComp.locality.has_value()) issuerDnJson["locality"] = *issuerDnComp.locality;
-                if (issuerDnComp.stateOrProvince.has_value()) issuerDnJson["stateOrProvince"] = *issuerDnComp.stateOrProvince;
-                if (issuerDnComp.country.has_value()) issuerDnJson["country"] = *issuerDnComp.country;
-                if (issuerDnComp.email.has_value()) issuerDnJson["email"] = *issuerDnComp.email;
-                if (issuerDnComp.serialNumber.has_value()) issuerDnJson["serialNumber"] = *issuerDnComp.serialNumber;
-                certJson["issuerDnComponents"] = issuerDnJson;
-            }
-
-            certs.append(certJson);
-        }
-        response["certificates"] = certs;
-
-        // Add statistics
-        Json::Value stats;
-        stats["total"] = result.stats.total;
-        stats["valid"] = result.stats.valid;
-        stats["expired"] = result.stats.expired;
-        stats["notYetValid"] = result.stats.notYetValid;
-        stats["unknown"] = result.stats.unknown;
-        response["stats"] = stats;
-
-        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
-        callback(resp);
 
     } catch (const std::exception& e) {
         callback(common::handler::internalError("CertHandler::search", e));
@@ -602,12 +425,100 @@ void CertificateHandler::handlePaLookup(
             response = validationService_->getValidationByFingerprint(fingerprint);
         }
 
+        // Save lookup history to pa_verification (non-blocking, failure doesn't affect response)
+        if (response.get("success", false).asBool() && !response["validation"].isNull()) {
+            try {
+                savePaLookupHistory(req, response["validation"]);
+            } catch (const std::exception& e) {
+                spdlog::warn("Failed to save PA lookup history: {}", e.what());
+            } catch (...) {
+                spdlog::warn("Failed to save PA lookup history (unknown error)");
+            }
+        }
+
         auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
         callback(resp);
 
     } catch (const std::exception& e) {
         callback(common::handler::internalError("CertHandler::paLookup", e));
     }
+}
+
+// =============================================================================
+// Helper: Save PA lookup result to pa_verification history
+// =============================================================================
+
+void CertificateHandler::savePaLookupHistory(
+    const drogon::HttpRequestPtr& req,
+    const Json::Value& validation) {
+    std::string dbType = queryExecutor_->getDatabaseType();
+
+    // Generate UUID
+    std::string uuidQuery = (dbType == "postgres")
+        ? "SELECT uuid_generate_v4()::text as id"
+        : "SELECT LOWER(REGEXP_REPLACE(RAWTOHEX(SYS_GUID()), "
+          "'([A-F0-9]{8})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{4})([A-F0-9]{12})', "
+          "'\\1-\\2-\\3-\\4-\\5')) as id FROM DUAL";
+    Json::Value uuidResult = queryExecutor_->executeQuery(uuidQuery, {});
+    if (uuidResult.empty()) return;
+    std::string id = uuidResult[0]["id"].asString();
+
+    // Extract request metadata
+    std::string clientIp = extractIpAddress(req);
+    std::string userAgent = req->getHeader("User-Agent");
+    auto [userId, username] = extractUserFromRequest(req);
+
+    // Map validation fields
+    std::string countryCode = validation.get("countryCode", "").asString();
+    if (countryCode.empty()) countryCode = "XX";
+    std::string status = validation.get("validationStatus", "PENDING").asString();
+    std::string verificationMessage = validation.get("trustChainMessage", "").asString();
+    std::string trustChainValidStr = common::db::boolLiteral(dbType, validation.get("trustChainValid", false).asBool());
+    std::string dscNonConformantStr = common::db::boolLiteral(dbType, validation.get("dscNonConformant", false).asBool());
+
+    const char* insertQuery =
+        "INSERT INTO pa_verification ("
+        "id, verification_type, issuing_country, verification_status, verification_message, "
+        "trust_chain_valid, trust_chain_message, "
+        "crl_status, "
+        "dsc_subject_dn, dsc_issuer_dn, dsc_serial_number, dsc_fingerprint, "
+        "csca_subject_dn, "
+        "dsc_non_conformant, pkd_conformance_code, pkd_conformance_text, "
+        "client_ip, user_agent, requested_by"
+        ") VALUES ("
+        "$1, $2, $3, $4, $5, "
+        "$6, $7, "
+        "$8, "
+        "$9, $10, $11, $12, "
+        "$13, "
+        "$14, $15, $16, "
+        "$17, $18, $19"
+        ")";
+
+    std::vector<std::string> params;
+    params.reserve(19);
+    params.push_back(id);                                                     // $1
+    params.push_back("LOOKUP");                                               // $2
+    params.push_back(countryCode);                                            // $3
+    params.push_back(status);                                                 // $4
+    params.push_back(verificationMessage);                                    // $5
+    params.push_back(trustChainValidStr);                                     // $6
+    params.push_back(validation.get("trustChainMessage", "").asString());     // $7
+    params.push_back(validation.get("crlCheckStatus", "NOT_CHECKED").asString()); // $8
+    params.push_back(validation.get("subjectDn", "").asString());             // $9
+    params.push_back(validation.get("issuerDn", "").asString());              // $10
+    params.push_back(validation.get("serialNumber", "").asString());          // $11
+    params.push_back(validation.get("fingerprint", "").asString());           // $12
+    params.push_back(validation.get("cscaSubjectDn", "").asString());         // $13
+    params.push_back(dscNonConformantStr);                                    // $14
+    params.push_back(validation.get("pkdConformanceCode", "").asString());    // $15
+    params.push_back(validation.get("pkdConformanceText", "").asString());    // $16
+    params.push_back(clientIp);                                               // $17
+    params.push_back(userAgent);                                              // $18
+    params.push_back(username.value_or(""));                                    // $19
+
+    queryExecutor_->executeQuery(insertQuery, params);
+    spdlog::info("PA lookup history saved: id={}, country={}, status={}", id.substr(0, 8), countryCode, status);
 }
 
 // =============================================================================

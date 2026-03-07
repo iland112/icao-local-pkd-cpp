@@ -3,6 +3,7 @@ import { Users, Plus, Edit, Trash2, Key, Shield, Search, X, Check, AlertCircle, 
 import { createAuthenticatedClient } from '@/services/authApi';
 import { authApi } from '@/services/api';
 import { PERMISSION_GROUPS, AVAILABLE_PERMISSIONS } from '@/utils/permissions';
+import { formatDateTime } from '@/utils/dateFormat';
 
 interface UserData {
   id: string;
@@ -211,15 +212,6 @@ export function UserManagement() {
     user.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const formatDateTime = (dateString: string) => {
-    if (!dateString) return '로그인 기록 없음';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit',
-    });
-  };
-
   const getInitials = (user: UserData) => {
     if (user.full_name) return user.full_name.charAt(0).toUpperCase();
     return user.username.charAt(0).toUpperCase();
@@ -367,7 +359,7 @@ export function UserManagement() {
                   <div className="flex items-center gap-2 text-sm">
                     <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
                     <span className="text-gray-600 dark:text-gray-400">
-                      {formatDateTime(user.last_login_at || '')}
+                      {formatDateTime(user.last_login_at, '로그인 기록 없음')}
                     </span>
                   </div>
                 </div>

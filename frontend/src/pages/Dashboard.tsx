@@ -19,6 +19,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { healthApi, ldapApi, uploadApi, icaoApi } from '@/services/api';
 import { cn } from '@/utils/cn';
+import { formatDateTime, formatTime } from '@/utils/dateFormat';
 import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
 
 interface IcaoStatusItem {
@@ -84,7 +85,7 @@ export function Dashboard() {
         day: 'numeric',
         weekday: 'long',
       }));
-      setCurrentTime(now.toLocaleTimeString('ko-KR'));
+      setCurrentTime(formatTime(now));
     };
 
     updateDateTime();
@@ -274,7 +275,7 @@ export function Dashboard() {
                     {icaoStatus.last_checked_at && (
                       <span className="text-xs text-amber-500 dark:text-amber-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        마지막 확인: {new Date(icaoStatus.last_checked_at).toLocaleString('ko-KR')}
+                        마지막 확인: {formatDateTime(icaoStatus.last_checked_at)}
                       </span>
                     )}
                   </div>

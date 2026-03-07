@@ -24,6 +24,7 @@ import { paApi } from '@/services/paApi';
 import type { PAHistoryItem, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { formatDateTime } from '@/utils/dateFormat';
 
 // DG1 MRZ Data interface
 interface DG1Data {
@@ -77,9 +78,10 @@ export function PAHistory() {
   const [globalStats, setGlobalStats] = useState<{
     total: number;
     valid: number;
+    expiredValid: number;
     invalid: number;
     error: number;
-  }>({ total: 0, valid: 0, invalid: 0, error: 0 });
+  }>({ total: 0, valid: 0, expiredValid: 0, invalid: 0, error: 0 });
 
   const pageSize = 5;
 
@@ -97,11 +99,13 @@ export function PAHistory() {
       const data = resp.data;
       const byStatus = data.byStatus || {};
       const valid = byStatus['VALID'] || 0;
+      const expiredValid = byStatus['EXPIRED_VALID'] || 0;
       const invalid = byStatus['INVALID'] || 0;
       const error = byStatus['ERROR'] || 0;
       setGlobalStats({
         total: data.totalVerifications || 0,
         valid,
+        expiredValid,
         invalid,
         error,
       });
@@ -136,13 +140,15 @@ export function PAHistory() {
 
   // Statistics derived from global stats (not current page)
   const stats = useMemo(() => {
-    const { total, valid, invalid, error } = globalStats;
+    const { total, valid, expiredValid, invalid, error } = globalStats;
     return {
       total,
       valid,
+      expiredValid,
       invalid,
       error,
       validPercent: total > 0 ? Math.round((valid / total) * 100) : 0,
+      expiredValidPercent: total > 0 ? Math.round((expiredValid / total) * 100) : 0,
       invalidPercent: total > 0 ? Math.round((invalid / total) * 100) : 0,
       errorPercent: total > 0 ? Math.round((error / total) * 100) : 0,
     };
@@ -166,6 +172,11 @@ export function PAHistory() {
         text: 'text-green-600 dark:text-green-400',
         icon: <CheckCircle className="w-3 h-3" />,
       },
+      EXPIRED_VALID: {
+        bg: 'bg-amber-100 dark:bg-amber-900/30',
+        text: 'text-amber-600 dark:text-amber-400',
+        icon: <AlertTriangle className="w-3 h-3" />,
+      },
       INVALID: {
         bg: 'bg-red-100 dark:bg-red-900/30',
         text: 'text-red-600 dark:text-red-400',
@@ -179,28 +190,22 @@ export function PAHistory() {
     };
 
     const style = styles[status];
-    const label = {
+    if (!style) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">{status}</span>;
+    }
+    const label: Record<PAStatus, string> = {
       VALID: 'Valid',
+      EXPIRED_VALID: '만료(서명유효)',
       INVALID: 'Invalid',
       ERROR: 'Error',
-    }[status];
+    };
 
     return (
       <span className={cn('inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
         {style.icon}
-        {label}
+        {label[status]}
       </span>
     );
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
   };
 
   const filteredHistory = history.filter((item) => {
@@ -241,8 +246,8 @@ export function PAHistory() {
     setDgData(null);
     setDgError(null);
 
-    // Load DG data for VALID records
-    if (record.status === 'VALID' && record.verificationId) {
+    // Load DG data for VALID full verification records (not LOOKUP)
+    if (record.status === 'VALID' && record.verificationId && record.verificationType !== 'LOOKUP') {
       setDgLoading(true);
       try {
         const response = await paApi.getDataGroups(record.verificationId);
@@ -298,7 +303,7 @@ export function PAHistory() {
       </div>
 
       {/* Statistics Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         {/* Total */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-blue-500">
           <div className="flex items-center gap-3">
@@ -322,6 +327,20 @@ export function PAHistory() {
               <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Valid</p>
               <p className="text-xl font-bold text-green-600 dark:text-green-400">{stats.valid}</p>
               <p className="text-xs text-gray-400">{stats.validPercent}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Expired Valid */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4 border-l-4 border-amber-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/30">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+            </div>
+            <div>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">만료(서명유효)</p>
+              <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{stats.expiredValid}</p>
+              <p className="text-xs text-gray-400">{stats.expiredValidPercent}%</p>
             </div>
           </div>
         </div>
@@ -392,6 +411,7 @@ export function PAHistory() {
             >
               <option value="">전체</option>
               <option value="VALID">Valid</option>
+              <option value="EXPIRED_VALID">만료(서명유효)</option>
               <option value="INVALID">Invalid</option>
               <option value="ERROR">Error</option>
             </select>
@@ -495,6 +515,9 @@ export function PAHistory() {
                       여권번호
                     </th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
+                      유형
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       결과
                     </th>
                     <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
@@ -543,11 +566,24 @@ export function PAHistory() {
                       <td className="px-3 py-2.5 text-xs text-gray-600 dark:text-gray-300 font-mono">
                         {item.documentNumber || '-'}
                       </td>
+                      <td className="px-3 py-2.5">
+                        {item.verificationType === 'LOOKUP' ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                            <Search className="w-3 h-3" />
+                            간편
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                            <ShieldCheck className="w-3 h-3" />
+                            전체
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5">{getStatusBadge(item.status)}</td>
                       <td className="px-3 py-2.5">
                         <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                           <Calendar className="w-3 h-3" />
-                          {formatDate(item.verificationTimestamp)}
+                          {formatDateTime(item.verificationTimestamp)}
                         </span>
                       </td>
                       <td className="px-3 py-2.5 text-xs text-gray-500 dark:text-gray-400">
@@ -628,6 +664,17 @@ export function PAHistory() {
                   <Info className="w-4 h-4 text-white" />
                 </div>
                 <h2 className="text-base font-bold text-gray-900 dark:text-white">검증 상세 정보</h2>
+                {selectedRecord.verificationType === 'LOOKUP' ? (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+                    <Search className="w-3 h-3" />
+                    간편 검증
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
+                    <ShieldCheck className="w-3 h-3" />
+                    전체 검증
+                  </span>
+                )}
                 {getStatusBadge(selectedRecord.status)}
               </div>
               <button
@@ -652,7 +699,7 @@ export function PAHistory() {
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
                   <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">검증 시각</p>
                   <p className="text-xs text-gray-900 dark:text-white mt-0.5">
-                    {formatDate(selectedRecord.verificationTimestamp)}
+                    {formatDateTime(selectedRecord.verificationTimestamp)}
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
@@ -708,31 +755,33 @@ export function PAHistory() {
                   <h3 className="text-xs font-bold text-gray-800 dark:text-gray-200">검증 결과</h3>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  {/* SOD Signature */}
-                  <div className={cn(
-                    'rounded-lg px-3 py-2.5 border-l-3',
-                    selectedRecord.sodSignatureValid
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
-                      : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-                  )}>
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">SOD 서명 검증</p>
-                    <div className="flex items-center gap-1.5">
-                      {selectedRecord.sodSignatureValid ? (
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-500" />
-                      )}
-                      <span className={cn(
-                        'text-xs font-bold',
-                        selectedRecord.sodSignatureValid
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      )}>
-                        {selectedRecord.sodSignatureValid ? 'Valid' : 'Invalid'}
-                      </span>
+                <div className={cn('grid gap-2', selectedRecord.verificationType === 'LOOKUP' ? 'grid-cols-1' : 'grid-cols-3')}>
+                  {/* SOD Signature — hide for LOOKUP */}
+                  {selectedRecord.verificationType !== 'LOOKUP' && (
+                    <div className={cn(
+                      'rounded-lg px-3 py-2.5 border-l-3',
+                      selectedRecord.sodSignatureValid
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                        : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                    )}>
+                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">SOD 서명 검증</p>
+                      <div className="flex items-center gap-1.5">
+                        {selectedRecord.sodSignatureValid ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-500" />
+                        )}
+                        <span className={cn(
+                          'text-xs font-bold',
+                          selectedRecord.sodSignatureValid
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        )}>
+                          {selectedRecord.sodSignatureValid ? 'Valid' : 'Invalid'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
 
                   {/* Certificate Chain */}
                   <div className={cn(
@@ -757,32 +806,39 @@ export function PAHistory() {
                         {selectedRecord.trustChainValid ? 'Valid' : 'Invalid'}
                       </span>
                     </div>
+                    {selectedRecord.trustChainMessage && (
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400 mt-1 truncate" title={selectedRecord.trustChainMessage}>
+                        {selectedRecord.trustChainMessage}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Data Group Hash */}
-                  <div className={cn(
-                    'rounded-lg px-3 py-2.5 border-l-3',
-                    selectedRecord.dgHashesValid
-                      ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
-                      : 'bg-red-50 dark:bg-red-900/20 border-red-500'
-                  )}>
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">DG 해시 검증</p>
-                    <div className="flex items-center gap-1.5">
-                      {selectedRecord.dgHashesValid ? (
-                        <CheckCircle className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <XCircle className="w-4 h-4 text-red-500" />
-                      )}
-                      <span className={cn(
-                        'text-xs font-bold',
-                        selectedRecord.dgHashesValid
-                          ? 'text-green-600 dark:text-green-400'
-                          : 'text-red-600 dark:text-red-400'
-                      )}>
-                        {selectedRecord.dgHashesValid ? 'Valid' : 'Invalid'}
-                      </span>
+                  {/* Data Group Hash — hide for LOOKUP */}
+                  {selectedRecord.verificationType !== 'LOOKUP' && (
+                    <div className={cn(
+                      'rounded-lg px-3 py-2.5 border-l-3',
+                      selectedRecord.dgHashesValid
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
+                        : 'bg-red-50 dark:bg-red-900/20 border-red-500'
+                    )}>
+                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">DG 해시 검증</p>
+                      <div className="flex items-center gap-1.5">
+                        {selectedRecord.dgHashesValid ? (
+                          <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : (
+                          <XCircle className="w-4 h-4 text-red-500" />
+                        )}
+                        <span className={cn(
+                          'text-xs font-bold',
+                          selectedRecord.dgHashesValid
+                            ? 'text-green-600 dark:text-green-400'
+                            : 'text-red-600 dark:text-red-400'
+                        )}>
+                          {selectedRecord.dgHashesValid ? 'Valid' : 'Invalid'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* CRL Status - Show when not VALID */}
@@ -838,8 +894,8 @@ export function PAHistory() {
                 </div>
               )}
 
-              {/* Section 3: 데이터 그룹 (DG1 + DG2) */}
-              {selectedRecord.status === 'VALID' && (
+              {/* Section 3: 데이터 그룹 (DG1 + DG2) — hide for LOOKUP */}
+              {selectedRecord.status === 'VALID' && selectedRecord.verificationType !== 'LOOKUP' && (
                 <div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <div className="w-1 h-3.5 rounded-full bg-purple-500" />

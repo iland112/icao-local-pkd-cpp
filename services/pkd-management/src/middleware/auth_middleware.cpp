@@ -195,6 +195,22 @@ void AuthMiddleware::doFilter(
                     req->getHeader("User-Agent"));
             }
         }
+        // For public endpoints, still try to extract user info from JWT if present
+        // (so downstream handlers can identify the logged-in user, e.g. for audit logs)
+        std::string publicAuthHeader = req->getHeader("Authorization");
+        if (publicAuthHeader.size() > 7 && publicAuthHeader.substr(0, 7) == "Bearer ") {
+            try {
+                std::string pubToken = publicAuthHeader.substr(7);
+                auto pubClaims = jwtService_->validateToken(pubToken);
+                if (pubClaims) {
+                    auto pubAttrs = req->getAttributes();
+                    pubAttrs->insert("user_id", pubClaims->userId);
+                    pubAttrs->insert("username", pubClaims->username);
+                }
+            } catch (...) {
+                // Ignore JWT errors on public endpoints — auth is not required
+            }
+        }
         spdlog::debug("[AuthMiddleware] Public endpoint: {}", path);
         fccb();
         return;

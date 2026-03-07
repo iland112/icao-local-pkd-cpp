@@ -31,6 +31,17 @@ const paClient = axios.create({
   },
 });
 
+// Request interceptor: Inject JWT token if available (for user identification on public endpoints)
+paClient.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+);
+
 paClient.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: AxiosError) => {

@@ -2,6 +2,7 @@ import React from 'react';
 import { X, Copy, FileText, MapPin, Database, Link2 } from 'lucide-react';
 import type { UploadDuplicate } from '../types';
 import { getFlagSvgPath } from '../utils/countryCode';
+import { formatDateTime } from '@/utils/dateFormat';
 
 interface Props {
   duplicate: UploadDuplicate | null;
@@ -15,19 +16,6 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
   onClose
 }) => {
   if (!isOpen || !duplicate) return null;
-
-  const formatDate = (dateStr: string) => {
-    if (!dateStr) return 'N/A';
-    const date = new Date(dateStr);
-    return date.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  };
 
   const getCertificateTypeBadge = (type: string) => {
     const colors: Record<string, { bg: string; text: string; label: string }> = {
@@ -176,7 +164,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                   업로드 시각:
                 </span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">
-                  {formatDate(duplicate.firstUploadTimestamp || '')}
+                  {formatDateTime(duplicate.firstUploadTimestamp || '')}
                 </span>
               </div>
 
@@ -263,7 +251,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                   감지 시각:
                 </span>
                 <span className="text-sm text-gray-900 dark:text-gray-100">
-                  {formatDate(duplicate.detectedAt)}
+                  {formatDateTime(duplicate.detectedAt)}
                 </span>
               </div>
             </div>

@@ -245,6 +245,11 @@ private:
     void handleDoc9303Checklist(
         const drogon::HttpRequestPtr& req,
         std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** Save PA lookup result to pa_verification history table */
+    void savePaLookupHistory(
+        const drogon::HttpRequestPtr& req,
+        const Json::Value& validation);
 };
 
 } // namespace handlers

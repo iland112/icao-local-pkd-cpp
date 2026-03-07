@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { PAVerificationResponse, CertificateChainValidationDto } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 import { Link } from 'react-router-dom';
 import { getFlagSvgPath, getAlpha2Code } from '@/utils/countryCode';
 import countries from 'i18n-iso-countries';
@@ -304,7 +305,7 @@ export function VerificationResultCard({
         </div>
         <div>
           <span>검증 시각: </span>
-          <span>{new Date(result.verificationTimestamp).toLocaleString('ko-KR')}</span>
+          <span>{formatDateTime(result.verificationTimestamp)}</span>
         </div>
       </div>
     </div>

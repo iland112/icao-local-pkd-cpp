@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { syncServiceApi, type ReconciliationSummary, type ReconciliationLog } from '@/services/api';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 import { Dialog } from '@/components/common/Dialog';
 
 export function ReconciliationHistory() {
@@ -92,18 +93,6 @@ export function ReconciliationHistory() {
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
   const formatDuration = (ms: number) => {
     if (ms < 1000) return `${ms}ms`;
     const seconds = Math.floor(ms / 1000);
@@ -176,7 +165,7 @@ export function ReconciliationHistory() {
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-900 dark:text-white">
-                      {formatTimestamp(item.startedAt)}
+                      {formatDateTime(item.startedAt)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">

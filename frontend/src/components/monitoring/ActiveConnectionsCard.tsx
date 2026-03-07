@@ -1,24 +1,35 @@
-import { Users, ArrowUpDown, BookOpen, PenTool, Clock } from 'lucide-react';
+import { Users, ArrowUpDown, BookOpen, PenTool, Clock, Link } from 'lucide-react';
 import type { NginxStatus } from '@/services/monitoringApi';
 
 interface Props {
   nginx: NginxStatus;
   requestsPerSecond: number;
+  uniqueUsers: number;
 }
 
-export default function ActiveConnectionsCard({ nginx, requestsPerSecond }: Props) {
+export default function ActiveConnectionsCard({ nginx, requestsPerSecond, uniqueUsers }: Props) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-5 h-5 text-cyan-500" />
-        <h3 className="font-semibold text-gray-800 dark:text-white">동시 접속</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-white">접속 현황</h3>
       </div>
 
-      <div className="flex items-baseline gap-1 mb-4">
+      {/* Primary: Unique Users */}
+      <div className="flex items-baseline gap-1 mb-1">
         <span className="text-3xl font-bold text-gray-900 dark:text-white">
-          {nginx.activeConnections}
+          {uniqueUsers}
         </span>
-        <span className="text-sm text-gray-500 dark:text-gray-400">active</span>
+        <span className="text-sm text-gray-500 dark:text-gray-400">명 접속 중</span>
+      </div>
+      <div className="text-xs text-gray-400 dark:text-gray-500 mb-4">최근 5분 고유 IP 기준</div>
+
+      {/* Secondary: TCP Connections */}
+      <div className="flex items-center gap-1.5 mb-3 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+        <Link className="w-3.5 h-3.5 text-gray-400" />
+        <span className="text-sm text-gray-600 dark:text-gray-300">
+          TCP 연결: <span className="font-semibold text-gray-800 dark:text-white">{nginx.activeConnections}</span>
+        </span>
       </div>
 
       <div className="grid grid-cols-3 gap-2 mb-3">

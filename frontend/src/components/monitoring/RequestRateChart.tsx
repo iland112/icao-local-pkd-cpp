@@ -1,6 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import type { HistoryPoint } from '@/services/monitoringApi';
+import { formatTime } from '@/utils/dateFormat';
 
 interface Props {
   data: HistoryPoint[];
@@ -8,7 +9,7 @@ interface Props {
 
 export default function RequestRateChart({ data }: Props) {
   const chartData = data.map(p => ({
-    time: new Date(p.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    time: formatTime(p.timestamp),
     rps: Number(p.nginx.requestsPerSecond.toFixed(1)),
     connections: p.nginx.activeConnections,
   }));

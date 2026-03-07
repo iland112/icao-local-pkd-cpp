@@ -341,15 +341,15 @@ export function PADashboard() {
           {/* Charts Row 1 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
             {/* Verification Status Chart */}
-            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
-              <div className="p-5">
+            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg h-full flex flex-col">
+              <div className="p-5 flex flex-col flex-1">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2.5 rounded-xl bg-green-50 dark:bg-green-900/30">
                     <TrendingUp className="w-5 h-5 text-green-500" />
                   </div>
                   <h2 className="text-lg font-bold text-gray-900 dark:text-white">검증 결과 분포</h2>
                 </div>
-                <div className="h-72 relative">
+                <div className="flex-1 min-h-[288px] relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
@@ -396,8 +396,8 @@ export function PADashboard() {
             </div>
 
             {/* Country Distribution */}
-            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg">
-              <div className="p-5">
+            <div className="rounded-2xl transition-all duration-300 hover:shadow-xl bg-white dark:bg-gray-800 shadow-lg h-full flex flex-col">
+              <div className="p-5 flex flex-col flex-1">
                 <div className="flex items-center gap-3 mb-4">
                   <div className="p-2.5 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
                     <Globe className="w-5 h-5 text-cyan-500" />
@@ -407,7 +407,7 @@ export function PADashboard() {
                   </h2>
                 </div>
                 {/* Country List with Flags and Progress Bars */}
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-2">
+                <div className="space-y-2 flex-1 overflow-y-auto pr-2">
                   {topCountries.length > 0 ? (
                     topCountries.map((item, index) => (
                       <div

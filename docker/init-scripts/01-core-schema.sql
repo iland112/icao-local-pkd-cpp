@@ -363,9 +363,12 @@ CREATE TABLE IF NOT EXISTS pa_verification (
     date_of_birth DATE,
     date_of_expiry DATE,
 
+    -- Verification type
+    verification_type VARCHAR(20) DEFAULT 'FULL',
+
     -- SOD info
-    sod_binary BYTEA NOT NULL,
-    sod_hash VARCHAR(64) NOT NULL,
+    sod_binary BYTEA,
+    sod_hash VARCHAR(64),
 
     -- DSC info (extracted from SOD)
     dsc_subject_dn TEXT,
@@ -406,7 +409,7 @@ CREATE TABLE IF NOT EXISTS pa_verification (
     pkd_conformance_code VARCHAR(100),
     pkd_conformance_text VARCHAR(500),
 
-    CONSTRAINT chk_verification_status CHECK (verification_status IN ('VALID', 'INVALID', 'ERROR', 'PENDING'))
+    CONSTRAINT chk_verification_status CHECK (verification_status IN ('VALID', 'INVALID', 'ERROR', 'PENDING', 'EXPIRED_VALID'))
 );
 
 CREATE INDEX idx_pa_verification_status ON pa_verification(verification_status);

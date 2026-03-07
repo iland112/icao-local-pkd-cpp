@@ -82,7 +82,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
   const countryCodes = [...new Set(anomalies.map(a => a.country_code).filter((v): v is string => v != null))];
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <ShieldAlert className="w-5 h-5 text-orange-500" />
@@ -126,7 +126,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
           <p className="text-sm">확장 프로파일 규칙 위반이 없습니다.</p>
         </div>
       ) : (
-        <div className="max-h-96 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto">
           {/* Header */}
           <div className="grid grid-cols-[24px_1fr_56px_40px_72px_48px_40px] gap-1 text-xs text-gray-500 dark:text-gray-400 font-medium pb-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10 px-1">
             <div />

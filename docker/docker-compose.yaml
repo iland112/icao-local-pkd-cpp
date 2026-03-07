@@ -351,6 +351,7 @@ services:
         condition: service_healthy
     volumes:
       - ../.docker-data/monitoring-logs:/app/logs
+      - ../.docker-data/gateway-logs:/var/log/nginx:ro
     networks:
       - pkd-network
     restart: unless-stopped

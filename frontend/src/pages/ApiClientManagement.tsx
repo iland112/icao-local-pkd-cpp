@@ -3,6 +3,7 @@ import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activi
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { apiClientApi, type ApiClient, type UsageStats, type CreateApiClientRequest, type UpdateApiClientRequest } from '@/api/apiClientApi';
 import { toast } from '@/stores/toastStore';
+import { formatDate } from '@/utils/dateFormat';
 import { ConfirmDialog } from '@/components/common';
 
 const AVAILABLE_PERMISSIONS = [
@@ -220,7 +221,7 @@ function ClientRow({ client, onEdit, onDelete, onUsage, onRegenerate }: {
             <span className="font-mono bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded">{client.api_key_prefix}...</span>
             <span className="flex items-center gap-1"><Activity className="w-3 h-3" />{client.total_requests.toLocaleString()} 요청</span>
             {client.last_used_at && (
-              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />최근: {new Date(client.last_used_at).toLocaleDateString('ko-KR')}</span>
+              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />최근: {formatDate(client.last_used_at)}</span>
             )}
           </div>
           <div className="flex flex-wrap gap-1 mt-1.5">

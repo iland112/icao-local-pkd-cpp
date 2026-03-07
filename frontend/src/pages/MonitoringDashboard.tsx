@@ -3,6 +3,7 @@ import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, Ch
 import { monitoringServiceApi, type SystemMetrics, type ServiceHealth, type LoadSnapshot, type HistoryPoint } from '@/services/monitoringApi';
 import { healthApi } from '@/services/pkdApi';
 import { cn } from '@/utils/cn';
+import { formatDateTime, formatTime } from '@/utils/dateFormat';
 import ActiveConnectionsCard from '@/components/monitoring/ActiveConnectionsCard';
 import RequestRateChart from '@/components/monitoring/RequestRateChart';
 import LatencyTrendChart from '@/components/monitoring/LatencyTrendChart';
@@ -162,7 +163,7 @@ export default function MonitoringDashboard() {
           <div className="flex gap-2 items-center">
             <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 mr-2">
               <Clock className="w-4 h-4" />
-              <span>{lastUpdate.toLocaleTimeString('ko-KR')}</span>
+              <span>{formatTime(lastUpdate)}</span>
             </div>
             <button
               onClick={() => fetchData(abortControllerRef.current?.signal)}
@@ -285,8 +286,9 @@ export default function MonitoringDashboard() {
                 <ActiveConnectionsCard
                   nginx={loadSnapshot.nginx}
                   requestsPerSecond={loadSnapshot.nginx.requestsPerSecond}
+                  uniqueUsers={loadSnapshot.uniqueUsers ?? 0}
                 />
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-2 h-full">
                   <ConnectionPoolChart services={loadSnapshot.services} />
                 </div>
               </div>
@@ -311,7 +313,7 @@ export default function MonitoringDashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             {infraHealth.map(ih => (
               <div key={ih.name} className={cn(
-                'border rounded-xl p-4 transition-all duration-200',
+                'border rounded-xl p-4 h-full transition-all duration-200',
                 ih.status === 'UP'
                   ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700'
                   : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
@@ -382,7 +384,7 @@ export default function MonitoringDashboard() {
 
           {/* Timestamp */}
           <div className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
-            메트릭 수집 시간: {new Date(metrics.timestamp).toLocaleString('ko-KR')}
+            메트릭 수집 시간: {formatDateTime(metrics.timestamp)}
           </div>
         </>
       )}
@@ -409,7 +411,7 @@ function MetricCard({ title, icon, value, unit, details, percentage }: MetricCar
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 hover:shadow-xl transition-all duration-200">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full hover:shadow-xl transition-all duration-200">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           {icon}
@@ -496,7 +498,7 @@ function ServiceCard({ service, label, port, description }: ServiceCardProps) {
   };
 
   return (
-    <div className={`border rounded-xl p-4 transition-all duration-200 ${getStatusColor(service.status)}`}>
+    <div className={`border rounded-xl p-4 h-full transition-all duration-200 ${getStatusColor(service.status)}`}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           {getStatusIcon(service.status)}
@@ -522,7 +524,7 @@ function ServiceCard({ service, label, port, description }: ServiceCardProps) {
         </div>
         <div className="flex justify-between">
           <span>마지막 체크:</span>
-          <span className="font-medium text-gray-800 dark:text-gray-200">{new Date(service.checkedAt).toLocaleTimeString('ko-KR')}</span>
+          <span className="font-medium text-gray-800 dark:text-gray-200">{formatTime(service.checkedAt)}</span>
         </div>
         {service.errorMessage && (
           <div className="mt-2 p-2 bg-white dark:bg-gray-900/40 rounded text-xs text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">

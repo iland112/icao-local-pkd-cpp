@@ -26,6 +26,7 @@ import {
 import { uploadApi, uploadHistoryApi } from '@/services/api';
 import type { UploadedFile, UploadStatus, FileFormat, UploadIssues, UploadDuplicate } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 import { toast } from '@/stores/toastStore';
 import { MasterListStructure } from '@/components/MasterListStructure';
 import { LdifStructure } from '@/components/LdifStructure';
@@ -193,32 +194,6 @@ export function UploadHistory() {
       return `${seconds}초`;
     } catch {
       return '-';
-    }
-  };
-
-  const formatDate = (dateString: string): string => {
-    if (!dateString) return '-';
-    try {
-      // PostgreSQL format: "2025-12-31 09:04:28.432487+09"
-      // Convert to ISO format for JavaScript Date parsing
-      const isoString = dateString
-        .replace(' ', 'T')
-        .replace(/\+(\d{2})$/, '+$1:00'); // "+09" -> "+09:00"
-
-      const date = new Date(isoString);
-      if (isNaN(date.getTime())) {
-        return dateString; // Return original if parsing fails
-      }
-      return date.toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      });
-    } catch {
-      return dateString;
     }
   };
 
@@ -659,10 +634,10 @@ export function UploadHistory() {
                       </td>
                       <td className="px-3 py-2.5 text-center">{renderStatusProgress(upload)}</td>
                       <td className="px-3 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                        {formatDate(upload.createdAt ?? '')}
+                        {formatDateTime(upload.createdAt ?? '')}
                       </td>
                       <td className="px-3 py-2.5 text-center text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                        {upload.status === 'COMPLETED' ? formatDate(upload.completedAt ?? upload.updatedAt ?? '') : '-'}
+                        {upload.status === 'COMPLETED' ? formatDateTime(upload.completedAt ?? upload.updatedAt ?? '') : '-'}
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <div className="flex items-center justify-end gap-1">
@@ -928,13 +903,13 @@ export function UploadHistory() {
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">업로드</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
-                        {formatDate(selectedUpload.createdAt ?? '')}
+                        {formatDateTime(selectedUpload.createdAt ?? '')}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">완료</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
-                        {formatDate(selectedUpload.completedAt ?? selectedUpload.updatedAt ?? '')}
+                        {formatDateTime(selectedUpload.completedAt ?? selectedUpload.updatedAt ?? '')}
                       </p>
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">

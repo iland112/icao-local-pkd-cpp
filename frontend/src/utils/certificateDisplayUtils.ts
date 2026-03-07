@@ -9,17 +9,9 @@
  */
 
 import type { Certificate } from '@/components/CertificateDetailDialog';
+export { formatDate } from '@/utils/dateFormat';
 
 // --- Formatting ---
-
-/** Format date string to Korean locale (YYYY. MM. DD.) */
-export function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('ko-KR', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-}
 
 /** Format X.509 version number (0 → v1, 1 → v2, 2 → v3) */
 export function formatVersion(version: number | undefined): string {

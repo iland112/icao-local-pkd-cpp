@@ -119,6 +119,17 @@ const auditApi = axios.create({
   },
 });
 
+// Request interceptor — attach JWT token
+auditApi.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+);
+
 // Response interceptor for error handling
 auditApi.interceptors.response.use(
   (response: AxiosResponse) => response,

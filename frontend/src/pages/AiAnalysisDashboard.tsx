@@ -45,6 +45,7 @@ import type {
   ForensicSummary,
 } from '@/services/aiAnalysisApi';
 import { cn } from '@/utils/cn';
+import { formatDateTime, formatDate } from '@/utils/dateFormat';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { exportAiAnalysisReportToCsv } from '@/utils/csvExport';
 import IssuerProfileCard from '@/components/ai/IssuerProfileCard';
@@ -530,7 +531,7 @@ export default function AiAnalysisDashboard() {
       )}
 
       {/* Issuer Profile + Extension Compliance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:max-h-[600px]">
         <IssuerProfileCard />
         <ExtensionComplianceChecklist />
       </div>
@@ -607,7 +608,7 @@ export default function AiAnalysisDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Algorithm Migration Trends */}
         {trendData.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-blue-500" />
               <h3 className="text-base font-bold text-gray-900 dark:text-white">알고리즘 마이그레이션 트렌드</h3>
@@ -641,7 +642,7 @@ export default function AiAnalysisDashboard() {
 
         {/* Key Size Distribution Pie */}
         {keySizePieData.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-violet-500" />
               <h3 className="text-base font-bold text-gray-900 dark:text-white">키 크기 분포</h3>
@@ -849,9 +850,7 @@ export default function AiAnalysisDashboard() {
                         .join(', ')}
                     </td>
                     <td className="px-3 py-2.5 text-center whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                      {item.analyzed_at
-                        ? new Date(item.analyzed_at).toLocaleDateString('ko-KR')
-                        : '-'}
+                      {formatDate(item.analyzed_at)}
                     </td>
                   </tr>
                 ))
@@ -924,7 +923,7 @@ function PageHeader({
             ML 기반 이상 탐지 및 패턴 분석
             {lastAnalysisAt && (
               <span className="ml-2">
-                (마지막 분석: {new Date(lastAnalysisAt).toLocaleString('ko-KR')})
+                (마지막 분석: {formatDateTime(lastAnalysisAt)})
               </span>
             )}
           </p>

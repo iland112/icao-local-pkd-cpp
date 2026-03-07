@@ -64,7 +64,7 @@ export default function IssuerProfileCard() {
   };
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <Users className="w-5 h-5 text-blue-500" />

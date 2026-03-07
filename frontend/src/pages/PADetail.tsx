@@ -22,6 +22,7 @@ import {
 import { paApi } from '@/services/paApi';
 import type { PAVerificationResponse, PAStatus } from '@/types';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 
 export function PADetail() {
   const { paId } = useParams<{ paId: string }>();
@@ -61,6 +62,11 @@ export function PADetail() {
         text: 'text-green-600 dark:text-green-400',
         icon: <CheckCircle className="w-5 h-5" />,
       },
+      EXPIRED_VALID: {
+        bg: 'bg-amber-100 dark:bg-amber-900/30',
+        text: 'text-amber-600 dark:text-amber-400',
+        icon: <AlertTriangle className="w-5 h-5" />,
+      },
       INVALID: {
         bg: 'bg-red-100 dark:bg-red-900/30',
         text: 'text-red-600 dark:text-red-400',
@@ -74,29 +80,22 @@ export function PADetail() {
     };
 
     const style = styles[status];
-    const label = {
+    if (!style) {
+      return <span className="inline-flex items-center px-4 py-2 rounded-full text-base font-medium bg-gray-100 text-gray-600">{status}</span>;
+    }
+    const label: Record<PAStatus, string> = {
       VALID: '검증 성공',
+      EXPIRED_VALID: '만료(서명유효)',
       INVALID: '검증 실패',
       ERROR: '오류 발생',
-    }[status];
+    };
 
     return (
       <span className={cn('inline-flex items-center gap-2 px-4 py-2 rounded-full text-base font-medium', style.bg, style.text)}>
         {style.icon}
-        {label}
+        {label[status]}
       </span>
     );
-  };
-
-  const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
   };
 
   const getCrlSeverityColor = (severity: string) => {
@@ -475,7 +474,7 @@ export function PADetail() {
                 <div>
                   <p className="text-xs text-gray-500 dark:text-gray-400">검증 일시</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {formatDate(result.verificationTimestamp)}
+                    {formatDateTime(result.verificationTimestamp)}
                   </p>
                 </div>
               </div>

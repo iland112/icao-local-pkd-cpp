@@ -2,6 +2,7 @@ import { FileText, Key, Calendar, Hash, MapPin } from 'lucide-react';
 import type { CertificateMetadata, IcaoComplianceStatus } from '@/types';
 import { IcaoComplianceBadge } from './IcaoComplianceBadge';
 import { cn } from '@/utils/cn';
+import { formatDate } from '@/utils/dateFormat';
 
 interface CurrentCertificateCardProps {
   certificate: CertificateMetadata;
@@ -147,7 +148,7 @@ export function CurrentCertificateCard({
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Validity Period</div>
             <div className="flex items-center gap-2 text-xs">
               <span className="text-gray-600 dark:text-gray-400">
-                {new Date(certificate.notBefore).toLocaleDateString()}
+                {formatDate(certificate.notBefore)}
               </span>
               <span className="text-gray-400">→</span>
               <span className={cn(
@@ -155,7 +156,7 @@ export function CurrentCertificateCard({
                   ? 'text-red-600 dark:text-red-400 font-medium'
                   : 'text-green-600 dark:text-green-400'
               )}>
-                {new Date(certificate.notAfter).toLocaleDateString()}
+                {formatDate(certificate.notAfter)}
                 {certificate.isExpired && ' (만료됨)'}
               </span>
             </div>

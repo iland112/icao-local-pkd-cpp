@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2, Clock, FileText } from 'lucide-react';
 import { cn } from '@/utils/cn';
+import { formatDateTime } from '@/utils/dateFormat';
 import { icaoApi } from '@/services/pkdApi';
 import { Dialog } from '@/components/common/Dialog';
 
@@ -128,17 +129,6 @@ export default function IcaoStatus() {
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('ko-KR', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-  };
-
   return (
     <div className="w-full px-4 lg:px-6 py-4">
       {/* Page Header */}
@@ -156,7 +146,7 @@ export default function IcaoStatus() {
               {lastCheckedAt && (
                 <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
                   <Clock className="w-3 h-3" />
-                  마지막 확인: {formatTimestamp(lastCheckedAt)}
+                  마지막 확인: {formatDateTime(lastCheckedAt)}
                 </span>
               )}
             </div>
@@ -208,8 +198,10 @@ export default function IcaoStatus() {
                   <div
                     key={status.collection_type}
                     className={cn(
-                      "bg-white dark:bg-gray-800 rounded-2xl border shadow-lg p-5 transition-all duration-200",
-                      status.needs_update
+                      "bg-white dark:bg-gray-800 rounded-2xl border shadow-lg p-5 h-full flex flex-col transition-all duration-200",
+                      status.status === 'DETECTION_STALE'
+                        ? 'border-yellow-300 dark:border-yellow-700'
+                        : status.needs_update
                         ? 'border-orange-300 dark:border-orange-700'
                         : 'border-green-300 dark:border-green-700'
                     )}
@@ -224,14 +216,16 @@ export default function IcaoStatus() {
                             : 'CSCA Master List'}
                         </h3>
                       </div>
-                      {status.needs_update ? (
+                      {status.status === 'DETECTION_STALE' ? (
+                        <Clock className="w-5 h-5 text-yellow-500" />
+                      ) : status.needs_update ? (
                         <AlertCircle className="w-5 h-5 text-orange-500" />
                       ) : (
                         <CheckCircle className="w-5 h-5 text-green-500" />
                       )}
                     </div>
 
-                    <div className="space-y-3">
+                    <div className="space-y-3 flex-1 flex flex-col">
                       {/* Status Badge */}
                       <div>
                         <span
@@ -239,12 +233,16 @@ export default function IcaoStatus() {
                             "inline-flex items-center gap-2 px-2.5 py-1 rounded-full border text-xs font-medium",
                             status.status === 'UPDATE_NEEDED'
                               ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-700'
+                              : status.status === 'DETECTION_STALE'
+                              ? 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700'
                               : status.status === 'UP_TO_DATE'
                               ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 border-green-300 dark:border-green-700'
                               : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600'
                           )}
                         >
-                          {status.status === 'UPDATE_NEEDED' ? '업데이트 필요' : '최신 상태'}
+                          {status.status === 'UPDATE_NEEDED' ? '업데이트 필요'
+                            : status.status === 'DETECTION_STALE' ? '감지 갱신 필요'
+                            : '최신 상태'}
                         </span>
                       </div>
 
@@ -280,17 +278,17 @@ export default function IcaoStatus() {
                       </div>
 
                       {/* Status Message */}
-                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                      <div className="pt-3 border-t border-gray-200 dark:border-gray-700 mt-auto">
                         <p className="text-sm text-gray-600 dark:text-gray-400">{status.status_message}</p>
                         {status.upload_timestamp !== 'N/A' && (
                           <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                            마지막 업로드: {formatTimestamp(status.upload_timestamp)}
+                            마지막 업로드: {formatDateTime(status.upload_timestamp)}
                           </p>
                         )}
                       </div>
 
                       {/* Download Link for Updates */}
-                      {status.needs_update && (
+                      {status.status === 'UPDATE_NEEDED' && (
                         <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
                           <a
                             href="https://pkddownloadsg.icao.int/"
@@ -301,6 +299,13 @@ export default function IcaoStatus() {
                             <Download className="w-4 h-4" />
                             ICAO 포털에서 다운로드
                           </a>
+                        </div>
+                      )}
+                      {status.status === 'DETECTION_STALE' && (
+                        <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
+                          <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                            업로드된 버전이 감지된 버전보다 높습니다. "업데이트 확인" 버튼을 클릭하여 ICAO 포털의 최신 버전을 다시 감지하세요.
+                          </p>
                         </div>
                       )}
                     </div>
@@ -385,7 +390,7 @@ export default function IcaoStatus() {
                             </span>
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">
-                            {formatTimestamp(version.detected_at)}
+                            {formatDateTime(version.detected_at)}
                           </td>
                         </tr>
                       ))
@@ -481,7 +486,7 @@ export default function IcaoStatus() {
                 </p>
               </div>
               <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                {formatTimestamp(new Date().toISOString())}
+                {formatDateTime(new Date().toISOString())}
               </span>
             </div>
 
