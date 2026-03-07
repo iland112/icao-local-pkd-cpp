@@ -21,9 +21,13 @@ CREATE TABLE IF NOT EXISTS icao_pkd_versions (
     detected_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     status VARCHAR(20) NOT NULL DEFAULT 'DETECTED',
     notified_at TIMESTAMP WITH TIME ZONE,
+    notification_sent BOOLEAN DEFAULT FALSE,
+    notification_sent_at TIMESTAMP WITH TIME ZONE,
     downloaded_at TIMESTAMP WITH TIME ZONE,
     import_upload_id UUID REFERENCES uploaded_file(id) ON DELETE SET NULL,
     imported_at TIMESTAMP WITH TIME ZONE,
+    certificate_count INTEGER,
+    error_message TEXT,
     metadata JSONB,
     UNIQUE(collection_type, file_version)
 );

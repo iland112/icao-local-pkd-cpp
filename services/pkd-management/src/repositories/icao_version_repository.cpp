@@ -28,7 +28,7 @@ bool IcaoVersionRepository::insert(const domain::models::IcaoVersion& version) {
         if (exists(version.collectionType, version.fileVersion)) {
             spdlog::debug("[IcaoVersionRepository] Version already exists: {} (v{})",
                          version.fileName, version.fileVersion);
-            return false;
+            return true;  // Idempotent: already exists is success
         }
 
         const char* query =

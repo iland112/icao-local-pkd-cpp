@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2, Clock } from 'lucide-react';
+import { RefreshCw, AlertCircle, CheckCircle, Download, Globe, Loader2, Clock, FileText } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { icaoApi } from '@/services/pkdApi';
+import { Dialog } from '@/components/common/Dialog';
 
 interface IcaoVersion {
   id: number;
@@ -48,6 +49,13 @@ interface StatusApiResponse {
   last_checked_at?: string | null;
 }
 
+interface CheckUpdateResult {
+  success: boolean;
+  message: string;
+  new_version_count: number;
+  new_versions: IcaoVersion[];
+}
+
 export default function IcaoStatus() {
   const [versionHistory, setVersionHistory] = useState<IcaoVersion[]>([]);
   const [versionStatus, setVersionStatus] = useState<VersionStatus[]>([]);
@@ -55,6 +63,7 @@ export default function IcaoStatus() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [checkResult, setCheckResult] = useState<CheckUpdateResult | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -106,16 +115,15 @@ export default function IcaoStatus() {
     setError(null);
 
     try {
-      await icaoApi.checkUpdates();
-      // Wait a moment for async processing
-      setTimeout(() => {
-        fetchVersionStatus();
-        fetchVersionHistory();
-        setChecking(false);
-      }, 2000);
+      const res = await icaoApi.checkUpdates();
+      const result = res.data as CheckUpdateResult;
+      setCheckResult(result);
+      // Refresh page data with the latest results
+      await Promise.all([fetchVersionStatus(), fetchVersionHistory()]);
     } catch (err) {
-      setError('Network error: Unable to check for updates');
+      setCheckResult({ success: false, message: '네트워크 오류: 업데이트 확인에 실패했습니다.', new_version_count: 0, new_versions: [] });
       if (import.meta.env.DEV) console.error('Check updates error:', err);
+    } finally {
       setChecking(false);
     }
   };
@@ -415,6 +423,123 @@ export default function IcaoStatus() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Check Update Result Dialog */}
+      {checkResult && (
+        <Dialog isOpen={true} onClose={() => setCheckResult(null)} title="업데이트 확인 결과" size="lg">
+          <div className="space-y-4">
+            {/* Status Banner */}
+            <div className={cn(
+              "flex items-center gap-3 p-4 rounded-xl border",
+              checkResult.success
+                ? checkResult.new_version_count > 0
+                  ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
+                  : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+            )}>
+              <div className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0",
+                checkResult.success
+                  ? checkResult.new_version_count > 0
+                    ? "bg-orange-100 dark:bg-orange-900/40"
+                    : "bg-green-100 dark:bg-green-900/40"
+                  : "bg-red-100 dark:bg-red-900/40"
+              )}>
+                {checkResult.success ? (
+                  checkResult.new_version_count > 0
+                    ? <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                    : <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                ) : (
+                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className={cn(
+                  "text-sm font-semibold",
+                  checkResult.success
+                    ? checkResult.new_version_count > 0
+                      ? "text-orange-900 dark:text-orange-300"
+                      : "text-green-900 dark:text-green-300"
+                    : "text-red-900 dark:text-red-300"
+                )}>
+                  {checkResult.success
+                    ? checkResult.new_version_count > 0
+                      ? `${checkResult.new_version_count}개의 신규 버전이 감지되었습니다`
+                      : '시스템이 최신 상태입니다'
+                    : '확인 실패'}
+                </p>
+                <p className={cn(
+                  "text-xs mt-0.5",
+                  checkResult.success
+                    ? checkResult.new_version_count > 0
+                      ? "text-orange-700 dark:text-orange-400"
+                      : "text-green-700 dark:text-green-400"
+                    : "text-red-700 dark:text-red-400"
+                )}>
+                  {checkResult.message}
+                </p>
+              </div>
+              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                {formatTimestamp(new Date().toISOString())}
+              </span>
+            </div>
+
+            {/* New Versions Detail */}
+            {checkResult.new_version_count > 0 && (
+              <div className="space-y-3">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white">감지된 신규 버전</h4>
+                <div className="space-y-2">
+                  {checkResult.new_versions.map((v, i) => (
+                    <div key={v.id ?? i} className="flex items-center gap-3 p-3 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex-shrink-0">
+                        <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                            {v.collection_type === 'DSC_CRL' ? 'DSC/CRL' : v.collection_type === 'DSC_NC' ? 'DSC_NC' : 'Master List'}
+                          </span>
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-700">
+                            {v.status}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate mt-0.5">
+                          {v.file_name}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+                          {v.file_version.toString().padStart(6, '0')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Up-to-date detail */}
+            {checkResult.success && checkResult.new_version_count === 0 && (
+              <div className="text-center py-4">
+                <Globe className="w-10 h-10 text-green-400 dark:text-green-500 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  ICAO PKD 포털과 로컬 시스템의 버전이 동일합니다.
+                </p>
+              </div>
+            )}
+
+            {/* Close Button */}
+            <div className="flex justify-end pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setCheckResult(null)}
+                className="px-5 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 rounded-xl transition-all duration-200 shadow-sm"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </Dialog>
       )}
     </div>
   );

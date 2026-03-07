@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Link2,
   CheckCircle,
@@ -12,11 +12,8 @@ import {
   Shield,
   TrendingUp,
 } from 'lucide-react';
-import { paApi } from '@/services/paApi';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
-import { QuickLookupPanel } from '@/components/pa/QuickLookupPanel';
-import type { QuickLookupResult } from '@/components/pa/QuickLookupPanel';
 import axios from 'axios';
 
 // Trust Chain 분포 데이터
@@ -68,12 +65,6 @@ export function TrustChainValidationReport() {
   const [stats, setStats] = useState<ValidationStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
-  // Quick lookup states
-  const [quickLookupDn, setQuickLookupDn] = useState('');
-  const [quickLookupFingerprint, setQuickLookupFingerprint] = useState('');
-  const [quickLookupResult, setQuickLookupResult] = useState<QuickLookupResult | null>(null);
-  const [quickLookupLoading, setQuickLookupLoading] = useState(false);
-  const [quickLookupError, setQuickLookupError] = useState<string | null>(null);
 
   // Load statistics
   useEffect(() => {
@@ -103,56 +94,6 @@ export function TrustChainValidationReport() {
     fetchStats();
   }, []);
 
-  // Quick lookup handler
-  const handleQuickLookup = useCallback(async () => {
-    if (!quickLookupDn && !quickLookupFingerprint) {
-      setQuickLookupError('Subject DN 또는 Fingerprint를 입력해주세요.');
-      return;
-    }
-    setQuickLookupLoading(true);
-    setQuickLookupError(null);
-    setQuickLookupResult(null);
-    try {
-      const params: { subjectDn?: string; fingerprint?: string } = {};
-      if (quickLookupDn) params.subjectDn = quickLookupDn;
-      else if (quickLookupFingerprint) params.fingerprint = quickLookupFingerprint;
-      const response = await paApi.paLookup(params);
-      const data = response.data as QuickLookupResult;
-      setQuickLookupResult(data);
-      if (!data.success) {
-        setQuickLookupError(data.error || '조회 실패');
-      } else if (!data.validation) {
-        setQuickLookupError('해당 인증서의 검증 결과가 없습니다.');
-      }
-    } catch (err) {
-      setQuickLookupError(err instanceof Error ? err.message : '조회 중 오류가 발생했습니다.');
-    } finally {
-      setQuickLookupLoading(false);
-    }
-  }, [quickLookupDn, quickLookupFingerprint]);
-
-  // Sample cert click → fill fingerprint and auto-search
-  const handleSampleClick = useCallback((cert: SampleCert) => {
-    setQuickLookupDn('');
-    setQuickLookupFingerprint(cert.fingerprint);
-    setQuickLookupResult(null);
-    setQuickLookupError(null);
-    // Auto-search
-    setTimeout(async () => {
-      setQuickLookupLoading(true);
-      try {
-        const response = await paApi.paLookup({ fingerprint: cert.fingerprint });
-        const data = response.data as QuickLookupResult;
-        setQuickLookupResult(data);
-        if (!data.success) setQuickLookupError(data.error || '조회 실패');
-        else if (!data.validation) setQuickLookupError('해당 인증서의 검증 결과가 없습니다.');
-      } catch (err) {
-        setQuickLookupError(err instanceof Error ? err.message : '조회 오류');
-      } finally {
-        setQuickLookupLoading(false);
-      }
-    }, 100);
-  }, []);
 
   // Chain path color assignment based on depth (number of arrows)
   const pathColors = [
@@ -338,20 +279,19 @@ export function TrustChainValidationReport() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
         <div className="flex items-center gap-2 mb-4">
           <Globe className="w-5 h-5 text-indigo-500" />
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">샘플 인증서 조회</h2>
-          <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">클릭하면 Trust Chain 결과를 즉시 조회합니다</span>
+          <h2 className="text-base font-bold text-gray-900 dark:text-white">샘플 인증서</h2>
+          <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">다양한 Trust Chain 경로 패턴 예시</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
           {SAMPLE_CERTS.map((cert) => (
-            <button
+            <a
               key={cert.fingerprint}
-              onClick={() => handleSampleClick(cert)}
+              href={`/pkd/certificates?fingerprint=${cert.fingerprint}`}
               className={cn(
                 'flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all hover:shadow-md',
                 'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600',
                 'hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20',
-                quickLookupFingerprint === cert.fingerprint && 'border-indigo-400 dark:border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-300'
               )}
             >
               {getFlagSvgPath(cert.country) && (
@@ -373,23 +313,10 @@ export function TrustChainValidationReport() {
                 </div>
               </div>
               <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            </button>
+            </a>
           ))}
         </div>
       </div>
-
-      {/* Trust Chain Lookup (reuse QuickLookupPanel) */}
-      <QuickLookupPanel
-        quickLookupDn={quickLookupDn}
-        setQuickLookupDn={setQuickLookupDn}
-        quickLookupFingerprint={quickLookupFingerprint}
-        setQuickLookupFingerprint={setQuickLookupFingerprint}
-        quickLookupResult={quickLookupResult}
-        quickLookupLoading={quickLookupLoading}
-        quickLookupError={quickLookupError}
-        setQuickLookupError={setQuickLookupError}
-        handleQuickLookup={handleQuickLookup}
-      />
     </div>
   );
 }

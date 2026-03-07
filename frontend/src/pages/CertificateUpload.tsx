@@ -14,14 +14,16 @@ import {
   Eye,
   Database,
   RotateCcw,
-  ExternalLink,
   Lock,
+  Globe,
+  History,
 } from 'lucide-react';
 import { uploadApi } from '@/services/api';
 import type { CertificatePreviewResult, CertificatePreviewItem, DeviationPreviewItem, CertificateUploadResponse } from '@/types';
 import { cn } from '@/utils/cn';
 import { TreeViewer, type TreeNode } from '@/components/TreeViewer';
 import { Doc9303ComplianceChecklist } from '@/components/Doc9303ComplianceChecklist';
+import { Dialog } from '@/components/common/Dialog';
 
 type PageState = 'IDLE' | 'FILE_SELECTED' | 'PREVIEWING' | 'PREVIEW_READY' | 'PREVIEW_ERROR' | 'CONFIRMING' | 'COMPLETED' | 'FAILED';
 type PreviewTab = 'certificates' | 'dl-structure' | 'crl';
@@ -352,6 +354,7 @@ export default function CertificateUpload() {
   const [uploadId, setUploadId] = useState<string>('');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [previewTab, setPreviewTab] = useState<PreviewTab>('certificates');
+  const [showResultDialog, setShowResultDialog] = useState(false);
 
   const isValidFile = useCallback((file: File) => {
     const name = file.name.toLowerCase();
@@ -414,6 +417,7 @@ export default function CertificateUpload() {
         setUploadResult(result);
         setUploadId(result.uploadId);
         setPageState('COMPLETED');
+        setShowResultDialog(true);
       } else {
         throw new Error(result.errorMessage || result.message || '업로드에 실패했습니다.');
       }
@@ -571,7 +575,7 @@ export default function CertificateUpload() {
                 <div className="flex items-center gap-2 ml-auto">
                   {previewResult.isDuplicate && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                      <AlertTriangle className="w-3 h-3" /> Duplicate
+                      <AlertTriangle className="w-3 h-3" /> 중복
                     </span>
                   )}
                   {isDl && previewResult.dlSignatureValid !== undefined && (
@@ -664,7 +668,13 @@ export default function CertificateUpload() {
                   </button>
                   <button
                     onClick={handleConfirm}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                    disabled={previewResult?.isDuplicate}
+                    className={cn(
+                      'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                      previewResult?.isDuplicate
+                        ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                    )}
                   >
                     <Database className="w-3.5 h-3.5" /> DB + LDAP 저장
                   </button>
@@ -707,9 +717,9 @@ export default function CertificateUpload() {
               <button onClick={handleReset} className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-colors">
                 <CloudUpload className="w-3.5 h-3.5" /> 새 파일
               </button>
-              {uploadId && (
-                <button onClick={() => navigate(`/upload/${uploadId}`)} className="flex items-center gap-1.5 px-3.5 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-xs transition-colors">
-                  <ExternalLink className="w-3.5 h-3.5" /> 상세보기
+              {uploadResult && (
+                <button onClick={() => setShowResultDialog(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-xs transition-colors">
+                  <Eye className="w-3.5 h-3.5" /> 상세보기
                 </button>
               )}
             </div>
@@ -741,6 +751,205 @@ export default function CertificateUpload() {
           </div>
         )}
       </div>
+
+      {/* Upload Result Dialog */}
+      {uploadResult && (
+        <Dialog
+          isOpen={showResultDialog}
+          onClose={() => setShowResultDialog(false)}
+          title="인증서 업로드 완료"
+          size="2xl"
+        >
+          <div className="space-y-4">
+            {/* Status Banner — contextual based on duplicate status */}
+            {uploadResult.duplicateCount >= uploadResult.certificateCount && uploadResult.duplicateCount > 0 ? (
+              /* All duplicates — no new certificates saved */
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" />
+                <div>
+                  <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
+                    이미 등록된 인증서입니다.
+                  </span>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">
+                    {uploadResult.duplicateCount}건 모두 기존에 저장된 인증서와 동일합니다.
+                  </p>
+                </div>
+                <span className="ml-auto text-xs text-gray-500 dark:text-gray-400 flex-shrink-0">
+                  {new Date().toLocaleString('ko-KR')}
+                </span>
+              </div>
+            ) : (
+              /* New certificates saved (with optional partial duplicates) */
+              <>
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                  <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
+                  <span className="text-sm font-medium text-green-800 dark:text-green-300">
+                    인증서 저장이 완료되었습니다.
+                  </span>
+                  <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
+                    {new Date().toLocaleString('ko-KR')}
+                  </span>
+                </div>
+                {uploadResult.duplicateCount > 0 && (
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
+                    <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                    <span className="text-sm text-orange-700 dark:text-orange-300">
+                      {uploadResult.duplicateCount}건은 이미 등록된 인증서입니다.
+                    </span>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* File Info */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-gray-500" />
+                파일 정보
+              </h4>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">파일명</span>
+                  <p className="font-medium text-gray-900 dark:text-white truncate" title={selectedFile?.name}>
+                    {selectedFile?.name || '-'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">파일 형식</span>
+                  <p>
+                    <span className={cn(
+                      'inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold',
+                      uploadResult.fileFormat === 'DL' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                        : uploadResult.fileFormat === 'CRL' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400'
+                        : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                    )}>
+                      {uploadResult.fileFormat}
+                    </span>
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">파일 크기</span>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {selectedFile ? formatFileSize(selectedFile.size) : '-'}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-gray-500 dark:text-gray-400">업로드 ID</span>
+                  <p className="font-mono text-xs text-gray-600 dark:text-gray-300 truncate" title={uploadResult.uploadId}>
+                    {uploadResult.uploadId.substring(0, 8)}...
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Certificate Count Grid */}
+            <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-indigo-500" />
+                인증서 처리 결과
+                <span className="ml-auto text-base font-bold text-gray-900 dark:text-white">
+                  {uploadResult.certificateCount}건
+                </span>
+              </h4>
+              <div className="grid grid-cols-3 gap-2">
+                {uploadResult.cscaCount > 0 && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <Shield className="w-3.5 h-3.5 text-blue-500" />
+                      <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">CSCA</span>
+                    </div>
+                    <span className="text-lg font-bold text-blue-700 dark:text-blue-300">{uploadResult.cscaCount}</span>
+                  </div>
+                )}
+                {uploadResult.dscCount > 0 && (
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <Shield className="w-3.5 h-3.5 text-green-500" />
+                      <span className="text-xs text-green-600 dark:text-green-400 font-medium">DSC</span>
+                    </div>
+                    <span className="text-lg font-bold text-green-700 dark:text-green-300">{uploadResult.dscCount}</span>
+                  </div>
+                )}
+                {uploadResult.dscNcCount > 0 && (
+                  <div className="p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <Shield className="w-3.5 h-3.5 text-orange-500" />
+                      <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">DSC_NC</span>
+                    </div>
+                    <span className="text-lg font-bold text-orange-700 dark:text-orange-300">{uploadResult.dscNcCount}</span>
+                  </div>
+                )}
+                {uploadResult.mlscCount > 0 && (
+                  <div className="p-3 bg-teal-50 dark:bg-teal-900/20 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <Key className="w-3.5 h-3.5 text-teal-500" />
+                      <span className="text-xs text-teal-600 dark:text-teal-400 font-medium">MLSC</span>
+                    </div>
+                    <span className="text-lg font-bold text-teal-700 dark:text-teal-300">{uploadResult.mlscCount}</span>
+                  </div>
+                )}
+                {uploadResult.crlCount > 0 && (
+                  <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-1.5 mb-1">
+                      <Globe className="w-3.5 h-3.5 text-purple-500" />
+                      <span className="text-xs text-purple-600 dark:text-purple-400 font-medium">CRL</span>
+                    </div>
+                    <span className="text-lg font-bold text-purple-700 dark:text-purple-300">{uploadResult.crlCount}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* LDAP Storage Status — hide when all duplicates (no new storage) */}
+            {!(uploadResult.duplicateCount >= uploadResult.certificateCount && uploadResult.duplicateCount > 0) && (
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 dark:border-gray-700">
+                <Database className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">LDAP 저장</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {uploadResult.ldapStoredCount} / {uploadResult.certificateCount}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 w-full bg-gray-200 dark:bg-gray-600 rounded-full h-1.5">
+                    <div
+                      className={cn(
+                        'h-1.5 rounded-full transition-all',
+                        uploadResult.ldapStoredCount >= uploadResult.certificateCount
+                          ? 'bg-green-500'
+                          : 'bg-orange-500'
+                      )}
+                      style={{ width: `${uploadResult.certificateCount > 0 ? Math.round((uploadResult.ldapStoredCount / uploadResult.certificateCount) * 100) : 0}%` }}
+                    />
+                  </div>
+                </div>
+                {uploadResult.ldapStoredCount >= uploadResult.certificateCount ? (
+                  <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                ) : (
+                  <AlertTriangle className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                )}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => { setShowResultDialog(false); navigate('/upload-history'); }}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <History className="w-4 h-4" />
+                업로드 이력
+              </button>
+              <button
+                onClick={() => setShowResultDialog(false)}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </div>
   );
 }

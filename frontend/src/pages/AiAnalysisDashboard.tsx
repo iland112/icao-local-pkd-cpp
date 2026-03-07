@@ -134,7 +134,13 @@ export default function AiAnalysisDashboard() {
       ]);
 
       if (statsRes.status === 'fulfilled') setStats(statsRes.value.data);
-      if (statusRes.status === 'fulfilled') setJobStatus(statusRes.value.data);
+      if (statusRes.status === 'fulfilled') {
+        setJobStatus(statusRes.value.data);
+        // Auto-resume polling if backend is still running (page refresh during analysis)
+        if (statusRes.value.data.status === 'RUNNING') {
+          setAnalyzing(true);
+        }
+      }
       if (maturityRes.status === 'fulfilled') setMaturity(maturityRes.value.data);
       if (trendsRes.status === 'fulfilled') setTrends(trendsRes.value.data);
       if (riskRes.status === 'fulfilled') setRiskDist(riskRes.value.data);
@@ -188,19 +194,44 @@ export default function AiAnalysisDashboard() {
   // Polling during analysis
   useEffect(() => {
     if (!analyzing) return;
-    const interval = setInterval(async () => {
+    let errorCount = 0;
+    const maxErrors = 10;
+
+    const pollStatus = async () => {
       try {
         const res = await aiAnalysisApi.getAnalysisStatus();
+        errorCount = 0; // Reset on success
         setJobStatus(res.data);
-        if (res.data.status === 'COMPLETED' || res.data.status === 'FAILED') {
+        if (res.data.status === 'COMPLETED') {
           setAnalyzing(false);
           fetchDataRef.current();
           fetchAnomaliesRef.current();
+          const processed = res.data.processed_certificates.toLocaleString();
+          const duration = res.data.started_at && res.data.completed_at
+            ? `${((new Date(res.data.completed_at).getTime() - new Date(res.data.started_at).getTime()) / 1000).toFixed(1)}초`
+            : '';
+          toast.success('AI 분석 완료', `${processed}건 인증서 분석 완료${duration ? ` (${duration})` : ''}`);
+        } else if (res.data.status === 'FAILED') {
+          setAnalyzing(false);
+          fetchDataRef.current();
+          fetchAnomaliesRef.current();
+          toast.error('AI 분석 실패', res.data.error_message || '분석 중 오류가 발생했습니다.');
+        } else if (res.data.status === 'IDLE') {
+          // Unexpected IDLE during analysis — stop polling
+          setAnalyzing(false);
         }
       } catch {
-        /* ignore */
+        errorCount++;
+        if (errorCount >= maxErrors) {
+          setAnalyzing(false);
+          toast.error('분석 상태 확인 실패', '서버 연결이 불안정합니다. 페이지를 새로고침해 주세요.');
+        }
       }
-    }, 3000);
+    };
+
+    // Immediate first poll (don't wait 3 seconds)
+    pollStatus();
+    const interval = setInterval(pollStatus, 3000);
     return () => clearInterval(interval);
   }, [analyzing]);
 

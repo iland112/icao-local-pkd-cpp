@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.4
-**Last Updated**: 2026-03-06
+**Current Version**: v2.29.5
+**Last Updated**: 2026-03-07
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -583,6 +583,16 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.5 (2026-03-07) - 인증서 업로드 결과 다이얼로그 + ICAO 버전 확인 다이얼로그 + 프론트엔드 UX 개선
+- **인증서 업로드 결과 다이얼로그**: 업로드 완료 후 UploadDetail 페이지 이동 대신 인라인 결과 Dialog 표시 (파일 정보, 타입별 카운트, LDAP 저장 상태)
+- **중복 인증서 UX 개선**: 전체 중복 시 주황 배너 "이미 등록된 인증서입니다" + LDAP 섹션 숨김, "DB + LDAP 저장" 버튼 중복 시 비활성화, "Duplicate" → "중복" 한국어화
+- **ICAO 버전 확인 결과 다이얼로그**: "업데이트 확인" 버튼 클릭 후 결과를 Dialog로 표시 (신규 버전 수, 버전 목록, 최신 상태 확인)
+- **ICAO 버전 스키마 확장**: `icao_pkd_versions` 테이블에 `notification_sent`, `notification_sent_at`, `certificate_count`, `error_message` 컬럼 추가
+- **ICAO 버전 insert 멱등성**: `IcaoVersionRepository::insert()` — 이미 존재하는 버전은 `true` 반환 (기존 `false` → 실패로 오인)
+- **DSC Trust Chain 보고서 간소화**: QuickLookupPanel(Trust Chain 조회 카드) 제거, 샘플 인증서 카드를 인증서 검색 링크로 변경
+- **AI 분석 폴링 안정화**: 즉시 첫 폴링 실행 (3초 대기 제거), 연속 10회 API 실패 시 에러 토스트 + 폴링 중단 (기존 무한 대기), RUNNING 상태 페이지 로드 시 폴링 자동 재개, IDLE 상태 안전 처리, COMPLETED/FAILED 시 토스트 알림 표시
+- 6 files changed (0 new, 6 modified)
 
 ### v2.29.4 (2026-03-06) - OpenSSL 메모리 누수 수정 (CRITICAL 1건 + HIGH 4건)
 - **CRITICAL FIX — CMS_ContentInfo 예외 경로 누수**: `upload_handler.cpp` Master List 처리 중 예외 발생 시 `CMS_ContentInfo*` 미해제 → `cms` 선언을 try 블록 밖으로 이동 + catch 블록에서 `CMS_ContentInfo_free(cms)` 추가
