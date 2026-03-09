@@ -1,7 +1,7 @@
 # Development Guide - ICAO Local PKD
 
-**Version**: 2.13.0
-**Last Updated**: 2026-02-17
+**Version**: 2.30.0
+**Last Updated**: 2026-03-09
 
 ---
 
@@ -40,8 +40,11 @@ LDAP_DATA_DN=dc=data,dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 | PA Service | 8082 | Passive Authentication (ICAO 9303) |
 | PKD Relay | 8083 | DB-LDAP Sync, Reconciliation |
 | Monitoring Service | 8084 | System Metrics, Service Health |
-| API Gateway | 8080 | nginx reverse proxy (`/api` prefix) |
-| Frontend | 3000 | React 19 SPA |
+| AI Analysis Service | 8085 | ML Anomaly Detection, Forensic Analysis (Python/FastAPI) |
+| API Gateway (HTTP) | 80 | nginx reverse proxy (`/api` prefix) |
+| API Gateway (HTTPS) | 443 | TLS 1.2/1.3, Private CA |
+| API Gateway (Internal) | 8080 | Internal HTTP (legacy) |
+| Frontend | 3080 | React 19 SPA |
 | API Docs | 8090 | Swagger UI |
 
 ### Daily Commands
@@ -68,22 +71,25 @@ source scripts/helpers/db-helpers.sh && db_count_certs
 
 ## Architecture Overview
 
-### System Architecture (v2.13.0)
+### System Architecture (v2.30.0)
 
 ```
-Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LDAP
+Frontend (React 19) --> API Gateway (nginx :80/:443/:8080) --> Backend Services --> DB/LDAP
                                                         |
                                                         +-- PKD Management (:8081)
-                                                        |     Upload, Certificate Search, Auth, Audit
+                                                        |     Upload, Certificate Search, ICAO Sync, Auth
                                                         |
                                                         +-- PA Service (:8082)
-                                                        |     Passive Authentication, DG2 Face Image
+                                                        |     Passive Authentication (ICAO 9303)
                                                         |
                                                         +-- PKD Relay (:8083)
                                                         |     DB-LDAP Sync, Reconciliation
                                                         |
                                                         +-- Monitoring Service (:8084)
-                                                              System Metrics (DB-independent)
+                                                        |     System Metrics, Service Health (DB-independent)
+                                                        |
+                                                        +-- AI Analysis Service (:8085)
+                                                              ML Anomaly Detection, Pattern Analysis (Python/FastAPI)
 ```
 
 ### Shared Libraries (`shared/lib/`)
@@ -116,7 +122,7 @@ Frontend (React 19) --> API Gateway (nginx :8080) --> Backend Services --> DB/LD
 | **Repository Pattern** | 100% SQL abstraction - zero SQL in controllers |
 | **Query Executor Pattern** | Database-agnostic queries via `IQueryExecutor` |
 | **Factory Pattern** | Runtime database selection via `DB_TYPE` |
-| **Strategy Pattern** | Processing strategies (AUTO/MANUAL upload modes) |
+| **Strategy Pattern** | Processing strategies (AUTO upload mode) |
 | **RAII** | Connection pooling (DB and LDAP) |
 | **Provider/Adapter Pattern** | Infrastructure abstraction for validation (`ICscaProvider`, `ICrlProvider`) |
 
@@ -177,6 +183,7 @@ Source code locations:
 | PA Service | `services/pa-service/src/` |
 | PKD Relay | `services/pkd-relay-service/src/` |
 | Monitoring | `services/monitoring-service/src/` |
+| AI Analysis | `services/ai-analysis/` (Python) |
 | Shared Libraries | `shared/lib/` |
 | Frontend | `frontend/src/` |
 
@@ -215,9 +222,10 @@ source scripts/helpers/db-helpers.sh
 ./docker-health.sh
 
 # Or individually
-curl http://localhost:8080/api/health | jq .
-curl http://localhost:8080/api/pa/health | jq .
-curl http://localhost:8080/api/sync/health | jq .
+curl http://localhost/api/health | jq .
+curl http://localhost/api/pa/health | jq .
+curl http://localhost/api/sync/health | jq .
+curl http://localhost/api/ai/health | jq .
 
 # Data verification
 ldap_count_all          # Count all LDAP entries
@@ -234,29 +242,31 @@ curl -X POST http://localhost:8080/api/pa/verify \
   -d '{"sod":"<base64>","dataGroups":{"1":"<base64>","2":"<base64>"}}' | jq .
 ```
 
-### Unit Tests
+### Unit Tests (438 test cases)
 
 ```bash
-# Run icao::validation unit tests (86 tests) via Docker
+# C++ certificate-parser tests (122 tests)
+docker build -f shared/lib/certificate-parser/tests/Dockerfile.test \
+  --build-arg BASE_IMAGE=icao-vcpkg-base:latest \
+  -t cert-parser-tests .
+
+# C++ icao::validation tests (86 tests)
 docker build -f shared/lib/icao-validation/tests/Dockerfile.test \
   --build-arg BASE_IMAGE=icao-vcpkg-base:latest \
   -t icao-validation-tests .
 
-# Or build locally (requires OpenSSL + GTest)
-cd shared/lib/icao-validation
-cmake -B build -S . -DBUILD_VALIDATION_TESTS=ON
-cmake --build build -j$(nproc)
-cd build && ctest --output-on-failure --verbose
+# Frontend tests (Vitest + React Testing Library, 114 tests)
+cd frontend && npm test
+
+# AI Analysis tests (pytest, 201 tests)
+cd services/ai-analysis && python -m pytest
 ```
 
-Test modules (86 tests total):
-- `test_cert_ops` — Pure X509 certificate operations (34 tests)
-- `test_extension_validator` — X.509 extension validation (10 tests)
-- `test_algorithm_compliance` — ICAO algorithm requirements (14 tests)
-- `test_trust_chain_builder` — Trust chain construction (11 tests)
-- `test_crl_checker` — CRL revocation checking (17 tests)
-
-All modules include idempotency verification (50-100 iterations per function).
+Test summary:
+- **C++ certificate-parser**: GTest — 5 files, 122 test cases
+- **C++ icao::validation**: GTest — 5 files, 86 tests (cert_ops, extension_validator, algorithm_compliance, trust_chain_builder, crl_checker)
+- **Frontend**: Vitest + RTL — 11 files, 114 passed
+- **AI Analysis**: pytest — 8 files, 201 passed
 
 ---
 
@@ -267,11 +277,14 @@ All modules include idempotency verification (50-100 iterations per function).
 ```
 scripts/
 +-- docker/          # Docker management (start, stop, restart, health, logs, backup)
++-- podman/          # Podman management for Production RHEL 9 (same structure as docker/)
 +-- luckfox/         # ARM64 deployment (same structure as docker/)
++-- lib/             # Shared shell library (common.sh)
 +-- build/           # Build scripts (build, rebuild-*, check-freshness, verify-*)
 +-- helpers/         # Utility functions (db-helpers.sh, ldap-helpers.sh)
 +-- maintenance/     # Data management (reset-all-data, reset-ldap, dn-migration)
 +-- monitoring/      # System monitoring (icao-version-check)
++-- ssl/             # SSL certificate management (init-cert, renew-cert)
 +-- deploy/          # Deployment (from-github-artifacts)
 +-- dev/             # Development scripts (start/stop/rebuild/logs dev services)
 ```
@@ -405,6 +418,22 @@ docker exec icao-local-pkd-openldap1 \
 ### 502 Bad Gateway after container restart
 
 nginx uses `resolver 127.0.0.11 valid=10s` with per-request DNS resolution. Usually resolves within 10 seconds.
+
+**Podman 환경**: Podman은 Docker DNS(`127.0.0.11`)가 없으므로 반드시 관리 스크립트(`scripts/podman/start.sh`, `restart.sh`)로 실행해야 aardvark-dns resolver가 자동 적용됩니다.
+
+### HTTPS / SSL
+
+```bash
+# Private CA 초기화 (최초 1회)
+./scripts/ssl/init-cert.sh
+
+# 서버 인증서 갱신 (IP 추가 가능)
+./scripts/ssl/renew-cert.sh --ip 10.0.0.220
+
+# .env에서 SSL 모드 전환
+NGINX_CONF=../nginx/api-gateway-ssl.conf    # HTTPS
+NGINX_CONF=../nginx/api-gateway.conf        # HTTP only
+```
 
 ### Sync Dashboard Timeout
 

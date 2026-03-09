@@ -1,8 +1,8 @@
 # ICAO Local PKD - Version History
 
-**Current Version**: v2.29.1
-**Period**: 2026-01-21 ~ 2026-03-05
-**Total Releases**: 59+
+**Current Version**: v2.30.0
+**Period**: 2026-01-21 ~ 2026-03-09
+**Total Releases**: 68+
 
 ---
 
@@ -10,6 +10,14 @@
 
 | Version | Date | Category | Summary |
 |---------|------|----------|---------|
+| v2.30.0 | 03-09 | Feature | 로그인 페이지 모던 리디자인 + 사이드바 4섹션 재구성 + 클라이언트 정렬 |
+| v2.29.8 | 03-09 | Feature | 로그인 페이지 리브랜딩 + 동적 통계 + 업로드 중복 파일 UX 개선 |
+| v2.29.7 | 03-09 | Fix | SSE Heartbeat + Recharts null guard + HTML 표준 접근성 개선 |
+| v2.29.6 | 03-07 | Feature | 시스템 모니터링 고유 접속자 + 전체 대시보드 그리드 높이 정렬 |
+| v2.29.5 | 03-07 | Feature | 인증서 업로드 결과 다이얼로그 + ICAO 버전 확인 다이얼로그 |
+| v2.29.4 | 03-06 | Fix | OpenSSL 메모리 누수 수정 (CRITICAL 1건 + HIGH 4건) |
+| v2.29.3 | 03-06 | Fix | 5차 코드 보안 + 안정성 강화 (CRITICAL 6건 + HIGH 8건 + MEDIUM 7건) |
+| v2.29.2 | 03-06 | Fix | 4차 코드 안정성 강화 + SSE HTTP/2 완전 수정 + 프론트엔드 UI 수정 |
 | v2.29.1 | 03-05 | Fix | SSE HTTP/2 프로토콜 에러 수정 + 업로드 통계 totalCertificates 누락 수정 |
 | v2.29.0 | 03-05 | Feature | 실시간 알림 시스템 (SSE) + DSC 재검증 + source_type 수정 |
 | v2.28.2 | 03-05 | Fix | 코드 안정성 강화 3차 (CRITICAL 4건 + HIGH 4건) |
@@ -81,6 +89,89 @@
 ---
 
 ## 2026-03 (March)
+
+### v2.30.0 (2026-03-09) - 로그인 페이지 모던 리디자인 + 사이드바 4섹션 재구성 + 클라이언트 정렬
+
+- **로그인 폼 모던 리디자인**: 카드 래퍼 제거(flat layout), `ring-1 ring-gray-200` 입력 필드, `group-focus-within:text-[#02385e]` 아이콘 포커스 색상, 단색 `bg-[#02385e]` 버튼 + `active:scale-[0.98]` 프레스 효과, `radial-gradient` 도트 패턴 배경
+- **로그인 텍스트 변경**: "시스템 로그인" → "SPKD 로그인", 하단 SPKD 부제 제거, 버전 번호 제거, 푸터 `© 2026 SmartCore Inc.` 만 표시
+- **Hero 배경 가시성 향상**: `hero-bg.svg` 전 레이어 opacity ~2.5배 증가 (0.03~0.06 → 0.08~0.25)
+- **사이드바 섹션 collapsible 전환**: 인증서 관리/위·변조 검사/보고서 & 분석/시스템 관리 4개 섹션을 접기/펼치기 가능한 버튼으로 변환
+- **사이드바 섹션 아이콘**: FolderKey, Fingerprint, ClipboardList, Settings — Home 메뉴와 동일한 스타일 통일
+- **사이드바 서브메뉴 인덴트**: `ml-3 pl-3 border-l border-gray-200` 트리형 시각 계층 구조
+- **클라이언트 사이드 테이블 정렬**: SortableHeader 컴포넌트 기반 12개 페이지 컬럼 정렬 (문자열/숫자/날짜/상태)
+- **페이지네이션 z-index 수정**: 8개 다이얼로그 `z-50` → `z-[70]`
+- ~21 files changed (0 new, ~21 modified)
+
+---
+
+### v2.29.8 (2026-03-09) - 로그인 페이지 리브랜딩 + 업로드 중복 파일 UX 개선
+
+- **로그인 페이지 제목 변경**: "ePassport 인증서 관리 시스템" → "전자여권 위·변조 검사 시스템"
+- **통계 카드 동적 데이터**: 로그인 페이지 "현재 등록 국가" / "현재 관리 인증서" 카드가 API에서 실시간 데이터 조회
+- **업로드 버튼 disabled 확장**: 처리 중 외에 완료(FINALIZED) 시에도 비활성화
+- **중복 파일 경고 다이얼로그**: 동일 파일(SHA-256 해시 일치) 재업로드 시 빨간 경고 다이얼로그 표시
+- 3 files changed
+
+---
+
+### v2.29.7 (2026-03-09) - SSE Heartbeat + Recharts null guard + HTML 표준 접근성 개선
+
+- **SSE Heartbeat**: NotificationManager에 30초 간격 heartbeat 스레드 추가 — `ERR_HTTP2_PROTOCOL_ERROR` 방지
+- **Recharts Tooltip null guard**: 6개소 `payload[0].payload` 접근 시 가드 추가
+- **HTML 표준 접근성**: 전체 프론트엔드 폼 요소에 `id`/`name`/`htmlFor` 속성 추가 (WCAG 2.1)
+- **Frontend SSE 안정화**: NotificationListener 재연결 최대 20회 제한, 딜레이 조정
+- ~15 files changed
+
+---
+
+### v2.29.6 (2026-03-07) - 시스템 모니터링 고유 접속자 + 대시보드 그리드 높이 정렬
+
+- **모니터링 고유 접속자 수**: nginx access log 기반 최근 5분 고유 IP 카운트
+- **전체 대시보드 그리드 높이 정렬** (8개 페이지): h-full flex flex-col 적용
+- **auditApi JWT 인터셉터 누락 수정**
+- ~15 files changed
+
+---
+
+### v2.29.5 (2026-03-07) - 인증서 업로드 결과 다이얼로그 + ICAO 버전 확인 다이얼로그
+
+- **인증서 업로드 결과 다이얼로그**: 업로드 완료 후 인라인 결과 Dialog 표시
+- **중복 인증서 UX 개선**: 전체 중복 시 주황 배너 "이미 등록된 인증서입니다"
+- **ICAO 버전 확인 결과 다이얼로그**: "업데이트 확인" 결과를 Dialog로 표시
+- **DSC Trust Chain 보고서 간소화**: QuickLookupPanel 제거
+- **AI 분석 폴링 안정화**: 연속 10회 실패 시 에러 토스트 + 폴링 중단
+- 6 files changed
+
+---
+
+### v2.29.4 (2026-03-06) - OpenSSL 메모리 누수 수정 (CRITICAL 1건 + HIGH 4건)
+
+- **CRITICAL**: CMS_ContentInfo 예외 경로 누수 — cms 선언을 try 블록 밖으로 이동
+- **HIGH**: X509 벡터 예외 경로 누수 (인증서 업로드 + 미리보기), X509_CRL RAII 전환, PA allCscas 예외 경로 누수
+- 4 files changed
+
+---
+
+### v2.29.3 (2026-03-06) - 5차 코드 보안 + 안정성 강화 (CRITICAL 6건 + HIGH 8건 + MEDIUM 7건)
+
+- **CRITICAL**: SQL 인젝션 방어 (PGconn 파라미터화), detached thread `this` 캡처 제거, EVP_Digest 반환값 검증, Oracle OCI 예외 경로 메모리 누수, dl_parser OID 버퍼 오버플로, HSTS 만료시간
+- **HIGH**: PA JSON 필드 검증, data_group stoi 예외 안전, Frontend EditDialog/DeleteDialog 에러 표시, JWT 디코드 안전, Python GC/캐시 동시성, Swagger CORS
+- **MEDIUM**: ZIP export 경로 탐색 방지, tolower signed char UB, SSE 알림 필드 검증, THREAD_NUM 범위 제한, Luckfox CORS, AI Dockerfile CMD
+- ~15 files changed
+
+---
+
+### v2.29.2 (2026-03-06) - 4차 코드 안정성 강화 + SSE HTTP/2 완전 수정 + 프론트엔드 UI 수정
+
+- **SSE HTTP/2 완전 수정**: `proxy_hide_header Transfer-Encoding;` 추가 (RFC 7540)
+- **nginx HTTP/2 문법 업데이트**: `listen 443 ssl http2;` → `listen 443 ssl;` + `http2 on;`
+- **다이얼로그 z-index 수정**: 8개 파일 `z-50` → `z-[70]`
+- **Recharts payload null guard**: 3개 파일 커스텀 YAxis tick
+- **ASN1_TIME 버퍼 안전성**, **DG2 JPEG2000 이미지 크기 검증**, **JWT 만료시간 검증**
+- **IP 파서 안전 강화**, **ReDoS 방어**, **페이지네이션 상한**, **catch-all 로깅**
+- 33 files changed, +145 / -62 lines
+
+---
 
 ### v2.29.1 (2026-03-05) - SSE HTTP/2 프로토콜 에러 수정 + 업로드 통계 누락 수정
 

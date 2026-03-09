@@ -7,9 +7,10 @@ info:
     and checks health of other backend services.
 
     ## Changelog
+    - **v1.2.0** (2026-03-09): Load snapshot + history endpoints 추가 (nginx 현황, 서비스 레이턴시, 고유 접속자, 시스템 리소스 시계열)
     - **v1.1.0** (2026-02-12): Removed PostgreSQL dependency (DB-independent)
     - **v1.0.0** (2026-01-13): Initial release
-  version: 1.1.0
+  version: 1.2.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
@@ -27,6 +28,8 @@ tags:
     description: System resource metrics
   - name: Services
     description: Backend service health monitoring
+  - name: Load
+    description: Aggregated load snapshot and history
 
 paths:
   /api/monitoring/health:
@@ -68,6 +71,7 @@ paths:
         - SERVICE_PKD_MANAGEMENT (default: http://pkd-management:8081/api/health)
         - SERVICE_PA_SERVICE (default: http://pa-service:8082/api/health)
         - SERVICE_SYNC_SERVICE (default: http://pkd-relay:8083/api/sync/health)
+        - SERVICE_AI_ANALYSIS (default: http://ai-analysis:8085/api/ai/health)
       operationId: getServicesHealth
       responses:
         '200':
@@ -78,6 +82,65 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ServiceHealth'
+
+  # ============================================
+  # Load
+  # ============================================
+  /api/monitoring/load:
+    get:
+      tags: [Load]
+      summary: Get current load snapshot
+      description: |
+        Returns an aggregated snapshot of current system load including
+        nginx connection stats, per-service health/pool status, unique users,
+        and system CPU/memory usage. Returns 503 if no metrics collected yet.
+      operationId: getLoadSnapshot
+      responses:
+        '200':
+          description: Current load snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadSnapshot'
+        '503':
+          description: No metrics data collected yet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  error:
+                    type: string
+                    example: "No metrics data collected yet. Please retry in 10 seconds."
+
+  /api/monitoring/load/history:
+    get:
+      tags: [Load]
+      summary: Get load history time-series
+      description: |
+        Returns time-series load data at 10-second intervals.
+        Default: last 30 minutes. Maximum: 1440 minutes (24 hours).
+      operationId: getLoadHistory
+      parameters:
+        - name: minutes
+          in: query
+          description: Number of minutes of history to return (1-1440, default 30)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1440
+            default: 30
+      responses:
+        '200':
+          description: Load history time-series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoadHistory'
 
 components:
   schemas:
@@ -92,7 +155,7 @@ components:
           example: monitoring-service
         version:
           type: string
-          example: 1.1.0
+          example: 1.2.0
         timestamp:
           type: string
 
@@ -173,3 +236,121 @@ components:
         checkedAt:
           type: string
           format: date-time
+
+    LoadSnapshot:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        nginx:
+          type: object
+          properties:
+            activeConnections:
+              type: integer
+              description: Current active nginx connections
+            totalRequests:
+              type: integer
+              format: int64
+              description: Total requests since nginx start
+            requestsPerSecond:
+              type: number
+              format: float
+              description: Calculated requests per second
+            reading:
+              type: integer
+              description: Connections reading request
+            writing:
+              type: integer
+              description: Connections writing response
+            waiting:
+              type: integer
+              description: Keep-alive connections waiting
+        services:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                example: pkd-management
+              status:
+                type: string
+                enum: [UP, DEGRADED, DOWN, UNKNOWN]
+              responseTimeMs:
+                type: integer
+              dbPool:
+                type: object
+                description: Present only if service reports DB pool
+                properties:
+                  available:
+                    type: integer
+                  total:
+                    type: integer
+                  max:
+                    type: integer
+              ldapPool:
+                type: object
+                description: Present only if service reports LDAP pool
+                properties:
+                  available:
+                    type: integer
+                  total:
+                    type: integer
+                  max:
+                    type: integer
+        uniqueUsers:
+          type: integer
+          description: Unique IP count from nginx access log (last 5 minutes)
+        system:
+          type: object
+          properties:
+            cpuPercent:
+              type: number
+              format: float
+            memoryPercent:
+              type: number
+              format: float
+
+    LoadHistory:
+      type: object
+      properties:
+        intervalSeconds:
+          type: integer
+          example: 10
+          description: Data collection interval
+        totalPoints:
+          type: integer
+          description: Number of data points returned
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              nginx:
+                type: object
+                properties:
+                  activeConnections:
+                    type: integer
+                  requestsPerSecond:
+                    type: number
+                    format: float
+              uniqueUsers:
+                type: integer
+              latency:
+                type: object
+                description: Per-service response time (key = service name, value = ms)
+                additionalProperties:
+                  type: integer
+              system:
+                type: object
+                properties:
+                  cpuPercent:
+                    type: number
+                    format: float
+                  memoryPercent:
+                    type: number
+                    format: float

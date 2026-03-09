@@ -1,7 +1,7 @@
 # ICAO Local PKD — Frontend Design System
 
-**Version**: 1.0
-**Last Updated**: 2026-02-24
+**Version**: 1.1
+**Last Updated**: 2026-03-09
 **Tech Stack**: React 19, TypeScript, Tailwind CSS 4, Vite, Lucide Icons, Recharts
 
 ---
@@ -10,15 +10,17 @@
 
 ### Brand Identity
 
-ICAO Local PKD는 ePassport 인증서 관리 시스템으로, **엔터프라이즈급 보안 소프트웨어**에 적합한 디자인을 지향한다.
+SPKD(SmartCore PKD)는 전자여권 위·변조 검사 시스템으로, **엔터프라이즈급 보안 소프트웨어**에 적합한 디자인을 지향한다.
 
 | 항목 | 값 |
 |------|----|
-| 로고 아이콘 | `ShieldCheck` (Lucide) |
-| 브랜드 그래디언트 | `from-blue-600 to-indigo-600` |
-| 시스템 명 | ICAO Local PKD |
-| 부제 | ePassport 인증서 관리 시스템 |
+| 로고 아이콘 | Shield + "S" 커스텀 SVG (`favicon.svg`) |
+| 브랜드 단색 | `bg-[#02385e]` (SPKD Navy) |
+| 시스템 명 | SPKD (SmartCore PKD) |
+| 부제 | 전자여권 위·변조 검사 시스템 |
 | 표준 참조 | ICAO Doc 9303, RFC 5280, RFC 5652 |
+
+> **v2.30.0 변경**: 기존 `ShieldCheck` 아이콘 + `from-blue-600 to-indigo-600` 그래디언트에서 커스텀 방패 SVG + 단색 `#02385e` 버튼으로 전환. 로그인 페이지 모던 리디자인 (카드 래퍼 제거, flat layout, `radial-gradient` 도트 패턴 배경).
 
 ### Design Principles
 

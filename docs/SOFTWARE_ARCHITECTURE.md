@@ -1,7 +1,7 @@
 # ICAO Local PKD - Software Architecture
 
-**Version**: 2.13.0
-**Last Updated**: 2026-02-17
+**Version**: 2.30.0
+**Last Updated**: 2026-03-09
 **Status**: Production Ready (Multi-DBMS: PostgreSQL + Oracle)
 
 ---
@@ -27,7 +27,7 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ### Core Principles
 
-- **Microservices**: 독립적으로 배포 가능한 4개 서비스 분리
+- **Microservices**: 독립적으로 배포 가능한 5개 서비스 분리
 - **Multi-DBMS**: PostgreSQL + Oracle 런타임 전환 (DB_TYPE 환경변수)
 - **Data Consistency**: DB-LDAP 이중 저장 및 자동 동기화 (Reconciliation)
 - **High Performance**: C++20 기반 고성능 백엔드
@@ -39,7 +39,7 @@ ICAO Local PKD는 **마이크로서비스 아키텍처** 기반의 전자여권 
 
 ## Technical Architecture Diagram
 
-### System Overview (v2.13.0)
+### System Overview (v2.30.0)
 
 ```mermaid
 graph TB
@@ -60,8 +60,8 @@ graph TB
         L2Title["Layer 2: DMZ - Public Ports"]
         subgraph L2Nodes[" "]
             direction LR
-            Frontend["Frontend<br/>React 19 SPA<br/>Port 3000"]
-            APIGateway["API Gateway<br/>Nginx Reverse Proxy<br/>Port 8080"]
+            Frontend["Frontend<br/>React 19 SPA<br/>Port 3080"]
+            APIGateway["API Gateway<br/>Nginx Reverse Proxy<br/>Port 80/443/8080"]
         end
     end
 
@@ -75,6 +75,7 @@ graph TB
             PA["PA Service<br/>Passive Auth Verify<br/>Port 8082"]
             Relay["PKD Relay<br/>DB-LDAP Sync<br/>Port 8083"]
             Monitoring["Monitoring<br/>System Metrics<br/>Port 8084"]
+            AI["AI Analysis<br/>ML Forensics<br/>Port 8085"]
         end
     end
 
@@ -106,6 +107,7 @@ graph TB
     APIGateway -.-> PA
     APIGateway -.-> Relay
     APIGateway -.-> Monitoring
+    APIGateway -.-> AI
 
     PKD -->|5. Query| DB
     PA --> DB
@@ -132,7 +134,7 @@ graph TB
 
     class User,ICAOPortal external
     class Frontend,APIGateway dmz
-    class PKD,PA,Relay,Monitoring app
+    class PKD,PA,Relay,Monitoring,AI app
     class DB,LDAPCluster data
     class Docker infra
 
@@ -156,8 +158,8 @@ graph TB
 | Layer | Purpose | Components | Key Characteristics |
 |-------|---------|------------|---------------------|
 | **Layer 1: External** | 외부 접근 및 연계 | User, ICAO Portal | Public Internet |
-| **Layer 2: DMZ** | 공개 서비스 영역 | Frontend, API Gateway | Ports 3000, 8080 |
-| **Layer 3: Application** | 비즈니스 로직 처리 | PKD, PA, Relay, Monitoring (C++20) | Internal Network |
+| **Layer 2: DMZ** | 공개 서비스 영역 | Frontend, API Gateway | Ports 3080, 80/443/8080 |
+| **Layer 3: Application** | 비즈니스 로직 처리 | PKD, PA, Relay, Monitoring (C++20), AI (Python) | Internal Network |
 | **Layer 4: Data** | 데이터 영속성 | PostgreSQL/Oracle, LDAP MMR | Internal Storage + App-level SLB |
 | **Layer 5: Infrastructure** | 컨테이너 런타임 | Docker Compose | Platform Layer |
 
@@ -169,10 +171,10 @@ User → Frontend → API Gateway → Services (PKD/PA/Relay) → Data (PostgreS
 ```
 
 **Service Architecture**:
-- **4 Microservices**: PKD Management (:8081), PA Service (:8082), PKD Relay (:8083), Monitoring (:8084)
+- **5 Microservices**: PKD Management (:8081), PA Service (:8082), PKD Relay (:8083), Monitoring (:8084), AI Analysis (:8085)
 - **2 Data Stores**: PostgreSQL/Oracle (31,212 certificates), LDAP MMR Cluster (Master 1+2)
-- **1 Gateway Node**: API Gateway (HTTP), App-level LDAP SLB
-- **1 Frontend**: React 19 SPA (21 pages)
+- **1 Gateway Node**: API Gateway (HTTP :80 / HTTPS :443), App-level LDAP SLB
+- **1 Frontend**: React 19 SPA (24 pages)
 
 ---
 

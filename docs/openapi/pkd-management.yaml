@@ -6,6 +6,7 @@ info:
     Handles certificate upload, validation, search, authentication, and LDAP synchronization.
 
     ## Changelog
+    - **v2.30.0** (2026-03-09): 로그인 페이지 모던 리디자인, 사이드바 4섹션 collapsible 재구성, 클라이언트 사이드 테이블 정렬, 페이지네이션 z-index 수정
     - **v2.29.1** (2026-03-05): LDIF 중복 인증서 totalCertificates 통계 수정, source_type 컬럼 정확한 저장
     - **v2.25.5** (2026-03-01): Code Master 6 endpoints, Link Certificate 3 endpoints, Upload parse/retry, Validation reasons, Internal auth check 추가
     - **v2.21.0** (2026-02-24): API Client management — API Key 기반 외부 클라이언트 인증 (7 endpoints), X-API-Key 헤더 인증, Rate Limiting, Permission/IP/Endpoint 접근 제어
@@ -23,7 +24,7 @@ info:
     - **v1.6.0** (2026-01-15): Certificate search/export, countries list API
     - **v1.5.10** (2026-01-13): AUTO mode progress display with X/Total format
     - **v1.4.8** (2026-01-11): Failed upload cleanup feature
-  version: 2.29.1
+  version: 2.30.0
   contact:
     name: SmartCore Inc.
     email: support@smartcoreinc.com
