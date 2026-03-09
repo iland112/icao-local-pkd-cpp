@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type CSSProperties } from 'react';
+import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Lock,
@@ -19,6 +19,7 @@ import {
   Moon,
 } from 'lucide-react';
 import { authApi } from '@/services/api';
+import { uploadHistoryApi } from '@/services/pkdApi';
 import { cn } from '@/utils/cn';
 import { useThemeStore } from '@/stores/themeStore';
 
@@ -26,10 +27,7 @@ const stagger = (delay: number): CSSProperties => ({
   animation: `slideInUp 0.6s ease-out ${delay}s both`,
 });
 
-const stats = [
-  { icon: Globe, value: '95+', label: '등록 국가' },
-  { icon: ShieldCheck, value: '31,200+', label: '관리 인증서' },
-];
+const defaultStats = { countriesCount: 0, totalCertificates: 0 };
 
 const featureCards = [
   {
@@ -68,6 +66,16 @@ export function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { darkMode, toggleTheme } = useThemeStore();
+  const [stats, setStats] = useState(defaultStats);
+
+  useEffect(() => {
+    uploadHistoryApi.getStatistics()
+      .then((res) => {
+        const d = res.data;
+        setStats({ countriesCount: d.countriesCount ?? 0, totalCertificates: d.totalCertificates ?? 0 });
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -137,17 +145,20 @@ export function Login() {
               ICAO Local PKD
             </h1>
             <p className="text-lg lg:text-xl text-blue-100 mb-2 font-medium">
-              ePassport 인증서 관리 시스템
+              전자여권 위·변조 검사 시스템
             </p>
             <p className="text-sm text-blue-200/70 max-w-lg leading-relaxed">
-              ICAO Public Key Directory 로컬 평가 및 관리 플랫폼.
-              전자여권 인증서의 수집, 검증, 모니터링을 통합 관리합니다.
+              ICAO PKD 인증서 관리 및 Passive Authentication 검증 플랫폼.
+              전자여권 인증서의 수집·검증·모니터링과 여권 칩 데이터의 위·변조 검사를 통합 수행합니다.
             </p>
           </div>
 
           {/* Statistics row */}
           <div className="grid grid-cols-2 gap-3 lg:gap-4 mt-10" style={stagger(0.2)}>
-            {stats.map((stat) => (
+            {[
+              { icon: Globe, value: stats.countriesCount.toLocaleString(), label: '현재 등록 국가' },
+              { icon: ShieldCheck, value: stats.totalCertificates.toLocaleString(), label: '현재 관리 인증서' },
+            ].map((stat) => (
               <div
                 key={stat.label}
                 className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/15 text-center transition-colors hover:bg-white/15"
@@ -229,7 +240,7 @@ export function Login() {
               ICAO Local PKD
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              ePassport 인증서 관리 시스템
+              전자여권 위·변조 검사 시스템
             </p>
           </div>
 

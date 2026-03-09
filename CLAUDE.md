@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.7
+**Current Version**: v2.29.8
 **Last Updated**: 2026-03-09
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -583,6 +583,15 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.8 (2026-03-09) - 로그인 페이지 리브랜딩 + 업로드 중복 파일 UX 개선
+- **로그인 페이지 제목 변경**: "ePassport 인증서 관리 시스템" → "전자여권 위·변조 검사 시스템" (데스크톱 + 모바일)
+- **로그인 설명 문구 갱신**: PA 검증 기능 포함 — "ICAO PKD 인증서 관리 및 Passive Authentication 검증 플랫폼. 전자여권 인증서의 수집·검증·모니터링과 여권 칩 데이터의 위·변조 검사를 통합 수행합니다."
+- **통계 카드 동적 데이터**: 로그인 페이지 "현재 등록 국가" / "현재 관리 인증서" 카드가 `GET /api/upload/statistics` API에서 실시간 데이터 조회 (기존 하드코딩 '95+', '31,200+' 제거)
+- **업로드 버튼 disabled 확장**: 처리 중(`isProcessing`) 외에 완료(`FINALIZED`) 시에도 업로드 버튼 비활성화
+- **중복 파일 경고 다이얼로그**: 동일 파일(SHA-256 해시 일치) 재업로드 시 빨간 경고 다이얼로그 표시 (파일명, 상태, 형식, 업로드 ID 정보 + "업로드 이력 보기" / "확인" 버튼)
+- **409 콘솔 에러 억제**: relayApi 응답 인터셉터에서 409 Conflict(중복 파일) 시 `console.error` 로그 제외 (정상 비즈니스 로직)
+- 3 files changed (0 new, 3 modified)
 
 ### v2.29.7 (2026-03-09) - SSE Heartbeat + Recharts null guard + HTML 표준 접근성 개선
 - **SSE Heartbeat**: NotificationManager에 30초 간격 heartbeat 스레드 추가 — SSE 연결 유휴 시 `ERR_HTTP2_PROTOCOL_ERROR` 방지 (`: heartbeat\n\n` 코멘트 라인)

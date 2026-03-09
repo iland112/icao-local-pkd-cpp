@@ -70,7 +70,10 @@ relayApi.interceptors.response.use(
         window.dispatchEvent(new CustomEvent('auth:expired'));
       }
     }
-    if (import.meta.env.DEV) console.error('[Relay API Error]:', error.response?.data || error.message);
+    // 409 Conflict is expected for duplicate file uploads — don't log
+    if (error.response?.status !== 409) {
+      if (import.meta.env.DEV) console.error('[Relay API Error]:', error.response?.data || error.message);
+    }
     return Promise.reject(error);
   }
 );

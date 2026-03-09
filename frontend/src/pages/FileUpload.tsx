@@ -77,6 +77,10 @@ export function FileUpload() {
     show: boolean;
     existingUpload?: { uploadId: string; fileName: string; status: string };
   }>({ show: false });
+  const [duplicateWarningDialog, setDuplicateWarningDialog] = useState<{
+    show: boolean;
+    existingUpload?: { uploadId: string; fileName: string; status: string; fileFormat?: string };
+  }>({ show: false });
 
   // Event log for SSE events (filtered: only meaningful events)
   const [eventLogEntries, setEventLogEntries] = useState<EventLogEntry[]>([]);
@@ -287,22 +291,18 @@ export function FileUpload() {
           return;
         }
 
-        setUploadStage({ status: 'FAILED', message: '중복 파일', percentage: 0 });
-        setOverallStatus('FAILED');
-        setOverallMessage(errorData.message || '이미 업로드된 파일입니다.');
-
-        const existing = errorData.existingUpload;
-        if (existing) {
-          setErrorMessages([
-            `이 파일은 이미 업로드되었습니다 (SHA-256 해시 중복).`,
-            `기존 업로드 ID: ${existing.uploadId}`,
-            `파일명: ${existing.fileName}`,
-            `상태: ${existing.status}`,
-            `파일 형식: ${existing.fileFormat}`,
-          ]);
-        } else {
-          setErrorMessages(['이 파일은 이미 업로드되었습니다.']);
-        }
+        setIsProcessing(false);
+        setOverallStatus('IDLE');
+        setDuplicateWarningDialog({
+          show: true,
+          existingUpload: errorData.existingUpload ? {
+            uploadId: errorData.existingUpload.uploadId,
+            fileName: errorData.existingUpload.fileName || selectedFile.name,
+            status: errorData.existingUpload.status || 'COMPLETED',
+            fileFormat: errorData.existingUpload.fileFormat,
+          } : undefined,
+        });
+        return;
       } else {
         // Other errors
         setUploadStage({ status: 'FAILED', message: '업로드 실패', percentage: 0 });
@@ -852,6 +852,53 @@ export function FileUpload() {
         </div>
       )}
 
+      {/* Duplicate File Warning Dialog */}
+      {duplicateWarningDialog.show && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full mx-4">
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30">
+                <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                중복 파일
+              </h3>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-300">이 파일은 이미 업로드 처리가 완료된 파일입니다.</p>
+              {duplicateWarningDialog.existingUpload && (
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
+                  <p><span className="font-medium">파일명:</span> {duplicateWarningDialog.existingUpload.fileName}</p>
+                  <p><span className="font-medium">상태:</span> {duplicateWarningDialog.existingUpload.status}</p>
+                  {duplicateWarningDialog.existingUpload.fileFormat && (
+                    <p><span className="font-medium">파일 형식:</span> {duplicateWarningDialog.existingUpload.fileFormat}</p>
+                  )}
+                  <p><span className="font-medium">업로드 ID:</span> <span className="font-mono text-xs">{duplicateWarningDialog.existingUpload.uploadId}</span></p>
+                </div>
+              )}
+              <p className="text-sm text-red-600 dark:text-red-400">
+                동일한 파일(SHA-256 해시 일치)은 재업로드할 수 없습니다.
+                업로드 이력에서 기존 업로드를 확인해주세요.
+              </p>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
+              <button
+                onClick={() => navigate('/upload-history')}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
+              >
+                업로드 이력 보기
+              </button>
+              <button
+                onClick={() => setDuplicateWarningDialog({ show: false })}
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Page Header */}
       <div className="mb-8">
         <div className="flex items-center gap-4">
@@ -1121,7 +1168,7 @@ export function FileUpload() {
                 </button>
                 <button
                   onClick={handleUpload}
-                  disabled={isProcessing || !selectedFile || (selectedFile && !isValidFileType(selectedFile))}
+                  disabled={isProcessing || overallStatus === 'FINALIZED' || !selectedFile || (selectedFile && !isValidFileType(selectedFile))}
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isProcessing ? (
