@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.6
-**Last Updated**: 2026-03-07
+**Current Version**: v2.29.7
+**Last Updated**: 2026-03-09
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -583,6 +583,19 @@ scripts/
 ---
 
 ## Version History
+
+### v2.29.7 (2026-03-09) - SSE Heartbeat + Recharts null guard + HTML 표준 접근성 개선
+- **SSE Heartbeat**: NotificationManager에 30초 간격 heartbeat 스레드 추가 — SSE 연결 유휴 시 `ERR_HTTP2_PROTOCOL_ERROR` 방지 (`: heartbeat\n\n` 코멘트 라인)
+- **Heartbeat 구현**: `startHeartbeat()`/`stopHeartbeat()` lifecycle, 1초 간격 sleep으로 responsive shutdown, copy-release-execute 패턴으로 disconnected 클라이언트 자동 정리
+- **SSE 응답 헤더**: `X-Accel-Buffering: no` 추가, `Cache-Control: no-cache, no-store, must-revalidate` 강화
+- **Frontend SSE 안정화**: NotificationListener 재연결 최대 20회 제한 (기존 무한), 딜레이 조정 (3s→5s→10s→30s)
+- **Recharts Tooltip null guard**: 6개소 `payload[0].payload` 접근 시 `!payload[0]` 가드 추가 — 차트 애니메이션 중 `payload` 배열 내 undefined 요소 접근 시 `Cannot read properties of undefined (reading 'payload')` TypeError 방지
+  - AiAnalysisDashboard (Country PKI Maturity), DscNcReport (Conformance Code, Country), CrlReport (Country, Revocation Reason), IssuerProfileCard
+- **HTML 표준 접근성 개선**: 전체 프론트엔드 폼 요소에 `id`/`name`/`htmlFor` 속성 추가 — 브라우저 autofill 지원, label-input 연결, 스크린 리더 접근성 (WCAG 2.1)
+  - 10개 파일 수정: AuditLog, OperationAuditLog, DscNcReport, CrlReport, PAHistory, AiAnalysisDashboard, UploadHistory, ApiClientManagement, UserManagement, CertificateSearchFilters
+  - InputField 컴포넌트에 동적 `id` 생성 (`label` 기반), 그룹 레이블 `<label>` → `<span>` 변경 (checkbox 그룹)
+  - deprecated `onKeyPress` → `onKeyDown` 전환
+- ~15 files changed (0 new, ~15 modified)
 
 ### v2.29.6 (2026-03-07) - 시스템 모니터링 고유 접속자 + 전체 대시보드 그리드 높이 정렬
 - **모니터링 고유 접속자 수**: nginx access log 기반 최근 5분 고유 IP 카운트 (접속 현황 카드 주 지표), TCP 연결 수는 부수 정보로 표시

@@ -431,6 +431,9 @@ int main() {
     // Register HTTP routes
     registerRoutes();
 
+    // Start SSE heartbeat thread (30s interval to prevent HTTP/2 connection timeout)
+    notification::NotificationManager::getInstance().startHeartbeat();
+
     // Configure and start scheduler
     g_scheduler.configure(g_config.dailySyncEnabled, g_config.dailySyncHour,
                           g_config.dailySyncMinute, g_config.revalidateCertsOnSync,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2, Brain } from 'lucide-react';
+import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2, Brain, Award, FileKey, Link2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import {
   formatDate,
@@ -337,15 +337,15 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
       />
 
       {/* Dialog Content */}
-      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
+      <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl mx-4 max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
-              <Shield className="w-5 h-5 text-white" />
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+              <Shield className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                 인증서 상세 정보
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md" title={`${selectedCert.country} - ${selectedCert.subjectDnComponents?.organization || selectedCert.cn}`}>
@@ -715,25 +715,105 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                       )}
                     </div>
 
-                    {/* Trust Chain Path Visualization */}
-                    {validationResult.trustChainPath && (
-                      <div>
-                        <span className="text-sm text-gray-600 dark:text-gray-400 mb-2 block">신뢰 체인 경로:</span>
-                        <TrustChainVisualization
-                          trustChainPath={validationResult.trustChainPath}
-                          trustChainValid={validationResult.trustChainValid}
-                          compact={false}
-                        />
-                      </div>
-                    )}
+                    {/* Trust Chain Path Visualization (PA-style) */}
+                    <div>
+                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Trust Chain 경로:</div>
+                      <div className="flex flex-col items-center gap-1">
+                        {/* CSCA (Root) */}
+                        {validationResult.cscaFound && validationResult.cscaSubjectDn ? (
+                          <div className="w-full p-2 bg-green-100 dark:bg-green-900/30 rounded border border-green-300 dark:border-green-700">
+                            <div className="flex items-center gap-2">
+                              <Award className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                              <span className="text-xs font-semibold text-green-700 dark:text-green-300">CSCA (Root)</span>
+                            </div>
+                            <code className="block mt-1 text-[11px] font-mono break-all text-gray-600 dark:text-gray-400">
+                              {validationResult.cscaSubjectDn}
+                            </code>
+                          </div>
+                        ) : (
+                          <div className="w-full p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-300 dark:border-red-700">
+                            <div className="flex items-center gap-2">
+                              <XCircle className="w-3.5 h-3.5 text-red-500" />
+                              <span className="text-xs font-semibold text-red-700 dark:text-red-300">CSCA 미등록</span>
+                            </div>
+                            {validationResult.issuerDn && (
+                              <code className="block mt-1 text-[11px] font-mono break-all text-gray-500 dark:text-gray-400">
+                                발급자: {validationResult.issuerDn}
+                              </code>
+                            )}
+                          </div>
+                        )}
 
-                    {/* Message */}
-                    {validationResult.trustChainMessage && (
-                      <div>
-                        <span className="text-sm text-gray-600 dark:text-gray-400">메시지:</span>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">{validationResult.trustChainMessage}</p>
+                        {/* Link Certificate indicator (if chain has Link) */}
+                        {validationResult.trustChainMessage && /Link/.test(validationResult.trustChainMessage) && (
+                          <>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500">↓ 서명</div>
+                            <div className="w-full p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-300 dark:border-purple-700">
+                              <div className="flex items-center gap-2">
+                                <Link2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+                                <span className="text-xs font-semibold text-purple-700 dark:text-purple-300">Link Certificate</span>
+                                {(() => {
+                                  const linkCount = (validationResult.trustChainMessage.match(/Link/g) || []).length;
+                                  return linkCount > 1 ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300">
+                                      ×{linkCount}
+                                    </span>
+                                  ) : null;
+                                })()}
+                              </div>
+                              <span className="block mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                                CSCA 키 교체를 위한 링크 인증서 체인
+                              </span>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Arrow */}
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500">↓ 서명</div>
+
+                        {/* DSC (Leaf) */}
+                        <div className="w-full p-2 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-300 dark:border-blue-700">
+                          <div className="flex items-center gap-2">
+                            <FileKey className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                            <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">DSC (Document Signer)</span>
+                            {validationResult.isExpired && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
+                                만료됨
+                              </span>
+                            )}
+                            {validationResult.signatureVerified && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
+                                ✓ 서명 검증됨
+                              </span>
+                            )}
+                          </div>
+                          <code className="block mt-1 text-[11px] font-mono break-all text-gray-600 dark:text-gray-400">
+                            {validationResult.subjectDn}
+                          </code>
+                          {validationResult.notBefore && validationResult.notAfter && (
+                            <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                              유효기간: {validationResult.notBefore?.split('T')[0]} ~ {validationResult.notAfter?.split('T')[0]}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </div>
+
+                    {/* Additional checks summary */}
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] pt-2 border-t border-gray-200 dark:border-gray-600">
+                      <span className={validationResult.cscaFound ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                        {validationResult.cscaFound ? '✓' : '✗'} CSCA {validationResult.cscaFound ? '확인' : '미등록'}
+                      </span>
+                      <span className={validationResult.signatureVerified ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                        {validationResult.signatureVerified ? '✓' : '✗'} 서명 검증
+                      </span>
+                      <span className={validationResult.validityCheckPassed ? 'text-green-600 dark:text-green-400' : validationResult.isExpired ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}>
+                        {validationResult.validityCheckPassed ? '✓' : validationResult.isExpired ? '⚠' : '✗'} {validationResult.validityCheckPassed ? '유효기간 내' : validationResult.isExpired ? '만료' : '유효기간'}
+                      </span>
+                      <span className={validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-gray-400'}>
+                        {validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? '✗ CRL 폐기' : '✓ CRL 미폐기') : '— CRL 미확인'}
+                      </span>
+                    </div>
                   </div>
                 ) : (
                   <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">

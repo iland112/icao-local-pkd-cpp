@@ -30,7 +30,7 @@ export function SortableHeader({
     >
       <div className="inline-flex items-center gap-0.5">
         {children || label}
-        <span className={`inline-flex ${isActive ? 'text-blue-500' : 'text-gray-300 dark:text-gray-600 opacity-0 group-hover:opacity-100'} transition-opacity`}>
+        <span className={`inline-flex ${isActive ? 'text-blue-500' : 'text-gray-500 dark:text-gray-300 opacity-0 group-hover:opacity-100'} transition-opacity`}>
           {direction === 'asc' ? (
             <ChevronUp className="w-3 h-3" />
           ) : direction === 'desc' ? (

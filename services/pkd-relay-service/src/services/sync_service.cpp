@@ -82,7 +82,8 @@ Json::Value SyncService::getSyncHistory(int limit, int offset) {
 Json::Value SyncService::performSyncCheck(
     const Json::Value& dbCounts,
     const Json::Value& ldapCounts,
-    const Json::Value& countryStats
+    const Json::Value& countryStats,
+    int checkDurationMs
 ) {
     Json::Value response;
 
@@ -143,7 +144,7 @@ Json::Value SyncService::performSyncCheck(
             std::nullopt,           // ldap_country_stats (not available yet)
             status,                 // status
             std::nullopt,           // error_message
-            0                       // check_duration_ms (will be calculated)
+            checkDurationMs          // check_duration_ms
         );
 
         // Save to database
@@ -296,6 +297,16 @@ Json::Value SyncService::syncStatusToJson(const domain::SyncStatus& syncStatus) 
 
     // Add status field based on total discrepancy
     json["status"] = (syncStatus.getTotalDiscrepancy() == 0) ? "SYNCED" : "DISCREPANCY";
+
+    // Flat fields for frontend history table
+    json["dbTotal"] = syncStatus.getDbCscaCount() + syncStatus.getDbMlscCount() +
+                      syncStatus.getDbDscCount() + syncStatus.getDbDscNcCount() +
+                      syncStatus.getDbCrlCount();
+    json["ldapTotal"] = syncStatus.getLdapCscaCount() + syncStatus.getLdapMlscCount() +
+                        syncStatus.getLdapDscCount() + syncStatus.getLdapDscNcCount() +
+                        syncStatus.getLdapCrlCount();
+    json["totalDiscrepancy"] = syncStatus.getTotalDiscrepancy();
+    json["checkDurationMs"] = syncStatus.getCheckDurationMs();
 
     // Include db_country_stats if available
     auto dbCountryStats = syncStatus.getDbCountryStats();

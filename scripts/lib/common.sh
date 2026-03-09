@@ -172,8 +172,12 @@ generate_podman_nginx_conf() {
         podman_dns="10.89.0.1"
     fi
 
-    # Generate config with Podman DNS resolver
-    sed "s|resolver 127.0.0.11|resolver $podman_dns|g" \
+    # Determine domain name (SSL_DOMAIN from .env or default)
+    local domain="${SSL_DOMAIN:-pkd.smartcoreinc.com}"
+
+    # Generate config with Podman DNS resolver + correct server_name
+    sed -e "s|resolver 127.0.0.11|resolver $podman_dns|g" \
+        -e "s|server_name dev\.pkd\.smartcoreinc\.com|server_name $domain|g" \
         "$ssl_source" > ".docker-data/nginx/api-gateway.conf"
 
     export NGINX_CONF="../.docker-data/nginx/api-gateway.conf"

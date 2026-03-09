@@ -58,11 +58,13 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3">
             {/* Country - wider column */}
             <div className="lg:col-span-2">
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label htmlFor="cert-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 국가
               </label>
               <div className="relative">
                 <select
+                  id="cert-country"
+                  name="country"
                   value={criteria.country}
                   onChange={(e) => setCriteria({ ...criteria, country: e.target.value })}
                   className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none"
@@ -93,10 +95,12 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
 
             {/* Certificate Type */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label htmlFor="cert-type" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 인증서 종류
               </label>
               <select
+                id="cert-type"
+                name="certType"
                 value={criteria.certType}
                 onChange={(e) => setCriteria({ ...criteria, certType: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -111,10 +115,12 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
 
             {/* Validity */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label htmlFor="cert-validity" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 유효성
               </label>
               <select
+                id="cert-validity"
+                name="validity"
                 value={criteria.validity}
                 onChange={(e) => setCriteria({ ...criteria, validity: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -129,10 +135,12 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
 
             {/* Source */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label htmlFor="cert-source" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 출처
               </label>
               <select
+                id="cert-source"
+                name="source"
                 value={criteria.source}
                 onChange={(e) => setCriteria({ ...criteria, source: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -148,10 +156,12 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
 
             {/* Limit */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label htmlFor="cert-limit" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 표시 개수
               </label>
               <select
+                id="cert-limit"
+                name="limit"
                 value={criteria.limit}
                 onChange={(e) => setCriteria({ ...criteria, limit: Number(e.target.value), offset: 0 })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -166,17 +176,19 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
 
             {/* Search */}
             <div>
-              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              <label htmlFor="cert-search" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
                 키워드 검색
               </label>
               <div className="relative">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="cert-search"
+                  name="searchTerm"
                   type="text"
                   placeholder="CN 검색..."
                   value={criteria.searchTerm}
                   onChange={(e) => setCriteria({ ...criteria, searchTerm: e.target.value })}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                   className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>

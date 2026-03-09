@@ -41,7 +41,7 @@ struct CertificateSearchFilter {
     std::optional<std::string> certificateType;  // "CSCA", "DSC", "DSC_NC", "MLSC"
     std::optional<std::string> sourceType;        // "PA_EXTRACTED", "ML_PARSED", etc.
     std::optional<std::string> validityStatus;    // "VALID", "EXPIRED", "NOT_YET_VALID"
-    std::optional<std::string> searchTerm;        // Search in subject_dn, serial_number
+    std::optional<std::string> searchTerm;        // Search in subject_dn, serial_number, fingerprint_sha256
     int limit = 100;
     int offset = 0;
 };

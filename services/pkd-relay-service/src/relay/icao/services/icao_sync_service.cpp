@@ -5,6 +5,7 @@
 #include "icao_sync_service.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <map>
 #include <sstream>
 
 namespace services {
@@ -53,7 +54,30 @@ IcaoSyncService::CheckResult IcaoSyncService::checkForUpdates() {
 
     if (newVersions.empty()) {
         result.success = true;
-        result.message = "No new versions detected. System is up to date.";
+
+        // Check if the latest version per collection type is not yet imported
+        std::map<std::string, const domain::models::IcaoVersion*> latestByType;
+        for (const auto& local : localVersions) {
+            auto it = latestByType.find(local.collectionType);
+            if (it == latestByType.end() || local.fileVersion > it->second->fileVersion) {
+                latestByType[local.collectionType] = &local;
+            }
+        }
+        int pendingCount = 0;
+        for (const auto& [type, ver] : latestByType) {
+            if (ver->status != "IMPORTED") {
+                pendingCount++;
+            }
+        }
+
+        if (pendingCount > 0) {
+            result.message = "No new versions from portal. " +
+                std::to_string(pendingCount) + " version(s) pending upload.";
+            result.newVersionCount = -pendingCount;  // negative = pending, not new
+        } else {
+            result.message = "No new versions detected. System is up to date.";
+        }
+
         spdlog::info("[IcaoSyncService] {}", result.message);
         return result;
     }

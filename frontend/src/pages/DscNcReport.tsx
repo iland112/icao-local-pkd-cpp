@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 import {
   AlertCircle,
   AlertTriangle,
@@ -137,6 +139,9 @@ export default function DscNcReport() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const handleRefresh = () => setRefreshKey(k => k + 1);
+
+  const certItems = useMemo(() => data?.certificates.items ?? [], [data]);
+  const { sortedData: sortedCerts, sortConfig: certSortConfig, requestSort: requestCertSort } = useSortableTable(certItems);
 
   useEffect(() => {
     abortControllerRef.current?.abort();
@@ -314,7 +319,7 @@ export default function DscNcReport() {
               <YAxis type="category" dataKey="code" tick={{ fill: '#6B7280', fontSize: 11 }} width={125} />
               <Tooltip
                 content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
+                  if (!active || !payload?.length || !payload[0]) return null;
                   const item = payload[0].payload as ConformanceCodeEntry;
                   return (
                     <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg max-w-[320px]">
@@ -367,7 +372,7 @@ export default function DscNcReport() {
               />
               <Tooltip
                 content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
+                  if (!active || !payload?.length || !payload[0]) return null;
                   const item = payload[0].payload as CountryEntry;
                   const flagPath = getFlagSvgPath(item.countryCode);
                   return (
@@ -497,8 +502,10 @@ export default function DscNcReport() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {/* Country Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
+            <label htmlFor="dscnc-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
             <select
+              id="dscnc-country"
+              name="countryFilter"
               value={countryFilter}
               onChange={(e) => { setCountryFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -514,8 +521,10 @@ export default function DscNcReport() {
 
           {/* Conformance Code Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">비준수 코드</label>
+            <label htmlFor="dscnc-code" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">비준수 코드</label>
             <select
+              id="dscnc-code"
+              name="codeFilter"
               value={codeFilter}
               onChange={(e) => { setCodeFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -561,17 +570,17 @@ export default function DscNcReport() {
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">국가</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">발급년도</th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">서명 알고리즘</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">공개키</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">유효기간</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">상태</th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">비준수 코드</th>
+                <SortableHeader label="국가" sortKey="countryCode" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="발급년도" sortKey="notBefore" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="서명 알고리즘" sortKey="signatureAlgorithm" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="공개키" sortKey="publicKeySize" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="유효기간" sortKey="notAfter" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="상태" sortKey="validity" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="비준수 코드" sortKey="pkdConformanceCode" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {data.certificates.items.map((cert) => (
+              {sortedCerts.map((cert) => (
                 <tr key={cert.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                   {/* 국가 */}
                   <td className="px-3 py-2.5 whitespace-nowrap">

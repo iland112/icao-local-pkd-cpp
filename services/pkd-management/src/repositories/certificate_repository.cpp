@@ -145,7 +145,8 @@ Json::Value CertificateRepository::search(const CertificateSearchFilter& filter)
             std::string term = "%" + *filter.searchTerm + "%";
             std::string p = "$" + std::to_string(paramIdx);
             where << " AND (" << common::db::ilikeCond(dbType, "subject_dn", p)
-                   << " OR " << common::db::ilikeCond(dbType, "serial_number", p) << ")";
+                   << " OR " << common::db::ilikeCond(dbType, "serial_number", p)
+                   << " OR " << common::db::ilikeCond(dbType, "fingerprint_sha256", p) << ")";
             paramIdx++;
             params.push_back(term);
         }

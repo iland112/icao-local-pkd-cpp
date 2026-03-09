@@ -305,11 +305,13 @@ function CreateDialog({ onClose, onCreated }: {
         <InputField label="설명" value={form.description || ''} onChange={v => setForm({ ...form, description: v })} placeholder="용도 설명" />
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">권한</label>
+          <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">권한</span>
           <div className="grid grid-cols-2 gap-2">
             {AVAILABLE_PERMISSIONS.map(p => (
-              <label key={p.value} className="flex items-center gap-2 text-sm cursor-pointer">
+              <label key={p.value} htmlFor={`create-perm-${p.value}`} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
+                  id={`create-perm-${p.value}`}
+                  name={`permission-${p.value}`}
                   type="checkbox"
                   checked={form.permissions.includes(p.value)}
                   onChange={e => {
@@ -396,11 +398,13 @@ function EditDialog({ client, onClose, onUpdated }: {
         <InputField label="설명" value={form.description || ''} onChange={v => setForm({ ...form, description: v })} />
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">권한</label>
+          <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">권한</span>
           <div className="grid grid-cols-2 gap-2">
             {AVAILABLE_PERMISSIONS.map(p => (
-              <label key={p.value} className="flex items-center gap-2 text-sm cursor-pointer">
+              <label key={p.value} htmlFor={`edit-perm-${p.value}`} className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
+                  id={`edit-perm-${p.value}`}
+                  name={`permission-${p.value}`}
                   type="checkbox"
                   checked={form.permissions?.includes(p.value) || false}
                   onChange={e => {
@@ -425,8 +429,8 @@ function EditDialog({ client, onClose, onUpdated }: {
           <InputField label="일당 제한" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
         </div>
 
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-gray-300" />
+        <label htmlFor="edit-is-active" className="flex items-center gap-2 cursor-pointer">
+          <input id="edit-is-active" name="isActive" type="checkbox" checked={form.is_active} onChange={e => setForm({ ...form, is_active: e.target.checked })} className="rounded border-gray-300" />
           <span className="text-sm text-gray-700 dark:text-gray-300">활성 상태</span>
         </label>
       </div>
@@ -681,14 +685,16 @@ function DialogWrapper({ children, onClose, title, small }: {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl ${small ? 'max-w-md' : 'max-w-2xl'} w-full mx-4 p-6`}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{title}</h3>
-          <button onClick={onClose} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">
-            <X className="w-5 h-5" />
+      <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-xl ${small ? 'max-w-md' : 'max-w-2xl'} w-full mx-4`}>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h3>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">
+            <X className="w-4 h-4" />
           </button>
         </div>
-        {children}
+        <div className="px-5 py-4">
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -702,10 +708,13 @@ function InputField({ label, value, onChange, placeholder, type = 'text', requir
   type?: string;
   required?: boolean;
 }) {
+  const fieldId = `apiclient-${label.replace(/\s+/g, '-').toLowerCase()}`;
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
+      <label htmlFor={fieldId} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{label}</label>
       <input
+        id={fieldId}
+        name={fieldId}
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}

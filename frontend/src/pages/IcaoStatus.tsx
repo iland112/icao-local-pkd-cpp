@@ -435,60 +435,73 @@ export default function IcaoStatus() {
         <Dialog isOpen={true} onClose={() => setCheckResult(null)} title="업데이트 확인 결과" size="lg">
           <div className="space-y-4">
             {/* Status Banner */}
-            <div className={cn(
-              "flex items-center gap-3 p-4 rounded-xl border",
-              checkResult.success
-                ? checkResult.new_version_count > 0
-                  ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
-                  : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
-                : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
-            )}>
-              <div className={cn(
-                "flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0",
-                checkResult.success
-                  ? checkResult.new_version_count > 0
-                    ? "bg-orange-100 dark:bg-orange-900/40"
-                    : "bg-green-100 dark:bg-green-900/40"
-                  : "bg-red-100 dark:bg-red-900/40"
-              )}>
-                {checkResult.success ? (
-                  checkResult.new_version_count > 0
-                    ? <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                    : <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                ) : (
-                  <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn(
-                  "text-sm font-semibold",
-                  checkResult.success
-                    ? checkResult.new_version_count > 0
-                      ? "text-orange-900 dark:text-orange-300"
-                      : "text-green-900 dark:text-green-300"
-                    : "text-red-900 dark:text-red-300"
-                )}>
-                  {checkResult.success
-                    ? checkResult.new_version_count > 0
-                      ? `${checkResult.new_version_count}개의 신규 버전이 감지되었습니다`
-                      : '시스템이 최신 상태입니다'
-                    : '확인 실패'}
-                </p>
-                <p className={cn(
-                  "text-xs mt-0.5",
-                  checkResult.success
-                    ? checkResult.new_version_count > 0
-                      ? "text-orange-700 dark:text-orange-400"
-                      : "text-green-700 dark:text-green-400"
-                    : "text-red-700 dark:text-red-400"
-                )}>
-                  {checkResult.message}
-                </p>
-              </div>
-              <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
-                {formatDateTime(new Date().toISOString())}
-              </span>
-            </div>
+            {(() => {
+              const isNewDetected = checkResult.new_version_count > 0;
+              const hasPending = checkResult.new_version_count < 0;
+              const isUpToDate = checkResult.success && checkResult.new_version_count === 0;
+              const pendingCount = Math.abs(checkResult.new_version_count);
+
+              const bannerColor = !checkResult.success
+                ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                : isNewDetected
+                ? "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
+                : hasPending
+                ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+                : "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800";
+
+              const iconBg = !checkResult.success
+                ? "bg-red-100 dark:bg-red-900/40"
+                : isNewDetected
+                ? "bg-orange-100 dark:bg-orange-900/40"
+                : hasPending
+                ? "bg-yellow-100 dark:bg-yellow-900/40"
+                : "bg-green-100 dark:bg-green-900/40";
+
+              const textColor = !checkResult.success
+                ? "text-red-900 dark:text-red-300"
+                : isNewDetected
+                ? "text-orange-900 dark:text-orange-300"
+                : hasPending
+                ? "text-yellow-900 dark:text-yellow-300"
+                : "text-green-900 dark:text-green-300";
+
+              const subTextColor = !checkResult.success
+                ? "text-red-700 dark:text-red-400"
+                : isNewDetected
+                ? "text-orange-700 dark:text-orange-400"
+                : hasPending
+                ? "text-yellow-700 dark:text-yellow-400"
+                : "text-green-700 dark:text-green-400";
+
+              const title = !checkResult.success
+                ? '확인 실패'
+                : isNewDetected
+                ? `${checkResult.new_version_count}개의 신규 버전이 감지되었습니다`
+                : hasPending
+                ? `${pendingCount}개의 미업로드 버전이 있습니다`
+                : '시스템이 최신 상태입니다';
+
+              return (
+                <div className={cn("flex items-center gap-3 p-4 rounded-xl border", bannerColor)}>
+                  <div className={cn("flex items-center justify-center w-10 h-10 rounded-full flex-shrink-0", iconBg)}>
+                    {!checkResult.success ? (
+                      <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                    ) : isUpToDate ? (
+                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    ) : (
+                      <AlertCircle className={cn("w-5 h-5", isNewDetected ? "text-orange-600 dark:text-orange-400" : "text-yellow-600 dark:text-yellow-400")} />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn("text-sm font-semibold", textColor)}>{title}</p>
+                    <p className={cn("text-xs mt-0.5", subTextColor)}>{checkResult.message}</p>
+                  </div>
+                  <span className="text-xs text-gray-400 dark:text-gray-500 whitespace-nowrap">
+                    {formatDateTime(new Date().toISOString())}
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* New Versions Detail */}
             {checkResult.new_version_count > 0 && (
@@ -531,6 +544,25 @@ export default function IcaoStatus() {
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   ICAO PKD 포털과 로컬 시스템의 버전이 동일합니다.
                 </p>
+              </div>
+            )}
+
+            {/* Pending uploads detail */}
+            {checkResult.success && checkResult.new_version_count < 0 && (
+              <div className="text-center py-4">
+                <Download className="w-10 h-10 text-yellow-400 dark:text-yellow-500 mx-auto mb-2" />
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  ICAO 포털에서 신규 버전은 없지만, 감지된 버전 중 아직 업로드되지 않은 파일이 있습니다.
+                </p>
+                <a
+                  href="https://pkddownloadsg.icao.int/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 mt-3 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
+                >
+                  <Download className="w-4 h-4" />
+                  ICAO 포털에서 다운로드
+                </a>
               </div>
             )}
 

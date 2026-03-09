@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useNotificationStore } from '@/stores/notificationStore';
 
 const SSE_URL = '/api/sync/notifications/stream';
-const RECONNECT_DELAYS = [5000, 5000, 5000, 30000]; // 5s x3, then 30s
+const RECONNECT_DELAYS = [3000, 5000, 10000, 30000]; // 3s, 5s, 10s, then 30s
+const MAX_RETRIES = 20; // Stop after 20 consecutive failures
 
 /**
  * NotificationListener — Global SSE listener for real-time system notifications
@@ -62,12 +63,20 @@ export function NotificationListener() {
         eventSource.close();
         eventSourceRef.current = null;
 
+        // Stop reconnecting after too many failures
+        if (retryCountRef.current >= MAX_RETRIES) {
+          if (import.meta.env.DEV) {
+            console.warn('[Notification] SSE max retries reached, stopping reconnection');
+          }
+          return;
+        }
+
         const retryIndex = Math.min(retryCountRef.current, RECONNECT_DELAYS.length - 1);
         const delay = RECONNECT_DELAYS[retryIndex];
         retryCountRef.current++;
 
         if (import.meta.env.DEV) {
-          console.log(`[Notification] SSE error, reconnecting in ${delay}ms (attempt ${retryCountRef.current})`);
+          console.log(`[Notification] SSE reconnecting in ${delay}ms (attempt ${retryCountRef.current})`);
         }
 
         reconnectTimerRef.current = setTimeout(connect, delay);

@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 import { Download, FileText, CheckCircle, XCircle, Clock, RefreshCw, Eye, ChevronLeft, ChevronRight, Shield, HelpCircle } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
 import { cn } from '@/utils/cn';
@@ -42,6 +45,8 @@ const CertificateSearch: React.FC = () => {
 
   // AbortController ref for cancelling stale search requests
   const searchAbortRef = useRef<AbortController | null>(null);
+
+  const { sortedData: sortedCerts, sortConfig: certSortConfig, requestSort: requestCertSort } = useSortableTable<Certificate>(certificates);
 
   // UI state
   const [showFilters, setShowFilters] = useState(true);
@@ -95,11 +100,20 @@ const CertificateSearch: React.FC = () => {
       const data = response.data as Record<string, unknown>;
 
       if (data.success) {
-        setCertificates(data.certificates as Certificate[]);
+        const certs = data.certificates as Certificate[];
+        setCertificates(certs);
         setTotal(data.total as number);
         // Store statistics from backend (if available)
         if (data.stats) {
           setApiStats(data.stats as { total: number; valid: number; expired: number; notYetValid: number; unknown: number });
+        }
+        // Auto-open detail dialog when navigated with fingerprint query param
+        if (autoOpenFingerprintRef.current && certs.length > 0) {
+          const match = certs.find(c => c.fingerprint === autoOpenFingerprintRef.current);
+          autoOpenFingerprintRef.current = null;
+          if (match) {
+            viewDetails(match);
+          }
         }
       } else {
         setError((data.error as string) || 'Search failed');
@@ -116,9 +130,23 @@ const CertificateSearch: React.FC = () => {
     }
   };
 
-  // Initial load - fetch countries once
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoOpenFingerprintRef = useRef<string | null>(null);
+
+  // Initial load - fetch countries once + handle fingerprint query param
   useEffect(() => {
     fetchCountries();
+
+    // Auto-lookup by fingerprint from URL query param (e.g. from Trust Chain report)
+    const fp = searchParams.get('fingerprint');
+    if (fp) {
+      // Clear the query param to avoid re-triggering
+      setSearchParams({}, { replace: true });
+      // Mark fingerprint for auto-open when search results arrive
+      autoOpenFingerprintRef.current = fp;
+      // Set search term to fingerprint and trigger search
+      setCriteria(prev => ({ ...prev, searchTerm: fp, offset: 0 }));
+    }
   }, []);
 
   // Search when criteria changes (AbortController covers pagination too via criteria.offset)
@@ -504,34 +532,20 @@ const CertificateSearch: React.FC = () => {
             <table className="w-full">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    국가
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    종류
-                  </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
-                    발급 기관
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    버전
-                  </th>
-                  <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    서명 알고리즘
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    유효기간
-                  </th>
-                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    상태
-                  </th>
+                  <SortableHeader label="국가" sortKey="country" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label="종류" sortKey="certType" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label="발급 기관" sortKey="issuerDn" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider" />
+                  <SortableHeader label="버전" sortKey="version" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label="서명 알고리즘" sortKey="signatureAlgorithm" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label="유효기간" sortKey="validFrom" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label="상태" sortKey="validity" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                   <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                     작업
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                {certificates.map((cert) => (
+                {sortedCerts.map((cert) => (
                   <tr
                     key={cert.fingerprint}
                     className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"

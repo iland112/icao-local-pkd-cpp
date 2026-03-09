@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import {
   Link2,
   CheckCircle,
-  XCircle,
   AlertTriangle,
   Clock,
   Loader2,
@@ -14,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import { getFlagSvgPath } from '@/utils/countryCode';
+import { getCountryName } from '@/utils/countryNames';
 import axios from 'axios';
 
 // Trust Chain 분포 데이터
@@ -24,28 +24,16 @@ interface ChainPattern {
   color: string;
 }
 
-// 샘플 인증서
-interface SampleCert {
-  country: string;
+// Chain path distribution from API
+interface ChainPathSample {
   fingerprint: string;
-  status: string;
-  chainPattern: string;
-  label: string;
+  country: string;
 }
 
-const SAMPLE_CERTS: SampleCert[] = [
-  { country: 'KR', fingerprint: '9ea82cef2c37c2b86cf52874e26cfc2327542e8378ee16773223e8bb0be19894', status: 'VALID', chainPattern: 'DSC → Root', label: '한국 DSC (Direct)' },
-  { country: 'HU', fingerprint: 'e2636645b39c47f36b0e518f34a74e96f77543059f0abee3fca98079395827a8', status: 'VALID', chainPattern: 'DSC → Link → Root', label: '헝가리 DSC (Link 1)' },
-  { country: 'LU', fingerprint: 'e3e0719559c4a46567395e94127a4248a1ea17fd72e20b44845f9e54e853e40a', status: 'VALID', chainPattern: 'DSC → Link → CSCA → Root', label: '룩셈부르크 DSC (Link 2)' },
-  { country: 'LU', fingerprint: 'ea9f8538afb2f9700d53ae450fbe4accb54fb1c512134e3fd56593c208daafdd', status: 'VALID', chainPattern: 'DSC → Link → Link → CSCA → Root', label: '룩셈부르크 DSC (Link 3)' },
-  { country: 'HU', fingerprint: 'bc1567b9da90aa19e239733d71c46e42661af816f2c6c5e1737c4273920fce26', status: 'VALID', chainPattern: 'DSC → Link → Link → Root', label: '헝가리 DSC (Link 2)' },
-  { country: 'NL', fingerprint: '574ec2b9b4a4ce15f02513c3907865fe1dc9bd0b9e0924097066d7a11832d27d', status: 'VALID', chainPattern: 'DSC → Link(x4) → Root', label: '네덜란드 DSC (Link 4)' },
-];
-
-// Chain path distribution from API
 interface ChainPathEntry {
   path: string;
   count: number;
+  samples?: ChainPathSample[];
 }
 
 // 통계 타입
@@ -133,25 +121,6 @@ export function TrustChainValidationReport() {
   const pureValidCount = stats ? stats.validCount - stats.expiredValidCount : 0;
   const totalValidated = stats ? stats.validCount + stats.invalidCount + stats.pendingCount : 0;
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'VALID': return <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />;
-      case 'EXPIRED_VALID': return <Clock className="w-3.5 h-3.5 text-amber-500" />;
-      case 'INVALID': return <XCircle className="w-3.5 h-3.5 text-red-500" />;
-      case 'PENDING': return <AlertTriangle className="w-3.5 h-3.5 text-yellow-500" />;
-      default: return null;
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'VALID': return 'text-emerald-600 dark:text-emerald-400';
-      case 'EXPIRED_VALID': return 'text-amber-600 dark:text-amber-400';
-      case 'INVALID': return 'text-red-600 dark:text-red-400';
-      case 'PENDING': return 'text-yellow-600 dark:text-yellow-400';
-      default: return 'text-gray-600';
-    }
-  };
 
   return (
     <div className="w-full px-4 lg:px-6 py-4">
@@ -275,48 +244,54 @@ export function TrustChainValidationReport() {
         </>
       )}
 
-      {/* Sample Certificates */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
-        <div className="flex items-center gap-2 mb-4">
-          <Globe className="w-5 h-5 text-indigo-500" />
-          <h2 className="text-base font-bold text-gray-900 dark:text-white">샘플 인증서</h2>
-          <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">다양한 Trust Chain 경로 패턴 예시</span>
-        </div>
+      {/* Sample Certificates - dynamically from API */}
+      {stats && stats.chainPathDistribution.some(e => e.samples && e.samples.length > 0) && (
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Globe className="w-5 h-5 text-indigo-500" />
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">샘플 인증서</h2>
+            <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">경로 패턴별 실제 인증서 예시 (클릭하여 상세 조회)</span>
+          </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {SAMPLE_CERTS.map((cert) => (
-            <a
-              key={cert.fingerprint}
-              href={`/pkd/certificates?fingerprint=${cert.fingerprint}`}
-              className={cn(
-                'flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all hover:shadow-md',
-                'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600',
-                'hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20',
-              )}
-            >
-              {getFlagSvgPath(cert.country) && (
-                <img
-                  src={getFlagSvgPath(cert.country)}
-                  alt={cert.country}
-                  className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600 flex-shrink-0"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  {getStatusIcon(cert.status)}
-                  <span className={cn('text-xs font-semibold', getStatusColor(cert.status))}>{cert.label}</span>
-                </div>
-                <div className="flex items-center gap-1 mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
-                  <ArrowRight className="w-2.5 h-2.5" />
-                  {cert.chainPattern}
-                </div>
-              </div>
-              <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-            </a>
-          ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {stats.chainPathDistribution.flatMap((entry) =>
+              (entry.samples || []).map((sample) => (
+                <a
+                  key={sample.fingerprint}
+                  href={`/pkd/certificates?fingerprint=${sample.fingerprint}`}
+                  className={cn(
+                    'flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all hover:shadow-md',
+                    'bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600',
+                    'hover:border-indigo-300 dark:hover:border-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20',
+                  )}
+                >
+                  {getFlagSvgPath(sample.country) && (
+                    <img
+                      src={getFlagSvgPath(sample.country)}
+                      alt={sample.country}
+                      className="w-6 h-4 object-cover rounded shadow-sm border border-gray-200 dark:border-gray-600 flex-shrink-0"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                        {getCountryName(sample.country)} DSC
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                      <ArrowRight className="w-2.5 h-2.5" />
+                      {formatPath(entry.path)}
+                    </div>
+                  </div>
+                  <Search className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                </a>
+              ))
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

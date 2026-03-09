@@ -572,6 +572,45 @@ Json::Value UploadRepository::getStatisticsSummary()
                 Json::Value entry;
                 entry["path"] = path;
                 entry["count"] = common::db::getInt(row, "cnt", 0);
+
+                // Fetch sample certificates for this chain pattern (1 per country, up to 3)
+                try {
+                    std::string sampleQuery;
+                    if (dbType == "oracle") {
+                        sampleQuery =
+                            "SELECT fingerprint_sha256, country_code FROM ("
+                            "  SELECT c.fingerprint_sha256, c.country_code, "
+                            "    ROW_NUMBER() OVER (PARTITION BY c.country_code ORDER BY c.created_at DESC) rn "
+                            "  FROM validation_result v "
+                            "  JOIN certificate c ON c.fingerprint_sha256 = v.certificate_id "
+                            "  WHERE v.trust_chain_valid = 1 "
+                            "  AND DBMS_LOB.SUBSTR(v.trust_chain_message, 200, 1) = $1"
+                            ") WHERE rn = 1 AND ROWNUM <= 3";
+                    } else {
+                        sampleQuery =
+                            "SELECT DISTINCT ON (c.country_code) c.fingerprint_sha256, c.country_code "
+                            "FROM validation_result v "
+                            "JOIN certificate c ON c.id = v.certificate_id "
+                            "WHERE v.trust_chain_valid = true "
+                            "AND v.trust_chain_message = $1 "
+                            "ORDER BY c.country_code, c.created_at DESC "
+                            "LIMIT 3";
+                    }
+                    Json::Value samples = queryExecutor_->executeQuery(sampleQuery, {path});
+                    Json::Value sampleCerts = Json::arrayValue;
+                    for (const auto& s : samples) {
+                        Json::Value sc;
+                        sc["fingerprint"] = s.get("fingerprint_sha256", "").asString();
+                        sc["country"] = s.get("country_code", "").asString();
+                        sampleCerts.append(sc);
+                    }
+                    if (!sampleCerts.empty()) {
+                        entry["samples"] = sampleCerts;
+                    }
+                } catch (...) {
+                    spdlog::warn("Failed to fetch sample cert for chain pattern: {}", path);
+                }
+
                 chainPathDistribution.append(entry);
             }
         }

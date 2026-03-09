@@ -1,9 +1,11 @@
 #pragma once
 
+#include <atomic>
 #include <functional>
 #include <map>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <json/json.h>
 
 namespace icao::relay::notification {
@@ -57,12 +59,26 @@ public:
     /** Get current connected client count */
     size_t clientCount() const;
 
+    /** Start heartbeat thread (called once at startup) */
+    void startHeartbeat();
+
+    /** Stop heartbeat thread (called at shutdown) */
+    void stopHeartbeat();
+
 private:
     NotificationManager() = default;
+    ~NotificationManager();
+
+    /** Send heartbeat comment to all connected clients */
+    void sendHeartbeat();
 
     mutable std::mutex mutex_;
     std::map<std::string, std::function<void(const std::string&)>> clients_;
     int clientCounter_ = 0;
+
+    // Heartbeat thread
+    std::thread heartbeatThread_;
+    std::atomic<bool> heartbeatRunning_{false};
 };
 
 } // namespace icao::relay::notification

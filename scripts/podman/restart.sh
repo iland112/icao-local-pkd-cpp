@@ -27,15 +27,27 @@ if [ -z "$SERVICE" ]; then
     echo ""
     bash "$SCRIPT_DIR/scripts/podman/start.sh"
 else
-    echo "   서비스: $SERVICE"
+    # 여러 서비스를 인자로 받을 수 있음
+    SERVICES="$@"
+    echo "   서비스: $SERVICES"
 
     # api-gateway 재시작 시 Podman DNS resolver 설정 자동 적용
-    if [ "$SERVICE" = "api-gateway" ]; then
-        echo "  nginx 설정 생성 (Podman DNS resolver)..."
-        generate_podman_nginx_conf
-    fi
+    for svc in $SERVICES; do
+        if [ "$svc" = "api-gateway" ]; then
+            echo "  nginx 설정 생성 (Podman DNS resolver)..."
+            generate_podman_nginx_conf
+            break
+        fi
+    done
 
-    $COMPOSE restart $SERVICE
+    # up -d --force-recreate: 새 이미지 반영을 위해 컨테이너 재생성
+    # (compose restart는 기존 컨테이너만 재시작하여 이미지 변경이 반영되지 않음)
+    for svc in $SERVICES; do
+        echo "  $svc 중지 및 제거..."
+        podman stop "icao-local-pkd-${svc}" 2>/dev/null || true
+        podman rm "icao-local-pkd-${svc}" 2>/dev/null || true
+    done
+    $COMPOSE up -d $SERVICES
 
     echo ""
     echo "  컨테이너 상태:"

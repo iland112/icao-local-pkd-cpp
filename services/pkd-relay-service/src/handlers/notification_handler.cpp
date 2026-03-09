@@ -38,8 +38,9 @@ void NotificationHandler::handleStream(
 
     // SSE headers (same as pkd-management progress stream)
     resp->setContentTypeString("text/event-stream; charset=utf-8");
-    resp->addHeader("Cache-Control", "no-cache");
+    resp->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     resp->addHeader("Connection", "keep-alive");
+    resp->addHeader("X-Accel-Buffering", "no");
     resp->addHeader("Access-Control-Allow-Origin", "*");
 
     callback(resp);

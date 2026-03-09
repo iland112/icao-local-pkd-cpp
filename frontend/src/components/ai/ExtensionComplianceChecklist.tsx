@@ -62,6 +62,17 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
     });
   };
 
+  // Hooks must be before early returns
+  const enrichedAnomalies = useMemo(() =>
+    anomalies.slice(0, 100).map(a => ({
+      ...a,
+      _violationCount: totalViolations(a),
+      _severityOrder: a.structural_score,
+    })),
+  [anomalies]);
+
+  const { sortedData: sortedAnomalies, sortConfig: anomalySortConfig, requestSort: requestAnomalySort } = useSortableTable(enrichedAnomalies, { key: 'structural_score', direction: 'desc' });
+
   if (loading) {
     return (
       <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6">
@@ -72,17 +83,6 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
       </div>
     );
   }
-
-  // Enrich anomalies with computed sort fields
-  const enrichedAnomalies = useMemo(() =>
-    anomalies.slice(0, 100).map(a => ({
-      ...a,
-      _violationCount: totalViolations(a),
-      _severityOrder: a.structural_score, // higher score = more severe, sort by score directly
-    })),
-  [anomalies]);
-
-  const { sortedData: sortedAnomalies, sortConfig: anomalySortConfig, requestSort: requestAnomalySort } = useSortableTable(enrichedAnomalies, { key: 'structural_score', direction: 'desc' });
 
   // Severity distribution based on structural_score
   const severityDist = anomalies.reduce((acc, a) => {
@@ -95,7 +95,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
   const countryCodes = [...new Set(anomalies.map(a => a.country_code).filter((v): v is string => v != null))];
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden lg:max-h-[600px]">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <ShieldAlert className="w-5 h-5 text-orange-500" />

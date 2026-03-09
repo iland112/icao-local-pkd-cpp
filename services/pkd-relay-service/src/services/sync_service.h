@@ -63,7 +63,8 @@ public:
     Json::Value performSyncCheck(
         const Json::Value& dbCounts,
         const Json::Value& ldapCounts,
-        const Json::Value& countryStats = Json::Value(Json::objectValue)
+        const Json::Value& countryStats = Json::Value(Json::objectValue),
+        int checkDurationMs = 0
     );
 
     /**

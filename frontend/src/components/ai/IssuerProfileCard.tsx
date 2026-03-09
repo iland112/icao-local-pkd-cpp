@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Users, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import aiAnalysisApi, { type IssuerProfile } from '@/services/aiAnalysisApi';
@@ -31,6 +31,11 @@ export default function IssuerProfileCard() {
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  const highRiskProfiles = useMemo(() =>
+    profiles.filter(p => p.risk_indicator === 'HIGH').slice(0, 5),
+  [profiles]);
+  const { sortedData: sortedHighRisk, sortConfig: highRiskSortConfig, requestSort: requestHighRiskSort } = useSortableTable<IssuerProfile>(highRiskProfiles);
 
   if (loading) {
     return (
@@ -65,11 +70,8 @@ export default function IssuerProfileCard() {
     LOW: profiles.filter(p => p.risk_indicator === 'LOW').length,
   };
 
-  const highRiskProfiles = profiles.filter(p => p.risk_indicator === 'HIGH').slice(0, 5);
-  const { sortedData: sortedHighRisk, sortConfig: highRiskSortConfig, requestSort: requestHighRiskSort } = useSortableTable(highRiskProfiles);
-
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-6 h-full flex flex-col overflow-hidden lg:max-h-[600px]">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold flex items-center gap-2 dark:text-white">
           <Users className="w-5 h-5 text-blue-500" />
@@ -95,7 +97,7 @@ export default function IssuerProfileCard() {
             <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={180} />
             <Tooltip
               content={({ active, payload }) => {
-                if (!active || !payload?.length) return null;
+                if (!active || !payload?.length || !payload[0]) return null;
                 const d = payload[0].payload;
                 return (
                   <div className="bg-white dark:bg-gray-800 p-3 rounded-lg shadow-lg border text-sm">

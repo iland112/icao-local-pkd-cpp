@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Shield, Filter, User, Activity, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
+import { Shield, Filter, User, Activity, CheckCircle, XCircle, X, Clock, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { createAuthenticatedClient } from '@/services/authApi';
 import { formatDateTime } from '@/utils/dateFormat';
 
@@ -43,6 +45,8 @@ export function AuditLog() {
   // Detail Dialog
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  const { sortedData: sortedLogs, sortConfig: logSortConfig, requestSort: requestLogSort } = useSortableTable<AuditLogEntry>(logs);
 
   useEffect(() => {
     fetchAuditLogs();
@@ -188,10 +192,12 @@ export function AuditLog() {
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="audit-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               사용자명
             </label>
             <input
+              id="audit-username"
+              name="username"
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
@@ -201,10 +207,12 @@ export function AuditLog() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="audit-event-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               이벤트 타입
             </label>
             <select
+              id="audit-event-type"
+              name="eventType"
               value={eventType}
               onChange={(e) => setEventType(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -218,10 +226,12 @@ export function AuditLog() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            <label htmlFor="audit-success" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               성공 여부
             </label>
             <select
+              id="audit-success"
+              name="successFilter"
               value={successFilter}
               onChange={(e) => setSuccessFilter(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -249,21 +259,11 @@ export function AuditLog() {
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                  시간
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                  사용자
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                  이벤트
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                  IP 주소
-                </th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                  상태
-                </th>
+                <SortableHeader label="시간" sortKey="createdAt" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="사용자" sortKey="username" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="이벤트" sortKey="eventType" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="IP 주소" sortKey="ipAddress" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="상태" sortKey="success" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                   상세
                 </th>
@@ -283,7 +283,7 @@ export function AuditLog() {
                   </td>
                 </tr>
               ) : (
-                logs.map((log) => (
+                sortedLogs.map((log) => (
                   <tr key={log.id} className="hover:bg-gray-50 dark:hover:bg-gray-900/30">
                     <td className="px-3 py-2.5 whitespace-nowrap text-xs text-gray-900 dark:text-white">
                       {formatDateTime(log.createdAt)}
@@ -369,104 +369,90 @@ export function AuditLog() {
 
       {/* Detail Dialog */}
       {dialogOpen && selectedLog && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-xl w-full">
             {/* Dialog Header */}
-            <div className="sticky top-0 bg-gradient-to-r from-purple-500 to-pink-500 px-6 py-4 rounded-t-xl">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold text-white">감사 로그 상세 정보</h3>
-                <button
-                  onClick={() => setDialogOpen(false)}
-                  className="text-white/80 hover:text-white transition-colors"
-                >
-                  <XCircle className="w-6 h-6" />
-                </button>
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                  <Shield className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                </div>
+                <h3 className="text-base font-bold text-gray-900 dark:text-white">인증 감사 로그</h3>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${getEventBadgeColor(selectedLog.eventType)}`}>
+                  {selectedLog.eventType}
+                </span>
+                {selectedLog.success ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                    <CheckCircle className="w-3 h-3 mr-1" />성공
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
+                    <XCircle className="w-3 h-3 mr-1" />실패
+                  </span>
+                )}
               </div>
+              <button
+                onClick={() => setDialogOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
             </div>
 
-            {/* Dialog Content */}
-            <div className="p-6 space-y-6">
-              {/* Basic Information */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">기본 정보</h4>
-                <dl className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">로그 ID</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.id}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">생성 시간</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{formatDateTime(selectedLog.createdAt)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">사용자 ID</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.userId || '-'}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">사용자 이름</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">{selectedLog.username || '시스템'}</dd>
-                  </div>
-                </dl>
+            {/* Dialog Content — dense layout */}
+            <div className="px-5 py-4 space-y-3">
+              <div className="grid grid-cols-4 gap-x-4 gap-y-2">
+                <div>
+                  <dt className="text-[11px] text-gray-500 dark:text-gray-400">시간</dt>
+                  <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{formatDateTime(selectedLog.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-gray-500 dark:text-gray-400">사용자</dt>
+                  <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.username || '시스템'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-gray-500 dark:text-gray-400">IP 주소</dt>
+                  <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.ipAddress || '-'}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] text-gray-500 dark:text-gray-400">사용자 ID</dt>
+                  <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={selectedLog.userId || '-'}>{selectedLog.userId || '-'}</dd>
+                </div>
               </div>
 
-              {/* Event Information */}
+              <hr className="border-gray-200 dark:border-gray-700" />
+
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">이벤트 정보</h4>
-                <dl className="grid grid-cols-2 gap-4">
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">이벤트 유형</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${getEventBadgeColor(selectedLog.eventType)}`}>
-                        {selectedLog.eventType}
-                      </span>
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">성공 여부</dt>
-                    <dd className="text-sm mt-1">
-                      {selectedLog.success ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                          <CheckCircle className="w-3 h-3 mr-1" />
-                          성공
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
-                          <XCircle className="w-3 h-3 mr-1" />
-                          실패
-                        </span>
-                      )}
-                    </dd>
-                  </div>
-                </dl>
+                <dt className="text-[11px] text-gray-500 dark:text-gray-400">로그 ID</dt>
+                <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={selectedLog.id}>{selectedLog.id}</dd>
               </div>
 
-              {/* Request Information */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">요청 정보</h4>
-                <dl className="grid grid-cols-2 gap-4">
+              {selectedLog.userAgent && (
+                <>
+                  <hr className="border-gray-200 dark:border-gray-700" />
                   <div>
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">IP 주소</dt>
-                    <dd className="text-sm text-gray-900 dark:text-gray-100 font-mono mt-1">{selectedLog.ipAddress || '-'}</dd>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">User Agent</dt>
+                    <dd className="text-[11px] text-gray-600 dark:text-gray-400 font-mono mt-0.5 truncate" title={selectedLog.userAgent}>{selectedLog.userAgent}</dd>
                   </div>
-                  <div className="col-span-2">
-                    <dt className="text-xs text-gray-500 dark:text-gray-400">User Agent</dt>
-                    <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-1 break-all">{selectedLog.userAgent || '-'}</dd>
+                </>
+              )}
+
+              {selectedLog.errorMessage && (
+                <>
+                  <hr className="border-gray-200 dark:border-gray-700" />
+                  <div>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">오류 메시지</dt>
+                    <dd className="text-xs text-red-600 dark:text-red-400 mt-0.5 break-all">{selectedLog.errorMessage}</dd>
                   </div>
-                  {selectedLog.errorMessage && (
-                    <div className="col-span-2">
-                      <dt className="text-xs text-gray-500 dark:text-gray-400">오류 메시지</dt>
-                      <dd className="text-sm text-red-600 dark:text-red-400 mt-1 break-all">{selectedLog.errorMessage}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
+                </>
+              )}
             </div>
 
             {/* Dialog Footer */}
-            <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 rounded-b-xl">
+            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end">
               <button
                 onClick={() => setDialogOpen(false)}
-                className="w-full px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
                 닫기
               </button>

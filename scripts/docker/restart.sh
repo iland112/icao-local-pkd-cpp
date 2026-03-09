@@ -24,8 +24,13 @@ if [ -z "$SERVICE" ]; then
     echo ""
     bash "$SCRIPT_DIR/scripts/docker/start.sh"
 else
-    echo "   서비스: $SERVICE"
-    docker compose -f docker/docker-compose.yaml $PROFILE_FLAG restart $SERVICE
+    # 여러 서비스를 인자로 받을 수 있음
+    SERVICES="$@"
+    echo "   서비스: $SERVICES"
+
+    # up -d --force-recreate: 새 이미지 반영을 위해 컨테이너 재생성
+    # (compose restart는 기존 컨테이너만 재시작하여 이미지 변경이 반영되지 않음)
+    docker compose -f docker/docker-compose.yaml $PROFILE_FLAG up -d --force-recreate $SERVICES
 
     echo ""
     echo "📊 컨테이너 상태:"

@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 #include <numeric>
 #include <algorithm>
+#include <chrono>
 
 using namespace drogon;
 
@@ -74,6 +75,7 @@ void SyncHandler::handleSyncCheck(const HttpRequestPtr& req,
                                    std::function<void(const HttpResponsePtr&)>&& callback) {
     try {
         spdlog::info("Starting sync check...");
+        auto startTime = std::chrono::high_resolution_clock::now();
 
         // Get DB stats
         icao::relay::DbStats dbStats = infrastructure::getDbStats(queryExecutor_);
@@ -103,8 +105,14 @@ void SyncHandler::handleSyncCheck(const HttpRequestPtr& req,
         ldapCounts["dsc_nc"] = ldapStats.dscNcCount;
         ldapCounts["crl"] = ldapStats.crlCount;
 
+        // Measure duration
+        auto endTime = std::chrono::high_resolution_clock::now();
+        int durationMs = static_cast<int>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count());
+
         // Call service to perform check and save
-        Json::Value result = syncService_->performSyncCheck(dbCounts, ldapCounts);
+        Json::Value result = syncService_->performSyncCheck(dbCounts, ldapCounts,
+            Json::Value(Json::objectValue), durationMs);
 
         auto resp = HttpResponse::newHttpJsonResponse(result);
         if (!result.get("success", true).asBool()) {

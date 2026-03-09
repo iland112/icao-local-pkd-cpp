@@ -417,10 +417,12 @@ export function UploadHistory() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* File Format Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="upload-format" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               파일 형식
             </label>
             <select
+              id="upload-format"
+              name="formatFilter"
               value={formatFilter}
               onChange={(e) => setFormatFilter(e.target.value as FileFormat | '')}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -433,10 +435,12 @@ export function UploadHistory() {
 
           {/* Status Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="upload-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               업로드 상태
             </label>
             <select
+              id="upload-status"
+              name="statusFilter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as UploadStatus | '')}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -456,10 +460,12 @@ export function UploadHistory() {
 
           {/* Date From */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="upload-date-from" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               시작 날짜
             </label>
             <input
+              id="upload-date-from"
+              name="dateFrom"
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
@@ -469,10 +475,12 @@ export function UploadHistory() {
 
           {/* Date To */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="upload-date-to" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               종료 날짜
             </label>
             <input
+              id="upload-date-to"
+              name="dateTo"
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
@@ -482,13 +490,15 @@ export function UploadHistory() {
 
           {/* Search & Actions */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="upload-search" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               검색
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="upload-search"
+                  name="searchTerm"
                   type="text"
                   placeholder="파일명..."
                   value={searchTerm}
@@ -718,28 +728,28 @@ export function UploadHistory() {
           />
 
           {/* Dialog Content - Wide layout without vertical scroll */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl mx-4 max-h-[85vh] flex flex-col">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-6xl mx-4 max-h-[85vh] flex flex-col">
             {/* Header */}
             <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
-                    <FileText className="w-5 h-5 text-white" />
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600">
+                    <FileText className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                       업로드 상세 정보
                     </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {selectedUpload.fileName}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={closeDialog}
-                  className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
+                  <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
 
@@ -1202,24 +1212,24 @@ export function UploadHistory() {
           />
 
           {/* Dialog Content */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4">
             {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="p-2 rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                <RefreshCw className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                <RefreshCw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                   업로드 재처리
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   실패 지점부터 이어서 재처리
                 </p>
               </div>
             </div>
 
             {/* Body */}
-            <div className="p-5 space-y-4">
+            <div className="px-5 py-4 space-y-3">
               <div className="border rounded-lg p-3 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
@@ -1262,16 +1272,16 @@ export function UploadHistory() {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={closeRetryDialog}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleRetryConfirm}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
                 이어서 재처리
@@ -1291,24 +1301,24 @@ export function UploadHistory() {
           />
 
           {/* Dialog Content */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md mx-4">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4">
             {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/30">
-                <Trash2 className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30">
+                <Trash2 className="w-4 h-4 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-base font-semibold text-gray-900 dark:text-white">
                   업로드 삭제
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   정말 삭제하시겠습니까?
                 </p>
               </div>
             </div>
 
             {/* Body */}
-            <div className="p-5 space-y-4">
+            <div className="px-5 py-4 space-y-3">
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -1355,18 +1365,18 @@ export function UploadHistory() {
             </div>
 
             {/* Footer */}
-            <div className="flex justify-end gap-3 px-5 py-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={closeDeleteDialog}
                 disabled={deleting}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 취소
               </button>
               <button
                 onClick={handleDeleteConfirm}
                 disabled={deleting}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 transition-colors disabled:opacity-50"
               >
                 {deleting ? (
                   <>

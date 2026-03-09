@@ -17,6 +17,8 @@ import {
   Download,
   Key,
 } from 'lucide-react';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 import {
   BarChart,
   Bar,
@@ -120,6 +122,8 @@ export default function AiAnalysisDashboard() {
 
   // AbortController ref for cancelling stale anomaly list requests
   const anomalyAbortRef = useRef<AbortController | null>(null);
+
+  const { sortedData: sortedAnomalies, sortConfig: anomalySortConfig, requestSort: requestAnomalySort } = useSortableTable<CertificateAnalysis>(anomalies);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -531,7 +535,7 @@ export default function AiAnalysisDashboard() {
       )}
 
       {/* Issuer Profile + Extension Compliance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:max-h-[600px]">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <IssuerProfileCard />
         <ExtensionComplianceChecklist />
       </div>
@@ -571,7 +575,7 @@ export default function AiAnalysisDashboard() {
               />
               <Tooltip
                 content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
+                  if (!active || !payload?.length || !payload[0]) return null;
                   const item = payload[0].payload as CountryMaturity;
                   const flagPath = getFlagSvgPath(item.country_code);
                   return (
@@ -686,8 +690,10 @@ export default function AiAnalysisDashboard() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
+            <label htmlFor="ai-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
             <select
+              id="ai-country"
+              name="filterCountry"
               value={filterCountry}
               onChange={(e) => { setFilterCountry(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -701,8 +707,10 @@ export default function AiAnalysisDashboard() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">인증서 유형</label>
+            <label htmlFor="ai-type" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">인증서 유형</label>
             <select
+              id="ai-type"
+              name="filterType"
               value={filterType}
               onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -715,8 +723,10 @@ export default function AiAnalysisDashboard() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이상 수준</label>
+            <label htmlFor="ai-label" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이상 수준</label>
             <select
+              id="ai-label"
+              name="filterLabel"
               value={filterLabel}
               onChange={(e) => { setFilterLabel(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -728,8 +738,10 @@ export default function AiAnalysisDashboard() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">위험 수준</label>
+            <label htmlFor="ai-risk" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">위험 수준</label>
             <select
+              id="ai-risk"
+              name="filterRisk"
               value={filterRisk}
               onChange={(e) => { setFilterRisk(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -778,14 +790,14 @@ export default function AiAnalysisDashboard() {
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">국가</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">유형</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">이상 점수</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">이상 수준</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">위험 점수</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">위험 수준</th>
+                <SortableHeader label="국가" sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="유형" sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="이상 점수" sortKey="anomaly_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="이상 수준" sortKey="anomaly_label" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="위험 점수" sortKey="risk_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="위험 수준" sortKey="risk_level" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">주요 위험 요인</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">분석 시간</th>
+                <SortableHeader label="분석 시간" sortKey="analyzed_at" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -804,7 +816,7 @@ export default function AiAnalysisDashboard() {
                   </td>
                 </tr>
               ) : (
-                anomalies.map((item) => (
+                sortedAnomalies.map((item) => (
                   <tr key={item.fingerprint} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                     <td className="px-3 py-2.5 whitespace-nowrap">
                       <div className="flex items-center justify-center gap-1.5">

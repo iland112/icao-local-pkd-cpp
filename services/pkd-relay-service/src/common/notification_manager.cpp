@@ -12,6 +12,68 @@ NotificationManager& NotificationManager::getInstance() {
     return instance;
 }
 
+NotificationManager::~NotificationManager() {
+    stopHeartbeat();
+}
+
+void NotificationManager::startHeartbeat() {
+    if (heartbeatRunning_.exchange(true)) {
+        return; // Already running
+    }
+    heartbeatThread_ = std::thread([this]() {
+        spdlog::info("[Notification] Heartbeat thread started (30s interval)");
+        while (heartbeatRunning_.load()) {
+            // Sleep in 1-second intervals for responsive shutdown
+            for (int i = 0; i < 30 && heartbeatRunning_.load(); ++i) {
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+            }
+            if (heartbeatRunning_.load()) {
+                sendHeartbeat();
+            }
+        }
+        spdlog::info("[Notification] Heartbeat thread stopped");
+    });
+}
+
+void NotificationManager::stopHeartbeat() {
+    heartbeatRunning_.store(false);
+    if (heartbeatThread_.joinable()) {
+        heartbeatThread_.join();
+    }
+}
+
+void NotificationManager::sendHeartbeat() {
+    // SSE comment line — keeps connection alive without triggering events
+    const std::string heartbeat = ": heartbeat\n\n";
+
+    std::vector<std::pair<std::string, std::function<void(const std::string&)>>> callbacksCopy;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (clients_.empty()) return;
+        callbacksCopy.reserve(clients_.size());
+        for (const auto& [id, cb] : clients_) {
+            callbacksCopy.emplace_back(id, cb);
+        }
+    }
+
+    std::vector<std::string> failedClients;
+    for (const auto& [id, cb] : callbacksCopy) {
+        try {
+            cb(heartbeat);
+        } catch (...) {
+            failedClients.push_back(id);
+        }
+    }
+
+    if (!failedClients.empty()) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& id : failedClients) {
+            clients_.erase(id);
+        }
+        spdlog::debug("[Notification] Heartbeat removed {} disconnected client(s)", failedClients.size());
+    }
+}
+
 std::string NotificationManager::registerClient(
     std::function<void(const std::string&)> callback) {
     std::lock_guard<std::mutex> lock(mutex_);

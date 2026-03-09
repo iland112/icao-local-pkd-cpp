@@ -933,11 +933,11 @@ export function UploadDashboard() {
 
       {/* Validation Reason Detail Dialog */}
       {reasonDialogOpen && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setReasonDialogOpen(null)}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[70] flex items-center justify-center p-4" onClick={() => setReasonDialogOpen(null)}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden" onClick={e => e.stopPropagation()}>
             {/* Dialog Header */}
             <div className={cn(
-              'px-6 py-4 border-b',
+              'px-5 py-3 border-b',
               reasonDialogOpen === 'INVALID' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
               reasonDialogOpen === 'PENDING' && 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
               reasonDialogOpen === 'EXPIRED' && 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
@@ -945,11 +945,11 @@ export function UploadDashboard() {
             )}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {reasonDialogOpen === 'INVALID' && <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />}
-                  {reasonDialogOpen === 'PENDING' && <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
-                  {reasonDialogOpen === 'EXPIRED' && <Clock className="w-5 h-5 text-orange-600 dark:text-orange-400" />}
-                  {reasonDialogOpen === 'REVOKED' && <XCircle className="w-5 h-5 text-gray-600 dark:text-gray-400" />}
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {reasonDialogOpen === 'INVALID' && <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />}
+                  {reasonDialogOpen === 'PENDING' && <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />}
+                  {reasonDialogOpen === 'EXPIRED' && <Clock className="w-4 h-4 text-orange-600 dark:text-orange-400" />}
+                  {reasonDialogOpen === 'REVOKED' && <XCircle className="w-4 h-4 text-gray-600 dark:text-gray-400" />}
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white">
                     {reasonDialogOpen === 'INVALID' && '검증 실패 상세'}
                     {reasonDialogOpen === 'PENDING' && 'CSCA 미발견 상세'}
                     {reasonDialogOpen === 'EXPIRED' && '만료 인증서 상세'}
@@ -969,7 +969,7 @@ export function UploadDashboard() {
             </div>
 
             {/* Dialog Body */}
-            <div className="px-6 py-4 overflow-y-auto max-h-[55vh]">
+            <div className="px-5 py-4 overflow-y-auto max-h-[55vh]">
               {reasonsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-gray-400" />

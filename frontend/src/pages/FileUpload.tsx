@@ -812,38 +812,38 @@ export function FileUpload() {
     <div className="w-full px-4 lg:px-6 py-4">
       {/* Re-upload Confirmation Dialog */}
       {reuploadDialog.show && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-2xl max-w-md w-full mx-4 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-full bg-amber-100 dark:bg-amber-900/30">
-                <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full mx-4">
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2.5">
+              <div className="p-1.5 rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">
                 파일 재업로드 확인
               </h3>
             </div>
-            <div className="mb-5 space-y-2 text-sm text-gray-600 dark:text-gray-300">
-              <p>이 파일은 이전에 업로드된 적이 있습니다.</p>
-              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1">
+            <div className="px-5 py-4 space-y-3">
+              <p className="text-sm text-gray-600 dark:text-gray-300">이 파일은 이전에 업로드된 적이 있습니다.</p>
+              <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
                 <p><span className="font-medium">파일명:</span> {reuploadDialog.existingUpload?.fileName}</p>
                 <p><span className="font-medium">상태:</span> {reuploadDialog.existingUpload?.status}</p>
                 <p><span className="font-medium">업로드 ID:</span> <span className="font-mono text-xs">{reuploadDialog.existingUpload?.uploadId}</span></p>
               </div>
-              <p className="text-amber-600 dark:text-amber-400 font-medium">
+              <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
                 재업로드하면 새 업로드 레코드가 생성되고 인증서 데이터가 재처리됩니다.
                 기존 업로드 기록은 유지됩니다.
               </p>
             </div>
-            <div className="flex justify-end gap-3">
+            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
               <button
                 onClick={() => setReuploadDialog({ show: false })}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
                 취소
               </button>
               <button
                 onClick={handleForceReupload}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
+                className="px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
               >
                 재업로드
               </button>

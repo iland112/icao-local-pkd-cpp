@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 import {
   AlertCircle, AlertTriangle, CheckCircle, Download, Globe,
   Loader2, RefreshCw, FileWarning, X, ChevronLeft, ChevronRight,
@@ -124,6 +126,12 @@ export default function CrlReport() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const handleRefresh = () => setRefreshKey(k => k + 1);
+
+  const crlItems = useMemo(() => reportData?.crls.items ?? [], [reportData]);
+  const { sortedData: sortedCrls, sortConfig: crlSortConfig, requestSort: requestCrlSort } = useSortableTable(crlItems);
+
+  const revokedItems = useMemo(() => detailData?.revokedCertificates.items ?? [], [detailData]);
+  const { sortedData: sortedRevoked, sortConfig: revokedSortConfig, requestSort: requestRevokedSort } = useSortableTable(revokedItems);
 
   useEffect(() => {
     abortControllerRef.current?.abort();
@@ -339,7 +347,7 @@ export default function CrlReport() {
               <YAxis tick={{ fill: '#6B7280', fontSize: 12 }} />
               <Tooltip
                 content={({ active, payload }) => {
-                  if (!active || !payload?.length) return null;
+                  if (!active || !payload?.length || !payload[0]) return null;
                   const item = payload[0].payload as CrlCountryEntry;
                   const flagPath = getFlagSvgPath(item.countryCode);
                   return (
@@ -416,7 +424,7 @@ export default function CrlReport() {
                 <YAxis tick={{ fill: '#6B7280', fontSize: 12 }} />
                 <Tooltip
                   content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
+                    if (!active || !payload?.length || !payload[0]) return null;
                     const item = payload[0].payload as RevocationReasonEntry;
                     return (
                       <div className="bg-gray-900 dark:bg-gray-700 border border-gray-700 dark:border-gray-600 rounded-lg px-3 py-2 shadow-lg">
@@ -442,8 +450,10 @@ export default function CrlReport() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
+            <label htmlFor="crl-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
             <select
+              id="crl-country"
+              name="countryFilter"
               value={countryFilter}
               onChange={(e) => { setCountryFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -457,8 +467,10 @@ export default function CrlReport() {
             </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상태</label>
+            <label htmlFor="crl-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상태</label>
             <select
+              id="crl-status"
+              name="statusFilter"
               value={statusFilter}
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -498,18 +510,18 @@ export default function CrlReport() {
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">국가</th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">발급자 (CN)</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">발급일</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">만료일</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">상태</th>
-                <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">폐기 수</th>
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">알고리즘</th>
+                <SortableHeader label="국가" sortKey="countryCode" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="발급자 (CN)" sortKey="issuerDn" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="발급일" sortKey="thisUpdate" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="만료일" sortKey="nextUpdate" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="상태" sortKey="status" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="폐기 수" sortKey="revokedCount" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label="알고리즘" sortKey="signatureAlgorithm" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {reportData.crls.items.map(crl => (
+              {sortedCrls.map(crl => (
                 <tr key={crl.id} onClick={() => handleRowClick(crl)}
                   className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer transition-colors">
                   <td className="px-3 py-2.5 whitespace-nowrap">
@@ -607,16 +619,16 @@ export default function CrlReport() {
       {/* Detail Dialog */}
       {dialogOpen && selectedCrl && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeDialog}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
             {/* Dialog Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-amber-50 dark:bg-amber-900/30">
-                  <FileWarning className="w-5 h-5 text-amber-600" />
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/30">
+                  <FileWarning className="w-4 h-4 text-amber-600" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-bold text-gray-900 dark:text-white">CRL 상세</h2>
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white">CRL 상세</h2>
                     {getFlagSvgPath(selectedCrl.countryCode) && (
                       <img src={getFlagSvgPath(selectedCrl.countryCode)} alt={selectedCrl.countryCode}
                         className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500" />
@@ -645,7 +657,7 @@ export default function CrlReport() {
             </div>
 
             {/* Dialog Body */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-5">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {detailLoading ? (
                 <div className="flex items-center justify-center py-16">
                   <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
@@ -688,13 +700,13 @@ export default function CrlReport() {
                           <thead className="bg-slate-100 dark:bg-gray-700 sticky top-0">
                             <tr>
                               <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 w-12">#</th>
-                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200">시리얼 번호</th>
-                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200">폐기 일자</th>
-                              <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200">폐기 사유</th>
+                              <SortableHeader label="시리얼 번호" sortKey="serialNumber" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
+                              <SortableHeader label="폐기 일자" sortKey="revocationDate" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
+                              <SortableHeader label="폐기 사유" sortKey="revocationReason" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                            {detailData.revokedCertificates.items.map((rev, i) => (
+                            {sortedRevoked.map((rev, i) => (
                               <tr key={rev.serialNumber} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
                                 <td className="px-3 py-2.5 text-center text-xs text-gray-400">{i + 1}</td>
                                 <td className="px-3 py-2.5 font-mono text-xs text-gray-900 dark:text-white">{rev.serialNumber}</td>
@@ -723,6 +735,16 @@ export default function CrlReport() {
                   <p className="text-sm">데이터를 불러올 수 없습니다</p>
                 </div>
               )}
+            </div>
+
+            {/* Dialog Footer */}
+            <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+              <button
+                onClick={closeDialog}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
+              >
+                닫기
+              </button>
             </div>
           </div>
         </div>

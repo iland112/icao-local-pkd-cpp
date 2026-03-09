@@ -1,4 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useSortableTable } from '@/hooks/useSortableTable';
+import { SortableHeader } from '@/components/common/SortableHeader';
 import { Link } from 'react-router-dom';
 import {
   History,
@@ -239,6 +241,8 @@ export function PAHistory() {
 
   const hasActiveFilters = searchTerm || statusFilter || countryFilter || dateFrom || dateTo;
 
+  const { sortedData: sortedHistory, sortConfig: historySortConfig, requestSort: requestHistorySort } = useSortableTable<PAHistoryItem>(filteredHistory);
+
   // Open detail modal
   const openDetailModal = async (record: PAHistoryItem) => {
     setSelectedRecord(record);
@@ -384,10 +388,12 @@ export function PAHistory() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* Country Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="pa-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               발급 국가
             </label>
             <select
+              id="pa-country"
+              name="countryFilter"
               value={countryFilter}
               onChange={(e) => setCountryFilter(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -401,10 +407,12 @@ export function PAHistory() {
 
           {/* Status Filter */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="pa-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               검증 결과
             </label>
             <select
+              id="pa-status"
+              name="statusFilter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as PAStatus | '')}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -419,10 +427,12 @@ export function PAHistory() {
 
           {/* Date From */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="pa-date-from" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               시작 날짜
             </label>
             <input
+              id="pa-date-from"
+              name="dateFrom"
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
@@ -432,10 +442,12 @@ export function PAHistory() {
 
           {/* Date To */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="pa-date-to" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               종료 날짜
             </label>
             <input
+              id="pa-date-to"
+              name="dateTo"
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
@@ -445,13 +457,15 @@ export function PAHistory() {
 
           {/* Search & Actions */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            <label htmlFor="pa-search" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
               검색
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
+                  id="pa-search"
+                  name="searchTerm"
                   type="text"
                   placeholder="여권번호..."
                   value={searchTerm}
@@ -505,34 +519,20 @@ export function PAHistory() {
               <table className="w-full">
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      검증 ID
-                    </th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      국가
-                    </th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      여권번호
-                    </th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      유형
-                    </th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      결과
-                    </th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      검증 시각
-                    </th>
-                    <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      요청자
-                    </th>
+                    <SortableHeader label="검증 ID" sortKey="verificationId" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label="국가" sortKey="issuingCountry" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label="여권번호" sortKey="documentNumber" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label="유형" sortKey="verificationType" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label="결과" sortKey="status" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label="검증 시각" sortKey="verificationTimestamp" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label="요청자" sortKey="requestedBy" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                     <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       상세
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredHistory.map((item) => (
+                  {sortedHistory.map((item) => (
                     <tr
                       key={item.verificationId}
                       className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
@@ -656,7 +656,7 @@ export function PAHistory() {
           />
 
           {/* Modal Content */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
             {/* Modal Header */}
             <div className="sticky top-0 z-10 px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800">
               <div className="flex items-center gap-2.5">
@@ -990,9 +990,8 @@ export function PAHistory() {
             <div className="sticky bottom-0 px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 flex justify-end">
               <button
                 onClick={closeDetailModal}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                <X className="w-3.5 h-3.5" />
                 닫기
               </button>
             </div>

@@ -406,7 +406,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             result["trustChainValid"] = tcvVal.asBool();
         } else if (tcvVal.isString()) {
             std::string tcvStr = tcvVal.asString();
-            result["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+            result["trustChainValid"] = (tcvStr == "t" || tcvStr == "true" || tcvStr == "1");
         } else {
             result["trustChainValid"] = false;
         }
@@ -441,7 +441,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             result["cscaFound"] = cfVal.asBool();
         } else if (cfVal.isString()) {
             std::string cfStr = cfVal.asString();
-            result["cscaFound"] = (cfStr == "t" || cfStr == "true");
+            result["cscaFound"] = (cfStr == "t" || cfStr == "true" || cfStr == "1");
         } else {
             result["cscaFound"] = false;
         }
@@ -454,7 +454,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             result["signatureVerified"] = svVal.asBool();
         } else if (svVal.isString()) {
             std::string svStr = svVal.asString();
-            result["signatureVerified"] = (svStr == "t" || svStr == "true");
+            result["signatureVerified"] = (svStr == "t" || svStr == "true" || svStr == "1");
         } else {
             result["signatureVerified"] = false;
         }
@@ -467,7 +467,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             result["validityCheckPassed"] = vpVal.asBool();
         } else if (vpVal.isString()) {
             std::string vpStr = vpVal.asString();
-            result["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+            result["validityCheckPassed"] = (vpStr == "t" || vpStr == "true" || vpStr == "1");
         } else {
             result["validityCheckPassed"] = false;
         }
@@ -484,7 +484,7 @@ Json::Value ValidationRepository::findByFingerprint(const std::string& fingerpri
             result["crlChecked"] = ccVal.asBool();
         } else if (ccVal.isString()) {
             std::string ccStr = ccVal.asString();
-            result["crlChecked"] = (ccStr == "t" || ccStr == "true");
+            result["crlChecked"] = (ccStr == "t" || ccStr == "true" || ccStr == "1");
         } else {
             result["crlChecked"] = false;
         }
@@ -691,7 +691,7 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
         if (tcvVal.isBool()) result["trustChainValid"] = tcvVal.asBool();
         else if (tcvVal.isString()) {
             std::string s = tcvVal.asString();
-            result["trustChainValid"] = (s == "t" || s == "true");
+            result["trustChainValid"] = (s == "t" || s == "true" || s == "1");
         } else result["trustChainValid"] = false;
 
         result["trustChainMessage"] = row.get("trust_chain_message", Json::nullValue);
@@ -715,7 +715,7 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
         if (cfVal.isBool()) result["cscaFound"] = cfVal.asBool();
         else if (cfVal.isString()) {
             std::string s = cfVal.asString();
-            result["cscaFound"] = (s == "t" || s == "true");
+            result["cscaFound"] = (s == "t" || s == "true" || s == "1");
         } else result["cscaFound"] = false;
 
         result["cscaSubjectDn"] = row.get("csca_subject_dn", Json::nullValue);
@@ -724,7 +724,7 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
         if (svVal.isBool()) result["signatureVerified"] = svVal.asBool();
         else if (svVal.isString()) {
             std::string s = svVal.asString();
-            result["signatureVerified"] = (s == "t" || s == "true");
+            result["signatureVerified"] = (s == "t" || s == "true" || s == "1");
         } else result["signatureVerified"] = false;
 
         result["signatureAlgorithm"] = row.get("signature_algorithm", Json::nullValue);
@@ -733,7 +733,7 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
         if (vpVal.isBool()) result["validityCheckPassed"] = vpVal.asBool();
         else if (vpVal.isString()) {
             std::string s = vpVal.asString();
-            result["validityCheckPassed"] = (s == "t" || s == "true");
+            result["validityCheckPassed"] = (s == "t" || s == "true" || s == "1");
         } else result["validityCheckPassed"] = false;
 
         result["notBefore"] = row.get("not_before", Json::nullValue);
@@ -745,7 +745,7 @@ Json::Value ValidationRepository::findBySubjectDn(const std::string& subjectDn)
         if (ccVal.isBool()) result["crlChecked"] = ccVal.asBool();
         else if (ccVal.isString()) {
             std::string s = ccVal.asString();
-            result["crlChecked"] = (s == "t" || s == "true");
+            result["crlChecked"] = (s == "t" || s == "true" || s == "1");
         } else result["crlChecked"] = false;
 
         result["validatedAt"] = row.get("validation_timestamp", Json::nullValue);
@@ -904,7 +904,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["trustChainValid"] = tcvVal.asBool();
             } else if (tcvVal.isString()) {
                 std::string tcvStr = tcvVal.asString();
-                v["trustChainValid"] = (tcvStr == "t" || tcvStr == "true");
+                v["trustChainValid"] = (tcvStr == "t" || tcvStr == "true" || tcvStr == "1");
             } else {
                 v["trustChainValid"] = false;
             }
@@ -938,7 +938,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["cscaFound"] = cfVal.asBool();
             } else if (cfVal.isString()) {
                 std::string cfStr = cfVal.asString();
-                v["cscaFound"] = (cfStr == "t" || cfStr == "true");
+                v["cscaFound"] = (cfStr == "t" || cfStr == "true" || cfStr == "1");
             } else {
                 v["cscaFound"] = false;
             }
@@ -951,7 +951,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["signatureVerified"] = svVal.asBool();
             } else if (svVal.isString()) {
                 std::string svStr = svVal.asString();
-                v["signatureVerified"] = (svStr == "t" || svStr == "true");
+                v["signatureVerified"] = (svStr == "t" || svStr == "true" || svStr == "1");
             } else {
                 v["signatureVerified"] = false;
             }
@@ -964,7 +964,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["validityCheckPassed"] = vpVal.asBool();
             } else if (vpVal.isString()) {
                 std::string vpStr = vpVal.asString();
-                v["validityCheckPassed"] = (vpStr == "t" || vpStr == "true");
+                v["validityCheckPassed"] = (vpStr == "t" || vpStr == "true" || vpStr == "1");
             } else {
                 v["validityCheckPassed"] = false;
             }
@@ -975,7 +975,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["isExpired"] = expVal.asBool();
             } else if (expVal.isString()) {
                 std::string expStr = expVal.asString();
-                v["isExpired"] = (expStr == "t" || expStr == "true");
+                v["isExpired"] = (expStr == "t" || expStr == "true" || expStr == "1");
             } else {
                 v["isExpired"] = false;
             }
@@ -986,7 +986,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["isNotYetValid"] = nysVal.asBool();
             } else if (nysVal.isString()) {
                 std::string nysStr = nysVal.asString();
-                v["isNotYetValid"] = (nysStr == "t" || nysStr == "true");
+                v["isNotYetValid"] = (nysStr == "t" || nysStr == "true" || nysStr == "1");
             } else {
                 v["isNotYetValid"] = false;
             }
@@ -1001,7 +1001,7 @@ Json::Value ValidationRepository::findByUploadId(
                 v["crlChecked"] = ccVal.asBool();
             } else if (ccVal.isString()) {
                 std::string ccStr = ccVal.asString();
-                v["crlChecked"] = (ccStr == "t" || ccStr == "true");
+                v["crlChecked"] = (ccStr == "t" || ccStr == "true" || ccStr == "1");
             } else {
                 v["crlChecked"] = false;
             }
