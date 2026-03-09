@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import {
   Brain,
   AlertCircle,
@@ -118,7 +119,7 @@ export default function AiAnalysisDashboard() {
   const [filterLabel, setFilterLabel] = useState('');
   const [filterRisk, setFilterRisk] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 15;
+  const pageSize = DEFAULT_PAGE_SIZE;
 
   // AbortController ref for cancelling stale anomaly list requests
   const anomalyAbortRef = useRef<AbortController | null>(null);

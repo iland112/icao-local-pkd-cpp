@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { Link } from 'react-router-dom';
 import {
   Clock,
@@ -88,7 +89,7 @@ export function UploadHistory() {
   // Tab state for detail dialog
   const [activeTab, setActiveTab] = useState<'details' | 'structure' | 'duplicates'>('details');
 
-  const pageSize = 10;
+  const pageSize = DEFAULT_PAGE_SIZE;
 
   const fetchUploads = useCallback(async () => {
     setLoading(true);

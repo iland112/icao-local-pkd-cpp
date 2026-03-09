@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import {
@@ -109,7 +110,7 @@ export function OperationAuditLog() {
 
   // Pagination
   const [page, setPage] = useState(0);
-  const limit = 20;
+  const limit = DEFAULT_PAGE_SIZE;
 
   // Filters
   const [operationTypeFilter, setOperationTypeFilter] = useState<OperationType | ''>('');

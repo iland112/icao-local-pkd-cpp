@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import { Link } from 'react-router-dom';
@@ -85,7 +86,7 @@ export function PAHistory() {
     error: number;
   }>({ total: 0, valid: 0, expiredValid: 0, invalid: 0, error: 0 });
 
-  const pageSize = 5;
+  const pageSize = DEFAULT_PAGE_SIZE;
 
   useEffect(() => {
     fetchStatistics();

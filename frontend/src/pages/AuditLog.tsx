@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import { Shield, Filter, User, Activity, CheckCircle, XCircle, X, Clock, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
@@ -40,7 +41,7 @@ export function AuditLog() {
 
   // Pagination
   const [page, setPage] = useState(1);
-  const [limit] = useState(20);
+  const limit = DEFAULT_PAGE_SIZE;
 
   // Detail Dialog
   const [selectedLog, setSelectedLog] = useState<AuditLogEntry | null>(null);

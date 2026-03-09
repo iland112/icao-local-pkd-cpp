@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ShieldCheck,
   Database,
   Server,
   Upload,
@@ -186,13 +185,13 @@ export function Dashboard() {
       {/* Header */}
       <div className="mb-6">
         <div className="flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg">
-            <ShieldCheck className="w-7 h-7 text-white" />
+          <div className="rounded-xl shadow-lg overflow-hidden">
+            <img src="/favicon.svg" alt="SPKD" className="w-13 h-13" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD Local Manager</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">SPKD Dashboard</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              ePassport 인증서 관리 및 Passive Authentication 검증 플랫폼
+              전자여권 인증서 관리 및 위·변조 검사 플랫폼
             </p>
           </div>
           <div className="hidden lg:flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -245,7 +244,7 @@ export function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
-                    ICAO PKD 새 버전 감지
+                    ICAO PKD 신규 버전 감지
                   </h3>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {icaoStatus.status

@@ -359,11 +359,11 @@ export function Header() {
     <Dialog isOpen={showAbout} onClose={() => setShowAbout(false)} title="About" size="lg">
       <div className="space-y-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 dark:text-white">ICAO Local PKD</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">SPKD</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Version: {__APP_VERSION__}</p>
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-          <p>ICAO 전자여권 PKD 관리 및 Passive Authentication 시스템</p>
+          <p>SmartCore PKD — 전자여권 위·변조 검사 시스템</p>
           <p className="text-xs text-gray-400 dark:text-gray-500">ePassport Public Key Directory Management &amp; Passive Authentication System</p>
         </div>
         <div>

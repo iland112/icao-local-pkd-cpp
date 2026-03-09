@@ -158,10 +158,10 @@ describe('Login page', () => {
     });
   });
 
-  it('should display ICAO Local PKD branding', () => {
+  it('should display SPKD branding', () => {
     render(<Login />);
 
     // Mobile branding or desktop branding should be present
-    expect(screen.getAllByText('ICAO Local PKD').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('SPKD').length).toBeGreaterThanOrEqual(1);
   });
 });

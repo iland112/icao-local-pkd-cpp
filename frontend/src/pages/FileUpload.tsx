@@ -910,7 +910,7 @@ export function FileUpload() {
               PKD 파일 업로드
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              ICAO PKD LDIF 또는 Master List 파일을 업로드합니다.
+              PKD LDIF 또는 Master List 파일을 업로드합니다.
             </p>
           </div>
         </div>

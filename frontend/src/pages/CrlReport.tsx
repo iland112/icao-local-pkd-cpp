@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import {
@@ -117,7 +118,7 @@ export default function CrlReport() {
   const [countryFilter, setCountryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = DEFAULT_PAGE_SIZE;
 
   const [selectedCrl, setSelectedCrl] = useState<CrlItem | null>(null);
   const [detailData, setDetailData] = useState<CrlDetailData | null>(null);

@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.29.8
+**Current Version**: v2.30.0
 **Last Updated**: 2026-03-09
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -328,7 +328,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | CertificateUpload | `/upload/certificate` | Individual certificate upload (preview-before-save) |
 | UploadHistory | `/upload-history` | Upload management |
 | UploadDetail | `/upload/:uploadId` | Upload detail & structure |
-| UploadDashboard | `/upload/dashboard` | Upload statistics dashboard |
+| UploadDashboard | `/upload-dashboard` | Certificate statistics dashboard |
 | CertificateSearch | `/pkd/certificates` | Certificate search & detail |
 | DscNcReport | `/pkd/dsc-nc` | DSC_NC non-conformant certificate report |
 | CrlReport | `/pkd/crl` | CRL report & revoked certificate analysis |
@@ -583,6 +583,25 @@ scripts/
 ---
 
 ## Version History
+
+### v2.30.0 (2026-03-09) - 로그인 페이지 모던 리디자인 + 사이드바 섹션 재구성 + 클라이언트 사이드 정렬
+- **로그인 폼 모던 리디자인**: 카드 래퍼 제거(flat layout), `ring-1 ring-gray-200` 입력 필드, `group-focus-within:text-[#02385e]` 아이콘 포커스 색상, 단색 `bg-[#02385e]` 버튼 + `active:scale-[0.98]` 프레스 효과, `radial-gradient` 도트 패턴 배경
+- **로그인 텍스트 변경**: "시스템 로그인" → "SPKD 로그인", 하단 SPKD 부제 제거, 버전 번호 제거, 푸터 `© 2026 SmartCore Inc.` 만 표시
+- **Hero 배경 가시성 향상**: `hero-bg.svg` 전 레이어 opacity ~2.5배 증가 (0.03~0.06 → 0.08~0.25), 비네팅 오버레이 감소
+- **사이드바 섹션 collapsible 전환**: 인증서 관리/위·변조 검사/보고서 & 분석/시스템 관리 4개 섹션을 접기/펼치기 가능한 버튼으로 변환 (Chevron 회전 애니메이션, 활성 자식 메뉴 자동 확장)
+- **사이드바 섹션 아이콘**: FolderKey(인증서 관리), Fingerprint(위·변조 검사), ClipboardList(보고서 & 분석), Settings(시스템 관리) — Home 메뉴와 동일한 스타일 통일
+- **사이드바 서브메뉴 인덴트**: `ml-3 pl-3 border-l border-gray-200` 트리형 시각 계층 구조
+- **사이드바 섹션 재구성** (4섹션 체계):
+  - 인증서 관리: ICAO 버전 상태, 파일 업로드, 인증서 업로드, 인증서 조회, 업로드 이력, 동기화 상태
+  - 위·변조 검사: PA 검증 수행, 검증 이력
+  - 보고서 & 분석: 인증서 보고서(인증서 통계/DSC Trust Chain/CRL 보고서/표준 부적합 DSC), PA 검증 통계, AI 인증서 분석
+  - 시스템 관리: 시스템 모니터링, 사용자 관리, API 클라이언트, 운영 감사 로그, 인증 감사 로그, API Docs
+- **API Docs 이동**: 별도 섹션 → 시스템 관리 하위 그룹으로 이동
+- **통계 대시보드 이동**: 인증서 관리 → 보고서 & 분석 섹션 "인증서 통계"로 이동 (라벨 변경)
+- **검증 이력/통계 분리**: PA 검증 이력 → 위·변조 검사, PA 검증 통계 → 보고서 & 분석
+- **클라이언트 사이드 테이블 정렬**: SortableHeader 컴포넌트 기반 12개 페이지 컬럼 정렬 (문자열/숫자/날짜/상태)
+- **페이지네이션 z-index 수정**: 8개 다이얼로그 `z-50` → `z-[70]` (사이드바 z-[60] 뒤 숨김 방지)
+- ~21 files changed (0 new, ~21 modified)
 
 ### v2.29.8 (2026-03-09) - 로그인 페이지 리브랜딩 + 업로드 중복 파일 UX 개선
 - **로그인 페이지 제목 변경**: "ePassport 인증서 관리 시스템" → "전자여권 위·변조 검사 시스템" (데스크톱 + 모바일)

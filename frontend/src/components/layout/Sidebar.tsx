@@ -25,6 +25,9 @@ import {
   Brain,
   KeyRound,
   Users,
+  FolderKey,
+  Fingerprint,
+  Settings,
 } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 
@@ -56,54 +59,59 @@ const isGroupItem = (item: NavItem): item is NavGroupItem => 'children' in item;
 
 interface NavSection {
   title: string;
+  icon?: React.ReactNode;
   items: NavItem[];
   adminOnly?: boolean;
 }
 
 const navSections: NavSection[] = [
   {
-    title: 'PKD Management',
+    title: '인증서 관리',
+    icon: <FolderKey className="w-5 h-5 flex-shrink-0" />,
     items: [
       { path: '/icao', label: 'ICAO 버전 상태', icon: <Zap className="w-4 h-4" />, permission: 'icao:read' },
       { path: '/upload', label: '파일 업로드', icon: <Upload className="w-4 h-4" />, permission: 'upload:write' },
       { path: '/upload/certificate', label: '인증서 업로드', icon: <FileText className="w-4 h-4" />, permission: 'upload:write' },
       { path: '/pkd/certificates', label: '인증서 조회', icon: <Key className="w-4 h-4" />, permission: 'cert:read' },
-      {
-        label: '보고서',
-        icon: <ClipboardList className="w-4 h-4" />,
-        children: [
-          { path: '/pkd/trust-chain', label: 'DSC Trust Chain 보고서', icon: <Link2 className="w-4 h-4" />, permission: 'report:read' },
-          { path: '/pkd/crl', label: 'CRL 보고서', icon: <FileWarning className="w-4 h-4" />, permission: 'report:read' },
-          { path: '/pkd/dsc-nc', label: '표준 부적합 DSC 보고서', icon: <ShieldX className="w-4 h-4" />, permission: 'report:read' },
-          { path: '/ai/analysis', label: 'AI 인증서 분석', icon: <Brain className="w-4 h-4" />, permission: 'ai:read' },
-        ],
-      },
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" />, permission: 'upload:read' },
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
-      { path: '/upload-dashboard', label: '통계 대시보드', icon: <BarChart3 className="w-4 h-4" />, permission: 'upload:read' },
     ],
   },
   {
-    title: 'Passive Auth',
+    title: '위·변조 검사',
+    icon: <Fingerprint className="w-5 h-5 flex-shrink-0" />,
     items: [
       { path: '/pa/verify', label: 'PA 검증 수행', icon: <ShieldCheck className="w-4 h-4" />, permission: 'pa:verify' },
       { path: '/pa/history', label: '검증 이력', icon: <History className="w-4 h-4" />, permission: 'pa:read' },
-      { path: '/pa/dashboard', label: '통계 대시보드', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:read' },
     ],
   },
   {
-    title: 'System & Admin',
+    title: '보고서 & 분석',
+    icon: <ClipboardList className="w-5 h-5 flex-shrink-0" />,
+    items: [
+      {
+        label: '인증서 보고서',
+        icon: <BarChart3 className="w-4 h-4" />,
+        children: [
+          { path: '/upload-dashboard', label: '인증서 통계', icon: <BarChart3 className="w-4 h-4" />, permission: 'upload:read' },
+          { path: '/pkd/trust-chain', label: 'DSC Trust Chain', icon: <Link2 className="w-4 h-4" />, permission: 'report:read' },
+          { path: '/pkd/crl', label: 'CRL 보고서', icon: <FileWarning className="w-4 h-4" />, permission: 'report:read' },
+          { path: '/pkd/dsc-nc', label: '표준 부적합 DSC', icon: <ShieldX className="w-4 h-4" />, permission: 'report:read' },
+        ],
+      },
+      { path: '/pa/dashboard', label: 'PA 검증 통계', icon: <PresentationIcon className="w-4 h-4" />, permission: 'pa:read' },
+      { path: '/ai/analysis', label: 'AI 인증서 분석', icon: <Brain className="w-4 h-4" />, permission: 'ai:read' },
+    ],
+  },
+  {
+    title: '시스템 관리',
+    icon: <Settings className="w-5 h-5 flex-shrink-0" />,
     items: [
       { path: '/monitoring', label: '시스템 모니터링', icon: <Activity className="w-4 h-4" /> },
       { path: '/admin/users', label: '사용자 관리', icon: <Users className="w-4 h-4" />, adminOnly: true },
       { path: '/admin/api-clients', label: 'API 클라이언트', icon: <KeyRound className="w-4 h-4" />, adminOnly: true },
       { path: '/admin/operation-audit', label: '운영 감사 로그', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
       { path: '/admin/audit-log', label: '인증 감사 로그', icon: <Key className="w-4 h-4" />, adminOnly: true },
-    ],
-  },
-  {
-    title: '',
-    items: [
       {
         label: 'API Docs',
         icon: <BookOpen className="w-4 h-4" />,
@@ -141,9 +149,23 @@ export function Sidebar() {
   const hasActiveChild = (item: NavGroupItem): boolean =>
     item.children.some((child) => location.pathname === child.path);
 
-  // Auto-expand groups with active children
+  /** Check if a section has any active item (leaf or group child) */
+  const sectionHasActiveItem = (section: NavSection): boolean =>
+    section.items.some((item) => {
+      if (isGroupItem(item)) return hasActiveChild(item);
+      return location.pathname === item.path;
+    });
+
+  // Auto-expand groups and sections with active children
   useEffect(() => {
     navSections.forEach((section) => {
+      // Auto-expand section if it has active items
+      if (section.title && sectionHasActiveItem(section)) {
+        setExpandedGroups((prev) => {
+          if (prev.has(section.title)) return prev;
+          return new Set(prev).add(section.title);
+        });
+      }
       section.items.forEach((item) => {
         if (isGroupItem(item) && hasActiveChild(item)) {
           setExpandedGroups((prev) => {
@@ -177,13 +199,13 @@ export function Sidebar() {
           {/* Logo */}
           <div className="px-4 pt-4 pb-2">
             <Link to="/" className="flex items-center gap-3 group">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow flex-shrink-0">
-                <ShieldCheck className="w-6 h-6 text-white" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg group-hover:shadow-xl transition-shadow flex-shrink-0 overflow-hidden">
+                <img src="/favicon.svg" alt="SPKD" className="w-10 h-10" />
               </div>
               {expanded && (
                 <div className="flex-1 min-w-0 overflow-hidden transition-opacity duration-200">
-                  <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">ICAO PKD</h2>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">Local Manager</p>
+                  <h2 className="text-base font-bold text-gray-900 dark:text-white truncate">SPKD</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">SmartCore PKD</p>
                 </div>
               )}
             </Link>
@@ -245,121 +267,168 @@ export function Sidebar() {
                 });
                 if (visibleItems.length === 0) return null;
 
-                return (
-                <li key={section.title}>
-                  {/* Section Header */}
-                  {expanded && section.title && (
-                    <p className="px-3 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
-                      {section.title}
-                    </p>
-                  )}
-                  {!expanded && <hr className="my-2 border-gray-200 dark:border-gray-700 lg:block hidden" />}
+                const isSectionExpanded = !section.title || expandedGroups.has(section.title);
+                const sectionActive = sectionHasActiveItem(section);
 
-                  {/* Section Items */}
-                  <ul className="space-y-1">
-                    {visibleItems.map((item) => (
-                      <li key={isGroupItem(item) ? item.label : item.path}>
-                        {isGroupItem(item) ? (
-                          /* Group with collapsible children */
-                          <>
-                            <button
-                              onClick={() => {
-                                if (!expanded) toggleExpanded();
-                                toggleGroup(item.label);
-                              }}
-                              className={cn(
-                                'w-full flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
-                                hasActiveChild(item)
-                                  ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
-                                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
-                                !expanded && 'lg:justify-center lg:px-2'
-                              )}
-                              title={!expanded ? item.label : undefined}
-                            >
-                              {item.icon}
-                              {expanded && (
-                                <>
-                                  <span className="flex-1 text-left">{item.label}</span>
-                                  {expandedGroups.has(item.label)
-                                    ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
-                                    : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
-                                  }
-                                </>
-                              )}
-                            </button>
-                            {expanded && expandedGroups.has(item.label) && (
-                              <ul className="mt-1 ml-4 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
-                                {item.children.filter(child => isLeafVisible(child)).map((child) => (
-                                  <li key={child.path}>
-                                    {child.external ? (
-                                      <a
-                                        href={child.path}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-x-2.5 py-1.5 px-2.5 text-sm rounded-lg transition-colors text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-                                      >
-                                        {child.icon}
-                                        <span>{child.label}</span>
-                                        <ExternalLink className="w-3 h-3 ml-auto" />
-                                      </a>
-                                    ) : (
-                                      <Link
-                                        to={child.path}
-                                        className={cn(
-                                          'flex items-center gap-x-2.5 py-1.5 px-2.5 text-sm rounded-lg transition-colors',
-                                          isActive(child.path)
-                                            ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
-                                        )}
-                                      >
-                                        {child.icon}
-                                        <span>{child.label}</span>
-                                      </Link>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </>
-                        ) : item.external ? (
-                          <a
-                            href={item.path}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className={cn(
-                              'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
-                              'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
-                              !expanded && 'lg:justify-center lg:px-2'
-                            )}
-                            title={!expanded ? item.label : undefined}
-                          >
-                            {item.icon}
-                            {expanded && (
-                              <>
-                                <span>{item.label}</span>
-                                <ExternalLink className="w-3 h-3 ml-auto" />
-                              </>
-                            )}
-                          </a>
-                        ) : (
-                          <Link
-                            to={item.path}
-                            className={cn(
-                              'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
-                              isActive(item.path)
-                                ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
-                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
-                              !expanded && 'lg:justify-center lg:px-2'
-                            )}
-                            title={!expanded ? item.label : undefined}
-                          >
-                            {item.icon}
-                            {expanded && <span>{item.label}</span>}
-                          </Link>
+                /** Render a single leaf nav item */
+                const renderLeafItem = (item: NavLeafItem, indent = false) => {
+                  if (item.external) {
+                    return (
+                      <a
+                        href={item.path}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={cn(
+                          'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
+                          'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+                          indent && 'pl-6',
+                          !expanded && 'lg:justify-center lg:px-2'
                         )}
-                      </li>
-                    ))}
-                  </ul>
+                        title={!expanded ? item.label : undefined}
+                      >
+                        {item.icon}
+                        {expanded && (
+                          <>
+                            <span>{item.label}</span>
+                            <ExternalLink className="w-3 h-3 ml-auto" />
+                          </>
+                        )}
+                      </a>
+                    );
+                  }
+                  return (
+                    <Link
+                      to={item.path}
+                      className={cn(
+                        'flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
+                        isActive(item.path)
+                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+                        indent && 'pl-6',
+                        !expanded && 'lg:justify-center lg:px-2'
+                      )}
+                      title={!expanded ? item.label : undefined}
+                    >
+                      {item.icon}
+                      {expanded && <span>{item.label}</span>}
+                    </Link>
+                  );
+                };
+
+                /** Render a sub-group (e.g. 보고서, API Docs) */
+                const renderGroupItem = (item: NavGroupItem) => (
+                  <>
+                    <button
+                      onClick={() => {
+                        if (!expanded) toggleExpanded();
+                        toggleGroup(item.label);
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-x-3 py-2 px-3 text-sm rounded-lg transition-colors',
+                        hasActiveChild(item)
+                          ? 'text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/10'
+                          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700',
+                        !expanded && 'lg:justify-center lg:px-2'
+                      )}
+                      title={!expanded ? item.label : undefined}
+                    >
+                      {item.icon}
+                      {expanded && (
+                        <>
+                          <span className="flex-1 text-left">{item.label}</span>
+                          {expandedGroups.has(item.label)
+                            ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                            : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                          }
+                        </>
+                      )}
+                    </button>
+                    {expanded && expandedGroups.has(item.label) && (
+                      <ul className="mt-1 ml-4 pl-3 border-l border-gray-200 dark:border-gray-700 space-y-0.5">
+                        {item.children.filter(child => isLeafVisible(child)).map((child) => (
+                          <li key={child.path}>
+                            {child.external ? (
+                              <a
+                                href={child.path}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-x-2.5 py-1.5 px-2.5 text-sm rounded-lg transition-colors text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
+                              >
+                                {child.icon}
+                                <span>{child.label}</span>
+                                <ExternalLink className="w-3 h-3 ml-auto" />
+                              </a>
+                            ) : (
+                              <Link
+                                to={child.path}
+                                className={cn(
+                                  'flex items-center gap-x-2.5 py-1.5 px-2.5 text-sm rounded-lg transition-colors',
+                                  isActive(child.path)
+                                    ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400'
+                                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700'
+                                )}
+                              >
+                                {child.icon}
+                                <span>{child.label}</span>
+                              </Link>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                );
+
+                return (
+                <li key={section.title || '__api-docs'}>
+                  {/* Collapsible Section Header — same style as Home */}
+                  {section.title && (
+                    <button
+                      onClick={() => {
+                        if (!expanded) toggleExpanded();
+                        toggleGroup(section.title);
+                      }}
+                      className={cn(
+                        'w-full flex items-center gap-x-3 py-2.5 px-3 text-sm font-semibold rounded-lg transition-colors mt-1.5',
+                        sectionActive
+                          ? 'text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700/50'
+                          : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700',
+                        !expanded && 'lg:justify-center lg:px-2'
+                      )}
+                      title={!expanded ? section.title : undefined}
+                    >
+                      {section.icon}
+                      {expanded && (
+                        <>
+                          <span className="flex-1 text-left">{section.title}</span>
+                          <ChevronDown className={cn(
+                            'w-3.5 h-3.5 text-gray-400 transition-transform duration-200',
+                            !isSectionExpanded && '-rotate-90'
+                          )} />
+                        </>
+                      )}
+                    </button>
+                  )}
+
+                  {/* Section Items (collapsible, indented under header) */}
+                  {isSectionExpanded && expanded && (
+                    <ul className="space-y-0.5 mt-0.5 ml-3 pl-3 border-l border-gray-200 dark:border-gray-700">
+                      {visibleItems.map((item) => (
+                        <li key={isGroupItem(item) ? item.label : item.path}>
+                          {isGroupItem(item) ? renderGroupItem(item) : renderLeafItem(item)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {isSectionExpanded && !expanded && (
+                    <ul className="space-y-0.5 mt-0.5">
+                      {visibleItems.map((item) => (
+                        <li key={isGroupItem(item) ? item.label : item.path}>
+                          {isGroupItem(item) ? renderGroupItem(item) : renderLeafItem(item)}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
                 );
               })}

@@ -67,7 +67,7 @@ describe('Dashboard page', () => {
   it('should render the dashboard title', async () => {
     render(<Dashboard />);
 
-    expect(screen.getByText('ICAO PKD Local Manager')).toBeInTheDocument();
+    expect(screen.getByText('SPKD Dashboard')).toBeInTheDocument();
   });
 
   it('should render platform description', () => {

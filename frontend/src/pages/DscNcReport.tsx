@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 import {
@@ -135,7 +136,7 @@ export default function DscNcReport() {
   const [countryFilter, setCountryFilter] = useState('');
   const [codeFilter, setCodeFilter] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 50;
+  const pageSize = DEFAULT_PAGE_SIZE;
   const abortControllerRef = useRef<AbortController | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const handleRefresh = () => setRefreshKey(k => k + 1);
@@ -713,7 +714,7 @@ function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; o
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">DSC_NC 비준수 인증서 보고서</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            ICAO PKD Non-Conformant DSC 인증서 분석
+            표준 부적합(Non-Conformant) DSC 인증서 분석
           </p>
         </div>
         <div className="flex gap-2">

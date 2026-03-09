@@ -8,6 +8,8 @@ export function Footer() {
         </span>
         <span>|</span>
         <span>ICAO Doc 9303 Compliant</span>
+        <span>|</span>
+        <span>&copy; SmartCore Inc.</span>
       </div>
     </footer>
   );

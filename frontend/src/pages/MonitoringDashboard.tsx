@@ -21,7 +21,7 @@ interface InfraHealth {
 const SERVICE_ORDER = ['pkd-management', 'pa-service', 'pkd-relay', 'Monitoring', 'ai-analysis'];
 
 const SERVICE_DEFS: Record<string, { label: string; port: number; desc: string }> = {
-  'pkd-management': { label: 'PKD Management', port: 8081, desc: '업로드, 인증서 관리, 인증' },
+  'pkd-management': { label: '인증서 관리', port: 8081, desc: '업로드, 인증서 관리, 인증' },
   'pa-service': { label: 'PA Service', port: 8082, desc: '여권 Passive Authentication' },
   'pkd-relay': { label: 'PKD Relay', port: 8083, desc: 'DB-LDAP 동기화' },
   'Monitoring': { label: 'Monitoring', port: 8084, desc: '시스템 메트릭 수집' },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSearchParams } from 'react-router-dom';
 import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
@@ -39,7 +40,7 @@ const CertificateSearch: React.FC = () => {
     validity: 'all',
     source: '',
     searchTerm: '',
-    limit: 50,
+    limit: DEFAULT_PAGE_SIZE,
     offset: 0,
   });
 

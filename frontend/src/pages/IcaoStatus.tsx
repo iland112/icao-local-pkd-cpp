@@ -138,7 +138,7 @@ export default function IcaoStatus() {
             <Globe className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD Auto Sync</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">ICAO PKD 버전 동기화</h1>
             <div className="flex items-center gap-3">
               <p className="text-sm text-gray-500 dark:text-gray-400">
                 ICAO PKD 포털의 버전 업데이트를 모니터링합니다.
@@ -415,7 +415,7 @@ export default function IcaoStatus() {
                   <li><strong>DETECTED</strong>: ICAO 포털에서 새 버전 발견</li>
                   <li><strong>NOTIFIED</strong>: 관리자에게 알림 전송 완료</li>
                   <li><strong>DOWNLOADED</strong>: 포털에서 파일 다운로드 완료</li>
-                  <li><strong>IMPORTED</strong>: Local PKD로 가져오기 성공</li>
+                  <li><strong>IMPORTED</strong>: SPKD로 가져오기 성공</li>
                   <li><strong>FAILED</strong>: 가져오기 실패 (오류 메시지 확인)</li>
                 </ul>
               </div>
