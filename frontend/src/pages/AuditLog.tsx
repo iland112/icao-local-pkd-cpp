@@ -125,7 +125,7 @@ export function AuditLog() {
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
@@ -191,7 +191,7 @@ export function AuditLog() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">필터</h2>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label htmlFor="audit-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               사용자명
@@ -402,7 +402,7 @@ export function AuditLog() {
 
             {/* Dialog Content — dense layout */}
             <div className="px-5 py-4 space-y-3">
-              <div className="grid grid-cols-4 gap-x-4 gap-y-2">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                 <div>
                   <dt className="text-[11px] text-gray-500 dark:text-gray-400">시간</dt>
                   <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{formatDateTime(selectedLog.createdAt)}</dd>

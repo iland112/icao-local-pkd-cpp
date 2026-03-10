@@ -620,7 +620,7 @@ export default function CrlReport() {
       {/* Detail Dialog */}
       {dialogOpen && selectedCrl && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={closeDialog}>
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm sm:max-w-2xl lg:max-w-4xl max-h-[85vh] flex flex-col mx-4" onClick={e => e.stopPropagation()}>
             {/* Dialog Header */}
             <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-2">

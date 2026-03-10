@@ -657,7 +657,7 @@ export function PAHistory() {
           />
 
           {/* Modal Content */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm sm:max-w-2xl lg:max-w-4xl max-h-[90vh] overflow-y-auto mx-4">
             {/* Modal Header */}
             <div className="sticky top-0 z-10 px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-white dark:bg-gray-800">
               <div className="flex items-center gap-2.5">

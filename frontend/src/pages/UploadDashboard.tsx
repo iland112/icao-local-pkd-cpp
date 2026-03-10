@@ -19,8 +19,6 @@ import {
   Award,
   AlertCircle,
   Info,
-  ArrowUp,
-  ArrowDown,
   PackageOpen,
 } from 'lucide-react';
 import {
@@ -37,7 +35,7 @@ import { uploadApi } from '@/services/api';
 import { uploadHistoryApi } from '@/services/pkdApi';
 import type { UploadStatisticsOverview, UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
-import { formatDateTime, formatDate } from '@/utils/dateFormat';
+import { formatDate } from '@/utils/dateFormat';
 import { getFlagSvgPath } from '@/utils/countryCode';
 
 interface ValidationReasonEntry {
@@ -503,223 +501,6 @@ export function UploadDashboard() {
             </div>
           </div>
 
-          {/* Timeline Chart Section */}
-          {chartData.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 mb-6">
-              <div className="flex items-center gap-2 mb-6">
-                <TrendingUp className="w-5 h-5 text-violet-500" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 변동 추이</h3>
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  (최근 {chartData.length}개 업로드)
-                </span>
-              </div>
-              <ResponsiveContainer width="100%" height={350}>
-                <LineChart
-                  data={chartData}
-                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                  <XAxis
-                    dataKey="date"
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    stroke="#6B7280"
-                  />
-                  <YAxis
-                    tick={{ fill: '#6B7280', fontSize: 12 }}
-                    stroke="#6B7280"
-                    label={{
-                      value: '인증서 수',
-                      angle: -90,
-                      position: 'insideLeft',
-                      style: { fill: '#6B7280', fontSize: 12 },
-                    }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#1F2937',
-                      border: '1px solid #374151',
-                      borderRadius: '8px',
-                      color: '#F9FAFB',
-                    }}
-                    labelStyle={{ color: '#F9FAFB', fontWeight: 'bold' }}
-                    formatter={(value) => Number(value).toLocaleString()}
-                  />
-                  <Legend
-                    wrapperStyle={{ paddingTop: '20px' }}
-                    iconType="line"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="DSC"
-                    stroke="#8B5CF6"
-                    strokeWidth={2}
-                    dot={{ fill: '#8B5CF6', r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name="DSC"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="CSCA"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    dot={{ fill: '#10B981', r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name="CSCA"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="CRL"
-                    stroke="#F59E0B"
-                    strokeWidth={2}
-                    dot={{ fill: '#F59E0B', r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name="CRL"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="DSC_NC"
-                    stroke="#EF4444"
-                    strokeWidth={2}
-                    dot={{ fill: '#EF4444', r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name="DSC_NC"
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="ML"
-                    stroke="#3B82F6"
-                    strokeWidth={2}
-                    dot={{ fill: '#3B82F6', r: 4 }}
-                    activeDot={{ r: 6 }}
-                    name="ML"
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* Recent Changes Section */}
-          {recentChanges.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-6">
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-500" />
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">최근 변경사항 상세</h3>
-                </div>
-                <Link
-                  to="/upload-history"
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                >
-                  전체 보기 →
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {recentChanges.map((change) => (
-                  <div
-                    key={change.uploadId}
-                    className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">
-                          {change.fileName}
-                        </span>
-                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                          Collection {change.collectionNumber}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-                        <span>{formatDateTime(change.uploadTime)}</span>
-                        {change.previousUpload && (
-                          <span className="text-gray-400 dark:text-gray-500">
-                            vs {change.previousUpload.fileName}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap justify-end">
-                      {change.changes.dsc !== 0 && (
-                        <div className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
-                          change.changes.dsc > 0
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                        )}>
-                          {change.changes.dsc > 0 ? (
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          )}
-                          <span>DSC {Math.abs(change.changes.dsc).toLocaleString()}</span>
-                        </div>
-                      )}
-                      {change.changes.csca !== 0 && (
-                        <div className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
-                          change.changes.csca > 0
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                        )}>
-                          {change.changes.csca > 0 ? (
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          )}
-                          <span>CSCA {Math.abs(change.changes.csca).toLocaleString()}</span>
-                        </div>
-                      )}
-                      {change.changes.dscNc !== 0 && (
-                        <div className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
-                          change.changes.dscNc > 0
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                        )}>
-                          {change.changes.dscNc > 0 ? (
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          )}
-                          <span>DSC_NC {Math.abs(change.changes.dscNc).toLocaleString()}</span>
-                        </div>
-                      )}
-                      {change.changes.crl !== 0 && (
-                        <div className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
-                          change.changes.crl > 0
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                        )}>
-                          {change.changes.crl > 0 ? (
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          )}
-                          <span>CRL {Math.abs(change.changes.crl).toLocaleString()}</span>
-                        </div>
-                      )}
-                      {change.changes.ml !== 0 && (
-                        <div className={cn(
-                          "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
-                          change.changes.ml > 0
-                            ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                            : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
-                        )}>
-                          {change.changes.ml > 0 ? (
-                            <ArrowUp className="w-3.5 h-3.5" />
-                          ) : (
-                            <ArrowDown className="w-3.5 h-3.5" />
-                          )}
-                          <span>ML {Math.abs(change.changes.ml).toLocaleString()}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Validation Statistics */}
           {stats?.validation && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -750,14 +531,22 @@ export function UploadDashboard() {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-lg flex items-center justify-end pr-3"
-                          style={{ width: `${Math.max(Number(validPercent), 5)}%` }}
-                        >
-                          <span className="text-xs font-bold text-white">{(stats.validation?.validCount ?? 0).toLocaleString()}</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const pct = Number(validPercent);
+                        const count = (stats.validation?.validCount ?? 0).toLocaleString();
+                        const wide = pct >= 10;
+                        return (
+                          <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg relative">
+                            <div
+                              className={`h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-lg${wide ? ' flex items-center justify-end pr-3' : ''}`}
+                              style={{ width: `${Math.max(pct, 2)}%` }}
+                            >
+                              {wide && <span className="text-xs font-bold text-white">{count}</span>}
+                            </div>
+                            {!wide && <span className="absolute top-0 h-full flex items-center text-xs font-bold text-green-600 dark:text-green-400 pl-1.5" style={{ left: `${Math.max(pct, 2)}%` }}>{count}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <span className="text-sm font-semibold text-green-600 dark:text-green-400 w-16 text-right">{validPercent}%</span>
                   </div>
@@ -780,14 +569,22 @@ export function UploadDashboard() {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-red-400 to-rose-500 rounded-lg flex items-center justify-end pr-3"
-                          style={{ width: `${Math.max(totalValidation > 0 ? (stats.validation?.invalidCount || 0) / totalValidation * 100 : 0, 5)}%` }}
-                        >
-                          <span className="text-xs font-bold text-white">{(stats.validation?.invalidCount ?? 0).toLocaleString()}</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const pct = totalValidation > 0 ? (stats.validation?.invalidCount || 0) / totalValidation * 100 : 0;
+                        const count = (stats.validation?.invalidCount ?? 0).toLocaleString();
+                        const wide = pct >= 10;
+                        return (
+                          <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg relative">
+                            <div
+                              className={`h-full bg-gradient-to-r from-red-400 to-rose-500 rounded-lg${wide ? ' flex items-center justify-end pr-3' : ''}`}
+                              style={{ width: `${Math.max(pct, 2)}%` }}
+                            >
+                              {wide && <span className="text-xs font-bold text-white">{count}</span>}
+                            </div>
+                            {!wide && <span className="absolute top-0 h-full flex items-center text-xs font-bold text-red-600 dark:text-red-400 pl-1.5" style={{ left: `${Math.max(pct, 2)}%` }}>{count}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <span className="text-sm font-semibold text-red-600 dark:text-red-400 w-16 text-right">
                       {totalValidation > 0 ? ((stats.validation?.invalidCount || 0) / totalValidation * 100).toFixed(1) : '0'}%
@@ -812,14 +609,22 @@ export function UploadDashboard() {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-lg flex items-center justify-end pr-3"
-                          style={{ width: `${Math.max(totalValidation > 0 ? (stats.validation?.pendingCount || 0) / totalValidation * 100 : 0, 5)}%` }}
-                        >
-                          <span className="text-xs font-bold text-white">{(stats.validation?.pendingCount ?? 0).toLocaleString()}</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const pct = totalValidation > 0 ? (stats.validation?.pendingCount || 0) / totalValidation * 100 : 0;
+                        const count = (stats.validation?.pendingCount ?? 0).toLocaleString();
+                        const wide = pct >= 10;
+                        return (
+                          <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg relative">
+                            <div
+                              className={`h-full bg-gradient-to-r from-yellow-400 to-amber-500 rounded-lg${wide ? ' flex items-center justify-end pr-3' : ''}`}
+                              style={{ width: `${Math.max(pct, 2)}%` }}
+                            >
+                              {wide && <span className="text-xs font-bold text-white">{count}</span>}
+                            </div>
+                            {!wide && <span className="absolute top-0 h-full flex items-center text-xs font-bold text-yellow-600 dark:text-yellow-400 pl-1.5" style={{ left: `${Math.max(pct, 2)}%` }}>{count}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <span className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 w-16 text-right">
                       {totalValidation > 0 ? ((stats.validation?.pendingCount || 0) / totalValidation * 100).toFixed(1) : '0'}%
@@ -843,14 +648,22 @@ export function UploadDashboard() {
                       </div>
                     </div>
                     <div className="flex-1">
-                      <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-gray-400 to-gray-500 rounded-lg flex items-center justify-end pr-3"
-                          style={{ width: `${Math.max(totalValidation > 0 ? (stats.validation?.errorCount || 0) / totalValidation * 100 : 0, 5)}%` }}
-                        >
-                          <span className="text-xs font-bold text-white">{(stats.validation?.errorCount ?? 0).toLocaleString()}</span>
-                        </div>
-                      </div>
+                      {(() => {
+                        const pct = totalValidation > 0 ? (stats.validation?.errorCount || 0) / totalValidation * 100 : 0;
+                        const count = (stats.validation?.errorCount ?? 0).toLocaleString();
+                        const wide = pct >= 10;
+                        return (
+                          <div className="h-8 bg-gray-100 dark:bg-gray-700 rounded-lg relative">
+                            <div
+                              className={`h-full bg-gradient-to-r from-gray-400 to-gray-500 rounded-lg${wide ? ' flex items-center justify-end pr-3' : ''}`}
+                              style={{ width: `${Math.max(pct, 2)}%` }}
+                            >
+                              {wide && <span className="text-xs font-bold text-white">{count}</span>}
+                            </div>
+                            {!wide && <span className="absolute top-0 h-full flex items-center text-xs font-bold text-gray-600 dark:text-gray-400 pl-1.5" style={{ left: `${Math.max(pct, 2)}%` }}>{count}</span>}
+                          </div>
+                        );
+                      })()}
                     </div>
                     <span className="text-sm font-semibold text-gray-600 dark:text-gray-400 w-16 text-right">
                       {totalValidation > 0 ? ((stats.validation?.errorCount || 0) / totalValidation * 100).toFixed(1) : '0'}%
@@ -865,7 +678,7 @@ export function UploadDashboard() {
                   <TrendingUp className="w-5 h-5 text-violet-500" />
                   <h3 className="text-lg font-bold text-gray-900 dark:text-white">Trust Chain 검증</h3>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -926,6 +739,61 @@ export function UploadDashboard() {
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Timeline Chart Section */}
+          {chartData.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <TrendingUp className="w-5 h-5 text-violet-500" />
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">인증서 변동 추이</h3>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  (최근 {chartData.length}개 업로드)
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={350}>
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    stroke="#6B7280"
+                  />
+                  <YAxis
+                    tick={{ fill: '#6B7280', fontSize: 12 }}
+                    stroke="#6B7280"
+                    label={{
+                      value: '인증서 수',
+                      angle: -90,
+                      position: 'insideLeft',
+                      style: { fill: '#6B7280', fontSize: 12 },
+                    }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#1F2937',
+                      border: '1px solid #374151',
+                      borderRadius: '8px',
+                      color: '#F9FAFB',
+                    }}
+                    labelStyle={{ color: '#F9FAFB', fontWeight: 'bold' }}
+                    formatter={(value) => Number(value).toLocaleString()}
+                  />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '20px' }}
+                    iconType="line"
+                  />
+                  <Line type="monotone" dataKey="DSC" stroke="#8B5CF6" strokeWidth={2} dot={{ fill: '#8B5CF6', r: 4 }} activeDot={{ r: 6 }} name="DSC" />
+                  <Line type="monotone" dataKey="CSCA" stroke="#10B981" strokeWidth={2} dot={{ fill: '#10B981', r: 4 }} activeDot={{ r: 6 }} name="CSCA" />
+                  <Line type="monotone" dataKey="CRL" stroke="#F59E0B" strokeWidth={2} dot={{ fill: '#F59E0B', r: 4 }} activeDot={{ r: 6 }} name="CRL" />
+                  <Line type="monotone" dataKey="DSC_NC" stroke="#EF4444" strokeWidth={2} dot={{ fill: '#EF4444', r: 4 }} activeDot={{ r: 6 }} name="DSC_NC" />
+                  <Line type="monotone" dataKey="ML" stroke="#3B82F6" strokeWidth={2} dot={{ fill: '#3B82F6', r: 4 }} activeDot={{ r: 6 }} name="ML" />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           )}
         </>

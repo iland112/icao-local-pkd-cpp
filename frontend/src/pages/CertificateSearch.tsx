@@ -445,7 +445,7 @@ const CertificateSearch: React.FC = () => {
           </div>
 
           {/* Breakdown Cards - Nested */}
-          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
             {/* Valid */}
             <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
               <div className="flex items-center gap-2 mb-1">

@@ -223,7 +223,7 @@ export function OperationAuditLog() {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total Operations */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
@@ -284,7 +284,7 @@ export function OperationAuditLog() {
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">필터</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Operation Type Filter */}
             <div>
               <label htmlFor="op-audit-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -540,7 +540,7 @@ export function OperationAuditLog() {
               {/* Dialog Content — dense 4-column grid */}
               <div className="px-5 py-4 space-y-3">
                 {/* Row 1: Basic + Operation */}
-                <div className="grid grid-cols-4 gap-x-4 gap-y-2">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div>
                     <dt className="text-[11px] text-gray-500 dark:text-gray-400">시간</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{formatDateTime(selectedLog.createdAt)}</dd>
@@ -565,7 +565,7 @@ export function OperationAuditLog() {
                 <hr className="border-gray-200 dark:border-gray-700" />
 
                 {/* Row 2: IDs */}
-                <div className="grid grid-cols-4 gap-x-4 gap-y-2">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div className="col-span-2">
                     <dt className="text-[11px] text-gray-500 dark:text-gray-400">로그 ID</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={String(selectedLog.id)}>{selectedLog.id}</dd>
@@ -589,7 +589,7 @@ export function OperationAuditLog() {
                 <hr className="border-gray-200 dark:border-gray-700" />
 
                 {/* Row 3: Request */}
-                <div className="grid grid-cols-4 gap-x-4 gap-y-2">
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div>
                     <dt className="text-[11px] text-gray-500 dark:text-gray-400">IP 주소</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.ipAddress || '-'}</dd>

@@ -729,7 +729,7 @@ export function UploadHistory() {
           />
 
           {/* Dialog Content - Wide layout without vertical scroll */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-6xl mx-4 max-h-[85vh] flex flex-col">
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm sm:max-w-2xl lg:max-w-6xl mx-4 max-h-[85vh] flex flex-col">
             {/* Header */}
             <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center justify-between mb-2">

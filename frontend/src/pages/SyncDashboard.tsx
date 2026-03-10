@@ -240,19 +240,19 @@ export function SyncDashboard() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="w-full px-4 lg:px-6 py-4 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <ArrowRightLeft className="w-7 h-7 text-blue-500" />
             DB-LDAP 동기화 상태
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            PostgreSQL과 LDAP 간의 데이터 일관성을 모니터링합니다.
+            DB과 LDAP 간의 데이터 일관성을 모니터링합니다.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={handleTriggerDailySync}
             disabled={triggeringDailySync}
@@ -476,7 +476,7 @@ export function SyncDashboard() {
                     <th className="text-right py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <Database className="w-3.5 h-3.5" />
-                        PostgreSQL
+                        DB
                       </div>
                     </th>
                     <th className="text-right py-2.5 px-3 font-semibold text-green-600 dark:text-green-400 whitespace-nowrap">
@@ -620,7 +620,7 @@ export function SyncDashboard() {
               불일치 상세
             </h3>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                 {status.discrepancies.total}
@@ -885,7 +885,7 @@ export function SyncDashboard() {
                   Sync Service가 매일 {config.dailySyncTime}에 자동으로 동기화를 실행합니다.
                 </p>
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
-                  <li>PostgreSQL과 LDAP의 데이터 일관성을 검사합니다.</li>
+                  <li>DB과 LDAP의 데이터 일관성을 검사합니다.</li>
                   {config.revalidateCertsOnSync && (
                     <li>인증서 만료 상태 갱신 + Trust Chain 재검증 + CRL 폐기 검사를 자동으로 수행합니다.</li>
                   )}

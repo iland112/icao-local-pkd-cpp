@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff, BarChart3, Inbox, CheckCircle, XCircle, User, Building2, Mail, Phone, FileText, Server, Monitor, Smartphone, HelpCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { apiClientApi, type ApiClient, type UsageStats, type CreateApiClientRequest, type UpdateApiClientRequest } from '@/api/apiClientApi';
+import { apiClientRequestApi, type ApiClientRequestItem, type ApproveRequestPayload } from '@/api/apiClientRequestApi';
 import { toast } from '@/stores/toastStore';
 import { formatDate } from '@/utils/dateFormat';
 import { ConfirmDialog } from '@/components/common';
@@ -20,6 +21,7 @@ const AVAILABLE_PERMISSIONS = [
 ];
 
 export default function ApiClientManagement() {
+  const [activeTab, setActiveTab] = useState<'clients' | 'requests'>('clients');
   const [clients, setClients] = useState<ApiClient[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -29,6 +31,31 @@ export default function ApiClientManagement() {
   const [showKey, setShowKey] = useState<{ client: ApiClient; key: string } | null>(null);
   const [showUsage, setShowUsage] = useState<ApiClient | null>(null);
   const [showRegenConfirm, setShowRegenConfirm] = useState<ApiClient | null>(null);
+
+  // Request tab state
+  const [requests, setRequests] = useState<ApiClientRequestItem[]>([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [requestsTotal, setRequestsTotal] = useState(0);
+  const [requestStatusFilter, setRequestStatusFilter] = useState('');
+  const [showRequestDetail, setShowRequestDetail] = useState<ApiClientRequestItem | null>(null);
+  const [showApproveKey, setShowApproveKey] = useState<{ clientName: string; apiKey: string } | null>(null);
+
+  const fetchRequests = useCallback(async () => {
+    setRequestsLoading(true);
+    try {
+      const res = await apiClientRequestApi.getAll(requestStatusFilter);
+      setRequests(res.requests || []);
+      setRequestsTotal(res.total || 0);
+    } catch (e) {
+      if (import.meta.env.DEV) console.error('Failed to fetch requests', e);
+    } finally {
+      setRequestsLoading(false);
+    }
+  }, [requestStatusFilter]);
+
+  useEffect(() => {
+    if (activeTab === 'requests') fetchRequests();
+  }, [activeTab, fetchRequests]);
 
   const handleRegenerateConfirm = async (client: ApiClient) => {
     try {
@@ -78,52 +105,140 @@ export default function ApiClientManagement() {
             <p className="text-sm text-gray-500 dark:text-gray-400">외부 시스템 API Key 발급 및 접근 권한 관리</p>
           </div>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          클라이언트 등록
-        </button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="전체 클라이언트" value={total} color="blue" />
-        <StatCard label="활성" value={activeCount} color="green" />
-        <StatCard label="비활성" value={total - activeCount} color="gray" />
-        <StatCard label="총 누적 요청" value={todayRequests.toLocaleString()} color="purple" />
-      </div>
-
-      {/* Client List */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">등록된 클라이언트</h2>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-          </div>
-        ) : clients.length === 0 ? (
-          <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-            등록된 API 클라이언트가 없습니다
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {clients.map(client => (
-              <ClientRow
-                key={client.id}
-                client={client}
-                onEdit={() => setShowEdit(client)}
-                onDelete={() => setShowDelete(client)}
-                onUsage={() => setShowUsage(client)}
-                onRegenerate={() => setShowRegenConfirm(client)}
-              />
-            ))}
-          </div>
+        {activeTab === 'clients' && (
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            클라이언트 등록
+          </button>
         )}
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-6">
+        {([
+          { key: 'clients' as const, label: '등록된 클라이언트', icon: Shield, count: total },
+          { key: 'requests' as const, label: '등록 요청', icon: Inbox, count: requestsTotal },
+        ]).map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex-1 justify-center ${
+              activeTab === tab.key
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+            {tab.count > 0 && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                activeTab === tab.key ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-gray-200 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+              }`}>
+                {tab.count}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* === Clients Tab === */}
+      {activeTab === 'clients' && (
+        <>
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="전체 클라이언트" value={total} color="blue" />
+            <StatCard label="활성" value={activeCount} color="green" />
+            <StatCard label="비활성" value={total - activeCount} color="gray" />
+            <StatCard label="총 누적 요청" value={todayRequests.toLocaleString()} color="purple" />
+          </div>
+
+          {/* Client List */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">등록된 클라이언트</h2>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : clients.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                등록된 API 클라이언트가 없습니다
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {clients.map(client => (
+                  <ClientRow
+                    key={client.id}
+                    client={client}
+                    onEdit={() => setShowEdit(client)}
+                    onDelete={() => setShowDelete(client)}
+                    onUsage={() => setShowUsage(client)}
+                    onRegenerate={() => setShowRegenConfirm(client)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* === Requests Tab === */}
+      {activeTab === 'requests' && (
+        <>
+          {/* Status filter */}
+          <div className="flex gap-2 mb-4">
+            {[
+              { value: '', label: '전체' },
+              { value: 'PENDING', label: '대기 중' },
+              { value: 'APPROVED', label: '승인' },
+              { value: 'REJECTED', label: '거절' },
+            ].map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setRequestStatusFilter(opt.value)}
+                className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                  requestStatusFilter === opt.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">등록 요청 목록</h2>
+              <button onClick={fetchRequests} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">
+                <RefreshCw className={`w-4 h-4 ${requestsLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            {requestsLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : requests.length === 0 ? (
+              <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+                <Inbox className="w-10 h-10 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
+                등록 요청이 없습니다
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                {requests.map(req => (
+                  <RequestRow key={req.id} request={req} onClick={() => setShowRequestDetail(req)} />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Dialogs */}
       <ConfirmDialog
@@ -172,6 +287,26 @@ export default function ApiClientManagement() {
         <UsageDialog
           client={showUsage}
           onClose={() => setShowUsage(null)}
+        />
+      )}
+      {showRequestDetail && (
+        <RequestDetailDialog
+          request={showRequestDetail}
+          onClose={() => setShowRequestDetail(null)}
+          onApproved={(apiKey) => {
+            setShowRequestDetail(null);
+            if (apiKey) setShowApproveKey({ clientName: showRequestDetail.client_name, apiKey });
+            fetchRequests();
+            fetchClients();
+          }}
+          onRejected={() => { setShowRequestDetail(null); fetchRequests(); }}
+        />
+      )}
+      {showApproveKey && (
+        <ApiKeyDialog
+          clientName={showApproveKey.clientName}
+          apiKey={showApproveKey.apiKey}
+          onClose={() => setShowApproveKey(null)}
         />
       )}
     </div>
@@ -330,7 +465,7 @@ function CreateDialog({ onClose, onCreated }: {
 
         <InputField label="허용 IP (콤마 구분)" value={ipsText} onChange={setIpsText} placeholder="192.168.1.100, 10.0.0.0/24" />
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <InputField label="분당 제한" value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
           <InputField label="시간당 제한" value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
           <InputField label="일당 제한" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
@@ -423,7 +558,7 @@ function EditDialog({ client, onClose, onUpdated }: {
 
         <InputField label="허용 IP (콤마 구분)" value={ipsText} onChange={setIpsText} placeholder="비워두면 모든 IP 허용" />
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <InputField label="분당 제한" value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
           <InputField label="시간당 제한" value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
           <InputField label="일당 제한" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
@@ -667,6 +802,294 @@ function ApiKeyDialog({ clientName, apiKey, onClose }: {
 
       <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button onClick={onClose} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors">확인</button>
+      </div>
+    </DialogWrapper>
+  );
+}
+
+// ============================================================================
+// Request Components
+// ============================================================================
+
+const STATUS_STYLES: Record<string, string> = {
+  PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  APPROVED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  REJECTED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING: '대기 중',
+  APPROVED: '승인',
+  REJECTED: '거절',
+};
+
+const DEVICE_TYPE_INFO: Record<string, { label: string; icon: typeof Server }> = {
+  SERVER: { label: '서버', icon: Server },
+  DESKTOP: { label: '데스크톱', icon: Monitor },
+  MOBILE: { label: '모바일', icon: Smartphone },
+  OTHER: { label: '기타', icon: HelpCircle },
+};
+
+function RequestRow({ request, onClick }: { request: ApiClientRequestItem; onClick: () => void }) {
+  return (
+    <div
+      onClick={onClick}
+      className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors cursor-pointer"
+    >
+      <div className="flex items-center gap-4 min-w-0 flex-1">
+        <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+          <User className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900 dark:text-white truncate">{request.client_name}</span>
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[request.status] || ''}`}>
+              {STATUS_LABELS[request.status] || request.status}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <span className="flex items-center gap-1"><User className="w-3 h-3" />{request.requester_name}</span>
+            <span className="flex items-center gap-1"><Building2 className="w-3 h-3" />{request.requester_org}</span>
+            {(() => { const dt = DEVICE_TYPE_INFO[request.device_type]; if (!dt) return null; const Icon = dt.icon; return <span className="flex items-center gap-1"><Icon className="w-3 h-3" />{dt.label}</span>; })()}
+            <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{formatDate(request.created_at)}</span>
+          </div>
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {request.permissions.slice(0, 5).map(p => (
+              <span key={p} className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded">{p}</span>
+            ))}
+            {request.permissions.length > 5 && (
+              <span className="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 rounded">+{request.permissions.length - 5}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
+  request: ApiClientRequestItem;
+  onClose: () => void;
+  onApproved: (apiKey?: string) => void;
+  onRejected: () => void;
+}) {
+  const [reviewComment, setReviewComment] = useState('');
+  const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState('');
+
+  // Admin-configured settings (only used at approval)
+  const [rateLimitPerMinute, setRateLimitPerMinute] = useState(60);
+  const [rateLimitPerHour, setRateLimitPerHour] = useState(1000);
+  const [rateLimitPerDay, setRateLimitPerDay] = useState(10000);
+  const [requestedDays, setRequestedDays] = useState(365);
+  const [allowedEndpointsText, setAllowedEndpointsText] = useState('');
+
+  const handleApprove = async () => {
+    setProcessing(true);
+    setError('');
+    try {
+      const payload: ApproveRequestPayload = {
+        review_comment: reviewComment,
+        rate_limit_per_minute: rateLimitPerMinute,
+        rate_limit_per_hour: rateLimitPerHour,
+        rate_limit_per_day: rateLimitPerDay,
+        requested_days: requestedDays,
+        allowed_endpoints: allowedEndpointsText ? allowedEndpointsText.split(',').map(s => s.trim()).filter(Boolean) : [],
+      };
+      const res = await apiClientRequestApi.approve(request.id, payload);
+      if (res.success) {
+        toast.success('승인 완료', `${request.client_name} API 클라이언트가 생성되었습니다.`);
+        onApproved(res.client?.api_key);
+      } else {
+        setError(res.message || '승인에 실패했습니다.');
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || '승인 처리 중 오류가 발생했습니다.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!reviewComment.trim()) {
+      setError('거절 사유를 입력해 주세요.');
+      return;
+    }
+    setProcessing(true);
+    setError('');
+    try {
+      const res = await apiClientRequestApi.reject(request.id, reviewComment);
+      if (res.success) {
+        toast.info('거절 처리', `${request.client_name} 요청이 거절되었습니다.`);
+        onRejected();
+      } else {
+        setError(res.message || '거절에 실패했습니다.');
+      }
+    } catch (e: any) {
+      setError(e?.response?.data?.message || '거절 처리 중 오류가 발생했습니다.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const isPending = request.status === 'PENDING';
+  const dtInfo = DEVICE_TYPE_INFO[request.device_type];
+  const DeviceIcon = dtInfo?.icon;
+
+  return (
+    <DialogWrapper onClose={onClose} title="등록 요청 상세">
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+        {/* Status badge */}
+        <div className="flex items-center gap-2">
+          <span className={`text-sm px-3 py-1 rounded-full font-medium ${STATUS_STYLES[request.status] || ''}`}>
+            {STATUS_LABELS[request.status] || request.status}
+          </span>
+          <span className="text-xs text-gray-500 dark:text-gray-400">요청일: {formatDate(request.created_at)}</span>
+        </div>
+
+        {/* Requester Info */}
+        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">요청자 정보</h4>
+          <div className="grid grid-cols-2 gap-2 text-sm">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <User className="w-3.5 h-3.5 text-gray-400" />{request.requester_name}
+            </div>
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <Building2 className="w-3.5 h-3.5 text-gray-400" />{request.requester_org}
+            </div>
+            <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <Mail className="w-3.5 h-3.5 text-gray-400" />{request.requester_contact_email}
+            </div>
+            {request.requester_contact_phone && (
+              <div className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+                <Phone className="w-3.5 h-3.5 text-gray-400" />{request.requester_contact_phone}
+              </div>
+            )}
+          </div>
+          <div className="pt-2">
+            <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-300">
+              <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
+              <span>{request.request_reason}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Client Config (from requester) */}
+        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">요청 클라이언트 설정</h4>
+          <div className="text-sm space-y-1.5">
+            <div><span className="text-gray-500 dark:text-gray-400">이름:</span> <span className="font-medium text-gray-900 dark:text-white">{request.client_name}</span></div>
+            {request.description && <div><span className="text-gray-500 dark:text-gray-400">설명:</span> <span className="text-gray-700 dark:text-gray-300">{request.description}</span></div>}
+            <div className="flex items-center gap-1.5">
+              <span className="text-gray-500 dark:text-gray-400">기기 타입:</span>
+              {DeviceIcon && <DeviceIcon className="w-3.5 h-3.5 text-gray-500" />}
+              <span className="text-gray-700 dark:text-gray-300">{dtInfo?.label || request.device_type}</span>
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-gray-500 dark:text-gray-400">권한:</span>
+              {request.permissions.map(p => (
+                <span key={p} className="text-xs px-1.5 py-0.5 bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 rounded">{p}</span>
+              ))}
+            </div>
+            {request.allowed_ips.length > 0 && (
+              <div><span className="text-gray-500 dark:text-gray-400">제안 IP:</span> <span className="font-mono text-xs text-gray-700 dark:text-gray-300">{request.allowed_ips.join(', ')}</span></div>
+            )}
+          </div>
+        </div>
+
+        {/* Review section (for non-pending, show existing review) */}
+        {!isPending && request.reviewed_by && (
+          <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">검토 결과</h4>
+            <div className="text-sm space-y-1">
+              {request.reviewed_at && <div><span className="text-gray-500 dark:text-gray-400">검토일:</span> <span className="text-gray-700 dark:text-gray-300">{formatDate(request.reviewed_at)}</span></div>}
+              {request.review_comment && <div><span className="text-gray-500 dark:text-gray-400">코멘트:</span> <span className="text-gray-700 dark:text-gray-300">{request.review_comment}</span></div>}
+            </div>
+          </div>
+        )}
+
+        {/* Admin approval settings (only for PENDING) */}
+        {isPending && (
+          <div className="bg-blue-50 dark:bg-blue-900/10 rounded-xl p-4 space-y-3">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white">승인 설정 (관리자)</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label htmlFor="approve-rpm" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">분당 제한</label>
+                <input id="approve-rpm" type="number" value={rateLimitPerMinute} onChange={e => setRateLimitPerMinute(parseInt(e.target.value) || 60)}
+                  className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="approve-rph" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">시간당 제한</label>
+                <input id="approve-rph" type="number" value={rateLimitPerHour} onChange={e => setRateLimitPerHour(parseInt(e.target.value) || 1000)}
+                  className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="approve-rpd" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">일당 제한</label>
+                <input id="approve-rpd" type="number" value={rateLimitPerDay} onChange={e => setRateLimitPerDay(parseInt(e.target.value) || 10000)}
+                  className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+              </div>
+            </div>
+            <div>
+              <label htmlFor="approve-days" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">사용 기간 (일)</label>
+              <input id="approve-days" type="number" value={requestedDays} onChange={e => setRequestedDays(parseInt(e.target.value) || 365)}
+                className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="approve-endpoints" className="block text-xs text-gray-500 dark:text-gray-400 mb-1">허용 엔드포인트 (콤마 구분, 비워두면 전체 허용)</label>
+              <input id="approve-endpoints" type="text" value={allowedEndpointsText} onChange={e => setAllowedEndpointsText(e.target.value)}
+                placeholder="/api/pa/*, /api/certificates/*"
+                className="w-full px-2 py-1.5 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white" />
+            </div>
+          </div>
+        )}
+
+        {/* Admin review comment */}
+        {isPending && (
+          <div>
+            <label htmlFor="review-comment" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">검토 코멘트</label>
+            <textarea
+              id="review-comment"
+              name="review-comment"
+              value={reviewComment}
+              onChange={e => setReviewComment(e.target.value)}
+              rows={2}
+              placeholder="승인 또는 거절 사유를 입력하세요 (거절 시 필수)"
+              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
+        )}
+
+        {error && (
+          <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+            <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+        <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+          닫기
+        </button>
+        {isPending && (
+          <>
+            <button
+              onClick={handleReject}
+              disabled={processing}
+              className="flex items-center gap-1.5 px-4 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              <XCircle className="w-4 h-4" />
+              {processing ? '처리 중...' : '거절'}
+            </button>
+            <button
+              onClick={handleApprove}
+              disabled={processing}
+              className="flex items-center gap-1.5 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 transition-colors"
+            >
+              <CheckCircle className="w-4 h-4" />
+              {processing ? '처리 중...' : '승인'}
+            </button>
+          </>
+        )}
       </div>
     </DialogWrapper>
   );

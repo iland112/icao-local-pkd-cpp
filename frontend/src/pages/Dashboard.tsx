@@ -14,9 +14,13 @@ import {
   Shield,
   AlertTriangle,
   X,
+  TrendingUp,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { healthApi, ldapApi, uploadApi, icaoApi } from '@/services/api';
+import type { UploadChange } from '@/types';
 import { cn } from '@/utils/cn';
 import { formatDateTime, formatTime } from '@/utils/dateFormat';
 import { CountryStatisticsDialog } from '@/components/CountryStatisticsDialog';
@@ -73,6 +77,8 @@ export function Dashboard() {
   const [showCountryDialog, setShowCountryDialog] = useState(false);
   const [icaoStatus, setIcaoStatus] = useState<IcaoStatusResponse | null>(null);
   const [icaoDismissed, setIcaoDismissed] = useState(false);
+  const [recentChanges, setRecentChanges] = useState<UploadChange[]>([]);
+  const [changesLoading, setChangesLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -98,7 +104,20 @@ export function Dashboard() {
     testLdapConnection();
     loadCountryData();
     loadIcaoStatus();
+    loadRecentChanges();
   }, []);
+
+  const loadRecentChanges = async () => {
+    setChangesLoading(true);
+    try {
+      const response = await uploadApi.getChanges(10);
+      setRecentChanges(response.data.changes || []);
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Failed to load recent changes:', error);
+    } finally {
+      setChangesLoading(false);
+    }
+  };
 
   const loadIcaoStatus = async () => {
     try {
@@ -334,7 +353,7 @@ export function Dashboard() {
               <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
             </div>
           ) : countryData.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-2">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 lg:gap-x-8 gap-y-2">
               {countryData.map((item, index) => (
                 <div
                   key={item.country}
@@ -410,6 +429,87 @@ export function Dashboard() {
                 <Upload className="w-4 h-4" />
                 파일 업로드
               </Link>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Recent PKD Data Changes */}
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white flex items-center gap-3">
+              <div className="p-2 rounded-lg bg-gradient-to-r from-blue-400 to-indigo-500">
+                <TrendingUp className="w-5 h-5 text-white" />
+              </div>
+              최근 PKD 데이터 변경사항 상세
+            </h3>
+            <Link
+              to="/upload-history"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              전체 보기 →
+            </Link>
+          </div>
+        </div>
+        <div className="p-6">
+          {changesLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+            </div>
+          ) : recentChanges.length > 0 ? (
+            <div className="space-y-3">
+              {recentChanges.map((change) => (
+                <div
+                  key={change.uploadId}
+                  className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 hover:border-blue-300 dark:hover:border-blue-600 transition-colors"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium text-gray-900 dark:text-white">
+                        {change.fileName}
+                      </span>
+                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                        Collection {change.collectionNumber}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                      <span>{formatDateTime(change.uploadTime)}</span>
+                      {change.previousUpload && (
+                        <span className="text-gray-400 dark:text-gray-500">
+                          vs {change.previousUpload.fileName}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    {[
+                      { key: 'dsc', label: 'DSC', value: change.changes.dsc },
+                      { key: 'csca', label: 'CSCA', value: change.changes.csca },
+                      { key: 'dscNc', label: 'DSC_NC', value: change.changes.dscNc },
+                      { key: 'crl', label: 'CRL', value: change.changes.crl },
+                      { key: 'ml', label: 'ML', value: change.changes.ml },
+                    ].filter(item => item.value !== 0).map(item => (
+                      <div key={item.key} className={cn(
+                        "flex items-center gap-1 px-2.5 py-1 rounded-lg text-sm font-medium",
+                        item.value > 0
+                          ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                          : "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300"
+                      )}>
+                        {item.value > 0 ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                        <span>{item.label} {Math.abs(item.value).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <TrendingUp className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                업로드된 데이터가 없습니다
+              </p>
             </div>
           )}
         </div>

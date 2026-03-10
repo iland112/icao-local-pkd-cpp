@@ -270,7 +270,7 @@ export function UserManagement() {
       )}
 
       {/* Summary Stats + Search */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
           <p className="text-sm text-gray-500 dark:text-gray-400">전체 사용자</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{users.length}</p>
@@ -314,7 +314,7 @@ export function UserManagement() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredUsers.map((user) => (
             <div
               key={user.id}
@@ -416,8 +416,8 @@ export function UserManagement() {
       {/* Create User Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full">
-            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3 flex-shrink-0">
               <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30">
                 <Plus className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               </div>
@@ -426,9 +426,9 @@ export function UserManagement() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">새로운 시스템 사용자 등록</p>
               </div>
             </div>
-            <div className="px-5 py-4 space-y-4">
+            <div className="px-5 py-4 space-y-4 overflow-y-auto flex-1">
               {/* 2-column grid for basic fields */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="create-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     사용자명 <span className="text-red-500">*</span>
@@ -574,8 +574,8 @@ export function UserManagement() {
       {/* Edit User Modal */}
       {showEditModal && selectedUser && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full">
-            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2.5">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] flex flex-col">
+            <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2.5 flex-shrink-0">
               <div className="p-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/30">
                 <Edit className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               </div>
@@ -584,9 +584,9 @@ export function UserManagement() {
                 <p className="text-xs text-gray-500 dark:text-gray-400">@{selectedUser.username}</p>
               </div>
             </div>
-            <div className="px-5 py-4 space-y-3">
+            <div className="px-5 py-4 space-y-3 overflow-y-auto flex-1">
               {/* 3-column grid for basic fields */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label htmlFor="edit-username" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">사용자명</label>
                   <div className="relative">

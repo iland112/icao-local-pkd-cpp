@@ -42,7 +42,6 @@ const initialSteps: VerificationStep[] = [
   { id: 5, title: 'Step 5: SOD 서명 검증', description: 'LDSSecurityObject가 DSC로 서명되었는지 검증', status: 'pending' },
   { id: 6, title: 'Step 6: Data Group 해시 검증', description: 'SOD의 예상 해시값과 실제 계산된 해시값 비교', status: 'pending' },
   { id: 7, title: 'Step 7: CRL 검사', description: 'DSC 인증서 폐기 여부 확인 (RFC 5280)', status: 'pending' },
-  { id: 8, title: 'Step 8: DSC 자동 등록', description: '신규 발견된 DSC를 Local PKD에 자동 등록', status: 'pending' },
 ];
 
 type VerificationMode = 'full' | 'quick';
@@ -308,51 +307,8 @@ export function PAVerify() {
         };
       }
 
-      // Step 8: DSC 자동 등록
-      if (response.dscAutoRegistration) {
-        const dscReg = response.dscAutoRegistration;
-        if (dscReg.registered && dscReg.newlyRegistered) {
-          newSteps[7] = {
-            ...newSteps[7],
-            status: 'success',
-            message: '✓ DSC 자동 등록 완료',
-            details: {
-              certificateId: dscReg.certificateId,
-              fingerprint: dscReg.fingerprint,
-              countryCode: dscReg.countryCode,
-              newlyRegistered: true,
-            },
-            expanded: true,
-          };
-        } else if (dscReg.registered && !dscReg.newlyRegistered) {
-          newSteps[7] = {
-            ...newSteps[7],
-            status: 'success',
-            message: '✓ DSC 이미 등록됨',
-            details: {
-              certificateId: dscReg.certificateId,
-              fingerprint: dscReg.fingerprint,
-              countryCode: dscReg.countryCode,
-              newlyRegistered: false,
-            },
-            expanded: true,
-          };
-        } else {
-          newSteps[7] = {
-            ...newSteps[7],
-            status: 'warning',
-            message: '⚠ DSC 등록 실패',
-            expanded: true,
-          };
-        }
-      } else {
-        newSteps[7] = {
-          ...newSteps[7],
-          status: 'warning',
-          message: '⚠ DSC 자동 등록 정보 없음',
-          expanded: true,
-        };
-      }
+      // DSC 등록은 백엔드에서 pending_dsc_registration 테이블에 자동 저장됨
+      // 관리자 승인은 /admin/pending-dsc 페이지에서 별도 처리
 
       return newSteps;
     });
@@ -804,7 +760,7 @@ export function PAVerify() {
                       <X className="w-4 h-4" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                     <div><span className="text-gray-500">성명:</span> {mrzData.fullName}</div>
                     <div><span className="text-gray-500">여권번호:</span> {mrzData.documentNumber}</div>
                     <div><span className="text-gray-500">국적:</span> {mrzData.nationality}</div>

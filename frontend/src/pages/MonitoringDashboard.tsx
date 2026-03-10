@@ -282,7 +282,7 @@ export default function MonitoringDashboard() {
           {loadSnapshot && (
             <>
               {/* Row: Active Connections + Connection Pool */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <ActiveConnectionsCard
                   nginx={loadSnapshot.nginx}
                   requestsPerSecond={loadSnapshot.nginx.requestsPerSecond}

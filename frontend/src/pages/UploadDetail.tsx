@@ -360,7 +360,7 @@ export function UploadDetail() {
                 </div>
 
                 {/* Certificate Types */}
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl">
                     <div className="flex items-center gap-2 mb-1">
                       <Shield className="w-4 h-4 text-blue-500" />
@@ -548,7 +548,7 @@ export function UploadDetail() {
           />
 
           {/* Dialog Content */}
-          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+          <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm sm:max-w-2xl lg:max-w-6xl mx-4 max-h-[90vh] flex flex-col">
             {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-3">

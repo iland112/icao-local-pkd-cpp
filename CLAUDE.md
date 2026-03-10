@@ -1,7 +1,7 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.30.0
-**Last Updated**: 2026-03-09
+**Current Version**: v2.31.1
+**Last Updated**: 2026-03-11
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
 ---
@@ -226,6 +226,10 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - `GET /api/certificates/crl/{id}` - CRL detail with parsed revoked certificate list
 - `GET /api/certificates/crl/{id}/download` - CRL binary file download (.crl)
 - `GET /api/certificates/doc9303-checklist` - Doc 9303 compliance checklist by fingerprint
+- `GET /api/certificates/pending-dsc` - Pending DSC registration list (paginated, filters)
+- `GET /api/certificates/pending-dsc/stats` - Pending DSC statistics
+- `POST /api/certificates/pending-dsc/{id}/approve` - Approve pending DSC (JWT required)
+- `POST /api/certificates/pending-dsc/{id}/reject` - Reject pending DSC (JWT required)
 - `GET /api/certificates/export/{format}` - Certificate export
 - `GET /api/certificates/export/all` - Export all LDAP-stored data as DIT-structured ZIP
 
@@ -318,7 +322,7 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 
 ## Frontend
 
-### Pages (24 total)
+### Pages (26 total)
 
 | Page | Route | Purpose |
 |------|-------|---------|
@@ -345,6 +349,8 @@ Public endpoints (no JWT required) are defined in [auth_middleware.cpp](services
 | AuditLog | `/admin/audit-log` | Auth audit log viewer |
 | OperationAuditLog | `/admin/operation-audit` | Operation audit trail |
 | ApiClientManagement | `/admin/api-clients` | API Client management (CRUD, key regeneration) |
+| ApiClientRequest | `/api-client-request` | External API client access request (public) |
+| PendingDscApproval | `/admin/pending-dsc` | DSC registration approval workflow |
 | Profile | `/profile` | User profile & account info |
 
 ### Key Components
@@ -583,6 +589,41 @@ scripts/
 ---
 
 ## Version History
+
+### v2.31.1 (2026-03-11) - 전체 프론트엔드 반응형 디자인 개선 (13개 페이지)
+- **모달/다이얼로그 모바일 대응**: 고정 `max-w-6xl`/`max-w-4xl` → `max-w-sm sm:max-w-2xl lg:max-w-Nxl` 점진적 확장 (UploadHistory, UploadDetail, PAHistory, CrlReport)
+- **UserManagement 모달 스크롤**: Create/Edit 모달에 `max-h-[90vh] flex flex-col` + `overflow-y-auto` 추가 — 모바일에서 권한 그리드가 뷰포트 밖으로 넘어가는 문제 해결
+- **고정 그리드 → 반응형 전환** (모바일에서 깨지는 레이아웃 수정):
+  - UserManagement: 통계 `md:grid-cols-4` → `grid-cols-2 lg:grid-cols-4`, 생성 폼 `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`, 수정 폼 `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+  - OperationAuditLog: 통계 `md:grid-cols-4` → `grid-cols-2 lg:grid-cols-4`, 필터 `md:grid-cols-3 lg:grid-cols-5` → `sm:grid-cols-2 lg:grid-cols-5`, 다이얼로그 3개소 `grid-cols-4` → `grid-cols-2 lg:grid-cols-4`
+  - AuditLog: 통계/필터/다이얼로그 동일 패턴 적용
+  - CertificateSearch: 유효/만료/미유효 카드 `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+  - ApiClientManagement: Rate limit 3개소 `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+  - ApiClientRequest: 기기 타입 `grid-cols-4` → `grid-cols-2 sm:grid-cols-4`
+  - UploadDashboard: Trust Chain 카드 `grid-cols-3` → `grid-cols-1 sm:grid-cols-3`
+  - UploadDetail: 인증서 타입 `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`
+  - PAVerify: MRZ 데이터 `grid-cols-2` → `grid-cols-1 sm:grid-cols-2`
+- **SyncDashboard 레이아웃 개선**: 페이지 패딩 `p-6` → `px-4 lg:px-6 py-4` (일관된 패턴), 헤더 버튼 `flex-col sm:flex-row flex-wrap` 모바일 스택, 불일치 상세 `md:grid-cols-6` → `sm:grid-cols-3 lg:grid-cols-6`
+- **MonitoringDashboard**: 연결/풀 카드 `lg:grid-cols-3` → `md:grid-cols-3` (태블릿 브레이크포인트 추가)
+- **Dashboard**: 국가 목록 `gap-x-8` → `gap-x-4 lg:gap-x-8` (모바일 간격 축소)
+- 13 files changed (0 new, 13 modified)
+
+### v2.31.0 (2026-03-10) - DSC 등록 승인 워크플로우 (PA 자동 등록 → 관리자 승인)
+- **DSC 자동 등록 → 관리자 승인 전환**: PA 검증에서 추출된 DSC 인증서를 자동 등록하지 않고 `pending_dsc_registration` 테이블에 임시 저장, 관리자가 확인 후 승인/거부
+- **pending_dsc_registration 테이블**: PostgreSQL + Oracle 이중 스키마 (fingerprint UNIQUE, status PENDING/APPROVED/REJECTED, 검토자/코멘트/검토일)
+- **PA Service 변경**: `DscAutoRegistrationService` — `certificate` 테이블 직접 INSERT → `pending_dsc_registration` 테이블로 변경, 3단계 중복 체크 (certificate → pending → insert)
+- **PA 응답 확장**: `dscAutoRegistration` JSON에 `pendingApproval`, `alreadyRegistered`, `pendingId` 필드 추가
+- **PendingDscRepository**: PKD Management 신규 리포지토리 (findAll/countAll/findById/updateStatus/getStatistics, PostgreSQL + Oracle 이중 지원)
+- **4개 신규 API 엔드포인트**: `GET /api/certificates/pending-dsc` (목록), `GET /api/certificates/pending-dsc/stats` (통계), `POST /api/certificates/pending-dsc/{id}/approve` (승인), `POST /api/certificates/pending-dsc/{id}/reject` (거부)
+- **승인 플로우**: pending 조회 → certificate 테이블 INSERT (PostgreSQL/Oracle 분기) → LDAP 저장 (비치명적) → pending 상태 APPROVED 업데이트 → 감사 로그
+- **감사 로그**: `DSC_PENDING_SAVE`, `DSC_APPROVE`, `DSC_REJECT` OperationType 추가 — 모든 승인/거부 작업 operation_audit_log에 기록
+- **Frontend**: `PendingDscApproval` 페이지 (통계 카드 4개, 필터, 테이블, 승인/거부 다이얼로그, 상세 모달)
+- **Frontend**: PAVerify Step 8 — "자동 등록" → "등록 대기 (관리자 승인 필요)" 표시로 변경
+- **Frontend**: `pendingDscApi.ts` API 모듈, `PAVerificationResponse.dscAutoRegistration` 타입 확장
+- **사이드바**: 인증서 관리 섹션에 "DSC 등록 승인" 메뉴 추가 (adminOnly)
+- **라우트**: `/admin/pending-dsc` (AdminRoute 보호)
+- **인증**: 목록/통계는 public, 승인/거부는 JWT 필수
+- ~15 files changed (5 new, ~10 modified)
 
 ### v2.30.0 (2026-03-09) - 로그인 페이지 모던 리디자인 + 사이드바 섹션 재구성 + 클라이언트 사이드 정렬
 - **로그인 폼 모던 리디자인**: 카드 래퍼 제거(flat layout), `ring-1 ring-gray-200` 입력 필드, `group-focus-within:text-[#02385e]` 아이콘 포커스 색상, 단색 `bg-[#02385e]` 버튼 + `active:scale-[0.98]` 프레스 효과, `radial-gradient` 도트 패턴 배경
