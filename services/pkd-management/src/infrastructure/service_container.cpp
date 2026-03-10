@@ -31,6 +31,8 @@
 #include "../repositories/ldap_certificate_repository.h"
 #include "../repositories/code_master_repository.h"
 #include "../repositories/api_client_repository.h"
+#include "../repositories/api_client_request_repository.h"
+#include "../repositories/pending_dsc_repository.h"
 
 // Services
 #include "../services/upload_service.h"
@@ -41,6 +43,10 @@
 #include "../services/icao_sync_service.h"
 #include "../services/ldap_storage_service.h"
 
+// LDAP Provider Adapters (for real-time PA Lookup validation)
+#include "../adapters/ldap_csca_provider.h"
+#include "../adapters/ldap_crl_provider.h"
+
 // Handlers
 #include "../handlers/icao_handler.h"
 #include "../handlers/auth_handler.h"
@@ -49,6 +55,7 @@
 #include "../handlers/certificate_handler.h"
 #include "../handlers/code_master_handler.h"
 #include "../handlers/api_client_handler.h"
+#include "../handlers/api_client_request_handler.h"
 
 // HTTP infrastructure
 #include "../infrastructure/http/http_client.h"
@@ -77,6 +84,12 @@ struct ServiceContainer::Impl {
     std::shared_ptr<repositories::LdapCertificateRepository> ldapCertificateRepository;
     std::shared_ptr<repositories::CodeMasterRepository> codeMasterRepository;
     std::shared_ptr<repositories::ApiClientRepository> apiClientRepository;
+    std::shared_ptr<repositories::ApiClientRequestRepository> apiClientRequestRepository;
+    std::shared_ptr<repositories::PendingDscRepository> pendingDscRepository;
+
+    // LDAP Provider Adapters (for real-time PA Lookup)
+    std::unique_ptr<adapters::LdapCscaProvider> ldapCscaProvider;
+    std::unique_ptr<adapters::LdapCrlProvider> ldapCrlProvider;
 
     // Services
     std::shared_ptr<services::UploadService> uploadService;
@@ -95,6 +108,7 @@ struct ServiceContainer::Impl {
     std::shared_ptr<handlers::CertificateHandler> certificateHandler;
     std::shared_ptr<handlers::CodeMasterHandler> codeMasterHandler;
     std::shared_ptr<handlers::ApiClientHandler> apiClientHandler;
+    std::shared_ptr<handlers::ApiClientRequestHandler> apiClientRequestHandler;
 };
 
 ServiceContainer::ServiceContainer() : impl_(std::make_unique<Impl>()) {}
@@ -107,6 +121,7 @@ void ServiceContainer::shutdown() {
     if (!impl_) return;
 
     // Release in reverse order
+    impl_->apiClientRequestHandler.reset();
     impl_->apiClientHandler.reset();
     impl_->codeMasterHandler.reset();
     impl_->certificateHandler.reset();
@@ -123,6 +138,12 @@ void ServiceContainer::shutdown() {
     impl_->uploadService.reset();
     impl_->certificateService.reset();
 
+    // Release LDAP providers before pool
+    impl_->ldapCrlProvider.reset();
+    impl_->ldapCscaProvider.reset();
+
+    impl_->pendingDscRepository.reset();
+    impl_->apiClientRequestRepository.reset();
     impl_->apiClientRepository.reset();
     impl_->codeMasterRepository.reset();
     impl_->ldapCertificateRepository.reset();
@@ -234,7 +255,9 @@ bool ServiceContainer::initialize(const AppConfig& config) {
     impl_->icaoVersionRepository = std::make_shared<repositories::IcaoVersionRepository>(impl_->queryExecutor.get());
     impl_->codeMasterRepository = std::make_shared<repositories::CodeMasterRepository>(impl_->queryExecutor.get());
     impl_->apiClientRepository = std::make_shared<repositories::ApiClientRepository>(impl_->queryExecutor.get());
-    spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion, CodeMaster, ApiClient)");
+    impl_->apiClientRequestRepository = std::make_shared<repositories::ApiClientRequestRepository>(impl_->queryExecutor.get());
+    impl_->pendingDscRepository = std::make_shared<repositories::PendingDscRepository>(impl_->queryExecutor.get());
+    spdlog::info("Repositories initialized (Upload, Certificate, Validation, Audit, User, AuthAudit, CRL, DL, LdifStructure, IcaoVersion, CodeMaster, ApiClient, ApiClientRequest, PendingDsc)");
 
     // --- Phase 4.5: LDAP Storage Service ---
     impl_->ldapStorageService = std::make_shared<services::LdapStorageService>(config);
@@ -267,10 +290,19 @@ bool ServiceContainer::initialize(const AppConfig& config) {
         impl_->deviationListRepository.get()
     );
 
+    // Create LDAP provider adapters for real-time PA Lookup validation
+    impl_->ldapCscaProvider = std::make_unique<adapters::LdapCscaProvider>(
+        impl_->ldapPool.get(), config.ldapBaseDn);
+    impl_->ldapCrlProvider = std::make_unique<adapters::LdapCrlProvider>(
+        impl_->ldapPool.get(), config.ldapBaseDn);
+    spdlog::info("LDAP provider adapters initialized for real-time PA Lookup (baseDN: {})", config.ldapBaseDn);
+
     impl_->validationService = std::make_shared<services::ValidationService>(
         impl_->validationRepository.get(),
         impl_->certificateRepository.get(),
-        impl_->crlRepository.get()
+        impl_->crlRepository.get(),
+        impl_->ldapCscaProvider.get(),
+        impl_->ldapCrlProvider.get()
     );
 
     impl_->auditService = std::make_shared<services::AuditService>(
@@ -327,9 +359,11 @@ bool ServiceContainer::initialize(const AppConfig& config) {
         impl_->certificateRepository.get(),
         impl_->crlRepository.get(),
         impl_->queryExecutor.get(),
-        impl_->ldapPool.get()
+        impl_->ldapPool.get(),
+        impl_->pendingDscRepository.get(),
+        impl_->ldapStorageService.get()
     );
-    spdlog::info("Certificate handler initialized (12 endpoints)");
+    spdlog::info("Certificate handler initialized (20 endpoints)");
 
     impl_->codeMasterHandler = std::make_shared<handlers::CodeMasterHandler>(
         impl_->codeMasterRepository.get(),
@@ -342,6 +376,13 @@ bool ServiceContainer::initialize(const AppConfig& config) {
         impl_->queryExecutor.get()
     );
     spdlog::info("API Client handler initialized (7 endpoints)");
+
+    impl_->apiClientRequestHandler = std::make_shared<handlers::ApiClientRequestHandler>(
+        impl_->apiClientRequestRepository.get(),
+        impl_->apiClientRepository.get(),
+        impl_->queryExecutor.get()
+    );
+    spdlog::info("API Client Request handler initialized (5 endpoints)");
 
     spdlog::info("ServiceContainer initialization complete");
     return true;
@@ -364,6 +405,8 @@ repositories::CrlRepository* ServiceContainer::crlRepository() const { return im
 repositories::DeviationListRepository* ServiceContainer::deviationListRepository() const { return impl_->deviationListRepository.get(); }
 repositories::CodeMasterRepository* ServiceContainer::codeMasterRepository() const { return impl_->codeMasterRepository.get(); }
 repositories::ApiClientRepository* ServiceContainer::apiClientRepository() const { return impl_->apiClientRepository.get(); }
+repositories::ApiClientRequestRepository* ServiceContainer::apiClientRequestRepository() const { return impl_->apiClientRequestRepository.get(); }
+repositories::PendingDscRepository* ServiceContainer::pendingDscRepository() const { return impl_->pendingDscRepository.get(); }
 
 // --- Service Accessors ---
 services::UploadService* ServiceContainer::uploadService() const { return impl_->uploadService.get(); }
@@ -382,5 +425,6 @@ handlers::UploadStatsHandler* ServiceContainer::uploadStatsHandler() const { ret
 handlers::CertificateHandler* ServiceContainer::certificateHandler() const { return impl_->certificateHandler.get(); }
 handlers::CodeMasterHandler* ServiceContainer::codeMasterHandler() const { return impl_->codeMasterHandler.get(); }
 handlers::ApiClientHandler* ServiceContainer::apiClientHandler() const { return impl_->apiClientHandler.get(); }
+handlers::ApiClientRequestHandler* ServiceContainer::apiClientRequestHandler() const { return impl_->apiClientRequestHandler.get(); }
 
 } // namespace infrastructure

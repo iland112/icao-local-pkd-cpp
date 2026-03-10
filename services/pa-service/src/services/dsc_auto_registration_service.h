@@ -1,12 +1,13 @@
 /**
  * @file dsc_auto_registration_service.h
- * @brief DSC Auto-Registration from PA Verification
+ * @brief DSC Pending Registration from PA Verification
  *
  * When PA verification extracts a DSC from SOD that is not yet
- * registered in the local PKD, this service automatically registers it.
- * PKD Relay reconciliation handles LDAP sync (stored_in_ldap=FALSE).
+ * registered in the local PKD, this service saves it to the
+ * pending_dsc_registration table for admin review and approval.
  *
  * @date 2026-02-12
+ * @modified 2026-03-10 — Changed from auto-registration to pending approval workflow
  */
 
 #pragma once
@@ -19,21 +20,24 @@
 namespace services {
 
 /**
- * @brief Result of DSC auto-registration attempt
+ * @brief Result of DSC pending registration attempt
  */
 struct DscRegistrationResult {
-    bool success = false;         // Operation completed without error
-    bool newlyRegistered = false; // true = new DSC inserted, false = already existed
-    std::string certificateId;    // certificate.id (UUID)
-    std::string fingerprint;      // SHA-256 hex (64 chars)
+    bool success = false;             // Operation completed without error
+    bool newlyRegistered = false;     // true = new pending entry, false = already existed
+    bool pendingApproval = false;     // true = saved to pending table (awaiting admin approval)
+    bool alreadyRegistered = false;   // true = already in certificate table
+    std::string pendingId;            // pending_dsc_registration.id (UUID)
+    std::string certificateId;        // certificate.id if already registered
+    std::string fingerprint;          // SHA-256 hex (64 chars)
     std::string countryCode;
 };
 
 /**
- * @brief Service for auto-registering DSC certificates from SOD
+ * @brief Service for saving DSC certificates from SOD to pending approval
  *
- * Inserts DSC into certificate table with source_type='PA_EXTRACTED'.
- * Does NOT write to LDAP — PKD Relay reconciliation handles that.
+ * Inserts DSC into pending_dsc_registration table for admin review.
+ * Admin approval via PKD Management triggers actual certificate + LDAP registration.
  */
 class DscAutoRegistrationService {
 public:
@@ -48,7 +52,7 @@ public:
     ~DscAutoRegistrationService() = default;
 
     /**
-     * @brief Register DSC certificate from SOD if not already in local PKD
+     * @brief Save DSC certificate from SOD to pending table for admin approval
      * @param dscCert X509 certificate pointer (not owned, not freed)
      * @param countryCode ISO 3166-1 alpha-2 country code
      * @param verificationId PA verification UUID (for source tracking)

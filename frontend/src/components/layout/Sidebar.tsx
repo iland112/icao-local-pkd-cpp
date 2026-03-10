@@ -74,6 +74,7 @@ const navSections: NavSection[] = [
       { path: '/upload/certificate', label: '인증서 업로드', icon: <FileText className="w-4 h-4" />, permission: 'upload:write' },
       { path: '/pkd/certificates', label: '인증서 조회', icon: <Key className="w-4 h-4" />, permission: 'cert:read' },
       { path: '/upload-history', label: '업로드 이력', icon: <Clock className="w-4 h-4" />, permission: 'upload:read' },
+      { path: '/admin/pending-dsc', label: 'DSC 등록 승인', icon: <ShieldCheck className="w-4 h-4" />, adminOnly: true },
       { path: '/sync', label: '동기화 상태', icon: <RefreshCw className="w-4 h-4" />, permission: 'sync:read' },
     ],
   },

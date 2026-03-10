@@ -77,6 +77,11 @@ enum class OperationType {
     REVALIDATE,         // Certificate re-validation
     TRIGGER_DAILY_SYNC, // Trigger daily sync manually
 
+    // DSC Pending Approval Workflow
+    DSC_PENDING_SAVE,   // DSC saved to pending table (from PA verification)
+    DSC_APPROVE,        // Admin approved pending DSC registration
+    DSC_REJECT,         // Admin rejected pending DSC registration
+
     // Common Operations
     CONFIG_UPDATE,      // Configuration update
     SYSTEM_HEALTH,      // Health check
@@ -130,6 +135,11 @@ inline std::string operationTypeToString(OperationType type) {
         case OperationType::RECONCILE: return "RECONCILE";
         case OperationType::REVALIDATE: return "REVALIDATE";
         case OperationType::TRIGGER_DAILY_SYNC: return "TRIGGER_DAILY_SYNC";
+
+        // DSC Pending Approval
+        case OperationType::DSC_PENDING_SAVE: return "DSC_PENDING_SAVE";
+        case OperationType::DSC_APPROVE: return "DSC_APPROVE";
+        case OperationType::DSC_REJECT: return "DSC_REJECT";
 
         // Common
         case OperationType::CONFIG_UPDATE: return "CONFIG_UPDATE";

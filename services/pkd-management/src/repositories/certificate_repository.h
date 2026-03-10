@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 #include <optional>
 #include <unordered_map>
 #include <json/json.h>
@@ -206,6 +207,41 @@ public:
      * ]
      */
     Json::Value findDscForRevalidation(int limit);
+
+    /**
+     * @brief Find PENDING DSC certificates for specific countries
+     *
+     * Used for auto re-validation when new CSCAs are uploaded.
+     * Retrieves DSC/DSC_NC certificates with PENDING status for the given country codes.
+     *
+     * @param countryCodes Set of country codes to filter by
+     * @param limit Maximum number of certificates to retrieve
+     * @return JSON array with certificate info (id, issuerDn, certificateData, fingerprint)
+     */
+    Json::Value findPendingDscByCountries(const std::set<std::string>& countryCodes, int limit);
+
+    /**
+     * @brief Find DSC certificate with binary data by fingerprint
+     *
+     * Returns certificate metadata and hex-encoded certificate_data for
+     * real-time LDAP-based trust chain validation in PA Lookup.
+     *
+     * @param fingerprint SHA-256 fingerprint (64-char hex)
+     * @return JSON object with id, subject_dn, issuer_dn, country_code,
+     *         certificate_type, fingerprint_sha256, certificate_data, serial_number,
+     *         not_before, not_after. Null if not found.
+     */
+    Json::Value findDscWithBinaryByFingerprint(const std::string& fingerprint);
+
+    /**
+     * @brief Find DSC certificate with binary data by subject DN
+     *
+     * Case-insensitive subject DN matching. Returns first DSC/DSC_NC match.
+     *
+     * @param subjectDn Subject DN to search
+     * @return JSON object with certificate metadata + binary. Null if not found.
+     */
+    Json::Value findDscWithBinaryBySubjectDn(const std::string& subjectDn);
 
     /// @}
 

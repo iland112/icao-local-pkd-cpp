@@ -36,6 +36,12 @@ namespace services {
 namespace repositories {
     class CertificateRepository;
     class CrlRepository;
+    class PendingDscRepository;
+}
+
+// Forward declarations - services (LDAP storage)
+namespace services {
+    class LdapStorageService;
 }
 
 // Forward declarations - common
@@ -73,7 +79,9 @@ public:
         repositories::CertificateRepository* certificateRepository,
         repositories::CrlRepository* crlRepository,
         common::IQueryExecutor* queryExecutor,
-        common::LdapConnectionPool* ldapPool);
+        common::LdapConnectionPool* ldapPool,
+        repositories::PendingDscRepository* pendingDscRepository = nullptr,
+        services::LdapStorageService* ldapStorageService = nullptr);
 
     /**
      * @brief Register certificate routes
@@ -92,6 +100,8 @@ private:
     repositories::CrlRepository* crlRepository_;
     common::IQueryExecutor* queryExecutor_;
     common::LdapConnectionPool* ldapPool_;
+    repositories::PendingDscRepository* pendingDscRepository_;
+    services::LdapStorageService* ldapStorageService_;
 
     // --- Handler methods ---
 
@@ -250,6 +260,30 @@ private:
     void savePaLookupHistory(
         const drogon::HttpRequestPtr& req,
         const Json::Value& validation);
+
+    // --- Pending DSC Registration Approval ---
+
+    /** GET /api/certificates/pending-dsc — List pending DSC registrations */
+    void handlePendingDscList(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** GET /api/certificates/pending-dsc/stats — Pending DSC statistics */
+    void handlePendingDscStats(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback);
+
+    /** POST /api/certificates/pending-dsc/{id}/approve — Approve pending DSC */
+    void handlePendingDscApprove(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+        const std::string& id);
+
+    /** POST /api/certificates/pending-dsc/{id}/reject — Reject pending DSC */
+    void handlePendingDscReject(
+        const drogon::HttpRequestPtr& req,
+        std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+        const std::string& id);
 };
 
 } // namespace handlers

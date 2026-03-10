@@ -683,6 +683,180 @@ Json::Value CertificateRepository::findDscForRevalidation(int limit)
     }
 }
 
+Json::Value CertificateRepository::findPendingDscByCountries(const std::set<std::string>& countryCodes, int limit)
+{
+    spdlog::debug("[CertificateRepository] Finding PENDING DSCs for {} countries (limit: {})",
+                  countryCodes.size(), limit);
+
+    if (countryCodes.empty()) {
+        return Json::arrayValue;
+    }
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string falseVal = common::db::boolLiteral(dbType, false);
+
+        // Build IN clause for country codes
+        std::string inClause;
+        std::vector<std::string> params;
+        int paramIdx = 1;
+        for (const auto& cc : countryCodes) {
+            if (!inClause.empty()) inClause += ", ";
+            inClause += "$" + std::to_string(paramIdx++);
+            params.push_back(cc);
+        }
+
+        // Oracle: BLOB→hex conversion to avoid LOB truncation
+        std::string certDataExpr = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(c.certificate_data, DBMS_LOB.GETLENGTH(c.certificate_data), 1))"
+            : "c.certificate_data";
+
+        std::string query =
+            "SELECT c.id, c.issuer_dn, " + certDataExpr + " AS certificate_data, c.fingerprint_sha256 "
+            "FROM certificate c "
+            "JOIN validation_result vr ON c.id = vr.certificate_id "
+            "WHERE c.certificate_type IN ('DSC', 'DSC_NC') "
+            "AND vr.validation_status = 'PENDING' "
+            "AND vr.csca_found = " + falseVal + " "
+            "AND c.country_code IN (" + inClause + ") "
+            "ORDER BY c.not_after DESC " +
+            common::db::limitClause(dbType, limit);
+
+        Json::Value result = queryExecutor_->executeQuery(query, params);
+
+        // Transform field names to camelCase (same pattern as findDscForRevalidation)
+        for (Json::ArrayIndex i = 0; i < result.size(); i++) {
+            if (!result[i].isMember("certificateData") && result[i].isMember("certificate_data")) {
+                result[i]["certificateData"] = result[i]["certificate_data"];
+                result[i].removeMember("certificate_data");
+            }
+            if (!result[i].isMember("issuerDn") && result[i].isMember("issuer_dn")) {
+                result[i]["issuerDn"] = result[i]["issuer_dn"];
+                result[i].removeMember("issuer_dn");
+            }
+            if (!result[i].isMember("fingerprint") && result[i].isMember("fingerprint_sha256")) {
+                result[i]["fingerprint"] = result[i]["fingerprint_sha256"];
+                result[i].removeMember("fingerprint_sha256");
+            }
+        }
+
+        spdlog::info("[CertificateRepository] Found {} PENDING DSC(s) for countries: {}",
+                     result.size(), [&]() {
+                         std::string s;
+                         for (const auto& cc : countryCodes) {
+                             if (!s.empty()) s += ",";
+                             s += cc;
+                         }
+                         return s;
+                     }());
+        return result;
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findPendingDscByCountries failed: {}", e.what());
+        return Json::arrayValue;
+    }
+}
+
+Json::Value CertificateRepository::findDscWithBinaryByFingerprint(const std::string& fingerprint)
+{
+    spdlog::debug("[CertificateRepository] Finding DSC with binary by fingerprint: {}", fingerprint.substr(0, 16));
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+
+        // Oracle: BLOB must be read via RAWTOHEX(DBMS_LOB.SUBSTR) to avoid LOB truncation
+        // PostgreSQL: certificate_data stored as hex text, no special handling needed
+        std::string certDataCol = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(certificate_data, DBMS_LOB.GETLENGTH(certificate_data), 1)) as certificate_data"
+            : "certificate_data";
+
+        std::string query =
+            "SELECT id, TO_CHAR(subject_dn) as subject_dn, TO_CHAR(issuer_dn) as issuer_dn, "
+            "country_code, certificate_type, "
+            "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+            "FROM certificate "
+            "WHERE fingerprint_sha256 = $1 "
+            "AND certificate_type IN ('DSC', 'DSC_NC') " +
+            common::db::limitClause(dbType, 1);
+
+        // PostgreSQL: TO_CHAR not needed, fix query
+        if (dbType == "postgres") {
+            query =
+                "SELECT id, subject_dn, issuer_dn, country_code, certificate_type, "
+                "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+                "FROM certificate "
+                "WHERE fingerprint_sha256 = $1 "
+                "AND certificate_type IN ('DSC', 'DSC_NC') " +
+                common::db::limitClause(dbType, 1);
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, {fingerprint});
+
+        if (result.empty()) {
+            spdlog::debug("[CertificateRepository] No DSC found for fingerprint: {}", fingerprint.substr(0, 16));
+            return Json::nullValue;
+        }
+
+        return result[0];
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findDscWithBinaryByFingerprint failed: {}", e.what());
+        return Json::nullValue;
+    }
+}
+
+Json::Value CertificateRepository::findDscWithBinaryBySubjectDn(const std::string& subjectDn)
+{
+    spdlog::debug("[CertificateRepository] Finding DSC with binary by subject DN: {}", subjectDn.substr(0, 60));
+
+    try {
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string caseInsensitive = (dbType == "postgres")
+            ? "LOWER(subject_dn) = LOWER($1)"
+            : "UPPER(subject_dn) = UPPER($1)";
+
+        // Oracle: BLOB must be read via RAWTOHEX(DBMS_LOB.SUBSTR) to avoid LOB truncation
+        std::string certDataCol = (dbType == "oracle")
+            ? "RAWTOHEX(DBMS_LOB.SUBSTR(certificate_data, DBMS_LOB.GETLENGTH(certificate_data), 1)) as certificate_data"
+            : "certificate_data";
+
+        std::string query;
+        if (dbType == "oracle") {
+            query =
+                "SELECT id, TO_CHAR(subject_dn) as subject_dn, TO_CHAR(issuer_dn) as issuer_dn, "
+                "country_code, certificate_type, "
+                "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+                "FROM certificate "
+                "WHERE " + caseInsensitive + " "
+                "AND certificate_type IN ('DSC', 'DSC_NC') "
+                "ORDER BY created_at DESC " +
+                common::db::limitClause(dbType, 1);
+        } else {
+            query =
+                "SELECT id, subject_dn, issuer_dn, country_code, certificate_type, "
+                "fingerprint_sha256, " + certDataCol + ", serial_number, not_before, not_after "
+                "FROM certificate "
+                "WHERE " + caseInsensitive + " "
+                "AND certificate_type IN ('DSC', 'DSC_NC') "
+                "ORDER BY created_at DESC " +
+                common::db::limitClause(dbType, 1);
+        }
+
+        Json::Value result = queryExecutor_->executeQuery(query, {subjectDn});
+
+        if (result.empty()) {
+            spdlog::debug("[CertificateRepository] No DSC found for subject DN: {}", subjectDn.substr(0, 60));
+            return Json::nullValue;
+        }
+
+        return result[0];
+
+    } catch (const std::exception& e) {
+        spdlog::error("[CertificateRepository] findDscWithBinaryBySubjectDn failed: {}", e.what());
+        return Json::nullValue;
+    }
+}
+
 // --- Private Helper Methods ---
 
 // --- DN Normalization Helpers ---
@@ -841,6 +1015,10 @@ X509* CertificateRepository::parseCertificateDataFromHex(const std::string& hexD
             derBytes = decodeHex(innerHex, 2);
             spdlog::debug("[CertificateRepository] Double-encoded BYTEA detected, decoded twice");
         }
+    } else if (hexData.size() >= 2 && std::isxdigit(static_cast<unsigned char>(hexData[0]))
+               && std::isxdigit(static_cast<unsigned char>(hexData[1]))) {
+        // Plain hex string (Oracle RAWTOHEX output, e.g., "308203A5...")
+        derBytes = decodeHex(hexData, 0);
     } else {
         // Might be raw binary (starts with 0x30 for DER SEQUENCE)
         if (!hexData.empty() && static_cast<unsigned char>(hexData[0]) == 0x30) {

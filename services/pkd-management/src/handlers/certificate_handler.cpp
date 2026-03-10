@@ -33,6 +33,10 @@
 // Repositories
 #include "../repositories/certificate_repository.h"
 #include "../repositories/crl_repository.h"
+#include "../repositories/pending_dsc_repository.h"
+
+// LDAP Storage Service (for DSC approval → LDAP write)
+#include "../services/ldap_storage_service.h"
 
 // Common utilities
 #include "db_connection_pool.h"
@@ -65,13 +69,17 @@ CertificateHandler::CertificateHandler(
     repositories::CertificateRepository* certificateRepository,
     repositories::CrlRepository* crlRepository,
     common::IQueryExecutor* queryExecutor,
-    common::LdapConnectionPool* ldapPool)
+    common::LdapConnectionPool* ldapPool,
+    repositories::PendingDscRepository* pendingDscRepository,
+    services::LdapStorageService* ldapStorageService)
     : certificateService_(certificateService)
     , validationService_(validationService)
     , certificateRepository_(certificateRepository)
     , crlRepository_(crlRepository)
     , queryExecutor_(queryExecutor)
     , ldapPool_(ldapPool)
+    , pendingDscRepository_(pendingDscRepository)
+    , ldapStorageService_(ldapStorageService)
 {
 }
 
@@ -239,7 +247,47 @@ void CertificateHandler::registerRoutes(drogon::HttpAppFramework& app) {
         },
         {drogon::Get});
 
-    spdlog::info("Certificate handler: 16 routes registered");
+    // --- Pending DSC Registration Approval ---
+
+    // GET /api/certificates/pending-dsc
+    app.registerHandler(
+        "/api/certificates/pending-dsc",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handlePendingDscList(req, std::move(callback));
+        },
+        {drogon::Get});
+
+    // GET /api/certificates/pending-dsc/stats
+    app.registerHandler(
+        "/api/certificates/pending-dsc/stats",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+            handlePendingDscStats(req, std::move(callback));
+        },
+        {drogon::Get});
+
+    // POST /api/certificates/pending-dsc/{id}/approve
+    app.registerHandler(
+        "/api/certificates/pending-dsc/{id}/approve",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+               const std::string& id) {
+            handlePendingDscApprove(req, std::move(callback), id);
+        },
+        {drogon::Post});
+
+    // POST /api/certificates/pending-dsc/{id}/reject
+    app.registerHandler(
+        "/api/certificates/pending-dsc/{id}/reject",
+        [this](const drogon::HttpRequestPtr& req,
+               std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+               const std::string& id) {
+            handlePendingDscReject(req, std::move(callback), id);
+        },
+        {drogon::Post});
+
+    spdlog::info("Certificate handler: 20 routes registered");
 }
 
 // =============================================================================
@@ -416,14 +464,12 @@ void CertificateHandler::handlePaLookup(
             return;
         }
 
-        Json::Value response;
-        if (!subjectDn.empty()) {
-            spdlog::info("POST /api/certificates/pa-lookup - subjectDn: {}", subjectDn.substr(0, 60));
-            response = validationService_->getValidationBySubjectDn(subjectDn);
-        } else {
-            spdlog::info("POST /api/certificates/pa-lookup - fingerprint: {}", fingerprint.substr(0, 16));
-            response = validationService_->getValidationByFingerprint(fingerprint);
-        }
+        spdlog::info("POST /api/certificates/pa-lookup - subjectDn: '{}', fingerprint: '{}'",
+            subjectDn.empty() ? "(empty)" : subjectDn.substr(0, 60),
+            fingerprint.empty() ? "(empty)" : fingerprint.substr(0, 16));
+
+        // Real-time LDAP validation (ICAO Doc 9303 compliant)
+        Json::Value response = validationService_->validateDscRealTime(subjectDn, fingerprint);
 
         // Save lookup history to pa_verification (non-blocking, failure doesn't affect response)
         if (response.get("success", false).asBool() && !response["validation"].isNull()) {
@@ -1756,6 +1802,382 @@ void CertificateHandler::handleDoc9303Checklist(
 
     } catch (const std::exception& e) {
         callback(common::handler::internalError("CertHandler::doc9303Checklist", e));
+    }
+}
+
+// =============================================================================
+// Pending DSC Registration Approval Handlers
+// =============================================================================
+
+void CertificateHandler::handlePendingDscList(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+    try {
+        if (!pendingDscRepository_) {
+            callback(common::handler::internalError("CertHandler::pendingDscList",
+                std::runtime_error("PendingDscRepository not configured")));
+            return;
+        }
+
+        int page = std::max(1, req->getOptionalParameter<int>("page").value_or(1));
+        int size = std::max(1, std::min(100, req->getOptionalParameter<int>("size").value_or(20)));
+        std::string status = req->getOptionalParameter<std::string>("status").value_or("");
+        std::string countryCode = req->getOptionalParameter<std::string>("country").value_or("");
+
+        int offset = (page - 1) * size;
+        int totalCount = pendingDscRepository_->countAll(status, countryCode);
+        Json::Value rows = pendingDscRepository_->findAll(size, offset, status, countryCode);
+
+        Json::Value response;
+        response["success"] = true;
+        response["data"] = rows;
+        response["pagination"]["page"] = page;
+        response["pagination"]["size"] = size;
+        response["pagination"]["totalCount"] = totalCount;
+        response["pagination"]["totalPages"] = (totalCount + size - 1) / size;
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+    } catch (const std::exception& e) {
+        callback(common::handler::internalError("CertHandler::pendingDscList", e));
+    }
+}
+
+void CertificateHandler::handlePendingDscStats(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback) {
+    try {
+        if (!pendingDscRepository_) {
+            callback(common::handler::internalError("CertHandler::pendingDscStats",
+                std::runtime_error("PendingDscRepository not configured")));
+            return;
+        }
+
+        Json::Value stats = pendingDscRepository_->getStatistics();
+
+        Json::Value response;
+        response["success"] = true;
+        response["data"] = stats;
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+    } catch (const std::exception& e) {
+        callback(common::handler::internalError("CertHandler::pendingDscStats", e));
+    }
+}
+
+void CertificateHandler::handlePendingDscApprove(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+    const std::string& id) {
+    try {
+        if (!pendingDscRepository_ || !certificateRepository_ || !queryExecutor_) {
+            callback(common::handler::internalError("CertHandler::pendingDscApprove",
+                std::runtime_error("Required dependencies not configured")));
+            return;
+        }
+
+        // Parse optional comment from request body
+        std::string reviewComment;
+        auto jsonBody = req->getJsonObject();
+        if (jsonBody && jsonBody->isMember("comment")) {
+            reviewComment = (*jsonBody)["comment"].asString();
+        }
+
+        // Get reviewer info from JWT
+        auto [userId, username] = extractUserFromRequest(req);
+        std::string reviewedBy = username.value_or("admin");
+
+        // 1. Fetch pending entry
+        Json::Value pending = pendingDscRepository_->findById(id);
+        if (pending.isNull()) {
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "Pending DSC registration not found";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k404NotFound);
+            callback(resp);
+            return;
+        }
+
+        if (pending["status"].asString() != "PENDING") {
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "Entry already processed (status: " + pending["status"].asString() + ")";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        // 2. Insert into certificate table
+        std::string dbType = queryExecutor_->getDatabaseType();
+        std::string fingerprint = pending["fingerprint_sha256"].asString();
+        std::string countryCode = pending["country_code"].asString();
+        std::string subjectDn = pending["subject_dn"].asString();
+        std::string issuerDn = pending["issuer_dn"].asString();
+        std::string serialNumber = pending["serial_number"].asString();
+        std::string notBefore = pending["not_before"].asString();
+        std::string notAfter = pending["not_after"].asString();
+        std::string signatureAlgorithm = pending["signature_algorithm"].asString();
+        std::string publicKeyAlgorithm = pending["public_key_algorithm"].asString();
+        std::string publicKeySize = pending["public_key_size"].asString();
+        std::string isSelfSigned = pending["is_self_signed"].asString();
+        std::string validationStatus = pending["validation_status"].asString();
+        std::string paVerificationId = pending["pa_verification_id"].asString();
+
+        // Get certificate_data (binary hex from DB)
+        std::string certDataHex = pending["certificate_data"].asString();
+
+        // Build source_context JSON
+        std::string sourceContext = "{\"verificationId\":\"" + paVerificationId +
+            "\",\"approvedBy\":\"" + reviewedBy + "\"}";
+
+        std::string newCertId;
+
+        if (dbType == "oracle") {
+            // Generate UUID for Oracle
+            std::string oracleId;
+            {
+                Json::Value uuidResult = queryExecutor_->executeQuery(
+                    "SELECT uuid_generate_v4() AS id FROM DUAL", {});
+                if (!uuidResult.empty()) {
+                    oracleId = uuidResult[0]["id"].asString();
+                }
+            }
+            if (oracleId.empty()) oracleId = id; // fallback
+
+            // Fix: Oracle boolean
+            std::string boolVal = (isSelfSigned == "1" || isSelfSigned == "true" || isSelfSigned == "TRUE")
+                ? "1" : "0";
+
+            std::string insertQuery =
+                "INSERT INTO certificate ("
+                "id, certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "not_before, not_after, certificate_data, "
+                "validation_status, stored_in_ldap, is_self_signed, "
+                "signature_algorithm, public_key_algorithm, public_key_size, "
+                "duplicate_count, created_at, "
+                "source_type, source_context, extracted_from, registered_at"
+                ") VALUES ("
+                "$1, 'DSC', $2, $3, $4, $5, $6, "
+                "CASE WHEN $7 IS NULL OR $7 = '' THEN NULL ELSE TO_TIMESTAMP($7, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "CASE WHEN $8 IS NULL OR $8 = '' THEN NULL ELSE TO_TIMESTAMP($8, 'YYYY-MM-DD HH24:MI:SS') END, "
+                "$9, $10, 0, $11, "
+                "$12, $13, $14, "
+                "0, SYSTIMESTAMP, "
+                "'PA_EXTRACTED', $15, $16, SYSTIMESTAMP"
+                ")";
+
+            std::vector<std::string> insertParams = {
+                oracleId, countryCode, subjectDn, issuerDn, serialNumber, fingerprint,
+                notBefore, notAfter, certDataHex, validationStatus, boolVal,
+                signatureAlgorithm, publicKeyAlgorithm, publicKeySize,
+                sourceContext, paVerificationId
+            };
+
+            queryExecutor_->executeCommand(insertQuery, insertParams);
+            newCertId = oracleId;
+
+        } else {
+            // PostgreSQL
+            std::string boolVal = (isSelfSigned == "true" || isSelfSigned == "t" || isSelfSigned == "1")
+                ? "TRUE" : "FALSE";
+
+            std::string insertQuery =
+                "INSERT INTO certificate ("
+                "certificate_type, country_code, "
+                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "not_before, not_after, certificate_data, "
+                "validation_status, stored_in_ldap, is_self_signed, "
+                "signature_algorithm, public_key_algorithm, public_key_size, "
+                "duplicate_count, created_at, "
+                "source_type, source_context, extracted_from, registered_at"
+                ") VALUES ("
+                "'DSC', $1, $2, $3, $4, $5, "
+                "$6, $7, $8, "
+                "$9, FALSE, " + boolVal + ", "
+                "$10, $11, $12, "
+                "0, CURRENT_TIMESTAMP, "
+                "'PA_EXTRACTED', $13::jsonb, $14, CURRENT_TIMESTAMP"
+                ") RETURNING id";
+
+            std::vector<std::string> insertParams = {
+                countryCode, subjectDn, issuerDn, serialNumber, fingerprint,
+                notBefore, notAfter, certDataHex, validationStatus,
+                signatureAlgorithm, publicKeyAlgorithm, publicKeySize,
+                sourceContext, paVerificationId
+            };
+
+            Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
+            if (!insertResult.empty()) {
+                newCertId = insertResult[0]["id"].asString();
+            }
+        }
+
+        // 3. Try LDAP storage (non-fatal)
+        bool ldapStored = false;
+        if (ldapStorageService_ && ldapPool_) {
+            try {
+                auto conn = ldapPool_->acquire();
+                if (conn.isValid()) {
+                    // Decode certificate_data hex to binary for LDAP
+                    std::vector<uint8_t> certBinary;
+                    std::string hexData = certDataHex;
+                    // Strip PostgreSQL \x or Oracle \\x prefix
+                    if (hexData.substr(0, 2) == "\\x") hexData = hexData.substr(2);
+                    else if (hexData.substr(0, 4) == "\\\\x") hexData = hexData.substr(4);
+
+                    for (size_t i = 0; i + 1 < hexData.size(); i += 2) {
+                        unsigned int byte = 0;
+                        std::istringstream iss(hexData.substr(i, 2));
+                        iss >> std::hex >> byte;
+                        certBinary.push_back(static_cast<uint8_t>(byte));
+                    }
+
+                    if (!certBinary.empty()) {
+                        std::string dn = ldapStorageService_->saveCertificateToLdap(
+                            conn.get(), "dsc", countryCode,
+                            subjectDn, issuerDn, serialNumber, fingerprint,
+                            certBinary);
+                        if (!dn.empty()) {
+                            ldapStored = true;
+                            // Mark as stored in LDAP
+                            certificateRepository_->markStoredInLdap(fingerprint);
+                        }
+                    }
+                }
+            } catch (const std::exception& e) {
+                spdlog::warn("[PendingDsc] LDAP storage failed (non-fatal): {}", e.what());
+            }
+        }
+
+        // 4. Mark pending entry as APPROVED
+        pendingDscRepository_->updateStatus(id, "APPROVED", reviewedBy, reviewComment);
+
+        // 5. Audit log
+        try {
+            auto entry = icao::audit::createAuditEntryFromRequest(req, OperationType::DSC_APPROVE);
+            entry.resourceId = id;
+            entry.resourceType = "pending_dsc_registration";
+            entry.success = true;
+            Json::Value meta;
+            meta["fingerprint"] = fingerprint;
+            meta["countryCode"] = countryCode;
+            meta["certificateId"] = newCertId;
+            meta["ldapStored"] = ldapStored;
+            meta["subjectDn"] = subjectDn.substr(0, 100);
+            entry.metadata = meta;
+            logOperation(queryExecutor_, entry);
+        } catch (...) {
+            spdlog::warn("[PendingDsc] Audit log failed for DSC_APPROVE");
+        }
+
+        Json::Value response;
+        response["success"] = true;
+        response["data"]["certificateId"] = newCertId;
+        response["data"]["fingerprint"] = fingerprint;
+        response["data"]["countryCode"] = countryCode;
+        response["data"]["ldapStored"] = ldapStored;
+        response["data"]["message"] = "DSC 인증서가 승인되어 등록되었습니다.";
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        // Audit log failure
+        try {
+            auto entry = icao::audit::createAuditEntryFromRequest(req, OperationType::DSC_APPROVE);
+            entry.resourceId = id;
+            entry.success = false;
+            entry.errorMessage = e.what();
+            logOperation(queryExecutor_, entry);
+        } catch (...) {}
+
+        callback(common::handler::internalError("CertHandler::pendingDscApprove", e));
+    }
+}
+
+void CertificateHandler::handlePendingDscReject(
+    const drogon::HttpRequestPtr& req,
+    std::function<void(const drogon::HttpResponsePtr&)>&& callback,
+    const std::string& id) {
+    try {
+        if (!pendingDscRepository_) {
+            callback(common::handler::internalError("CertHandler::pendingDscReject",
+                std::runtime_error("PendingDscRepository not configured")));
+            return;
+        }
+
+        // Parse comment from request body
+        std::string reviewComment;
+        auto jsonBody = req->getJsonObject();
+        if (jsonBody && jsonBody->isMember("comment")) {
+            reviewComment = (*jsonBody)["comment"].asString();
+        }
+
+        auto [userId, username] = extractUserFromRequest(req);
+        std::string reviewedBy = username.value_or("admin");
+
+        // Check pending entry exists
+        Json::Value pending = pendingDscRepository_->findById(id);
+        if (pending.isNull()) {
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "Pending DSC registration not found";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k404NotFound);
+            callback(resp);
+            return;
+        }
+
+        if (pending["status"].asString() != "PENDING") {
+            Json::Value error;
+            error["success"] = false;
+            error["error"] = "Entry already processed (status: " + pending["status"].asString() + ")";
+            auto resp = drogon::HttpResponse::newHttpJsonResponse(error);
+            resp->setStatusCode(drogon::k400BadRequest);
+            callback(resp);
+            return;
+        }
+
+        // Mark as REJECTED
+        pendingDscRepository_->updateStatus(id, "REJECTED", reviewedBy, reviewComment);
+
+        // Audit log
+        try {
+            auto entry = icao::audit::createAuditEntryFromRequest(req, OperationType::DSC_REJECT);
+            entry.resourceId = id;
+            entry.resourceType = "pending_dsc_registration";
+            entry.success = true;
+            Json::Value meta;
+            meta["fingerprint"] = pending["fingerprint_sha256"].asString();
+            meta["countryCode"] = pending["country_code"].asString();
+            meta["comment"] = reviewComment;
+            entry.metadata = meta;
+            logOperation(queryExecutor_, entry);
+        } catch (...) {
+            spdlog::warn("[PendingDsc] Audit log failed for DSC_REJECT");
+        }
+
+        Json::Value response;
+        response["success"] = true;
+        response["data"]["message"] = "DSC 인증서 등록이 거부되었습니다.";
+
+        auto resp = drogon::HttpResponse::newHttpJsonResponse(response);
+        callback(resp);
+
+    } catch (const std::exception& e) {
+        try {
+            auto entry = icao::audit::createAuditEntryFromRequest(req, OperationType::DSC_REJECT);
+            entry.resourceId = id;
+            entry.success = false;
+            entry.errorMessage = e.what();
+            logOperation(queryExecutor_, entry);
+        } catch (...) {}
+
+        callback(common::handler::internalError("CertHandler::pendingDscReject", e));
     }
 }
 

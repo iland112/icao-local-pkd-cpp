@@ -20,11 +20,15 @@ namespace services {
 ValidationService::ValidationService(
     repositories::ValidationRepository* validationRepo,
     repositories::CertificateRepository* certRepo,
-    repositories::CrlRepository* crlRepo
+    repositories::CrlRepository* crlRepo,
+    icao::validation::ICscaProvider* ldapCscaProvider,
+    icao::validation::ICrlProvider* ldapCrlProvider
 )
     : validationRepo_(validationRepo)
     , certRepo_(certRepo)
     , crlRepo_(crlRepo)
+    , ldapCscaProvider_(ldapCscaProvider)
+    , ldapCrlProvider_(ldapCrlProvider)
 {
     if (!validationRepo_) {
         throw std::invalid_argument("ValidationService: validationRepo cannot be nullptr");
@@ -33,7 +37,7 @@ ValidationService::ValidationService(
         throw std::invalid_argument("ValidationService: certRepo cannot be nullptr");
     }
 
-    // Initialize provider adapters and validation library components
+    // Initialize DB-based provider adapters (for upload-time validation)
     cscaProvider_ = std::make_unique<adapters::DbCscaProvider>(certRepo_);
     trustChainBuilder_ = std::make_unique<icao::validation::TrustChainBuilder>(cscaProvider_.get());
 
@@ -42,7 +46,18 @@ ValidationService::ValidationService(
         crlChecker_ = std::make_unique<icao::validation::CrlChecker>(crlProvider_.get());
     }
 
-    spdlog::info("ValidationService initialized with icao::validation library");
+    // Initialize LDAP-based validation components (for real-time PA Lookup)
+    if (ldapCscaProvider_) {
+        ldapTrustChainBuilder_ = std::make_unique<icao::validation::TrustChainBuilder>(ldapCscaProvider_);
+        spdlog::info("ValidationService: LDAP CSCA provider configured for real-time PA Lookup");
+    }
+    if (ldapCrlProvider_) {
+        ldapCrlChecker_ = std::make_unique<icao::validation::CrlChecker>(ldapCrlProvider_);
+        spdlog::info("ValidationService: LDAP CRL provider configured for real-time PA Lookup");
+    }
+
+    spdlog::info("ValidationService initialized (DB providers: yes, LDAP providers: {})",
+                 ldapCscaProvider_ ? "yes" : "no");
 }
 
 // --- Public Methods - DSC Re-validation ---
@@ -137,6 +152,123 @@ ValidationService::RevalidateResult ValidationService::revalidateDscCertificates
 
     } catch (const std::exception& e) {
         spdlog::error("ValidationService::revalidateDscCertificates failed: {}", e.what());
+        result.success = false;
+        result.message = e.what();
+    }
+
+    auto endTime = std::chrono::steady_clock::now();
+    result.durationSeconds = std::chrono::duration<double>(endTime - startTime).count();
+
+    return result;
+}
+
+// --- Public Methods - PENDING DSC Re-validation by Country ---
+
+ValidationService::RevalidateResult ValidationService::revalidatePendingDscForCountries(
+    const std::set<std::string>& countryCodes)
+{
+    spdlog::info("ValidationService::revalidatePendingDscForCountries - {} countries",
+                 countryCodes.size());
+
+    RevalidateResult result;
+    result.success = false;
+    result.totalProcessed = 0;
+    result.validCount = 0;
+    result.expiredValidCount = 0;
+    result.invalidCount = 0;
+    result.pendingCount = 0;
+    result.errorCount = 0;
+
+    if (countryCodes.empty()) {
+        result.success = true;
+        result.message = "No countries to re-validate";
+        result.durationSeconds = 0.0;
+        return result;
+    }
+
+    auto startTime = std::chrono::steady_clock::now();
+
+    try {
+        // Refresh CSCA cache to include newly added CSCAs
+        cscaProvider_->preloadAllCscas();
+
+        int limit = 50000;
+        Json::Value dscs = certRepo_->findPendingDscByCountries(countryCodes, limit);
+
+        if (!dscs.isArray() || dscs.empty()) {
+            result.success = true;
+            result.message = "No PENDING DSCs found for the given countries";
+            auto endTime = std::chrono::steady_clock::now();
+            result.durationSeconds = std::chrono::duration<double>(endTime - startTime).count();
+            return result;
+        }
+
+        spdlog::info("Found {} PENDING DSC(s) for re-validation", dscs.size());
+
+        for (const auto& dscInfo : dscs) {
+            result.totalProcessed++;
+
+            try {
+                std::string certId = dscInfo.get("id", "").asString();
+                std::string certDataHex = dscInfo.get("certificateData", "").asString();
+
+                if (certDataHex.empty()) {
+                    result.errorCount++;
+                    continue;
+                }
+
+                X509* cert = certRepo_->parseCertificateDataFromHex(certDataHex);
+                if (!cert) {
+                    result.errorCount++;
+                    continue;
+                }
+
+                ValidationResult valResult = validateCertificate(cert, "DSC");
+
+                if (valResult.validationStatus == "VALID") {
+                    result.validCount++;
+                } else if (valResult.validationStatus == "EXPIRED_VALID") {
+                    result.validCount++;
+                    result.expiredValidCount++;
+                } else if (valResult.validationStatus == "INVALID") {
+                    result.invalidCount++;
+                } else if (valResult.validationStatus == "PENDING") {
+                    result.pendingCount++;
+                } else {
+                    result.errorCount++;
+                }
+
+                validationRepo_->updateRevalidation(
+                    certId,
+                    valResult.validationStatus,
+                    valResult.trustChainValid,
+                    valResult.cscaFound,
+                    valResult.signatureValid,
+                    valResult.trustChainPath.empty() ? valResult.errorMessage : valResult.trustChainPath,
+                    valResult.cscaSubjectDn
+                );
+
+                X509_free(cert);
+
+            } catch (const std::exception& e) {
+                spdlog::error("Error re-validating PENDING DSC: {}", e.what());
+                result.errorCount++;
+            }
+        }
+
+        result.success = true;
+        std::string countryList;
+        for (const auto& cc : countryCodes) {
+            if (!countryList.empty()) countryList += ",";
+            countryList += cc;
+        }
+        result.message = "Re-validation completed for countries: " + countryList;
+
+        spdlog::info("PENDING DSC re-validation complete: processed={}, valid={}, invalid={}, pending={}, error={}",
+            result.totalProcessed, result.validCount, result.invalidCount, result.pendingCount, result.errorCount);
+
+    } catch (const std::exception& e) {
+        spdlog::error("revalidatePendingDscForCountries failed: {}", e.what());
         result.success = false;
         result.message = e.what();
     }
@@ -403,6 +535,161 @@ ValidationService::LinkCertValidationResult ValidationService::validateLinkCerti
     }
 
     return result;
+}
+
+// --- Public Methods - Real-time LDAP Validation (PA Lookup) ---
+
+Json::Value ValidationService::validateDscRealTime(
+    const std::string& subjectDn,
+    const std::string& fingerprint)
+{
+    spdlog::info("ValidationService::validateDscRealTime - subjectDn: '{}', fingerprint: '{}'",
+        subjectDn.empty() ? "(empty)" : subjectDn.substr(0, 60),
+        fingerprint.empty() ? "(empty)" : fingerprint.substr(0, 16));
+
+    Json::Value response;
+
+    // Check LDAP providers are available
+    if (!ldapTrustChainBuilder_) {
+        spdlog::warn("validateDscRealTime: LDAP CSCA provider not configured, falling back to DB result");
+        // Fallback to pre-computed DB results
+        if (!subjectDn.empty()) {
+            return getValidationBySubjectDn(subjectDn);
+        } else {
+            return getValidationByFingerprint(fingerprint);
+        }
+    }
+
+    try {
+        // Step 1: Find DSC certificate from DB (with binary data for X509 parsing)
+        Json::Value dscInfo;
+        if (!fingerprint.empty()) {
+            dscInfo = certRepo_->findDscWithBinaryByFingerprint(fingerprint);
+        } else {
+            dscInfo = certRepo_->findDscWithBinaryBySubjectDn(subjectDn);
+        }
+
+        if (dscInfo.isNull() || dscInfo.empty()) {
+            response["success"] = true;
+            response["validation"] = Json::nullValue;
+            return response;
+        }
+
+        std::string certDataHex = dscInfo.get("certificate_data", "").asString();
+        if (certDataHex.empty()) {
+            response["success"] = true;
+            response["validation"] = Json::nullValue;
+            spdlog::warn("validateDscRealTime: DSC found but no certificate binary data");
+            return response;
+        }
+
+        // Step 2: Parse X509 certificate from hex data
+        X509* cert = certRepo_->parseCertificateDataFromHex(certDataHex);
+        if (!cert) {
+            response["success"] = false;
+            response["error"] = "Failed to parse DSC certificate binary";
+            return response;
+        }
+
+        // Step 3: Build trust chain via LDAP CSCA lookup
+        icao::validation::TrustChainResult chainResult = ldapTrustChainBuilder_->build(cert, 5);
+
+        // Step 4: Check CRL via LDAP (if available)
+        bool crlChecked = false;
+        bool revoked = false;
+        std::string crlMessage;
+        std::string crlCheckStatus = "NOT_CHECKED";
+
+        if (chainResult.valid && ldapCrlChecker_) {
+            std::string countryCode = dscInfo.get("country_code", "").asString();
+            if (countryCode.empty()) {
+                countryCode = icao::validation::extractDnAttribute(
+                    icao::validation::getIssuerDn(cert), "C");
+            }
+
+            if (!countryCode.empty()) {
+                icao::validation::CrlCheckResult crlResult = ldapCrlChecker_->check(cert, countryCode);
+                crlChecked = true;
+                revoked = (crlResult.status == icao::validation::CrlCheckStatus::REVOKED);
+                crlMessage = crlResult.message;
+
+                if (crlResult.status == icao::validation::CrlCheckStatus::REVOKED) {
+                    crlCheckStatus = "REVOKED";
+                } else if (crlResult.status == icao::validation::CrlCheckStatus::VALID) {
+                    crlCheckStatus = "GOOD";
+                } else if (crlResult.status == icao::validation::CrlCheckStatus::CRL_UNAVAILABLE) {
+                    crlCheckStatus = "CRL_NOT_FOUND";
+                } else if (crlResult.status == icao::validation::CrlCheckStatus::CRL_EXPIRED) {
+                    crlCheckStatus = "CRL_EXPIRED";
+                } else {
+                    crlCheckStatus = "NOT_CHECKED";
+                }
+            }
+        }
+
+        // Step 5: Determine validation status
+        bool dscExpired = icao::validation::isCertificateExpired(cert);
+        std::string validationStatus;
+
+        if (!chainResult.valid) {
+            validationStatus = "INVALID";
+        } else if (dscExpired || chainResult.cscaExpired) {
+            validationStatus = "EXPIRED_VALID";
+        } else {
+            validationStatus = "VALID";
+        }
+
+        // Step 6: Assemble response (matching existing format)
+        Json::Value validation;
+        validation["validationStatus"] = validationStatus;
+        validation["trustChainValid"] = chainResult.valid;
+        validation["trustChainMessage"] = chainResult.valid
+            ? ("Trust chain verified via LDAP (" + std::to_string(chainResult.depth) + " steps)")
+            : ("Trust chain failed: " + chainResult.message);
+        validation["trustChainPath"] = chainResult.path;
+        validation["signatureValid"] = chainResult.valid;
+        validation["cscaFound"] = chainResult.valid;
+        validation["cscaSubjectDn"] = chainResult.cscaSubjectDn;
+        validation["cscaFingerprint"] = chainResult.cscaFingerprint;
+        validation["dscExpired"] = dscExpired;
+        validation["cscaExpired"] = chainResult.cscaExpired;
+        validation["crlChecked"] = crlChecked;
+        validation["revoked"] = revoked;
+        validation["crlMessage"] = crlMessage;
+        validation["crlCheckStatus"] = crlCheckStatus;
+        validation["validationSource"] = "LDAP_REALTIME";
+
+        // Copy DSC info from DB (column names are snake_case from query executor)
+        validation["subjectDn"] = dscInfo.get("subject_dn", "").asString();
+        validation["issuerDn"] = dscInfo.get("issuer_dn", "").asString();
+        validation["countryCode"] = dscInfo.get("country_code", "").asString();
+        validation["certificateType"] = dscInfo.get("certificate_type", "").asString();
+        validation["fingerprint"] = dscInfo.get("fingerprint_sha256", "").asString();
+        validation["serialNumber"] = dscInfo.get("serial_number", "").asString();
+        validation["notBefore"] = dscInfo.get("not_before", "").asString();
+        validation["notAfter"] = dscInfo.get("not_after", "").asString();
+
+        if (!chainResult.valid) {
+            validation["errorMessage"] = chainResult.message;
+        }
+
+        X509_free(cert);
+
+        response["success"] = true;
+        response["validation"] = validation;
+
+        spdlog::info("validateDscRealTime: {} (trust chain: {}, CRL: {})",
+            validationStatus,
+            chainResult.valid ? "verified" : "failed",
+            crlCheckStatus);
+
+    } catch (const std::exception& e) {
+        spdlog::error("validateDscRealTime failed: {}", e.what());
+        response["success"] = false;
+        response["error"] = e.what();
+    }
+
+    return response;
 }
 
 } // namespace services

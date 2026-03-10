@@ -111,6 +111,8 @@ add_executable(${PROJECT_NAME}
     # Provider Adapters (v2.11.0: icao::validation library integration)
     src/adapters/db_csca_provider.cpp
     src/adapters/db_crl_provider.cpp
+    src/adapters/ldap_csca_provider.cpp   # v2.31.0: LDAP real-time PA Lookup
+    src/adapters/ldap_crl_provider.cpp    # v2.31.0: LDAP real-time PA Lookup
 
     src/services/ldif_structure_service.cpp  # v2.2.2: LDIF structure visualization
     src/services/ldap_storage_service.cpp   # v2.13.0: LDAP storage operations
@@ -140,6 +142,13 @@ add_executable(${PROJECT_NAME}
     src/middleware/api_rate_limiter.cpp
     src/repositories/api_client_repository.cpp
     src/handlers/api_client_handler.cpp
+
+    # API Client Request Workflow (v2.31.0 - Public Request + Admin Approval)
+    src/repositories/api_client_request_repository.cpp
+    src/handlers/api_client_request_handler.cpp
+
+    # Pending DSC Registration Approval (v2.31.0)
+    src/repositories/pending_dsc_repository.cpp
 
     # Infrastructure
     src/infrastructure/service_container.cpp

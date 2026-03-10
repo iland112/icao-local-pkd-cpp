@@ -135,7 +135,7 @@ export function VerificationStepsPanel({
                 <h3 className="font-semibold text-gray-900 dark:text-white text-sm">{step.title}</h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400">{step.description}</p>
               </div>
-              {(step.message || step.id === 8) && (
+              {step.message && (
                 expandedSteps.has(step.id) ? (
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 ) : (
@@ -145,7 +145,7 @@ export function VerificationStepsPanel({
             </div>
 
             {/* Step Details (Expanded) */}
-            {expandedSteps.has(step.id) && (step.message || step.id === 8) && (
+            {expandedSteps.has(step.id) && step.message && (
               <div className="px-4 pb-3 pt-0">
                 {step.message ? (
                   <div className={cn(
@@ -585,34 +585,6 @@ export function VerificationStepsPanel({
                   </div>
                 )}
 
-                {/* Step 8: DSC 자동 등록 */}
-                {step.id === 8 && step.details && (
-                  <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-1.5">
-                    {step.details.fingerprint && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-500 dark:text-gray-400 shrink-0">Fingerprint:</span>
-                        <code className="font-mono text-gray-700 dark:text-gray-300 break-all">{step.details.fingerprint}</code>
-                      </div>
-                    )}
-                    {step.details.certificateId && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-500 dark:text-gray-400 shrink-0">Certificate ID:</span>
-                        <code className="font-mono text-gray-700 dark:text-gray-300">{step.details.certificateId}</code>
-                      </div>
-                    )}
-                    {step.details.countryCode && (
-                      <div className="flex items-center gap-2">
-                        <span className="text-gray-500 dark:text-gray-400 shrink-0">Country:</span>
-                        <span className="text-gray-700 dark:text-gray-300">{step.details.countryCode}</span>
-                      </div>
-                    )}
-                    {step.details.newlyRegistered === false && (
-                      <div className="text-gray-500 dark:text-gray-400 italic">
-                        이미 Local PKD에 등록된 DSC 인증서입니다.
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
           </div>

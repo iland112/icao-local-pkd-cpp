@@ -1,6 +1,10 @@
 /**
  * @file dsc_auto_registration_service.cpp
- * @brief DSC Auto-Registration from PA Verification
+ * @brief DSC Pending Registration from PA Verification
+ *
+ * Changed from auto-registration to pending approval workflow (v2.31.0):
+ * DSC certificates are saved to pending_dsc_registration table
+ * instead of directly to certificate table.
  */
 
 #include "dsc_auto_registration_service.h"
@@ -24,7 +28,7 @@ DscAutoRegistrationService::DscAutoRegistrationService(common::IQueryExecutor* q
     if (!queryExecutor_) {
         throw std::invalid_argument("QueryExecutor cannot be null");
     }
-    spdlog::info("[DscAutoReg] DSC auto-registration service initialized");
+    spdlog::info("[DscAutoReg] DSC pending registration service initialized");
 }
 
 DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
@@ -36,7 +40,7 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
     DscRegistrationResult result;
 
     if (!dscCert) {
-        spdlog::warn("[DscAutoReg] DSC certificate is null, skipping registration");
+        spdlog::warn("[DscAutoReg] DSC certificate is null, skipping");
         return result;
     }
 
@@ -50,26 +54,50 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
 
         result.countryCode = countryCode;
 
-        // 2. Check if DSC already exists (by type + fingerprint)
-        const char* checkQuery =
+        // 2. Check if DSC already exists in certificate table
+        const char* checkCertQuery =
             "SELECT id FROM certificate "
             "WHERE certificate_type = 'DSC' AND fingerprint_sha256 = $1 "
             "FETCH FIRST 1 ROWS ONLY";
 
         std::vector<std::string> checkParams = {result.fingerprint};
-        Json::Value checkResult = queryExecutor_->executeQuery(checkQuery, checkParams);
+        Json::Value certCheck = queryExecutor_->executeQuery(checkCertQuery, checkParams);
 
-        if (!checkResult.empty()) {
-            // DSC already registered
+        if (!certCheck.empty()) {
+            // DSC already registered in certificate table
             result.success = true;
-            result.newlyRegistered = false;
-            result.certificateId = checkResult[0]["id"].asString();
+            result.alreadyRegistered = true;
+            result.certificateId = certCheck[0]["id"].asString();
             spdlog::debug("[DscAutoReg] DSC already registered: id={}, fingerprint={}...",
                 result.certificateId.substr(0, 8), result.fingerprint.substr(0, 16));
             return result;
         }
 
-        // 3. Extract certificate fields
+        // 3. Check if already pending approval
+        const char* checkPendingQuery =
+            "SELECT id, status FROM pending_dsc_registration "
+            "WHERE fingerprint_sha256 = $1 "
+            "FETCH FIRST 1 ROWS ONLY";
+
+        Json::Value pendingCheck = queryExecutor_->executeQuery(checkPendingQuery, checkParams);
+
+        if (!pendingCheck.empty()) {
+            std::string pendingStatus = pendingCheck[0]["status"].asString();
+            result.success = true;
+            result.pendingId = pendingCheck[0]["id"].asString();
+            if (pendingStatus == "PENDING") {
+                result.pendingApproval = true;
+                spdlog::debug("[DscAutoReg] DSC already pending approval: id={}, fingerprint={}...",
+                    result.pendingId.substr(0, 8), result.fingerprint.substr(0, 16));
+            } else {
+                // APPROVED or REJECTED — already processed
+                spdlog::debug("[DscAutoReg] DSC pending entry exists (status={}): fingerprint={}...",
+                    pendingStatus, result.fingerprint.substr(0, 16));
+            }
+            return result;
+        }
+
+        // 4. Extract certificate fields
         std::string subjectDn = x509NameToString(X509_get_subject_name(dscCert));
         std::string issuerDn = x509NameToString(X509_get_issuer_name(dscCert));
 
@@ -99,8 +127,7 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
             return result;
         }
 
-        // Convert DER bytes to hex string for bytea storage
-        // PostgreSQL: \x for hex bytea; Oracle: \\x as BLOB marker for OracleQueryExecutor
+        // Convert DER bytes to hex string for bytea/BLOB storage
         std::string dbType = queryExecutor_->getDatabaseType();
         std::ostringstream hexStream;
         hexStream << common::db::hexPrefix(dbType);
@@ -155,53 +182,48 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
             }
         }
 
-        // Source context JSON
-        std::string sourceContext = "{\"verificationId\":\"" + verificationId +
-            "\",\"verificationStatus\":\"" + verificationStatus + "\"}";
-
-        // 4. Insert new DSC certificate
-        // dbType already declared above for hex prefix selection
+        // 5. Insert into pending_dsc_registration table
         std::string newId;
 
         if (dbType == "oracle") {
             newId = generateUuid();
 
             std::string insertQuery =
-                "INSERT INTO certificate ("
-                "id, certificate_type, country_code, "
-                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "INSERT INTO pending_dsc_registration ("
+                "id, fingerprint_sha256, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
                 "not_before, not_after, certificate_data, "
-                "validation_status, stored_in_ldap, is_self_signed, "
                 "signature_algorithm, public_key_algorithm, public_key_size, "
-                "duplicate_count, created_at, "
-                "source_type, source_context, extracted_from, registered_at"
+                "is_self_signed, validation_status, "
+                "pa_verification_id, verification_status, "
+                "status, created_at"
                 ") VALUES ("
-                "$1, 'DSC', $2, $3, $4, $5, $6, "
+                "$1, $2, $3, $4, $5, $6, "
                 "CASE WHEN $7 IS NULL OR $7 = '' THEN NULL ELSE TO_TIMESTAMP($7, 'YYYY-MM-DD HH24:MI:SS') END, "
                 "CASE WHEN $8 IS NULL OR $8 = '' THEN NULL ELSE TO_TIMESTAMP($8, 'YYYY-MM-DD HH24:MI:SS') END, "
-                "$9, $10, 0, $11, "
-                "$12, $13, $14, "
-                "0, SYSTIMESTAMP, "
-                "'PA_EXTRACTED', $15, $16, SYSTIMESTAMP"
+                "$9, $10, $11, $12, "
+                "$13, $14, "
+                "$15, $16, "
+                "'PENDING', SYSTIMESTAMP"
                 ")";
 
             std::vector<std::string> insertParams = {
-                newId,           // $1
-                countryCode,     // $2
-                subjectDn,       // $3
-                issuerDn,        // $4
-                serialNumber,    // $5
-                result.fingerprint, // $6
-                notBefore,       // $7
-                notAfter,        // $8
-                certDataHex,     // $9
-                validationStatus, // $10
-                common::db::boolLiteral("oracle", isSelfSigned), // $11
-                signatureAlgorithm, // $12
-                publicKeyAlgorithm, // $13
-                std::to_string(publicKeySize), // $14
-                sourceContext,   // $15
-                verificationId   // $16
+                newId,               // $1
+                result.fingerprint,  // $2
+                countryCode,         // $3
+                subjectDn,           // $4
+                issuerDn,            // $5
+                serialNumber,        // $6
+                notBefore,           // $7
+                notAfter,            // $8
+                certDataHex,         // $9
+                signatureAlgorithm,  // $10
+                publicKeyAlgorithm,  // $11
+                std::to_string(publicKeySize), // $12
+                common::db::boolLiteral("oracle", isSelfSigned), // $13
+                validationStatus,    // $14
+                verificationId,      // $15
+                verificationStatus   // $16
             };
 
             queryExecutor_->executeCommand(insertQuery, insertParams);
@@ -209,39 +231,39 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
         } else {
             // PostgreSQL
             const char* insertQuery =
-                "INSERT INTO certificate ("
-                "certificate_type, country_code, "
-                "subject_dn, issuer_dn, serial_number, fingerprint_sha256, "
+                "INSERT INTO pending_dsc_registration ("
+                "fingerprint_sha256, country_code, "
+                "subject_dn, issuer_dn, serial_number, "
                 "not_before, not_after, certificate_data, "
-                "validation_status, stored_in_ldap, is_self_signed, "
                 "signature_algorithm, public_key_algorithm, public_key_size, "
-                "duplicate_count, created_at, "
-                "source_type, source_context, extracted_from, registered_at"
+                "is_self_signed, validation_status, "
+                "pa_verification_id, verification_status, "
+                "status, created_at"
                 ") VALUES ("
-                "'DSC', $1, $2, $3, $4, $5, "
+                "$1, $2, $3, $4, $5, "
                 "$6, $7, $8, "
-                "$9, FALSE, $10, "
-                "$11, $12, $13, "
-                "0, CURRENT_TIMESTAMP, "
-                "'PA_EXTRACTED', $14::jsonb, $15, CURRENT_TIMESTAMP"
+                "$9, $10, $11, "
+                "$12, $13, "
+                "$14, $15, "
+                "'PENDING', CURRENT_TIMESTAMP"
                 ") RETURNING id";
 
             std::vector<std::string> insertParams = {
-                countryCode,        // $1
-                subjectDn,          // $2
-                issuerDn,           // $3
-                serialNumber,       // $4
-                result.fingerprint, // $5
-                notBefore,          // $6
-                notAfter,           // $7
-                certDataHex,        // $8
-                validationStatus,   // $9
-                common::db::boolLiteral("postgres", isSelfSigned),  // $10
-                signatureAlgorithm, // $11
-                publicKeyAlgorithm, // $12
-                std::to_string(publicKeySize), // $13
-                sourceContext,      // $14
-                verificationId      // $15
+                result.fingerprint,  // $1
+                countryCode,         // $2
+                subjectDn,           // $3
+                issuerDn,            // $4
+                serialNumber,        // $5
+                notBefore,           // $6
+                notAfter,            // $7
+                certDataHex,         // $8
+                signatureAlgorithm,  // $9
+                publicKeyAlgorithm,  // $10
+                std::to_string(publicKeySize), // $11
+                common::db::boolLiteral("postgres", isSelfSigned),  // $12
+                validationStatus,    // $13
+                verificationId,      // $14
+                verificationStatus   // $15
             };
 
             Json::Value insertResult = queryExecutor_->executeQuery(insertQuery, insertParams);
@@ -252,14 +274,15 @@ DscRegistrationResult DscAutoRegistrationService::registerDscFromSod(
 
         result.success = true;
         result.newlyRegistered = true;
-        result.certificateId = newId;
+        result.pendingApproval = true;
+        result.pendingId = newId;
 
-        spdlog::info("[DscAutoReg] DSC registered: id={}, country={}, fingerprint={}..., source=PA_EXTRACTED, verificationId={}",
+        spdlog::info("[DscAutoReg] DSC saved to pending: id={}, country={}, fingerprint={}..., verificationId={}",
             newId.substr(0, 8), countryCode, result.fingerprint.substr(0, 16), verificationId.substr(0, 8));
 
     } catch (const std::exception& e) {
-        spdlog::error("[DscAutoReg] Failed to register DSC: {}", e.what());
-        // Don't rethrow — registration failure should not affect PA verification
+        spdlog::error("[DscAutoReg] Failed to save pending DSC: {}", e.what());
+        // Don't rethrow — pending save failure should not affect PA verification
     }
 
     return result;

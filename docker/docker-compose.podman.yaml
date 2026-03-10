@@ -47,9 +47,9 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 1G
         reservations:
-          memory: 64M
+          memory: 128M
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/health || exit 1"]
       interval: 30s
@@ -124,7 +124,7 @@ services:
       - LDAP_WRITE_TIMEOUT=${LDAP_WRITE_TIMEOUT:-10}
       - MAX_CONCURRENT_UPLOADS=${MAX_CONCURRENT_UPLOADS:-3}
       - MAX_BODY_SIZE_MB=${MAX_BODY_SIZE_MB:-100}
-      - THREAD_NUM=${THREAD_NUM:-16}
+      - THREAD_NUM=${THREAD_NUM:-32}
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389
       - LDAP_WRITE_HOST=openldap1
       - LDAP_WRITE_PORT=389
@@ -195,7 +195,7 @@ services:
       - LDAP_NETWORK_TIMEOUT=${LDAP_NETWORK_TIMEOUT:-5}
       - LDAP_HEALTH_CHECK_TIMEOUT=${LDAP_HEALTH_CHECK_TIMEOUT:-2}
       - MAX_BODY_SIZE_MB=${MAX_BODY_SIZE_MB:-50}
-      - THREAD_NUM=${THREAD_NUM:-16}
+      - THREAD_NUM=${THREAD_NUM:-32}
       - LDAP_HOST=openldap1
       - LDAP_PORT=389
       - LDAP_READ_HOSTS=openldap1:389,openldap2:389

@@ -53,3 +53,39 @@ CREATE TABLE IF NOT EXISTS api_client_usage_log (
 
 CREATE INDEX IF NOT EXISTS idx_usage_log_client_time ON api_client_usage_log(client_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_log_created ON api_client_usage_log(created_at);
+
+-- ============================================================================
+-- API Client Request table (Request-Approval workflow)
+-- v2.31.0: External users submit API access requests, admins approve/reject
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS api_client_requests (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Requester information (filled by external user)
+    requester_name VARCHAR(255) NOT NULL,
+    requester_org VARCHAR(255) NOT NULL,
+    requester_contact_phone VARCHAR(50),
+    requester_contact_email VARCHAR(255) NOT NULL,
+    request_reason TEXT NOT NULL,
+
+    -- Desired API client configuration
+    client_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    device_type VARCHAR(20) DEFAULT 'SERVER',
+    permissions JSONB DEFAULT '[]'::jsonb,
+    allowed_ips JSONB DEFAULT '[]'::jsonb,
+
+    -- Approval workflow
+    status VARCHAR(20) DEFAULT 'PENDING' NOT NULL,
+    reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    reviewed_at TIMESTAMP WITH TIME ZONE,
+    review_comment TEXT,
+    approved_client_id UUID REFERENCES api_clients(id) ON DELETE SET NULL,
+
+    -- Audit
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_client_requests_status ON api_client_requests(status);
+CREATE INDEX IF NOT EXISTS idx_api_client_requests_created ON api_client_requests(created_at);

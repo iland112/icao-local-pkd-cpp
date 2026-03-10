@@ -29,6 +29,8 @@ const UserManagement = lazy(() => import('./pages/UserManagement'));
 const ApiClientManagement = lazy(() => import('./pages/ApiClientManagement'));
 const OperationAuditLog = lazy(() => import('./pages/OperationAuditLog'));
 const AuditLog = lazy(() => import('./pages/AuditLog'));
+const PendingDscApproval = lazy(() => import('./pages/PendingDscApproval'));
+const ApiClientRequest = lazy(() => import('./pages/ApiClientRequest'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -77,8 +79,9 @@ function App() {
       <BrowserRouter>
         <AuthExpiredHandler />
         <Routes>
-          {/* Public Route - Login */}
+          {/* Public Routes */}
           <Route path="/login" element={<Login />} />
+          <Route path="/api-client-request" element={<Suspense fallback={<PageLoader />}><ApiClientRequest /></Suspense>} />
 
           {/* Protected Routes - Require Authentication */}
           <Route path="/" element={<PrivateRoute><Layout /></PrivateRoute>}>
@@ -106,6 +109,7 @@ function App() {
             <Route path="admin/api-clients" element={<AdminRoute><Suspense fallback={<PageLoader />}><ApiClientManagement /></Suspense></AdminRoute>} />
             <Route path="admin/operation-audit" element={<AdminRoute><Suspense fallback={<PageLoader />}><OperationAuditLog /></Suspense></AdminRoute>} />
             <Route path="admin/audit-log" element={<AdminRoute><Suspense fallback={<PageLoader />}><AuditLog /></Suspense></AdminRoute>} />
+            <Route path="admin/pending-dsc" element={<AdminRoute><Suspense fallback={<PageLoader />}><PendingDscApproval /></Suspense></AdminRoute>} />
           </Route>
         </Routes>
         <ToastContainer />

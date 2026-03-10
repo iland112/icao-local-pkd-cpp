@@ -19,8 +19,10 @@
 #include "repositories/certificate_repository.h"
 #include "repositories/crl_repository.h"
 #include "adapters/db_csca_provider.h"
+#include "adapters/db_crl_provider.h"
 #include <icao/validation/cert_ops.h>
 #include <icao/validation/trust_chain_builder.h>
+#include <icao/validation/crl_checker.h>
 #include <spdlog/spdlog.h>
 #include <libpq-fe.h>
 #include <ldap.h>
@@ -175,7 +177,9 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
                            int& cscaCount, int& dscCount, int& dscNcCount, int& ldapStoredCount,
                            ValidationStats& validationStats,
                            common::ValidationStatistics& enhancedStats,
-                           adapters::DbCscaProvider* sharedCscaProvider = nullptr) {
+                           adapters::DbCscaProvider* sharedCscaProvider = nullptr,
+                           icao::validation::CrlChecker* sharedCrlChecker = nullptr,
+                           std::set<std::string>* newCscaCountries = nullptr) {
     std::string base64Value = entry.getFirstAttribute(attrName);
     if (base64Value.empty()) return false;
 
@@ -484,6 +488,40 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
         }  // End of else block for regular DSC
     }
 
+    // CRL revocation check for DSC/DSC_NC with valid trust chain (ICAO Doc 9303 Part 11)
+    if (sharedCrlChecker && (certType == "DSC" || certType == "DSC_NC") && valRecord.trustChainValid) {
+        try {
+            icao::validation::CrlCheckResult crlResult = sharedCrlChecker->check(cert, countryCode);
+            valRecord.crlCheckStatus = icao::validation::crlCheckStatusToString(crlResult.status);
+            valRecord.crlCheckMessage = crlResult.message;
+
+            if (crlResult.status == icao::validation::CrlCheckStatus::REVOKED) {
+                validationStatus = "INVALID";
+                valRecord.validationStatus = "INVALID";
+                valRecord.trustChainMessage = "Certificate revoked via CRL";
+                valRecord.errorMessage = crlResult.message;
+                // Adjust counts: move from valid/expired_valid to invalid
+                if (valRecord.trustChainValid) {
+                    validationStats.validCount--;
+                    validationStats.trustChainValidCount--;
+                }
+                validationStats.invalidCount++;
+                validationStats.trustChainInvalidCount++;
+                enhancedStats.revokedCount++;
+                spdlog::warn("CRL check: Certificate REVOKED for {} — {}", countryCode, crlResult.message);
+            } else if (crlResult.status == icao::validation::CrlCheckStatus::VALID) {
+                spdlog::debug("CRL check: Certificate not revoked for {}", countryCode);
+            } else {
+                spdlog::debug("CRL check: {} for {} — {}",
+                    icao::validation::crlCheckStatusToString(crlResult.status), countryCode, crlResult.message);
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("CRL check failed for {}: {}", countryCode, e.what());
+            valRecord.crlCheckStatus = "ERROR";
+            valRecord.crlCheckMessage = std::string("CRL check error: ") + e.what();
+        }
+    }
+
     // Check ICAO 9303 compliance after certificate type is determined
     common::IcaoComplianceStatus icaoCompliance = common::checkIcaoCompliance(cert, certType);
     spdlog::debug("ICAO compliance for {} cert: isCompliant={}, level={}",
@@ -601,7 +639,10 @@ bool parseCertificateEntry(LDAP* ld, const std::string& uploadId,
     // Next DSC validation will trigger lazy reload with the new CSCA included
     if (!isDuplicate && (certType == "CSCA") && sharedCscaProvider) {
         sharedCscaProvider->invalidateCache();
-        spdlog::info("New CSCA saved — CSCA cache invalidated for reload");
+        if (newCscaCountries && !countryCode.empty()) {
+            newCscaCountries->insert(countryCode);
+        }
+        spdlog::info("New CSCA saved for {} — CSCA cache invalidated for reload", countryCode);
     }
 
     if (!certId.empty()) {
@@ -871,6 +912,15 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
     adapters::DbCscaProvider sharedCscaProvider(g_services->certificateRepository());
     sharedCscaProvider.preloadAllCscas();
 
+    // Create CRL checker for revocation check during upload validation (ICAO Doc 9303 Part 11)
+    std::unique_ptr<adapters::DbCrlProvider> crlProvider;
+    std::unique_ptr<icao::validation::CrlChecker> crlChecker;
+    if (g_services->crlRepository()) {
+        crlProvider = std::make_unique<adapters::DbCrlProvider>(g_services->crlRepository());
+        crlChecker = std::make_unique<icao::validation::CrlChecker>(crlProvider.get());
+        spdlog::info("CRL checker initialized for upload-time revocation check");
+    }
+
     // Preload existing fingerprints for O(1) duplicate detection (v2.26.0)
     // Eliminates ~30K per-entry SELECT queries during processing
     g_services->certificateRepository()->preloadExistingFingerprints();
@@ -893,14 +943,14 @@ LdifProcessor::ProcessingCounts LdifProcessor::processEntries(
                 parseCertificateEntry(ld, uploadId, entry, "userCertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
                                     counts.ldapCertStoredCount, stats, enhancedStats,
-                                    &sharedCscaProvider);
+                                    &sharedCscaProvider, crlChecker.get(), &counts.newCscaCountries);
             }
             // Check for cACertificate;binary
             else if (entry.hasAttribute("cACertificate;binary")) {
                 parseCertificateEntry(ld, uploadId, entry, "cACertificate;binary",
                                     counts.cscaCount, counts.dscCount, counts.dscNcCount,
                                     counts.ldapCertStoredCount, stats, enhancedStats,
-                                    &sharedCscaProvider);
+                                    &sharedCscaProvider, crlChecker.get(), &counts.newCscaCountries);
             }
 
             // Check for CRL

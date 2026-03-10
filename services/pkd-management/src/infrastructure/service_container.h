@@ -37,6 +37,8 @@ namespace repositories {
     class LdapCertificateRepository;
     class CodeMasterRepository;
     class ApiClientRepository;
+    class ApiClientRequestRepository;
+    class PendingDscRepository;
 }
 
 // Forward declarations - Services
@@ -59,6 +61,7 @@ namespace handlers {
     class CertificateHandler;
     class CodeMasterHandler;
     class ApiClientHandler;
+    class ApiClientRequestHandler;
 }
 
 namespace infrastructure {
@@ -113,6 +116,8 @@ public:
     repositories::DeviationListRepository* deviationListRepository() const;
     repositories::CodeMasterRepository* codeMasterRepository() const;
     repositories::ApiClientRepository* apiClientRepository() const;
+    repositories::ApiClientRequestRepository* apiClientRequestRepository() const;
+    repositories::PendingDscRepository* pendingDscRepository() const;
 
     // --- Service Accessors ---
     services::UploadService* uploadService() const;
@@ -131,6 +136,7 @@ public:
     handlers::CertificateHandler* certificateHandler() const;
     handlers::CodeMasterHandler* codeMasterHandler() const;
     handlers::ApiClientHandler* apiClientHandler() const;
+    handlers::ApiClientRequestHandler* apiClientRequestHandler() const;
 
 private:
     struct Impl;

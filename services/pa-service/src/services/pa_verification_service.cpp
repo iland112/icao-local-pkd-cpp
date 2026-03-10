@@ -218,11 +218,14 @@ Json::Value PaVerificationService::verifyPassiveAuthentication(
         data["dataGroupValidation"]["validGroups"] = validDgs;
         data["dataGroupValidation"]["invalidGroups"] = totalDgs - validDgs;
 
-        // DSC auto-registration result
+        // DSC pending registration result
         if (dscRegResult.success) {
             Json::Value dscAutoReg;
-            dscAutoReg["registered"] = true;
+            dscAutoReg["registered"] = dscRegResult.alreadyRegistered;
             dscAutoReg["newlyRegistered"] = dscRegResult.newlyRegistered;
+            dscAutoReg["pendingApproval"] = dscRegResult.pendingApproval;
+            dscAutoReg["alreadyRegistered"] = dscRegResult.alreadyRegistered;
+            dscAutoReg["pendingId"] = dscRegResult.pendingId;
             dscAutoReg["certificateId"] = dscRegResult.certificateId;
             dscAutoReg["fingerprint"] = dscRegResult.fingerprint;
             dscAutoReg["countryCode"] = dscRegResult.countryCode;

@@ -17,6 +17,7 @@
 #include "domain/models/validation_statistics.h"
 #include "infrastructure/service_container.h"
 #include "services/ldap_storage_service.h"
+#include "services/validation_service.h"
 #include "repositories/upload_repository.h"
 #include "query_helpers.h"
 #include "repositories/validation_repository.h"
@@ -191,6 +192,50 @@ void AutoProcessingStrategy::processLdifEntries(
     spdlog::info("AUTO mode: Validation - {} valid, {} invalid, {} pending, {} CSCA not found, {} expired",
                 enhancedStats.validCount, enhancedStats.invalidCount, enhancedStats.pendingCount, enhancedStats.cscaNotFoundCount, enhancedStats.expiredCount);
 
+    // Auto re-validate PENDING DSCs when new CSCAs were uploaded
+    if (!counts.newCscaCountries.empty() && g_services->validationService()) {
+        spdlog::info("AUTO mode: {} new CSCA countries detected — triggering PENDING DSC re-validation",
+                     counts.newCscaCountries.size());
+        try {
+            auto revalResult = g_services->validationService()->revalidatePendingDscForCountries(
+                counts.newCscaCountries);
+            if (revalResult.success && revalResult.totalProcessed > 0) {
+                spdlog::info("AUTO mode: PENDING DSC re-validation complete — {} processed, {} valid, {} still pending ({}s)",
+                    revalResult.totalProcessed, revalResult.validCount, revalResult.pendingCount,
+                    revalResult.durationSeconds);
+                // Update validation stats with re-validated results
+                enhancedStats.validCount += revalResult.validCount;
+                enhancedStats.expiredValidCount += revalResult.expiredValidCount;
+                enhancedStats.pendingCount -= (revalResult.validCount + revalResult.invalidCount + revalResult.expiredValidCount);
+                if (enhancedStats.pendingCount < 0) enhancedStats.pendingCount = 0;
+                enhancedStats.invalidCount += revalResult.invalidCount;
+
+                // Re-update validation statistics in DB
+                if (g_services->validationRepository()) {
+                    domain::models::ValidationStatistics valStats;
+                    valStats.validCount = enhancedStats.validCount;
+                    valStats.invalidCount = enhancedStats.invalidCount;
+                    valStats.pendingCount = enhancedStats.pendingCount;
+                    valStats.expiredValidCount = enhancedStats.expiredValidCount;
+                    valStats.errorCount = enhancedStats.totalErrorCount;
+                    valStats.trustChainValidCount = enhancedStats.trustChainValidCount + revalResult.validCount;
+                    valStats.trustChainInvalidCount = enhancedStats.trustChainInvalidCount + revalResult.invalidCount;
+                    valStats.cscaNotFoundCount = enhancedStats.cscaNotFoundCount - (revalResult.validCount + revalResult.invalidCount + revalResult.expiredValidCount);
+                    if (valStats.cscaNotFoundCount < 0) valStats.cscaNotFoundCount = 0;
+                    valStats.expiredCount = enhancedStats.expiredCount;
+                    valStats.validPeriodCount = enhancedStats.validPeriodCount;
+                    valStats.revokedCount = enhancedStats.revokedCount;
+                    valStats.icaoCompliantCount = enhancedStats.icaoCompliantCount;
+                    valStats.icaoNonCompliantCount = enhancedStats.icaoNonCompliantCount;
+                    valStats.icaoWarningCount = enhancedStats.icaoWarningCount;
+                    g_services->validationRepository()->updateStatistics(uploadId, valStats);
+                }
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("AUTO mode: PENDING DSC re-validation failed (non-critical): {}", e.what());
+        }
+    }
+
     // Send completion progress to frontend
     std::string completionMsg = "처리 완료: ";
     std::vector<std::string> parts;
@@ -276,4 +321,20 @@ void AutoProcessingStrategy::processMasterListContent(
                 stats.cscaNewCount, stats.mlscCount, stats.cscaExtractedCount, stats.cscaNewCount);
     spdlog::info("AUTO mode: Validation - {} valid, {} invalid, {} pending, {} expired",
                 enhancedStats.validCount, enhancedStats.invalidCount, enhancedStats.pendingCount, enhancedStats.expiredCount);
+
+    // Auto re-validate PENDING DSCs when new CSCAs were extracted from Master List
+    if (stats.cscaNewCount > 0 && g_services->validationService()) {
+        spdlog::info("AUTO mode: {} new CSCAs from Master List — triggering full PENDING DSC re-validation",
+                     stats.cscaNewCount);
+        try {
+            auto revalResult = g_services->validationService()->revalidateDscCertificates();
+            if (revalResult.success && revalResult.totalProcessed > 0) {
+                spdlog::info("AUTO mode: PENDING DSC re-validation complete — {} processed, {} valid, {} still pending ({}s)",
+                    revalResult.totalProcessed, revalResult.validCount, revalResult.pendingCount,
+                    revalResult.durationSeconds);
+            }
+        } catch (const std::exception& e) {
+            spdlog::warn("AUTO mode: PENDING DSC re-validation failed (non-critical): {}", e.what());
+        }
+    }
 }

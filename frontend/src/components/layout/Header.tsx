@@ -1,4 +1,4 @@
-import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home, Bell, CheckCheck, Trash2, RefreshCw, Database, ShieldCheck, GitMerge, Calendar } from 'lucide-react';
+import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home, Bell, CheckCheck, Trash2, RefreshCw, Database, ShieldCheck, GitMerge, Calendar, FileKey } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useNotificationStore, type SystemNotification } from '@/stores/notificationStore';
@@ -39,6 +39,8 @@ function getNotificationMeta(type: string) {
       return { icon: Calendar, color: 'text-emerald-500', bg: 'bg-emerald-100 dark:bg-emerald-900/30' };
     case 'DAILY_SYNC_FAILED':
       return { icon: RefreshCw, color: 'text-red-500', bg: 'bg-red-100 dark:bg-red-900/30' };
+    case 'DSC_PENDING_CREATED':
+      return { icon: FileKey, color: 'text-amber-500', bg: 'bg-amber-100 dark:bg-amber-900/30' };
     default:
       return { icon: Bell, color: 'text-gray-500', bg: 'bg-gray-100 dark:bg-gray-800' };
   }

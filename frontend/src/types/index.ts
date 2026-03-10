@@ -326,6 +326,9 @@ export interface PAVerificationResponse {
   dscAutoRegistration?: {
     registered: boolean;
     newlyRegistered: boolean;
+    pendingApproval: boolean;
+    alreadyRegistered: boolean;
+    pendingId: string;
     certificateId: string;
     fingerprint: string;
     countryCode: string;

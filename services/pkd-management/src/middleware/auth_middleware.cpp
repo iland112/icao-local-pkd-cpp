@@ -59,6 +59,8 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/certificates/crl/[a-f0-9\\-]+$",       // CRL detail by ID
     "^/api/certificates/crl/[a-f0-9\\-]+/download$", // CRL binary download
     "^/api/certificates/doc9303-checklist.*",      // Doc 9303 compliance checklist
+    "^/api/certificates/pending-dsc$",             // Pending DSC list (read-only)
+    "^/api/certificates/pending-dsc/stats$",       // Pending DSC statistics (read-only)
 
     // --- Code Master (Read-only reference data) ---
     "^/api/code-master.*",             // Code master list, categories, detail (read-only GET)
@@ -88,6 +90,10 @@ std::set<std::string> AuthMiddleware::publicEndpoints_ = {
     "^/api/pa/statistics$",        // PA statistics
     "^/api/pa/[a-f0-9\\-]+$",      // PA verification detail by ID (UUID)
     "^/api/pa/[a-f0-9\\-]+/datagroups$", // DataGroups detail
+
+    // --- API Client Request (Public: submit + check status) ---
+    "^/api/auth/api-client-requests$",                     // POST submit (public), GET list (handler validates admin)
+    "^/api/auth/api-client-requests/[a-f0-9\\-]+$",       // GET by ID (check status)
 
     // --- Static Files & Documentation ---
     "^/static/.*",                 // Static files (CSS, JS, images)

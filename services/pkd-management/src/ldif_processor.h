@@ -7,6 +7,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 #include <libpq-fe.h>
 #include <ldap.h>
 #include "common.h"
@@ -50,6 +51,7 @@ public:
         int ldapCertStoredCount = 0;
         int ldapCrlStoredCount = 0;
         int ldapMlStoredCount = 0;
+        std::set<std::string> newCscaCountries;  // Country codes with newly added CSCAs
     };
 
     struct TotalCounts {

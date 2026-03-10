@@ -69,6 +69,48 @@ CREATE TABLE api_client_usage_log (
 CREATE INDEX idx_usage_log_client_time ON api_client_usage_log(client_id, created_at);
 CREATE INDEX idx_usage_log_created ON api_client_usage_log(created_at);
 
+-- API Client Request table (Request-Approval workflow)
+-- v2.31.0: External users submit API access requests, admins approve/reject
+CREATE TABLE api_client_requests (
+    id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
+
+    -- Requester information (filled by external user)
+    requester_name VARCHAR2(255) NOT NULL,
+    requester_org VARCHAR2(255) NOT NULL,
+    requester_contact_phone VARCHAR2(50),
+    requester_contact_email VARCHAR2(255) NOT NULL,
+    request_reason VARCHAR2(4000) NOT NULL,
+
+    -- Desired API client configuration
+    client_name VARCHAR2(255) NOT NULL,
+    description VARCHAR2(4000),
+    device_type VARCHAR2(20) DEFAULT 'SERVER',
+    permissions CLOB DEFAULT '[]',
+    allowed_ips CLOB DEFAULT '[]',
+
+    -- Approval workflow
+    status VARCHAR2(20) DEFAULT 'PENDING' NOT NULL,
+    reviewed_by VARCHAR2(36),
+    reviewed_at TIMESTAMP,
+    review_comment VARCHAR2(4000),
+    approved_client_id VARCHAR2(36),
+
+    -- Audit
+    created_at TIMESTAMP DEFAULT SYSTIMESTAMP,
+    updated_at TIMESTAMP DEFAULT SYSTIMESTAMP
+);
+
+CREATE INDEX idx_api_client_req_status ON api_client_requests(status);
+CREATE INDEX idx_api_client_req_created ON api_client_requests(created_at);
+
+CREATE OR REPLACE TRIGGER trg_api_client_req_updated
+BEFORE UPDATE ON api_client_requests
+FOR EACH ROW
+BEGIN
+    :NEW.updated_at := SYSTIMESTAMP;
+END;
+/
+
 COMMIT;
 
 EXIT;

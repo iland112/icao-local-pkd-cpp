@@ -381,8 +381,21 @@ export function Login() {
             )}
           </div>
 
+          {/* API Client Request Link */}
+          <div className="mt-6 text-center" style={stagger(0.3)}>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">외부 시스템 연동이 필요하신가요?</p>
+            <button
+              type="button"
+              onClick={() => navigate('/api-client-request')}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-[#02385e] dark:text-sky-400 hover:underline transition-colors"
+            >
+              <Key className="w-3.5 h-3.5" />
+              API 클라이언트 등록 요청
+            </button>
+          </div>
+
           {/* Footer */}
-          <p className="mt-8 text-center text-[11px] text-gray-300 dark:text-gray-600" style={stagger(0.3)}>
+          <p className="mt-4 text-center text-[11px] text-gray-300 dark:text-gray-600" style={stagger(0.4)}>
             &copy; 2026 SmartCore Inc.
           </p>
         </div>

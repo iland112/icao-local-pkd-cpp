@@ -3,6 +3,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { Footer } from './Footer';
 import { NotificationListener } from '@/components/notification/NotificationListener';
+import { PendingDscNotifier } from '@/components/notification/PendingDscNotifier';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { cn } from '@/utils/cn';
 
@@ -13,6 +14,8 @@ export function Layout() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Global SSE Notification Listener */}
       <NotificationListener />
+      {/* Pending DSC polling notifier */}
+      <PendingDscNotifier />
 
       {/* Sidebar */}
       <Sidebar />
