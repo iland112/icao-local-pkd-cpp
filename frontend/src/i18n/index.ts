@@ -70,6 +70,8 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
+    supportedLngs: ['ko', 'en'],
+    nonExplicitSupportedLngs: true,
     fallbackLng: 'ko',
     defaultNS: 'common',
     ns: [
