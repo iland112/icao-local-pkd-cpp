@@ -1,5 +1,6 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
+import i18n from '@/i18n';
 import { useNavigate } from 'react-router-dom';
 import {
   Lock,
@@ -17,6 +18,7 @@ import {
   FileText,
   Sun,
   Moon,
+  Languages,
 } from 'lucide-react';
 import { authApi } from '@/services/api';
 import { uploadHistoryApi } from '@/services/pkdApi';
@@ -223,15 +225,29 @@ export function Login() {
           backgroundSize: '24px 24px',
         }} />
 
-        {/* Dark mode toggle */}
-        <button
-          type="button"
-          onClick={toggleTheme}
-          className="absolute top-5 right-5 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors"
-          aria-label={t('login.themeToggle')}
-        >
-          {darkMode ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
-        </button>
+        {/* Language toggle + Dark mode toggle */}
+        <div className="absolute top-5 right-5 flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              const next = i18n.language?.startsWith('ko') ? 'en' : 'ko';
+              i18n.changeLanguage(next);
+            }}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors"
+            aria-label={t('login.languageToggle')}
+            title={i18n.language?.startsWith('ko') ? 'English' : '한국어'}
+          >
+            <Languages className="w-4.5 h-4.5" />
+          </button>
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors"
+            aria-label={t('login.themeToggle')}
+          >
+            {darkMode ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
+          </button>
+        </div>
 
         <div className="w-full max-w-[380px] relative">
           {/* Mobile-only branding */}
