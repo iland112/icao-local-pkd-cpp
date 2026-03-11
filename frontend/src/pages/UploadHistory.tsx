@@ -215,7 +215,7 @@ export function UploadHistory() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
           <XCircle className="w-3 h-3" />
-          {t('upload.statistics.totalFailed')}
+          {t('upload:statistics.totalFailed')}
         </span>
       );
     }
@@ -224,7 +224,7 @@ export function UploadHistory() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
           <CheckCircle className="w-3 h-3" />
-          {t('upload.stepper.complete')}
+          {t('upload:stepper.complete')}
         </span>
       );
     }
@@ -422,7 +422,7 @@ export function UploadHistory() {
           {/* File Format Filter */}
           <div>
             <label htmlFor="upload-format" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              {t('upload.history.fileType')}
+              {t('upload:history.fileType')}
             </label>
             <select
               id="upload-format"
@@ -453,12 +453,12 @@ export function UploadHistory() {
               <option value="COMPLETED">{ t('common:status.finalized') }</option>
               <option value="FAILED">{t('common:status.failed')}</option>
               <option value="PENDING">{ t('monitoring:pool.idle') }</option>
-              <option value="UPLOADING">{t('upload.detail.uploading')}</option>
-              <option value="PARSING">{t('upload.detail.parsing')}</option>
+              <option value="UPLOADING">{t('upload:detail.uploading')}</option>
+              <option value="PARSING">{t('upload:detail.parsing')}</option>
               <option value="PROCESSING">{t('common:status.processing')}</option>
-              <option value="VALIDATING">{t('upload.detail.validating')}</option>
-              <option value="SAVING_DB">{t('upload.detail.savingDb')}</option>
-              <option value="SAVING_LDAP">{t('upload.detail.savingLdap')}</option>
+              <option value="VALIDATING">{t('upload:detail.validating')}</option>
+              <option value="SAVING_DB">{t('upload:detail.savingDb')}</option>
+              <option value="SAVING_LDAP">{t('upload:detail.savingLdap')}</option>
             </select>
           </div>
 
@@ -515,7 +515,7 @@ export function UploadHistory() {
                   onClick={clearFilters}
                   className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  {t('common.button.reset')}
+                  {t('common:button.reset')}
                 </button>
               )}
             </div>
@@ -606,7 +606,7 @@ export function UploadHistory() {
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
-                      {t('upload.history.fileName')}
+                      {t('upload:history.fileName')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       {t('upload:history.format')}
@@ -615,10 +615,10 @@ export function UploadHistory() {
                       {t('upload:history.size')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      {t('upload.history.status')}
+                      {t('upload:history.status')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      {t('upload.history.createdAt')}
+                      {t('upload:history.createdAt')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
                       {t('upload:history.completedAt')}
@@ -660,7 +660,7 @@ export function UploadHistory() {
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            {t('upload.history.detail')}
+                            {t('upload:history.detail')}
                           </button>
                           {upload.status === 'FAILED' && (
                             <button
@@ -670,7 +670,7 @@ export function UploadHistory() {
                               title={t('upload:history.retryFailed')}
                             >
                               <RefreshCw className={cn("w-3.5 h-3.5", retryingId === upload.id && "animate-spin")} />
-                              {t('common.button.retry')}
+                              {t('common:button.retry')}
                             </button>
                           )}
                           {(upload.status === 'FAILED' || upload.status === 'PENDING') && (
@@ -680,7 +680,7 @@ export function UploadHistory() {
                               title={t('upload:history.deleteConfirmTitle')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              {t('common.button.delete')}
+                              {t('common:button.delete')}
                             </button>
                           )}
                         </div>
@@ -769,7 +769,7 @@ export function UploadHistory() {
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                     )}
                   >
-                    {t('admin.operationAudit.detail')}
+                    {t('admin:operationAudit.detail')}
                   </button>
                   {(selectedUpload.fileFormat === 'ML' ||
                     selectedUpload.fileFormat === 'MASTER_LIST' ||
@@ -783,7 +783,7 @@ export function UploadHistory() {
                           : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       )}
                     >
-                      {selectedUpload.fileFormat === 'LDIF' ? t('upload.history.ldifStructure') : t('upload.history.mlStructure')}
+                      {selectedUpload.fileFormat === 'LDIF' ? t('upload:history.ldifStructure') : t('upload:history.mlStructure')}
                     </button>
                   )}
                   {uploadIssues && uploadIssues.totalDuplicates > 0 && (
@@ -796,7 +796,7 @@ export function UploadHistory() {
                           : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       )}
                     >
-                      {t('upload.detail.duplicateCertificates')}
+                      {t('upload:detail.duplicateCertificates')}
                       <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-200 dark:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200">
                         {uploadIssues.totalDuplicates}
                       </span>
@@ -887,7 +887,7 @@ export function UploadHistory() {
                       <div className="flex items-start gap-2">
                         <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                         <div>
-                          <h4 className="text-xs font-medium text-red-800 dark:text-red-300">{t('common.label.errorOccurred')}</h4>
+                          <h4 className="text-xs font-medium text-red-800 dark:text-red-300">{t('common:label.errorOccurred')}</h4>
                           <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                             {selectedUpload.errorMessage}
                           </p>
@@ -1116,7 +1116,7 @@ export function UploadHistory() {
                         title={t('upload:history.exportStats')}
                       >
                         <Download className="w-3.5 h-3.5" />
-                        {t('upload.detail.statistics')}
+                        {t('upload:detail.statistics')}
                       </button>
                       <button
                         onClick={() => exportDuplicatesToCsv(
@@ -1127,7 +1127,7 @@ export function UploadHistory() {
                         title={t('certificate:search.exportAll')}
                       >
                         <Download className="w-3.5 h-3.5" />
-                        {t('monitoring.pool.total')}
+                        {t('monitoring:pool.total')}
                       </button>
                     </div>
                   </div>
@@ -1199,7 +1199,7 @@ export function UploadHistory() {
                 onClick={closeDialog}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                {t('icao.banner.dismiss')}
+                {t('icao:banner.dismiss')}
               </button>
             </div>
           </div>
@@ -1281,7 +1281,7 @@ export function UploadHistory() {
                 onClick={closeRetryDialog}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleRetryConfirm}
@@ -1313,7 +1313,7 @@ export function UploadHistory() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  {t('upload.history.deleteConfirmTitle')}
+                  {t('upload:history.deleteConfirmTitle')}
                 </h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t('upload:history.deleteConfirmMsg')}
@@ -1328,7 +1328,7 @@ export function UploadHistory() {
                   <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-                      {t('common.toast.warning')}
+                      {t('common:toast.warning')}
                     </h4>
                     <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
                       {t('upload:history.deleteWarningMsg')}
@@ -1375,7 +1375,7 @@ export function UploadHistory() {
                 disabled={deleting}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleDeleteConfirm}
@@ -1390,7 +1390,7 @@ export function UploadHistory() {
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    {t('common.button.delete')}
+                    {t('common:button.delete')}
                   </>
                 )}
               </button>

@@ -31,6 +31,8 @@
     "dismiss": "Dismiss",
     "viewDetails": "View Details"
   },
+  "newVersionDetected": "New ICAO PKD Version Detected",
+  "viewDetail": "View Details →",
   "noData": "No ICAO version data available",
   "statusPage": {
     "updateCheck": "Check Updates",

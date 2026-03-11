@@ -224,7 +224,7 @@ export default function DscNcReport() {
         <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-red-900 dark:text-red-300">{t('common.label.dataLoadFailed')}</h3>
+            <h3 className="font-semibold text-red-900 dark:text-red-300">{t('common:label.dataLoadFailed')}</h3>
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         </div>
@@ -244,7 +244,7 @@ export default function DscNcReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common.label.countryCount')}</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common:label.countryCount')}</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                 {data.summary.countryCount}
               </p>
@@ -346,7 +346,7 @@ export default function DscNcReport() {
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-orange-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">{ t('report:crl.byCountry') }</h3>
-            <span className="text-sm text-gray-500 dark:text-gray-400">{t('common.label.top20Countries')}</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{t('common:label.top20Countries')}</span>
           </div>
           <ResponsiveContainer width="100%" height={Math.max(250, Math.min(data.byCountry.length, 20) * 32)}>
             <BarChart data={data.byCountry.slice(0, 20)} layout="vertical" margin={{ left: 70, right: 20, top: 5, bottom: 5 }}>
@@ -548,7 +548,7 @@ export default function DscNcReport() {
                 onClick={() => { setCountryFilter(''); setCodeFilter(''); setPage(1); }}
                 className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                {t('common.button.reset')}
+                {t('common:button.reset')}
               </button>
             )}
             <span className="ml-auto text-sm text-gray-500 dark:text-gray-400 pb-2">

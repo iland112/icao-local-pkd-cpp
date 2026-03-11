@@ -379,7 +379,7 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('normal')}</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.normal')}</p>
                 <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">
                   {stats.normal_count.toLocaleString()}
                 </p>
@@ -394,7 +394,7 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-amber-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('suspicious')}</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.suspicious')}</p>
                 <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">
                   {stats.suspicious_count.toLocaleString()}
                 </p>
@@ -409,7 +409,7 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-red-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('anomalous')}</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.anomalous')}</p>
                 <p className="text-3xl font-bold text-red-600 dark:text-red-400 mt-1">
                   {stats.anomalous_count.toLocaleString()}
                 </p>
@@ -652,7 +652,7 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-violet-500" />
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('keySizeDistribution')}</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('dashboard.keySizeDistribution')}</h3>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -735,9 +735,9 @@ export default function AiAnalysisDashboard() {
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
               <option value="">{ t('monitoring:pool.total') }</option>
-              <option value="ANOMALOUS">{t('anomalous')}</option>
-              <option value="SUSPICIOUS">{t('suspicious')}</option>
-              <option value="NORMAL">{t('normal')}</option>
+              <option value="ANOMALOUS">{t('dashboard.anomalous')}</option>
+              <option value="SUSPICIOUS">{t('dashboard.suspicious')}</option>
+              <option value="NORMAL">{t('dashboard.normal')}</option>
             </select>
           </div>
           <div>
@@ -769,7 +769,7 @@ export default function AiAnalysisDashboard() {
               }}
               className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              {t('common.button.reset')}
+              {t('common:button.reset')}
             </button>
           )}
           <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
@@ -810,10 +810,10 @@ export default function AiAnalysisDashboard() {
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
                       <p className="text-lg font-medium">
-                        {stats?.total_analyzed === 0 ? t('ai:dashboard.runAnalysisFirst') : t('common.error.noSearchResults')}
+                        {stats?.total_analyzed === 0 ? t('ai:dashboard.runAnalysisFirst') : t('common:error.noSearchResults')}
                       </p>
                       <p className="text-sm mt-1">
-                        {stats?.total_analyzed === 0 ? t('ai:dashboard.clickAnalyzeButton') : t('common.error.tryChangingFilters')}
+                        {stats?.total_analyzed === 0 ? t('ai:dashboard.clickAnalyzeButton') : t('common:error.tryChangingFilters')}
                       </p>
                     </div>
                   </td>
@@ -933,7 +933,7 @@ function PageHeader({
           <Brain className="w-7 h-7 text-white" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('dashboard.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             {t('ai:dashboard.mlDescription')}
             {lastAnalysisAt && (

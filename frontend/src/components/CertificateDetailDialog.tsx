@@ -103,7 +103,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
         setDoc9303Checklist(res.data);
       })
       .catch(err => {
-        setDoc9303Error(err.response?.data?.error || t('certificate.detail.doc9303LoadFailed'));
+        setDoc9303Error(err.response?.data?.error || t('certificate:detail.doc9303LoadFailed'));
       })
       .finally(() => setDoc9303Loading(false));
   }, [detailTab, selectedCert.fingerprint, doc9303Checklist]);
@@ -430,7 +430,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               )}
             >
               <Brain className="w-3.5 h-3.5" />
-              {t('certificate.detail.forensicTab')}
+              {t('certificate:detail.forensicTab')}
             </button>
           </div>
         </div>
@@ -617,7 +617,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                           onClick={() => setDetailTab('details')}
                           className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                         >
-                          {t('icao.banner.viewDetails')} <ChevronRight className="w-3 h-3" />
+                          {t('icao:banner.viewDetails')} <ChevronRight className="w-3 h-3" />
                         </button>
                       </div>
 
@@ -707,7 +707,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                       {validationResult.trustChainValid ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                           <CheckCircle className="w-3 h-3 mr-1" />
-                          {t('upload.statistics.validCount')}
+                          {t('upload:statistics.validCount')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
@@ -810,7 +810,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                         {validationResult.signatureVerified ? '✓' : '✗'} {t('certificate:detail.signatureVerify')}
                       </span>
                       <span className={validationResult.validityCheckPassed ? 'text-green-600 dark:text-green-400' : validationResult.isExpired ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}>
-                        {validationResult.validityCheckPassed ? '✓' : validationResult.isExpired ? '⚠' : '✗'} {validationResult.validityCheckPassed ? t('certificate:detail.withinValidityPeriod') : validationResult.isExpired ? t('common:status.expired') : t('common.label.validityPeriod')}
+                        {validationResult.validityCheckPassed ? '✓' : validationResult.isExpired ? '⚠' : '✗'} {validationResult.validityCheckPassed ? t('certificate:detail.withinValidityPeriod') : validationResult.isExpired ? t('common:status.expired') : t('common:label.validityPeriod')}
                       </span>
                       <span className={validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-gray-400'}>
                         {validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? t('certificate:detail.crlRevoked') : t('certificate:detail.crlNotRevoked')) : t('certificate:detail.crlNotChecked')}
@@ -899,7 +899,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                         <div className="grid grid-cols-[120px_1fr] gap-2">
                           <span className="text-purple-600 dark:text-purple-400 font-medium">{t('certificate:detail.selfSigned')}</span>
                           <span className="text-purple-800 dark:text-purple-300">
-                            {selectedCert.isSelfSigned ? t('certificate:detail.selfSignedYes') : t('common.label.no')}
+                            {selectedCert.isSelfSigned ? t('certificate:detail.selfSignedYes') : t('common:label.no')}
                           </span>
                         </div>
                       </div>
@@ -958,7 +958,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
             onClick={() => setShowDetailDialog(false)}
             className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
-            {t('icao.banner.dismiss')}
+            {t('icao:banner.dismiss')}
           </button>
         </div>
       </div>

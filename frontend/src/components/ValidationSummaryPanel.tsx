@@ -104,10 +104,10 @@ export function ValidationSummaryPanel({
   type CardInfo = { key: string; label: string; value: number; color: string };
   const activeCards: CardInfo[] = [];
   if (data.validCount > 0) activeCards.push({ key: 'valid', label: t('common:status.valid'), value: data.validCount, color: 'green' });
-  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: t('upload.dashboard.expiredValidCount'), value: expiredValidCount, color: 'amber' });
-  if (data.pendingCount > 0) activeCards.push({ key: 'pending', label: t('upload.dashboard.pendingCount'), value: data.pendingCount, color: 'yellow' });
-  if (data.invalidCount > 0) activeCards.push({ key: 'invalid', label: t('upload.statistics.invalidCount'), value: data.invalidCount, color: 'red' });
-  if ((data.errorCount ?? 0) > 0) activeCards.push({ key: 'error', label: t('sync.dashboard.error'), value: data.errorCount!, color: 'gray' });
+  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: t('upload:dashboard.expiredValidCount'), value: expiredValidCount, color: 'amber' });
+  if (data.pendingCount > 0) activeCards.push({ key: 'pending', label: t('upload:dashboard.pendingCount'), value: data.pendingCount, color: 'yellow' });
+  if (data.invalidCount > 0) activeCards.push({ key: 'invalid', label: t('upload:statistics.invalidCount'), value: data.invalidCount, color: 'red' });
+  if ((data.errorCount ?? 0) > 0) activeCards.push({ key: 'error', label: t('sync:dashboard.error'), value: data.errorCount!, color: 'gray' });
 
   const cc: Record<string, { bg: string; border: string; text: string; bold: string }> = {
     green: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800', text: 'text-green-600 dark:text-green-400', bold: 'text-green-700 dark:text-green-300' },
@@ -238,7 +238,7 @@ export function ValidationSummaryPanel({
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <CheckCircle className="w-2.5 h-2.5" /> {t('sync.reconciliation.successCount')}
+                  <CheckCircle className="w-2.5 h-2.5" /> {t('sync:reconciliation.successCount')}
                 </span>
                 <span className="font-semibold text-green-700 dark:text-green-300">
                   {data.trustChainValidCount.toLocaleString()} ({trustChainSuccessRate}%)
@@ -247,7 +247,7 @@ export function ValidationSummaryPanel({
               {data.trustChainInvalidCount > 0 && (
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <XCircle className="w-2.5 h-2.5" /> {t('upload.statistics.totalFailed')}
+                    <XCircle className="w-2.5 h-2.5" /> {t('upload:statistics.totalFailed')}
                   </span>
                   <span className="font-semibold text-red-700 dark:text-red-300">{data.trustChainInvalidCount.toLocaleString()}</span>
                 </div>
@@ -272,7 +272,7 @@ export function ValidationSummaryPanel({
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <CheckCircle className="w-2.5 h-2.5" /> {t('certificate.doc9303.compliant')}
+                  <CheckCircle className="w-2.5 h-2.5" /> {t('certificate:doc9303.compliant')}
                 </span>
                 <span className="font-semibold text-green-700 dark:text-green-300">
                   {(data.icaoCompliantCount ?? 0).toLocaleString()} ({icaoComplianceRate}%)
@@ -281,7 +281,7 @@ export function ValidationSummaryPanel({
               {(data.icaoNonCompliantCount ?? 0) > 0 && (
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <XCircle className="w-2.5 h-2.5" /> {t('certificate.doc9303.nonCompliant')}
+                    <XCircle className="w-2.5 h-2.5" /> {t('certificate:doc9303.nonCompliant')}
                   </span>
                   <span className="font-semibold text-red-700 dark:text-red-300">
                     {(data.icaoNonCompliantCount ?? 0).toLocaleString()}
@@ -416,7 +416,7 @@ export function ValidationSummaryPanel({
         return (
           <div>
             <div className="flex justify-between text-[11px] mb-0.5">
-              <span className="text-gray-500 dark:text-gray-400">{t('dashboard.successRate')}</span>
+              <span className="text-gray-500 dark:text-gray-400">{t('dashboard:successRate')}</span>
               <span className="font-semibold text-gray-900 dark:text-gray-100">{pct}%</span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">

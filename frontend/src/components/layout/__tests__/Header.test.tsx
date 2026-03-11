@@ -71,7 +71,7 @@ describe('Header', () => {
 
     render(<Header />);
 
-    expect(screen.getByText('Admin')).toBeInTheDocument();
+    expect(screen.getByText('관리자')).toBeInTheDocument();
   });
 
   it('should not show Admin badge for regular users', () => {
@@ -84,7 +84,7 @@ describe('Header', () => {
 
     render(<Header />);
 
-    expect(screen.queryByText('Admin')).not.toBeInTheDocument();
+    expect(screen.queryByText('관리자')).not.toBeInTheDocument();
   });
 
   it('should toggle theme when theme button is clicked', async () => {

@@ -784,9 +784,9 @@ export function SyncDashboard() {
                     className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" />
                   <SortableHeader label="TC VALID" sortKey="tcNewlyValid" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" />
-                  <SortableHeader label={t('sync.dashboard.crlCheck')} sortKey="crlChecked" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.crlCheck')} sortKey="crlChecked" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap" />
-                  <SortableHeader label={t('sync.dashboard.crlRevoked')} sortKey="crlRevoked" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.crlRevoked')} sortKey="crlRevoked" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap" />
                   <SortableHeader label={t('sync:reconciliation.duration')} sortKey="durationMs" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
@@ -1032,7 +1032,7 @@ export function SyncDashboard() {
                 onClick={() => setRevalidationResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>
@@ -1073,7 +1073,7 @@ export function SyncDashboard() {
                     : 'text-red-800 dark:text-red-300'
               )}>
                 {syncCheckResult.status === 'SYNCED'
-                  ? t('sync.dashboard.dbLdapSynced')
+                  ? t('sync:dashboard.dbLdapSynced')
                   : syncCheckResult.status === 'DISCREPANCY'
                     ? t('sync:dashboard.discrepanciesDetected', { num: syncCheckResult.discrepancies?.total ?? 0 })
                     : t('sync:dashboard.syncCheckError')}
@@ -1148,7 +1148,7 @@ export function SyncDashboard() {
                 onClick={() => setSyncCheckResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>
@@ -1229,7 +1229,7 @@ export function SyncDashboard() {
                 onClick={() => setDailySyncResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>
@@ -1287,7 +1287,7 @@ export function SyncDashboard() {
                 onClick={() => setConfigSaveResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>
@@ -1307,7 +1307,7 @@ export function SyncDashboard() {
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                   <CalendarClock className="w-5 h-5 text-purple-500" />
-                  {t('sync.reconciliation.dailySync')}
+                  {t('sync:reconciliation.dailySync')}
                 </label>
                 <button
                   type="button"
@@ -1376,7 +1376,7 @@ export function SyncDashboard() {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <ShieldCheck className="w-5 h-5 text-green-500" />
-                {t('sync.dashboard.autoRevalidation')}
+                {t('sync:dashboard.autoRevalidation')}
               </label>
               <button
                 type="button"
@@ -1406,7 +1406,7 @@ export function SyncDashboard() {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <RotateCcw className="w-5 h-5 text-orange-500" />
-                {t('sync.dashboard.autoReconcileLabel')}
+                {t('sync:dashboard.autoReconcileLabel')}
               </label>
               <button
                 type="button"
@@ -1440,7 +1440,7 @@ export function SyncDashboard() {
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
               >
                 <CloseIcon className="w-4 h-4" />
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleSaveConfig}
@@ -1450,12 +1450,12 @@ export function SyncDashboard() {
                 {saving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    {t('common.label.saving')}
+                    {t('common:label.saving')}
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    {t('common.button.save')}
+                    {t('common:button.save')}
                   </>
                 )}
               </button>

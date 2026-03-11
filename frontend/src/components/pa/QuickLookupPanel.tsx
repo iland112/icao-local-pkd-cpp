@@ -289,7 +289,7 @@ export function QuickLookupPanel({
                 {quickLookupResult.validation.crlCheckStatus === 'REVOKED'
                   ? <XCircle className="w-4 h-4 text-red-500" />
                   : <CheckCircle className="w-4 h-4 text-green-500" />}
-                <span className="font-semibold">{t('sync.dashboard.crlCheck')}</span>
+                <span className="font-semibold">{t('sync:dashboard.crlCheck')}</span>
                 <span className="text-gray-500 ml-1">({quickLookupResult.validation.crlCheckStatus || 'NOT_CHECKED'})</span>
               </div>
             </div>

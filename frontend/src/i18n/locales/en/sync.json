@@ -44,6 +44,7 @@
     "disabled": "Disabled",
     "enabled": "Enabled",
     "autoRevalidation": "Auto Certificate Revalidation",
+    "autoReconcile": "Auto Reconciliation",
     "autoReconcileLabel": "Auto Reconcile Discrepancy",
     "dbOnlyLdapOnly": "+ DB only | - LDAP only",
     "updateSuccess": "Update Success",

@@ -87,7 +87,7 @@ export function ReconciliationHistory() {
       case 'MANUAL':
         return t('sync:reconciliation.manual');
       case 'AUTO':
-        return t('upload.detail.auto');
+        return t('upload:detail.auto');
       case 'DAILY_SYNC':
         return t('sync:reconciliation.dailySync');
       default:
@@ -124,7 +124,7 @@ export function ReconciliationHistory() {
           className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
-          {t('common.button.refresh')}
+          {t('common:button.refresh')}
         </button>
       </div>
 
@@ -309,22 +309,22 @@ export function ReconciliationHistory() {
                     <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {t('common.label.action')}
+                          {t('common:label.action')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
                           {t('sync:reconciliation.logType')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {t('pa.history.country')}
+                          {t('pa:history.country')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
                           Subject
                         </th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {t('upload.history.status')}
+                          {t('upload:history.status')}
                         </th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
-                          {t('common.label.hours')}
+                          {t('common:label.hours')}
                         </th>
                       </tr>
                     </thead>

@@ -247,7 +247,7 @@ export function PADashboard() {
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium transition-all duration-200 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
-              {t('common.button.refresh')}
+              {t('common:button.refresh')}
             </button>
           </div>
         </div>

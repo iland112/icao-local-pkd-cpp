@@ -240,6 +240,9 @@
     "description": "An unexpected error occurred. Please try again.",
     "retry": "Try Again"
   },
+  "unit": {
+    "cases": ""
+  },
   "footer": {
     "systemOperational": "System Operational",
     "icaoCompliant": "ICAO Doc 9303 Compliant",

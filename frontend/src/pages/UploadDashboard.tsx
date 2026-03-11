@@ -154,7 +154,7 @@ export function UploadDashboard() {
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('upload:dashboard.pkdStatsDashboard')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t('upload.dashboard.subtitle')}
+              {t('upload:dashboard.subtitle')}
             </p>
           </div>
           {/* Quick Actions */}
@@ -164,14 +164,14 @@ export function UploadDashboard() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 transition-all duration-200 shadow-md hover:shadow-lg"
             >
               <Upload className="w-4 h-4" />
-              {t('upload.fileUpload.title_short')}
+              {t('upload:fileUpload.title_short')}
             </Link>
             <Link
               to="/upload-history"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               <Clock className="w-4 h-4" />
-              {t('upload.history.title')}
+              {t('upload:history.title')}
             </Link>
             <button
               onClick={fetchDashboardData}
@@ -196,12 +196,12 @@ export function UploadDashboard() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-cyan-500">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('upload.dashboard.registeredCountries')}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('upload:dashboard.registeredCountries')}</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                     {(stats?.countriesCount ?? 0).toLocaleString()}
                   </p>
                   <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    {t('upload.dashboard.icaoMemberStates')}
+                    {t('upload:dashboard.icaoMemberStates')}
                   </p>
                 </div>
                 <div className="p-3 rounded-xl bg-cyan-50 dark:bg-cyan-900/30">
@@ -232,7 +232,7 @@ export function UploadDashboard() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('upload.dashboard.uploadStatus')}</p>
+                  <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('upload:dashboard.uploadStatus')}</p>
                   <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                     {((stats?.successfulUploads ?? 0) + (stats?.failedUploads ?? 0)).toLocaleString()}
                   </p>
@@ -276,7 +276,7 @@ export function UploadDashboard() {
             <div className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 rounded-2xl shadow-lg p-5 mb-6 border border-indigo-200 dark:border-indigo-800">
               <div className="flex items-center gap-2 mb-4">
                 <Database className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload.dashboard.mlExtractionStats')}</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.mlExtractionStats')}</h3>
                 <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
                   v2.1.1
                 </span>
@@ -286,7 +286,7 @@ export function UploadDashboard() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-indigo-200 dark:border-indigo-700">
                   <div className="flex items-center gap-2 mb-2">
                     <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{t('upload.dashboard.extractedCerts')}</span>
+                    <span className="text-sm font-semibold text-indigo-700 dark:text-indigo-300">{t('upload:dashboard.extractedCerts')}</span>
                   </div>
                   <p className="text-3xl font-bold text-indigo-800 dark:text-indigo-200">
                     {(stats?.cscaExtractedFromMl ?? 0).toLocaleString()}
@@ -298,19 +298,19 @@ export function UploadDashboard() {
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-amber-200 dark:border-amber-700">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
-                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('upload.dashboard.duplicatesDetected')}</span>
+                    <span className="text-sm font-semibold text-amber-700 dark:text-amber-300">{t('upload:dashboard.duplicatesDetected')}</span>
                   </div>
                   <p className="text-3xl font-bold text-amber-800 dark:text-amber-200">
                     {(stats?.cscaDuplicates ?? 0).toLocaleString()}
                   </p>
-                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('upload.dashboard.existingDuplicate')}</p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">{t('upload:dashboard.existingDuplicate')}</p>
                 </div>
 
                 {/* Duplicate Rate */}
                 <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-violet-200 dark:border-violet-700">
                   <div className="flex items-center gap-2 mb-2">
                     <Award className="w-5 h-5 text-violet-600 dark:text-violet-400" />
-                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">{t('upload.dashboard.duplicateRate')}</span>
+                    <span className="text-sm font-semibold text-violet-700 dark:text-violet-300">{t('upload:dashboard.duplicateRate')}</span>
                   </div>
                   <p className="text-3xl font-bold text-violet-800 dark:text-violet-200">
                     {stats.cscaExtractedFromMl && stats.cscaExtractedFromMl > 0
@@ -333,7 +333,7 @@ export function UploadDashboard() {
             <div className="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <Shield className="w-5 h-5 text-violet-500" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload.dashboard.certTypeStatus')}</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.certTypeStatus')}</h3>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
                 {/* CSCA */}
@@ -427,7 +427,7 @@ export function UploadDashboard() {
                     <span className="text-sm font-semibold text-orange-700 dark:text-orange-300">CRL</span>
                   </div>
                   <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">{(stats?.crlCount ?? 0).toLocaleString()}</p>
-                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{t('upload.dashboard.revocationList')}</p>
+                  <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">{t('upload:dashboard.revocationList')}</p>
                   <div className="absolute -right-2 -bottom-2 opacity-10">
                     <FileText className="w-16 h-16 text-orange-600" />
                   </div>
@@ -439,7 +439,7 @@ export function UploadDashboard() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 h-full">
               <div className="flex items-center gap-2 mb-5">
                 <PackageOpen className="w-5 h-5 text-amber-500" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload.dashboard.sourceStatus')}</h3>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.sourceStatus')}</h3>
               </div>
               {(() => {
                 const bySource = stats?.bySource;
@@ -447,16 +447,16 @@ export function UploadDashboard() {
                   return (
                     <div className="flex flex-col items-center justify-center py-8 text-gray-400 dark:text-gray-500">
                       <PackageOpen className="w-10 h-10 mb-2" />
-                      <p className="text-sm">{t('upload.dashboard.noSourceData')}</p>
+                      <p className="text-sm">{t('upload:dashboard.noSourceData')}</p>
                     </div>
                   );
                 }
                 const sourceLabels: Record<string, { label: string; color: string; bg: string }> = {
-                  LDIF_PARSED: { label: t('upload.dashboard.ldifUpload'), color: '#3B82F6', bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
+                  LDIF_PARSED: { label: t('upload:dashboard.ldifUpload'), color: '#3B82F6', bg: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800' },
                   ML_PARSED: { label: 'Master List', color: '#8B5CF6', bg: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800' },
-                  FILE_UPLOAD: { label: t('upload.dashboard.fileUpload'), color: '#22C55E', bg: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' },
-                  PA_EXTRACTED: { label: t('upload.dashboard.paExtracted'), color: '#F59E0B', bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
-                  DL_PARSED: { label: t('upload.dashboard.deviationList'), color: '#EF4444', bg: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
+                  FILE_UPLOAD: { label: t('upload:dashboard.fileUpload'), color: '#22C55E', bg: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' },
+                  PA_EXTRACTED: { label: t('upload:dashboard.paExtracted'), color: '#F59E0B', bg: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800' },
+                  DL_PARSED: { label: t('upload:dashboard.deviationList'), color: '#EF4444', bg: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' },
                 };
                 const total = Object.values(bySource).reduce((a, b) => a + b, 0);
                 const sorted = Object.entries(bySource).sort(([, a], [, b]) => b - a);
@@ -510,7 +510,7 @@ export function UploadDashboard() {
               <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
                 <div className="flex items-center gap-2 mb-5">
                   <CheckCircle className="w-5 h-5 text-green-500" />
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload.dashboard.dscTrustChainStatus')}</h3>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:dashboard.dscTrustChainStatus')}</h3>
                 </div>
                 <div className="space-y-4">
                   {/* Valid */}
@@ -522,11 +522,11 @@ export function UploadDashboard() {
                         <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-help" />
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
                           <div className="space-y-1">
-                            <div className="font-semibold mb-1">{t('upload.dashboard.trustChainSuccess')}</div>
-                            <div>{t('upload.dashboard.cscaFound')}</div>
-                            <div>{t('upload.dashboard.dscSignedByCsca')}</div>
-                            <div>{t('upload.dashboard.signatureValid')}</div>
-                            <div>{t('upload.dashboard.withinValidityPeriod')}</div>
+                            <div className="font-semibold mb-1">{t('upload:dashboard.trustChainSuccess')}</div>
+                            <div>{t('upload:dashboard.cscaFound')}</div>
+                            <div>{t('upload:dashboard.dscSignedByCsca')}</div>
+                            <div>{t('upload:dashboard.signatureValid')}</div>
+                            <div>{t('upload:dashboard.withinValidityPeriod')}</div>
                           </div>
                           <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
                         </div>
@@ -563,8 +563,8 @@ export function UploadDashboard() {
                         <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-64 p-3 bg-gray-900 dark:bg-gray-700 text-white text-xs rounded-lg shadow-lg z-10">
                           <div className="space-y-1">
                             <div className="font-semibold mb-1">{ t('upload:dashboard.trustChainValidationFailed') }</div>
-                            <div>{t('upload.dashboard.cscaFound')}</div>
-                            <div className="text-red-400">{t('upload.dashboard.signatureFailedOrExpired')}</div>
+                            <div>{t('upload:dashboard.cscaFound')}</div>
+                            <div className="text-red-400">{t('upload:dashboard.signatureFailedOrExpired')}</div>
                           </div>
                           <div className="absolute left-4 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900 dark:border-t-gray-700"></div>
                         </div>
@@ -1058,7 +1058,7 @@ export function UploadDashboard() {
                 onClick={() => setReasonDialogOpen(null)}
                 className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
               >
-                {t('icao.banner.dismiss')}
+                {t('icao:banner.dismiss')}
               </button>
             </div>
           </div>

@@ -61,7 +61,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Country - wider column */}
             <div className="lg:col-span-2">
               <label htmlFor="cert-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                {t('pa.history.country')}
+                {t('pa:history.country')}
               </label>
               <div className="relative">
                 <select
@@ -74,7 +74,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                   disabled={countriesLoading}
                 >
                   <option value="">
-                    {countriesLoading ? 'Loading...' : countries.length === 0 ? 'No countries' : t('report.crl.allCountries')}
+                    {countriesLoading ? 'Loading...' : countries.length === 0 ? 'No countries' : t('report:crl.allCountries')}
                   </option>
                   {countries.map((country) => (
                     <option key={country} value={country}>
@@ -138,7 +138,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Source */}
             <div>
               <label htmlFor="cert-source" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                {t('certificate.detail.sourceType')}
+                {t('certificate:detail.sourceType')}
               </label>
               <select
                 id="cert-source"
@@ -187,7 +187,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                   id="cert-search"
                   name="searchTerm"
                   type="text"
-                  placeholder={t('certificate.search.cnSearch')}
+                  placeholder={t('certificate:search.cnSearch')}
                   value={criteria.searchTerm}
                   onChange={(e) => setCriteria({ ...criteria, searchTerm: e.target.value })}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}

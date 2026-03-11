@@ -200,7 +200,7 @@ describe('getCertTypeDescription', () => {
     });
     const desc = getCertTypeDescription('CSCA', cert);
     expect(desc).toContain('Doc 9303 Part 12');
-    expect(desc).toContain('연결');
+    expect(desc).toContain('CSCA');
   });
 
   it('should return DSC description for DSC type', () => {

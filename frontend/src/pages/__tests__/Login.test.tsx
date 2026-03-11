@@ -3,6 +3,24 @@ import { render, screen, waitFor } from '@/test/test-utils';
 import userEvent from '@testing-library/user-event';
 import { Login } from '../Login';
 
+// Mock react-i18next to handle returnObjects calls that expect arrays
+vi.mock('react-i18next', async () => {
+  const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next');
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, opts?: { returnObjects?: boolean }) => {
+        if (opts?.returnObjects) return [];
+        return key;
+      },
+      i18n: {
+        language: 'ko',
+        changeLanguage: vi.fn(),
+      },
+    }),
+  };
+});
+
 // Mock authApi
 const mockLogin = vi.fn();
 vi.mock('@/services/api', () => ({
@@ -10,6 +28,14 @@ vi.mock('@/services/api', () => ({
     login: (...args: unknown[]) => mockLogin(...args),
     isAuthenticated: vi.fn().mockReturnValue(false),
     getStoredUser: vi.fn().mockReturnValue(null),
+  },
+}));
+
+// Mock uploadHistoryApi (used for statistics fetch on mount)
+const mockGetStatistics = vi.fn();
+vi.mock('@/services/pkdApi', () => ({
+  uploadHistoryApi: {
+    getStatistics: (...args: unknown[]) => mockGetStatistics(...args),
   },
 }));
 
@@ -26,28 +52,33 @@ vi.mock('react-router-dom', async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   mockNavigate.mockClear();
+  mockGetStatistics.mockResolvedValue({ data: { countriesCount: 0, totalCertificates: 0 } });
   localStorage.clear();
 });
 
 describe('Login page', () => {
+  // i18n is mocked so t('key') returns the raw key string.
+  // Login.tsx uses useTranslation(['auth', 'common']), and the mock t()
+  // returns the key as-is (e.g., t('login.username') -> 'login.username').
+
   it('should render login form with username and password fields', () => {
     render(<Login />);
 
-    expect(screen.getByLabelText('사용자명')).toBeInTheDocument();
-    expect(screen.getByLabelText('비밀번호')).toBeInTheDocument();
+    expect(screen.getByLabelText('login.username')).toBeInTheDocument();
+    expect(screen.getByLabelText('login.password')).toBeInTheDocument();
   });
 
   it('should render the login button', () => {
     render(<Login />);
 
-    const loginButton = screen.getByRole('button', { name: '로그인' });
+    const loginButton = screen.getByRole('button', { name: 'login.submit' });
     expect(loginButton).toBeInTheDocument();
   });
 
   it('should disable login button when fields are empty', () => {
     render(<Login />);
 
-    const loginButton = screen.getByRole('button', { name: '로그인' });
+    const loginButton = screen.getByRole('button', { name: 'login.submit' });
     expect(loginButton).toBeDisabled();
   });
 
@@ -55,10 +86,10 @@ describe('Login page', () => {
     const user = userEvent.setup();
     render(<Login />);
 
-    await user.type(screen.getByLabelText('사용자명'), 'admin');
-    await user.type(screen.getByLabelText('비밀번호'), 'admin123');
+    await user.type(screen.getByLabelText('login.username'), 'admin');
+    await user.type(screen.getByLabelText('login.password'), 'admin123');
 
-    const loginButton = screen.getByRole('button', { name: '로그인' });
+    const loginButton = screen.getByRole('button', { name: 'login.submit' });
     expect(loginButton).toBeEnabled();
   });
 
@@ -77,9 +108,9 @@ describe('Login page', () => {
 
     render(<Login />);
 
-    await user.type(screen.getByLabelText('사용자명'), 'admin');
-    await user.type(screen.getByLabelText('비밀번호'), 'admin123');
-    await user.click(screen.getByRole('button', { name: '로그인' }));
+    await user.type(screen.getByLabelText('login.username'), 'admin');
+    await user.type(screen.getByLabelText('login.password'), 'admin123');
+    await user.click(screen.getByRole('button', { name: 'login.submit' }));
 
     await waitFor(() => {
       expect(mockLogin).toHaveBeenCalledWith('admin', 'admin123');
@@ -98,12 +129,12 @@ describe('Login page', () => {
 
     render(<Login />);
 
-    await user.type(screen.getByLabelText('사용자명'), 'admin');
-    await user.type(screen.getByLabelText('비밀번호'), 'wrong');
-    await user.click(screen.getByRole('button', { name: '로그인' }));
+    await user.type(screen.getByLabelText('login.username'), 'admin');
+    await user.type(screen.getByLabelText('login.password'), 'wrong');
+    await user.click(screen.getByRole('button', { name: 'login.submit' }));
 
     await waitFor(() => {
-      expect(screen.getByText('사용자명 또는 비밀번호가 올바르지 않습니다.')).toBeInTheDocument();
+      expect(screen.getByText('login.invalidCredentials')).toBeInTheDocument();
     });
   });
 
@@ -113,12 +144,12 @@ describe('Login page', () => {
 
     render(<Login />);
 
-    await user.type(screen.getByLabelText('사용자명'), 'admin');
-    await user.type(screen.getByLabelText('비밀번호'), 'admin123');
-    await user.click(screen.getByRole('button', { name: '로그인' }));
+    await user.type(screen.getByLabelText('login.username'), 'admin');
+    await user.type(screen.getByLabelText('login.password'), 'admin123');
+    await user.click(screen.getByRole('button', { name: 'login.submit' }));
 
     await waitFor(() => {
-      expect(screen.getByText('로그인 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.')).toBeInTheDocument();
+      expect(screen.getByText('login.networkError')).toBeInTheDocument();
     });
   });
 
@@ -129,12 +160,12 @@ describe('Login page', () => {
 
     render(<Login />);
 
-    await user.type(screen.getByLabelText('사용자명'), 'admin');
-    await user.type(screen.getByLabelText('비밀번호'), 'admin123');
-    await user.click(screen.getByRole('button', { name: '로그인' }));
+    await user.type(screen.getByLabelText('login.username'), 'admin');
+    await user.type(screen.getByLabelText('login.password'), 'admin123');
+    await user.click(screen.getByRole('button', { name: 'login.submit' }));
 
     await waitFor(() => {
-      expect(screen.getByText('로그인 중...')).toBeInTheDocument();
+      expect(screen.getByText('login.loggingIn')).toBeInTheDocument();
     });
   });
 
@@ -149,9 +180,9 @@ describe('Login page', () => {
 
     render(<Login />);
 
-    await user.type(screen.getByLabelText('사용자명'), 'admin');
-    await user.type(screen.getByLabelText('비밀번호'), 'admin123');
-    await user.click(screen.getByRole('button', { name: '로그인' }));
+    await user.type(screen.getByLabelText('login.username'), 'admin');
+    await user.type(screen.getByLabelText('login.password'), 'admin123');
+    await user.click(screen.getByRole('button', { name: 'login.submit' }));
 
     await waitFor(() => {
       expect(screen.getByText('서버 내부 오류')).toBeInTheDocument();

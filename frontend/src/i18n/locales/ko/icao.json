@@ -31,6 +31,8 @@
     "dismiss": "닫기",
     "viewDetails": "자세히 보기"
   },
+  "newVersionDetected": "ICAO PKD 신규 버전 감지",
+  "viewDetail": "상세 보기 →",
   "noData": "ICAO 버전 데이터가 없습니다",
   "statusPage": {
     "updateCheck": "업데이트 확인",

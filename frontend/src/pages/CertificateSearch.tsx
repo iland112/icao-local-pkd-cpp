@@ -278,7 +278,7 @@ const CertificateSearch: React.FC = () => {
         document.body.removeChild(a);
       } else {
         const errorData = await response.json().catch(() => null);
-        toast.error(t('certificate.search.exportFailed'), errorData?.error || response.statusText);
+        toast.error(t('certificate:search.exportFailed'), errorData?.error || response.statusText);
       }
     } catch (err) {
       toast.error(t('search.exportFailed'), err instanceof Error ? err.message : t('common:error.unknownError'));

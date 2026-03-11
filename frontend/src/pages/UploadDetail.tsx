@@ -72,10 +72,10 @@ export function UploadDetail() {
       if (response.data?.success && response.data.data) {
         setUpload(response.data.data);
       } else {
-        setError(t('upload.detail.uploadNotFound'));
+        setError(t('upload:detail.uploadNotFound'));
       }
     } catch (err) {
-      setError(t('upload.detail.loadFailed'));
+      setError(t('upload:detail.loadFailed'));
       if (import.meta.env.DEV) console.error('Failed to fetch upload detail:', err);
     } finally {
       setLoading(false);
@@ -192,7 +192,7 @@ export function UploadDetail() {
             onClick={() => navigate('/upload-history')}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            {t('upload.detail.backToList')}
+            {t('upload:detail.backToList')}
           </button>
         </div>
       </div>
@@ -230,7 +230,7 @@ export function UploadDetail() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
-              {t('upload.detail.fileInfo')}
+              {t('upload:detail.fileInfo')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-4">
@@ -243,10 +243,10 @@ export function UploadDetail() {
                   <div className="mt-1">{getFormatBadge(upload.fileFormat)}</div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500 dark:text-gray-400">{t('upload.detail.processingMode')}</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400">{t('upload:detail.processingMode')}</label>
                   <p className="font-medium text-gray-900 dark:text-white">
                     <span className="px-2 py-1 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
-                      {t('upload.detail.auto')}
+                      {t('upload:detail.auto')}
                     </span>
                   </p>
                 </div>
@@ -262,7 +262,7 @@ export function UploadDetail() {
                 <div className="flex items-center gap-2">
                   <Hash className="w-4 h-4 text-gray-400" />
                   <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">{t('upload.detail.fileHash')}</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">{t('upload:detail.fileHash')}</label>
                     <p className="font-mono text-xs text-gray-600 dark:text-gray-300 break-all">{upload.fileHash}</p>
                   </div>
                 </div>
@@ -274,7 +274,7 @@ export function UploadDetail() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-purple-500" />
-              {t('upload.detail.processingTimeline')}
+              {t('upload:detail.processingTimeline')}
             </h2>
             <div className="space-y-4">
               <div className="flex items-center gap-4">
@@ -282,7 +282,7 @@ export function UploadDetail() {
                   <Clock className="w-5 h-5 text-blue-500" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">{t('upload.detail.uploadStart')}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{t('upload:detail.uploadStart')}</p>
                   <p className="text-sm text-gray-500">{formatDateTime(upload.uploadedAt || upload.createdAt || '')}</p>
                 </div>
               </div>
@@ -294,7 +294,7 @@ export function UploadDetail() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {upload.status === 'PROCESSING' ? t('upload.detail.processingCerts') : t('upload:detail.processingInProgressLabel')}
+                      {upload.status === 'PROCESSING' ? t('upload:detail.processingCerts') : t('upload:detail.processingInProgressLabel')}
                     </p>
                     {upload.totalEntries && upload.totalEntries > 0 && (
                       <p className="text-sm text-blue-600 dark:text-blue-400">
@@ -320,7 +320,7 @@ export function UploadDetail() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {upload.status === 'COMPLETED' ? t('upload.statistics.totalProcessed') : t('upload.detail.processFailed')}
+                      {upload.status === 'COMPLETED' ? t('upload:statistics.totalProcessed') : t('upload:detail.processFailed')}
                     </p>
                     <p className="text-sm text-gray-500">{formatDateTime(upload.completedAt)}</p>
                   </div>
@@ -334,7 +334,7 @@ export function UploadDetail() {
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
-                {t('upload.detail.errorMessage')}
+                {t('upload:detail.errorMessage')}
               </h2>
               <p className="text-red-600 dark:text-red-300">{upload.errorMessage}</p>
             </div>
@@ -347,7 +347,7 @@ export function UploadDetail() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Database className="w-5 h-5 text-indigo-500" />
-                {t('upload.detail.processingStats')}
+                {t('upload:detail.processingStats')}
               </h2>
 
               <div className="space-y-4">
@@ -422,7 +422,7 @@ export function UploadDetail() {
                       className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800"
                     >
                       <Eye className="w-4 h-4" />
-                      {t('upload.detail.viewDetailResult')}
+                      {t('upload:detail.viewDetailResult')}
                     </button>
                   )}
                 </div>
@@ -432,7 +432,7 @@ export function UploadDetail() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                {t('upload.detail.processingInProgressTitle')}
+                {t('upload:detail.processingInProgressTitle')}
               </h2>
               <div className="space-y-4">
                 {/* Progress Bar */}
@@ -507,7 +507,7 @@ export function UploadDetail() {
                 {/* No counts yet */}
                 {(upload.cscaCount ?? 0) === 0 && (upload.dscCount ?? 0) === 0 && (upload.crlCount ?? 0) === 0 && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
-                    {t('upload.detail.countDisplayAfterStart')}
+                    {t('upload:detail.countDisplayAfterStart')}
                   </p>
                 )}
               </div>
@@ -516,8 +516,8 @@ export function UploadDetail() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
                 <Database className="w-12 h-12 mb-4 opacity-50" />
-                <p className="text-sm">{t('upload.detail.noStatsAvailable')}</p>
-                <p className="text-xs">{t('upload.detail.willShowAfterProcessing')}</p>
+                <p className="text-sm">{t('upload:detail.noStatsAvailable')}</p>
+                <p className="text-xs">{t('upload:detail.willShowAfterProcessing')}</p>
               </div>
             </div>
           )}
@@ -528,13 +528,13 @@ export function UploadDetail() {
               to="/upload"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all shadow-md hover:shadow-lg"
             >
-              {t('upload.detail.newFileUpload')}
+              {t('upload:detail.newFileUpload')}
             </Link>
             <Link
               to="/upload-history"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              {t('upload.detail.uploadList')}
+              {t('upload:detail.uploadList')}
             </Link>
           </div>
         </div>
@@ -750,7 +750,7 @@ export function UploadDetail() {
                         : selectedValidation.validationStatus === 'EXPIRED_VALID' ? 'text-amber-600 dark:text-amber-400'
                         : 'text-red-600 dark:text-red-400'
                     )}>
-                      {selectedValidation.validationStatus === 'EXPIRED_VALID' ? t('upload.detail.expiredValid') : selectedValidation.validationStatus}
+                      {selectedValidation.validationStatus === 'EXPIRED_VALID' ? t('upload:detail.expiredValid') : selectedValidation.validationStatus}
                     </span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">

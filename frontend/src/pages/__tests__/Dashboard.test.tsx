@@ -107,7 +107,7 @@ describe('Dashboard page', () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.queryByText('icao.newVersionDetected')).not.toBeInTheDocument();
+      expect(screen.queryByText('newVersionDetected')).not.toBeInTheDocument();
     });
   });
 
@@ -136,7 +136,7 @@ describe('Dashboard page', () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText('icao.newVersionDetected')).toBeInTheDocument();
+      expect(screen.getByText('newVersionDetected')).toBeInTheDocument();
       expect(screen.getByText('LDIF')).toBeInTheDocument();
     });
   });

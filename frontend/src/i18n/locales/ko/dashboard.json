@@ -28,6 +28,7 @@
     "viewDetail": "상세 보기 →",
     "lastChecked": "마지막 확인: {{time}}"
   },
+  "successRate": "검증 성공률",
   "countryStatsTop10": "국가별 인증서 현황 (Top 10)",
   "detailStats": "상세 통계",
   "noCertificates": "업로드된 인증서가 없습니다",

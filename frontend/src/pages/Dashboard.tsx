@@ -265,7 +265,7 @@ export function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
-                    {t('icao.newVersionDetected')}
+                    {t('icao:newVersionDetected')}
                   </h3>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {icaoStatus.status
@@ -290,12 +290,12 @@ export function Dashboard() {
                       onClick={() => navigate('/icao')}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
                     >
-                      {t('icao.viewDetail')}
+                      {t('icao:viewDetail')}
                     </button>
                     {icaoStatus.last_checked_at && (
                       <span className="text-xs text-amber-500 dark:text-amber-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {t('icao.lastChecked', { time: formatDateTime(icaoStatus.last_checked_at) })}
+                        {t('icao:lastChecked', { time: formatDateTime(icaoStatus.last_checked_at) })}
                       </span>
                     )}
                   </div>

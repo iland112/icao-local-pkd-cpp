@@ -124,7 +124,7 @@ export function FileUpload() {
       {
         id: 'upload',
         label: t('fileUpload.title'),
-        description: uploadStage.message || t('upload.fileUpload.sendingToServer'),
+        description: uploadStage.message || t('upload:fileUpload.sendingToServer'),
         status: toStepStatus(uploadStage.status),
         progress: uploadStage.percentage,
         details: uploadStage.details,
@@ -132,8 +132,8 @@ export function FileUpload() {
       },
       {
         id: 'parse',
-        label: t('upload.fileUpload.fileParsing'),
-        description: parseStage.message || t('upload.fileUpload.ldifMlParsing'),
+        label: t('upload:fileUpload.fileParsing'),
+        description: parseStage.message || t('upload:fileUpload.ldifMlParsing'),
         status: toStepStatus(parseStage.status),
         progress: parseStage.percentage,
         details: parseStage.details,
@@ -141,8 +141,8 @@ export function FileUpload() {
       },
       {
         id: 'database',
-        label: t('upload.fileUpload.validationAndSave'),
-        description: dbSaveStage.message || t('upload.fileUpload.certValidationAndSave'),
+        label: t('upload:fileUpload.validationAndSave'),
+        description: dbSaveStage.message || t('upload:fileUpload.certValidationAndSave'),
         status: toStepStatus(dbSaveStage.status),
         progress: dbSaveStage.percentage,
         details: dbSaveStage.details,
@@ -182,9 +182,9 @@ export function FileUpload() {
     const name = file.name.toLowerCase();
 
     if (name.endsWith('.ml') || name.endsWith('.bin')) {
-      return t('upload.fileUpload.mlDescription');
+      return t('upload:fileUpload.mlDescription');
     } else if (name.endsWith('.ldif')) {
-      return t('upload.fileUpload.ldifDescription');
+      return t('upload:fileUpload.ldifDescription');
     }
     return '';
   }, []);
@@ -246,7 +246,7 @@ export function FileUpload() {
 
     try {
       // Start upload
-      setUploadStage({ status: 'IN_PROGRESS', message: t('upload.fileUpload.uploadingFile'), percentage: 0 });
+      setUploadStage({ status: 'IN_PROGRESS', message: t('upload:fileUpload.uploadingFile'), percentage: 0 });
 
       // LDIF / Master List upload (async with SSE)
       const isLdif = selectedFile.name.toLowerCase().endsWith('.ldif');
@@ -307,10 +307,10 @@ export function FileUpload() {
         return;
       } else {
         // Other errors
-        setUploadStage({ status: 'FAILED', message: t('upload.fileUpload.uploadFailed'), percentage: 0 });
+        setUploadStage({ status: 'FAILED', message: t('upload:fileUpload.uploadFailed'), percentage: 0 });
         setOverallStatus('FAILED');
-        setOverallMessage(t('upload.fileUpload.fileUploadFailed'));
-        setErrorMessages([error instanceof Error ? error.message : t('upload.fileUpload.unknownError')]);
+        setOverallMessage(t('upload:fileUpload.fileUploadFailed'));
+        setErrorMessages([error instanceof Error ? error.message : t('upload:fileUpload.unknownError')]);
       }
       setIsProcessing(false);
     }
@@ -344,7 +344,7 @@ export function FileUpload() {
         const entriesCount = upload.fileFormat === 'ML' ? upload.processedEntries : upload.totalEntries;
         setParseStage({
           status: 'COMPLETED',
-          message: t('upload.fileUpload.parsingComplete'),
+          message: t('upload:fileUpload.parsingComplete'),
           percentage: 100,
           details: t('upload:fileUpload.entriesProcessed', { num: entriesCount?.toLocaleString() ?? '0' })
         });
@@ -379,7 +379,7 @@ export function FileUpload() {
           const details = parts.length > 0 ? `${t('upload:fileUpload.saveCompleteLabel')}: ${parts.join(', ')}` : t('upload:fileUpload.entriesSaved', { num: (upload.processedEntries || upload.totalEntries)?.toLocaleString() ?? '0' });
           setDbSaveStage({
             status: 'COMPLETED',
-            message: t('upload.fileUpload.saveComplete'),
+            message: t('upload:fileUpload.saveComplete'),
             percentage: 100,
             details
           });
@@ -389,7 +389,7 @@ export function FileUpload() {
       // Handle completion states
       if (upload.status === 'COMPLETED') {
         setOverallStatus('FINALIZED');
-        setOverallMessage(t('upload.fileUpload.allProcessingComplete'));
+        setOverallMessage(t('upload:fileUpload.allProcessingComplete'));
         setIsProcessing(false);
         // Stop polling when completed
         if (pollingIntervalRef.current) {
@@ -404,7 +404,7 @@ export function FileUpload() {
         }
       } else if (upload.status === 'FAILED') {
         setOverallStatus('FAILED');
-        setOverallMessage(t('upload.fileUpload.processingError'));
+        setOverallMessage(t('upload:fileUpload.processingError'));
         setIsProcessing(false);
         // Stop polling on failure
         if (pollingIntervalRef.current) {
@@ -517,11 +517,11 @@ export function FileUpload() {
 
   // Translate validation reason to Korean
   const translateReason = (reason: string): string => {
-    if (reason.includes('Trust chain signature verification failed')) return t('upload.dashboard.signatureVerificationFailed');
-    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return t('upload.dashboard.trustChainBroken');
-    if (reason.includes('CSCA not found')) return t('report.trustChain.cscaNotFound');
-    if (reason.includes('not yet valid')) return t('upload.dashboard.notYetValidPeriod');
-    if (reason.includes('certificates expired')) return t('upload.dashboard.expiredValidSignature');
+    if (reason.includes('Trust chain signature verification failed')) return t('upload:dashboard.signatureVerificationFailed');
+    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return t('upload:dashboard.trustChainBroken');
+    if (reason.includes('CSCA not found')) return t('report:trustChain.cscaNotFound');
+    if (reason.includes('not yet valid')) return t('upload:dashboard.notYetValidPeriod');
+    if (reason.includes('certificates expired')) return t('upload:dashboard.expiredValidSignature');
     return reason;
   };
 
@@ -551,7 +551,7 @@ export function FileUpload() {
       else if (stage !== lastStageRef.current) {
         const isComplete = stage.endsWith('_COMPLETED') || stage === 'COMPLETED';
         const isFail = stage === 'FAILED';
-        const detail = message || stageName || (isComplete ? t('common:status.completed') : isFail ? t('common:status.failed') : t('upload.fileUpload.started'));
+        const detail = message || stageName || (isComplete ? t('common:status.completed') : isFail ? t('common:status.failed') : t('upload:fileUpload.started'));
         addEntry(stage, detail, isFail ? 'fail' : isComplete ? 'success' : 'info');
       }
       // 3) Milestones every 10,000 entries (for long-running operations)
@@ -574,9 +574,9 @@ export function FileUpload() {
           const addedCount = newCount - lastErrorCountRef.current;
           const recentNew = newErrors.slice(-addedCount);
           for (const err of recentNew) {
-            const label = err.errorType === 'PARSE' ? t('upload.fileUpload.parseFailed')
-              : err.errorType === 'DB_SAVE' ? t('upload.fileUpload.dbSaveFailed')
-              : err.errorType === 'LDAP_SAVE' ? t('upload.fileUpload.ldapSaveFailed')
+            const label = err.errorType === 'PARSE' ? t('upload:fileUpload.parseFailed')
+              : err.errorType === 'DB_SAVE' ? t('upload:fileUpload.dbSaveFailed')
+              : err.errorType === 'LDAP_SAVE' ? t('upload:fileUpload.ldapSaveFailed')
               : err.errorType;
             const detail = `[${err.countryCode}] ${err.certificateType} - ${err.message}`;
             addEntry(label, detail, err.errorType === 'LDAP_SAVE' ? 'warning' : 'fail');
@@ -606,7 +606,7 @@ export function FileUpload() {
             const isInvalid = key.startsWith('INVALID:');
             const isPending = key.startsWith('PENDING:');
             const reasonText = key.replace(/^(INVALID|EXPIRED_VALID|PENDING):\s*/, '');
-            const label = isInvalid ? t('upload.fileUpload.validationFailed') : isPending ? t('upload.fileUpload.validationPending') : t('upload.fileUpload.expiredValidLabel');
+            const label = isInvalid ? t('upload:fileUpload.validationFailed') : isPending ? t('upload:fileUpload.validationPending') : t('upload:fileUpload.expiredValidLabel');
             const translated = translateReason(reasonText);
             addEntry(label, `${translated} (${count.toLocaleString()}${t('common:unit.cases')})`, isInvalid ? 'fail' : 'warning');
           }
@@ -829,7 +829,7 @@ export function FileUpload() {
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
                 <p><span className="font-medium">{t('common:label.fileName')}:</span> {reuploadDialog.existingUpload?.fileName}</p>
                 <p><span className="font-medium">{ t('certificate:detail.status_label') }</span> {reuploadDialog.existingUpload?.status}</p>
-                <p><span className="font-medium">{t('common.label.uploadIdColon')}</span> <span className="font-mono text-xs">{reuploadDialog.existingUpload?.uploadId}</span></p>
+                <p><span className="font-medium">{t('common:label.uploadIdColon')}</span> <span className="font-mono text-xs">{reuploadDialog.existingUpload?.uploadId}</span></p>
               </div>
               <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
                 {t('upload:fileUpload.reuploadWarning')}
@@ -841,7 +841,7 @@ export function FileUpload() {
                 onClick={() => setReuploadDialog({ show: false })}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                {t('common.button.cancel')}
+                {t('common:button.cancel')}
               </button>
               <button
                 onClick={handleForceReupload}
@@ -875,7 +875,7 @@ export function FileUpload() {
                   {duplicateWarningDialog.existingUpload.fileFormat && (
                     <p><span className="font-medium">{t('upload:fileUpload.fileFormat')}:</span> {duplicateWarningDialog.existingUpload.fileFormat}</p>
                   )}
-                  <p><span className="font-medium">{t('common.label.uploadIdColon')}</span> <span className="font-mono text-xs">{duplicateWarningDialog.existingUpload.uploadId}</span></p>
+                  <p><span className="font-medium">{t('common:label.uploadIdColon')}</span> <span className="font-mono text-xs">{duplicateWarningDialog.existingUpload.uploadId}</span></p>
                 </div>
               )}
               <p className="text-sm text-red-600 dark:text-red-400">
@@ -887,13 +887,13 @@ export function FileUpload() {
                 onClick={() => navigate('/upload-history')}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                {t('upload.fileUpload.viewUploadHistory')}
+                {t('upload:fileUpload.viewUploadHistory')}
               </button>
               <button
                 onClick={() => setDuplicateWarningDialog({ show: false })}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
               >
-                {t('common.confirm.title')}
+                {t('common:confirm.title')}
               </button>
             </div>
           </div>
@@ -923,7 +923,7 @@ export function FileUpload() {
           <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
             <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('pa.verify.cscaNotRegistered')}</p>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('pa:verify.cscaNotRegistered')}</p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                 {t('upload:fileUpload.cscaUploadRequired')}
               </p>
@@ -956,7 +956,7 @@ export function FileUpload() {
                 onClick={() => navigate('/upload-history')}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-teal-700 bg-white/90 hover:bg-white transition-colors shrink-0"
               >
-                {t('upload.fileUpload.viewUploadHistory')}
+                {t('upload:fileUpload.viewUploadHistory')}
               </button>
             </div>
           </div>
@@ -1165,7 +1165,7 @@ export function FileUpload() {
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   <Clock className="w-4 h-4" />
-                  {t('upload.history.title')}
+                  {t('upload:history.title')}
                 </button>
                 <button
                   onClick={handleUpload}
@@ -1240,7 +1240,7 @@ export function FileUpload() {
                       <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">{t('upload.detail.processFailed')}</h4>
+                      <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">{t('upload:detail.processFailed')}</h4>
                       <p className="text-sm mt-0.5 text-red-600 dark:text-red-500">{overallMessage}</p>
                     </div>
                   </div>

@@ -116,7 +116,7 @@ export function AuditLog() {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {t('nav.header.loginHistory')}
+              {t('nav:header.loginHistory')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               {t('admin:auditLog.pageSubtitle')}
@@ -196,7 +196,7 @@ export function AuditLog() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label htmlFor="audit-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              {t('common.label.username')}
+              {t('common:label.username')}
             </label>
             <input
               id="audit-username"
@@ -250,7 +250,7 @@ export function AuditLog() {
               onClick={handleReset}
               className="w-full px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
-              {t('common.button.reset')}
+              {t('common:button.reset')}
             </button>
           </div>
         </div>
@@ -268,7 +268,7 @@ export function AuditLog() {
                 <SortableHeader label={t('admin:operationAudit.ipAddress')} sortKey="ipAddress" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label={t('common:label.status')} sortKey="success" sortConfig={logSortConfig} onSort={requestLogSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                  {t('upload.history.detail')}
+                  {t('upload:history.detail')}
                 </th>
               </tr>
             </thead>
@@ -276,7 +276,7 @@ export function AuditLog() {
               {loading ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-xs text-gray-500 dark:text-gray-400">
-                    {t('common.button.loading')}
+                    {t('common:button.loading')}
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
@@ -311,12 +311,12 @@ export function AuditLog() {
                       {log.success ? (
                         <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
                           <CheckCircle className="w-3.5 h-3.5" />
-                          {t('sync.reconciliation.successCount')}
+                          {t('sync:reconciliation.successCount')}
                         </span>
                       ) : (
                         <span className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
                           <XCircle className="w-3.5 h-3.5" />
-                          {t('upload.statistics.totalFailed')}
+                          {t('upload:statistics.totalFailed')}
                         </span>
                       )}
                     </td>
@@ -422,7 +422,7 @@ export function AuditLog() {
                   <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.ipAddress || '-'}</dd>
                 </div>
                 <div>
-                  <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common.label.userId')}</dt>
+                  <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common:label.userId')}</dt>
                   <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={selectedLog.userId || '-'}>{selectedLog.userId || '-'}</dd>
                 </div>
               </div>
@@ -430,7 +430,7 @@ export function AuditLog() {
               <hr className="border-gray-200 dark:border-gray-700" />
 
               <div>
-                <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common.label.logId')}</dt>
+                <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common:label.logId')}</dt>
                 <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={selectedLog.id}>{selectedLog.id}</dd>
               </div>
 
@@ -448,7 +448,7 @@ export function AuditLog() {
                 <>
                   <hr className="border-gray-200 dark:border-gray-700" />
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('upload.detail.errorMessage')}</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('upload:detail.errorMessage')}</dt>
                     <dd className="text-xs text-red-600 dark:text-red-400 mt-0.5 break-all">{selectedLog.errorMessage}</dd>
                   </div>
                 </>
@@ -461,7 +461,7 @@ export function AuditLog() {
                 onClick={() => setDialogOpen(false)}
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                {t('icao.banner.dismiss')}
+                {t('icao:banner.dismiss')}
               </button>
             </div>
           </div>

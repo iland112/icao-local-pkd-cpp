@@ -70,7 +70,7 @@ export default function ApiClientRequest() {
         setError(res.message || t('admin:apiClientRequest.submitFailedDefault'));
       }
     } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || t('admin.apiClientRequest.submitError');
+      const msg = err?.response?.data?.message || err?.message || t('admin:apiClientRequest.submitError');
       setError(msg);
     } finally {
       setSubmitting(false);
@@ -89,20 +89,20 @@ export default function ApiClientRequest() {
           <div className="w-14 h-14 sm:w-16 sm:h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-5 sm:mb-6">
             <CheckCircle className="w-7 h-7 sm:w-8 sm:h-8 text-green-600 dark:text-green-400" />
           </div>
-          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('admin.apiClientRequest.requestReceived')}</h2>
+          <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('admin:apiClientRequest.requestReceived')}</h2>
           <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mb-5 sm:mb-6">
-            {t('admin.apiClientRequest.adminReviewNote')}<br />
-            {t('admin.apiClientRequest.apiKeyByEmail')}
+            {t('admin:apiClientRequest.adminReviewNote')}<br />
+            {t('admin:apiClientRequest.apiKeyByEmail')}
           </p>
           <div className={cn('rounded-xl p-4 mb-5 sm:mb-6 text-left', darkMode ? 'bg-gray-700' : 'bg-gray-50')}>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin.apiClientRequest.requestId')}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('admin:apiClientRequest.requestId')}</p>
             <p className="text-xs sm:text-sm font-mono text-gray-900 dark:text-white break-all">{requestId}</p>
           </div>
           <button
             onClick={() => navigate('/login')}
             className="w-full sm:w-auto px-5 py-3 sm:py-2.5 bg-[#02385e] hover:bg-[#024b7a] text-white rounded-xl font-medium transition-colors"
           >
-            {t('admin.apiClientRequest.goToLogin')}
+            {t('admin:apiClientRequest.goToLogin')}
           </button>
         </div>
       </div>
@@ -119,7 +119,7 @@ export default function ApiClientRequest() {
             className="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-3 transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            {t('admin.apiClientRequest.backToLogin')}
+            {t('admin:apiClientRequest.backToLogin')}
           </button>
           <div className="flex items-center gap-3">
             <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg flex-shrink-0">
@@ -127,7 +127,7 @@ export default function ApiClientRequest() {
             </div>
             <div className="min-w-0">
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white truncate">{ t('auth:login.apiClientRequestLink') }</h1>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('admin.apiClientRequest.requestSubtitle')}</p>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">{t('admin:apiClientRequest.requestSubtitle')}</p>
             </div>
           </div>
         </div>
@@ -139,12 +139,12 @@ export default function ApiClientRequest() {
             {/* Left Column: Requester Info */}
             <div className={cn('rounded-2xl shadow-lg overflow-hidden lg:h-fit', darkMode ? 'bg-gray-800' : 'bg-white')}>
               <div className="px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">{t('admin.apiClientRequest.requesterInfo')}</h2>
+                <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">{t('admin:apiClientRequest.requesterInfo')}</h2>
               </div>
               <div className="px-4 sm:px-5 py-4 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Field label={t('admin.apiClient.requesterName')} required value={form.requester_name} onChange={v => updateField('requester_name', v)} placeholder={t('admin.apiClient.namePlaceholder')} />
-                  <Field label={t('admin.apiClient.orgDept')} required value={form.requester_org} onChange={v => updateField('requester_org', v)} placeholder={t('admin.apiClientRequest.orgPlaceholder')} />
+                  <Field label={t('admin:apiClient.requesterName')} required value={form.requester_name} onChange={v => updateField('requester_name', v)} placeholder={t('admin:apiClient.namePlaceholder')} />
+                  <Field label={t('admin:apiClient.orgDept')} required value={form.requester_org} onChange={v => updateField('requester_org', v)} placeholder={t('admin:apiClientRequest.orgPlaceholder')} />
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <Field label={t('admin:apiClientRequest.contactPhone')} value={form.requester_contact_phone || ''} onChange={v => updateField('requester_contact_phone', v)} placeholder="02-1234-5678" />
@@ -152,7 +152,7 @@ export default function ApiClientRequest() {
                 </div>
                 <div>
                   <label htmlFor="req-reason" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('admin.apiClientRequest.requestReason')} <span className="text-red-500">*</span>
+                    {t('admin:apiClientRequest.requestReason')} <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     id="req-reason"
@@ -161,7 +161,7 @@ export default function ApiClientRequest() {
                     onChange={e => updateField('request_reason', e.target.value)}
                     required
                     rows={3}
-                    placeholder={t('admin.apiClientRequest.reasonPlaceholder')}
+                    placeholder={t('admin:apiClientRequest.reasonPlaceholder')}
                     className={cn(
                       'w-full px-3 py-2.5 sm:py-2 rounded-lg text-sm',
                       darkMode ? 'bg-gray-700 border-gray-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-900',
@@ -172,14 +172,14 @@ export default function ApiClientRequest() {
 
                 {/* Client Name + Description (desktop: in left column to balance height) */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-100 dark:border-gray-700">
-                  <Field label={t('admin:apiClient.clientName_label')} required value={form.client_name} onChange={v => updateField('client_name', v)} placeholder={t('admin.apiClientRequest.clientNamePlaceholder')} />
-                  <Field label={t('common:label.description')} value={form.description || ''} onChange={v => updateField('description', v)} placeholder={t('admin.apiClientRequest.apiUsagePlaceholder')} />
+                  <Field label={t('admin:apiClient.clientName_label')} required value={form.client_name} onChange={v => updateField('client_name', v)} placeholder={t('admin:apiClientRequest.clientNamePlaceholder')} />
+                  <Field label={t('common:label.description')} value={form.description || ''} onChange={v => updateField('description', v)} placeholder={t('admin:apiClientRequest.apiUsagePlaceholder')} />
                 </div>
 
                 {/* Device Type */}
                 <div>
                   <span className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('common.label.deviceTypeLabel')} <span className="text-red-500">*</span>
+                    {t('common:label.deviceTypeLabel')} <span className="text-red-500">*</span>
                   </span>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
                     {DEVICE_TYPES_KEYS.map(dt => {
@@ -212,10 +212,10 @@ export default function ApiClientRequest() {
                       label={t('admin:apiClient.allowedIpsComma')}
                       value={ipsText}
                       onChange={setIpsText}
-                      placeholder={t('admin.apiClientRequest.ipSuggestionPlaceholder')}
+                      placeholder={t('admin:apiClientRequest.ipSuggestionPlaceholder')}
                     />
                     <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                      {t('admin.apiClientRequest.ipSuggestionNote')}
+                      {t('admin:apiClientRequest.ipSuggestionNote')}
                     </p>
                   </div>
                 )}
@@ -223,7 +223,7 @@ export default function ApiClientRequest() {
                   <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
                     <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
                     <p className="text-xs text-amber-700 dark:text-amber-300">
-                      {t('admin.apiClientRequest.mobileIpNote')}
+                      {t('admin:apiClientRequest.mobileIpNote')}
                     </p>
                   </div>
                 )}
@@ -234,7 +234,7 @@ export default function ApiClientRequest() {
             <div className="flex flex-col gap-4 lg:gap-5">
               <div className={cn('rounded-2xl shadow-lg overflow-hidden flex-1', darkMode ? 'bg-gray-800' : 'bg-white')}>
                 <div className="px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-gray-700">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">{t('admin.apiClientRequest.requestedPermissions')}</h2>
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-white">{t('admin:apiClientRequest.requestedPermissions')}</h2>
                 </div>
                 <div className="px-4 sm:px-5 py-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -269,7 +269,7 @@ export default function ApiClientRequest() {
                 {/* Info banner */}
                 <div className="px-4 sm:px-5 py-2.5 bg-blue-50 dark:bg-blue-900/10 border-t border-gray-200 dark:border-gray-700">
                   <p className="text-xs text-blue-600 dark:text-blue-400">
-                    {t('admin.apiClientRequest.advancedSettingsNote')}
+                    {t('admin:apiClientRequest.advancedSettingsNote')}
                   </p>
                 </div>
               </div>
@@ -289,7 +289,7 @@ export default function ApiClientRequest() {
                   onClick={() => navigate('/login')}
                   className="w-full sm:w-auto px-5 py-3 sm:py-2.5 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 font-medium transition-colors text-center"
                 >
-                  {t('common.button.cancel')}
+                  {t('common:button.cancel')}
                 </button>
                 <button
                   type="submit"
@@ -304,7 +304,7 @@ export default function ApiClientRequest() {
                   {submitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" /><span>{t('apiClientRequest.submitting')}</span></>
                   ) : (
-                    <><Send className="w-4 h-4" /><span>{t('admin.apiClientRequest.submitRequest')}</span></>
+                    <><Send className="w-4 h-4" /><span>{t('admin:apiClientRequest.submitRequest')}</span></>
                   )}
                 </button>
               </div>

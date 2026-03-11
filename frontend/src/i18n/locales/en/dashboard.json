@@ -28,6 +28,7 @@
     "viewDetail": "View Details →",
     "lastChecked": "Last checked: {{time}}"
   },
+  "successRate": "Validation Success Rate",
   "countryStatsTop10": "Certificates by Country (Top 10)",
   "detailStats": "Detailed Statistics",
   "noCertificates": "No certificates uploaded",

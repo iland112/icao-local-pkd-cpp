@@ -33,7 +33,7 @@ describe('ConfirmDialog', () => {
     expect(screen.getByText('This upload will be permanently deleted.')).toBeInTheDocument();
   });
 
-  it('should display default button labels in Korean', () => {
+  it('should display default button labels using i18n keys', () => {
     render(
       <ConfirmDialog
         isOpen={true}
@@ -44,8 +44,9 @@ describe('ConfirmDialog', () => {
       />
     );
 
-    expect(screen.getByText('확인')).toBeInTheDocument();
-    expect(screen.getByText('취소')).toBeInTheDocument();
+    // Test i18n returns raw keys (no translations loaded in test env)
+    expect(screen.getByText('button.confirm')).toBeInTheDocument();
+    expect(screen.getByText('button.cancel')).toBeInTheDocument();
   });
 
   it('should use custom button labels when provided', () => {
@@ -79,7 +80,7 @@ describe('ConfirmDialog', () => {
       />
     );
 
-    await user.click(screen.getByText('취소'));
+    await user.click(screen.getByText('button.cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
@@ -98,7 +99,7 @@ describe('ConfirmDialog', () => {
       />
     );
 
-    await user.click(screen.getByText('확인'));
+    await user.click(screen.getByText('button.confirm'));
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -137,7 +138,7 @@ describe('ConfirmDialog', () => {
     );
 
     // Confirm button should have red styling
-    const confirmButton = screen.getByText('확인');
+    const confirmButton = screen.getByText('button.confirm');
     expect(confirmButton.className).toContain('bg-red-600');
   });
 
@@ -153,7 +154,7 @@ describe('ConfirmDialog', () => {
       />
     );
 
-    const confirmButton = screen.getByText('확인');
+    const confirmButton = screen.getByText('button.confirm');
     expect(confirmButton.className).toContain('bg-blue-600');
   });
 });
