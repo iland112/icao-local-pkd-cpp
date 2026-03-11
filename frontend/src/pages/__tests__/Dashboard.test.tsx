@@ -64,24 +64,23 @@ beforeEach(() => {
 });
 
 describe('Dashboard page', () => {
+  // i18n returns keys as-is in test environment (no translation files loaded)
   it('should render the dashboard title', async () => {
     render(<Dashboard />);
 
-    expect(screen.getByText('SPKD Dashboard')).toBeInTheDocument();
+    expect(screen.getByText('title')).toBeInTheDocument();
   });
 
   it('should render platform description', () => {
     render(<Dashboard />);
 
-    expect(
-      screen.getByText('ePassport 인증서 관리 및 {t('pa:verify.pageTitle')} 플랫폼')
-    ).toBeInTheDocument();
+    expect(screen.getByText('subtitle')).toBeInTheDocument();
   });
 
   it('should render country statistics section', () => {
     render(<Dashboard />);
 
-    expect(screen.getByText(/국가별 인증서 현황/)).toBeInTheDocument();
+    expect(screen.getByText('countryStatsTop10')).toBeInTheDocument();
   });
 
   it.skip('should display country data after loading', async () => {
@@ -98,17 +97,17 @@ describe('Dashboard page', () => {
     );
   });
 
-  it('should show "상세 통계" button', () => {
+  it('should show detail stats button', () => {
     render(<Dashboard />);
 
-    expect(screen.getByText('상세 통계')).toBeInTheDocument();
+    expect(screen.getByText('detailStats')).toBeInTheDocument();
   });
 
   it('should not show ICAO notification banner when no updates needed', async () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.queryByText('ICAO PKD 새 버전 감지')).not.toBeInTheDocument();
+      expect(screen.queryByText('icao.newVersionDetected')).not.toBeInTheDocument();
     });
   });
 
@@ -137,7 +136,7 @@ describe('Dashboard page', () => {
     render(<Dashboard />);
 
     await waitFor(() => {
-      expect(screen.getByText('ICAO PKD 새 버전 감지')).toBeInTheDocument();
+      expect(screen.getByText('icao.newVersionDetected')).toBeInTheDocument();
       expect(screen.getByText('LDIF')).toBeInTheDocument();
     });
   });
