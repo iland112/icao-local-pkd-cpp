@@ -110,7 +110,7 @@ export function Dashboard() {
   const loadRecentChanges = async () => {
     setChangesLoading(true);
     try {
-      const response = await uploadApi.getChanges(10);
+      const response = await uploadApi.getChanges(5);
       setRecentChanges(response.data.changes || []);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to load recent changes:', error);

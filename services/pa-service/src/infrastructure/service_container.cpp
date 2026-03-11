@@ -5,6 +5,7 @@
 
 #include "service_container.h"
 #include "app_config.h"
+#include "../auth/personal_info_crypto.h"
 
 #include <spdlog/spdlog.h>
 #include <ldap.h>
@@ -120,6 +121,9 @@ LDAP* connectLdap(const AppConfig& config) {
 
 bool ServiceContainer::initialize(const AppConfig& config) {
     spdlog::info("Initializing PA Service dependencies...");
+
+    // Step 0: PII encryption (개인정보보호법 제29조 안전조치)
+    auth::pii::initialize();
 
     try {
         // Step 1: Database connection pool

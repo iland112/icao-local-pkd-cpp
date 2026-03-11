@@ -6,6 +6,7 @@
 
 #include "pa_verification_repository.h"
 #include "query_helpers.h"
+#include "../auth/personal_info_crypto.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 #include <sstream>
@@ -98,10 +99,15 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             sodBinaryHex = hexStream.str();
         }
 
+        // Encrypt PII fields (개인정보보호법 제29조 안전조치)
+        std::string encDocNum = auth::pii::encrypt(verification.documentNumber);
+        std::string encIp = auth::pii::encrypt(verification.ipAddress.value_or(""));
+        std::string encUa = auth::pii::encrypt(verification.userAgent.value_or(""));
+
         std::vector<std::string> params = {
             generatedId,                                                     // $1: id
             verification.countryCode,                                        // $2
-            verification.documentNumber,                                     // $3
+            encDocNum,                                                       // $3: document_number (encrypted)
             verification.verificationStatus,                                 // $4
             verification.sodHash,                                            // $5
             sodBinaryHex,                                                    // $6: sod_binary
@@ -120,8 +126,8 @@ std::string PaVerificationRepository::insert(const domain::models::PaVerificatio
             verification.crlStatus,                                          // $19
             verification.crlMessage.value_or(""),                            // $20
             verification.validationErrors.value_or(""),                      // $21
-            verification.ipAddress.value_or(""),                             // $22
-            verification.userAgent.value_or(""),                             // $23
+            encIp,                                                           // $22: client_ip (encrypted)
+            encUa,                                                           // $23: user_agent (encrypted)
             verification.requestedBy,                                        // $24
             boolStr(verification.dscNonConformant),                          // $25
             verification.pkdConformanceCode,                                 // $26
@@ -479,6 +485,11 @@ Json::Value PaVerificationRepository::toCamelCase(const Json::Value& dbRow) {
             } else {
                 camelCaseRow[camelKey] = value.asBool();
             }
+        }
+        // Decrypt PII fields (개인정보보호법 제29조 안전조치)
+        else if ((key == "document_number" || key == "client_ip" || key == "user_agent")
+                 && value.isString()) {
+            camelCaseRow[camelKey] = auth::pii::decrypt(value.asString());
         }
         // All other fields
         else {

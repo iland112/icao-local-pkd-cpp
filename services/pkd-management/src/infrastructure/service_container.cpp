@@ -57,6 +57,9 @@
 #include "../handlers/api_client_handler.h"
 #include "../handlers/api_client_request_handler.h"
 
+// PII Encryption (개인정보보호법)
+#include "../auth/personal_info_crypto.h"
+
 // HTTP infrastructure
 #include "../infrastructure/http/http_client.h"
 
@@ -170,6 +173,9 @@ void ServiceContainer::shutdown() {
 
 bool ServiceContainer::initialize(const AppConfig& config) {
     spdlog::info("ServiceContainer initializing...");
+
+    // --- Phase 0: PII Encryption (개인정보보호법 제29조 안전조치) ---
+    auth::pii::initialize();
 
     // --- Phase 1: LDAP Connection Pool ---
     try {

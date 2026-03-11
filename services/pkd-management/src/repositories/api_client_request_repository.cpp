@@ -4,6 +4,7 @@
 
 #include "api_client_request_repository.h"
 #include "query_helpers.h"
+#include "../auth/personal_info_crypto.h"
 #include <spdlog/spdlog.h>
 #include <stdexcept>
 
@@ -56,11 +57,17 @@ std::string ApiClientRequestRepository::insert(const domain::models::ApiClientRe
                 "  $9" + jsonCast + ", $10" + jsonCast + ") RETURNING id";
         }
 
+        // Encrypt PII fields (개인정보보호법 제29조 안전조치)
+        std::string encName = auth::pii::encrypt(request.requesterName);
+        std::string encOrg = auth::pii::encrypt(request.requesterOrg);
+        std::string encPhone = auth::pii::encrypt(request.requesterContactPhone.value_or(""));
+        std::string encEmail = auth::pii::encrypt(request.requesterContactEmail);
+
         std::vector<std::string> params = {
-            request.requesterName,                          // $1
-            request.requesterOrg,                           // $2
-            request.requesterContactPhone.value_or(""),     // $3
-            request.requesterContactEmail,                  // $4
+            encName,                                        // $1
+            encOrg,                                         // $2
+            encPhone,                                       // $3
+            encEmail,                                       // $4
             request.requestReason,                          // $5
             request.clientName,                             // $6
             request.description.value_or(""),               // $7
@@ -71,12 +78,12 @@ std::string ApiClientRequestRepository::insert(const domain::models::ApiClientRe
 
         if (dbType == "oracle") {
             executor_->executeCommand(query, params);
-            // Retrieve the generated ID by most recent insert
+            // Retrieve the generated ID by most recent insert (use encrypted email for match)
             Json::Value idResult = executor_->executeQuery(
                 "SELECT id FROM api_client_requests "
                 "WHERE requester_contact_email = $1 AND client_name = $2 "
                 "ORDER BY created_at DESC FETCH FIRST 1 ROWS ONLY",
-                { request.requesterContactEmail, request.clientName });
+                { encEmail, request.clientName });
             if (idResult.isArray() && idResult.size() > 0) {
                 return idResult[0].get("id", "").asString();
             }
@@ -263,13 +270,15 @@ domain::models::ApiClientRequest ApiClientRequestRepository::jsonToModel(const J
     domain::models::ApiClientRequest req;
 
     req.id = row.get("id", "").asString();
-    req.requesterName = row.get("requester_name", "").asString();
-    req.requesterOrg = row.get("requester_org", "").asString();
 
-    std::string phone = row.get("requester_contact_phone", "").asString();
+    // Decrypt PII fields (개인정보보호법 제29조 안전조치)
+    req.requesterName = auth::pii::decrypt(row.get("requester_name", "").asString());
+    req.requesterOrg = auth::pii::decrypt(row.get("requester_org", "").asString());
+
+    std::string phone = auth::pii::decrypt(row.get("requester_contact_phone", "").asString());
     if (!phone.empty()) req.requesterContactPhone = phone;
 
-    req.requesterContactEmail = row.get("requester_contact_email", "").asString();
+    req.requesterContactEmail = auth::pii::decrypt(row.get("requester_contact_email", "").asString());
     req.requestReason = row.get("request_reason", "").asString();
     req.clientName = row.get("client_name", "").asString();
 

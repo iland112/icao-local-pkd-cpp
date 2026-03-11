@@ -75,10 +75,12 @@ CREATE TABLE api_client_requests (
     id VARCHAR2(36) DEFAULT SYS_GUID() PRIMARY KEY,
 
     -- Requester information (filled by external user)
-    requester_name VARCHAR2(255) NOT NULL,
-    requester_org VARCHAR2(255) NOT NULL,
-    requester_contact_phone VARCHAR2(50),
-    requester_contact_email VARCHAR2(255) NOT NULL,
+    -- PII fields encrypted with AES-256-GCM (개인정보보호법 제29조)
+    -- Format: "ENC:" + hex(IV[12] + ciphertext + tag[16]) — max ~600 chars for 255-char input
+    requester_name VARCHAR2(1024) NOT NULL,
+    requester_org VARCHAR2(1024) NOT NULL,
+    requester_contact_phone VARCHAR2(1024),
+    requester_contact_email VARCHAR2(1024) NOT NULL,
     request_reason VARCHAR2(4000) NOT NULL,
 
     -- Desired API client configuration

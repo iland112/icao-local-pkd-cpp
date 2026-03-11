@@ -109,6 +109,11 @@ set(INFRASTRUCTURE_SRC
     src/infrastructure/service_container.cpp
 )
 
+# PII Encryption (개인정보보호법 제29조 — AES-256-GCM)
+set(AUTH_SRC
+    src/auth/personal_info_crypto.cpp
+)
+
 add_executable(${PROJECT_NAME}
     src/main.cpp
     ${DOMAIN_MODELS_SRC}
@@ -117,6 +122,7 @@ add_executable(${PROJECT_NAME}
     ${COMMON_SRC}
     ${HANDLERS_SRC}
     ${INFRASTRUCTURE_SRC}
+    ${AUTH_SRC}
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

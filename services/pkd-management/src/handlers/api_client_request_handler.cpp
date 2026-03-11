@@ -5,6 +5,7 @@
 #include "api_client_request_handler.h"
 #include "handler_utils.h"
 #include "../auth/api_key_generator.h"
+#include "../auth/personal_info_crypto.h"
 #include <icao/audit/audit_log.h>
 #include <spdlog/spdlog.h>
 #include <cstdlib>
@@ -275,9 +276,13 @@ void ApiClientRequestHandler::handleGetById(
             return;
         }
 
+        // Public endpoint — mask PII unless caller is admin
+        auto claims = validateRequestToken(req);
+        bool isAdmin = claims && claims->isAdmin;
+
         Json::Value resp;
         resp["success"] = true;
-        resp["request"] = modelToJson(*request);
+        resp["request"] = isAdmin ? modelToJson(*request) : modelToMaskedJson(*request);
 
         auto response = HttpResponse::newHttpJsonResponse(resp);
         callback(response);
@@ -579,6 +584,21 @@ Json::Value ApiClientRequestHandler::modelToJson(const domain::models::ApiClient
 
     json["created_at"] = r.createdAt;
     json["updated_at"] = r.updatedAt;
+
+    // PII encryption status indicator
+    json["pii_encrypted"] = auth::pii::isEnabled();
+
+    return json;
+}
+
+Json::Value ApiClientRequestHandler::modelToMaskedJson(const domain::models::ApiClientRequest& r) {
+    // Public endpoint용: 개인정보 마스킹 처리 (개인정보보호법 최소 수집 원칙)
+    Json::Value json = modelToJson(r);
+
+    json["requester_name"] = auth::pii::mask(r.requesterName, "name");
+    json["requester_org"] = auth::pii::mask(r.requesterOrg, "org");
+    json["requester_contact_phone"] = auth::pii::mask(r.requesterContactPhone.value_or(""), "phone");
+    json["requester_contact_email"] = auth::pii::mask(r.requesterContactEmail, "email");
 
     return json;
 }

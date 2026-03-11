@@ -62,10 +62,12 @@ CREATE TABLE IF NOT EXISTS api_client_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
 
     -- Requester information (filled by external user)
-    requester_name VARCHAR(255) NOT NULL,
-    requester_org VARCHAR(255) NOT NULL,
-    requester_contact_phone VARCHAR(50),
-    requester_contact_email VARCHAR(255) NOT NULL,
+    -- PII fields encrypted with AES-256-GCM (개인정보보호법 제29조)
+    -- Format: "ENC:" + hex(IV[12] + ciphertext + tag[16]) — max ~600 chars for 255-char input
+    requester_name VARCHAR(1024) NOT NULL,
+    requester_org VARCHAR(1024) NOT NULL,
+    requester_contact_phone VARCHAR(1024),
+    requester_contact_email VARCHAR(1024) NOT NULL,
     request_reason TEXT NOT NULL,
 
     -- Desired API client configuration

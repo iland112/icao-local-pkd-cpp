@@ -139,6 +139,7 @@ add_executable(${PROJECT_NAME}
 
     # API Client Module (v2.21.0 - External Client Agent Authentication)
     src/auth/api_key_generator.cpp
+    src/auth/personal_info_crypto.cpp
     src/middleware/api_rate_limiter.cpp
     src/repositories/api_client_repository.cpp
     src/handlers/api_client_handler.cpp

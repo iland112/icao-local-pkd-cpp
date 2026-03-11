@@ -1,6 +1,6 @@
 # ICAO Local PKD - Development Guide
 
-**Current Version**: v2.31.1
+**Current Version**: v2.31.2
 **Last Updated**: 2026-03-11
 **Status**: Multi-DBMS Support Complete (PostgreSQL + Oracle)
 
@@ -183,6 +183,12 @@ dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
 - Dual audit logging: `auth_audit_log` (authentication events) + `operation_audit_log` (operations)
 - IP tracking and User-Agent logging
 - Content-Security-Policy (CSP) header via nginx (XSS defense)
+- **PII encryption (개인정보보호법 제29조)**: AES-256-GCM authenticated encryption for personal information fields
+  - PKD Management: `api_client_requests` 4개 PII 필드 (성명, 소속, 이메일, 전화번호)
+  - PA Service: `pa_verification` 3개 PII 필드 (여권번호, IP, User-Agent)
+  - 여권번호(고유식별정보) 저장 시 암호화 — 법적 의무 (법 제24조, 시행령 제21조)
+  - `PII_ENCRYPTION_KEY` 환경변수 기반 키 관리, 미설정 시 암호화 비활성화
+  - Public API 응답 시 PII 마스킹 (홍*동, h***@example.com)
 
 ### Multi-DBMS Support
 
@@ -607,6 +613,20 @@ scripts/
 - **MonitoringDashboard**: 연결/풀 카드 `lg:grid-cols-3` → `md:grid-cols-3` (태블릿 브레이크포인트 추가)
 - **Dashboard**: 국가 목록 `gap-x-8` → `gap-x-4 lg:gap-x-8` (모바일 간격 축소)
 - 13 files changed (0 new, 13 modified)
+
+### v2.31.2 (2026-03-11) - 개인정보 암호화 (개인정보보호법 제29조 안전조치)
+- **AES-256-GCM 개인정보 암호화 모듈**: `personal_info_crypto.h/.cpp` — OpenSSL EVP API 기반 인증된 암호화 (기밀성 + 무결성 동시 보장)
+- **PKD Management 적용**: `api_client_requests` 테이블 4개 PII 필드 암호화 (requester_name, requester_org, requester_contact_phone, requester_contact_email)
+- **PA Service 적용**: `pa_verification` 테이블 3개 PII 필드 암호화 (document_number, client_ip, user_agent)
+- **여권번호 암호화**: 개인정보보호법 제24조 고유식별정보(시행령 제19조 제2호) — 저장 시 암호화 법적 의무 충족
+- **암호화 형식**: `"ENC:" + hex(IV[12] + ciphertext + tag[16])` — 12바이트 랜덤 IV, 16바이트 GCM 인증 태그
+- **키 관리**: `PII_ENCRYPTION_KEY` 환경변수 (64 hex chars = 256비트), 미설정 시 암호화 비활성화 (개발 환경 호환)
+- **PII 마스킹**: Public API 응답 시 개인정보 마스킹 (이름: 홍*동, 이메일: h***@example.com, 전화: ***-****-5678)
+- **Backward compatible**: `"ENC:"` 접두사 감지로 기존 평문 데이터와 암호화 데이터 혼재 시에도 올바르게 처리
+- **DB 스키마 확장**: PII 컬럼 VARCHAR(50/255) → VARCHAR(1024) (PostgreSQL + Oracle 양쪽)
+- **Fail-open 설계**: 암호화/복호화 실패 시 평문 반환 + 에러 로그 (서비스 가용성 유지)
+- **법적 준수 문서**: `docs/PII_ENCRYPTION_COMPLIANCE.md` — 법적 근거, 기술 구현, 운영 가이드, 준수 체크리스트
+- ~15 files changed (5 new, ~10 modified)
 
 ### v2.31.0 (2026-03-10) - DSC 등록 승인 워크플로우 (PA 자동 등록 → 관리자 승인)
 - **DSC 자동 등록 → 관리자 승인 전환**: PA 검증에서 추출된 DSC 인증서를 자동 등록하지 않고 `pending_dsc_registration` 테이블에 임시 저장, 관리자가 확인 후 승인/거부
@@ -1657,6 +1677,7 @@ scripts/
 - [docs/API_CLIENT_ADMIN_GUIDE.md](docs/API_CLIENT_ADMIN_GUIDE.md) - API Client admin guide (management API, permissions, rate limiting)
 - [docs/API_CLIENT_USER_GUIDE.md](docs/API_CLIENT_USER_GUIDE.md) - API Client user guide (external integration, Python/Java/C#/curl examples)
 - [docs/FRONTEND_DESIGN_SYSTEM.md](docs/FRONTEND_DESIGN_SYSTEM.md) - Frontend UI/UX design system (color theme, components, tokens)
+- [docs/PII_ENCRYPTION_COMPLIANCE.md](docs/PII_ENCRYPTION_COMPLIANCE.md) - PII encryption compliance (개인정보보호법, AES-256-GCM, legal basis)
 
 ### Architecture
 - [docs/SOFTWARE_ARCHITECTURE.md](docs/SOFTWARE_ARCHITECTURE.md) - System architecture

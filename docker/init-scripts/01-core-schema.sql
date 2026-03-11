@@ -359,7 +359,7 @@ CREATE TABLE IF NOT EXISTS pa_verification (
 
     -- Request info
     issuing_country VARCHAR(3) NOT NULL,
-    document_number VARCHAR(50),
+    document_number VARCHAR(1024),  -- AES-256-GCM encrypted (개인정보보호법 제29조)
     date_of_birth DATE,
     date_of_expiry DATE,
 
@@ -400,7 +400,9 @@ CREATE TABLE IF NOT EXISTS pa_verification (
     processing_time_ms INTEGER,
 
     -- Request metadata
-    client_ip VARCHAR(45),
+    -- PII fields (document_number, client_ip, user_agent) encrypted with AES-256-GCM (개인정보보호법 제29조)
+    -- Format: "ENC:" + hex(IV[12] + ciphertext + tag[16])
+    client_ip VARCHAR(1024),
     user_agent TEXT,
     requested_by VARCHAR(100),
 

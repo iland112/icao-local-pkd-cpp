@@ -417,7 +417,7 @@ CREATE TABLE pa_verification (
 
     -- Request info
     issuing_country VARCHAR2(3) NOT NULL,
-    document_number VARCHAR2(50),
+    document_number VARCHAR2(1024),  -- AES-256-GCM encrypted (개인정보보호법 제29조)
     date_of_birth DATE,
     date_of_expiry DATE,
 
@@ -458,7 +458,8 @@ CREATE TABLE pa_verification (
     processing_time_ms NUMBER(10),
 
     -- Request metadata
-    client_ip VARCHAR2(45),
+    -- PII fields (document_number, client_ip, user_agent) encrypted with AES-256-GCM (개인정보보호법 제29조)
+    client_ip VARCHAR2(1024),
     user_agent VARCHAR2(4000),
     requested_by VARCHAR2(100),
 

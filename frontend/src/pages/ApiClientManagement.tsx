@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff, BarChart3, Inbox, CheckCircle, XCircle, User, Building2, Mail, Phone, FileText, Server, Monitor, Smartphone, HelpCircle } from 'lucide-react';
+import { Key, Plus, RefreshCw, Trash2, Edit2, Copy, Check, Shield, Clock, Activity, X, Eye, EyeOff, BarChart3, Inbox, CheckCircle, XCircle, User, Building2, Mail, Phone, FileText, Server, Monitor, Smartphone, HelpCircle, ChevronDown, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { apiClientApi, type ApiClient, type UsageStats, type CreateApiClientRequest, type UpdateApiClientRequest } from '@/api/apiClientApi';
 import { apiClientRequestApi, type ApiClientRequestItem, type ApproveRequestPayload } from '@/api/apiClientRequestApi';
@@ -8,16 +8,23 @@ import { formatDate } from '@/utils/dateFormat';
 import { ConfirmDialog } from '@/components/common';
 
 const AVAILABLE_PERMISSIONS = [
-  { value: 'cert:read', label: '인증서 검색' },
-  { value: 'cert:export', label: '인증서 내보내기' },
-  { value: 'pa:verify', label: 'PA 검증' },
-  { value: 'pa:read', label: 'PA 이력 조회' },
-  { value: 'upload:read', label: '업로드 조회' },
-  { value: 'upload:write', label: '파일 업로드' },
-  { value: 'report:read', label: '보고서 조회' },
-  { value: 'ai:read', label: 'AI 분석 조회' },
-  { value: 'sync:read', label: 'Sync 조회' },
-  { value: 'icao:read', label: 'ICAO 조회' },
+  { value: 'cert:read', label: '인증서 검색', desc: 'CSCA/DSC 인증서 조회' },
+  { value: 'cert:export', label: '인증서 내보내기', desc: 'PEM/DER 형식 다운로드' },
+  { value: 'pa:verify', label: 'PA 검증', desc: 'Passive Authentication 수행' },
+  { value: 'pa:read', label: 'PA 이력 조회', desc: '검증 이력 및 결과 조회' },
+  { value: 'upload:read', label: '업로드 조회', desc: '업로드 이력 및 상태 조회' },
+  { value: 'upload:write', label: '파일 업로드', desc: 'LDIF/ML/인증서 파일 업로드' },
+  { value: 'report:read', label: '보고서 조회', desc: 'DSC_NC/CRL/Trust Chain 보고서' },
+  { value: 'ai:read', label: 'AI 분석 조회', desc: 'AI 인증서 포렌식 분석 결과' },
+  { value: 'sync:read', label: 'Sync 조회', desc: 'DB-LDAP 동기화 상태' },
+  { value: 'icao:read', label: 'ICAO 조회', desc: 'ICAO PKD 버전 상태' },
+];
+
+const DEVICE_TYPES = [
+  { value: 'SERVER' as const, label: '서버', desc: '서버 간 통신 (고정 IP)', icon: Server },
+  { value: 'DESKTOP' as const, label: '데스크톱', desc: '데스크톱 애플리케이션 (사내 IP)', icon: Monitor },
+  { value: 'MOBILE' as const, label: '모바일', desc: '모바일 앱 (IP 제한 불가)', icon: Smartphone },
+  { value: 'OTHER' as const, label: '기타', desc: '기타 환경', icon: HelpCircle },
 ];
 
 export default function ApiClientManagement() {
@@ -116,8 +123,16 @@ export default function ApiClientManagement() {
         )}
       </div>
 
+      {/* Stats Cards (always visible above tabs) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard label="전체 클라이언트" value={total} color="blue" />
+        <StatCard label="활성" value={activeCount} color="green" />
+        <StatCard label="비활성" value={total - activeCount} color="gray" />
+        <StatCard label="총 누적 요청" value={todayRequests.toLocaleString()} color="purple" />
+      </div>
+
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1 mb-6">
+      <div className="flex gap-1 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
         {([
           { key: 'clients' as const, label: '등록된 클라이언트', icon: Shield, count: total },
           { key: 'requests' as const, label: '등록 요청', icon: Inbox, count: requestsTotal },
@@ -147,14 +162,6 @@ export default function ApiClientManagement() {
       {/* === Clients Tab === */}
       {activeTab === 'clients' && (
         <>
-          {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="전체 클라이언트" value={total} color="blue" />
-            <StatCard label="활성" value={activeCount} color="green" />
-            <StatCard label="비활성" value={total - activeCount} color="gray" />
-            <StatCard label="총 누적 요청" value={todayRequests.toLocaleString()} color="purple" />
-          </div>
-
           {/* Client List */}
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -404,15 +411,27 @@ function CreateDialog({ onClose, onCreated }: {
     rate_limit_per_day: 10000,
   });
   const [ipsText, setIpsText] = useState('');
+  const [deviceType, setDeviceType] = useState<'SERVER' | 'DESKTOP' | 'MOBILE' | 'OTHER'>('SERVER');
+  const [showRequester, setShowRequester] = useState(false);
+  const [requesterName, setRequesterName] = useState('');
+  const [requesterOrg, setRequesterOrg] = useState('');
+  const [requesterPhone, setRequesterPhone] = useState('');
+  const [requesterEmail, setRequesterEmail] = useState('');
+  const [requestReason, setRequestReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  const showIpField = deviceType === 'SERVER' || deviceType === 'DESKTOP';
 
   const handleSubmit = async () => {
     if (!form.client_name.trim()) return;
     setSaving(true);
     setError('');
     try {
-      const req = { ...form, allowed_ips: ipsText ? ipsText.split(',').map(s => s.trim()).filter(Boolean) : [] };
+      const req: CreateApiClientRequest = {
+        ...form,
+        allowed_ips: showIpField && ipsText ? ipsText.split(',').map(s => s.trim()).filter(Boolean) : [],
+      };
       const res = await apiClientApi.create(req);
       if (res.success && res.client.api_key) {
         onCreated(res.client, res.client.api_key);
@@ -434,16 +453,119 @@ function CreateDialog({ onClose, onCreated }: {
   };
 
   return (
-    <DialogWrapper onClose={onClose} title="API 클라이언트 등록">
-      <div className="space-y-4">
-        <InputField label="클라이언트 이름" value={form.client_name} onChange={v => setForm({ ...form, client_name: v })} placeholder="출입국관리시스템" required />
-        <InputField label="설명" value={form.description || ''} onChange={v => setForm({ ...form, description: v })} placeholder="용도 설명" />
+    <DialogWrapper onClose={onClose} title="API 클라이언트 등록" wide>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 max-h-[70vh] overflow-y-auto px-0.5">
+        {/* Left Column: Client Info + Device + IPs + Rate Limits */}
+        <div className="space-y-4">
+          {/* Client Config */}
+          <div>
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">클라이언트 설정</h4>
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <InputField label="클라이언트 이름" value={form.client_name} onChange={v => setForm({ ...form, client_name: v })} placeholder="출입국관리시스템" required />
+                <InputField label="설명" value={form.description || ''} onChange={v => setForm({ ...form, description: v })} placeholder="API 사용 용도" />
+              </div>
+            </div>
+          </div>
 
+          {/* Device Type */}
+          <div>
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">사용 기기 타입</span>
+            <div className="grid grid-cols-4 gap-1.5">
+              {DEVICE_TYPES.map(dt => {
+                const Icon = dt.icon;
+                const selected = deviceType === dt.value;
+                return (
+                  <button
+                    key={dt.value}
+                    type="button"
+                    onClick={() => setDeviceType(dt.value)}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all text-center ${
+                      selected
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                    }`}
+                  >
+                    <Icon className={`w-4 h-4 ${selected ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400'}`} />
+                    <span className={`text-xs font-medium ${selected ? 'text-blue-700 dark:text-blue-300' : 'text-gray-700 dark:text-gray-300'}`}>{dt.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Allowed IPs */}
+          {showIpField && (
+            <div>
+              <InputField label="허용 IP (콤마 구분)" value={ipsText} onChange={setIpsText} placeholder="10.0.0.0/24, 192.168.1.100" />
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">비워두면 모든 IP에서 접근 허용</p>
+            </div>
+          )}
+          {deviceType === 'MOBILE' && (
+            <div className="flex items-start gap-2 p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl">
+              <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-700 dark:text-amber-300">모바일 기기는 IP 유동으로 IP 제한이 적용되지 않습니다.</p>
+            </div>
+          )}
+
+          {/* Rate Limits */}
+          <div>
+            <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Rate Limit</span>
+            <div className="grid grid-cols-3 gap-2">
+              <InputField label="분당" value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
+              <InputField label="시간당" value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
+              <InputField label="일당" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
+            </div>
+          </div>
+
+          {/* Optional: Requester Info (for offline registration) */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowRequester(!showRequester)}
+              className="flex items-center gap-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${showRequester ? '' : '-rotate-90'}`} />
+              <User className="w-4 h-4" />
+              요청자 정보 (오프라인 대리 등록 시)
+            </button>
+            {showRequester && (
+              <div className="mt-3 space-y-3 pl-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField label="요청자 이름" value={requesterName} onChange={setRequesterName} placeholder="홍길동" />
+                  <InputField label="소속 (기관·부서)" value={requesterOrg} onChange={setRequesterOrg} placeholder="법무부 출입국본부" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <InputField label="연락처" value={requesterPhone} onChange={setRequesterPhone} placeholder="02-1234-5678" />
+                  <InputField label="이메일" value={requesterEmail} onChange={setRequesterEmail} placeholder="hong@example.go.kr" type="email" />
+                </div>
+                <div>
+                  <label htmlFor="create-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">등록 사유</label>
+                  <textarea
+                    id="create-reason"
+                    name="create-reason"
+                    value={requestReason}
+                    onChange={e => setRequestReason(e.target.value)}
+                    rows={2}
+                    placeholder="대리 등록 사유를 기재해 주세요"
+                    className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Permissions */}
         <div>
-          <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">권한</span>
-          <div className="grid grid-cols-2 gap-2">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">권한 설정</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {AVAILABLE_PERMISSIONS.map(p => (
-              <label key={p.value} htmlFor={`create-perm-${p.value}`} className="flex items-center gap-2 text-sm cursor-pointer">
+              <label key={p.value} htmlFor={`create-perm-${p.value}`} className={`flex items-start gap-2.5 p-2.5 rounded-lg cursor-pointer transition-colors ${
+                form.permissions.includes(p.value)
+                  ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700'
+                  : 'bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600'
+              }`}>
                 <input
                   id={`create-perm-${p.value}`}
                   name={`permission-${p.value}`}
@@ -455,20 +577,18 @@ function CreateDialog({ onClose, onCreated }: {
                       : form.permissions.filter(x => x !== p.value);
                     setForm({ ...form, permissions: perms });
                   }}
-                  className="rounded border-gray-300"
+                  className="mt-0.5 w-4 h-4 rounded border-gray-300"
                 />
-                <span className="text-gray-700 dark:text-gray-300">{p.label}</span>
+                <div className="min-w-0">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">{p.label}</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{p.desc}</p>
+                </div>
               </label>
             ))}
           </div>
-        </div>
-
-        <InputField label="허용 IP (콤마 구분)" value={ipsText} onChange={setIpsText} placeholder="192.168.1.100, 10.0.0.0/24" />
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <InputField label="분당 제한" value={String(form.rate_limit_per_minute)} onChange={v => setForm({ ...form, rate_limit_per_minute: parseInt(v) || 60 })} type="number" />
-          <InputField label="시간당 제한" value={String(form.rate_limit_per_hour)} onChange={v => setForm({ ...form, rate_limit_per_hour: parseInt(v) || 1000 })} type="number" />
-          <InputField label="일당 제한" value={String(form.rate_limit_per_day)} onChange={v => setForm({ ...form, rate_limit_per_day: parseInt(v) || 10000 })} type="number" />
+          <div className="mt-3 px-3 py-2 bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 rounded-lg">
+            <p className="text-xs text-blue-600 dark:text-blue-400">허용 엔드포인트, 사용 기간 등 고급 설정은 등록 후 수정 화면에서 설정할 수 있습니다.</p>
+          </div>
         </div>
       </div>
 
@@ -478,9 +598,10 @@ function CreateDialog({ onClose, onCreated }: {
         </div>
       )}
 
-      <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="flex justify-end gap-3 mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
         <button onClick={onClose} className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">취소</button>
-        <button onClick={handleSubmit} disabled={saving || !form.client_name.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 transition-colors">
+        <button onClick={handleSubmit} disabled={saving || !form.client_name.trim()} className="flex items-center gap-2 px-5 py-2 bg-[#02385e] text-white rounded-xl hover:bg-[#024b7a] disabled:opacity-50 transition-colors active:scale-[0.98]">
+          <Key className="w-4 h-4" />
           {saving ? '생성 중...' : 'API Key 발급'}
         </button>
       </div>
@@ -1099,16 +1220,17 @@ function RequestDetailDialog({ request, onClose, onApproved, onRejected }: {
 // Shared UI Components
 // ============================================================================
 
-function DialogWrapper({ children, onClose, title, small }: {
+function DialogWrapper({ children, onClose, title, small, wide }: {
   children: React.ReactNode;
   onClose: () => void;
   title: string;
   small?: boolean;
+  wide?: boolean;
 }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-xl ${small ? 'max-w-md' : 'max-w-2xl'} w-full mx-4`}>
+      <div className={`relative bg-white dark:bg-gray-800 rounded-xl shadow-xl ${small ? 'max-w-md' : wide ? 'max-w-5xl' : 'max-w-2xl'} w-full mx-4`}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-base font-semibold text-gray-900 dark:text-white">{title}</h3>
           <button onClick={onClose} className="p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors">

@@ -63,8 +63,10 @@ private:
         std::function<void(const drogon::HttpResponsePtr&)>& callback);
     std::optional<auth::JwtClaims> validateRequestToken(const drogon::HttpRequestPtr& req);
 
-    /** Helper: convert model to JSON */
+    /** Helper: convert model to JSON (full detail for admin) */
     Json::Value modelToJson(const domain::models::ApiClientRequest& request);
+    /** Helper: convert model to JSON with PII masked (for public endpoint) */
+    Json::Value modelToMaskedJson(const domain::models::ApiClientRequest& request);
 
     std::shared_ptr<auth::JwtService> jwtService_;
     common::IQueryExecutor* queryExecutor_;

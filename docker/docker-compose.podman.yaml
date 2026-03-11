@@ -138,6 +138,7 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}
       - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY:-}
       - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}
       - ICAO_CHECK_SCHEDULE_HOUR=${ICAO_CHECK_SCHEDULE_HOUR:-9}
       - ICAO_SCHEDULER_ENABLED=${ICAO_SCHEDULER_ENABLED:-true}
@@ -202,6 +203,7 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY:-}  # 64 hex chars (32 bytes). Empty = encryption disabled
     depends_on:
       - openldap1
       # openldap2 removed: hardware failure, single-node (openldap1) operation

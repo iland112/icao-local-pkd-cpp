@@ -149,6 +149,8 @@ services:
       - JWT_ISSUER=${JWT_ISSUER:-icao-pkd}        # Default: icao-pkd
       - JWT_EXPIRATION_SECONDS=${JWT_EXPIRATION_SECONDS:-3600}  # Default: 3600 (1 hour)
       - AUTH_ENABLED=${AUTH_ENABLED:-true}        # Default: true (NEVER disable in production)
+      # PII Encryption (개인정보보호법 제29조 — AES-256-GCM)
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY:-}  # 64 hex chars (32 bytes). Empty = encryption disabled
       # ASN.1 Parser Configuration
       - ASN1_MAX_LINES=${ASN1_MAX_LINES:-100}     # Default: 100 (max lines for Master List structure parsing)
       # ICAO Scheduler Configuration (v2.10.0)
@@ -222,6 +224,7 @@ services:
       - LDAP_BIND_DN=cn=admin,dc=ldap,dc=smartcoreinc,dc=com
       - LDAP_BIND_PASSWORD=${LDAP_BIND_PASSWORD}  # From .env file
       - LDAP_BASE_DN=dc=download,dc=pkd,dc=ldap,dc=smartcoreinc,dc=com
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY:-}  # 64 hex chars (32 bytes). Empty = encryption disabled
     depends_on:
       openldap1:
         condition: service_healthy
