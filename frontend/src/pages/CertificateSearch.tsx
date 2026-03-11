@@ -488,7 +488,7 @@ const CertificateSearch: React.FC = () => {
             <FileText className="w-4 h-4 text-blue-500" />
             <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('search.searchResults')}</h3>
             <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-              {t('search.resultCount', { count: certificates.length })}
+              {t('search.resultCount', { num: certificates.length })}
             </span>
           </div>
           <div className="flex items-center gap-2">

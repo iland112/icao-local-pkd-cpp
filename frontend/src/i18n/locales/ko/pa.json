@@ -85,7 +85,7 @@
     "mrzFileLabel": "MRZ 텍스트 파일 (선택사항)",
     "mrzFileHint": "mrz.txt 파일 (TD3 포맷: 2줄 x 44자)",
     "mrzParseResult": "MRZ 파싱 결과",
-    "uploadCount": "업로드 완료 ({{count}}개)",
+    "uploadCount": "업로드 완료 ({{num}}개)",
     "dataPreview": "데이터 미리보기",
     "enterDnOrFingerprint": "Subject DN 또는 Fingerprint를 입력해주세요.",
     "lookupFailed": "조회 실패",

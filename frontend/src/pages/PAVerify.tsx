@@ -778,7 +778,7 @@ export function PAVerify() {
                   <div className="flex items-center gap-2 mb-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
                     <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                      {t('pa:verify.uploadCount', { count: (sodFile ? 1 : 0) + dgFiles.length })}
+                      {t('pa:verify.uploadCount', { num: (sodFile ? 1 : 0) + dgFiles.length })}
                     </span>
                   </div>
                   <div className="text-xs space-y-1 text-green-600 dark:text-green-400">

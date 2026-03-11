@@ -169,12 +169,12 @@
   "pagination": {
     "showing": "Showing {{from}}-{{to}} of {{total}}",
     "pageInfo": "Page {{page}} / {{totalPages}}",
-    "totalCount": "Total {{count}}",
+    "totalCount": "Total {{num}}",
     "prev": "Previous",
     "next": "Next",
     "first": "First",
     "last": "Last",
-    "perPage": "{{count}} per page"
+    "perPage": "{{num}} per page"
   },
   "table": {
     "noData": "No data available",
@@ -211,9 +211,9 @@
   },
   "time": {
     "justNow": "Just now",
-    "minutesAgo": "{{count}}m ago",
-    "hoursAgo": "{{count}}h ago",
-    "daysAgo": "{{count}}d ago",
+    "minutesAgo": "{{num}}m ago",
+    "hoursAgo": "{{num}}h ago",
+    "daysAgo": "{{num}}d ago",
     "hour": "Hour",
     "hours": "h",
     "minutes": "m",

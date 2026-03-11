@@ -45,7 +45,7 @@
     "riskMedium": "Medium",
     "riskHigh": "High",
     "riskCritical": "Critical",
-    "certsAnalyzed": "{{count}} certificates analyzed",
+    "certsAnalyzed": "{{num}} certificates analyzed",
     "analysisError": "An error occurred during analysis.",
     "statusCheckFailed": "Status Check Failed",
     "statusCheckError": "Server connection is unstable. Please refresh the page.",
@@ -60,7 +60,7 @@
     "forensicSummary": "Forensic Analysis Summary",
     "avgForensicScore": "Average Forensic Score",
     "mainFindings": "Key Findings",
-    "findingsCount": "{{count}} items",
+    "findingsCount": "{{num}} items",
     "top15Countries": "(Top 15 countries)",
     "maturityScore": "Maturity: {{score}}",
     "algorithmScore": "Algorithm: {{score}}",
@@ -86,8 +86,8 @@
     "certificate": "Certificates",
     "runAnalysisFirst": "Please run an analysis first",
     "clickAnalyzeButton": "Click the \"Run Analysis\" button above",
-    "totalItems": "Showing {{start}}-{{end}} of {{count}}",
-    "itemCount": "{{count}} items"
+    "totalItems": "Showing {{start}}-{{end}} of {{num}}",
+    "itemCount": "{{num}} items"
   },
   "risk": {
     "low": "Low",

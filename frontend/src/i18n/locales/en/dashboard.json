@@ -12,7 +12,7 @@
   "latestUpload": "Latest Upload",
   "validCertificates": "Valid Certificates",
   "expiredCertificates": "Expired Certificates",
-  "totalCountries": "{{count}} countries",
+  "totalCountries": "{{num}} countries",
   "countryList": "Country Statistics",
   "connectionStatus": "Connection Status",
   "recentActivity": "Recent Activity",

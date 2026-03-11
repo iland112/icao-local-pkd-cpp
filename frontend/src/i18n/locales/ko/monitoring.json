@@ -6,7 +6,7 @@
   "connectionPool": "연결 풀",
   "activeConnections": "접속 현황",
   "uniqueVisitors": "고유 접속자",
-  "connectedNow": "{{count}}명 접속 중",
+  "connectedNow": "{{num}}명 접속 중",
   "tcpConnections": "TCP 연결",
   "metricsCollectedAt": "메트릭 수집 시간: {{time}}",
   "services": {

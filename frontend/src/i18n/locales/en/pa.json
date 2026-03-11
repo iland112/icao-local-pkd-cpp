@@ -85,7 +85,7 @@
     "mrzFileLabel": "MRZ text file (optional)",
     "mrzFileHint": "mrz.txt file (TD3 format: 2 lines x 44 chars)",
     "mrzParseResult": "MRZ Parse Result",
-    "uploadCount": "Upload complete ({{count}})",
+    "uploadCount": "Upload complete ({{num}})",
     "dataPreview": "Data Preview",
     "enterDnOrFingerprint": "Please enter Subject DN or Fingerprint.",
     "lookupFailed": "Lookup Failed",

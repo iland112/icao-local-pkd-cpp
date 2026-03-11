@@ -69,11 +69,11 @@ export function Header() {
     const seconds = Math.floor(diff / 1000);
     if (seconds < 60) return t('common:time.justNow');
     const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return t('common:time.minutesAgo', { count: minutes });
+    if (minutes < 60) return t('common:time.minutesAgo', { num: minutes });
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return t('common:time.hoursAgo', { count: hours });
+    if (hours < 24) return t('common:time.hoursAgo', { num: hours });
     const days = Math.floor(hours / 24);
-    return t('common:time.daysAgo', { count: days });
+    return t('common:time.daysAgo', { num: days });
   }
 
   const toggleLanguage = () => {

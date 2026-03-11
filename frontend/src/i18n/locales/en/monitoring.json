@@ -6,7 +6,7 @@
   "connectionPool": "Connection Pool",
   "activeConnections": "Active Connections",
   "uniqueVisitors": "Unique Visitors",
-  "connectedNow": "{{count}} connected",
+  "connectedNow": "{{num}} connected",
   "tcpConnections": "TCP Connections",
   "metricsCollectedAt": "Metrics collected at: {{time}}",
   "services": {

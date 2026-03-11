@@ -45,7 +45,7 @@
     "riskMedium": "보통",
     "riskHigh": "높음",
     "riskCritical": "심각",
-    "certsAnalyzed": "{{count}}건 인증서 분석 완료",
+    "certsAnalyzed": "{{num}}건 인증서 분석 완료",
     "analysisError": "분석 중 오류가 발생했습니다.",
     "statusCheckFailed": "분석 상태 확인 실패",
     "statusCheckError": "서버 연결이 불안정합니다. 페이지를 새로고침해 주세요.",
@@ -60,7 +60,7 @@
     "forensicSummary": "포렌식 분석 요약",
     "avgForensicScore": "평균 포렌식 점수",
     "mainFindings": "주요 발견 사항",
-    "findingsCount": "{{count}}건",
+    "findingsCount": "{{num}}건",
     "top15Countries": "(상위 15개국)",
     "maturityScore": "성숙도: {{score}}점",
     "algorithmScore": "알고리즘: {{score}}",
@@ -86,8 +86,8 @@
     "certificate": "인증서",
     "runAnalysisFirst": "분석을 먼저 실행해 주세요",
     "clickAnalyzeButton": "상단의 \"분석 실행\" 버튼을 클릭하세요",
-    "totalItems": "총 {{count}}개 중 {{start}}-{{end}}개 표시",
-    "itemCount": "{{count}}건"
+    "totalItems": "총 {{num}}개 중 {{start}}-{{end}}개 표시",
+    "itemCount": "{{num}}건"
   },
   "risk": {
     "low": "낮음",

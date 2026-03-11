@@ -473,7 +473,7 @@
   },
   "pendingDscNotifier": {
     "pendingDscTitle": "DSC Registration Pending Approval",
-    "pendingDscCount": "{{count}} pending"
+    "pendingDscCount": "{{num}} pending"
   },
   "pendingDscNotify": {
     "title": "DSC Registration Pending Approval",

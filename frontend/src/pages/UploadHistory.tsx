@@ -578,7 +578,7 @@ export function UploadHistory() {
           <FileText className="w-4 h-4 text-orange-500" />
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('history.title')}</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-            {t('upload:history.itemCount', { count: filteredUploads.length })}
+            {t('upload:history.itemCount', { num: filteredUploads.length })}
           </span>
         </div>
 
@@ -911,7 +911,7 @@ export function UploadHistory() {
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
                       <span className="text-xs text-gray-500 dark:text-gray-400">{ t('certificate:search.totalCerts') }</span>
                       <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
-                        {t('upload:history.itemCount', { count: selectedUpload.certificateCount })}
+                        {t('upload:history.itemCount', { num: selectedUpload.certificateCount })}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
@@ -1050,17 +1050,17 @@ export function UploadHistory() {
                             {t('upload:history.ldapFailureTitle')}
                           </h4>
                           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                            {t('upload:history.ldapFailureDesc', { count: selectedUpload.certificateCount })}
+                            {t('upload:history.ldapFailureDesc', { num: selectedUpload.certificateCount })}
                           </p>
                           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
                             {t('upload:history.ldapFailureAction')}
                           </p>
                           <div className="mt-2 flex gap-2">
                             <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-                              DB: {t('upload:history.itemCount', { count: selectedUpload.certificateCount })}
+                              DB: {t('upload:history.itemCount', { num: selectedUpload.certificateCount })}
                             </span>
                             <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-                              LDAP: {t('upload:history.itemCount', { count: selectedUpload.ldapUploadedCount || 0 })}
+                              LDAP: {t('upload:history.itemCount', { num: selectedUpload.ldapUploadedCount || 0 })}
                             </span>
                           </div>
                         </div>
@@ -1100,7 +1100,7 @@ export function UploadHistory() {
                         {t('upload:history.duplicateList')}
                       </h3>
                       <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
-                        {t('upload:history.totalItemCount', { count: uploadIssues.totalDuplicates })}
+                        {t('upload:history.totalItemCount', { num: uploadIssues.totalDuplicates })}
                       </span>
                     </div>
 

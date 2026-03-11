@@ -473,7 +473,7 @@
   },
   "pendingDscNotifier": {
     "pendingDscTitle": "DSC 등록 승인 대기",
-    "pendingDscCount": "{{count}}건 대기 중"
+    "pendingDscCount": "{{num}}건 대기 중"
   },
   "pendingDscNotify": {
     "title": "DSC 등록 승인 대기",

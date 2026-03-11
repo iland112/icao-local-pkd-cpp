@@ -28,7 +28,7 @@
     "totalCerts": "Total Certificates",
     "countryTotalCerts": "{{country}} Total Certificates",
     "searchResults": "Search Results",
-    "resultCount": "{{count}} results",
+    "resultCount": "{{num}} results",
     "searching": "Searching...",
     "issuer": "Issuer",
     "version": "Version",
@@ -148,9 +148,9 @@
     "passed": "Passed",
     "failed": "Failed",
     "summary": "Summary",
-    "passCount": "{{count}} passed",
-    "failCount": "{{count}} failed",
-    "warnCount": "{{count}} warnings",
+    "passCount": "{{num}} passed",
+    "failCount": "{{num}} failed",
+    "warnCount": "{{num}} warnings",
     "numFailed": "{{num}} failed",
     "numWarning": "{{num}} warnings",
     "allPassed": "All passed",
@@ -197,7 +197,7 @@
   "duplicate": {
     "title": "Duplicate Certificates",
     "noData": "No duplicate certificates",
-    "totalDuplicates": "{{count}} duplicates"
+    "totalDuplicates": "{{num}} duplicates"
   },
   "typeDescription": {
     "linkCert": "Certificate defined in ICAO Doc 9303 Part 12 that links trust chains between a previous CSCA and a new CSCA.\n\nUse cases: CSCA key rollover/renewal, signature algorithm migration (RSA \u2192 ECDSA), organizational information changes, CSCA infrastructure upgrades",

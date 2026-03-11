@@ -169,12 +169,12 @@
   "pagination": {
     "showing": "{{total}}건 중 {{from}}-{{to}} 표시",
     "pageInfo": "{{page}} / {{totalPages}} 페이지",
-    "totalCount": "총 {{count}}건",
+    "totalCount": "총 {{num}}건",
     "prev": "이전",
     "next": "다음",
     "first": "처음",
     "last": "마지막",
-    "perPage": "페이지당 {{count}}건"
+    "perPage": "페이지당 {{num}}건"
   },
   "table": {
     "noData": "데이터가 없습니다",
@@ -211,9 +211,9 @@
   },
   "time": {
     "justNow": "방금 전",
-    "minutesAgo": "{{count}}분 전",
-    "hoursAgo": "{{count}}시간 전",
-    "daysAgo": "{{count}}일 전",
+    "minutesAgo": "{{num}}분 전",
+    "hoursAgo": "{{num}}시간 전",
+    "daysAgo": "{{num}}일 전",
     "hour": "시",
     "hours": "시간",
     "minutes": "분",

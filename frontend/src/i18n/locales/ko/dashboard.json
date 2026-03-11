@@ -12,7 +12,7 @@
   "latestUpload": "최근 업로드",
   "validCertificates": "유효 인증서",
   "expiredCertificates": "만료 인증서",
-  "totalCountries": "총 {{count}}개국",
+  "totalCountries": "총 {{num}}개국",
   "countryList": "국가별 현황",
   "connectionStatus": "연결 상태",
   "recentActivity": "최근 활동",

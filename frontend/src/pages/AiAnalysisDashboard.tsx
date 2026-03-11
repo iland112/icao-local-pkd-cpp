@@ -218,7 +218,7 @@ export default function AiAnalysisDashboard() {
           const duration = res.data.started_at && res.data.completed_at
             ? t('ai:dashboard.duration', { sec: ((new Date(res.data.completed_at).getTime() - new Date(res.data.started_at).getTime()) / 1000).toFixed(1) })
             : '';
-          toast.success(t('ai:dashboard.analysisComplete'), `${t('ai:dashboard.certsAnalyzed', { count: processed })}${duration ? ` (${duration})` : ''}`);
+          toast.success(t('ai:dashboard.analysisComplete'), `${t('ai:dashboard.certsAnalyzed', { num: processed })}${duration ? ` (${duration})` : ''}`);
         } else if (res.data.status === 'FAILED') {
           setAnalyzing(false);
           fetchDataRef.current();
@@ -529,7 +529,7 @@ export default function AiAnalysisDashboard() {
                     #{i + 1}
                   </span>
                   <span className="text-gray-600 dark:text-gray-400">{f.message}</span>
-                  <span className="text-gray-400 dark:text-gray-500">({t('ai:dashboard.findingsCount', { count: f.count })})</span>
+                  <span className="text-gray-400 dark:text-gray-500">({t('ai:dashboard.findingsCount', { num: f.count })})</span>
                 </div>
               ))}
             </div>
@@ -598,7 +598,7 @@ export default function AiAnalysisDashboard() {
                         <div className="flex gap-3">
                           <span>{t('ai:dashboard.extensionsScore', { score: item.extension_score.toFixed(0) })}</span>
                           <span>{t('ai:dashboard.freshnessScore', { score: item.freshness_score.toFixed(0) })}</span>
-                          <span className="text-gray-400">({t('ai:dashboard.findingsCount', { count: item.certificate_count })})</span>
+                          <span className="text-gray-400">({t('ai:dashboard.findingsCount', { num: item.certificate_count })})</span>
                         </div>
                       </div>
                     </div>
@@ -677,7 +677,7 @@ export default function AiAnalysisDashboard() {
                   contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#F3F4F6' }}
                   itemStyle={{ color: '#F3F4F6' }}
-                  formatter={(value) => [`${t('ai:dashboard.itemCount', { count: Number(value) })}`, t('ai:dashboard.certificate')]}
+                  formatter={(value) => [`${t('ai:dashboard.itemCount', { num: Number(value) })}`, t('ai:dashboard.certificate')]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -773,7 +773,7 @@ export default function AiAnalysisDashboard() {
             </button>
           )}
           <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
-            {t('ai:dashboard.itemCount', { count: anomalyTotal })}
+            {t('ai:dashboard.itemCount', { num: anomalyTotal })}
           </span>
         </div>
       </div>
@@ -785,7 +785,7 @@ export default function AiAnalysisDashboard() {
           <Brain className="w-4 h-4 text-purple-500" />
           <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('ai:dashboard.certAnalysisResults')}</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-            {t('ai:dashboard.itemCount', { count: anomalyTotal })}
+            {t('ai:dashboard.itemCount', { num: anomalyTotal })}
           </span>
         </div>
 
@@ -878,7 +878,7 @@ export default function AiAnalysisDashboard() {
         {totalPages > 1 && (
           <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t('ai:dashboard.totalItems', { count: anomalyTotal.toLocaleString(), start: ((page - 1) * pageSize + 1).toLocaleString(), end: Math.min(page * pageSize, anomalyTotal).toLocaleString() })}
+              {t('ai:dashboard.totalItems', { num: anomalyTotal.toLocaleString(), start: ((page - 1) * pageSize + 1).toLocaleString(), end: Math.min(page * pageSize, anomalyTotal).toLocaleString() })}
             </p>
             <div className="flex items-center gap-1">
               <button

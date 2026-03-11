@@ -931,7 +931,7 @@ export function SyncDashboard() {
                   : 'text-red-800 dark:text-red-300'
               )}>
                 {revalidationResult.success
-                  ? t('sync:dashboard.certsValidated', { count: revalidationResult.totalProcessed })
+                  ? t('sync:dashboard.certsValidated', { num: revalidationResult.totalProcessed })
                   : t('sync:dashboard.revalidationError')}
               </span>
               <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
@@ -1075,7 +1075,7 @@ export function SyncDashboard() {
                 {syncCheckResult.status === 'SYNCED'
                   ? t('sync.dashboard.dbLdapSynced')
                   : syncCheckResult.status === 'DISCREPANCY'
-                    ? t('sync:dashboard.discrepanciesDetected', { count: syncCheckResult.discrepancies?.total ?? 0 })
+                    ? t('sync:dashboard.discrepanciesDetected', { num: syncCheckResult.discrepancies?.total ?? 0 })
                     : t('sync:dashboard.syncCheckError')}
               </span>
               {syncCheckResult.checkDurationMs && (

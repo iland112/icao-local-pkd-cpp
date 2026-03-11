@@ -28,7 +28,7 @@
     "totalCerts": "총 인증서",
     "countryTotalCerts": "{{country}} 총 인증서",
     "searchResults": "검색 결과",
-    "resultCount": "{{count}}건",
+    "resultCount": "{{num}}건",
     "searching": "검색 중...",
     "issuer": "발급 기관",
     "version": "버전",
@@ -148,9 +148,9 @@
     "passed": "통과",
     "failed": "실패",
     "summary": "요약",
-    "passCount": "{{count}}건 통과",
-    "failCount": "{{count}}건 실패",
-    "warnCount": "{{count}}건 주의",
+    "passCount": "{{num}}건 통과",
+    "failCount": "{{num}}건 실패",
+    "warnCount": "{{num}}건 주의",
     "numFailed": "{{num}}건 실패",
     "numWarning": "{{num}}건 경고",
     "allPassed": "모두 통과",
@@ -197,7 +197,7 @@
   "duplicate": {
     "title": "중복 인증서",
     "noData": "중복된 인증서가 없습니다",
-    "totalDuplicates": "중복 {{count}}건"
+    "totalDuplicates": "중복 {{num}}건"
   },
   "typeDescription": {
     "linkCert": "ICAO Doc 9303 Part 12에 정의된 인증서로, 이전 CSCA와 새 CSCA 사이의 신뢰 체인을 연결합니다.\n\n사용 사례: CSCA 키 교체/갱신, 서명 알고리즘 마이그레이션 (RSA \u2192 ECDSA), 조직 정보 변경, CSCA 인프라 업그레이드",
