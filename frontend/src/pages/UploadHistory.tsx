@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { Link } from 'react-router-dom';
@@ -38,21 +39,23 @@ import { exportDuplicatesToCsv, exportDuplicateStatisticsToCsv } from '@/utils/c
 
 
 // Full status step definition (for dialog detail view)
-const STATUS_STEPS: { key: UploadStatus; label: string; icon: React.ReactNode }[] = [
-  { key: 'PENDING', label: '대기', icon: <Clock className="w-4 h-4" /> },
-  { key: 'UPLOADING', label: '업로드', icon: <Upload className="w-4 h-4" /> },
-  { key: 'PARSING', label: '파싱', icon: <FileCheck className="w-4 h-4" /> },
-  { key: 'PROCESSING', label: '처리', icon: <Loader2 className="w-4 h-4" /> },
-  { key: 'VALIDATING', label: '검증', icon: <ShieldCheck className="w-4 h-4" /> },
-  { key: 'SAVING_DB', label: 'DB 저장', icon: <Database className="w-4 h-4" /> },
-  { key: 'SAVING_LDAP', label: 'LDAP 저장', icon: <Server className="w-4 h-4" /> },
-  { key: 'COMPLETED', label: '완료', icon: <CheckCircle className="w-4 h-4" /> },
+// Uses labelKey instead of label — resolved via t() at render time
+const STATUS_STEPS: { key: UploadStatus; labelKey: string; icon: React.ReactNode }[] = [
+  { key: 'PENDING', labelKey: 'monitoring.pool.idle', icon: <Clock className="w-4 h-4" /> },
+  { key: 'UPLOADING', labelKey: 'upload.stepper.upload', icon: <Upload className="w-4 h-4" /> },
+  { key: 'PARSING', labelKey: 'upload.stepper.parsing', icon: <FileCheck className="w-4 h-4" /> },
+  { key: 'PROCESSING', labelKey: 'common.label.processing', icon: <Loader2 className="w-4 h-4" /> },
+  { key: 'VALIDATING', labelKey: 'upload.stepper.validation', icon: <ShieldCheck className="w-4 h-4" /> },
+  { key: 'SAVING_DB', labelKey: 'upload.stepper.dbSaving', icon: <Database className="w-4 h-4" /> },
+  { key: 'SAVING_LDAP', labelKey: 'upload.stepper.ldapSaving', icon: <Server className="w-4 h-4" /> },
+  { key: 'COMPLETED', labelKey: 'common:status.completed', icon: <CheckCircle className="w-4 h-4" /> },
 ];
 
 // Statuses considered "in progress"
 const IN_PROGRESS_STATUSES: UploadStatus[] = ['PENDING', 'UPLOADING', 'PARSING', 'PROCESSING', 'VALIDATING', 'SAVING_DB', 'SAVING_LDAP'];
 
 export function UploadHistory() {
+  const { t } = useTranslation(['upload', 'common']);
   const [uploads, setUploads] = useState<UploadedFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -190,9 +193,9 @@ export function UploadHistory() {
       const hours = Math.floor(totalSec / 3600);
       const minutes = Math.floor((totalSec % 3600) / 60);
       const seconds = totalSec % 60;
-      if (hours > 0) return `${hours}시간 ${minutes}분 ${seconds}초`;
-      if (minutes > 0) return `${minutes}분 ${seconds}초`;
-      return `${seconds}초`;
+      if (hours > 0) return t('upload:history.durationFormat', { hours, minutes, seconds });
+      if (minutes > 0) return t('upload:history.durationMinSec', { minutes, seconds });
+      return t('upload:history.durationSec', { seconds });
     } catch {
       return '-';
     }
@@ -212,7 +215,7 @@ export function UploadHistory() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
           <XCircle className="w-3 h-3" />
-          실패
+          {t('upload.statistics.totalFailed')}
         </span>
       );
     }
@@ -221,7 +224,7 @@ export function UploadHistory() {
       return (
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
           <CheckCircle className="w-3 h-3" />
-          완료
+          {t('upload.stepper.complete')}
         </span>
       );
     }
@@ -233,7 +236,7 @@ export function UploadHistory() {
       <div className="flex items-center gap-2">
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 whitespace-nowrap">
           <Loader2 className="w-3 h-3 animate-spin" />
-          {status === 'PROCESSING' ? '처리 중' : '진행 중'}
+          {status === 'PROCESSING' ? t('common:status.processing') : t('upload:history.inProgress')}
         </span>
         {hasProgress && (
           <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
@@ -313,7 +316,7 @@ export function UploadHistory() {
       if (import.meta.env.DEV) console.log('Upload deleted successfully');
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to delete upload:', error);
-      toast.error('삭제 실패', '업로드 삭제에 실패했습니다.');
+      toast.error(t('upload:history.deleteFailed'), t('upload:history.deleteFailedMsg'));
     } finally {
       setDeleting(false);
     }
@@ -339,7 +342,7 @@ export function UploadHistory() {
       await fetchUploads();
     } catch (error) {
       if (import.meta.env.DEV) console.error('Failed to retry upload:', error);
-      toast.error('재시도 실패', '업로드 재시도에 실패했습니다.');
+      toast.error(t('upload:history.retryFailedTitle'), t('upload:history.retryFailedMsg'));
     } finally {
       setRetryingId(null);
     }
@@ -384,9 +387,9 @@ export function UploadHistory() {
             <Clock className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">업로드 이력</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('history.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              LDIF 및 Master List 파일 업로드 이력을 확인합니다.
+              {t('upload:history.subtitle')}
             </p>
           </div>
           <div className="flex gap-2">
@@ -402,7 +405,7 @@ export function UploadHistory() {
               className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all shadow-md hover:shadow-lg"
             >
               <Upload className="w-4 h-4" />
-              새 업로드
+              {t('upload:history.newUpload')}
             </Link>
           </div>
         </div>
@@ -412,14 +415,14 @@ export function UploadHistory() {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-blue-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('certificate:search.filterLabel') }</h3>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* File Format Filter */}
           <div>
             <label htmlFor="upload-format" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              파일 형식
+              {t('upload.history.fileType')}
             </label>
             <select
               id="upload-format"
@@ -428,7 +431,7 @@ export function UploadHistory() {
               onChange={(e) => setFormatFilter(e.target.value as FileFormat | '')}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">전체</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
               <option value="LDIF">LDIF</option>
               <option value="ML">Master List</option>
             </select>
@@ -437,7 +440,7 @@ export function UploadHistory() {
           {/* Status Filter */}
           <div>
             <label htmlFor="upload-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              업로드 상태
+              {t('upload:history.uploadStatus')}
             </label>
             <select
               id="upload-status"
@@ -446,23 +449,23 @@ export function UploadHistory() {
               onChange={(e) => setStatusFilter(e.target.value as UploadStatus | '')}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">전체</option>
-              <option value="COMPLETED">완료</option>
-              <option value="FAILED">실패</option>
-              <option value="PENDING">대기</option>
-              <option value="UPLOADING">업로드 중</option>
-              <option value="PARSING">파싱 중</option>
-              <option value="PROCESSING">처리 중</option>
-              <option value="VALIDATING">검증 중</option>
-              <option value="SAVING_DB">DB 저장 중</option>
-              <option value="SAVING_LDAP">LDAP 저장 중</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
+              <option value="COMPLETED">{ t('common:status.finalized') }</option>
+              <option value="FAILED">{t('common:status.failed')}</option>
+              <option value="PENDING">{ t('monitoring:pool.idle') }</option>
+              <option value="UPLOADING">{t('upload.detail.uploading')}</option>
+              <option value="PARSING">{t('upload.detail.parsing')}</option>
+              <option value="PROCESSING">{t('common:status.processing')}</option>
+              <option value="VALIDATING">{t('upload.detail.validating')}</option>
+              <option value="SAVING_DB">{t('upload.detail.savingDb')}</option>
+              <option value="SAVING_LDAP">{t('upload.detail.savingLdap')}</option>
             </select>
           </div>
 
           {/* Date From */}
           <div>
             <label htmlFor="upload-date-from" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              시작 날짜
+              {t('upload:history.startDate')}
             </label>
             <input
               id="upload-date-from"
@@ -477,7 +480,7 @@ export function UploadHistory() {
           {/* Date To */}
           <div>
             <label htmlFor="upload-date-to" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              종료 날짜
+              {t('upload:history.endDate')}
             </label>
             <input
               id="upload-date-to"
@@ -492,7 +495,7 @@ export function UploadHistory() {
           {/* Search & Actions */}
           <div>
             <label htmlFor="upload-search" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              검색
+              {t('upload:history.search')}
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
@@ -501,7 +504,7 @@ export function UploadHistory() {
                   id="upload-search"
                   name="searchTerm"
                   type="text"
-                  placeholder="파일명..."
+                  placeholder={t('upload:history.filenamePlaceholder')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -512,7 +515,7 @@ export function UploadHistory() {
                   onClick={clearFilters}
                   className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  초기화
+                  {t('common.button.reset')}
                 </button>
               )}
             </div>
@@ -529,7 +532,7 @@ export function UploadHistory() {
               <FileText className="w-6 h-6 text-blue-500" />
             </div>
             <div className="flex-1">
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 업로드</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t('upload:history.totalUploads')}</p>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
             </div>
           </div>
@@ -540,7 +543,7 @@ export function UploadHistory() {
             <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle className="w-4 h-4 text-green-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">완료</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{ t('common:status.finalized') }</p>
               </div>
               <p className="text-lg font-bold text-green-600 dark:text-green-400">{stats.completed.toLocaleString()}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{stats.completedPercent}%</p>
@@ -550,7 +553,7 @@ export function UploadHistory() {
             <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
               <div className="flex items-center gap-2 mb-1">
                 <XCircle className="w-4 h-4 text-red-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">실패</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t('common:status.failed')}</p>
               </div>
               <p className="text-lg font-bold text-red-600 dark:text-red-400">{stats.failed.toLocaleString()}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{stats.failedPercent}%</p>
@@ -560,7 +563,7 @@ export function UploadHistory() {
             <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
               <div className="flex items-center gap-2 mb-1">
                 <Loader2 className="w-4 h-4 text-yellow-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">진행 중</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t('upload:history.inProgress')}</p>
               </div>
               <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{stats.inProgress.toLocaleString()}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{stats.inProgressPercent}%</p>
@@ -573,9 +576,9 @@ export function UploadHistory() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <FileText className="w-4 h-4 text-orange-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">업로드 이력</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('history.title')}</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-            {filteredUploads.length}건
+            {t('upload:history.itemCount', { count: filteredUploads.length })}
           </span>
         </div>
 
@@ -586,14 +589,14 @@ export function UploadHistory() {
         ) : filteredUploads.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
             <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">업로드 이력이 없습니다.</p>
-            <p className="text-sm">새 파일을 업로드하거나 필터를 조정하세요.</p>
+            <p className="text-lg font-medium">{ t('upload:history.noUploads') }</p>
+            <p className="text-sm">{t('upload:history.emptyMessage')}</p>
             <Link
               to="/upload"
               className="mt-4 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500"
             >
               <Upload className="w-4 h-4" />
-              파일 업로드하기
+              {t('upload:history.goToUpload')}
             </Link>
           </div>
         ) : (
@@ -603,25 +606,25 @@ export function UploadHistory() {
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider">
-                      파일명
+                      {t('upload.history.fileName')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      형식
+                      {t('upload:history.format')}
                     </th>
                     <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      크기
+                      {t('upload:history.size')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      상태
+                      {t('upload.history.status')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      업로드 일시
+                      {t('upload.history.createdAt')}
                     </th>
                     <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      완료 시각
+                      {t('upload:history.completedAt')}
                     </th>
                     <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      액션
+                      {t('upload:history.action')}
                     </th>
                   </tr>
                 </thead>
@@ -657,27 +660,27 @@ export function UploadHistory() {
                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            상세
+                            {t('upload.history.detail')}
                           </button>
                           {upload.status === 'FAILED' && (
                             <button
                               onClick={() => handleRetryClick(upload)}
                               disabled={retryingId === upload.id}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-50"
-                              title="실패한 업로드 재시도"
+                              title={t('upload:history.retryFailed')}
                             >
                               <RefreshCw className={cn("w-3.5 h-3.5", retryingId === upload.id && "animate-spin")} />
-                              재시도
+                              {t('common.button.retry')}
                             </button>
                           )}
                           {(upload.status === 'FAILED' || upload.status === 'PENDING') && (
                             <button
                               onClick={() => handleDeleteClick(upload)}
                               className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                              title="업로드 삭제"
+                              title={t('upload:history.deleteConfirmTitle')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              삭제
+                              {t('common.button.delete')}
                             </button>
                           )}
                         </div>
@@ -691,14 +694,14 @@ export function UploadHistory() {
             {/* Pagination */}
             <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                총 {totalElements}개 중 {page * pageSize + 1}-{Math.min((page + 1) * pageSize, totalElements)}개 표시
+                {t('upload:history.showingRange', { total: totalElements, start: page * pageSize + 1, end: Math.min((page + 1) * pageSize, totalElements) })}
               </p>
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="이전 페이지"
+                  aria-label={t('common:button.prev_page')}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -709,7 +712,7 @@ export function UploadHistory() {
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="다음 페이지"
+                  aria-label={t('common:button.next_page')}
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -739,7 +742,7 @@ export function UploadHistory() {
                   </div>
                   <div>
                     <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                      업로드 상세 정보
+                      {t('upload:history.uploadDetail')}
                     </h2>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {selectedUpload.fileName}
@@ -766,7 +769,7 @@ export function UploadHistory() {
                         : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                     )}
                   >
-                    상세 정보
+                    {t('admin.operationAudit.detail')}
                   </button>
                   {(selectedUpload.fileFormat === 'ML' ||
                     selectedUpload.fileFormat === 'MASTER_LIST' ||
@@ -780,7 +783,7 @@ export function UploadHistory() {
                           : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       )}
                     >
-                      {selectedUpload.fileFormat === 'LDIF' ? 'LDIF 구조' : 'Master List 구조'}
+                      {selectedUpload.fileFormat === 'LDIF' ? t('upload.history.ldifStructure') : t('upload.history.mlStructure')}
                     </button>
                   )}
                   {uploadIssues && uploadIssues.totalDuplicates > 0 && (
@@ -793,7 +796,7 @@ export function UploadHistory() {
                           : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
                       )}
                     >
-                      중복 인증서
+                      {t('upload.detail.duplicateCertificates')}
                       <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-yellow-200 dark:bg-yellow-900/70 text-yellow-800 dark:text-yellow-200">
                         {uploadIssues.totalDuplicates}
                       </span>
@@ -810,7 +813,7 @@ export function UploadHistory() {
               <div className="space-y-4">
                   {/* Status Progress - Compact horizontal */}
                   <div>
-                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">진행 상태</h3>
+                    <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{t('upload:history.progressStatus')}</h3>
                     <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
                       {STATUS_STEPS.map((step, index) => {
                         const currentIndex = getStatusStepIndex(selectedUpload.status);
@@ -846,7 +849,7 @@ export function UploadHistory() {
                               isFailed && 'text-red-600 dark:text-red-400',
                               !isPassed && !isCurrent && !isFailed && 'text-gray-400'
                             )}>
-                              {step.label}
+                              {t(step.labelKey)}
                             </span>
                           </div>
                         );
@@ -860,7 +863,7 @@ export function UploadHistory() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                          <span className="text-sm font-medium text-blue-700 dark:text-blue-300">처리 진행률</span>
+                          <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{t('upload:history.processingProgress')}</span>
                         </div>
                         <span className="text-sm font-bold text-blue-700 dark:text-blue-300">
                           {selectedUpload.processedEntries?.toLocaleString() || 0} / {selectedUpload.totalEntries.toLocaleString()}
@@ -884,7 +887,7 @@ export function UploadHistory() {
                       <div className="flex items-start gap-2">
                         <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                         <div>
-                          <h4 className="text-xs font-medium text-red-800 dark:text-red-300">오류 발생</h4>
+                          <h4 className="text-xs font-medium text-red-800 dark:text-red-300">{t('common.label.errorOccurred')}</h4>
                           <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                             {selectedUpload.errorMessage}
                           </p>
@@ -896,35 +899,35 @@ export function UploadHistory() {
                   {/* Certificate & File Info Grid - Compact */}
                   <div className="grid grid-cols-6 gap-2">
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">형식</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{t('upload:history.format')}</span>
                       <div className="mt-0.5">{getFormatBadge(selectedUpload.fileFormat)}</div>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">크기</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{t('upload:history.size')}</span>
                       <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
                         {formatFileSize(selectedUpload.fileSize)}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">총 인증서</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{ t('certificate:search.totalCerts') }</span>
                       <p className="text-sm font-medium text-gray-900 dark:text-white mt-0.5">
-                        {selectedUpload.certificateCount}개
+                        {t('upload:history.itemCount', { count: selectedUpload.certificateCount })}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">업로드</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{ t('common:button.upload') }</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
                         {formatDateTime(selectedUpload.createdAt ?? '')}
                       </p>
                     </div>
                     <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">완료</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{ t('common:status.finalized') }</span>
                       <p className="text-xs font-medium text-gray-900 dark:text-white mt-0.5">
                         {formatDateTime(selectedUpload.completedAt ?? selectedUpload.updatedAt ?? '')}
                       </p>
                     </div>
                     <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
-                      <span className="text-xs text-blue-500 dark:text-blue-400">처리시간</span>
+                      <span className="text-xs text-blue-500 dark:text-blue-400">{t('upload:history.processingTime')}</span>
                       <p className="text-sm font-bold text-blue-700 dark:text-blue-300 mt-0.5">
                         {selectedUpload.status === 'COMPLETED'
                           ? formatDuration(selectedUpload.createdAt ?? '', selectedUpload.completedAt ?? selectedUpload.updatedAt ?? '')
@@ -1003,7 +1006,7 @@ export function UploadHistory() {
                     <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Database className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">Master List 인증서 추출 (MLSC + CSCA + LC)</span>
+                        <span className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">{t('upload:history.mlExtraction')}</span>
                         <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300">
                           v2.1.1
                         </span>
@@ -1013,13 +1016,13 @@ export function UploadHistory() {
                           <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
                             {selectedUpload.cscaExtractedFromMl || 0}
                           </p>
-                          <span className="text-xs text-indigo-700 dark:text-indigo-300">총 추출</span>
+                          <span className="text-xs text-indigo-700 dark:text-indigo-300">{t('upload:history.totalExtracted')}</span>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
                           <p className="text-lg font-bold text-amber-600 dark:text-amber-400">
                             {selectedUpload.cscaDuplicates || 0}
                           </p>
-                          <span className="text-xs text-amber-700 dark:text-amber-300">중복</span>
+                          <span className="text-xs text-amber-700 dark:text-amber-300">{ t('common:status.duplicate') }</span>
                         </div>
                         <div className="bg-white dark:bg-gray-800 rounded p-2 text-center">
                           <p className="text-lg font-bold text-green-600 dark:text-green-400">
@@ -1027,7 +1030,7 @@ export function UploadHistory() {
                               ? ((selectedUpload.cscaExtractedFromMl - (selectedUpload.cscaDuplicates || 0)) / selectedUpload.cscaExtractedFromMl * 100).toFixed(0)
                               : '0'}%
                           </p>
-                          <span className="text-xs text-green-700 dark:text-green-300">신규</span>
+                          <span className="text-xs text-green-700 dark:text-green-300">{t('upload:history.newCerts')}</span>
                         </div>
                       </div>
                     </div>
@@ -1044,20 +1047,20 @@ export function UploadHistory() {
                         <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
                         <div className="flex-1">
                           <h4 className="text-sm font-semibold text-red-800 dark:text-red-300">
-                            ⚠️ LDAP 저장 실패 - 데이터 불일치 감지
+                            {t('upload:history.ldapFailureTitle')}
                           </h4>
                           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                            {selectedUpload.certificateCount}개의 인증서가 PostgreSQL에는 저장되었지만 LDAP에는 저장되지 않았습니다.
+                            {t('upload:history.ldapFailureDesc', { count: selectedUpload.certificateCount })}
                           </p>
                           <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                            이 파일을 삭제하고 다시 업로드하거나, 관리자에게 문의하세요.
+                            {t('upload:history.ldapFailureAction')}
                           </p>
                           <div className="mt-2 flex gap-2">
                             <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-                              DB: {selectedUpload.certificateCount}개
+                              DB: {t('upload:history.itemCount', { count: selectedUpload.certificateCount })}
                             </span>
                             <span className="px-2 py-1 text-xs font-medium rounded bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300">
-                              LDAP: {selectedUpload.ldapUploadedCount || 0}개
+                              LDAP: {t('upload:history.itemCount', { count: selectedUpload.ldapUploadedCount || 0 })}
                             </span>
                           </div>
                         </div>
@@ -1067,7 +1070,7 @@ export function UploadHistory() {
 
                   {/* Upload ID - Compact */}
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">업로드 ID</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{t('history.uploadId')}</span>
                     <p className="text-xs font-mono text-gray-900 dark:text-white mt-0.5 break-all">
                       {selectedUpload.id}
                     </p>
@@ -1094,10 +1097,10 @@ export function UploadHistory() {
                     <div className="flex items-center gap-2">
                       <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
                       <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-                        중복 인증서 목록
+                        {t('upload:history.duplicateList')}
                       </h3>
                       <span className="px-2 py-1 text-xs font-medium rounded bg-yellow-100 dark:bg-yellow-900/50 text-yellow-700 dark:text-yellow-300">
-                        총 {uploadIssues.totalDuplicates}건
+                        {t('upload:history.totalItemCount', { count: uploadIssues.totalDuplicates })}
                       </span>
                     </div>
 
@@ -1110,10 +1113,10 @@ export function UploadHistory() {
                           `duplicate-stats-${selectedUpload.id}.csv`
                         )}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors"
-                        title="통계 내보내기"
+                        title={t('upload:history.exportStats')}
                       >
                         <Download className="w-3.5 h-3.5" />
-                        통계
+                        {t('upload.detail.statistics')}
                       </button>
                       <button
                         onClick={() => exportDuplicatesToCsv(
@@ -1121,10 +1124,10 @@ export function UploadHistory() {
                           `duplicates-${selectedUpload.id}.csv`
                         )}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-yellow-700 dark:text-yellow-300 bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-700 rounded-lg hover:bg-yellow-50 dark:hover:bg-yellow-900/30 transition-colors"
-                        title="전체 내보내기"
+                        title={t('certificate:search.exportAll')}
                       >
                         <Download className="w-3.5 h-3.5" />
-                        전체
+                        {t('monitoring.pool.total')}
                       </button>
                     </div>
                   </div>
@@ -1182,7 +1185,7 @@ export function UploadHistory() {
                     <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                       <div className="flex items-center gap-2 justify-center">
                         <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
-                        <span className="text-sm text-gray-500 dark:text-gray-400">업로드 이슈 조회 중...</span>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">{t('upload:history.loadingIssues')}</span>
                       </div>
                     </div>
                   )}
@@ -1196,7 +1199,7 @@ export function UploadHistory() {
                 onClick={closeDialog}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                닫기
+                {t('icao.banner.dismiss')}
               </button>
             </div>
           </div>
@@ -1221,10 +1224,10 @@ export function UploadHistory() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  업로드 재처리
+                  {t('upload:history.retryReprocess')}
                 </h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  실패 지점부터 이어서 재처리
+                  {t('upload:history.retryFromFailPoint')}
                 </p>
               </div>
             </div>
@@ -1235,13 +1238,13 @@ export function UploadHistory() {
                 <div className="flex items-start gap-2">
                   <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0 text-blue-600 dark:text-blue-400" />
                   <div>
-                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300">이어하기 모드</h4>
+                    <h4 className="text-sm font-medium text-blue-800 dark:text-blue-300">{t('upload:history.resumeMode')}</h4>
                     <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                      이미 처리된 인증서는 건너뛰고 실패 지점부터 이어서 재처리합니다.
+                      {t('upload:history.resumeModeDesc')}
                     </p>
                     {(uploadToRetry.processedEntries ?? 0) > 0 && (
                       <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                        처리 완료: <span className="font-semibold">{(uploadToRetry.processedEntries ?? 0).toLocaleString()}</span> / {(uploadToRetry.totalEntries ?? 0).toLocaleString()} 건
+                        {t('upload:history.processedCount')}: <span className="font-semibold">{(uploadToRetry.processedEntries ?? 0).toLocaleString()}</span> / {(uploadToRetry.totalEntries ?? 0).toLocaleString()}
                       </p>
                     )}
                   </div>
@@ -1250,18 +1253,18 @@ export function UploadHistory() {
 
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">파일명</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{ t('upload:history.fileName') }</span>
                   <span className="text-sm font-medium text-gray-900 dark:text-white truncate ml-4 max-w-[200px]" title={uploadToRetry.fileName}>
                     {uploadToRetry.fileName}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">상태</span>
-                  <span className="text-sm font-medium text-red-600 dark:text-red-400">실패</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{ t('admin:apiClient.status') }</span>
+                  <span className="text-sm font-medium text-red-600 dark:text-red-400">{t('common:status.failed')}</span>
                 </div>
                 {uploadToRetry.errorMessage && (
                   <div className="flex justify-between items-start">
-                    <span className="text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">오류</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400 flex-shrink-0">{ t('sync:dashboard.error') }</span>
                     <span className="text-xs text-red-600 dark:text-red-400 ml-4 text-right break-all max-w-[220px]">
                       {uploadToRetry.errorMessage.length > 80
                         ? uploadToRetry.errorMessage.substring(0, 80) + '...'
@@ -1278,14 +1281,14 @@ export function UploadHistory() {
                 onClick={closeRetryDialog}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleRetryConfirm}
                 className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
               >
                 <RefreshCw className="w-4 h-4" />
-                이어서 재처리
+                {t('upload:history.resumeReprocess')}
               </button>
             </div>
           </div>
@@ -1310,10 +1313,10 @@ export function UploadHistory() {
               </div>
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                  업로드 삭제
+                  {t('upload.history.deleteConfirmTitle')}
                 </h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  정말 삭제하시겠습니까?
+                  {t('upload:history.deleteConfirmMsg')}
                 </p>
               </div>
             </div>
@@ -1325,17 +1328,17 @@ export function UploadHistory() {
                   <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
                   <div>
                     <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-300">
-                      경고
+                      {t('common.toast.warning')}
                     </h4>
                     <p className="text-sm text-yellow-700 dark:text-yellow-400 mt-1">
-                      다음 데이터가 모두 삭제됩니다:
+                      {t('upload:history.deleteWarningMsg')}
                     </p>
                     <ul className="text-sm text-yellow-700 dark:text-yellow-400 mt-2 ml-4 list-disc space-y-1">
-                      <li>업로드 기록</li>
-                      <li>인증서 데이터 (CSCA, DSC, DSC_NC)</li>
-                      <li>CRL 데이터</li>
-                      <li>Master List 데이터</li>
-                      <li>임시 파일</li>
+                      <li>{t('upload:history.deleteItem.uploadRecord')}</li>
+                      <li>{t('upload:history.deleteItem.certData')}</li>
+                      <li>{t('upload:history.deleteItem.crlData')}</li>
+                      <li>{t('upload:history.deleteItem.mlData')}</li>
+                      <li>{t('upload:history.deleteItem.tempFiles')}</li>
                     </ul>
                   </div>
                 </div>
@@ -1343,21 +1346,21 @@ export function UploadHistory() {
 
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">파일명</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{ t('upload:history.fileName') }</span>
                   <span className="text-sm font-medium text-gray-900 dark:text-white">
                     {uploadToDelete.fileName}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">상태</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{ t('admin:apiClient.status') }</span>
                   {uploadToDelete.status === 'FAILED' ? (
-                    <span className="text-sm font-medium text-red-600 dark:text-red-400">실패</span>
+                    <span className="text-sm font-medium text-red-600 dark:text-red-400">{t('common:status.failed')}</span>
                   ) : (
-                    <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">대기</span>
+                    <span className="text-sm font-medium text-yellow-600 dark:text-yellow-400">{ t('monitoring:pool.idle') }</span>
                   )}
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-gray-600 dark:text-gray-400">업로드 ID</span>
+                  <span className="text-sm text-gray-600 dark:text-gray-400">{t('history.uploadId')}</span>
                   <span className="text-xs font-mono text-gray-900 dark:text-white">
                     {uploadToDelete.id.substring(0, 8)}...
                   </span>
@@ -1372,7 +1375,7 @@ export function UploadHistory() {
                 disabled={deleting}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleDeleteConfirm}
@@ -1382,12 +1385,12 @@ export function UploadHistory() {
                 {deleting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    삭제 중...
+                    {t('upload:history.deleting')}
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    삭제
+                    {t('common.button.delete')}
                   </>
                 )}
               </button>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import type { ValidationStatistics } from '@/types';
 import { ValidationSummaryPanel } from './ValidationSummaryPanel';
 import type { ValidationSummaryData } from './ValidationSummaryPanel';
@@ -12,6 +13,7 @@ interface RealTimeStatisticsPanelProps {
  * Preserves backward compatibility with existing FileUpload.tsx usage.
  */
 export function RealTimeStatisticsPanel({ statistics, isProcessing }: RealTimeStatisticsPanelProps) {
+  const { t } = useTranslation(['upload', 'common']);
   const data: ValidationSummaryData = {
     validCount: statistics.validCount,
     invalidCount: statistics.invalidCount,
@@ -38,7 +40,7 @@ export function RealTimeStatisticsPanel({ statistics, isProcessing }: RealTimeSt
   return (
     <ValidationSummaryPanel
       data={data}
-      title="실시간 검증 통계"
+      title={t('upload:statistics.realTimeTitle')}
       isProcessing={isProcessing}
     />
   );

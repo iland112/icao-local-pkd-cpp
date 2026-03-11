@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
@@ -25,6 +26,7 @@ import { cn } from '@/utils/cn';
 import { formatDateTime } from '@/utils/dateFormat';
 
 export function PADetail() {
+  const { t } = useTranslation(['pa', 'common']);
   const { paId } = useParams<{ paId: string }>();
   const navigate = useNavigate();
 
@@ -131,7 +133,7 @@ export function PADetail() {
             onClick={() => navigate('/pa/history')}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            목록으로 돌아가기
+            {t('upload.detail.backToList')}
           </button>
         </div>
       </div>
@@ -155,7 +157,7 @@ export function PADetail() {
             <ShieldCheck className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">PA 검증 상세</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('detail.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
               {result.verificationId}
             </p>
@@ -241,7 +243,7 @@ export function PADetail() {
                 : 'bg-red-500 text-white'
             )}>
               <Lock className="w-5 h-5" />
-              <span className="font-bold">인증서 체인 검증</span>
+              <span className="font-bold">{t('common.label.certChainVerification')}</span>
               {result.certificateChainValidation?.valid ? (
                 <CheckCircle className="w-5 h-5 ml-auto" />
               ) : (
@@ -298,7 +300,7 @@ export function PADetail() {
                     )}>
                       <div className="flex items-center gap-2 mb-1">
                         <FileKey className="w-4 h-4" />
-                        <span className="font-semibold text-sm">CRL 확인</span>
+                        <span className="font-semibold text-sm">{ t('pa:steps.step6') }</span>
                       </div>
                       <p className="text-sm">{result.certificateChainValidation.crlStatusDescription}</p>
                       {result.certificateChainValidation.crlStatusDetailedDescription && (
@@ -326,7 +328,7 @@ export function PADetail() {
                 : 'bg-red-500 text-white'
             )}>
               <ShieldCheck className="w-5 h-5" />
-              <span className="font-bold">SOD 서명 검증</span>
+              <span className="font-bold">{ t('pa:steps.step3') }</span>
               {result.sodSignatureValidation?.valid ? (
                 <CheckCircle className="w-5 h-5 ml-auto" />
               ) : (
@@ -338,13 +340,13 @@ export function PADetail() {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">서명 알고리즘</label>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">{ t('certificate:detail.signatureAlgorithm') }</label>
                       <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
                         {result.sodSignatureValidation.signatureAlgorithm || '-'}
                       </p>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-500 dark:text-gray-400">해시 알고리즘</label>
+                      <label className="text-xs text-gray-500 dark:text-gray-400">{ t('common:label.hashAlgorithm') }</label>
                       <p className="font-mono text-sm text-gray-700 dark:text-gray-300">
                         {result.sodSignatureValidation.hashAlgorithm || '-'}
                       </p>
@@ -385,19 +387,19 @@ export function PADetail() {
                       <p className="text-2xl font-bold text-gray-900 dark:text-white">
                         {result.dataGroupValidation.totalGroups}
                       </p>
-                      <p className="text-xs text-gray-500">전체</p>
+                      <p className="text-xs text-gray-500">{ t('monitoring:pool.total') }</p>
                     </div>
                     <div className="p-3 rounded-lg bg-green-100 dark:bg-green-900/30">
                       <p className="text-2xl font-bold text-green-600">
                         {result.dataGroupValidation.validGroups}
                       </p>
-                      <p className="text-xs text-gray-500">성공</p>
+                      <p className="text-xs text-gray-500">{t('common:toast.success')}</p>
                     </div>
                     <div className="p-3 rounded-lg bg-red-100 dark:bg-red-900/30">
                       <p className="text-2xl font-bold text-red-600">
                         {result.dataGroupValidation.invalidGroups}
                       </p>
-                      <p className="text-xs text-gray-500">실패</p>
+                      <p className="text-xs text-gray-500">{t('common:status.failed')}</p>
                     </div>
                   </div>
 
@@ -424,7 +426,7 @@ export function PADetail() {
                                 ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400'
                                 : 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400'
                             )}>
-                              {detail.valid ? '일치' : '불일치'}
+                              {detail.valid ? t('sync.dashboard.consistent') : t('sync.dashboard.discrepancy')}
                             </span>
                           </div>
                           <div className="font-mono text-xs space-y-1">
@@ -453,7 +455,7 @@ export function PADetail() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Fingerprint className="w-5 h-5 text-purple-500" />
-              검증 정보
+              {t('pa.detail.verificationInfo')}
             </h2>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -461,7 +463,7 @@ export function PADetail() {
                   <FileText className="w-4 h-4 text-gray-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">검증 ID</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ t('pa:history.verificationId') }</p>
                   <p className="text-xs font-mono text-gray-900 dark:text-white break-all">
                     {result.verificationId}
                   </p>
@@ -472,7 +474,7 @@ export function PADetail() {
                   <Calendar className="w-4 h-4 text-gray-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">검증 일시</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{ t('pa:history.createdAt') }</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {formatDateTime(result.verificationTimestamp)}
                   </p>
@@ -483,7 +485,7 @@ export function PADetail() {
                   <Clock className="w-4 h-4 text-gray-500" />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">처리 시간</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{t('result.processingDuration')}</p>
                   <p className="text-sm font-medium text-gray-900 dark:text-white">
                     {result.processingDurationMs}ms
                   </p>
@@ -495,7 +497,7 @@ export function PADetail() {
                     <Globe className="w-4 h-4 text-gray-500" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">발급 국가</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('result.country')}</p>
                     <div className="flex items-center gap-2">
                       <img
                         src={`/svg/${result.issuingCountry.toLowerCase()}.svg`}
@@ -518,7 +520,7 @@ export function PADetail() {
                     <IdCard className="w-4 h-4 text-gray-500" />
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">여권 번호</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{t('common.label.passportNumber')}</p>
                     <p className="text-sm font-mono font-medium text-gray-900 dark:text-white">
                       {result.documentNumber}
                     </p>
@@ -533,14 +535,14 @@ export function PADetail() {
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">검증 요약</h2>
             <div className="space-y-2">
               <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-600 dark:text-gray-400">인증서 체인</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{t('detail.certificateChain')}</span>
                 <span className={cn(
                   'text-xs font-medium px-2 py-1 rounded',
                   result.certificateChainValidation?.valid
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
                     : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                 )}>
-                  {result.certificateChainValidation?.valid ? '성공' : '실패'}
+                  {result.certificateChainValidation?.valid ? t('sync.reconciliation.successCount') : t('common:status.failed')}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-700">
@@ -551,7 +553,7 @@ export function PADetail() {
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
                     : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
                 )}>
-                  {result.sodSignatureValidation?.valid ? '성공' : '실패'}
+                  {result.sodSignatureValidation?.valid ? t('sync.reconciliation.successCount') : t('common:status.failed')}
                 </span>
               </div>
               <div className="flex items-center justify-between py-2">
@@ -580,7 +582,7 @@ export function PADetail() {
               to="/pa/history"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              검증 이력
+              {t('nav.menu.verifyHistory')}
             </Link>
           </div>
         </div>

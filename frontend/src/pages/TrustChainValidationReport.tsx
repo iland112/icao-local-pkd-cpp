@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import {
   Link2,
@@ -49,6 +50,7 @@ interface ValidationStats {
 }
 
 export function TrustChainValidationReport() {
+  const { t } = useTranslation(['report', 'common']);
   // Statistics
   const [stats, setStats] = useState<ValidationStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
@@ -108,13 +110,12 @@ export function TrustChainValidationReport() {
           color: getPathColor(entry.path),
         }))
       : stats.trustChainValidCount > 0
-        ? [{ label: 'Trust Chain 유효', description: 'DSC → CSCA 신뢰 체인 검증 성공', count: stats.trustChainValidCount, color: 'bg-emerald-500' }]
+        ? [{ label: t('report:trustChain.trustChainValid'), description: t('report:trustChain.trustChainValidDesc'), count: stats.trustChainValidCount, color: 'bg-emerald-500' }]
         : []
     ),
     // Trust Chain 실패
-    { label: 'Trust Chain 실패', description: 'CSCA 존재하나 서명/유효기간 검증 실패', count: stats.trustChainInvalidCount - stats.cscaNotFoundCount, color: 'bg-red-500' },
-    // CSCA 미등록
-    { label: 'CSCA 미등록', description: 'CSCA 인증서를 찾을 수 없음', count: stats.cscaNotFoundCount, color: 'bg-amber-500' },
+    { label: t('report:trustChain.trustChainFailed'), description: t('report:trustChain.trustChainFailedDesc'), count: stats.trustChainInvalidCount - stats.cscaNotFoundCount, color: 'bg-red-500' },
+    { label: t('report:trustChain.cscaNotFound'), description: t('report:trustChain.cscaNotFoundDesc'), count: stats.cscaNotFoundCount, color: 'bg-amber-500' },
   ].filter(p => p.count > 0) : [];
 
   // validCount from API already includes EXPIRED_VALID, so subtract to get pure VALID
@@ -132,10 +133,10 @@ export function TrustChainValidationReport() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              DSC Trust Chain 보고서
+              {t('report:trustChain.title')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              DSC 인증서의 Trust Chain 검증 결과 통계 및 샘플 인증서 조회
+              {t('report:trustChain.reportSubtitle')}
             </p>
           </div>
         </div>
@@ -151,7 +152,7 @@ export function TrustChainValidationReport() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
             <StatCard
               icon={<Shield className="w-5 h-5 text-blue-500" />}
-              label="총 검증 결과"
+              label={t('report:trustChain.totalValidationResults')}
               value={totalValidated.toLocaleString()}
               borderColor="border-blue-500"
             />
@@ -171,7 +172,7 @@ export function TrustChainValidationReport() {
             />
             <StatCard
               icon={<AlertTriangle className="w-5 h-5 text-yellow-500" />}
-              label="PENDING (CSCA 미등록)"
+              label={t('report:trustChain.pendingCscaNotFound')}
               value={stats.pendingCount.toLocaleString()}
               sub={`${totalValidated > 0 ? ((stats.pendingCount / totalValidated) * 100).toFixed(1) : 0}%`}
               borderColor="border-yellow-500"
@@ -182,7 +183,7 @@ export function TrustChainValidationReport() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-indigo-500" />
-              <h2 className="text-base font-bold text-gray-900 dark:text-white">Trust Chain 분포</h2>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('report:trustChain.trustChainDistribution')}</h2>
             </div>
 
             {/* Status Bar */}
@@ -249,8 +250,8 @@ export function TrustChainValidationReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 mb-5">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-indigo-500" />
-            <h2 className="text-base font-bold text-gray-900 dark:text-white">샘플 인증서</h2>
-            <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">경로 패턴별 실제 인증서 예시 (클릭하여 상세 조회)</span>
+            <h2 className="text-base font-bold text-gray-900 dark:text-white">{ t('report:trustChain.sampleCertificates') }</h2>
+            <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{t('report:trustChain.sampleCertificatesDesc')}</span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">

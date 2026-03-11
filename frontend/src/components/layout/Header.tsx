@@ -1,10 +1,11 @@
-import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home, Bell, CheckCheck, Trash2, RefreshCw, Database, ShieldCheck, GitMerge, Calendar, FileKey } from 'lucide-react';
+import { Menu, User, Sun, Moon, LogOut, Settings, UserCircle, Shield, HelpCircle, ExternalLink, ChevronDown, ChevronRight, Home, Bell, CheckCheck, Trash2, RefreshCw, Database, ShieldCheck, GitMerge, Calendar, FileKey, Globe } from 'lucide-react';
 import { useSidebarStore } from '@/stores/sidebarStore';
 import { useThemeStore } from '@/stores/themeStore';
 import { useNotificationStore, type SystemNotification } from '@/stores/notificationStore';
 import { authApi } from '@/services/api';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Dialog } from '@/components/common';
 import { getBreadcrumbs } from '@/utils/breadcrumbs';
 
@@ -46,25 +47,13 @@ function getNotificationMeta(type: string) {
   }
 }
 
-/** Format relative time in Korean */
-function formatRelativeTime(timestamp: string): string {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  const seconds = Math.floor(diff / 1000);
-  if (seconds < 60) return '방금 전';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}분 전`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  const days = Math.floor(hours / 24);
-  return `${days}일 전`;
-}
-
 export function Header() {
   const { toggleMobile } = useSidebarStore();
   const { darkMode, toggleTheme } = useThemeStore();
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotificationStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const { t, i18n } = useTranslation(['nav', 'common']);
   const breadcrumbs = getBreadcrumbs(location.pathname);
   const user = authApi.getStoredUser();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -73,6 +62,24 @@ export function Header() {
   const [showLicenses, setShowLicenses] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+
+  /** Format relative time */
+  function formatRelativeTime(timestamp: string): string {
+    const diff = Date.now() - new Date(timestamp).getTime();
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 60) return t('common:time.justNow');
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return t('common:time.minutesAgo', { count: minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t('common:time.hoursAgo', { count: hours });
+    const days = Math.floor(hours / 24);
+    return t('common:time.daysAgo', { count: days });
+  }
+
+  const toggleLanguage = () => {
+    const nextLng = i18n.language === 'ko' ? 'en' : 'ko';
+    i18n.changeLanguage(nextLng);
+  };
 
   const handleLogout = async () => {
     try {
@@ -112,7 +119,7 @@ export function Header() {
           <button
             onClick={toggleMobile}
             className="lg:hidden p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex-shrink-0"
-            aria-label="메뉴 열기"
+            aria-label={t('header.openMenu')}
           >
             <Menu className="w-4 h-4 text-gray-600 dark:text-gray-300" />
           </button>
@@ -122,20 +129,21 @@ export function Header() {
             <nav className="hidden lg:flex items-center gap-1 text-sm min-w-0" aria-label="breadcrumb">
               <Link to="/" className={`flex items-center gap-1 transition-colors flex-shrink-0 ${breadcrumbs.length === 0 ? 'font-medium text-gray-700 dark:text-gray-200' : 'text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400'}`}>
                 <Home className="w-3.5 h-3.5" />
-                {breadcrumbs.length === 0 && <span>Home</span>}
+                {breadcrumbs.length === 0 && <span>{t('home')}</span>}
               </Link>
               {breadcrumbs.map((item, index) => {
                 const isLast = index === breadcrumbs.length - 1;
+                const label = t(item.labelKey);
                 return (
-                  <span key={item.label} className="flex items-center gap-1 min-w-0">
+                  <span key={item.labelKey} className="flex items-center gap-1 min-w-0">
                     <ChevronRight className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" />
                     {item.path && !isLast ? (
                       <Link to={item.path} className="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors truncate">
-                        {item.label}
+                        {label}
                       </Link>
                     ) : (
                       <span className={isLast ? 'font-medium text-gray-700 dark:text-gray-200 truncate' : 'text-gray-400 dark:text-gray-500 truncate'}>
-                        {item.label}
+                        {label}
                       </span>
                     )}
                   </span>
@@ -147,6 +155,16 @@ export function Header() {
 
         {/* Right: Actions */}
         <div className="flex items-center gap-1">
+          {/* Language Toggle */}
+          <button
+            onClick={toggleLanguage}
+            className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            title={i18n.language === 'ko' ? 'English' : '한국어'}
+            aria-label={i18n.language === 'ko' ? 'Switch to English' : '한국어로 전환'}
+          >
+            <Globe className="w-4 h-4 text-gray-600 dark:text-gray-300" />
+          </button>
+
           {/* Notification Bell */}
           <div className="relative inline-flex" ref={notificationRef}>
             <button
@@ -156,8 +174,8 @@ export function Header() {
                 setIsUserMenuOpen(false);
               }}
               className="relative p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              title="알림"
-              aria-label="알림"
+              title={t('header.notifications')}
+              aria-label={t('header.notifications')}
             >
               <Bell className="w-4 h-4 text-gray-600 dark:text-gray-300" />
               {unreadCount > 0 && (
@@ -171,13 +189,13 @@ export function Header() {
               <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-gray-800 shadow-lg rounded-lg border border-gray-200 dark:border-gray-700 z-50">
                 {/* Header */}
                 <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 dark:border-gray-700">
-                  <span className="text-sm font-semibold text-gray-900 dark:text-white">알림</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">{t('header.notifications')}</span>
                   <div className="flex items-center gap-1">
                     {unreadCount > 0 && (
                       <button
                         onClick={markAllAsRead}
                         className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        title="모두 읽음"
+                        title={t('header.markAllRead')}
                       >
                         <CheckCheck className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                       </button>
@@ -186,7 +204,7 @@ export function Header() {
                       <button
                         onClick={clearAll}
                         className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                        title="전체 삭제"
+                        title={t('header.clearAll')}
                       >
                         <Trash2 className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" />
                       </button>
@@ -199,7 +217,7 @@ export function Header() {
                   {notifications.length === 0 ? (
                     <div className="px-4 py-8 text-center">
                       <Bell className="w-8 h-8 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
-                      <p className="text-sm text-gray-500 dark:text-gray-400">알림이 없습니다</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('header.noNotifications')}</p>
                     </div>
                   ) : (
                     notifications.map((n: SystemNotification) => {
@@ -241,8 +259,8 @@ export function Header() {
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            title={darkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
-            aria-label={darkMode ? '라이트 모드로 전환' : '다크 모드로 전환'}
+            title={darkMode ? t('header.lightMode') : t('header.darkMode')}
+            aria-label={darkMode ? t('header.lightMode') : t('header.darkMode')}
           >
             {darkMode ? (
               <Sun className="w-4 h-4 text-yellow-500" />
@@ -257,7 +275,7 @@ export function Header() {
               type="button"
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
               className="flex items-center gap-1.5 p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              aria-label="사용자 메뉴"
+              aria-label={t('header.userMenu')}
               aria-expanded={isUserMenuOpen}
             >
               <div className="w-6 h-6 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-full flex items-center justify-center">
@@ -298,7 +316,7 @@ export function Header() {
                 className="w-full flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <UserCircle className="w-4 h-4" />
-                프로필
+                {t('header.profile')}
               </button>
 
               {user?.is_admin && (
@@ -311,7 +329,7 @@ export function Header() {
                     className="w-full flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Shield className="w-4 h-4" />
-                    사용자 관리
+                    {t('header.userManagement')}
                   </button>
                   <button
                     onClick={() => {
@@ -321,7 +339,7 @@ export function Header() {
                     className="w-full flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     <Settings className="w-4 h-4" />
-                    로그인 이력
+                    {t('header.loginHistory')}
                   </button>
                 </>
               )}
@@ -334,7 +352,7 @@ export function Header() {
                 className="w-full flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <HelpCircle className="w-4 h-4" />
-                About
+                {t('header.about')}
               </button>
 
               <hr className="my-2 border-gray-200 dark:border-gray-700" />
@@ -348,7 +366,7 @@ export function Header() {
                 className="w-full flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
               >
                 <LogOut className="w-4 h-4" />
-                로그아웃
+                {t('header.logout')}
               </button>
               </div>
             )}
@@ -358,18 +376,18 @@ export function Header() {
     </header>
 
     {/* About Dialog */}
-    <Dialog isOpen={showAbout} onClose={() => setShowAbout(false)} title="About" size="lg">
+    <Dialog isOpen={showAbout} onClose={() => setShowAbout(false)} title={t('about.title')} size="lg">
       <div className="space-y-4">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">SPKD</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Version: {__APP_VERSION__}</p>
         </div>
         <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
-          <p>SmartCore PKD — 전자여권 위·변조 검사 시스템</p>
-          <p className="text-xs text-gray-400 dark:text-gray-500">ePassport Public Key Directory Management &amp; Passive Authentication System</p>
+          <p>{t('about.subtitle')}</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500">{t('about.subtitleEn')}</p>
         </div>
         <div>
-          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">Supported Standards:</p>
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5">{t('about.supportedStandards')}</p>
           <p className="text-xs text-gray-600 dark:text-gray-400">
             ICAO Doc 9303 (Part 10 &amp; 11), RFC 5280 (X.509), RFC 5652 (CMS), ISO 19794-5 (Face Image)
           </p>
@@ -381,7 +399,7 @@ export function Header() {
             className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
           >
             {showLicenses ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-            Open Source Licenses ({OPEN_SOURCE_LICENSES.length})
+            {t('about.openSourceLicenses')} ({OPEN_SOURCE_LICENSES.length})
           </button>
           {showLicenses && (
             <div className="mt-2 max-h-40 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
@@ -409,7 +427,7 @@ export function Header() {
         </div>
 
         <p className="text-sm text-gray-700 dark:text-gray-300">
-          Copyright (c) SMARTCORE Inc. All rights reserved.
+          {t('about.copyright')}
         </p>
         <div className="flex items-center justify-between pt-2 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-4">
@@ -423,7 +441,7 @@ export function Header() {
             </a>
           </div>
           <button onClick={() => setShowAbout(false)} className="px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
-            Close
+            {t('common:button.close')}
           </button>
         </div>
       </div>

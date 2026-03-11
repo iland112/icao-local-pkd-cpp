@@ -1,4 +1,5 @@
 import { useState, useEffect, type FormEvent, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
   Lock,
@@ -28,30 +29,6 @@ const stagger = (delay: number): CSSProperties => ({
 
 const defaultStats = { countriesCount: 0, totalCertificates: 0 };
 
-const featureCards = [
-  {
-    icon: Upload,
-    color: 'violet',
-    title: 'PKD 파일 업로드 및 처리',
-    desc: 'PKD LDIF/Master List 파일을 업로드하고, 인증서를 파싱·검증하여 DB 및 LDAP에 저장합니다.',
-    items: ['LDIF / Master List 파일 업로드', 'CSCA/DSC/CRL 파싱 및 검증', 'Trust Chain 검증 (DSC → CSCA)', 'DB + LDAP 이중 저장'],
-  },
-  {
-    icon: IdCard,
-    color: 'teal',
-    title: 'Passive Authentication',
-    desc: '전자여권 칩의 SOD, Data Group을 업로드하여 ICAO 9303 표준에 따른 PA를 수행합니다.',
-    items: ['SOD CMS 서명 검증', 'DSC → CSCA Trust Chain 검증', 'Data Group 해시 무결성 검증', 'DG1/DG2 파싱 및 시각화'],
-  },
-  {
-    icon: Database,
-    color: 'blue',
-    title: '인증서 관리 및 조회',
-    desc: '저장된 CSCA/DSC/CRL 인증서를 검색하고, 다양한 형식으로 내보내기할 수 있습니다.',
-    items: ['LDAP 기반 실시간 인증서 검색', '국가/타입별 필터링 및 정렬', 'DER/PEM 형식 Export', 'AI 기반 인증서 포렌식 분석'],
-  },
-];
-
 const standards = [
   { icon: GraduationCap, label: 'ICAO Doc 9303' },
   { icon: FileText, label: 'RFC 5280 X.509' },
@@ -59,6 +36,7 @@ const standards = [
 ];
 
 export function Login() {
+  const { t } = useTranslation(['auth', 'common']);
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -66,6 +44,30 @@ export function Login() {
   const [error, setError] = useState('');
   const { darkMode, toggleTheme } = useThemeStore();
   const [stats, setStats] = useState(defaultStats);
+
+  const featureCards = [
+    {
+      icon: Upload,
+      color: 'violet',
+      title: t('login.features.pkdUpload'),
+      desc: t('login.features.pkdUploadDesc'),
+      items: t('login.features.pkdUploadItems', { returnObjects: true }) as string[],
+    },
+    {
+      icon: IdCard,
+      color: 'teal',
+      title: t('login.features.paVerification'),
+      desc: t('login.features.paVerificationDesc'),
+      items: t('login.features.paVerificationItems', { returnObjects: true }) as string[],
+    },
+    {
+      icon: Database,
+      color: 'blue',
+      title: t('login.features.certManagement'),
+      desc: t('login.features.certManagementDesc'),
+      items: t('login.features.certManagementItems', { returnObjects: true }) as string[],
+    },
+  ];
 
   useEffect(() => {
     uploadHistoryApi.getStatistics()
@@ -93,17 +95,17 @@ export function Login() {
 
         navigate('/');
       } else {
-        setError('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        setError(t('login.failed'));
       }
     } catch (err: any) {
       if (import.meta.env.DEV) console.error('Login error:', err);
 
       if (err.response?.status === 401) {
-        setError('사용자명 또는 비밀번호가 올바르지 않습니다.');
+        setError(t('login.invalidCredentials'));
       } else if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else {
-        setError('로그인 중 오류가 발생했습니다. 네트워크 연결을 확인해주세요.');
+        setError(t('login.networkError'));
       }
     } finally {
       setLoading(false);
@@ -141,19 +143,18 @@ export function Login() {
               SPKD
             </h1>
             <p className="text-lg lg:text-xl text-sky-200 mb-2 font-medium">
-              전자여권 위·변조 검사 시스템
+              {t('login.systemName')}
             </p>
             <p className="text-sm text-gray-300/70 max-w-lg leading-relaxed">
-              SmartCore PKD 인증서 관리 및 Passive Authentication 검증 플랫폼.
-              전자여권 인증서의 수집·검증·모니터링과 여권 칩 데이터의 위·변조 검사를 통합 수행합니다.
+              {t('login.description')}
             </p>
           </div>
 
           {/* Statistics row */}
           <div className="grid grid-cols-2 gap-3 lg:gap-4 mt-10" style={stagger(0.2)}>
             {[
-              { icon: Globe, value: stats.countriesCount.toLocaleString(), label: '현재 등록 국가' },
-              { icon: ShieldCheck, value: stats.totalCertificates.toLocaleString(), label: '현재 관리 인증서' },
+              { icon: Globe, value: stats.countriesCount.toLocaleString(), label: t('login.registeredCountries') },
+              { icon: ShieldCheck, value: stats.totalCertificates.toLocaleString(), label: t('login.managedCertificates') },
             ].map((stat) => (
               <div
                 key={stat.label}
@@ -208,7 +209,7 @@ export function Login() {
           {/* Bottom attribution */}
           <div className="mt-auto pt-10">
             <p className="text-xs text-gray-400/50">
-              Powered by SmartCore Inc.
+              {t('login.poweredBy')}
             </p>
           </div>
         </div>
@@ -227,7 +228,7 @@ export function Login() {
           type="button"
           onClick={toggleTheme}
           className="absolute top-5 right-5 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-400 dark:text-gray-500 transition-colors"
-          aria-label="테마 전환"
+          aria-label={t('login.themeToggle')}
         >
           {darkMode ? <Sun className="w-4.5 h-4.5" /> : <Moon className="w-4.5 h-4.5" />}
         </button>
@@ -242,7 +243,7 @@ export function Login() {
               SPKD
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-              전자여권 위·변조 검사 시스템
+              {t('login.systemName')}
             </p>
           </div>
 
@@ -251,15 +252,15 @@ export function Login() {
             <div className="inline-flex items-center justify-center mb-4">
               <img src="/favicon.svg" alt="SPKD" className="w-11 h-11" />
             </div>
-            <h2 className="text-[22px] font-bold text-gray-900 dark:text-white tracking-tight">SPKD 로그인</h2>
-            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">계정 정보를 입력해 주세요</p>
+            <h2 className="text-[22px] font-bold text-gray-900 dark:text-white tracking-tight">{t('login.title')}</h2>
+            <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('login.enterCredentials')}</p>
           </div>
 
           {/* Login Card */}
           <div style={stagger(0.2)}>
             {/* Mobile title inside card */}
             <h2 className="md:hidden text-lg font-semibold text-gray-900 dark:text-white mb-6 text-center">
-              로그인
+              {t('login.mobileLogin')}
             </h2>
 
             {/* Error Alert */}
@@ -278,7 +279,7 @@ export function Login() {
                   htmlFor="username"
                   className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider"
                 >
-                  사용자명
+                  {t('login.username')}
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -304,7 +305,7 @@ export function Login() {
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       'transition-all duration-150'
                     )}
-                    placeholder="사용자명"
+                    placeholder={t('login.usernamePlaceholder')}
                   />
                 </div>
               </div>
@@ -315,7 +316,7 @@ export function Login() {
                   htmlFor="password"
                   className="block text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1.5 uppercase tracking-wider"
                 >
-                  비밀번호
+                  {t('login.password')}
                 </label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -340,7 +341,7 @@ export function Login() {
                       'disabled:opacity-50 disabled:cursor-not-allowed',
                       'transition-all duration-150'
                     )}
-                    placeholder="비밀번호"
+                    placeholder={t('login.passwordPlaceholder')}
                   />
                 </div>
               </div>
@@ -363,10 +364,10 @@ export function Login() {
                 {loading ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>로그인 중...</span>
+                    <span>{t('login.loggingIn')}</span>
                   </>
                 ) : (
-                  <span>로그인</span>
+                  <span>{t('login.submit')}</span>
                 )}
               </button>
             </form>
@@ -375,7 +376,7 @@ export function Login() {
             {import.meta.env.DEV && (
               <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
                 <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
-                  기본 계정: <span className="font-mono font-medium text-gray-600 dark:text-gray-400">admin</span> / <span className="font-mono font-medium text-gray-600 dark:text-gray-400">admin123</span>
+                  {t('login.defaultAccount')}: <span className="font-mono font-medium text-gray-600 dark:text-gray-400">admin</span> / <span className="font-mono font-medium text-gray-600 dark:text-gray-400">admin123</span>
                 </p>
               </div>
             )}
@@ -383,20 +384,20 @@ export function Login() {
 
           {/* API Client Request Link */}
           <div className="mt-6 text-center" style={stagger(0.3)}>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">외부 시스템 연동이 필요하신가요?</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">{t('login.apiClientRequest')}</p>
             <button
               type="button"
               onClick={() => navigate('/api-client-request')}
               className="inline-flex items-center gap-1.5 text-sm font-medium text-[#02385e] dark:text-sky-400 hover:underline transition-colors"
             >
               <Key className="w-3.5 h-3.5" />
-              API 클라이언트 등록 요청
+              {t('login.apiClientRequestLink')}
             </button>
           </div>
 
           {/* Footer */}
           <p className="mt-4 text-center text-[11px] text-gray-300 dark:text-gray-600" style={stagger(0.4)}>
-            &copy; 2026 SmartCore Inc.
+            {t('login.copyright')}
           </p>
         </div>
       </div>

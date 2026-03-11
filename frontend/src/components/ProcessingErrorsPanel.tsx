@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useRef } from 'react';
 import {
   AlertTriangle,
@@ -45,6 +46,7 @@ export function ProcessingErrorsPanel({
   ldapSaveErrorCount,
   isProcessing,
 }: ProcessingErrorsPanelProps) {
+  const { t } = useTranslation(['upload', 'common']);
   const [isExpanded, setIsExpanded] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const prevErrorCount = useRef(0);
@@ -78,7 +80,7 @@ export function ProcessingErrorsPanel({
             <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-400" />
           </div>
           <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-            처리 오류
+            {t('upload.processingErrors.title')}
           </span>
           <span className="inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-bold bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300">
             {totalErrorCount}

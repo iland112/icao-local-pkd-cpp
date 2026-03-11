@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 /**
  * @file LdifStructure.tsx
  * @brief LDIF File Structure Visualization Component (TreeViewer)
@@ -192,6 +193,7 @@ function convertDnTreeToTreeNode(dnNode: DnTreeNode, nodeId: string): TreeNode {
  * LDIF Structure Main Component
  */
 export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
+  const { t } = useTranslation(['upload', 'common']);
   const [data, setData] = useState<LdifStructureData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -317,7 +319,7 @@ export const LdifStructure: React.FC<LdifStructureProps> = ({ uploadId }) => {
             <option value="100">100 엔트리</option>
             <option value="500">500 엔트리</option>
             <option value="1000">1000 엔트리</option>
-            <option value="10000">전체</option>
+            <option value="10000">{ t('monitoring:pool.total') }</option>
           </select>
         </div>
       </div>

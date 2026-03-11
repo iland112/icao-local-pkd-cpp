@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -38,6 +39,7 @@ const initialStage: StageStatus = {
 };
 
 export function FileUpload() {
+  const { t } = useTranslation(['upload', 'common']);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -121,8 +123,8 @@ export function FileUpload() {
     return [
       {
         id: 'upload',
-        label: '파일 업로드',
-        description: uploadStage.message || '서버로 파일 전송',
+        label: t('fileUpload.title'),
+        description: uploadStage.message || t('upload.fileUpload.sendingToServer'),
         status: toStepStatus(uploadStage.status),
         progress: uploadStage.percentage,
         details: uploadStage.details,
@@ -130,8 +132,8 @@ export function FileUpload() {
       },
       {
         id: 'parse',
-        label: '파일 파싱',
-        description: parseStage.message || 'LDIF/Master List 구문 분석',
+        label: t('upload.fileUpload.fileParsing'),
+        description: parseStage.message || t('upload.fileUpload.ldifMlParsing'),
         status: toStepStatus(parseStage.status),
         progress: parseStage.percentage,
         details: parseStage.details,
@@ -139,8 +141,8 @@ export function FileUpload() {
       },
       {
         id: 'database',
-        label: '검증 및 저장 (DB + LDAP)',
-        description: dbSaveStage.message || '인증서 검증 및 DB/LDAP 동시 저장',
+        label: t('upload.fileUpload.validationAndSave'),
+        description: dbSaveStage.message || t('upload.fileUpload.certValidationAndSave'),
         status: toStepStatus(dbSaveStage.status),
         progress: dbSaveStage.percentage,
         details: dbSaveStage.details,
@@ -180,9 +182,9 @@ export function FileUpload() {
     const name = file.name.toLowerCase();
 
     if (name.endsWith('.ml') || name.endsWith('.bin')) {
-      return 'Master List 서명 인증서(MLSC)와 국가 인증 기관 인증서(CSCA)가 포함됩니다.';
+      return t('upload.fileUpload.mlDescription');
     } else if (name.endsWith('.ldif')) {
-      return 'LDIF 파일은 다양한 인증서 유형(DSC, CSCA, CRL 등)을 포함할 수 있습니다.';
+      return t('upload.fileUpload.ldifDescription');
     }
     return '';
   }, []);
@@ -191,7 +193,7 @@ export function FileUpload() {
   const handleFileSelect = (file: File) => {
     if (!isValidFileType(file)) return;
     if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-      setErrorMessages([`파일 크기가 너무 큽니다 (${formatFileSize(file.size)}). 최대 ${MAX_FILE_SIZE_MB}MB까지 업로드 가능합니다.`]);
+      setErrorMessages([t('upload:fileUpload.fileSizeTooLarge', { size: formatFileSize(file.size), max: MAX_FILE_SIZE_MB })]);
       return;
     }
     setSelectedFile(file);
@@ -244,7 +246,7 @@ export function FileUpload() {
 
     try {
       // Start upload
-      setUploadStage({ status: 'IN_PROGRESS', message: '파일 업로드 중...', percentage: 0 });
+      setUploadStage({ status: 'IN_PROGRESS', message: t('upload.fileUpload.uploadingFile'), percentage: 0 });
 
       // LDIF / Master List upload (async with SSE)
       const isLdif = selectedFile.name.toLowerCase().endsWith('.ldif');
@@ -255,11 +257,11 @@ export function FileUpload() {
       if (response.data.success && response.data.data) {
         const uploadedFile = response.data.data;
         const fileId = (uploadedFile as { uploadId?: string }).uploadId || uploadedFile.id;
-        setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
+        setUploadStage({ status: 'COMPLETED', message: t('upload:fileUpload.uploadComplete'), percentage: 100 });
 
         connectToProgressStream(fileId);
       } else {
-        throw new Error(response.data.error || '업로드 실패');
+        throw new Error(response.data.error || t('upload:fileUpload.uploadFailed'));
       }
     } catch (error: unknown) {
       // Check for HTTP 409 Conflict (duplicate file)
@@ -305,10 +307,10 @@ export function FileUpload() {
         return;
       } else {
         // Other errors
-        setUploadStage({ status: 'FAILED', message: '업로드 실패', percentage: 0 });
+        setUploadStage({ status: 'FAILED', message: t('upload.fileUpload.uploadFailed'), percentage: 0 });
         setOverallStatus('FAILED');
-        setOverallMessage('파일 업로드에 실패했습니다.');
-        setErrorMessages([error instanceof Error ? error.message : '알 수 없는 오류']);
+        setOverallMessage(t('upload.fileUpload.fileUploadFailed'));
+        setErrorMessages([error instanceof Error ? error.message : t('upload.fileUpload.unknownError')]);
       }
       setIsProcessing(false);
     }
@@ -336,15 +338,15 @@ export function FileUpload() {
       // Update stage states based on DB data
       // Stage 1: Upload & Parse (always completed if we have the record)
       if (upload.status !== 'PENDING') {
-        setUploadStage({ status: 'COMPLETED', message: '파일 업로드 완료', percentage: 100 });
+        setUploadStage({ status: 'COMPLETED', message: t('upload:fileUpload.uploadComplete'), percentage: 100 });
         // For Master List: use processedEntries (extracted certificates)
         // For LDIF: use totalEntries (LDIF entries)
         const entriesCount = upload.fileFormat === 'ML' ? upload.processedEntries : upload.totalEntries;
         setParseStage({
           status: 'COMPLETED',
-          message: '파싱 완료',
+          message: t('upload.fileUpload.parsingComplete'),
           percentage: 100,
-          details: `${entriesCount?.toLocaleString()}건 처리`
+          details: t('upload:fileUpload.entriesProcessed', { num: entriesCount?.toLocaleString() ?? '0' })
         });
       }
 
@@ -366,18 +368,18 @@ export function FileUpload() {
         if (upload.status === 'PROCESSING') {
           // In-progress: show live percentage from DB
           const pct = Math.min(Math.round(100 * processedEntries / totalEntries), 99);
-          const details = parts.length > 0 ? `${parts.join(', ')} (${processedEntries.toLocaleString()}/${totalEntries.toLocaleString()})` : `${processedEntries.toLocaleString()}/${totalEntries.toLocaleString()}건 처리 중`;
+          const details = parts.length > 0 ? `${parts.join(', ')} (${processedEntries.toLocaleString()}/${totalEntries.toLocaleString()})` : t('upload:fileUpload.entriesProcessing', { processed: processedEntries.toLocaleString(), total: totalEntries.toLocaleString() });
           setDbSaveStage({
             status: 'IN_PROGRESS',
-            message: `처리 중 (${pct}%)`,
+            message: t('upload:fileUpload.processingPercent', { pct }),
             percentage: pct,
             details
           });
         } else {
-          const details = parts.length > 0 ? `저장 완료: ${parts.join(', ')}` : `${(upload.processedEntries || upload.totalEntries)?.toLocaleString()}건 저장 (DB+LDAP)`;
+          const details = parts.length > 0 ? `${t('upload:fileUpload.saveCompleteLabel')}: ${parts.join(', ')}` : t('upload:fileUpload.entriesSaved', { num: (upload.processedEntries || upload.totalEntries)?.toLocaleString() ?? '0' });
           setDbSaveStage({
             status: 'COMPLETED',
-            message: 'DB 및 LDAP 저장 완료',
+            message: t('upload.fileUpload.saveComplete'),
             percentage: 100,
             details
           });
@@ -387,7 +389,7 @@ export function FileUpload() {
       // Handle completion states
       if (upload.status === 'COMPLETED') {
         setOverallStatus('FINALIZED');
-        setOverallMessage('모든 처리가 완료되었습니다.');
+        setOverallMessage(t('upload.fileUpload.allProcessingComplete'));
         setIsProcessing(false);
         // Stop polling when completed
         if (pollingIntervalRef.current) {
@@ -402,7 +404,7 @@ export function FileUpload() {
         }
       } else if (upload.status === 'FAILED') {
         setOverallStatus('FAILED');
-        setOverallMessage('처리 중 오류가 발생했습니다.');
+        setOverallMessage(t('upload.fileUpload.processingError'));
         setIsProcessing(false);
         // Stop polling on failure
         if (pollingIntervalRef.current) {
@@ -515,11 +517,11 @@ export function FileUpload() {
 
   // Translate validation reason to Korean
   const translateReason = (reason: string): string => {
-    if (reason.includes('Trust chain signature verification failed')) return '서명 검증 실패';
-    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return 'Trust Chain 끊김';
-    if (reason.includes('CSCA not found')) return 'CSCA 미등록';
-    if (reason.includes('not yet valid')) return '유효기간 미도래';
-    if (reason.includes('certificates expired')) return '인증서 만료 (서명 유효)';
+    if (reason.includes('Trust chain signature verification failed')) return t('upload.dashboard.signatureVerificationFailed');
+    if (reason.includes('Chain broken') || reason.includes('Failed to build trust chain')) return t('upload.dashboard.trustChainBroken');
+    if (reason.includes('CSCA not found')) return t('report.trustChain.cscaNotFound');
+    if (reason.includes('not yet valid')) return t('upload.dashboard.notYetValidPeriod');
+    if (reason.includes('certificates expired')) return t('upload.dashboard.expiredValidSignature');
     return reason;
   };
 
@@ -549,7 +551,7 @@ export function FileUpload() {
       else if (stage !== lastStageRef.current) {
         const isComplete = stage.endsWith('_COMPLETED') || stage === 'COMPLETED';
         const isFail = stage === 'FAILED';
-        const detail = message || stageName || (isComplete ? '완료' : isFail ? '실패' : '시작');
+        const detail = message || stageName || (isComplete ? t('common:status.completed') : isFail ? t('common:status.failed') : t('upload.fileUpload.started'));
         addEntry(stage, detail, isFail ? 'fail' : isComplete ? 'success' : 'info');
       }
       // 3) Milestones every 10,000 entries (for long-running operations)
@@ -557,7 +559,7 @@ export function FileUpload() {
         const milestone = Math.floor(processedCount / 10000) * 10000;
         if (milestone > 0 && milestone > lastMilestoneRef.current) {
           lastMilestoneRef.current = milestone;
-          addEntry('MILESTONE', `${milestone.toLocaleString()}/${totalCount.toLocaleString()} 처리 완료 (${percentage}%)`, 'info');
+          addEntry('MILESTONE', t('upload:fileUpload.milestoneProgress', { processed: milestone.toLocaleString(), total: totalCount.toLocaleString(), pct: percentage }), 'info');
         }
       }
 
@@ -572,9 +574,9 @@ export function FileUpload() {
           const addedCount = newCount - lastErrorCountRef.current;
           const recentNew = newErrors.slice(-addedCount);
           for (const err of recentNew) {
-            const label = err.errorType === 'PARSE' ? '파싱 실패'
-              : err.errorType === 'DB_SAVE' ? 'DB 저장 실패'
-              : err.errorType === 'LDAP_SAVE' ? 'LDAP 저장 실패'
+            const label = err.errorType === 'PARSE' ? t('upload.fileUpload.parseFailed')
+              : err.errorType === 'DB_SAVE' ? t('upload.fileUpload.dbSaveFailed')
+              : err.errorType === 'LDAP_SAVE' ? t('upload.fileUpload.ldapSaveFailed')
               : err.errorType;
             const detail = `[${err.countryCode}] ${err.certificateType} - ${err.message}`;
             addEntry(label, detail, err.errorType === 'LDAP_SAVE' ? 'warning' : 'fail');
@@ -588,7 +590,7 @@ export function FileUpload() {
         const dupCount = progress.statistics.duplicateCount;
         if (dupCount > lastDuplicateCountRef.current) {
           const newDups = dupCount - lastDuplicateCountRef.current;
-          addEntry('중복 인증서', `${newDups.toLocaleString()}개 중복 건너뜀 (누적 ${dupCount.toLocaleString()}개)`, 'warning');
+          addEntry(t('upload:fileUpload.duplicateCert'), t('upload:fileUpload.duplicateSkipped', { newDups: newDups.toLocaleString(), total: dupCount.toLocaleString() }), 'warning');
           lastDuplicateCountRef.current = dupCount;
         }
       }
@@ -604,9 +606,9 @@ export function FileUpload() {
             const isInvalid = key.startsWith('INVALID:');
             const isPending = key.startsWith('PENDING:');
             const reasonText = key.replace(/^(INVALID|EXPIRED_VALID|PENDING):\s*/, '');
-            const label = isInvalid ? '검증 실패' : isPending ? '검증 보류' : '만료-유효';
+            const label = isInvalid ? t('upload.fileUpload.validationFailed') : isPending ? t('upload.fileUpload.validationPending') : t('upload.fileUpload.expiredValidLabel');
             const translated = translateReason(reasonText);
-            addEntry(label, `${translated} (${count.toLocaleString()}건)`, isInvalid ? 'fail' : 'warning');
+            addEntry(label, `${translated} (${count.toLocaleString()}${t('common:unit.cases')})`, isInvalid ? 'fail' : 'warning');
           }
         }
         lastValidationReasonsRef.current = { ...reasons };
@@ -631,7 +633,7 @@ export function FileUpload() {
               : log.validationStatus === 'INVALID' ? 'fail'
               : log.validationStatus === 'DUPLICATE' ? 'info'
               : 'warning';
-            addEntry('검증', detail, status);
+            addEntry(t('upload:fileUpload.validation'), detail, status);
           }
           lastValidationLogCountRef.current = totalCount2;
         }
@@ -713,7 +715,7 @@ export function FileUpload() {
       // Show final count on completion (use processedCount if available, fallback to totalCount)
       const count = processedCount || totalCount;
       if (count > 0) {
-        details = `${count.toLocaleString()}건 처리`;
+        details = t('upload:fileUpload.entriesProcessed', { num: count.toLocaleString() });
       }
     } else if (processedCount > 0 && totalCount > 0) {
       // Show progress during processing
@@ -755,7 +757,7 @@ export function FileUpload() {
         status: stage === 'VALIDATION_COMPLETED' ? 'IN_PROGRESS' : stageStatus.status,  // Keep IN_PROGRESS until DB_SAVING_COMPLETED
         message: stageName || message,
         percentage: stagePercent,
-        details: stage === 'VALIDATION_COMPLETED' && validationCount > 0 ? `검증: ${validationCount.toLocaleString()}건` : details,
+        details: stage === 'VALIDATION_COMPLETED' && validationCount > 0 ? t('upload:fileUpload.validationCount', { num: validationCount.toLocaleString() }) : details,
       };
       setDbSaveStage(validationStatus);
     } else if (stage.startsWith('DB_SAVING')) {
@@ -767,7 +769,7 @@ export function FileUpload() {
         status: stage === 'DB_SAVING_COMPLETED' ? 'COMPLETED' : 'IN_PROGRESS',
         message: stageName || message,
         percentage: stage === 'DB_SAVING_COMPLETED' ? 100 : stagePercent,
-        details: stage === 'DB_SAVING_COMPLETED' && saveCount > 0 ? `${saveCount.toLocaleString()}건 저장` : details,
+        details: stage === 'DB_SAVING_COMPLETED' && saveCount > 0 ? t('upload:fileUpload.entriesSavedShort', { num: saveCount.toLocaleString() }) : details,
       };
       setDbSaveStage(dbStatus);
     } else if (stage.startsWith('LDAP_SAVING')) {
@@ -791,11 +793,11 @@ export function FileUpload() {
       setDbSaveStage(prev => {
         const completionDetails = (message && (message.includes('CSCA') || message.includes('DSC') || message.includes('CRL') || message.includes('ML')))
           ? message
-          : (prev.details || `${totalCount.toLocaleString()}건 저장 (DB+LDAP)`);
+          : (prev.details || t('upload:fileUpload.entriesSaved', { num: totalCount.toLocaleString() }));
         return { ...prev, status: 'COMPLETED', percentage: 100, details: completionDetails };
       });
       setOverallStatus('FINALIZED');
-      setOverallMessage(message || '모든 처리가 완료되었습니다.');
+      setOverallMessage(message || t('upload:fileUpload.allProcessingComplete'));
       setIsProcessing(false);
       // Clear localStorage when all stages completed
       localStorage.removeItem('currentUploadId');
@@ -819,19 +821,19 @@ export function FileUpload() {
                 <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
               </div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                파일 재업로드 확인
+                {t('upload:fileUpload.reuploadConfirm')}
               </h3>
             </div>
             <div className="px-5 py-4 space-y-3">
-              <p className="text-sm text-gray-600 dark:text-gray-300">이 파일은 이전에 업로드된 적이 있습니다.</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{t('upload:fileUpload.previouslyUploaded')}</p>
               <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                <p><span className="font-medium">파일명:</span> {reuploadDialog.existingUpload?.fileName}</p>
-                <p><span className="font-medium">상태:</span> {reuploadDialog.existingUpload?.status}</p>
-                <p><span className="font-medium">업로드 ID:</span> <span className="font-mono text-xs">{reuploadDialog.existingUpload?.uploadId}</span></p>
+                <p><span className="font-medium">{t('common:label.fileName')}:</span> {reuploadDialog.existingUpload?.fileName}</p>
+                <p><span className="font-medium">{ t('certificate:detail.status_label') }</span> {reuploadDialog.existingUpload?.status}</p>
+                <p><span className="font-medium">{t('common.label.uploadIdColon')}</span> <span className="font-mono text-xs">{reuploadDialog.existingUpload?.uploadId}</span></p>
               </div>
               <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
-                재업로드하면 새 업로드 레코드가 생성되고 인증서 데이터가 재처리됩니다.
-                기존 업로드 기록은 유지됩니다.
+                {t('upload:fileUpload.reuploadWarning')}
+                {' '}{t('upload:fileUpload.existingRecordKept')}
               </p>
             </div>
             <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
@@ -839,13 +841,13 @@ export function FileUpload() {
                 onClick={() => setReuploadDialog({ show: false })}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleForceReupload}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-amber-600 hover:bg-amber-700 transition-colors"
               >
-                재업로드
+                {t('upload:fileUpload.reupload')}
               </button>
             </div>
           </div>
@@ -861,24 +863,23 @@ export function FileUpload() {
                 <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
               </div>
               <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                중복 파일
+                {t('upload:fileUpload.duplicateFile')}
               </h3>
             </div>
             <div className="px-5 py-4 space-y-3">
-              <p className="text-sm text-gray-600 dark:text-gray-300">이 파일은 이미 업로드 처리가 완료된 파일입니다.</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{t('upload:fileUpload.duplicateFileAlreadyProcessed')}</p>
               {duplicateWarningDialog.existingUpload && (
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 space-y-1 text-sm text-gray-600 dark:text-gray-300">
-                  <p><span className="font-medium">파일명:</span> {duplicateWarningDialog.existingUpload.fileName}</p>
-                  <p><span className="font-medium">상태:</span> {duplicateWarningDialog.existingUpload.status}</p>
+                  <p><span className="font-medium">{t('common:label.fileName')}:</span> {duplicateWarningDialog.existingUpload.fileName}</p>
+                  <p><span className="font-medium">{ t('certificate:detail.status_label') }</span> {duplicateWarningDialog.existingUpload.status}</p>
                   {duplicateWarningDialog.existingUpload.fileFormat && (
-                    <p><span className="font-medium">파일 형식:</span> {duplicateWarningDialog.existingUpload.fileFormat}</p>
+                    <p><span className="font-medium">{t('upload:fileUpload.fileFormat')}:</span> {duplicateWarningDialog.existingUpload.fileFormat}</p>
                   )}
-                  <p><span className="font-medium">업로드 ID:</span> <span className="font-mono text-xs">{duplicateWarningDialog.existingUpload.uploadId}</span></p>
+                  <p><span className="font-medium">{t('common.label.uploadIdColon')}</span> <span className="font-mono text-xs">{duplicateWarningDialog.existingUpload.uploadId}</span></p>
                 </div>
               )}
               <p className="text-sm text-red-600 dark:text-red-400">
-                동일한 파일(SHA-256 해시 일치)은 재업로드할 수 없습니다.
-                업로드 이력에서 기존 업로드를 확인해주세요.
+                {t('upload:fileUpload.duplicateFileCannotReupload')}
               </p>
             </div>
             <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
@@ -886,13 +887,13 @@ export function FileUpload() {
                 onClick={() => navigate('/upload-history')}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                업로드 이력 보기
+                {t('upload.fileUpload.viewUploadHistory')}
               </button>
               <button
                 onClick={() => setDuplicateWarningDialog({ show: false })}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
               >
-                확인
+                {t('common.confirm.title')}
               </button>
             </div>
           </div>
@@ -907,10 +908,10 @@ export function FileUpload() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              PKD 파일 업로드
+              {t('upload:fileUpload.pkdFileUpload')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              PKD LDIF 또는 Master List 파일을 업로드합니다.
+              {t('upload:fileUpload.pkdFileUploadDesc')}
             </p>
           </div>
         </div>
@@ -922,9 +923,9 @@ export function FileUpload() {
           <div className="mb-6 flex items-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
             <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-800 dark:text-red-300">CSCA 인증서가 등록되지 않았습니다</p>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('pa.verify.cscaNotRegistered')}</p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
-                Trust Chain 검증을 위해 먼저 CSCA가 포함된 LDIF 또는 Master List를 업로드해 주세요.
+                {t('upload:fileUpload.cscaUploadRequired')}
               </p>
             </div>
           </div>
@@ -932,7 +933,7 @@ export function FileUpload() {
           <div className="mb-6 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800">
             <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
             <p className="text-xs text-green-700 dark:text-green-400">
-              CSCA <span className="font-semibold">{cscaCount.toLocaleString()}</span>개 등록됨 — 인증서 검증 가능
+              {t('upload:fileUpload.cscaRegisteredPrefix')} <span className="font-semibold">{cscaCount.toLocaleString()}</span> {t('upload:fileUpload.cscaRegisteredSuffix')}
             </p>
           </div>
         )
@@ -948,14 +949,14 @@ export function FileUpload() {
                 <CheckCircle className="w-5 h-5 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-base font-bold text-white">업로드 처리 결과</h3>
+                <h3 className="text-base font-bold text-white">{t('upload:fileUpload.uploadProcessResult')}</h3>
                 <p className="text-sm text-teal-100">{overallMessage}</p>
               </div>
               <button
                 onClick={() => navigate('/upload-history')}
                 className="px-4 py-1.5 rounded-lg text-sm font-medium text-teal-700 bg-white/90 hover:bg-white transition-colors shrink-0"
               >
-                업로드 이력 보기
+                {t('upload.fileUpload.viewUploadHistory')}
               </button>
             </div>
           </div>
@@ -992,28 +993,28 @@ export function FileUpload() {
               if (invalidTotal === 0 && pendingTotal === 0 && expiredValid === 0) return null;
               return (
                 <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
-                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">검증 사유별 상세</h4>
+                  <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">{t('upload:fileUpload.validationReasonDetail')}</h4>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between text-green-600 dark:text-green-400">
-                      <span>✓ 성공 (VALID)</span>
-                      <span className="font-medium">{validCount.toLocaleString()}건</span>
+                      <span>✓ {t('upload:fileUpload.validSuccess')} (VALID)</span>
+                      <span className="font-medium">{validCount.toLocaleString()}{t('common:unit.cases')}</span>
                     </div>
                     {expiredValid > 0 && (
                       <div className="flex justify-between text-amber-600 dark:text-amber-400">
-                        <span>✓ 만료-유효 (EXPIRED_VALID)</span>
-                        <span className="font-medium">{expiredValid.toLocaleString()}건</span>
+                        <span>✓ {t('upload:fileUpload.expiredValid')} (EXPIRED_VALID)</span>
+                        <span className="font-medium">{expiredValid.toLocaleString()}{t('common:unit.cases')}</span>
                       </div>
                     )}
                     {invalidTotal > 0 && (
                       <>
                         <div className="flex justify-between text-red-600 dark:text-red-400">
-                          <span>✗ 실패 (INVALID)</span>
-                          <span className="font-medium">{invalidTotal.toLocaleString()}건</span>
+                          <span>✗ {t('upload:fileUpload.validFailed')} (INVALID)</span>
+                          <span className="font-medium">{invalidTotal.toLocaleString()}{t('common:unit.cases')}</span>
                         </div>
                         {invalidReasons.map(([reason, count]) => (
                           <div key={reason} className="flex justify-between text-red-500 dark:text-red-500 pl-4">
                             <span className="text-xs">· {reason}</span>
-                            <span className="text-xs font-medium">{count.toLocaleString()}건</span>
+                            <span className="text-xs font-medium">{count.toLocaleString()}{t('common:unit.cases')}</span>
                           </div>
                         ))}
                       </>
@@ -1021,13 +1022,13 @@ export function FileUpload() {
                     {pendingTotal > 0 && (
                       <>
                         <div className="flex justify-between text-gray-500 dark:text-gray-400">
-                          <span>○ 보류 (PENDING)</span>
-                          <span className="font-medium">{pendingTotal.toLocaleString()}건</span>
+                          <span>○ {t('upload:fileUpload.validPending')} (PENDING)</span>
+                          <span className="font-medium">{pendingTotal.toLocaleString()}{t('common:unit.cases')}</span>
                         </div>
                         {pendingReasons.map(([reason, count]) => (
                           <div key={reason} className="flex justify-between text-gray-400 dark:text-gray-500 pl-4">
                             <span className="text-xs">· {reason}</span>
-                            <span className="text-xs font-medium">{count.toLocaleString()}건</span>
+                            <span className="text-xs font-medium">{count.toLocaleString()}{t('common:unit.cases')}</span>
                           </div>
                         ))}
                       </>
@@ -1050,9 +1051,9 @@ export function FileUpload() {
                   <CloudUpload className="w-6 h-6 text-indigo-500" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">파일 업로드</h2>
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white">{t('fileUpload.title')}</h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    LDIF, Master List 파일을 업로드합니다.
+                    {t('upload:fileUpload.uploadLdifMl')}
                   </p>
                 </div>
               </div>
@@ -1100,10 +1101,10 @@ export function FileUpload() {
                   {!selectedFile ? (
                     <>
                       <p className="text-gray-600 dark:text-gray-300 font-medium">
-                        파일을 여기로 드래그하거나 클릭하여 선택하세요
+                        {t('upload:fileUpload.dragOrClick')}
                       </p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">
-                        LDIF, Master List (.ml, .bin) 파일 지원
+                        {t('upload:fileUpload.supportedFormats')}
                       </p>
                     </>
                   ) : (
@@ -1128,7 +1129,7 @@ export function FileUpload() {
                 <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center gap-2">
                   <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
                   <span className="text-sm text-yellow-700 dark:text-yellow-400">
-                    지원하지 않는 파일 형식입니다. LDIF 또는 Master List (.ml, .bin) 파일을 선택해주세요. 개별 인증서는 인증서 업로드 페이지를 이용해주세요.
+                    {t('upload:fileUpload.unsupportedFileType')}
                   </span>
                 </div>
               )}
@@ -1164,7 +1165,7 @@ export function FileUpload() {
                   className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 border text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
                   <Clock className="w-4 h-4" />
-                  업로드 이력
+                  {t('upload.history.title')}
                 </button>
                 <button
                   onClick={handleUpload}
@@ -1176,7 +1177,7 @@ export function FileUpload() {
                   ) : (
                     <Upload className="w-4 h-4" />
                   )}
-                  업로드
+                  {t('upload:fileUpload.upload')}
                 </button>
               </div>
 
@@ -1188,7 +1189,7 @@ export function FileUpload() {
                     <FileText className="w-5 h-5 text-cyan-500" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">처리 진행 상황</h3>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white">{t('upload:fileUpload.processingProgress')}</h3>
                     {selectedFile && (
                       <p className="font-mono text-xs text-gray-500 dark:text-gray-400 truncate">
                         {selectedFile.name}
@@ -1203,9 +1204,9 @@ export function FileUpload() {
                       overallStatus === 'FINALIZED' && 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
                       overallStatus === 'FAILED' && 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
                     )}>
-                      {overallStatus === 'PROCESSING' && '처리 중'}
-                      {overallStatus === 'FINALIZED' && '완료'}
-                      {overallStatus === 'FAILED' && '실패'}
+                      {overallStatus === 'PROCESSING' && t('common:status.processing')}
+                      {overallStatus === 'FINALIZED' && t('common:status.completed')}
+                      {overallStatus === 'FAILED' && t('common:status.failed')}
                     </span>
                   )}
                 </div>
@@ -1223,7 +1224,7 @@ export function FileUpload() {
                 {/* Currently Processing Certificate (inline in progress card) */}
                 {currentCertificate && (overallStatus === 'PROCESSING' || dbSaveStage.status === 'IN_PROGRESS') && (
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">처리 중인 인증서</h4>
+                    <h4 className="font-bold text-sm mb-3 text-gray-700 dark:text-gray-300">{t('upload:fileUpload.currentlyProcessingCert')}</h4>
                     <CurrentCertificateCard
                       certificate={currentCertificate}
                       compliance={currentCompliance || undefined}
@@ -1239,7 +1240,7 @@ export function FileUpload() {
                       <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
                     </div>
                     <div>
-                      <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">처리 실패</h4>
+                      <h4 className="font-semibold text-sm text-red-700 dark:text-red-400">{t('upload.detail.processFailed')}</h4>
                       <p className="text-sm mt-0.5 text-red-600 dark:text-red-500">{overallMessage}</p>
                     </div>
                   </div>
@@ -1251,7 +1252,7 @@ export function FileUpload() {
                   <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
                     <h4 className="font-bold text-sm text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
                       <XCircle className="w-4 h-4" />
-                      오류 상세
+                      {t('upload:fileUpload.errorDetail')}
                     </h4>
                     <ul className="text-sm text-red-600 dark:text-red-300 space-y-1">
                       {errorMessages.map((msg, idx) => (

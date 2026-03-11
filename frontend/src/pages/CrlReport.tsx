@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
@@ -112,6 +113,7 @@ const extractCn = (dn: string): string => {
 // --- Component ---
 
 export default function CrlReport() {
+  const { t } = useTranslation(['report', 'common']);
   const [reportData, setReportData] = useState<CrlReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -242,7 +244,7 @@ export default function CrlReport() {
         <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl flex items-start gap-3">
           <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-semibold text-red-900 dark:text-red-300">데이터 로드 실패</h3>
+            <h3 className="font-semibold text-red-900 dark:text-red-300">{t('common.label.dataLoadFailed')}</h3>
             <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
           </div>
         </div>
@@ -262,7 +264,7 @@ export default function CrlReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">전체 CRL</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('crl.totalCrls')}</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{summary.totalCrls.toLocaleString()}</p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">Certificate Revocation Lists</p>
             </div>
@@ -275,9 +277,9 @@ export default function CrlReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-orange-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">국가 수</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('common.label.countryCount')}</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{summary.countryCount}</p>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">발급 국가</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('crl.totalCountries')}</p>
             </div>
             <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/30">
               <Globe className="w-8 h-8 text-orange-500" />
@@ -301,7 +303,7 @@ export default function CrlReport() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-rose-500">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">만료율</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{ t('report:dscNc.expirationRate') }</p>
               <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{expiredRate.toFixed(1)}%</p>
               <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                 {summary.expiredCount}건 만료 / {summary.validCount}건 유효
@@ -323,7 +325,7 @@ export default function CrlReport() {
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-orange-500" />
             <h3 className="text-base font-bold text-gray-900 dark:text-white">국가별 폐기 인증서</h3>
-            <span className="text-sm text-gray-500 dark:text-gray-400">(상위 20개국)</span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{t('common.label.top20Countries')}</span>
           </div>
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={sortedByCountry} margin={{ left: 10, right: 10, top: 5, bottom: 50 }}>
@@ -447,11 +449,11 @@ export default function CrlReport() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-amber-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('certificate:search.filterLabel') }</h3>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label htmlFor="crl-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
+            <label htmlFor="crl-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{ t('ai:dashboard.filterCountry') }</label>
             <select
               id="crl-country"
               name="countryFilter"
@@ -459,7 +461,7 @@ export default function CrlReport() {
               onChange={(e) => { setCountryFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
-              <option value="">전체</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
               {[...reportData.byCountry].sort((a, b) => a.countryCode.localeCompare(b.countryCode)).map(c => (
                 <option key={c.countryCode} value={c.countryCode}>
                   {c.countryCode} - {getCountryName(c.countryCode)} ({c.crlCount})
@@ -468,7 +470,7 @@ export default function CrlReport() {
             </select>
           </div>
           <div>
-            <label htmlFor="crl-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">상태</label>
+            <label htmlFor="crl-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{ t('admin:apiClient.status') }</label>
             <select
               id="crl-status"
               name="statusFilter"
@@ -476,9 +478,9 @@ export default function CrlReport() {
               onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
-              <option value="">전체</option>
-              <option value="valid">유효</option>
-              <option value="expired">만료</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
+              <option value="valid">{t('common:status.valid')}</option>
+              <option value="expired">{t('common:status.expired')}</option>
             </select>
           </div>
           <div className="col-span-2 flex items-end gap-3">
@@ -487,7 +489,7 @@ export default function CrlReport() {
                 onClick={resetFilters}
                 className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                초기화
+                {t('common.button.reset')}
               </button>
             )}
             <span className="ml-auto text-sm text-gray-500 dark:text-gray-400 pb-2">
@@ -501,7 +503,7 @@ export default function CrlReport() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <ShieldAlert className="w-4 h-4 text-amber-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">CRL 목록</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('crl.crlList')}</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">
             {reportData.crls.total.toLocaleString()}건
           </span>
@@ -511,13 +513,13 @@ export default function CrlReport() {
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <SortableHeader label="국가" sortKey="countryCode" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('common:label.country')} sortKey="countryCode" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label="발급자 (CN)" sortKey="issuerDn" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="발급일" sortKey="thisUpdate" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="만료일" sortKey="nextUpdate" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="상태" sortKey="status" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('report:crl.thisUpdate')} sortKey="thisUpdate" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('common:label.expiryDate')} sortKey="nextUpdate" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('common:label.status')} sortKey="status" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <SortableHeader label="폐기 수" sortKey="revokedCount" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="알고리즘" sortKey="signatureAlgorithm" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('ai:forensic.categories.algorithm')} sortKey="signatureAlgorithm" sortConfig={crlSortConfig} onSort={requestCrlSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                 <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap"></th>
               </tr>
             </thead>
@@ -557,15 +559,15 @@ export default function CrlReport() {
                       <button
                         onClick={(e) => { e.stopPropagation(); handleRowClick(crl); }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
-                        title="상세보기"
+                        title={t('certificate:search.viewDetail')}
                       >
                         <Eye className="w-3.5 h-3.5" />
-                        상세
+                        {t('upload.history.detail')}
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDownloadCrl(crl); }}
                         className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors"
-                        title="CRL 파일 다운로드"
+                        title={t('report.crl.downloadCrlFile')}
                       >
                         <Download className="w-3.5 h-3.5" />
                         .crl
@@ -579,8 +581,8 @@ export default function CrlReport() {
                   <td colSpan={8} className="px-3 py-12 text-center">
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-                      <p className="text-lg font-medium">검색 결과 없음</p>
-                      <p className="text-sm mt-1">필터 조건을 변경해 보세요</p>
+                      <p className="text-lg font-medium">{ t('common:error.noSearchResults') }</p>
+                      <p className="text-sm mt-1">{ t('common:error.tryChangingFilters') }</p>
                     </div>
                   </td>
                 </tr>
@@ -629,7 +631,7 @@ export default function CrlReport() {
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-bold text-gray-900 dark:text-white">CRL 상세</h2>
+                    <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('crl.crlDetail')}</h2>
                     {getFlagSvgPath(selectedCrl.countryCode) && (
                       <img src={getFlagSvgPath(selectedCrl.countryCode)} alt={selectedCrl.countryCode}
                         className="w-6 h-4 object-cover rounded shadow-sm border border-gray-300 dark:border-gray-500" />
@@ -646,7 +648,7 @@ export default function CrlReport() {
                 <button
                   onClick={() => handleDownloadCrl(selectedCrl)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/30 transition-colors border border-green-200 dark:border-green-700"
-                  title="CRL 파일 다운로드"
+                  title={t('report.crl.downloadCrlFile')}
                 >
                   <Download className="w-4 h-4" />
                   .crl
@@ -672,11 +674,11 @@ export default function CrlReport() {
                       CRL 메타데이터
                     </h3>
                     <div className="grid grid-cols-2 gap-4 text-sm">
-                      <InfoRow label="발급자 DN" value={detailData.crl.issuerDn} mono />
-                      <InfoRow label="서명 알고리즘" value={formatAlgorithm(detailData.crl.signatureAlgorithm)} />
-                      <InfoRow label="발급일" value={detailData.crl.thisUpdate} />
-                      <InfoRow label="만료일" value={detailData.crl.nextUpdate || '-'} />
-                      <InfoRow label="CRL 번호" value={detailData.crl.crlNumber || '-'} />
+                      <InfoRow label={t('ai:issuerProfile.issuerDn')} value={detailData.crl.issuerDn} mono />
+                      <InfoRow label={t('certificate:detail.signatureAlgorithm')} value={formatAlgorithm(detailData.crl.signatureAlgorithm)} />
+                      <InfoRow label={t('report:crl.thisUpdate')} value={detailData.crl.thisUpdate} />
+                      <InfoRow label={t('common:label.expiryDate')} value={detailData.crl.nextUpdate || '-'} />
+                      <InfoRow label={t('report.crl.crlNumber')} value={detailData.crl.crlNumber || '-'} />
                       <InfoRow label="폐기 인증서 수" value={detailData.crl.revokedCount.toLocaleString()} highlight />
                     </div>
                   </div>
@@ -703,7 +705,7 @@ export default function CrlReport() {
                               <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 w-12">#</th>
                               <SortableHeader label="시리얼 번호" sortKey="serialNumber" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
                               <SortableHeader label="폐기 일자" sortKey="revocationDate" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
-                              <SortableHeader label="폐기 사유" sortKey="revocationReason" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
+                              <SortableHeader label={t('report:crl.revocationReason')} sortKey="revocationReason" sortConfig={revokedSortConfig} onSort={requestRevokedSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200" />
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -744,7 +746,7 @@ export default function CrlReport() {
                 onClick={closeDialog}
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                닫기
+                {t('icao.banner.dismiss')}
               </button>
             </div>
           </div>
@@ -757,6 +759,7 @@ export default function CrlReport() {
 // ─── Sub Components ──────────────────────────────────────────────────────────
 
 function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; onExport: () => void; loading: boolean }) {
+  const { t } = useTranslation(['report', 'common']);
   return (
     <div className="mb-6">
       <div className="flex items-center gap-4">
@@ -764,7 +767,7 @@ function PageHeader({ onRefresh, onExport, loading }: { onRefresh: () => void; o
           <FileWarning className="w-7 h-7 text-white" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">CRL 보고서</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('crl.title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
             Certificate Revocation List 분석 및 폐기 인증서 현황
           </p>
@@ -802,7 +805,7 @@ function ValidityBar({ validCount, expiredCount, total }: { validCount: number; 
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
       <div className="flex items-center gap-2 mb-3">
         <CheckCircle className="w-5 h-5 text-green-500" />
-        <h3 className="text-base font-bold text-gray-900 dark:text-white">유효성 상태</h3>
+        <h3 className="text-base font-bold text-gray-900 dark:text-white">{ t('report:dscNc.validityStatus') }</h3>
       </div>
       <div className="flex rounded-full overflow-hidden h-7 shadow-inner">
         {segments.map(seg => (
@@ -838,7 +841,7 @@ function StatusBadge({ status }: { status: string }) {
         : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400',
     )}>
       {isValid ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-      {isValid ? '유효' : '만료'}
+      {isValid ? t('upload.statistics.validCount') : t('upload.statistics.expiredCount')}
     </span>
   );
 }

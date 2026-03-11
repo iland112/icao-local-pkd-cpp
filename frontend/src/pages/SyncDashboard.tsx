@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useCallback } from 'react';
 import {
   RefreshCw,
@@ -30,6 +31,7 @@ import { useSortableTable } from '@/hooks/useSortableTable';
 import { SortableHeader } from '@/components/common/SortableHeader';
 
 export function SyncDashboard() {
+  const { t } = useTranslation(['sync', 'common']);
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
   const [history, setHistory] = useState<SyncHistoryItem[]>([]);
   const [config, setConfig] = useState<SyncConfigResponse | null>(null);
@@ -74,7 +76,7 @@ export function SyncDashboard() {
       setRevalidationHistory(Array.isArray(revalHistoryRes.data) ? revalHistoryRes.data : []);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to fetch sync data:', err);
-      setError('동기화 서비스에 연결할 수 없습니다.');
+      setError(t('dashboard.connectionError'));
     } finally {
       setLoading(false);
     }
@@ -102,7 +104,7 @@ export function SyncDashboard() {
       await fetchData();
     } catch (err) {
       if (import.meta.env.DEV) console.error('Manual check failed:', err);
-      setError('수동 검사 실패');
+      setError(t('dashboard.manualCheckFailed'));
     } finally {
       setChecking(false);
     }
@@ -117,7 +119,7 @@ export function SyncDashboard() {
       await fetchData();
     } catch (err) {
       if (import.meta.env.DEV) console.error('Revalidation failed:', err);
-      setError('인증서 재검증 실패');
+      setError(t('dashboard.revalidationFailed'));
     } finally {
       setRevalidating(false);
     }
@@ -149,7 +151,7 @@ export function SyncDashboard() {
       }
     } catch (err) {
       if (import.meta.env.DEV) console.error('Failed to update config:', err);
-      setError('설정 업데이트 실패');
+      setError(t('dashboard.configUpdateFailed'));
     } finally {
       setSaving(false);
     }
@@ -163,7 +165,7 @@ export function SyncDashboard() {
       setDailySyncResult(res.data);
     } catch (err) {
       if (import.meta.env.DEV) console.error('Daily sync trigger failed:', err);
-      setDailySyncResult({ success: false, message: '수동 동기화 트리거 실패' });
+      setDailySyncResult({ success: false, message: t('dashboard.manualSyncFailed') });
     } finally {
       setTriggeringDailySync(false);
     }
@@ -198,15 +200,15 @@ export function SyncDashboard() {
   const getStatusLabel = (syncStatus: SyncStatusType) => {
     switch (syncStatus) {
       case 'SYNCED':
-        return '동기화됨';
+        return t('dashboard.synced');
       case 'DISCREPANCY':
-        return '불일치 감지';
+        return t('dashboard.discrepancyDetected');
       case 'ERROR':
-        return '오류';
+        return t('dashboard.error');
       case 'NO_DATA':
-        return '데이터 없음';
+        return t('dashboard.noData');
       default:
-        return '대기 중';
+        return t('dashboard.waiting');
     }
   };
 
@@ -214,7 +216,7 @@ export function SyncDashboard() {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-        <span className="ml-2 text-gray-600 dark:text-gray-400">로딩 중...</span>
+        <span className="ml-2 text-gray-600 dark:text-gray-400">{t('common:button.loading')}</span>
       </div>
     );
   }
@@ -225,14 +227,14 @@ export function SyncDashboard() {
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 text-center">
           <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">
-            동기화 서비스 연결 실패
+            {t('dashboard.connectionFailed')}
           </h3>
           <p className="text-red-600 dark:text-red-300 mb-4">{error}</p>
           <button
             onClick={fetchData}
             className="px-4 py-2 bg-red-100 dark:bg-red-800 text-red-700 dark:text-red-200 rounded-lg hover:bg-red-200 dark:hover:bg-red-700 transition-colors"
           >
-            다시 시도
+            {t('common:button.retry')}
           </button>
         </div>
       </div>
@@ -246,10 +248,10 @@ export function SyncDashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <ArrowRightLeft className="w-7 h-7 text-blue-500" />
-            DB-LDAP 동기화 상태
+            {t('dashboard.title')}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            DB과 LDAP 간의 데이터 일관성을 모니터링합니다.
+            {t('dashboard.subtitle')}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -268,7 +270,7 @@ export function SyncDashboard() {
             ) : (
               <CalendarClock className="w-4 h-4" />
             )}
-            {triggeringDailySync ? '실행 중...' : '수동 동기화'}
+            {triggeringDailySync ? t('dashboard.running') : t('dashboard.manualSync')}
           </button>
           <button
             onClick={handleRevalidation}
@@ -285,7 +287,7 @@ export function SyncDashboard() {
             ) : (
               <ShieldCheck className="w-4 h-4" />
             )}
-            {revalidating ? '검증 중...' : '인증서 재검증'}
+            {revalidating ? t('dashboard.revalidatingText') : t('dashboard.certRevalidation')}
           </button>
           <button
             onClick={handleManualCheck}
@@ -302,7 +304,7 @@ export function SyncDashboard() {
             ) : (
               <Play className="w-4 h-4" />
             )}
-            {checking ? '검사 중...' : '수동 검사'}
+            {checking ? t('dashboard.checkingText') : t('dashboard.manualCheck')}
           </button>
         </div>
       </div>
@@ -314,7 +316,7 @@ export function SyncDashboard() {
             <div className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-gray-500" />
               <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                서비스 설정
+                {t('dashboard.serviceConfig')}
               </h3>
             </div>
             <button
@@ -322,35 +324,35 @@ export function SyncDashboard() {
               className="flex items-center gap-2 px-3 py-1.5 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
             >
               <Edit className="w-4 h-4" />
-              설정 편집
+              {t('dashboard.editConfig')}
             </button>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <CalendarClock className="w-4 h-4 text-purple-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">일일 동기화 시간</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard.dailySyncTime')}</span>
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {config.dailySyncEnabled ? `매일 ${config.dailySyncTime}` : '비활성화'}
+                {config.dailySyncEnabled ? t('dashboard.daily', { time: config.dailySyncTime }) : t('dashboard.disabled')}
               </p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <ShieldCheck className="w-4 h-4 text-green-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">인증서 자동 재검증</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard.autoRevalidation')}</span>
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {config.revalidateCertsOnSync ? '활성화' : '비활성화'}
+                {config.revalidateCertsOnSync ? t('dashboard.enabled') : t('dashboard.disabled')}
               </p>
             </div>
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
               <div className="flex items-center gap-2 mb-1">
                 <RotateCcw className="w-4 h-4 text-orange-500" />
-                <span className="text-xs text-gray-500 dark:text-gray-400">불일치 자동 조정</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard.autoReconcile')}</span>
               </div>
               <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                {config.autoReconcile ? '활성화' : '비활성화'}
+                {config.autoReconcile ? t('dashboard.enabled') : t('dashboard.disabled')}
               </p>
             </div>
           </div>
@@ -363,7 +365,7 @@ export function SyncDashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              현재 상태
+              {t('dashboard.currentStatus')}
             </h3>
             {status && getStatusIcon(status.status || 'PENDING')}
           </div>
@@ -374,14 +376,14 @@ export function SyncDashboard() {
                 status ? getStatusColor(status.status || 'PENDING') : 'bg-gray-100 text-gray-600'
               )}
             >
-              {status ? getStatusLabel(status.status || 'PENDING') : '알 수 없음'}
+              {status ? getStatusLabel(status.status || 'PENDING') : t('common:status.unknown')}
             </div>
 
             {/* Discrepancy Details in Current Status Card */}
             {status?.status === 'DISCREPANCY' && status.discrepancies && status.discrepancies.total > 0 && (
               <div className="mt-3 pt-3 border-t border-yellow-200 dark:border-yellow-800/50">
                 <div className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-2">
-                  불일치 상세:
+                  {t('dashboard.discrepancyDetail')}:
                 </div>
                 <div className="grid grid-cols-2 gap-1.5 text-xs">
                   {status.discrepancies.csca !== 0 && (
@@ -441,17 +443,17 @@ export function SyncDashboard() {
                   )}
                 </div>
                 <div className="mt-2 text-[10px] text-gray-500 dark:text-gray-400">
-                  + DB에만 있음 | - LDAP에만 있음
+                  {t('dashboard.dbOnlyLdapOnly')}
                 </div>
               </div>
             )}
 
             <div className="text-xs text-gray-500 dark:text-gray-400">
-              마지막 검사: {formatDateTime(status?.checkedAt)}
+              {t('dashboard.lastCheck')}: {formatDateTime(status?.checkedAt)}
             </div>
             {status?.checkDurationMs && (
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                검사 소요 시간: {status.checkDurationMs}ms
+                {t('dashboard.checkDuration')}: {status.checkDurationMs}ms
               </div>
             )}
           </div>
@@ -462,7 +464,7 @@ export function SyncDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <ArrowRightLeft className="w-5 h-5 text-purple-500" />
             <h3 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              DB ↔ LDAP 비교
+              {t('dashboard.dbLdapComparison')}
             </h3>
           </div>
           {status?.dbCounts && status?.ldapCounts ? (
@@ -471,7 +473,7 @@ export function SyncDashboard() {
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
                     <th className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                      인증서 타입
+                      {t('dashboard.certType')}
                     </th>
                     <th className="text-right py-2.5 px-3 font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
@@ -486,7 +488,7 @@ export function SyncDashboard() {
                       </div>
                     </th>
                     <th className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap">
-                      차이
+                      {t('dashboard.difference')}
                     </th>
                   </tr>
                 </thead>
@@ -600,13 +602,13 @@ export function SyncDashboard() {
               </table>
               <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
                 <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between">
-                  <span>+ DB에 더 많음 | - LDAP에 더 많음</span>
-                  <span className="font-medium">✓ 일치</span>
+                  <span>{t('dashboard.dbMoreLdapMore')}</span>
+                  <span className="font-medium">✓ {t('dashboard.consistent')}</span>
                 </div>
               </div>
             </div>
           ) : (
-            <div className="text-gray-400 text-center py-4">데이터 없음</div>
+            <div className="text-gray-400 text-center py-4">{t('dashboard.noData')}</div>
           )}
         </div>
       </div>
@@ -617,7 +619,7 @@ export function SyncDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <AlertTriangle className="w-5 h-5 text-yellow-500" />
             <h3 className="text-lg font-semibold text-yellow-800 dark:text-yellow-300">
-              불일치 상세
+              {t('dashboard.discrepancyDetail')}
             </h3>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -625,7 +627,7 @@ export function SyncDashboard() {
               <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
                 {status.discrepancies.total}
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">총 불일치</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">{t('dashboard.totalDiscrepancy')}</div>
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg p-3 text-center">
               <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">
@@ -659,7 +661,7 @@ export function SyncDashboard() {
             </div>
           </div>
           <p className="mt-4 text-sm text-yellow-700 dark:text-yellow-300">
-            양수 값: DB에 있고 LDAP에 없음 | 음수 값: LDAP에 있고 DB에 없음
+            {t('dashboard.positiveNegativeExplanation')}
           </p>
         </div>
       )}
@@ -669,7 +671,7 @@ export function SyncDashboard() {
         <div className="flex items-center gap-2 mb-4">
           <History className="w-5 h-5 text-purple-500" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            동기화 검사 이력
+            {t('dashboard.syncHistory')}
           </h3>
           <button
             onClick={fetchData}
@@ -684,17 +686,17 @@ export function SyncDashboard() {
             <table className="w-full text-xs">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <SortableHeader label="검사 시간" sortKey="checkedAt" sortConfig={historySortConfig} onSort={requestHistorySort}
+                  <SortableHeader label={t('dashboard.checkTime')} sortKey="checkedAt" sortConfig={historySortConfig} onSort={requestHistorySort}
                     className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="상태" sortKey="status" sortConfig={historySortConfig} onSort={requestHistorySort}
+                  <SortableHeader label={t('common:label.status')} sortKey="status" sortConfig={historySortConfig} onSort={requestHistorySort}
                     className="text-center py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="DB 총계" sortKey="dbTotal" sortConfig={historySortConfig} onSort={requestHistorySort}
+                  <SortableHeader label={t('dashboard.dbTotal')} sortKey="dbTotal" sortConfig={historySortConfig} onSort={requestHistorySort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="LDAP 총계" sortKey="ldapTotal" sortConfig={historySortConfig} onSort={requestHistorySort}
+                  <SortableHeader label={t('dashboard.ldapTotal')} sortKey="ldapTotal" sortConfig={historySortConfig} onSort={requestHistorySort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="불일치" sortKey="totalDiscrepancy" sortConfig={historySortConfig} onSort={requestHistorySort}
+                  <SortableHeader label={t('dashboard.discrepancy')} sortKey="totalDiscrepancy" sortConfig={historySortConfig} onSort={requestHistorySort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="소요 시간" sortKey="checkDurationMs" sortConfig={historySortConfig} onSort={requestHistorySort}
+                  <SortableHeader label={t('dashboard.duration')} sortKey="checkDurationMs" sortConfig={historySortConfig} onSort={requestHistorySort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
                 </tr>
               </thead>
@@ -746,8 +748,8 @@ export function SyncDashboard() {
         ) : (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>동기화 검사 이력이 없습니다.</p>
-            <p className="text-sm mt-1">수동 검사를 실행하거나 자동 검사를 기다려주세요.</p>
+            <p>{t('dashboard.noSyncHistory')}</p>
+            <p className="text-sm mt-1">{t('dashboard.waitForCheck')}</p>
           </div>
         )}
       </div>
@@ -758,7 +760,7 @@ export function SyncDashboard() {
           <div className="flex items-center gap-2 mb-4">
             <ShieldCheck className="w-5 h-5 text-green-500" />
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-              인증서 재검증 이력
+              {t('dashboard.revalidationHistory')}
             </h3>
           </div>
 
@@ -766,27 +768,27 @@ export function SyncDashboard() {
             <table className="w-full text-xs">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <SortableHeader label="실행 시간" sortKey="executedAt" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('dashboard.executionTime')} sortKey="executedAt" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-left py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="처리된 인증서" sortKey="totalProcessed" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('dashboard.processedCerts')} sortKey="totalProcessed" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="새로 만료" sortKey="newlyExpired" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.newlyExpired')} sortKey="newlyExpired" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="새로 유효" sortKey="newlyValid" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.newlyValid')} sortKey="newlyValid" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="변경 없음" sortKey="unchanged" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.noChange')} sortKey="unchanged" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="오류" sortKey="errors" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.error')} sortKey="errors" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
-                  <SortableHeader label="TC 대상" sortKey="tcProcessed" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:dashboard.tcTarget')} sortKey="tcProcessed" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" />
                   <SortableHeader label="TC VALID" sortKey="tcNewlyValid" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-blue-700 dark:text-blue-300 whitespace-nowrap" />
-                  <SortableHeader label="CRL 검사" sortKey="crlChecked" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync.dashboard.crlCheck')} sortKey="crlChecked" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap" />
-                  <SortableHeader label="CRL 폐기" sortKey="crlRevoked" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync.dashboard.crlRevoked')} sortKey="crlRevoked" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-purple-700 dark:text-purple-300 whitespace-nowrap" />
-                  <SortableHeader label="소요 시간" sortKey="durationMs" sortConfig={revalSortConfig} onSort={requestRevalSort}
+                  <SortableHeader label={t('sync:reconciliation.duration')} sortKey="durationMs" sortConfig={revalSortConfig} onSort={requestRevalSort}
                     className="text-right py-2.5 px-3 font-semibold text-slate-700 dark:text-gray-200 whitespace-nowrap" />
                 </tr>
               </thead>
@@ -878,22 +880,22 @@ export function SyncDashboard() {
         <div className="flex items-start gap-3">
           <Activity className="w-5 h-5 text-blue-500 mt-0.5" />
           <div className="text-sm text-blue-700 dark:text-blue-300">
-            <p className="font-medium mb-1">일일 동기화 및 인증서 재검증</p>
+            <p className="font-medium mb-1">{t('sync:dashboard.dailySyncTitle')}</p>
             {config?.dailySyncEnabled ? (
               <div>
                 <p className="mb-1">
-                  Sync Service가 매일 {config.dailySyncTime}에 자동으로 동기화를 실행합니다.
+                  {t('sync:dashboard.dailySyncDesc', { time: config.dailySyncTime })}
                 </p>
                 <ul className="list-disc list-inside space-y-0.5 ml-1">
-                  <li>DB과 LDAP의 데이터 일관성을 검사합니다.</li>
+                  <li>{t('sync:dashboard.dailySyncStep1')}</li>
                   {config.revalidateCertsOnSync && (
-                    <li>인증서 만료 상태 갱신 + Trust Chain 재검증 + CRL 폐기 검사를 자동으로 수행합니다.</li>
+                    <li>{t('sync:dashboard.dailySyncStep2')}</li>
                   )}
                 </ul>
               </div>
             ) : (
               <p>
-                일일 동기화가 비활성화되어 있습니다. 수동 검사 버튼을 사용하여 동기화 상태를 확인하세요.
+                {t('sync:dashboard.dailySyncDisabledMsg')}
               </p>
             )}
           </div>
@@ -906,7 +908,7 @@ export function SyncDashboard() {
         <Dialog
           isOpen={!!revalidationResult}
           onClose={() => setRevalidationResult(null)}
-          title="인증서 재검증 완료"
+          title={t('sync:dashboard.revalidationComplete')}
           size="lg"
         >
           <div className="space-y-4">
@@ -929,42 +931,42 @@ export function SyncDashboard() {
                   : 'text-red-800 dark:text-red-300'
               )}>
                 {revalidationResult.success
-                  ? `${revalidationResult.totalProcessed.toLocaleString()}건의 인증서를 검증했습니다.`
-                  : '인증서 재검증 중 오류가 발생했습니다.'}
+                  ? t('sync:dashboard.certsValidated', { count: revalidationResult.totalProcessed })
+                  : t('sync:dashboard.revalidationError')}
               </span>
               <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
                 {revalidationResult.durationMs < 1000
                   ? `${revalidationResult.durationMs}ms`
-                  : `${(revalidationResult.durationMs / 1000).toFixed(1)}초`}
+                  : `${(revalidationResult.durationMs / 1000).toFixed(1)}${t('common:time.seconds')}`}
               </span>
             </div>
 
             {/* Step 1: Expiration Check */}
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
-                Step 1: 만료 상태 검사
+                {t('sync:dashboard.step1ExpiryCheck')}
               </h4>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">처리</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('common:label.processing') }</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.totalProcessed.toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', revalidationResult.newlyExpired > 0 ? 'bg-orange-50 dark:bg-orange-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">새로 만료</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.newlyExpired')}</p>
                   <p className={cn('text-base font-bold', revalidationResult.newlyExpired > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.newlyExpired}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', revalidationResult.newlyValid > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">새로 유효</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.newlyValid')}</p>
                   <p className={cn('text-base font-bold', revalidationResult.newlyValid > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.newlyValid}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2 mt-2 text-center">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">변경 없음</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.noChange')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.unchanged.toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', revalidationResult.errors > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">오류</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
                   <p className={cn('text-base font-bold', revalidationResult.errors > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.errors}</p>
                 </div>
               </div>
@@ -973,23 +975,23 @@ export function SyncDashboard() {
             {/* Step 2: Trust Chain Re-validation */}
             <div className="border border-blue-200 dark:border-blue-800 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-300 mb-3">
-                Step 2: Trust Chain 재검증
+                {t('sync:dashboard.step2TrustChain')}
               </h4>
               <div className="grid grid-cols-4 gap-2 text-center">
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">대상</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.target')}</p>
                   <p className="text-base font-bold text-blue-700 dark:text-blue-300">{(revalidationResult.tcProcessed ?? 0).toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.tcNewlyValid ?? 0) > 0 ? 'bg-green-50 dark:bg-green-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">VALID 전환</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.validTransition')}</p>
                   <p className={cn('text-base font-bold', (revalidationResult.tcNewlyValid ?? 0) > 0 ? 'text-green-600 dark:text-green-400' : 'text-gray-900 dark:text-white')}>{(revalidationResult.tcNewlyValid ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">여전히 PENDING</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.stillPending')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{(revalidationResult.tcStillPending ?? 0).toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.tcErrors ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">오류</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
                   <p className={cn('text-base font-bold', (revalidationResult.tcErrors ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.tcErrors ?? 0}</p>
                 </div>
               </div>
@@ -998,27 +1000,27 @@ export function SyncDashboard() {
             {/* Step 3: CRL Re-check */}
             <div className="border border-purple-200 dark:border-purple-800 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-purple-700 dark:text-purple-300 mb-3">
-                Step 3: CRL 폐기 재검사
+                {t('sync:dashboard.step3CrlCheck')}
               </h4>
               <div className="grid grid-cols-5 gap-2 text-center">
                 <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">검사</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.checked')}</p>
                   <p className="text-base font-bold text-purple-700 dark:text-purple-300">{(revalidationResult.crlChecked ?? 0).toLocaleString()}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.crlRevoked ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">폐기</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.revoked')}</p>
                   <p className={cn('text-base font-bold', (revalidationResult.crlRevoked ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.crlRevoked ?? 0}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">CRL 없음</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.crlUnavailable')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{(revalidationResult.crlUnavailable ?? 0).toLocaleString()}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-2">
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">CRL 만료</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{t('sync:dashboard.crlExpired')}</p>
                   <p className="text-base font-bold text-gray-900 dark:text-white">{revalidationResult.crlExpired ?? 0}</p>
                 </div>
                 <div className={cn('rounded-lg p-2', (revalidationResult.crlErrors ?? 0) > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-gray-50 dark:bg-gray-700/50')}>
-                  <p className="text-[10px] text-gray-500 dark:text-gray-400">오류</p>
+                  <p className="text-[10px] text-gray-500 dark:text-gray-400">{ t('sync:dashboard.error') }</p>
                   <p className={cn('text-base font-bold', (revalidationResult.crlErrors ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-white')}>{revalidationResult.crlErrors ?? 0}</p>
                 </div>
               </div>
@@ -1030,7 +1032,7 @@ export function SyncDashboard() {
                 onClick={() => setRevalidationResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                확인
+                {t('common.confirm.title')}
               </button>
             </div>
           </div>
@@ -1042,7 +1044,7 @@ export function SyncDashboard() {
         <Dialog
           isOpen={!!syncCheckResult}
           onClose={() => setSyncCheckResult(null)}
-          title="동기화 검사 완료"
+          title={t('sync:dashboard.syncCheckComplete')}
           size="lg"
         >
           <div className="space-y-4">
@@ -1071,16 +1073,16 @@ export function SyncDashboard() {
                     : 'text-red-800 dark:text-red-300'
               )}>
                 {syncCheckResult.status === 'SYNCED'
-                  ? 'DB와 LDAP이 완전히 동기화되어 있습니다.'
+                  ? t('sync.dashboard.dbLdapSynced')
                   : syncCheckResult.status === 'DISCREPANCY'
-                    ? `${syncCheckResult.discrepancies?.total ?? 0}건의 불일치가 감지되었습니다.`
-                    : '동기화 검사 중 오류가 발생했습니다.'}
+                    ? t('sync:dashboard.discrepanciesDetected', { count: syncCheckResult.discrepancies?.total ?? 0 })
+                    : t('sync:dashboard.syncCheckError')}
               </span>
               {syncCheckResult.checkDurationMs && (
                 <span className="ml-auto text-xs text-gray-500 dark:text-gray-400">
                   {syncCheckResult.checkDurationMs < 1000
                     ? `${syncCheckResult.checkDurationMs}ms`
-                    : `${(syncCheckResult.checkDurationMs / 1000).toFixed(1)}초`}
+                    : `${(syncCheckResult.checkDurationMs / 1000).toFixed(1)}${t('common:time.seconds')}`}
                 </span>
               )}
             </div>
@@ -1090,16 +1092,16 @@ export function SyncDashboard() {
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                   <ArrowRightLeft className="w-4 h-4 text-purple-500" />
-                  DB ↔ LDAP 인증서 수량 비교
+                  {t('sync:dashboard.dbLdapCertComparison')}
                 </h4>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead className="bg-slate-100 dark:bg-gray-700">
                       <tr>
-                        <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">유형</th>
+                        <th className="text-left py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">{ t('ai:dashboard.filterType') }</th>
                         <th className="text-right py-2 px-3 font-semibold text-blue-600 dark:text-blue-400">DB</th>
                         <th className="text-right py-2 px-3 font-semibold text-green-600 dark:text-green-400">LDAP</th>
-                        <th className="text-right py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">차이</th>
+                        <th className="text-right py-2 px-3 font-semibold text-slate-700 dark:text-gray-200">{ t('sync:dashboard.difference') }</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1146,7 +1148,7 @@ export function SyncDashboard() {
                 onClick={() => setSyncCheckResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                확인
+                {t('common.confirm.title')}
               </button>
             </div>
           </div>
@@ -1158,7 +1160,7 @@ export function SyncDashboard() {
         <Dialog
           isOpen={!!dailySyncResult}
           onClose={() => setDailySyncResult(null)}
-          title="수동 동기화"
+          title={t('sync:dashboard.manualSync')}
           size="md"
         >
           <div className="space-y-4">
@@ -1180,7 +1182,7 @@ export function SyncDashboard() {
                   : 'text-red-800 dark:text-red-300'
               )}>
                 {dailySyncResult.success
-                  ? '일일 동기화가 트리거되었습니다.'
+                  ? t('sync:dashboard.dailySyncTriggered')
                   : dailySyncResult.message}
               </span>
             </div>
@@ -1189,13 +1191,13 @@ export function SyncDashboard() {
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
                 <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-blue-500" />
-                  실행 작업
+                  {t('sync:dashboard.executedTasks')}
                 </h4>
                 <div className="space-y-2">
                   {[
-                    { icon: <Play className="w-3.5 h-3.5 text-blue-500" />, label: '동기화 상태 검사 (DB ↔ LDAP)' },
-                    { icon: <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />, label: '인증서 재검증 (만료·Trust Chain·CRL)', note: config?.revalidateCertsOnSync ? '활성화' : '비활성화' },
-                    { icon: <RotateCcw className="w-3.5 h-3.5 text-orange-500" />, label: '불일치 자동 조정 (Reconciliation)', note: config?.autoReconcile ? '활성화' : '비활성화' },
+                    { icon: <Play className="w-3.5 h-3.5 text-blue-500" />, label: t('sync:dashboard.taskSyncCheck') },
+                    { icon: <ShieldCheck className="w-3.5 h-3.5 text-purple-500" />, label: t('sync:dashboard.taskRevalidation'), note: config?.revalidateCertsOnSync ? t('dashboard.enabled') : t('dashboard.disabled') },
+                    { icon: <RotateCcw className="w-3.5 h-3.5 text-orange-500" />, label: t('sync:dashboard.taskReconciliation'), note: config?.autoReconcile ? t('dashboard.enabled') : t('dashboard.disabled') },
                   ].map((step, i) => (
                     <div key={i} className="flex items-center gap-3 p-2 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
                       <div className="flex items-center justify-center w-6 h-6 bg-white dark:bg-gray-600 rounded-full text-xs font-bold text-gray-600 dark:text-gray-300 shadow-sm">
@@ -1206,7 +1208,7 @@ export function SyncDashboard() {
                       {step.note && (
                         <span className={cn(
                           'text-[10px] px-1.5 py-0.5 rounded font-medium',
-                          step.note === '활성화'
+                          step.note === t('dashboard.enabled')
                             ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                             : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
                         )}>
@@ -1217,7 +1219,7 @@ export function SyncDashboard() {
                   ))}
                 </div>
                 <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-                  백그라운드에서 실행됩니다. 완료 후 이력에서 결과를 확인할 수 있습니다.
+                  {t('sync:dashboard.backgroundRunning')}
                 </p>
               </div>
             )}
@@ -1227,7 +1229,7 @@ export function SyncDashboard() {
                 onClick={() => setDailySyncResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                확인
+                {t('common.confirm.title')}
               </button>
             </div>
           </div>
@@ -1239,14 +1241,14 @@ export function SyncDashboard() {
         <Dialog
           isOpen={!!configSaveResult}
           onClose={() => setConfigSaveResult(null)}
-          title="설정 저장 완료"
+          title={t('sync:dashboard.configSaved')}
           size="md"
         >
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
               <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0" />
               <span className="text-sm font-medium text-green-800 dark:text-green-300">
-                동기화 서비스 설정이 저장되었습니다.
+                {t('sync:dashboard.configSavedMsg')}
               </span>
             </div>
 
@@ -1254,28 +1256,28 @@ export function SyncDashboard() {
               <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-2">
                   <CalendarClock className="w-4 h-4 text-purple-500" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">일일 동기화</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{ t('admin:operationAudit.dailySync') }</span>
                 </div>
                 <span className={cn('text-sm font-semibold', configSaveResult.dailySyncEnabled ? 'text-blue-600 dark:text-blue-400' : 'text-gray-400 dark:text-gray-500')}>
-                  {configSaveResult.dailySyncEnabled ? `매일 ${configSaveResult.dailySyncTime}` : '비활성화'}
+                  {configSaveResult.dailySyncEnabled ? t('dashboard.daily', { time: configSaveResult.dailySyncTime }) : t('dashboard.disabled')}
                 </span>
               </div>
               <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-green-500" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">인증서 자동 재검증</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{t('dashboard.autoRevalidation')}</span>
                 </div>
                 <span className={cn('text-sm font-semibold', configSaveResult.revalidateCertsOnSync ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500')}>
-                  {configSaveResult.revalidateCertsOnSync ? '활성화' : '비활성화'}
+                  {configSaveResult.revalidateCertsOnSync ? t('dashboard.enabled') : t('dashboard.disabled')}
                 </span>
               </div>
               <div className="flex items-center justify-between p-3">
                 <div className="flex items-center gap-2">
                   <RotateCcw className="w-4 h-4 text-orange-500" />
-                  <span className="text-sm text-gray-700 dark:text-gray-300">불일치 자동 조정</span>
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{t('dashboard.autoReconcile')}</span>
                 </div>
                 <span className={cn('text-sm font-semibold', configSaveResult.autoReconcile ? 'text-orange-600 dark:text-orange-400' : 'text-gray-400 dark:text-gray-500')}>
-                  {configSaveResult.autoReconcile ? '활성화' : '비활성화'}
+                  {configSaveResult.autoReconcile ? t('dashboard.enabled') : t('dashboard.disabled')}
                 </span>
               </div>
             </div>
@@ -1285,7 +1287,7 @@ export function SyncDashboard() {
                 onClick={() => setConfigSaveResult(null)}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
               >
-                확인
+                {t('common.confirm.title')}
               </button>
             </div>
           </div>
@@ -1296,7 +1298,7 @@ export function SyncDashboard() {
         <Dialog
           isOpen={showConfigDialog}
           onClose={() => setShowConfigDialog(false)}
-          title="서비스 설정 편집"
+          title={t('sync:dashboard.editServiceConfig')}
           size="lg"
         >
           <div className="space-y-6 py-4">
@@ -1305,7 +1307,7 @@ export function SyncDashboard() {
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                   <CalendarClock className="w-5 h-5 text-purple-500" />
-                  일일 동기화
+                  {t('sync.reconciliation.dailySync')}
                 </label>
                 <button
                   type="button"
@@ -1334,7 +1336,7 @@ export function SyncDashboard() {
               {editedConfig.dailySyncEnabled && (
                 <div className="flex items-center gap-3 pl-7">
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600 dark:text-gray-400">시</label>
+                    <label className="text-sm text-gray-600 dark:text-gray-400">{t('common:time.hour')}</label>
                     <input
                       type="number"
                       min="0"
@@ -1351,7 +1353,7 @@ export function SyncDashboard() {
                   </div>
                   <span className="text-gray-400">:</span>
                   <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600 dark:text-gray-400">분</label>
+                    <label className="text-sm text-gray-600 dark:text-gray-400">{ t('common:label.minutes') }</label>
                     <input
                       type="number"
                       min="0"
@@ -1374,7 +1376,7 @@ export function SyncDashboard() {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <ShieldCheck className="w-5 h-5 text-green-500" />
-                인증서 자동 재검증
+                {t('sync.dashboard.autoRevalidation')}
               </label>
               <button
                 type="button"
@@ -1404,7 +1406,7 @@ export function SyncDashboard() {
             <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                 <RotateCcw className="w-5 h-5 text-orange-500" />
-                불일치 자동 조정
+                {t('sync.dashboard.autoReconcileLabel')}
               </label>
               <button
                 type="button"
@@ -1438,7 +1440,7 @@ export function SyncDashboard() {
                 className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50"
               >
                 <CloseIcon className="w-4 h-4" />
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleSaveConfig}
@@ -1448,12 +1450,12 @@ export function SyncDashboard() {
                 {saving ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    저장 중...
+                    {t('common.label.saving')}
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    저장
+                    {t('common.button.save')}
                   </>
                 )}
               </button>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useRef } from 'react';
 import { Activity, Cpu, HardDrive, MemoryStick, Network, Server, AlertCircle, CheckCircle2, XCircle, Clock, RefreshCw, Loader2, Gauge, Database, Globe } from 'lucide-react';
 import { monitoringServiceApi, type SystemMetrics, type ServiceHealth, type LoadSnapshot, type HistoryPoint } from '@/services/monitoringApi';
@@ -21,7 +22,7 @@ interface InfraHealth {
 const SERVICE_ORDER = ['pkd-management', 'pa-service', 'pkd-relay', 'Monitoring', 'ai-analysis'];
 
 const SERVICE_DEFS: Record<string, { label: string; port: number; desc: string }> = {
-  'pkd-management': { label: '인증서 관리', port: 8081, desc: '업로드, 인증서 관리, 인증' },
+  'pkd-management': { label: t('nav.sections.certManagement'), port: 8081, desc: '업로드, 인증서 관리, 인증' },
   'pa-service': { label: 'PA Service', port: 8082, desc: '여권 Passive Authentication' },
   'pkd-relay': { label: 'PKD Relay', port: 8083, desc: 'DB-LDAP 동기화' },
   'Monitoring': { label: 'Monitoring', port: 8084, desc: '시스템 메트릭 수집' },
@@ -36,6 +37,7 @@ function formatBytes(bytes: number): string {
 }
 
 export default function MonitoringDashboard() {
+  const { t } = useTranslation(['monitoring', 'common']);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [services, setServices] = useState<ServiceHealth[]>([]);
   const [infraHealth, setInfraHealth] = useState<InfraHealth[]>([]);
@@ -155,7 +157,7 @@ export default function MonitoringDashboard() {
             <Gauge className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">시스템 모니터링</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               실시간 시스템 리소스 및 서비스 상태를 모니터링합니다.
             </p>
@@ -220,7 +222,7 @@ export default function MonitoringDashboard() {
                   'font-medium',
                   ih.status === 'UP' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                 )}>
-                  {ih.name} {ih.status === 'UP' ? '정상' : '중단'}
+                  {ih.name} {ih.status === 'UP' ? t('monitoring.status.healthy') : '중단'}
                 </span>
               ))}
             </div>
@@ -246,9 +248,9 @@ export default function MonitoringDashboard() {
               value={metrics.memory.usagePercent.toFixed(1)}
               unit="%"
               details={[
-                { label: '전체', value: `${metrics.memory.totalMb.toLocaleString()} MB` },
+                { label: t('common:label.all'), value: `${metrics.memory.totalMb.toLocaleString()} MB` },
                 { label: '사용', value: `${metrics.memory.usedMb.toLocaleString()} MB` },
-                { label: '여유', value: `${metrics.memory.freeMb.toLocaleString()} MB` },
+                { label: t('common.label.surplus'), value: `${metrics.memory.freeMb.toLocaleString()} MB` },
               ]}
               percentage={metrics.memory.usagePercent}
             />
@@ -258,9 +260,9 @@ export default function MonitoringDashboard() {
               value={metrics.disk.usagePercent.toFixed(1)}
               unit="%"
               details={[
-                { label: '전체', value: `${metrics.disk.totalGb.toFixed(0)} GB` },
+                { label: t('common:label.all'), value: `${metrics.disk.totalGb.toFixed(0)} GB` },
                 { label: '사용', value: `${metrics.disk.usedGb.toFixed(0)} GB` },
-                { label: '여유', value: `${metrics.disk.freeGb.toFixed(0)} GB` },
+                { label: t('common.label.surplus'), value: `${metrics.disk.freeGb.toFixed(0)} GB` },
               ]}
               percentage={metrics.disk.usagePercent}
             />
@@ -357,7 +359,7 @@ export default function MonitoringDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center gap-2 mb-4">
               <Server className="w-5 h-5 text-gray-700 dark:text-gray-300" />
-              <h2 className="text-lg font-semibold text-gray-800 dark:text-white">서비스 상태</h2>
+              <h2 className="text-lg font-semibold text-gray-800 dark:text-white">{t('serviceStatus')}</h2>
               <span className="text-sm text-gray-500 dark:text-gray-400 ml-auto">{upCount}/{totalCount} 정상</span>
             </div>
 

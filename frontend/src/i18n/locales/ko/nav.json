@@ -1,0 +1,64 @@
+{
+  "home": "Home",
+  "sections": {
+    "certManagement": "인증서 관리",
+    "forgeryDetection": "위·변조 검사",
+    "reportsAnalysis": "보고서 & 분석",
+    "systemAdmin": "시스템 관리"
+  },
+  "menu": {
+    "icaoVersion": "ICAO 버전 상태",
+    "fileUpload": "파일 업로드",
+    "certUpload": "인증서 업로드",
+    "certSearch": "인증서 조회",
+    "uploadHistory": "업로드 이력",
+    "pendingDsc": "DSC 등록 승인",
+    "syncStatus": "동기화 상태",
+    "paVerify": "PA 검증 수행",
+    "verifyHistory": "검증 이력",
+    "certReports": "인증서 보고서",
+    "certStats": "인증서 통계",
+    "dscTrustChain": "DSC Trust Chain",
+    "crlReport": "CRL 보고서",
+    "nonConformantDsc": "표준 부적합 DSC",
+    "paStats": "PA 검증 통계",
+    "aiAnalysis": "AI 인증서 분석",
+    "systemMonitoring": "시스템 모니터링",
+    "userManagement": "사용자 관리",
+    "apiClients": "API 클라이언트",
+    "operationAudit": "운영 감사 로그",
+    "authAudit": "인증 감사 로그",
+    "apiDocs": "API Docs"
+  },
+  "breadcrumb": {
+    "detail": "상세",
+    "profile": "프로필"
+  },
+  "sidebar": {
+    "collapse": "사이드바 축소",
+    "expand": "사이드바 확장"
+  },
+  "header": {
+    "openMenu": "메뉴 열기",
+    "notifications": "알림",
+    "noNotifications": "알림이 없습니다",
+    "markAllRead": "모두 읽음",
+    "clearAll": "전체 삭제",
+    "darkMode": "다크 모드로 전환",
+    "lightMode": "라이트 모드로 전환",
+    "userMenu": "사용자 메뉴",
+    "profile": "프로필",
+    "userManagement": "사용자 관리",
+    "loginHistory": "로그인 이력",
+    "about": "About",
+    "logout": "로그아웃"
+  },
+  "about": {
+    "title": "About",
+    "subtitle": "SmartCore PKD — 전자여권 위·변조 검사 시스템",
+    "subtitleEn": "ePassport Public Key Directory Management & Passive Authentication System",
+    "supportedStandards": "Supported Standards:",
+    "openSourceLicenses": "Open Source Licenses",
+    "copyright": "Copyright (c) SMARTCORE Inc. All rights reserved."
+  }
+}

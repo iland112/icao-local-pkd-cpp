@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { Shield, AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
 import aiAnalysisApi, { type ForensicDetail } from '@/services/aiAnalysisApi';
@@ -49,6 +50,7 @@ function SeverityIcon({ severity }: { severity: string }) {
 }
 
 export default function ForensicAnalysisPanel({ fingerprint }: ForensicAnalysisPanelProps) {
+  const { t } = useTranslation(['ai', 'common']);
   const [detail, setDetail] = useState<ForensicDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

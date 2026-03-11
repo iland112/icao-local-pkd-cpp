@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   Search,
   Loader2,
@@ -67,6 +68,7 @@ export function QuickLookupPanel({
   setQuickLookupError,
   handleQuickLookup,
 }: QuickLookupPanelProps) {
+  const { t } = useTranslation(['pa', 'common']);
   return (
     <div className="max-w-3xl space-y-5">
       {/* Input Card */}
@@ -199,7 +201,7 @@ export function QuickLookupPanel({
                 {quickLookupResult.validation.trustChainValid
                   ? <CheckCircle className="w-4 h-4 text-green-500" />
                   : <XCircle className="w-4 h-4 text-red-500" />}
-                <span className="font-semibold">Trust Chain 검증</span>
+                <span className="font-semibold">{ t('pa:steps.step5') }</span>
               </div>
               {quickLookupResult.validation.trustChainPath && (
                 <div className="ml-6 text-gray-600 dark:text-gray-400">
@@ -267,7 +269,7 @@ export function QuickLookupPanel({
                 {quickLookupResult.validation.validityCheckPassed
                   ? <CheckCircle className="w-4 h-4 text-green-500" />
                   : <AlertTriangle className="w-4 h-4 text-yellow-500" />}
-                <span className="font-semibold">유효기간</span>
+                <span className="font-semibold">{ t('ai:forensic.categories.validity') }</span>
               </div>
               {(quickLookupResult.validation.notBefore || quickLookupResult.validation.notAfter) && (
                 <div className="ml-6 text-gray-600 dark:text-gray-400">
@@ -287,7 +289,7 @@ export function QuickLookupPanel({
                 {quickLookupResult.validation.crlCheckStatus === 'REVOKED'
                   ? <XCircle className="w-4 h-4 text-red-500" />
                   : <CheckCircle className="w-4 h-4 text-green-500" />}
-                <span className="font-semibold">CRL 검사</span>
+                <span className="font-semibold">{t('sync.dashboard.crlCheck')}</span>
                 <span className="text-gray-500 ml-1">({quickLookupResult.validation.crlCheckStatus || 'NOT_CHECKED'})</span>
               </div>
             </div>

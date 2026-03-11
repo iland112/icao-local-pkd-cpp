@@ -1,5 +1,6 @@
 export interface BreadcrumbItem {
-  label: string;
+  /** i18n key (e.g. 'nav:menu.fileUpload') or plain text for dynamic items */
+  labelKey: string;
   path?: string;
 }
 
@@ -7,34 +8,35 @@ const ROUTE_BREADCRUMBS: Record<string, BreadcrumbItem[]> = {
   '/': [],
 
   // 인증서 관리
-  '/icao': [{ label: '인증서 관리' }, { label: 'ICAO 버전 상태' }],
-  '/upload': [{ label: '인증서 관리' }, { label: '파일 업로드' }],
-  '/upload/certificate': [{ label: '인증서 관리' }, { label: '인증서 업로드' }],
-  '/pkd/certificates': [{ label: '인증서 관리' }, { label: '인증서 조회' }],
-  '/upload-history': [{ label: '인증서 관리' }, { label: '업로드 이력' }],
-  '/sync': [{ label: '인증서 관리' }, { label: '동기화 상태' }],
+  '/icao': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.icaoVersion' }],
+  '/upload': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.fileUpload' }],
+  '/upload/certificate': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.certUpload' }],
+  '/pkd/certificates': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.certSearch' }],
+  '/upload-history': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.uploadHistory' }],
+  '/sync': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.syncStatus' }],
 
   // 위·변조 검사
-  '/pa/verify': [{ label: '위·변조 검사' }, { label: 'PA 검증 수행' }],
-  '/pa/history': [{ label: '위·변조 검사' }, { label: '검증 이력' }],
+  '/pa/verify': [{ labelKey: 'nav:sections.forgeryDetection' }, { labelKey: 'nav:menu.paVerify' }],
+  '/pa/history': [{ labelKey: 'nav:sections.forgeryDetection' }, { labelKey: 'nav:menu.verifyHistory' }],
 
   // 보고서 & 분석
-  '/upload-dashboard': [{ label: '보고서 & 분석' }, { label: '인증서 보고서' }, { label: '인증서 통계' }],
-  '/pkd/trust-chain': [{ label: '보고서 & 분석' }, { label: '인증서 보고서' }, { label: 'DSC Trust Chain' }],
-  '/pkd/crl': [{ label: '보고서 & 분석' }, { label: '인증서 보고서' }, { label: 'CRL 보고서' }],
-  '/pkd/dsc-nc': [{ label: '보고서 & 분석' }, { label: '인증서 보고서' }, { label: '표준 부적합 DSC' }],
-  '/pa/dashboard': [{ label: '보고서 & 분석' }, { label: 'PA 검증 통계' }],
-  '/ai/analysis': [{ label: '보고서 & 분석' }, { label: 'AI 인증서 분석' }],
+  '/upload-dashboard': [{ labelKey: 'nav:sections.reportsAnalysis' }, { labelKey: 'nav:menu.certReports' }, { labelKey: 'nav:menu.certStats' }],
+  '/pkd/trust-chain': [{ labelKey: 'nav:sections.reportsAnalysis' }, { labelKey: 'nav:menu.certReports' }, { labelKey: 'nav:menu.dscTrustChain' }],
+  '/pkd/crl': [{ labelKey: 'nav:sections.reportsAnalysis' }, { labelKey: 'nav:menu.certReports' }, { labelKey: 'nav:menu.crlReport' }],
+  '/pkd/dsc-nc': [{ labelKey: 'nav:sections.reportsAnalysis' }, { labelKey: 'nav:menu.certReports' }, { labelKey: 'nav:menu.nonConformantDsc' }],
+  '/pa/dashboard': [{ labelKey: 'nav:sections.reportsAnalysis' }, { labelKey: 'nav:menu.paStats' }],
+  '/ai/analysis': [{ labelKey: 'nav:sections.reportsAnalysis' }, { labelKey: 'nav:menu.aiAnalysis' }],
 
   // 시스템 관리
-  '/monitoring': [{ label: '시스템 관리' }, { label: '시스템 모니터링' }],
-  '/admin/users': [{ label: '시스템 관리' }, { label: '사용자 관리' }],
-  '/admin/api-clients': [{ label: '시스템 관리' }, { label: 'API 클라이언트' }],
-  '/admin/operation-audit': [{ label: '시스템 관리' }, { label: '운영 감사 로그' }],
-  '/admin/audit-log': [{ label: '시스템 관리' }, { label: '인증 감사 로그' }],
+  '/monitoring': [{ labelKey: 'nav:sections.systemAdmin' }, { labelKey: 'nav:menu.systemMonitoring' }],
+  '/admin/users': [{ labelKey: 'nav:sections.systemAdmin' }, { labelKey: 'nav:menu.userManagement' }],
+  '/admin/api-clients': [{ labelKey: 'nav:sections.systemAdmin' }, { labelKey: 'nav:menu.apiClients' }],
+  '/admin/operation-audit': [{ labelKey: 'nav:sections.systemAdmin' }, { labelKey: 'nav:menu.operationAudit' }],
+  '/admin/audit-log': [{ labelKey: 'nav:sections.systemAdmin' }, { labelKey: 'nav:menu.authAudit' }],
+  '/admin/pending-dsc': [{ labelKey: 'nav:sections.certManagement' }, { labelKey: 'nav:menu.pendingDsc' }],
 
   // Profile
-  '/profile': [{ label: '프로필' }],
+  '/profile': [{ labelKey: 'nav:breadcrumb.profile' }],
 };
 
 /** Dynamic route patterns */
@@ -42,17 +44,17 @@ const DYNAMIC_PATTERNS: { regex: RegExp; crumbs: BreadcrumbItem[] }[] = [
   {
     regex: /^\/upload\/(?!certificate)[^/]+$/,
     crumbs: [
-      { label: '인증서 관리' },
-      { label: '업로드 이력', path: '/upload-history' },
-      { label: '상세' },
+      { labelKey: 'nav:sections.certManagement' },
+      { labelKey: 'nav:menu.uploadHistory', path: '/upload-history' },
+      { labelKey: 'nav:breadcrumb.detail' },
     ],
   },
   {
     regex: /^\/pa\/(?!verify|history|dashboard)[^/]+$/,
     crumbs: [
-      { label: '위·변조 검사' },
-      { label: '검증 이력', path: '/pa/history' },
-      { label: '상세' },
+      { labelKey: 'nav:sections.forgeryDetection' },
+      { labelKey: 'nav:menu.verifyHistory', path: '/pa/history' },
+      { labelKey: 'nav:breadcrumb.detail' },
     ],
   },
 ];

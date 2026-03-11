@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState } from 'react';
 import { authApi } from '@/services/api';
 import { createAuthenticatedClient } from '@/services/authApi';
@@ -7,6 +8,7 @@ import { User, Mail, Shield, Key, Check, AlertCircle, Eye, EyeOff, CheckCircle, 
 const authClient = createAuthenticatedClient('/api/auth');
 
 export function Profile() {
+  const { t } = useTranslation(['auth', 'common']);
   const user = authApi.getStoredUser();
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -32,7 +34,7 @@ export function Profile() {
     if (!user) return;
 
     if (!passwordData.currentPassword) {
-      setError('현재 비밀번호를 입력해주세요.');
+      setError(t('admin.userManagement.currentPasswordRequired'));
       return;
     }
     if (passwordData.newPassword.length < 8) {
@@ -56,7 +58,7 @@ export function Profile() {
       resetPasswordForm();
       setShowPasswordForm(false);
     } catch (err: any) {
-      const msg = err.response?.data?.message || err.message || '비밀번호 변경에 실패했습니다.';
+      const msg = err.response?.data?.message || err.message || t('admin.userManagement.passwordChangeFailed');
       if (msg.includes('incorrect')) {
         setError('현재 비밀번호가 올바르지 않습니다.');
       } else {
@@ -84,7 +86,7 @@ export function Profile() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          프로필
+          {t('nav.header.profile')}
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
           사용자 정보 및 계정 설정
@@ -115,7 +117,7 @@ export function Profile() {
             {user.is_admin && (
               <span className="inline-flex items-center gap-1 mt-2 px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full">
                 <Shield className="w-3 h-3" />
-                관리자
+                {t('admin.userManagement.adminUsers')}
               </span>
             )}
           </div>
@@ -128,7 +130,7 @@ export function Profile() {
             <Mail className="w-5 h-5 text-gray-400 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                이메일
+                {t('common.label.email')}
               </p>
               <p className="text-sm text-gray-900 dark:text-white">
                 {user.email || 'Not set'}
@@ -141,7 +143,7 @@ export function Profile() {
             <User className="w-5 h-5 text-gray-400 mt-0.5" />
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                사용자 ID
+                {t('common.label.userId')}
               </p>
               <p className="text-sm text-gray-900 dark:text-white font-mono">
                 {user.id}
@@ -154,12 +156,12 @@ export function Profile() {
       {/* Permissions Card */}
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 mb-6">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          권한
+          {t('admin.userManagement.permissions')}
         </h3>
         {user.is_admin ? (
           <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl flex items-center gap-2">
             <Shield className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">전체 권한 (관리자)</span>
+            <span className="text-sm font-medium text-blue-700 dark:text-blue-300">{t('common.label.allPermissions')}</span>
           </div>
         ) : user.permissions.length > 0 ? (
           <div className="space-y-4">
@@ -199,7 +201,7 @@ export function Profile() {
             })}
           </div>
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400">권한 없음</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('common.label.noPermissions')}</p>
         )}
       </div>
 
@@ -208,7 +210,7 @@ export function Profile() {
         <div className="flex items-center gap-3 mb-4">
           <Key className="w-5 h-5 text-gray-400" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            비밀번호 변경
+            {t('auth.profile.changePassword')}
           </h3>
         </div>
 
@@ -221,7 +223,7 @@ export function Profile() {
               onClick={() => { setShowPasswordForm(true); setError(''); setSuccess(''); }}
               className="px-4 py-2 bg-gradient-to-r from-purple-500 to-violet-500 text-white rounded-lg hover:from-purple-600 hover:to-violet-600 transition-all shadow-md text-sm font-medium"
             >
-              비밀번호 변경
+              {t('auth.profile.changePassword')}
             </button>
           </div>
         ) : (
@@ -235,7 +237,7 @@ export function Profile() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                현재 비밀번호
+                {t('auth.profile.currentPassword')}
               </label>
               <div className="relative">
                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -243,7 +245,7 @@ export function Profile() {
                   type={showCurrentPw ? 'text' : 'password'}
                   value={passwordData.currentPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                  placeholder="현재 비밀번호 입력"
+                  placeholder={t('admin.userManagement.currentPasswordInput')}
                   className="w-full pl-9 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 />
                 <button type="button" onClick={() => setShowCurrentPw(!showCurrentPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -254,7 +256,7 @@ export function Profile() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                새 비밀번호
+                {t('auth.profile.newPassword')}
               </label>
               <div className="relative">
                 <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -262,7 +264,7 @@ export function Profile() {
                   type={showNewPw ? 'text' : 'password'}
                   value={passwordData.newPassword}
                   onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                  placeholder="8자 이상 입력"
+                  placeholder={t('admin.userManagement.minChars8Input')}
                   className="w-full pl-9 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                 />
                 <button type="button" onClick={() => setShowNewPw(!showNewPw)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -288,7 +290,7 @@ export function Profile() {
               {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
                 <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
                   <AlertCircle className="w-3 h-3" />
-                  비밀번호가 일치하지 않습니다
+                  {t('common.validation.passwordMismatch')}
                 </p>
               )}
             </div>
@@ -298,7 +300,7 @@ export function Profile() {
                 onClick={() => { setShowPasswordForm(false); resetPasswordForm(); }}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors text-sm"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleChangePassword}

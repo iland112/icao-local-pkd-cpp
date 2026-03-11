@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useMemo } from 'react';
 import {
   CheckCircle,
@@ -62,6 +63,7 @@ export function ValidationSummaryPanel({
   title = '검증 결과 요약',
   isProcessing = false,
 }: ValidationSummaryPanelProps) {
+  const { t } = useTranslation(['upload', 'common']);
   const expiredValidCount = data.expiredValidCount ?? 0;
 
   // Trust chain success rate
@@ -100,11 +102,11 @@ export function ValidationSummaryPanel({
   // Dynamic summary cards
   type CardInfo = { key: string; label: string; value: number; color: string };
   const activeCards: CardInfo[] = [];
-  if (data.validCount > 0) activeCards.push({ key: 'valid', label: '유효', value: data.validCount, color: 'green' });
-  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: '만료(서명유효)', value: expiredValidCount, color: 'amber' });
-  if (data.pendingCount > 0) activeCards.push({ key: 'pending', label: '보류', value: data.pendingCount, color: 'yellow' });
-  if (data.invalidCount > 0) activeCards.push({ key: 'invalid', label: '무효', value: data.invalidCount, color: 'red' });
-  if ((data.errorCount ?? 0) > 0) activeCards.push({ key: 'error', label: '오류', value: data.errorCount!, color: 'gray' });
+  if (data.validCount > 0) activeCards.push({ key: 'valid', label: t('common:status.valid'), value: data.validCount, color: 'green' });
+  if (expiredValidCount > 0) activeCards.push({ key: 'expired-valid', label: t('upload.dashboard.expiredValidCount'), value: expiredValidCount, color: 'amber' });
+  if (data.pendingCount > 0) activeCards.push({ key: 'pending', label: t('upload.dashboard.pendingCount'), value: data.pendingCount, color: 'yellow' });
+  if (data.invalidCount > 0) activeCards.push({ key: 'invalid', label: t('upload.statistics.invalidCount'), value: data.invalidCount, color: 'red' });
+  if ((data.errorCount ?? 0) > 0) activeCards.push({ key: 'error', label: t('sync.dashboard.error'), value: data.errorCount!, color: 'gray' });
 
   const cc: Record<string, { bg: string; border: string; text: string; bold: string }> = {
     green: { bg: 'bg-green-50 dark:bg-green-900/20', border: 'border-green-200 dark:border-green-800', text: 'text-green-600 dark:text-green-400', bold: 'text-green-700 dark:text-green-300' },
@@ -135,7 +137,7 @@ export function ValidationSummaryPanel({
         {isProcessing && (
           <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400">
             <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600" />
-            <span>처리 중...</span>
+            <span>{ t('upload:fileUpload.processing') }</span>
           </div>
         )}
       </div>
@@ -235,7 +237,7 @@ export function ValidationSummaryPanel({
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <CheckCircle className="w-2.5 h-2.5" /> 성공
+                  <CheckCircle className="w-2.5 h-2.5" /> {t('sync.reconciliation.successCount')}
                 </span>
                 <span className="font-semibold text-green-700 dark:text-green-300">
                   {data.trustChainValidCount.toLocaleString()} ({trustChainSuccessRate}%)
@@ -244,7 +246,7 @@ export function ValidationSummaryPanel({
               {data.trustChainInvalidCount > 0 && (
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <XCircle className="w-2.5 h-2.5" /> 실패
+                    <XCircle className="w-2.5 h-2.5" /> {t('upload.statistics.totalFailed')}
                   </span>
                   <span className="font-semibold text-red-700 dark:text-red-300">{data.trustChainInvalidCount.toLocaleString()}</span>
                 </div>
@@ -269,7 +271,7 @@ export function ValidationSummaryPanel({
               </div>
               <div className="flex justify-between items-center text-xs">
                 <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                  <CheckCircle className="w-2.5 h-2.5" /> 준수
+                  <CheckCircle className="w-2.5 h-2.5" /> {t('certificate.doc9303.compliant')}
                 </span>
                 <span className="font-semibold text-green-700 dark:text-green-300">
                   {(data.icaoCompliantCount ?? 0).toLocaleString()} ({icaoComplianceRate}%)
@@ -278,7 +280,7 @@ export function ValidationSummaryPanel({
               {(data.icaoNonCompliantCount ?? 0) > 0 && (
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-red-600 dark:text-red-400 flex items-center gap-1">
-                    <XCircle className="w-2.5 h-2.5" /> 미준수
+                    <XCircle className="w-2.5 h-2.5" /> {t('certificate.doc9303.nonCompliant')}
                   </span>
                   <span className="font-semibold text-red-700 dark:text-red-300">
                     {(data.icaoNonCompliantCount ?? 0).toLocaleString()}
@@ -306,19 +308,19 @@ export function ValidationSummaryPanel({
           {/* Expiration + Revoked */}
           {(hasExpirationData || hasRevokedData) && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 space-y-1">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">유효 기간</div>
+              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{ t('common:label.validPeriod') }</div>
               <div className="flex gap-2">
                 {(data.validPeriodCount ?? 0) > 0 && (
                   <div className="flex items-center gap-1 text-xs">
                     <FileCheck className="w-2.5 h-2.5 text-green-500" />
-                    <span className="text-green-600 dark:text-green-400">유효</span>
+                    <span className="text-green-600 dark:text-green-400">{t('common:status.valid')}</span>
                     <span className="font-semibold text-green-700 dark:text-green-300">{(data.validPeriodCount ?? 0).toLocaleString()}</span>
                   </div>
                 )}
                 {data.expiredCount > 0 && (
                   <div className="flex items-center gap-1 text-xs">
                     <FileX className="w-2.5 h-2.5 text-red-500" />
-                    <span className="text-red-600 dark:text-red-400">만료</span>
+                    <span className="text-red-600 dark:text-red-400">{t('common:status.expired')}</span>
                     <span className="font-semibold text-red-700 dark:text-red-300">{data.expiredCount.toLocaleString()}</span>
                   </div>
                 )}
@@ -341,7 +343,7 @@ export function ValidationSummaryPanel({
           {/* Certificate Types */}
           {hasCertTypeData && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">인증서 유형</div>
+              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('certificate:detail.certificateType') }</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(data.certificateTypes!)
                   .sort(([, a], [, b]) => b - a)
@@ -358,7 +360,7 @@ export function ValidationSummaryPanel({
           {/* Key Sizes */}
           {hasKeySizeData && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">키 크기</div>
+              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('ai:forensic.categories.keySize') }</div>
               <div className="flex flex-wrap gap-1.5">
                 {Object.entries(data.keySizes!)
                   .sort(([a], [b]) => parseInt(b) - parseInt(a))
@@ -375,7 +377,7 @@ export function ValidationSummaryPanel({
           {/* Signature Algorithms — full width */}
           {hasSigAlgoData && (
             <div className="bg-gray-50 dark:bg-gray-700/30 rounded p-2 md:col-span-2">
-              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">서명 알고리즘</div>
+              <div className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-1">{ t('certificate:detail.signatureAlgorithm') }</div>
               <div className="space-y-1">
                 {(() => {
                   const total = Object.values(data.signatureAlgorithms!).reduce((s, c) => s + c, 0);
@@ -413,7 +415,7 @@ export function ValidationSummaryPanel({
         return (
           <div>
             <div className="flex justify-between text-[11px] mb-0.5">
-              <span className="text-gray-500 dark:text-gray-400">검증 성공률</span>
+              <span className="text-gray-500 dark:text-gray-400">{t('dashboard.successRate')}</span>
               <span className="font-semibold text-gray-900 dark:text-gray-100">{pct}%</span>
             </div>
             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">

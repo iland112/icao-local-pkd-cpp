@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import {
   Database,
@@ -60,16 +61,17 @@ interface ConnectionStatus {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation(['dashboard', 'common']);
   const [currentDate, setCurrentDate] = useState('');
   const [currentTime, setCurrentTime] = useState('');
   const [dbStatus, setDbStatus] = useState<ConnectionStatus>({
     connected: false,
-    message: '연결 상태를 확인하세요.',
+    message: '',
     testing: false,
   });
   const [ldapStatus, setLdapStatus] = useState<ConnectionStatus>({
     connected: false,
-    message: '연결 상태를 확인하세요.',
+    message: '',
     testing: false,
   });
   const [countryData, setCountryData] = useState<CountryStats[]>([]);
@@ -158,14 +160,14 @@ export function Dashboard() {
       setDbStatus({
         connected: response.data.status === 'UP',
         message: response.data.status === 'UP'
-          ? `PostgreSQL ${response.data.version || ''} 연결됨`
-          : '연결 실패',
+          ? t('dbConnected', { version: response.data.version || '' })
+          : t('connectionFailed'),
         testing: false,
       });
     } catch {
       setDbStatus({
         connected: false,
-        message: '연결 실패: 서버에 연결할 수 없습니다.',
+        message: t('connectionFailedDetail'),
         testing: false,
       });
     }
@@ -178,14 +180,14 @@ export function Dashboard() {
       setLdapStatus({
         connected: response.data.status === 'UP',
         message: response.data.status === 'UP'
-          ? `OpenLDAP 연결됨 (${response.data.responseTime}ms)`
-          : '연결 실패',
+          ? t('ldapConnected', { responseTime: response.data.responseTime })
+          : t('connectionFailed'),
         testing: false,
       });
     } catch {
       setLdapStatus({
         connected: false,
-        message: '연결 실패: 서버에 연결할 수 없습니다.',
+        message: t('connectionFailedDetail'),
         testing: false,
       });
     }
@@ -208,9 +210,9 @@ export function Dashboard() {
             <img src="/favicon.svg" alt="SPKD" className="w-13 h-13" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">SPKD Dashboard</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              전자여권 인증서 관리 및 위·변조 검사 플랫폼
+              {t('subtitle')}
             </p>
           </div>
           <div className="hidden lg:flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
@@ -263,7 +265,7 @@ export function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-1">
-                    ICAO PKD 신규 버전 감지
+                    {t('icao.newVersionDetected')}
                   </h3>
                   <div className="flex flex-wrap gap-2 mb-2">
                     {icaoStatus.status
@@ -288,12 +290,12 @@ export function Dashboard() {
                       onClick={() => navigate('/icao')}
                       className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 transition-colors"
                     >
-                      상세 보기 →
+                      {t('icao.viewDetail')}
                     </button>
                     {icaoStatus.last_checked_at && (
                       <span className="text-xs text-amber-500 dark:text-amber-500 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        마지막 확인: {formatDateTime(icaoStatus.last_checked_at)}
+                        {t('icao.lastChecked', { time: formatDateTime(icaoStatus.last_checked_at) })}
                       </span>
                     )}
                   </div>
@@ -302,7 +304,7 @@ export function Dashboard() {
               <button
                 onClick={() => setIcaoDismissed(true)}
                 className="p-1 rounded-lg text-amber-400 hover:text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors"
-                title="닫기"
+                title={t('common:button.close')}
               >
                 <X className="w-4 h-4" />
               </button>
@@ -319,7 +321,7 @@ export function Dashboard() {
               <div className="p-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500">
                 <Globe className="w-5 h-5 text-white" />
               </div>
-              국가별 인증서 현황 (Top 10)
+              {t('countryStatsTop10')}
             </h3>
             <div className="flex items-center gap-4">
               {/* Legend */}
@@ -342,7 +344,7 @@ export function Dashboard() {
                 className="text-sm text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 transition-colors"
               >
                 <BarChart3 className="w-4 h-4" />
-                상세 통계
+                {t('detailStats')}
               </button>
             </div>
           </div>
@@ -420,14 +422,14 @@ export function Dashboard() {
             <div className="text-center py-12">
               <Globe className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                업로드된 인증서가 없습니다
+                {t('noCertificates')}
               </p>
               <Link
                 to="/upload"
                 className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-gradient-to-r from-violet-500 to-purple-500"
               >
                 <Upload className="w-4 h-4" />
-                파일 업로드
+                {t('goUpload')}
               </Link>
             </div>
           )}
@@ -442,13 +444,13 @@ export function Dashboard() {
               <div className="p-2 rounded-lg bg-gradient-to-r from-blue-400 to-indigo-500">
                 <TrendingUp className="w-5 h-5 text-white" />
               </div>
-              최근 PKD 데이터 변경사항 상세
+              {t('recentChanges')}
             </h3>
             <Link
               to="/upload-history"
               className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
             >
-              전체 보기 →
+              {t('viewAll')}
             </Link>
           </div>
         </div>
@@ -508,7 +510,7 @@ export function Dashboard() {
             <div className="text-center py-12">
               <TrendingUp className="w-12 h-12 mx-auto text-gray-300 dark:text-gray-600 mb-3" />
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                업로드된 데이터가 없습니다
+                {t('noChanges')}
               </p>
             </div>
           )}

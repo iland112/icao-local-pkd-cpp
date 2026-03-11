@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { Users, Plus, Edit, Trash2, Key, Shield, Search, X, Check, AlertCircle, Mail, Clock, User } from 'lucide-react';
 import { createAuthenticatedClient } from '@/services/authApi';
@@ -29,6 +30,7 @@ interface UserFormData {
 const authClient = createAuthenticatedClient('/api/auth');
 
 export function UserManagement() {
+  const { t } = useTranslation(['admin', 'common']);
   const [users, setUsers] = useState<UserData[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,7 +139,7 @@ export function UserManagement() {
     const isSelf = currentUser?.id === selectedUser.id;
 
     if (isSelf && !passwordData.currentPassword) {
-      setError('현재 비밀번호를 입력해주세요.');
+      setError(t('admin.userManagement.currentPasswordRequired'));
       return;
     }
 
@@ -158,7 +160,7 @@ export function UserManagement() {
       setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
       setSelectedUser(null);
     } catch (error: any) {
-      setError(error.response?.data?.message || error.message || '비밀번호 변경에 실패했습니다.');
+      setError(error.response?.data?.message || error.message || t('admin.userManagement.passwordChangeFailed'));
     }
   };
 
@@ -232,7 +234,7 @@ export function UserManagement() {
           </div>
           <div className="flex-1">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              사용자 관리
+              {t('nav.header.userManagement')}
             </h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               시스템 사용자 및 권한 관리
@@ -272,15 +274,15 @@ export function UserManagement() {
       {/* Summary Stats + Search */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
-          <p className="text-sm text-gray-500 dark:text-gray-400">전체 사용자</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('userManagement.totalUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{users.length}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-indigo-500">
-          <p className="text-sm text-gray-500 dark:text-gray-400">관리자</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('userManagement.adminUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{adminCount}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
-          <p className="text-sm text-gray-500 dark:text-gray-400">활성 사용자</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('userManagement.activeUsers')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-white">{activeCount}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5">
@@ -310,7 +312,7 @@ export function UserManagement() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-12 text-center">
           <Users className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400">
-            {searchQuery ? '검색 결과가 없습니다.' : '등록된 사용자가 없습니다.'}
+            {searchQuery ? t('certificate.search.noResults') : '등록된 사용자가 없습니다.'}
           </p>
         </div>
       ) : (
@@ -338,7 +340,7 @@ export function UserManagement() {
                       {toBool(user.is_admin) && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium rounded-full flex-shrink-0">
                           <Shield className="w-3 h-3" />
-                          관리자
+                          {t('admin.userManagement.adminUsers')}
                         </span>
                       )}
                     </div>
@@ -378,8 +380,8 @@ export function UserManagement() {
                   ))}
                   {user.permissions.length === 0 && (
                     toBool(user.is_admin)
-                      ? <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs rounded-full">전체 권한 (관리자)</span>
-                      : <span className="text-xs text-gray-400 dark:text-gray-500 italic">권한 없음</span>
+                      ? <span className="px-2 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 text-xs rounded-full">{t('common.label.allPermissions')}</span>
+                      : <span className="text-xs text-gray-400 dark:text-gray-500 italic">{t('common.label.noPermissions')}</span>
                   )}
                 </div>
               </div>
@@ -391,21 +393,21 @@ export function UserManagement() {
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                 >
                   <Edit className="w-3.5 h-3.5" />
-                  수정
+                  {t('common.button.edit')}
                 </button>
                 <button
                   onClick={() => openPasswordModal(user)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/30 rounded-lg transition-colors"
                 >
                   <Key className="w-3.5 h-3.5" />
-                  비밀번호
+                  {t('common.label.password')}
                 </button>
                 <button
                   onClick={() => openDeleteModal(user)}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  삭제
+                  {t('common.button.delete')}
                 </button>
               </div>
             </div>
@@ -431,7 +433,7 @@ export function UserManagement() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="create-username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    사용자명 <span className="text-red-500">*</span>
+                    {t('common.label.username')} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -448,7 +450,7 @@ export function UserManagement() {
                 </div>
                 <div>
                   <label htmlFor="create-password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    비밀번호 <span className="text-red-500">*</span>
+                    {t('common.label.password')} <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -458,14 +460,14 @@ export function UserManagement() {
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="8자 이상"
+                      placeholder={t('admin.userManagement.minChars8')}
                       className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                     />
                   </div>
                 </div>
                 <div>
                   <label htmlFor="create-fullname" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    이름
+                    {t('common.label.name')}
                   </label>
                   <input
                     id="create-fullname"
@@ -479,7 +481,7 @@ export function UserManagement() {
                 </div>
                 <div>
                   <label htmlFor="create-email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    이메일
+                    {t('common.label.email')}
                   </label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -557,7 +559,7 @@ export function UserManagement() {
                 onClick={() => { setShowCreateModal(false); resetForm(); }}
                 className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition-colors text-sm"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleCreateUser}
@@ -580,7 +582,7 @@ export function UserManagement() {
                 <Edit className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">사용자 수정</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('userManagement.editUser')}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">@{selectedUser.username}</p>
               </div>
             </div>
@@ -588,7 +590,7 @@ export function UserManagement() {
               {/* 3-column grid for basic fields */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label htmlFor="edit-username" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">사용자명</label>
+                  <label htmlFor="edit-username" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{ t('admin:operationAudit.username') }</label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     <input
@@ -602,7 +604,7 @@ export function UserManagement() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="edit-email" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">이메일</label>
+                  <label htmlFor="edit-email" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{ t('admin:userManagement.email') }</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                     <input
@@ -617,7 +619,7 @@ export function UserManagement() {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor="edit-fullname" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">이름</label>
+                  <label htmlFor="edit-fullname" className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t('userManagement.fullName')}</label>
                   <input
                     id="edit-fullname"
                     name="fullName"
@@ -649,7 +651,7 @@ export function UserManagement() {
 
               {/* Permissions Grid — compact 3-col, no descriptions */}
               <div>
-                <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">권한 설정</span>
+                <span className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">{t('common.label.permissionSettings')}</span>
                 <div className="space-y-2">
                   {PERMISSION_GROUPS.map((group) => (
                     <div key={group.label}>
@@ -687,13 +689,13 @@ export function UserManagement() {
                 onClick={() => { setShowEditModal(false); resetForm(); }}
                 className="px-4 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleUpdateUser}
                 className="px-5 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-lg hover:from-blue-600 hover:to-indigo-600 transition-all shadow-md text-sm font-medium"
               >
-                저장
+                {t('common.button.save')}
               </button>
             </div>
           </div>
@@ -708,7 +710,7 @@ export function UserManagement() {
               <div className="w-12 h-12 mx-auto mb-3 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                 <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
               </div>
-              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">사용자 삭제</h2>
+              <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">{t('userManagement.deleteUser')}</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
                 다음 사용자를 삭제하시겠습니까?
               </p>
@@ -726,13 +728,13 @@ export function UserManagement() {
                 onClick={() => { setShowDeleteModal(false); setSelectedUser(null); }}
                 className="flex-1 px-4 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm font-medium border border-gray-200 dark:border-gray-600"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleDeleteUser}
                 className="flex-1 px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
               >
-                삭제
+                {t('common.button.delete')}
               </button>
             </div>
           </div>
@@ -748,7 +750,7 @@ export function UserManagement() {
                 <Key className="w-4 h-4 text-purple-600 dark:text-purple-400" />
               </div>
               <div>
-                <h2 className="text-base font-bold text-gray-900 dark:text-white">비밀번호 변경</h2>
+                <h2 className="text-base font-bold text-gray-900 dark:text-white">{ t('auth:profile.changePassword') }</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">@{selectedUser.username}</p>
               </div>
             </div>
@@ -756,7 +758,7 @@ export function UserManagement() {
               {authApi.getStoredUser()?.id === selectedUser.id && (
                 <div>
                   <label htmlFor="pw-current" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                    현재 비밀번호
+                    {t('auth.profile.currentPassword')}
                   </label>
                   <div className="relative">
                     <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -766,7 +768,7 @@ export function UserManagement() {
                       type="password"
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                      placeholder="현재 비밀번호 입력"
+                      placeholder={t('admin.userManagement.currentPasswordInput')}
                       className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                     />
                   </div>
@@ -774,7 +776,7 @@ export function UserManagement() {
               )}
               <div>
                 <label htmlFor="pw-new" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  새 비밀번호
+                  {t('auth.profile.newPassword')}
                 </label>
                 <div className="relative">
                   <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -784,14 +786,14 @@ export function UserManagement() {
                     type="password"
                     value={passwordData.newPassword}
                     onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                    placeholder="8자 이상 입력"
+                    placeholder={t('admin.userManagement.minChars8Input')}
                     className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
                   />
                 </div>
               </div>
               <div>
                 <label htmlFor="pw-confirm" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                  비밀번호 확인
+                  {t('auth.profile.confirmPassword')}
                 </label>
                 <div className="relative">
                   <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -808,7 +810,7 @@ export function UserManagement() {
                 {passwordData.confirmPassword && passwordData.newPassword !== passwordData.confirmPassword && (
                   <p className="mt-1.5 text-xs text-red-500 flex items-center gap-1">
                     <AlertCircle className="w-3 h-3" />
-                    비밀번호가 일치하지 않습니다
+                    {t('common.validation.passwordMismatch')}
                   </p>
                 )}
               </div>
@@ -818,7 +820,7 @@ export function UserManagement() {
                 onClick={() => { setShowPasswordModal(false); setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' }); setSelectedUser(null); }}
                 className="px-4 py-1.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors text-sm"
               >
-                취소
+                {t('common.button.cancel')}
               </button>
               <button
                 onClick={handleChangePassword}

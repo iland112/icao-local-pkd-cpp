@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Fragment } from 'react';
 import { AlertTriangle } from 'lucide-react';
 
@@ -22,10 +23,13 @@ export function ConfirmDialog({
   onConfirm,
   title,
   message,
-  confirmLabel = '확인',
-  cancelLabel = '취소',
+  confirmLabel,
+  cancelLabel,
   variant = 'warning',
 }: ConfirmDialogProps) {
+  const { t } = useTranslation(['common']);
+  const resolvedConfirmLabel = confirmLabel ?? t('button.confirm');
+  const resolvedCancelLabel = cancelLabel ?? t('button.cancel');
   if (!isOpen) return null;
 
   const variantStyles = {
@@ -82,7 +86,7 @@ export function ConfirmDialog({
               onClick={onClose}
               className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
             >
-              {cancelLabel}
+              {resolvedCancelLabel}
             </button>
             <button
               onClick={() => {
@@ -91,7 +95,7 @@ export function ConfirmDialog({
               }}
               className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${styles.button}`}
             >
-              {confirmLabel}
+              {resolvedConfirmLabel}
             </button>
           </div>
         </div>

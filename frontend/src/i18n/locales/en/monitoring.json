@@ -1,0 +1,69 @@
+{
+  "title": "System Monitoring",
+  "serviceStatus": "Service Status",
+  "systemMetrics": "System Metrics",
+  "connectionPool": "Connection Pool",
+  "activeConnections": "Active Connections",
+  "uniqueVisitors": "Unique Visitors",
+  "connectedNow": "{{count}} connected",
+  "tcpConnections": "TCP Connections",
+  "services": {
+    "pkdManagement": "PKD Management",
+    "paService": "PA Service",
+    "pkdRelay": "PKD Relay",
+    "monitoring": "Monitoring",
+    "aiAnalysis": "AI Analysis",
+    "apiGateway": "API Gateway",
+    "postgres": "PostgreSQL",
+    "oracle": "Oracle",
+    "openldap": "OpenLDAP"
+  },
+  "status": {
+    "healthy": "Healthy",
+    "unhealthy": "Unhealthy",
+    "unknown": "Unknown"
+  },
+  "metrics": {
+    "cpuUsage": "CPU Usage",
+    "memoryUsage": "Memory Usage",
+    "diskUsage": "Disk Usage",
+    "uptime": "Uptime",
+    "requestRate": "Request Rate",
+    "latency": "Latency",
+    "errorRate": "Error Rate"
+  },
+  "pool": {
+    "active": "Active",
+    "idle": "Idle",
+    "total": "Total",
+    "maxSize": "Max"
+  },
+  "noData": "No monitoring data available",
+  "dashboard": {
+    "systemMetrics": "System Metrics",
+    "serviceHealth": "Service Health",
+    "connectionPool": "Connection Pool",
+    "activeConnections": "Active Connections",
+    "uniqueVisitors": "Unique Visitors",
+    "connected": "Connected",
+    "latencyTrend": "Latency Trend",
+    "requestRate": "Request Rate",
+    "cpuUsage": "CPU Usage",
+    "memoryUsage": "Memory Usage",
+    "diskUsage": "Disk Usage",
+    "uptime": "Uptime",
+    "dbConnections": "DB Connections",
+    "ldapConnections": "LDAP Connections",
+    "dbPool": "DB Pool",
+    "ldapPool": "LDAP Pool",
+    "usedConnections": "Used Connections",
+    "availableConnections": "Available Connections",
+    "maxConnections": "Max Connections",
+    "connectionRate": "Connection Rate",
+    "requestsPerMin": "Req/min",
+    "avgLatency": "Avg Latency",
+    "peakLatency": "Peak Latency",
+    "tcpConnections": "TCP Connections",
+    "activeNow": "active now"
+  }
+}

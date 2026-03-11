@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 /**
  * PendingDscNotifier - Polls pending DSC stats and notifies admin when new pending DSCs arrive.
  * Mounted in Layout.tsx alongside NotificationListener.
@@ -10,6 +11,7 @@ import { useNotificationStore } from '@/stores/notificationStore';
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 
 export function PendingDscNotifier() {
+  const { t } = useTranslation(['admin', 'common']);
   const lastPendingCount = useRef<number | null>(null);
   const addNotification = useNotificationStore((s) => s.addNotification);
 
@@ -29,7 +31,7 @@ export function PendingDscNotifier() {
           const diff = current - lastPendingCount.current;
           addNotification({
             type: 'DSC_PENDING_CREATED',
-            title: 'DSC 등록 승인 대기',
+            title: t('admin.pendingDscNotifier.pendingDscTitle'),
             message: `신규 DSC ${diff}건이 승인 대기 중입니다. (전체 ${current}건)`,
             data: { pendingCount: current, newCount: diff },
             timestamp: new Date().toISOString(),

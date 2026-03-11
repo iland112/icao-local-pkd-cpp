@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import type { HistoryPoint } from '@/services/monitoringApi';
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export default function RequestRateChart({ data }: Props) {
+  const { t } = useTranslation(['monitoring', 'common']);
   const chartData = data.map(p => ({
     time: formatTime(p.timestamp),
     rps: Number(p.nginx.requestsPerSecond.toFixed(1)),

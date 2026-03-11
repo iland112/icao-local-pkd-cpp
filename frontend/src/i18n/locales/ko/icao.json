@@ -1,0 +1,45 @@
+{
+  "title": "ICAO PKD 버전 상태",
+  "subtitle": "ICAO PKD 인증서 컬렉션 버전 모니터링",
+  "checkUpdates": "업데이트 확인",
+  "checking": "확인 중...",
+  "lastChecked": "마지막 확인",
+  "currentVersion": "현재 버전",
+  "latestVersion": "최신 버전",
+  "upToDate": "최신 상태",
+  "updateAvailable": "업데이트 있음",
+  "newVersions": "신규 버전 {{count}}건",
+  "versionHistory": "버전 이력",
+  "versionNumber": "버전 번호",
+  "releaseDate": "공개일",
+  "certificateCount": "인증서 수",
+  "status": "상태",
+  "applied": "적용됨",
+  "notApplied": "미적용",
+  "checkResult": "확인 결과",
+  "checkResultTitle": "ICAO 버전 확인 결과",
+  "noNewVersions": "현재 최신 상태입니다",
+  "newVersionsFound": "신규 버전 {{count}}건이 확인되었습니다",
+  "collections": {
+    "masterList": "Master List",
+    "dscList": "DSC List",
+    "crlList": "CRL List",
+    "deviationList": "Deviation List"
+  },
+  "banner": {
+    "newVersionAvailable": "ICAO PKD 신규 버전이 발견되었습니다",
+    "dismiss": "닫기",
+    "viewDetails": "자세히 보기"
+  },
+  "noData": "ICAO 버전 데이터가 없습니다",
+  "statusPage": {
+    "updateCheck": "업데이트 확인",
+    "currentVersion": "현재 버전",
+    "latestVersion": "최신 버전",
+    "localVersion": "로컬 버전",
+    "noUpdateNeeded": "최신 상태입니다",
+    "updateAvailable": "업데이트 가능",
+    "versionHistory": "버전 이력",
+    "lastChecked": "마지막 확인"
+  }
+}

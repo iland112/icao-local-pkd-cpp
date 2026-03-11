@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Shield, ShieldCheck, ShieldAlert, ShieldX } from 'lucide-react';
 import type { IcaoComplianceStatus } from '@/types';
 import { cn } from '@/utils/cn';
@@ -13,6 +14,7 @@ export function IcaoComplianceBadge({
   size = 'md',
   showDetails = false
 }: IcaoComplianceBadgeProps) {
+  const { t } = useTranslation(['certificate', 'common']);
   const getIcon = () => {
     switch (compliance.complianceLevel) {
       case 'CONFORMANT':
@@ -58,13 +60,13 @@ export function IcaoComplianceBadge({
   const getLabel = () => {
     switch (compliance.complianceLevel) {
       case 'CONFORMANT':
-        return 'ICAO 준수';
+        return t('upload.statistics.icaoCompliant');
       case 'WARNING':
-        return 'ICAO 경고';
+        return t('certificate.compliance.icaoWarning');
       case 'NON_CONFORMANT':
-        return 'ICAO 미준수';
+        return t('upload.statistics.icaoNonCompliant');
       default:
-        return 'ICAO 미확인';
+        return t('certificate.compliance.icaoUnknown');
     }
   };
 

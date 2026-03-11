@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { Loader2, FileCode, AlertCircle } from 'lucide-react';
 import axios from 'axios';
@@ -35,6 +36,7 @@ interface ApiResponse {
 }
 
 export function MasterListStructure({ uploadId }: MasterListStructureProps) {
+  const { t } = useTranslation(['upload', 'common']);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiResponse | null>(null);
@@ -115,7 +117,7 @@ export function MasterListStructure({ uploadId }: MasterListStructureProps) {
         <div className="flex items-start gap-2">
           <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-800 dark:text-red-300">파싱 실패</p>
+            <p className="text-sm font-medium text-red-800 dark:text-red-300">{ t('common:error.parseFailed') }</p>
             <p className="text-sm text-red-600 dark:text-red-400 mt-1">{error}</p>
           </div>
         </div>

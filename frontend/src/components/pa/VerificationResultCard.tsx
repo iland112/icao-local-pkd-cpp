@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   Award,
   XCircle,
@@ -38,14 +39,14 @@ function TrustChainErrorDetail({ chainValidation }: { chainValidation: Certifica
   const errorMessages: Record<string, { title: string; description: string }> = {
     CSCA_NOT_FOUND: {
       title: 'CSCA 인증서 미등록',
-      description: '해당 국가의 CSCA 인증서가 PKD에 등록되어 있지 않습니다.',
+      description: t('pa.steps.cscaNotInPkd'),
     },
     CSCA_DN_MISMATCH: {
-      title: 'CSCA DN 불일치',
+      title: t('pa.steps.cscaDnMismatch'),
       description: '해당 국가의 CSCA가 존재하나 DSC 발급자 DN과 일치하는 인증서를 찾을 수 없습니다.',
     },
     CSCA_SELF_SIGNATURE_FAILED: {
-      title: 'CSCA 자체 서명 검증 실패',
+      title: t('pa.steps.cscaSelfSignFailed'),
       description: 'Root CSCA의 자체 서명 검증에 실패했습니다. 인증서가 변조되었을 수 있습니다.',
     },
   };
@@ -139,6 +140,7 @@ export function VerificationResultCard({
   dg1ParseResult,
   dg2ParseResult,
 }: VerificationResultCardProps) {
+  const { t } = useTranslation(['pa', 'common']);
   return (
     <div className={cn(
       'rounded-2xl p-4',
@@ -159,9 +161,9 @@ export function VerificationResultCard({
         <div className="flex-grow">
           <h2 className="text-lg font-bold">
             {result.status === 'VALID'
-              ? '검증 성공'
+              ? t('pa.result.passed')
               : result.status === 'INVALID'
-              ? '검증 실패'
+              ? t('upload.fileUpload.validationFailed')
               : '검증 오류'}
           </h2>
           <div className="flex items-center gap-4 mt-0.5 text-sm opacity-90">
@@ -200,14 +202,14 @@ export function VerificationResultCard({
           className="flex items-center gap-1 text-xs opacity-80 hover:opacity-100 underline shrink-0"
         >
           <ExternalLink className="w-3.5 h-3.5" />
-          상세
+          {t('upload.history.detail')}
         </Link>
       </div>
 
       {/* Failure reasons */}
       {result.status === 'INVALID' && (
         <div className="mt-3 pt-3 border-t border-white/20 space-y-1.5">
-          <div className="text-xs font-semibold opacity-90">실패 원인:</div>
+          <div className="text-xs font-semibold opacity-90">{ t('common:error.failReason') }</div>
           {!result.certificateChainValidation?.valid && result.certificateChainValidation && (
             <TrustChainErrorDetail chainValidation={result.certificateChainValidation} />
           )}
@@ -243,7 +245,7 @@ export function VerificationResultCard({
             {result.certificateChainValidation.pkdConformanceCode && (
               <span className="font-mono">{result.certificateChainValidation.pkdConformanceCode}: </span>
             )}
-            {result.certificateChainValidation.pkdConformanceText || 'ICAO PKD 비준수 인증서'}
+            {result.certificateChainValidation.pkdConformanceText || t('pa.result.icaoNonConformant')}
           </p>
         </div>
       )}
@@ -266,29 +268,29 @@ export function VerificationResultCard({
             {dg1ParseResult?.success && (
               <div className="flex-grow grid grid-cols-3 gap-x-4 gap-y-1 text-xs">
                 <div>
-                  <span className="opacity-70">성명</span>
+                  <span className="opacity-70">{t('common.label.fullName')}</span>
                   <div className="font-semibold">{dg1ParseResult.fullName}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">여권번호</span>
+                  <span className="opacity-70">{ t('pa:result.documentNumber') }</span>
                   <div className="font-mono font-semibold">{dg1ParseResult.documentNumber}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">국적</span>
+                  <span className="opacity-70">{t('common.label.nationality')}</span>
                   <div className="font-semibold">{dg1ParseResult.nationality}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">생년월일</span>
+                  <span className="opacity-70">{t('common.label.dateOfBirth')}</span>
                   <div className="font-mono font-semibold">{dg1ParseResult.dateOfBirth}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">만료일</span>
+                  <span className="opacity-70">{ t('common:label.expiryDate') }</span>
                   <div className="font-mono font-semibold">{dg1ParseResult.dateOfExpiry}</div>
                 </div>
                 <div>
-                  <span className="opacity-70">성별</span>
+                  <span className="opacity-70">{t('common.label.gender')}</span>
                   <div className="font-semibold">
-                    {dg1ParseResult.sex === 'M' ? '남성' : dg1ParseResult.sex === 'F' ? '여성' : dg1ParseResult.sex}
+                    {dg1ParseResult.sex === 'M' ? t('pa.result.male') : dg1ParseResult.sex === 'F' ? t('pa.result.female') : dg1ParseResult.sex}
                   </div>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
@@ -26,6 +27,7 @@ import type { ValidationResult } from '@/types/validation';
 import { TrustChainVisualization } from '@/components/TrustChainVisualization';
 
 export function UploadDetail() {
+  const { t } = useTranslation(['upload', 'common']);
   const { uploadId } = useParams<{ uploadId: string }>();
   const navigate = useNavigate();
 
@@ -70,10 +72,10 @@ export function UploadDetail() {
       if (response.data?.success && response.data.data) {
         setUpload(response.data.data);
       } else {
-        setError('업로드 정보를 찾을 수 없습니다.');
+        setError(t('upload.detail.uploadNotFound'));
       }
     } catch (err) {
-      setError('업로드 정보를 불러오는데 실패했습니다.');
+      setError(t('upload.detail.loadFailed'));
       if (import.meta.env.DEV) console.error('Failed to fetch upload detail:', err);
     } finally {
       setLoading(false);
@@ -127,15 +129,15 @@ export function UploadDetail() {
 
     const style = styles[status];
     const label: Record<UploadStatus, string> = {
-      PENDING: '대기',
+      PENDING: t('common:status.pending'),
       UPLOADING: '업로드 중',
       PARSING: '파싱 중',
-      PROCESSING: '처리 중',
+      PROCESSING: t('common:status.processing'),
       VALIDATING: '검증 중',
       SAVING_DB: 'DB 저장 중',
       SAVING_LDAP: 'LDAP 저장 중',
-      COMPLETED: '완료',
-      FAILED: '실패',
+      COMPLETED: t('common:status.completed'),
+      FAILED: t('common:status.failed'),
     };
 
     return (
@@ -190,7 +192,7 @@ export function UploadDetail() {
             onClick={() => navigate('/upload-history')}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
           >
-            목록으로 돌아가기
+            {t('upload.detail.backToList')}
           </button>
         </div>
       </div>
@@ -212,7 +214,7 @@ export function UploadDetail() {
             <FileText className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">업로드 상세</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('detail.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400 font-mono">
               {upload.id}
             </p>
@@ -228,23 +230,23 @@ export function UploadDetail() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
-              파일 정보
+              {t('upload.detail.fileInfo')}
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-gray-500 dark:text-gray-400">파일명</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400">{ t('upload:history.fileName') }</label>
                   <p className="font-medium text-gray-900 dark:text-white">{upload.fileName}</p>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500 dark:text-gray-400">파일 형식</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400">{ t('upload:history.fileType') }</label>
                   <div className="mt-1">{getFormatBadge(upload.fileFormat)}</div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-500 dark:text-gray-400">처리 모드</label>
+                  <label className="text-sm text-gray-500 dark:text-gray-400">{t('upload.detail.processingMode')}</label>
                   <p className="font-medium text-gray-900 dark:text-white">
                     <span className="px-2 py-1 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
-                      자동
+                      {t('upload.detail.auto')}
                     </span>
                   </p>
                 </div>
@@ -253,14 +255,14 @@ export function UploadDetail() {
                 <div className="flex items-center gap-2">
                   <HardDrive className="w-4 h-4 text-gray-400" />
                   <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">파일 크기</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">{ t('upload:fileUpload.fileSize') }</label>
                     <p className="font-medium text-gray-900 dark:text-white">{formatFileSize(upload.fileSize)}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <Hash className="w-4 h-4 text-gray-400" />
                   <div>
-                    <label className="text-sm text-gray-500 dark:text-gray-400">파일 해시 (SHA-256)</label>
+                    <label className="text-sm text-gray-500 dark:text-gray-400">{t('upload.detail.fileHash')}</label>
                     <p className="font-mono text-xs text-gray-600 dark:text-gray-300 break-all">{upload.fileHash}</p>
                   </div>
                 </div>
@@ -272,7 +274,7 @@ export function UploadDetail() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
             <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
               <Calendar className="w-5 h-5 text-purple-500" />
-              처리 타임라인
+              {t('upload.detail.processingTimeline')}
             </h2>
             <div className="space-y-4">
               <div className="flex items-center gap-4">
@@ -280,7 +282,7 @@ export function UploadDetail() {
                   <Clock className="w-5 h-5 text-blue-500" />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900 dark:text-white">업로드 시작</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{t('upload.detail.uploadStart')}</p>
                   <p className="text-sm text-gray-500">{formatDateTime(upload.uploadedAt || upload.createdAt || '')}</p>
                 </div>
               </div>
@@ -292,7 +294,7 @@ export function UploadDetail() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {upload.status === 'PROCESSING' ? '인증서 처리 중' : '처리 진행 중'}
+                      {upload.status === 'PROCESSING' ? t('upload.detail.processingCerts') : '처리 진행 중'}
                     </p>
                     {upload.totalEntries && upload.totalEntries > 0 && (
                       <p className="text-sm text-blue-600 dark:text-blue-400">
@@ -318,7 +320,7 @@ export function UploadDetail() {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {upload.status === 'COMPLETED' ? '처리 완료' : '처리 실패'}
+                      {upload.status === 'COMPLETED' ? t('upload.statistics.totalProcessed') : t('upload.detail.processFailed')}
                     </p>
                     <p className="text-sm text-gray-500">{formatDateTime(upload.completedAt)}</p>
                   </div>
@@ -332,7 +334,7 @@ export function UploadDetail() {
             <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6">
               <h2 className="text-lg font-bold text-red-700 dark:text-red-400 mb-2 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
-                오류 메시지
+                {t('upload.detail.errorMessage')}
               </h2>
               <p className="text-red-600 dark:text-red-300">{upload.errorMessage}</p>
             </div>
@@ -345,14 +347,14 @@ export function UploadDetail() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Database className="w-5 h-5 text-indigo-500" />
-                처리 통계
+                {t('upload.detail.processingStats')}
               </h2>
 
               <div className="space-y-4">
                 {/* Total Certificates */}
                 <div className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">전체 인증서</span>
+                    <span className="text-sm text-gray-500 dark:text-gray-400">{t('detail.totalCertificates')}</span>
                     <span className="text-2xl font-bold text-gray-900 dark:text-white">
                       {upload.statistics.totalCertificates}
                     </span>
@@ -392,22 +394,22 @@ export function UploadDetail() {
 
                 {/* Validation Results */}
                 <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">검증 결과</h3>
+                  <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">{t('detail.validationResults')}</h3>
                   <div className="space-y-2 mb-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">유효</span>
+                      <span className="text-sm text-gray-500">{t('common:status.valid')}</span>
                       <span className="font-medium text-green-600 dark:text-green-400">
                         {upload.statistics.validCount}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">무효</span>
+                      <span className="text-sm text-gray-500">{t('common:status.invalid')}</span>
                       <span className="font-medium text-red-600 dark:text-red-400">
                         {upload.statistics.invalidCount}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-500">건너뜀</span>
+                      <span className="text-sm text-gray-500">{ t('upload:statistics.totalSkipped') }</span>
                       <span className="font-medium text-gray-600 dark:text-gray-400">
                         {upload.statistics.skippedCount}
                       </span>
@@ -420,7 +422,7 @@ export function UploadDetail() {
                       className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors border border-blue-200 dark:border-blue-800"
                     >
                       <Eye className="w-4 h-4" />
-                      상세 결과 보기
+                      {t('upload.detail.viewDetailResult')}
                     </button>
                   )}
                 </div>
@@ -430,14 +432,14 @@ export function UploadDetail() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                 <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
-                처리 진행 중
+                {t('upload.detail.processingInProgressTitle')}
               </h2>
               <div className="space-y-4">
                 {/* Progress Bar */}
                 {upload.totalEntries && upload.totalEntries > 0 && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm text-gray-500 dark:text-gray-400">진행률</span>
+                      <span className="text-sm text-gray-500 dark:text-gray-400">{ t('upload:history.progress') }</span>
                       <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
                         {Math.round(((upload.processedEntries || 0) / upload.totalEntries) * 100)}%
                       </span>
@@ -505,7 +507,7 @@ export function UploadDetail() {
                 {/* No counts yet */}
                 {(upload.cscaCount ?? 0) === 0 && (upload.dscCount ?? 0) === 0 && (upload.crlCount ?? 0) === 0 && (
                   <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-2">
-                    인증서 처리가 시작되면 카운트가 표시됩니다.
+                    {t('upload.detail.countDisplayAfterStart')}
                   </p>
                 )}
               </div>
@@ -514,8 +516,8 @@ export function UploadDetail() {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
               <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
                 <Database className="w-12 h-12 mb-4 opacity-50" />
-                <p className="text-sm">통계 정보가 없습니다.</p>
-                <p className="text-xs">처리가 완료되면 표시됩니다.</p>
+                <p className="text-sm">{t('upload.detail.noStatsAvailable')}</p>
+                <p className="text-xs">{t('upload.detail.willShowAfterProcessing')}</p>
               </div>
             </div>
           )}
@@ -526,13 +528,13 @@ export function UploadDetail() {
               to="/upload"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium text-white bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 transition-all shadow-md hover:shadow-lg"
             >
-              새 파일 업로드
+              {t('upload.detail.newFileUpload')}
             </Link>
             <Link
               to="/upload-history"
               className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              업로드 목록
+              {t('upload.detail.uploadList')}
             </Link>
           </div>
         </div>
@@ -748,7 +750,7 @@ export function UploadDetail() {
                         : selectedValidation.validationStatus === 'EXPIRED_VALID' ? 'text-amber-600 dark:text-amber-400'
                         : 'text-red-600 dark:text-red-400'
                     )}>
-                      {selectedValidation.validationStatus === 'EXPIRED_VALID' ? 'EXPIRED_VALID (만료-유효)' : selectedValidation.validationStatus}
+                      {selectedValidation.validationStatus === 'EXPIRED_VALID' ? t('upload.detail.expiredValid') : selectedValidation.validationStatus}
                     </span>
                   </div>
                   <div className="grid grid-cols-[140px_1fr] gap-2">

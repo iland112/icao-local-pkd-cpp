@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { Users, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
@@ -22,6 +23,7 @@ function truncateDn(dn: string, maxLen = 60): string {
 }
 
 export default function IssuerProfileCard() {
+  const { t } = useTranslation(['ai', 'common']);
   const [profiles, setProfiles] = useState<IssuerProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -112,7 +114,7 @@ export default function IssuerProfileCard() {
                 );
               }}
             />
-            <Bar dataKey="count" name="인증서 수">
+            <Bar dataKey="count" name={t('ai:issuerProfile.certCount')}>
               {chartData.map((entry, idx) => (
                 <Cell key={idx} fill={RISK_COLORS[entry.risk] || RISK_COLORS.LOW} />
               ))}
@@ -132,13 +134,13 @@ export default function IssuerProfileCard() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-gray-500 dark:text-gray-400 text-left">
-                  <SortableHeader label="발급자 DN" sortKey="issuer_dn" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                  <SortableHeader label={t('ai:issuerProfile.issuerDn')} sortKey="issuer_dn" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
                     className="pb-1 font-medium" />
-                  <SortableHeader label="인증서" sortKey="cert_count" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                  <SortableHeader label={t('upload:certUpload.certificates')} sortKey="cert_count" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
                     className="pb-1 font-medium text-center" />
-                  <SortableHeader label="준수율" sortKey="compliance_rate" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                  <SortableHeader label={t('ai:issuerProfile.complianceRate')} sortKey="compliance_rate" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
                     className="pb-1 font-medium text-center" />
-                  <SortableHeader label="만료율" sortKey="expired_rate" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
+                  <SortableHeader label={t('report:dscNc.expirationRate')} sortKey="expired_rate" sortConfig={highRiskSortConfig} onSort={requestHighRiskSort}
                     className="pb-1 font-medium text-center" />
                 </tr>
               </thead>

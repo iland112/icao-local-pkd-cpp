@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, XCircle, Clock, RefreshCw, ChevronRight, Shield, FileText, Loader2, Brain, Award, FileKey, Link2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
@@ -86,6 +87,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
   exportCertificate,
   getCertTypeBadge,
 }) => {
+  const { t } = useTranslation(['certificate', 'common']);
   // Doc 9303 checklist lazy loading state
   const [doc9303Checklist, setDoc9303Checklist] = useState<Doc9303ChecklistResult | null>(null);
   const [doc9303Loading, setDoc9303Loading] = useState(false);
@@ -101,7 +103,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
         setDoc9303Checklist(res.data);
       })
       .catch(err => {
-        setDoc9303Error(err.response?.data?.error || 'Doc 9303 체크리스트를 로드할 수 없습니다.');
+        setDoc9303Error(err.response?.data?.error || t('certificate.detail.doc9303LoadFailed'));
       })
       .finally(() => setDoc9303Loading(false));
   }, [detailTab, selectedCert.fingerprint, doc9303Checklist]);
@@ -346,7 +348,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
             </div>
             <div>
               <h2 className="text-base font-semibold text-gray-900 dark:text-white">
-                인증서 상세 정보
+                {t('certificate:detail.certDetail')}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 truncate max-w-md" title={`${selectedCert.country} - ${selectedCert.subjectDnComponents?.organization || selectedCert.cn}`}>
                 {selectedCert.country} - {selectedCert.subjectDnComponents?.organization || selectedCert.cn}
@@ -376,7 +378,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
           <button
             onClick={() => setShowDetailDialog(false)}
             className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label="닫기"
+            aria-label={t('common:button.close')}
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -428,7 +430,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               )}
             >
               <Brain className="w-3.5 h-3.5" />
-              포렌식
+              {t('certificate.detail.forensicTab')}
             </button>
           </div>
         </div>
@@ -576,7 +578,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                   {validationLoading ? (
                     <div className="flex items-center gap-2 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
                       <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                      <span className="text-xs text-gray-500 dark:text-gray-400">검증 결과 로드 중...</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{ t('certificate:detail.loading') }</span>
                     </div>
                   ) : validationResult ? (
                     <div className={`rounded-lg border p-3 space-y-2 ${
@@ -592,22 +594,22 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                           {validationResult.validationStatus === 'EXPIRED_VALID' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300">
                               <CheckCircle className="w-3 h-3" />
-                              만료-유효 (서명 검증 성공)
+                              {t('certificate:detail.expiredValid')}
                             </span>
                           ) : validationResult.trustChainValid ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300">
                               <CheckCircle className="w-3 h-3" />
-                              신뢰 체인 유효
+                              {t('certificate:detail.trustChainValid')}
                             </span>
                           ) : validationResult.validationStatus === 'PENDING' ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300">
                               <Clock className="w-3 h-3" />
-                              검증 대기 (만료됨)
+                              {t('certificate:detail.verificationPending')}
                             </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 dark:bg-red-900/40 text-red-800 dark:text-red-300">
                               <XCircle className="w-3 h-3" />
-                              신뢰 체인 유효하지 않음
+                              {t('certificate:detail.trustChainInvalid')}
                             </span>
                           )}
                         </div>
@@ -615,14 +617,14 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                           onClick={() => setDetailTab('details')}
                           className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
                         >
-                          자세히 보기 <ChevronRight className="w-3 h-3" />
+                          {t('icao.banner.viewDetails')} <ChevronRight className="w-3 h-3" />
                         </button>
                       </div>
 
                       {/* Trust Chain Path (Compact) */}
                       {validationResult.trustChainPath && (
                         <div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">신뢰 체인 경로:</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400 block mb-1">{t('certificate:detail.trustChainPath')}</span>
                           <TrustChainVisualization
                             trustChainPath={validationResult.trustChainPath}
                             trustChainValid={validationResult.trustChainValid}
@@ -646,7 +648,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                     </div>
                   ) : (
                     <p className="text-xs text-gray-500 dark:text-gray-400 p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-200 dark:border-gray-700">
-                      이 인증서에 대한 신뢰 체인 검증 결과가 없습니다.
+                      {t('certificate:detail.noTrustChainResult')}
                     </p>
                   )}
                 </div>
@@ -660,7 +662,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               {doc9303Loading && (
                 <div className="flex items-center justify-center gap-2 py-8 text-blue-500">
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Doc 9303 체크리스트 로드 중...</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">{t('certificate:detail.doc9303Loading')}</span>
                 </div>
               )}
               {doc9303Error && (
@@ -673,7 +675,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               )}
               {!doc9303Loading && !doc9303Error && !doc9303Checklist && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                  Doc 9303 적합성 체크리스트 데이터가 없습니다.
+                  {t('certificate:detail.doc9303NoData')}
                 </p>
               )}
             </div>
@@ -690,34 +692,34 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               {/* Trust Chain Validation */}
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                  신뢰 체인 검증
+                  {t('certificate:detail.trustChainVerification')}
                 </h3>
                 {validationLoading ? (
                   <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-blue-500" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">검증 결과 로드 중...</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{ t('certificate:detail.loading') }</span>
                   </div>
                 ) : validationResult ? (
                   <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600 space-y-3">
                     {/* Validation Status */}
                     <div className="flex items-center gap-2">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">상태:</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{ t('certificate:detail.status_label') }</span>
                       {validationResult.trustChainValid ? (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
                           <CheckCircle className="w-3 h-3 mr-1" />
-                          유효
+                          {t('upload.statistics.validCount')}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">
                           <XCircle className="w-3 h-3 mr-1" />
-                          유효하지 않음
+                          {t('certificate:detail.invalid')}
                         </span>
                       )}
                     </div>
 
                     {/* Trust Chain Path Visualization (PA-style) */}
                     <div>
-                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Trust Chain 경로:</div>
+                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">{ t('certificate:detail.trustChainPath') }</div>
                       <div className="flex flex-col items-center gap-1">
                         {/* CSCA (Root) */}
                         {validationResult.cscaFound && validationResult.cscaSubjectDn ? (
@@ -734,11 +736,11 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                           <div className="w-full p-2 bg-red-50 dark:bg-red-900/20 rounded border border-red-300 dark:border-red-700">
                             <div className="flex items-center gap-2">
                               <XCircle className="w-3.5 h-3.5 text-red-500" />
-                              <span className="text-xs font-semibold text-red-700 dark:text-red-300">CSCA 미등록</span>
+                              <span className="text-xs font-semibold text-red-700 dark:text-red-300">{ t('pa:steps.cscaNotFound') }</span>
                             </div>
                             {validationResult.issuerDn && (
                               <code className="block mt-1 text-[11px] font-mono break-all text-gray-500 dark:text-gray-400">
-                                발급자: {validationResult.issuerDn}
+                                {t('certificate:detail.issuerLabel')} {validationResult.issuerDn}
                               </code>
                             )}
                           </div>
@@ -747,7 +749,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                         {/* Link Certificate indicator (if chain has Link) */}
                         {validationResult.trustChainMessage && /Link/.test(validationResult.trustChainMessage) && (
                           <>
-                            <div className="text-[10px] text-gray-400 dark:text-gray-500">↓ 서명</div>
+                            <div className="text-[10px] text-gray-400 dark:text-gray-500">{ t('certificate:detail.signatureArrow') }</div>
                             <div className="w-full p-2 bg-purple-50 dark:bg-purple-900/20 rounded border border-purple-300 dark:border-purple-700">
                               <div className="flex items-center gap-2">
                                 <Link2 className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
@@ -762,14 +764,14 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                                 })()}
                               </div>
                               <span className="block mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                                CSCA 키 교체를 위한 링크 인증서 체인
+                                {t('certificate:detail.linkCertChain')}
                               </span>
                             </div>
                           </>
                         )}
 
                         {/* Arrow */}
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500">↓ 서명</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500">{ t('certificate:detail.signatureArrow') }</div>
 
                         {/* DSC (Leaf) */}
                         <div className="w-full p-2 bg-blue-100 dark:bg-blue-900/30 rounded border border-blue-300 dark:border-blue-700">
@@ -778,12 +780,12 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                             <span className="text-xs font-semibold text-blue-700 dark:text-blue-300">DSC (Document Signer)</span>
                             {validationResult.isExpired && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-orange-200 dark:bg-orange-900/50 text-orange-700 dark:text-orange-300">
-                                만료됨
+                                {t('certificate:detail.expired')}
                               </span>
                             )}
                             {validationResult.signatureVerified && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-200 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-                                ✓ 서명 검증됨
+                                {t('certificate:detail.signatureVerified')}
                               </span>
                             )}
                           </div>
@@ -792,7 +794,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                           </code>
                           {validationResult.notBefore && validationResult.notAfter && (
                             <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                              유효기간: {validationResult.notBefore?.split('T')[0]} ~ {validationResult.notAfter?.split('T')[0]}
+                              {t('certificate:detail.validityPeriod', { from: validationResult.notBefore?.split('T')[0], to: validationResult.notAfter?.split('T')[0] })}
                             </div>
                           )}
                         </div>
@@ -802,23 +804,23 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                     {/* Additional checks summary */}
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] pt-2 border-t border-gray-200 dark:border-gray-600">
                       <span className={validationResult.cscaFound ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                        {validationResult.cscaFound ? '✓' : '✗'} CSCA {validationResult.cscaFound ? '확인' : '미등록'}
+                        {validationResult.cscaFound ? '✓' : '✗'} CSCA {validationResult.cscaFound ? t('common:button.confirm') : t('certificate:detail.cscaNotRegistered')}
                       </span>
                       <span className={validationResult.signatureVerified ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
-                        {validationResult.signatureVerified ? '✓' : '✗'} 서명 검증
+                        {validationResult.signatureVerified ? '✓' : '✗'} {t('certificate:detail.signatureVerify')}
                       </span>
                       <span className={validationResult.validityCheckPassed ? 'text-green-600 dark:text-green-400' : validationResult.isExpired ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'}>
-                        {validationResult.validityCheckPassed ? '✓' : validationResult.isExpired ? '⚠' : '✗'} {validationResult.validityCheckPassed ? '유효기간 내' : validationResult.isExpired ? '만료' : '유효기간'}
+                        {validationResult.validityCheckPassed ? '✓' : validationResult.isExpired ? '⚠' : '✗'} {validationResult.validityCheckPassed ? t('certificate:detail.withinValidityPeriod') : validationResult.isExpired ? t('common:status.expired') : t('common.label.validityPeriod')}
                       </span>
                       <span className={validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400') : 'text-gray-400'}>
-                        {validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? '✗ CRL 폐기' : '✓ CRL 미폐기') : '— CRL 미확인'}
+                        {validationResult.crlCheckStatus && validationResult.crlCheckStatus !== 'NOT_CHECKED' ? (validationResult.crlCheckStatus === 'REVOKED' ? t('certificate:detail.crlRevoked') : t('certificate:detail.crlNotRevoked')) : t('certificate:detail.crlNotChecked')}
                       </span>
                     </div>
                   </div>
                 ) : (
                   <div className="bg-gray-50 dark:bg-gray-700/50 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      이 인증서에 대한 검증 결과가 없습니다.
+                      {t('certificate:detail.noVerificationResult')}
                     </p>
                   </div>
                 )}
@@ -828,23 +830,23 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               {isLinkCertificate(selectedCert) && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    링크 인증서 정보
+                    {t('certificate:detail.linkCertInfo')}
                   </h3>
                   <div className="bg-cyan-50 dark:bg-cyan-900/20 border border-cyan-200 dark:border-cyan-700 rounded-lg p-4 space-y-3">
                     <div className="flex items-start gap-2">
                       <Shield className="w-5 h-5 text-cyan-600 dark:text-cyan-400 mt-0.5" />
                       <div className="flex-1">
                         <h4 className="text-sm font-semibold text-cyan-800 dark:text-cyan-300 mb-2">
-                          목적
+                          {t('certificate:detail.purpose')}
                         </h4>
                         <p className="text-xs text-cyan-700 dark:text-cyan-400 leading-relaxed">
-                          링크 인증서는 서로 다른 CSCA 인증서 간의 암호화 신뢰 체인을 생성합니다. 일반적으로 다음과 같은 경우에 사용됩니다:
+                          {t('certificate:detail.linkCertDesc')}
                         </p>
                         <ul className="mt-2 ml-4 space-y-1 text-xs text-cyan-700 dark:text-cyan-400">
-                          <li className="list-disc">국가가 CSCA 인프라를 업데이트할 때</li>
-                          <li className="list-disc">조직 정보가 변경될 때 (예: 조직명 변경)</li>
-                          <li className="list-disc">인증서 정책이 업데이트될 때</li>
-                          <li className="list-disc">새로운 암호화 알고리즘으로 마이그레이션할 때</li>
+                          <li className="list-disc">{t('certificate:detail.linkCertUseCase1')}</li>
+                          <li className="list-disc">{t('certificate:detail.linkCertUseCase2')}</li>
+                          <li className="list-disc">{t('certificate:detail.linkCertUseCase3')}</li>
+                          <li className="list-disc">{t('certificate:detail.linkCertUseCase4')}</li>
                         </ul>
                       </div>
                     </div>
@@ -862,23 +864,23 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               {isMasterListSignerCertificate(selectedCert) && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    Master List 서명 인증서 정보
+                    {t('certificate:detail.mlscInfo')}
                   </h3>
                   <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-4 space-y-3">
                     <div className="flex items-start gap-2">
                       <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400 mt-0.5" />
                       <div className="flex-1">
                         <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300 mb-2">
-                          목적
+                          {t('certificate:detail.purpose')}
                         </h4>
                         <p className="text-xs text-purple-700 dark:text-purple-400 leading-relaxed">
-                          Master List 서명 인증서(MLSC)는 Master List CMS 구조에 디지털 서명하는 데 사용됩니다. 이러한 인증서의 특징:
+                          {t('certificate:detail.mlscDesc')}
                         </p>
                         <ul className="mt-2 ml-4 space-y-1 text-xs text-purple-700 dark:text-purple-400">
-                          <li className="list-disc">자체 서명 인증서</li>
-                          <li className="list-disc">digitalSignature 키 사용 (0x80 비트)</li>
-                          <li className="list-disc">Master List CMS에 서명 인증서로 포함됨</li>
-                          <li className="list-disc">국가 PKI 기관에서 발급</li>
+                          <li className="list-disc">{t('certificate:detail.mlscFeature1')}</li>
+                          <li className="list-disc">{t('certificate:detail.mlscFeature2')}</li>
+                          <li className="list-disc">{t('certificate:detail.mlscFeature3')}</li>
+                          <li className="list-disc">{t('certificate:detail.mlscFeature4')}</li>
                         </ul>
                       </div>
                     </div>
@@ -889,15 +891,15 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                           <span className="text-purple-800 dark:text-purple-300 font-mono break-all">{selectedCert.dn}</span>
                         </div>
                         <div className="grid grid-cols-[120px_1fr] gap-2">
-                          <span className="text-purple-600 dark:text-purple-400 font-medium">저장 위치:</span>
+                          <span className="text-purple-600 dark:text-purple-400 font-medium">{t('certificate:detail.storageLocation')}</span>
                           <span className="text-purple-800 dark:text-purple-300">
-                            데이터베이스에는 CSCA 타입으로 저장되지만, LDAP에서는 <code className="bg-purple-100 dark:bg-purple-900/50 px-1 py-0.5 rounded">o=mlsc</code> 조직 단위에 저장
+                            {t('certificate:detail.storageLocationDesc')}
                           </span>
                         </div>
                         <div className="grid grid-cols-[120px_1fr] gap-2">
-                          <span className="text-purple-600 dark:text-purple-400 font-medium">자체 서명:</span>
+                          <span className="text-purple-600 dark:text-purple-400 font-medium">{t('certificate:detail.selfSigned')}</span>
                           <span className="text-purple-800 dark:text-purple-300">
-                            {selectedCert.isSelfSigned ? '예 (Subject DN = Issuer DN)' : '아니오'}
+                            {selectedCert.isSelfSigned ? t('certificate:detail.selfSignedYes') : t('common.label.no')}
                           </span>
                         </div>
                       </div>
@@ -910,7 +912,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
               {validationResult && validationResult.trustChainPath && validationResult.trustChainPath.trim() !== '' && !selectedCert.isSelfSigned && (
                 <div>
                   <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">
-                    신뢰 체인 계층
+                    {t('certificate:detail.trustChainHierarchy')}
                   </h3>
                   <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
                     <TreeViewer
@@ -921,12 +923,12 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
                   {validationResult.trustChainValid ? (
                     <div className="mt-2 flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
                       <CheckCircle className="w-4 h-4" />
-                      <span>신뢰 체인이 유효합니다</span>
+                      <span>{t('certificate:detail.trustChainValidMsg')}</span>
                     </div>
                   ) : (
                     <div className="mt-2 flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
                       <XCircle className="w-4 h-4" />
-                      <span>신뢰 체인 검증 실패</span>
+                      <span>{t('certificate:detail.trustChainFailedMsg')}</span>
                     </div>
                   )}
                 </div>
@@ -934,7 +936,7 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
 
               {/* Certificate Fields Tree */}
               <div>
-                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">인증서 필드</h3>
+                <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 pb-2 border-b border-gray-200 dark:border-gray-700">{t('certificate:detail.certFields')}</h3>
                 <TreeViewer
                   data={buildCertificateTree(selectedCert)}
                   height="400px"
@@ -950,13 +952,13 @@ const CertificateDetailDialog: React.FC<CertificateDetailDialogProps> = ({
             onClick={() => exportCertificate(selectedCert.dn, 'pem')}
             className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
           >
-            인증서 저장...
+            {t('certificate:detail.savingCert')}
           </button>
           <button
             onClick={() => setShowDetailDialog(false)}
             className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors"
           >
-            닫기
+            {t('icao.banner.dismiss')}
           </button>
         </div>
       </div>

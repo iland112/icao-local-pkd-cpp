@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import {
   RefreshCw,
@@ -16,6 +17,7 @@ import { formatDateTime } from '@/utils/dateFormat';
 import { Dialog } from '@/components/common/Dialog';
 
 export function ReconciliationHistory() {
+  const { t } = useTranslation(['sync', 'common']);
   const [history, setHistory] = useState<ReconciliationSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<ReconciliationSummary | null>(null);
@@ -85,9 +87,9 @@ export function ReconciliationHistory() {
       case 'MANUAL':
         return '수동';
       case 'AUTO':
-        return '자동';
+        return t('upload.detail.auto');
       case 'DAILY_SYNC':
-        return '일일 동기화';
+        return t('sync.reconciliation.dailySync');
       default:
         return triggeredBy;
     }
@@ -106,7 +108,7 @@ export function ReconciliationHistory() {
     return (
       <div className="flex items-center justify-center py-12">
         <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-        <span className="ml-2 text-gray-600 dark:text-gray-400">로딩 중...</span>
+        <span className="ml-2 text-gray-600 dark:text-gray-400">{t('common:button.loading')}</span>
       </div>
     );
   }
@@ -122,7 +124,7 @@ export function ReconciliationHistory() {
           className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
-          새로고침
+          {t('common.button.refresh')}
         </button>
       </div>
 
@@ -136,15 +138,15 @@ export function ReconciliationHistory() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
                 <tr>
-                  <th className="px-4 py-3 text-left font-medium">상태</th>
-                  <th className="px-4 py-3 text-left font-medium">시작 시간</th>
+                  <th className="px-4 py-3 text-left font-medium">{ t('admin:apiClient.status') }</th>
+                  <th className="px-4 py-3 text-left font-medium">{t('reconciliation.startedAt')}</th>
                   <th className="px-4 py-3 text-left font-medium">트리거</th>
-                  <th className="px-4 py-3 text-center font-medium">처리</th>
-                  <th className="px-4 py-3 text-center font-medium">성공</th>
-                  <th className="px-4 py-3 text-center font-medium">실패</th>
+                  <th className="px-4 py-3 text-center font-medium">{ t('common:label.processing') }</th>
+                  <th className="px-4 py-3 text-center font-medium">{t('common:toast.success')}</th>
+                  <th className="px-4 py-3 text-center font-medium">{t('common:status.failed')}</th>
                   <th className="px-4 py-3 text-center font-medium">추가</th>
                   <th className="px-4 py-3 text-center font-medium">소요시간</th>
-                  <th className="px-4 py-3 text-center font-medium">상세</th>
+                  <th className="px-4 py-3 text-center font-medium">{ t('nav:breadcrumb.detail') }</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -199,7 +201,7 @@ export function ReconciliationHistory() {
                         onClick={() => handleViewDetails(item)}
                         className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
                       >
-                        <span className="text-xs font-medium">상세</span>
+                        <span className="text-xs font-medium">{ t('nav:breadcrumb.detail') }</span>
                         <ChevronRight className="w-4 h-4" />
                       </button>
                     </td>
@@ -226,7 +228,7 @@ export function ReconciliationHistory() {
             {/* Summary */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">상태</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{ t('admin:apiClient.status') }</div>
                 <div className="flex items-center gap-2">
                   {getStatusIcon(selectedItem.status)}
                   <span className="font-medium text-gray-900 dark:text-white">
@@ -244,13 +246,13 @@ export function ReconciliationHistory() {
                 </div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">처리 건수</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{ t('sync:revalidation.totalProcessed') }</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {selectedItem.totalProcessed}
                 </div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">소요 시간</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">{t('reconciliation.duration')}</div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white">
                   {formatDuration(selectedItem.durationMs)}
                 </div>
@@ -260,13 +262,13 @@ export function ReconciliationHistory() {
             {/* Results Breakdown */}
             <div className="grid grid-cols-3 gap-4">
               <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                <div className="text-sm text-green-700 dark:text-green-300 mb-2">성공</div>
+                <div className="text-sm text-green-700 dark:text-green-300 mb-2">{t('common:toast.success')}</div>
                 <div className="text-3xl font-bold text-green-600 dark:text-green-400">
                   {selectedItem.successCount}
                 </div>
               </div>
               <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-                <div className="text-sm text-red-700 dark:text-red-300 mb-2">실패</div>
+                <div className="text-sm text-red-700 dark:text-red-300 mb-2">{t('common:status.failed')}</div>
                 <div className="text-3xl font-bold text-red-600 dark:text-red-400">
                   {selectedItem.failedCount}
                 </div>
@@ -295,7 +297,7 @@ export function ReconciliationHistory() {
               {loadingDetails ? (
                 <div className="flex items-center justify-center py-8">
                   <RefreshCw className="w-5 h-5 animate-spin text-blue-500 mr-2" />
-                  <span className="text-gray-600 dark:text-gray-400">로딩 중...</span>
+                  <span className="text-gray-600 dark:text-gray-400">{t('common:button.loading')}</span>
                 </div>
               ) : logs.length === 0 ? (
                 <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -307,22 +309,22 @@ export function ReconciliationHistory() {
                     <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0">
                       <tr>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                          작업
+                          {t('common.label.action')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
                           타입
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
-                          국가
+                          {t('pa.history.country')}
                         </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-700 dark:text-gray-300">
                           Subject
                         </th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
-                          상태
+                          {t('upload.history.status')}
                         </th>
                         <th className="px-3 py-2 text-center text-xs font-medium text-gray-700 dark:text-gray-300">
-                          시간
+                          {t('common.label.hours')}
                         </th>
                       </tr>
                     </thead>

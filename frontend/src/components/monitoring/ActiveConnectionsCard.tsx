@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { Users, ArrowUpDown, BookOpen, PenTool, Clock, Link } from 'lucide-react';
 import type { NginxStatus } from '@/services/monitoringApi';
 
@@ -8,11 +9,12 @@ interface Props {
 }
 
 export default function ActiveConnectionsCard({ nginx, requestsPerSecond, uniqueUsers }: Props) {
+  const { t } = useTranslation(['monitoring', 'common']);
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-5 h-full">
       <div className="flex items-center gap-2 mb-4">
         <Users className="w-5 h-5 text-cyan-500" />
-        <h3 className="font-semibold text-gray-800 dark:text-white">접속 현황</h3>
+        <h3 className="font-semibold text-gray-800 dark:text-white">{ t('monitoring:activeConnections') }</h3>
       </div>
 
       {/* Primary: Unique Users */}

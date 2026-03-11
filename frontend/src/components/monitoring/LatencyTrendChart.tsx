@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Timer } from 'lucide-react';
 import type { HistoryPoint } from '@/services/monitoringApi';
@@ -22,6 +23,7 @@ const SERVICE_LABELS: Record<string, string> = {
 };
 
 export default function LatencyTrendChart({ data }: Props) {
+  const { t } = useTranslation(['monitoring', 'common']);
   // Get all service names from data
   const serviceNames = new Set<string>();
   data.forEach(p => Object.keys(p.latency).forEach(k => serviceNames.add(k)));

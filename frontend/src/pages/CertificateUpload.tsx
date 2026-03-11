@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
@@ -335,6 +336,7 @@ function InfoRow({ label, value, mono, className }: { label: string; value: stri
 // ============================================================================
 
 export default function CertificateUpload() {
+  const { t } = useTranslation(['upload', 'common']);
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -464,7 +466,7 @@ export default function CertificateUpload() {
           <Shield className="w-6 h-6 text-white" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-gray-900 dark:text-white">인증서 업로드</h1>
+          <h1 className="text-xl font-bold text-gray-900 dark:text-white">{t('certUpload.title')}</h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
             개별 인증서 파일을 미리보기 후 DB + LDAP에 저장합니다 (PEM, DER, P7B, DL, CRL)
           </p>
@@ -477,7 +479,7 @@ export default function CertificateUpload() {
           <div className="max-w-4xl mb-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800">
             <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-red-800 dark:text-red-300">CSCA 인증서가 등록되지 않았습니다</p>
+              <p className="text-sm font-semibold text-red-800 dark:text-red-300">{t('pa.verify.cscaNotRegistered')}</p>
               <p className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                 Trust Chain 검증을 위해 먼저 CSCA가 포함된 LDIF 또는 Master List를 업로드해 주세요.
               </p>
@@ -550,7 +552,7 @@ export default function CertificateUpload() {
                 className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium transition-colors"
               >
                 <Eye className="w-4 h-4" />
-                미리보기
+                {t('upload.certUpload.preview')}
               </button>
             )}
             {pageState === 'PREVIEWING' && (
@@ -575,7 +577,7 @@ export default function CertificateUpload() {
                 <div className="flex items-center gap-2 ml-auto">
                   {previewResult.isDuplicate && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                      <AlertTriangle className="w-3 h-3" /> 중복
+                      <AlertTriangle className="w-3 h-3" /> {t('upload.statistics.duplicateCount')}
                     </span>
                   )}
                   {isDl && previewResult.dlSignatureValid !== undefined && (
@@ -664,7 +666,7 @@ export default function CertificateUpload() {
                     onClick={handleReset}
                     className="flex items-center gap-1.5 px-3.5 py-2 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-sm transition-colors"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" /> 취소
+                    <RotateCcw className="w-3.5 h-3.5" /> {t('common.button.cancel')}
                   </button>
                   <button
                     onClick={handleConfirm}
@@ -676,14 +678,14 @@ export default function CertificateUpload() {
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                     )}
                   >
-                    <Database className="w-3.5 h-3.5" /> DB + LDAP 저장
+                    <Database className="w-3.5 h-3.5" /> {t('upload.certUpload.saveToDbAndLdap')}
                   </button>
                 </div>
               )}
               {pageState === 'CONFIRMING' && (
                 <div className="flex items-center justify-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700 text-blue-600 dark:text-blue-400">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">저장 중...</span>
+                  <span className="text-sm">{t('common.label.saving')}</span>
                 </div>
               )}
             </div>
@@ -701,7 +703,7 @@ export default function CertificateUpload() {
             <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
               <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-semibold text-green-800 dark:text-green-300">처리 완료</p>
+                <p className="text-sm font-semibold text-green-800 dark:text-green-300">{ t('upload:statistics.totalProcessed') }</p>
                 <div className="mt-0.5 flex flex-wrap gap-2 text-xs text-green-700 dark:text-green-400">
                   {uploadResult.cscaCount ? <span>CSCA {uploadResult.cscaCount}</span> : null}
                   {uploadResult.dscCount ? <span>DSC {uploadResult.dscCount}</span> : null}
@@ -719,7 +721,7 @@ export default function CertificateUpload() {
               </button>
               {uploadResult && (
                 <button onClick={() => setShowResultDialog(true)} className="flex items-center gap-1.5 px-3.5 py-1.5 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg text-xs transition-colors">
-                  <Eye className="w-3.5 h-3.5" /> 상세보기
+                  <Eye className="w-3.5 h-3.5" /> {t('certificate.search.viewDetail')}
                 </button>
               )}
             </div>
@@ -733,7 +735,7 @@ export default function CertificateUpload() {
               <XCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-red-800 dark:text-red-300">
-                  {pageState === 'PREVIEW_ERROR' ? '파싱 실패' : '저장 실패'}
+                  {pageState === 'PREVIEW_ERROR' ? t('upload.fileUpload.parseFailed') : '저장 실패'}
                 </p>
                 <p className="mt-0.5 text-xs text-red-700 dark:text-red-400">{errorMessage}</p>
               </div>
@@ -805,17 +807,17 @@ export default function CertificateUpload() {
             <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <h4 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 flex items-center gap-2">
                 <FileText className="w-4 h-4 text-gray-500" />
-                파일 정보
+                {t('upload.detail.fileInfo')}
               </h4>
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
                 <div>
-                  <span className="text-gray-500 dark:text-gray-400">파일명</span>
+                  <span className="text-gray-500 dark:text-gray-400">{ t('upload:history.fileName') }</span>
                   <p className="font-medium text-gray-900 dark:text-white truncate" title={selectedFile?.name}>
                     {selectedFile?.name || '-'}
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500 dark:text-gray-400">파일 형식</span>
+                  <span className="text-gray-500 dark:text-gray-400">{ t('upload:history.fileType') }</span>
                   <p>
                     <span className={cn(
                       'inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold',
@@ -828,13 +830,13 @@ export default function CertificateUpload() {
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500 dark:text-gray-400">파일 크기</span>
+                  <span className="text-gray-500 dark:text-gray-400">{ t('upload:fileUpload.fileSize') }</span>
                   <p className="font-medium text-gray-900 dark:text-white">
                     {selectedFile ? formatFileSize(selectedFile.size) : '-'}
                   </p>
                 </div>
                 <div>
-                  <span className="text-gray-500 dark:text-gray-400">업로드 ID</span>
+                  <span className="text-gray-500 dark:text-gray-400">{ t('upload:history.uploadId') }</span>
                   <p className="font-mono text-xs text-gray-600 dark:text-gray-300 truncate" title={uploadResult.uploadId}>
                     {uploadResult.uploadId.substring(0, 8)}...
                   </p>
@@ -906,7 +908,7 @@ export default function CertificateUpload() {
                 <Database className="w-4 h-4 text-gray-500 flex-shrink-0" />
                 <div className="flex-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">LDAP 저장</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{ t('certificate:detail.storedInLdap') }</span>
                     <span className="text-sm font-semibold text-gray-900 dark:text-white">
                       {uploadResult.ldapStoredCount} / {uploadResult.certificateCount}
                     </span>
@@ -938,13 +940,13 @@ export default function CertificateUpload() {
                 className="flex items-center gap-1.5 px-4 py-2 text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
               >
                 <History className="w-4 h-4" />
-                업로드 이력
+                {t('upload.history.title')}
               </button>
               <button
                 onClick={() => setShowResultDialog(false)}
                 className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors"
               >
-                확인
+                {t('common.confirm.title')}
               </button>
             </div>
           </div>

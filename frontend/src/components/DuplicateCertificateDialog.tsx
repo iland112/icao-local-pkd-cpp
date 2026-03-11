@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { X, Copy, FileText, MapPin, Database, Link2 } from 'lucide-react';
 import type { UploadDuplicate } from '../types';
@@ -15,6 +16,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useTranslation(['upload', 'common']);
   if (!isOpen || !duplicate) return null;
 
   const getCertificateTypeBadge = (type: string) => {
@@ -116,7 +118,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                   <button
                     onClick={() => copyToClipboard(duplicate.subjectDn, 'Subject DN')}
                     className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-                    title="복사"
+                    title={t('common:button.copy')}
                   >
                     <Copy className="w-4 h-4 text-gray-400" />
                   </button>
@@ -134,7 +136,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                   <button
                     onClick={() => copyToClipboard(duplicate.fingerprint, 'Fingerprint')}
                     className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-                    title="복사"
+                    title={t('common:button.copy')}
                   >
                     <Copy className="w-4 h-4 text-gray-400" />
                   </button>
@@ -179,7 +181,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                   <button
                     onClick={() => copyToClipboard(duplicate.firstUploadId, 'Upload ID')}
                     className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-                    title="복사"
+                    title={t('common:button.copy')}
                   >
                     <Copy className="w-4 h-4 text-gray-400" />
                   </button>
@@ -238,7 +240,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                     <button
                       onClick={() => copyToClipboard(duplicate.sourceEntryDn!, 'LDAP DN')}
                       className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-                      title="복사"
+                      title={t('common:button.copy')}
                     >
                       <Copy className="w-4 h-4 text-gray-400" />
                     </button>
@@ -284,7 +286,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
                   <button
                     onClick={() => copyToClipboard(duplicate.certificateId, 'Certificate ID')}
                     className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded transition-colors flex-shrink-0"
-                    title="복사"
+                    title={t('common:button.copy')}
                   >
                     <Copy className="w-4 h-4 text-gray-400" />
                   </button>
@@ -300,7 +302,7 @@ export const DuplicateCertificateDialog: React.FC<Props> = ({
             onClick={onClose}
             className="w-full px-4 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors text-sm font-medium"
           >
-            닫기
+            {t('icao.banner.dismiss')}
           </button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 /**
  * @file DuplicateCertificatesTree.tsx
  * @brief Duplicate Certificates Tree Viewer
@@ -34,6 +35,7 @@ interface Props {
 }
 
 export const DuplicateCertificatesTree: React.FC<Props> = ({ duplicates }) => {
+  const { t } = useTranslation(['upload', 'common']);
   // Format fingerprint: first 8 + ... + last 8
   const formatFingerprint = (fp: string) => {
     if (fp.length <= 16) return fp;

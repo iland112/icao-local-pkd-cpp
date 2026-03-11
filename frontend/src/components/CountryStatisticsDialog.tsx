@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { X, Globe, Download, Loader2 } from 'lucide-react';
 import { uploadHistoryApi } from '@/services/pkdApi';
@@ -21,6 +22,7 @@ interface CountryStatisticsDialogProps {
 }
 
 export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDialogProps) {
+  const { t } = useTranslation(['dashboard', 'common']);
   const [data, setData] = useState<CountryStatistics[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -150,7 +152,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
                     <th className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-8">
                       #
                     </th>
-                    <SortableHeader label="국가" sortKey="countryCode" sortConfig={sortConfig} onSort={requestSort}
+                    <SortableHeader label={t('common:label.country')} sortKey="countryCode" sortConfig={sortConfig} onSort={requestSort}
                       className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-left font-semibold text-gray-700 dark:text-gray-200 border-b-2 border-gray-300 dark:border-gray-600 w-16" />
                     <SortableHeader label="MLSC" sortKey="mlsc" sortConfig={sortConfig} onSort={requestSort}
                       className="sticky top-0 z-10 bg-gray-100 dark:bg-gray-700 px-1.5 py-2 text-right font-semibold text-purple-600 dark:text-purple-300 border-b-2 border-gray-300 dark:border-gray-600" />
@@ -281,7 +283,7 @@ export function CountryStatisticsDialog({ isOpen, onClose }: CountryStatisticsDi
               onClick={onClose}
               className="px-4 py-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg transition-colors font-medium"
             >
-              닫기
+              {t('icao.banner.dismiss')}
             </button>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { Database } from 'lucide-react';
 import type { ServiceLoadMetrics } from '@/services/monitoringApi';
@@ -14,6 +15,7 @@ const SERVICE_SHORT: Record<string, string> = {
 };
 
 export default function ConnectionPoolChart({ services }: Props) {
+  const { t } = useTranslation(['monitoring', 'common']);
   const chartData = services.flatMap(svc => {
     const items = [];
     const label = SERVICE_SHORT[svc.name] || svc.name;
@@ -82,13 +84,13 @@ export default function ConnectionPoolChart({ services }: Props) {
             contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
             formatter={(value, name) => [
               value,
-              name === 'inUse' ? '사용 중' : '여유',
+              name === 'inUse' ? '사용 중' : t('common.label.surplus'),
             ]}
           />
           <Legend
             iconSize={10}
             wrapperStyle={{ fontSize: 11 }}
-            formatter={(value: string) => (value === 'inUse' ? '사용 중' : '여유')}
+            formatter={(value: string) => (value === 'inUse' ? '사용 중' : t('common.label.surplus'))}
           />
           <Bar dataKey="inUse" stackId="pool" barSize={16}>
             {chartData.map((entry, idx) => (

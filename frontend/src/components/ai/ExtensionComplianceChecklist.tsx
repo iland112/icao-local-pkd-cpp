@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { ShieldAlert, CheckCircle, XCircle, AlertTriangle, ChevronDown, ChevronRight, Filter } from 'lucide-react';
 import { aiAnalysisApi, type ExtensionAnomaly } from '@/services/aiAnalysisApi';
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export default function ExtensionComplianceChecklist({ certType, country }: Props) {
+  const { t } = useTranslation(['ai', 'common']);
   const [anomalies, setAnomalies] = useState<ExtensionAnomaly[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -119,7 +121,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
             onChange={e => setFilterType(e.target.value)}
             className="text-xs border border-gray-200 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 dark:text-gray-200"
           >
-            <option value="">전체 유형</option>
+            <option value="">{ t('ai:dashboard.allTypes') }</option>
             {certTypes.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
@@ -128,7 +130,7 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
           onChange={e => setFilterCountry(e.target.value)}
           className="text-xs border border-gray-200 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 dark:text-gray-200"
         >
-          <option value="">전체 국가</option>
+          <option value="">{ t('report:crl.allCountries') }</option>
           {countryCodes.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
@@ -143,9 +145,9 @@ export default function ExtensionComplianceChecklist({ certType, country }: Prop
           {/* Header */}
           <div className="grid grid-cols-[24px_1fr_56px_40px_72px_48px_40px] gap-1 text-xs text-gray-500 dark:text-gray-400 font-medium pb-2 border-b border-gray-200 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10 px-1">
             <div />
-            <SortableHeader as="div" label="인증서" sortKey="fingerprint" sortConfig={anomalySortConfig} onSort={requestAnomalySort} />
-            <SortableHeader as="div" label="유형" sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
-            <SortableHeader as="div" label="국가" sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label={t('upload:certUpload.certificates')} sortKey="fingerprint" sortConfig={anomalySortConfig} onSort={requestAnomalySort} />
+            <SortableHeader as="div" label={t('common:label.type')} sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
+            <SortableHeader as="div" label={t('common:label.country')} sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
             <SortableHeader as="div" label="심각도" sortKey="_severityOrder" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
             <SortableHeader as="div" label="위반" sortKey="_violationCount" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />
             <SortableHeader as="div" label="점수" sortKey="structural_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="text-center" />

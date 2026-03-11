@@ -1,0 +1,45 @@
+{
+  "title": "ICAO PKD Version Status",
+  "subtitle": "ICAO PKD Certificate Collection Version Monitoring",
+  "checkUpdates": "Check Updates",
+  "checking": "Checking...",
+  "lastChecked": "Last Checked",
+  "currentVersion": "Current Version",
+  "latestVersion": "Latest Version",
+  "upToDate": "Up to Date",
+  "updateAvailable": "Update Available",
+  "newVersions": "{{count}} new versions",
+  "versionHistory": "Version History",
+  "versionNumber": "Version Number",
+  "releaseDate": "Release Date",
+  "certificateCount": "Certificate Count",
+  "status": "Status",
+  "applied": "Applied",
+  "notApplied": "Not Applied",
+  "checkResult": "Check Result",
+  "checkResultTitle": "ICAO Version Check Result",
+  "noNewVersions": "Currently up to date",
+  "newVersionsFound": "{{count}} new versions found",
+  "collections": {
+    "masterList": "Master List",
+    "dscList": "DSC List",
+    "crlList": "CRL List",
+    "deviationList": "Deviation List"
+  },
+  "banner": {
+    "newVersionAvailable": "New ICAO PKD version detected",
+    "dismiss": "Dismiss",
+    "viewDetails": "View Details"
+  },
+  "noData": "No ICAO version data available",
+  "statusPage": {
+    "updateCheck": "Check Updates",
+    "currentVersion": "Current Version",
+    "latestVersion": "Latest Version",
+    "localVersion": "Local Version",
+    "noUpdateNeeded": "Up to date",
+    "updateAvailable": "Update available",
+    "versionHistory": "Version History",
+    "lastChecked": "Last Checked"
+  }
+}

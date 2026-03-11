@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 /**
  * @file CertificateMetadataCard.tsx
  * @brief X.509 Certificate Metadata Display Component
@@ -38,6 +39,7 @@ interface CertificateMetadataCardProps {
 }
 
 const CertificateMetadataCard: React.FC<CertificateMetadataCardProps> = ({ certificate }) => {
+  const { t } = useTranslation(['certificate', 'common']);
   const [copiedField, setCopiedField] = React.useState<string | null>(null);
 
   // Copy to clipboard helper

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   CheckCircle,
   XCircle,
@@ -32,14 +33,14 @@ const extractCountryFromDn = (dn: string): string | null => {
 const ERROR_MESSAGES: Record<string, { title: string; description: string }> = {
   CSCA_NOT_FOUND: {
     title: 'CSCA 인증서 미등록',
-    description: '해당 국가의 CSCA 인증서가 PKD에 등록되어 있지 않습니다.',
+    description: t('pa.steps.cscaNotInPkd'),
   },
   CSCA_DN_MISMATCH: {
-    title: 'CSCA DN 불일치',
+    title: t('pa.steps.cscaDnMismatch'),
     description: '해당 국가의 CSCA가 존재하나 DSC 발급자 DN과 일치하는 인증서를 찾을 수 없습니다.',
   },
   CSCA_SELF_SIGNATURE_FAILED: {
-    title: 'CSCA 자체 서명 검증 실패',
+    title: t('pa.steps.cscaSelfSignFailed'),
     description: 'Root CSCA의 자체 서명 검증에 실패했습니다.',
   },
 };
@@ -68,6 +69,7 @@ interface DGHashDetail {
 }
 
 export function getStepStatusIcon(status: StepStatus) {
+  const { t } = useTranslation(['pa', 'common']);
   switch (status) {
     case 'success':
       return <CheckCircle className="w-5 h-5 text-green-500" />;
@@ -166,13 +168,13 @@ export function VerificationStepsPanel({
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <span className="text-gray-500">해시 알고리즘:</span>
+                        <span className="text-gray-500">{ t('pa:steps.hashAlgorithm') }</span>
                         <code className="ml-1 font-mono bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
                           {String(step.details.hashAlgorithm || '')}
                         </code>
                       </div>
                       <div>
-                        <span className="text-gray-500">서명 알고리즘:</span>
+                        <span className="text-gray-500">{ t('pa:steps.signatureAlgorithm') }</span>
                         <code className="ml-1 font-mono bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
                           {String(step.details.signatureAlgorithm || '')}
                         </code>
@@ -208,7 +210,7 @@ export function VerificationStepsPanel({
                 {/* Step 3: Trust Chain 검증 상세 정보 (성공) */}
                 {step.id === 3 && step.details && step.status !== 'error' && (
                   <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg text-xs">
-                    <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">Trust Chain 경로:</div>
+                    <div className="font-semibold text-gray-700 dark:text-gray-300 mb-2">{ t('certificate:detail.trustChainPath') }</div>
                     <div className="flex flex-col items-center gap-1">
                       {/* CSCA (Root) */}
                       <div className="w-full p-2 bg-green-100 dark:bg-green-900/30 rounded border border-green-300 dark:border-green-700">
@@ -370,10 +372,10 @@ export function VerificationStepsPanel({
                           <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
                             <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
                             <div>
-                              <span className="font-semibold">실패 원인: </span>
+                              <span className="font-semibold">{ t('common:error.failReason') }</span>
                               {step.details.error
                                 ? String(step.details.error)
-                                : 'DSC 인증서가 CSCA에 의해 서명되지 않았거나 서명 검증에 실패했습니다.'}
+                                : t('pa.steps.dscNotSignedByCsca')}
                             </div>
                           </div>
                         </div>
@@ -454,7 +456,7 @@ export function VerificationStepsPanel({
                     <div className="grid grid-cols-2 gap-2">
                       {step.details.signatureAlgorithm && (
                         <div>
-                          <span className="text-gray-500">서명 알고리즘:</span>
+                          <span className="text-gray-500">{ t('pa:steps.signatureAlgorithm') }</span>
                           <code className="ml-1 font-mono bg-purple-100 dark:bg-purple-900/30 px-1.5 py-0.5 rounded text-purple-700 dark:text-purple-300">
                             {String(step.details.signatureAlgorithm)}
                           </code>
@@ -462,7 +464,7 @@ export function VerificationStepsPanel({
                       )}
                       {step.details.hashAlgorithm && (
                         <div>
-                          <span className="text-gray-500">해시 알고리즘:</span>
+                          <span className="text-gray-500">{ t('pa:steps.hashAlgorithm') }</span>
                           <code className="ml-1 font-mono bg-blue-100 dark:bg-blue-900/30 px-1.5 py-0.5 rounded text-blue-700 dark:text-blue-300">
                             {String(step.details.hashAlgorithm)}
                           </code>
@@ -479,7 +481,7 @@ export function VerificationStepsPanel({
                         <div className="grid grid-cols-2 gap-2">
                           {step.details.signatureAlgorithm && (
                             <div>
-                              <span className="text-gray-500">서명 알고리즘:</span>
+                              <span className="text-gray-500">{ t('pa:steps.signatureAlgorithm') }</span>
                               <code className="ml-1 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
                                 {String(step.details.signatureAlgorithm)}
                               </code>
@@ -487,7 +489,7 @@ export function VerificationStepsPanel({
                           )}
                           {step.details.hashAlgorithm && (
                             <div>
-                              <span className="text-gray-500">해시 알고리즘:</span>
+                              <span className="text-gray-500">{ t('pa:steps.hashAlgorithm') }</span>
                               <code className="ml-1 font-mono bg-gray-200 dark:bg-gray-600 px-1.5 py-0.5 rounded">
                                 {String(step.details.hashAlgorithm)}
                               </code>
@@ -500,7 +502,7 @@ export function VerificationStepsPanel({
                       <div className="flex items-start gap-2 text-red-600 dark:text-red-400">
                         <XCircle className="w-4 h-4 shrink-0 mt-0.5" />
                         <div>
-                          <span className="font-semibold">실패 원인: </span>
+                          <span className="font-semibold">{ t('common:error.failReason') }</span>
                           {step.details?.error
                             ? String(step.details.error)
                             : 'SOD의 서명이 DSC 공개키로 검증되지 않았습니다.'}
@@ -535,9 +537,9 @@ export function VerificationStepsPanel({
                               detail.valid ? 'bg-green-200 text-green-700 dark:bg-green-800 dark:text-green-200' : 'bg-red-200 text-red-700 dark:bg-red-800 dark:text-red-200'
                             )}>
                               {detail.valid ? (
-                                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" /> 일치</span>
+                                <span className="flex items-center gap-1"><CheckCircle className="w-3 h-3" />{ t('sync:dashboard.consistent') }</span>
                               ) : (
-                                <span className="flex items-center gap-1"><XCircle className="w-3 h-3" /> 불일치</span>
+                                <span className="flex items-center gap-1"><XCircle className="w-3 h-3" />{ t('sync:dashboard.discrepancy') }</span>
                               )}
                             </div>
                           </div>

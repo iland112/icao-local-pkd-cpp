@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { FileText, Key, Calendar, Hash, MapPin } from 'lucide-react';
 import type { CertificateMetadata, IcaoComplianceStatus } from '@/types';
 import { IcaoComplianceBadge } from './IcaoComplianceBadge';
@@ -15,6 +16,7 @@ export function CurrentCertificateCard({
   compliance,
   compact = false
 }: CurrentCertificateCardProps) {
+  const { t } = useTranslation(['upload', 'common']);
   const getCertTypeColor = (type: string) => {
     switch (type) {
       case 'CSCA':
@@ -157,7 +159,7 @@ export function CurrentCertificateCard({
                   : 'text-green-600 dark:text-green-400'
               )}>
                 {formatDate(certificate.notAfter)}
-                {certificate.isExpired && ' (만료됨)'}
+                {certificate.isExpired && ` (${t('common:status.expired')})`}
               </span>
             </div>
           </div>

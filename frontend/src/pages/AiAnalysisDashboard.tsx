@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import {
@@ -62,17 +63,17 @@ const getCountryName = (code: string): string => {
   return countries.getName(code, 'ko') || code;
 };
 
-const ANOMALY_LABELS_KO: Record<string, string> = {
-  NORMAL: '정상',
-  SUSPICIOUS: '의심',
-  ANOMALOUS: '이상',
+const ANOMALY_LABEL_KEYS: Record<string, string> = {
+  NORMAL: 'ai:dashboard.normal',
+  SUSPICIOUS: 'ai:dashboard.suspicious',
+  ANOMALOUS: 'ai:dashboard.anomalous',
 };
 
-const RISK_LABELS_KO: Record<string, string> = {
-  LOW: '낮음',
-  MEDIUM: '보통',
-  HIGH: '높음',
-  CRITICAL: '심각',
+const RISK_LABEL_KEYS: Record<string, string> = {
+  LOW: 'ai:dashboard.riskLow',
+  MEDIUM: 'ai:dashboard.riskMedium',
+  HIGH: 'ai:dashboard.riskHigh',
+  CRITICAL: 'ai:dashboard.riskCritical',
 };
 
 const RISK_BAR_CONFIG: Record<string, { color: string; tw: string }> = {
@@ -101,6 +102,7 @@ const TREND_COLORS = [
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#a855f7'];
 
 export default function AiAnalysisDashboard() {
+  const { t } = useTranslation(['ai', 'common']);
   const [stats, setStats] = useState<AnalysisStatistics | null>(null);
   const [jobStatus, setJobStatus] = useState<AnalysisJobStatus | null>(null);
   const [anomalies, setAnomalies] = useState<CertificateAnalysis[]>([]);
@@ -212,16 +214,16 @@ export default function AiAnalysisDashboard() {
           setAnalyzing(false);
           fetchDataRef.current();
           fetchAnomaliesRef.current();
-          const processed = res.data.processed_certificates.toLocaleString();
+          const processed = res.data.processed_certificates;
           const duration = res.data.started_at && res.data.completed_at
-            ? `${((new Date(res.data.completed_at).getTime() - new Date(res.data.started_at).getTime()) / 1000).toFixed(1)}초`
+            ? t('ai:dashboard.duration', { sec: ((new Date(res.data.completed_at).getTime() - new Date(res.data.started_at).getTime()) / 1000).toFixed(1) })
             : '';
-          toast.success('AI 분석 완료', `${processed}건 인증서 분석 완료${duration ? ` (${duration})` : ''}`);
+          toast.success(t('ai:dashboard.analysisComplete'), `${t('ai:dashboard.certsAnalyzed', { count: processed })}${duration ? ` (${duration})` : ''}`);
         } else if (res.data.status === 'FAILED') {
           setAnalyzing(false);
           fetchDataRef.current();
           fetchAnomaliesRef.current();
-          toast.error('AI 분석 실패', res.data.error_message || '분석 중 오류가 발생했습니다.');
+          toast.error(t('ai:dashboard.analysisFailed'), res.data.error_message || t('ai:dashboard.analysisError'));
         } else if (res.data.status === 'IDLE') {
           // Unexpected IDLE during analysis — stop polling
           setAnalyzing(false);
@@ -230,7 +232,7 @@ export default function AiAnalysisDashboard() {
         errorCount++;
         if (errorCount >= maxErrors) {
           setAnalyzing(false);
-          toast.error('분석 상태 확인 실패', '서버 연결이 불안정합니다. 페이지를 새로고침해 주세요.');
+          toast.error(t('ai:dashboard.statusCheckFailed'), t('ai:dashboard.statusCheckError'));
         }
       }
     };
@@ -246,8 +248,8 @@ export default function AiAnalysisDashboard() {
       await aiAnalysisApi.triggerAnalysis();
       setAnalyzing(true);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '분석 시작 실패';
-      toast.error('분석 실패', msg);
+      const msg = e instanceof Error ? e.message : t('ai:dashboard.startFailed');
+      toast.error(t('ai:dashboard.analysisFailed'), msg);
     }
   };
 
@@ -339,9 +341,9 @@ export default function AiAnalysisDashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-purple-500">
           <div className="flex items-center gap-2 mb-3">
             <Loader2 className="w-5 h-5 text-purple-500 animate-spin" />
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">분석 진행 중</h3>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.analysisInProgress')}</h3>
             <span className="ml-auto text-sm text-purple-600 dark:text-purple-400 font-medium">
-              {jobStatus.processed_certificates.toLocaleString()} / {jobStatus.total_certificates.toLocaleString()} 인증서
+              {t('ai:dashboard.certsProgress', { processed: jobStatus.processed_certificates.toLocaleString(), total: jobStatus.total_certificates.toLocaleString() })}
             </span>
           </div>
           <div className="w-full bg-purple-100 dark:bg-purple-900/30 rounded-full h-3 shadow-inner">
@@ -351,7 +353,7 @@ export default function AiAnalysisDashboard() {
             />
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-            {Math.round(jobStatus.progress * 100)}% 완료
+            {t('ai:dashboard.percentComplete', { pct: Math.round(jobStatus.progress * 100) })}
           </p>
         </div>
       )}
@@ -362,11 +364,11 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">총 분석</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('ai:dashboard.totalAnalyzed')}</p>
                 <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
                   {stats.total_analyzed.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">분석된 인증서</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('ai:dashboard.analyzedCerts')}</p>
               </div>
               <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/30">
                 <Brain className="w-8 h-8 text-blue-500" />
@@ -377,11 +379,11 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-green-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">정상</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('normal')}</p>
                 <p className="text-3xl font-bold text-green-600 dark:text-green-400 mt-1">
                   {stats.normal_count.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">이상 없음</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('ai:dashboard.noAnomaly')}</p>
               </div>
               <div className="p-3 rounded-xl bg-green-50 dark:bg-green-900/30">
                 <CheckCircle className="w-8 h-8 text-green-500" />
@@ -392,11 +394,11 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-amber-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">의심</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('suspicious')}</p>
                 <p className="text-3xl font-bold text-amber-600 dark:text-amber-400 mt-1">
                   {stats.suspicious_count.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">추가 확인 필요</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('ai:dashboard.needsReview')}</p>
               </div>
               <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30">
                 <AlertTriangle className="w-8 h-8 text-amber-500" />
@@ -407,11 +409,11 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border-l-4 border-red-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">이상</p>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('anomalous')}</p>
                 <p className="text-3xl font-bold text-red-600 dark:text-red-400 mt-1">
                   {stats.anomalous_count.toLocaleString()}
                 </p>
-                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">이상 탐지됨</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{t('ai:dashboard.anomalyDetected')}</p>
               </div>
               <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/30">
                 <ShieldAlert className="w-8 h-8 text-red-500" />
@@ -427,11 +429,11 @@ export default function AiAnalysisDashboard() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Shield className="w-5 h-5 text-purple-500" />
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">위험 수준 분포</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.riskDistribution')}</h3>
             </div>
             {stats && (
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                평균 위험 점수: <span className="font-bold text-purple-600 dark:text-purple-400">{stats.avg_risk_score}</span>
+                {t('ai:dashboard.avgRiskScore')}: <span className="font-bold text-purple-600 dark:text-purple-400">{stats.avg_risk_score}</span>
               </span>
             )}
           </div>
@@ -443,9 +445,9 @@ export default function AiAnalysisDashboard() {
                   key={r.risk_level}
                   className={cn(cfg?.tw || 'bg-gray-400', 'flex items-center justify-center text-xs font-medium text-white transition-all')}
                   style={{ width: `${r.percentage}%` }}
-                  title={`${RISK_LABELS_KO[r.risk_level] || r.risk_level}: ${r.count.toLocaleString()} (${r.percentage}%)`}
+                  title={`${t(RISK_LABEL_KEYS[r.risk_level] || r.risk_level)}: ${r.count.toLocaleString()} (${r.percentage}%)`}
                 >
-                  {r.percentage >= 8 && `${RISK_LABELS_KO[r.risk_level]} ${r.count.toLocaleString()}`}
+                  {r.percentage >= 8 && `${t(RISK_LABEL_KEYS[r.risk_level] || r.risk_level)} ${r.count.toLocaleString()}`}
                 </div>
               );
             })}
@@ -456,7 +458,7 @@ export default function AiAnalysisDashboard() {
               return (
                 <span key={r.risk_level} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                   <span className={cn('w-2.5 h-2.5 rounded-full', cfg?.tw || 'bg-gray-400')} />
-                  {RISK_LABELS_KO[r.risk_level]}: {r.count.toLocaleString()} ({r.percentage}%)
+                  {t(RISK_LABEL_KEYS[r.risk_level] || r.risk_level)}: {r.count.toLocaleString()} ({r.percentage}%)
                 </span>
               );
             })}
@@ -470,11 +472,11 @@ export default function AiAnalysisDashboard() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <ShieldAlert className="w-5 h-5 text-orange-500" />
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">포렌식 분석 요약</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.forensicSummary')}</h3>
             </div>
             {stats && stats.avg_forensic_score != null && (
               <span className="text-sm text-gray-500 dark:text-gray-400">
-                평균 포렌식 점수: <span className="font-bold text-orange-600 dark:text-orange-400">{stats.avg_forensic_score!.toFixed(1)}</span>
+                {t('ai:dashboard.avgForensicScore')}: <span className="font-bold text-orange-600 dark:text-orange-400">{stats.avg_forensic_score!.toFixed(1)}</span>
               </span>
             )}
           </div>
@@ -493,9 +495,9 @@ export default function AiAnalysisDashboard() {
                       key={level}
                       className={cn(cfg?.tw || 'bg-gray-400', 'flex items-center justify-center text-xs font-medium text-white transition-all')}
                       style={{ width: `${pct}%` }}
-                      title={`${RISK_LABELS_KO[level] || level}: ${count.toLocaleString()} (${pct.toFixed(1)}%)`}
+                      title={`${t(RISK_LABEL_KEYS[level] || level)}: ${count.toLocaleString()} (${pct.toFixed(1)}%)`}
                     >
-                      {pct >= 8 && `${RISK_LABELS_KO[level]} ${count.toLocaleString()}`}
+                      {pct >= 8 && `${t(RISK_LABEL_KEYS[level] || level)} ${count.toLocaleString()}`}
                     </div>
                   );
                 })}
@@ -510,7 +512,7 @@ export default function AiAnalysisDashboard() {
                   return (
                     <span key={level} className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-400">
                       <span className={cn('w-2.5 h-2.5 rounded-full', cfg?.tw || 'bg-gray-400')} />
-                      {RISK_LABELS_KO[level]}: {count.toLocaleString()} ({pct}%)
+                      {t(RISK_LABEL_KEYS[level] || level)}: {count.toLocaleString()} ({pct}%)
                     </span>
                   );
                 })}
@@ -520,14 +522,14 @@ export default function AiAnalysisDashboard() {
           {/* Top findings */}
           {forensicSummary.top_findings && forensicSummary.top_findings.length > 0 && (
             <div className="mt-4 space-y-1.5">
-              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">주요 발견 사항</h4>
+              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('ai:dashboard.mainFindings')}</h4>
               {forensicSummary.top_findings.slice(0, 5).map((f, i) => (
                 <div key={f.message} className="flex items-center gap-2 text-xs">
                   <span className="px-1.5 py-0.5 rounded font-medium text-orange-600 bg-orange-50 dark:text-orange-400 dark:bg-orange-900/20">
                     #{i + 1}
                   </span>
                   <span className="text-gray-600 dark:text-gray-400">{f.message}</span>
-                  <span className="text-gray-400 dark:text-gray-500">({f.count}건)</span>
+                  <span className="text-gray-400 dark:text-gray-500">({t('ai:dashboard.findingsCount', { count: f.count })})</span>
                 </div>
               ))}
             </div>
@@ -546,8 +548,8 @@ export default function AiAnalysisDashboard() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
           <div className="flex items-center gap-2 mb-4">
             <Globe className="w-5 h-5 text-purple-500" />
-            <h3 className="text-base font-bold text-gray-900 dark:text-white">국가별 PKI 성숙도</h3>
-            <span className="text-sm text-gray-500 dark:text-gray-400">(상위 15개국)</span>
+            <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.countryPkiMaturity')}</h3>
+            <span className="text-sm text-gray-500 dark:text-gray-400">{t('ai:dashboard.top15Countries')}</span>
           </div>
           <ResponsiveContainer width="100%" height={Math.max(300, top15Maturity.length * 32)}>
             <BarChart data={top15Maturity} layout="vertical" margin={{ left: 70, right: 20, top: 5, bottom: 5 }}>
@@ -587,16 +589,16 @@ export default function AiAnalysisDashboard() {
                         <span className="text-xs text-gray-400">{getCountryName(item.country_code)}</span>
                       </div>
                       <div className="text-xs text-gray-300 space-y-0.5">
-                        <div>성숙도: <span className="font-bold text-white">{item.maturity_score.toFixed(1)}점</span></div>
+                        <div>{t('ai:dashboard.maturityScore', { score: item.maturity_score.toFixed(1) })}</div>
                         <div className="flex gap-3 mt-1">
-                          <span>알고리즘: {item.algorithm_score.toFixed(0)}</span>
-                          <span>키크기: {item.key_size_score.toFixed(0)}</span>
-                          <span>준수: {item.compliance_score.toFixed(0)}</span>
+                          <span>{t('ai:dashboard.algorithmScore', { score: item.algorithm_score.toFixed(0) })}</span>
+                          <span>{t('ai:dashboard.keySizeScore', { score: item.key_size_score.toFixed(0) })}</span>
+                          <span>{t('ai:dashboard.complianceScore', { score: item.compliance_score.toFixed(0) })}</span>
                         </div>
                         <div className="flex gap-3">
-                          <span>확장: {item.extension_score.toFixed(0)}</span>
-                          <span>최신성: {item.freshness_score.toFixed(0)}</span>
-                          <span className="text-gray-400">({item.certificate_count}건)</span>
+                          <span>{t('ai:dashboard.extensionsScore', { score: item.extension_score.toFixed(0) })}</span>
+                          <span>{t('ai:dashboard.freshnessScore', { score: item.freshness_score.toFixed(0) })}</span>
+                          <span className="text-gray-400">({t('ai:dashboard.findingsCount', { count: item.certificate_count })})</span>
                         </div>
                       </div>
                     </div>
@@ -616,7 +618,7 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
             <div className="flex items-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-blue-500" />
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">알고리즘 마이그레이션 트렌드</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('ai:dashboard.algorithmMigrationTrend')}</h3>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={trendData} margin={{ left: 10, right: 20, top: 5, bottom: 5 }}>
@@ -650,7 +652,7 @@ export default function AiAnalysisDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6 h-full">
             <div className="flex items-center gap-2 mb-4">
               <Key className="w-5 h-5 text-violet-500" />
-              <h3 className="text-base font-bold text-gray-900 dark:text-white">키 크기 분포</h3>
+              <h3 className="text-base font-bold text-gray-900 dark:text-white">{t('keySizeDistribution')}</h3>
             </div>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
@@ -675,7 +677,7 @@ export default function AiAnalysisDashboard() {
                   contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: '8px' }}
                   labelStyle={{ color: '#F3F4F6' }}
                   itemStyle={{ color: '#F3F4F6' }}
-                  formatter={(value) => [`${Number(value).toLocaleString()}건`, '인증서']}
+                  formatter={(value) => [`${t('ai:dashboard.itemCount', { count: Number(value) })}`, t('ai:dashboard.certificate')]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -687,11 +689,11 @@ export default function AiAnalysisDashboard() {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-purple-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('certificate:search.filterLabel') }</h3>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label htmlFor="ai-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">국가</label>
+            <label htmlFor="ai-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{ t('ai:dashboard.filterCountry') }</label>
             <select
               id="ai-country"
               name="filterCountry"
@@ -699,7 +701,7 @@ export default function AiAnalysisDashboard() {
               onChange={(e) => { setFilterCountry(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">전체</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
               {stats?.top_anomalous_countries.map((c) => (
                 <option key={c.country} value={c.country}>
                   {c.country} - {getCountryName(c.country)} ({c.total})
@@ -708,7 +710,7 @@ export default function AiAnalysisDashboard() {
             </select>
           </div>
           <div>
-            <label htmlFor="ai-type" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">인증서 유형</label>
+            <label htmlFor="ai-type" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{ t('certificate:detail.certificateType') }</label>
             <select
               id="ai-type"
               name="filterType"
@@ -716,7 +718,7 @@ export default function AiAnalysisDashboard() {
               onChange={(e) => { setFilterType(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">전체</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
               <option value="CSCA">CSCA</option>
               <option value="DSC">DSC</option>
               <option value="DSC_NC">DSC_NC</option>
@@ -724,7 +726,7 @@ export default function AiAnalysisDashboard() {
             </select>
           </div>
           <div>
-            <label htmlFor="ai-label" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">이상 수준</label>
+            <label htmlFor="ai-label" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('ai:dashboard.anomalyLevel')}</label>
             <select
               id="ai-label"
               name="filterLabel"
@@ -732,14 +734,14 @@ export default function AiAnalysisDashboard() {
               onChange={(e) => { setFilterLabel(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">전체</option>
-              <option value="ANOMALOUS">이상</option>
-              <option value="SUSPICIOUS">의심</option>
-              <option value="NORMAL">정상</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
+              <option value="ANOMALOUS">{t('anomalous')}</option>
+              <option value="SUSPICIOUS">{t('suspicious')}</option>
+              <option value="NORMAL">{t('normal')}</option>
             </select>
           </div>
           <div>
-            <label htmlFor="ai-risk" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">위험 수준</label>
+            <label htmlFor="ai-risk" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{t('ai:dashboard.riskLevel')}</label>
             <select
               id="ai-risk"
               name="filterRisk"
@@ -747,11 +749,11 @@ export default function AiAnalysisDashboard() {
               onChange={(e) => { setFilterRisk(e.target.value); setPage(1); }}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-purple-500"
             >
-              <option value="">전체</option>
-              <option value="CRITICAL">심각</option>
-              <option value="HIGH">높음</option>
-              <option value="MEDIUM">보통</option>
-              <option value="LOW">낮음</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
+              <option value="CRITICAL">{ t('ai:forensic.severity.critical') }</option>
+              <option value="HIGH">{ t('ai:forensic.severity.high') }</option>
+              <option value="MEDIUM">{ t('ai:forensic.severity.medium') }</option>
+              <option value="LOW">{ t('ai:risk.low') }</option>
             </select>
           </div>
         </div>
@@ -767,11 +769,11 @@ export default function AiAnalysisDashboard() {
               }}
               className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
             >
-              초기화
+              {t('common.button.reset')}
             </button>
           )}
           <span className="ml-auto text-sm text-gray-500 dark:text-gray-400">
-            {anomalyTotal.toLocaleString()}건
+            {t('ai:dashboard.itemCount', { count: anomalyTotal })}
           </span>
         </div>
       </div>
@@ -781,9 +783,9 @@ export default function AiAnalysisDashboard() {
         {/* Table Header */}
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <Brain className="w-4 h-4 text-purple-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">인증서 분석 결과</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('ai:dashboard.certAnalysisResults')}</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400">
-            {anomalyTotal.toLocaleString()}건
+            {t('ai:dashboard.itemCount', { count: anomalyTotal })}
           </span>
         </div>
 
@@ -791,14 +793,14 @@ export default function AiAnalysisDashboard() {
           <table className="w-full">
             <thead className="bg-slate-100 dark:bg-gray-700">
               <tr>
-                <SortableHeader label="국가" sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="유형" sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="이상 점수" sortKey="anomaly_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="이상 수준" sortKey="anomaly_label" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="위험 점수" sortKey="risk_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <SortableHeader label="위험 수준" sortKey="risk_level" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">주요 위험 요인</th>
-                <SortableHeader label="분석 시간" sortKey="analyzed_at" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('common:label.country')} sortKey="country_code" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('common:label.type')} sortKey="certificate_type" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('ai:dashboard.anomalyScore')} sortKey="anomaly_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('ai:dashboard.anomalyLevel')} sortKey="anomaly_label" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('ai:issuerProfile.riskScore')} sortKey="risk_score" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <SortableHeader label={t('ai:dashboard.riskLevel')} sortKey="risk_level" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                <th className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">{t('ai:dashboard.riskFactors')}</th>
+                <SortableHeader label={t('ai:dashboard.analysisTime')} sortKey="analyzed_at" sortConfig={anomalySortConfig} onSort={requestAnomalySort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -808,10 +810,10 @@ export default function AiAnalysisDashboard() {
                     <div className="flex flex-col items-center text-gray-500 dark:text-gray-400">
                       <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
                       <p className="text-lg font-medium">
-                        {stats?.total_analyzed === 0 ? '분석을 먼저 실행해 주세요' : '검색 결과 없음'}
+                        {stats?.total_analyzed === 0 ? t('ai:dashboard.runAnalysisFirst') : t('common.error.noSearchResults')}
                       </p>
                       <p className="text-sm mt-1">
-                        {stats?.total_analyzed === 0 ? '상단의 "분석 실행" 버튼을 클릭하세요' : '필터 조건을 변경해 보세요'}
+                        {stats?.total_analyzed === 0 ? t('ai:dashboard.clickAnalyzeButton') : t('common.error.tryChangingFilters')}
                       </p>
                     </div>
                   </td>
@@ -876,8 +878,7 @@ export default function AiAnalysisDashboard() {
         {totalPages > 1 && (
           <div className="px-5 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              총 {anomalyTotal.toLocaleString()}개 중{' '}
-              {((page - 1) * pageSize + 1).toLocaleString()}-{Math.min(page * pageSize, anomalyTotal).toLocaleString()}개 표시
+              {t('ai:dashboard.totalItems', { count: anomalyTotal.toLocaleString(), start: ((page - 1) * pageSize + 1).toLocaleString(), end: Math.min(page * pageSize, anomalyTotal).toLocaleString() })}
             </p>
             <div className="flex items-center gap-1">
               <button
@@ -888,7 +889,7 @@ export default function AiAnalysisDashboard() {
                 <ChevronLeft className="w-4 h-4" />
               </button>
               <span className="px-3 text-sm text-gray-600 dark:text-gray-300">
-                {page} / {totalPages}
+                {t('ai:dashboard.pageInfo', { current: page, total: totalPages })}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
@@ -924,6 +925,7 @@ function PageHeader({
   jobStatus: AnalysisJobStatus | null;
   lastAnalysisAt: string | null;
 }) {
+  const { t } = useTranslation(['ai', 'common']);
   return (
     <div className="mb-6">
       <div className="flex items-center gap-4">
@@ -931,12 +933,12 @@ function PageHeader({
           <Brain className="w-7 h-7 text-white" />
         </div>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI 인증서 분석</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('title')}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">
-            ML 기반 이상 탐지 및 패턴 분석
+            {t('ai:dashboard.mlDescription')}
             {lastAnalysisAt && (
               <span className="ml-2">
-                (마지막 분석: {formatDateTime(lastAnalysisAt)})
+                ({t('ai:dashboard.lastAnalysisPrefix', { time: formatDateTime(lastAnalysisAt) })})
               </span>
             )}
           </p>
@@ -969,12 +971,12 @@ function PageHeader({
             {isRunning ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                분석 중... {jobStatus?.progress ? `${Math.round(jobStatus.progress * 100)}%` : ''}
+                {t('ai:dashboard.analyzing')} {jobStatus?.progress ? `${Math.round(jobStatus.progress * 100)}%` : ''}
               </>
             ) : (
               <>
                 <Play className="w-4 h-4" />
-                분석 실행
+                {t('ai:dashboard.runAnalysis')}
               </>
             )}
           </button>
@@ -985,6 +987,7 @@ function PageHeader({
 }
 
 function AnomalyBadge({ label }: { label: string }) {
+  const { t } = useTranslation(['ai']);
   const config: Record<string, { bg: string; text: string }> = {
     NORMAL: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400' },
     SUSPICIOUS: { bg: 'bg-amber-100 dark:bg-amber-900/30', text: 'text-amber-600 dark:text-amber-400' },
@@ -994,12 +997,13 @@ function AnomalyBadge({ label }: { label: string }) {
 
   return (
     <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
-      {ANOMALY_LABELS_KO[label] || label}
+      {t(ANOMALY_LABEL_KEYS[label] || label)}
     </span>
   );
 }
 
 function RiskBadge({ level }: { level: string }) {
+  const { t } = useTranslation(['ai']);
   const config: Record<string, { bg: string; text: string }> = {
     LOW: { bg: 'bg-green-100 dark:bg-green-900/30', text: 'text-green-600 dark:text-green-400' },
     MEDIUM: { bg: 'bg-yellow-100 dark:bg-yellow-900/30', text: 'text-yellow-600 dark:text-yellow-400' },
@@ -1010,7 +1014,7 @@ function RiskBadge({ level }: { level: string }) {
 
   return (
     <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium', style.bg, style.text)}>
-      {RISK_LABELS_KO[level] || level}
+      {t(RISK_LABEL_KEYS[level] || level)}
     </span>
   );
 }

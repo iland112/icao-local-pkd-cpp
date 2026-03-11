@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import React from 'react';
 import { Search, Download, Filter, ChevronDown, ChevronUp, Archive, Loader2 } from 'lucide-react';
 import { getFlagSvgPath } from '@/utils/countryCode';
@@ -40,11 +41,12 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
   exportAll,
   exportAllLoading,
 }) => {
+  const { t } = useTranslation(['certificate', 'common']);
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg mb-4 p-5">
       <div className="flex items-center gap-2 mb-3">
         <Filter className="w-4 h-4 text-blue-500" />
-        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
+        <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('certificate:search.filterLabel') }</h3>
         <button
           onClick={() => setShowFilters(!showFilters)}
           className="ml-auto p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
@@ -59,7 +61,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
             {/* Country - wider column */}
             <div className="lg:col-span-2">
               <label htmlFor="cert-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                국가
+                {t('pa.history.country')}
               </label>
               <div className="relative">
                 <select
@@ -72,7 +74,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                   disabled={countriesLoading}
                 >
                   <option value="">
-                    {countriesLoading ? 'Loading...' : countries.length === 0 ? 'No countries' : '전체 국가'}
+                    {countriesLoading ? 'Loading...' : countries.length === 0 ? 'No countries' : t('report.crl.allCountries')}
                   </option>
                   {countries.map((country) => (
                     <option key={country} value={country}>
@@ -105,7 +107,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                 onChange={(e) => setCriteria({ ...criteria, certType: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">전체</option>
+                <option value="">{ t('monitoring:pool.total') }</option>
                 <option value="CSCA">CSCA</option>
                 <option value="MLSC">MLSC</option>
                 <option value="DSC">DSC</option>
@@ -125,18 +127,18 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                 onChange={(e) => setCriteria({ ...criteria, validity: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">전체</option>
-                <option value="VALID">유효</option>
-                <option value="EXPIRED_VALID">만료-유효</option>
-                <option value="EXPIRED">만료</option>
-                <option value="NOT_YET_VALID">유효 전</option>
+                <option value="all">{ t('monitoring:pool.total') }</option>
+                <option value="VALID">{t('common:status.valid')}</option>
+                <option value="EXPIRED_VALID">{ t('certificate:search.validity.expiredValid') }</option>
+                <option value="EXPIRED">{t('common:status.expired')}</option>
+                <option value="NOT_YET_VALID">{ t('certificate:search.validity.notYetValid') }</option>
               </select>
             </div>
 
             {/* Source */}
             <div>
               <label htmlFor="cert-source" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                출처
+                {t('certificate.detail.sourceType')}
               </label>
               <select
                 id="cert-source"
@@ -145,12 +147,12 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                 onChange={(e) => setCriteria({ ...criteria, source: e.target.value })}
                 className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">전체</option>
-                <option value="LDIF_PARSED">LDIF 업로드</option>
+                <option value="">{ t('monitoring:pool.total') }</option>
+                <option value="LDIF_PARSED">{ t('common:source.LDIF_UPLOAD') }</option>
                 <option value="ML_PARSED">Master List</option>
-                <option value="FILE_UPLOAD">파일 업로드</option>
-                <option value="PA_EXTRACTED">PA 검증 추출</option>
-                <option value="DL_PARSED">편차 목록</option>
+                <option value="FILE_UPLOAD">{ t('nav:menu.fileUpload') }</option>
+                <option value="PA_EXTRACTED">{ t('common:source.PA_EXTRACTED_short') }</option>
+                <option value="DL_PARSED">{ t('common:source.DL_PARSED_short') }</option>
               </select>
             </div>
 
@@ -185,7 +187,7 @@ const CertificateSearchFilters: React.FC<CertificateSearchFiltersProps> = ({
                   id="cert-search"
                   name="searchTerm"
                   type="text"
-                  placeholder="CN 검색..."
+                  placeholder={t('certificate.search.cnSearch')}
                   value={criteria.searchTerm}
                   onChange={(e) => setCriteria({ ...criteria, searchTerm: e.target.value })}
                   onKeyDown={(e) => e.key === 'Enter' && handleSearch()}

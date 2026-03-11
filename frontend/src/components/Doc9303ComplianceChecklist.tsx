@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useMemo } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, MinusCircle, ChevronRight, ChevronDown } from 'lucide-react';
 import type { Doc9303ChecklistResult, Doc9303CheckItem } from '@/types';
@@ -47,9 +48,9 @@ const overallStatusStyle = (status: string) => {
 
 const overallStatusLabel = (status: string) => {
   switch (status) {
-    case 'CONFORMANT': return 'Doc 9303 적합';
-    case 'NON_CONFORMANT': return 'Doc 9303 부적합';
-    case 'WARNING': return 'Doc 9303 경고';
+    case 'CONFORMANT': return t('certificate.compliance.doc9303Pass');
+    case 'NON_CONFORMANT': return t('certificate.compliance.doc9303Fail');
+    case 'WARNING': return t('certificate.compliance.doc9303Warning');
     default: return status;
   }
 };
@@ -127,6 +128,7 @@ function CategorySection({ group, defaultOpen }: { group: CategoryGroup; default
 }
 
 export function Doc9303ComplianceChecklist({ checklist, compact = false }: Props) {
+  const { t } = useTranslation(['certificate', 'common']);
   const groups = useMemo<CategoryGroup[]>(() => {
     const map = new Map<string, Doc9303CheckItem[]>();
     for (const item of checklist.items) {

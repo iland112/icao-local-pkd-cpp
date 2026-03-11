@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect, useMemo } from 'react';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
@@ -57,6 +58,7 @@ interface DGDataResponse {
 }
 
 export function PAHistory() {
+  const { t } = useTranslation(['pa', 'common']);
   const [history, setHistory] = useState<PAHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -283,7 +285,7 @@ export function PAHistory() {
             <History className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">PA 검증 이력</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('history.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Passive Authentication 검증 이력을 조회하고 필터링합니다.
             </p>
@@ -316,7 +318,7 @@ export function PAHistory() {
               <FileText className="w-5 h-5 text-blue-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">총 검증</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{t('common.label.totalVerification')}</p>
               <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
             </div>
           </div>
@@ -343,7 +345,7 @@ export function PAHistory() {
               <AlertTriangle className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">만료(서명유효)</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">{ t('report:trustChain.expiredValid') }</p>
               <p className="text-xl font-bold text-amber-600 dark:text-amber-400">{stats.expiredValid}</p>
               <p className="text-xs text-gray-400">{stats.expiredValidPercent}%</p>
             </div>
@@ -383,14 +385,14 @@ export function PAHistory() {
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md mb-4 p-4">
         <div className="flex items-center gap-2 mb-3">
           <Filter className="w-4 h-4 text-blue-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 필터</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('certificate:search.filterLabel') }</h3>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {/* Country Filter */}
           <div>
             <label htmlFor="pa-country" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              발급 국가
+              {t('report.crl.totalCountries')}
             </label>
             <select
               id="pa-country"
@@ -399,7 +401,7 @@ export function PAHistory() {
               onChange={(e) => setCountryFilter(e.target.value)}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">전체</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
               {uniqueCountries.map((country) => (
                 <option key={country} value={country}>{country}</option>
               ))}
@@ -409,7 +411,7 @@ export function PAHistory() {
           {/* Status Filter */}
           <div>
             <label htmlFor="pa-status" className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-              검증 결과
+              {t('upload.detail.validationResults')}
             </label>
             <select
               id="pa-status"
@@ -418,9 +420,9 @@ export function PAHistory() {
               onChange={(e) => setStatusFilter(e.target.value as PAStatus | '')}
               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="">전체</option>
+              <option value="">{ t('monitoring:pool.total') }</option>
               <option value="VALID">Valid</option>
-              <option value="EXPIRED_VALID">만료(서명유효)</option>
+              <option value="EXPIRED_VALID">{ t('report:trustChain.expiredValid') }</option>
               <option value="INVALID">Invalid</option>
               <option value="ERROR">Error</option>
             </select>
@@ -479,7 +481,7 @@ export function PAHistory() {
                   onClick={clearFilters}
                   className="px-3 py-2 text-xs font-medium text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700"
                 >
-                  초기화
+                  {t('common.button.reset')}
                 </button>
               )}
             </div>
@@ -491,7 +493,7 @@ export function PAHistory() {
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
           <FileText className="w-4 h-4 text-purple-500" />
-          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검증 이력</h3>
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{ t('nav:menu.verifyHistory') }</h3>
           <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
             {filteredHistory.length}건
           </span>
@@ -504,7 +506,7 @@ export function PAHistory() {
         ) : filteredHistory.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
             <AlertCircle className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">검증 이력이 없습니다.</p>
+            <p className="text-lg font-medium">{ t('pa:history.noHistory') }</p>
             <p className="text-sm">PA 검증을 수행하거나 필터를 조정하세요.</p>
             <Link
               to="/pa/verify"
@@ -520,15 +522,15 @@ export function PAHistory() {
               <table className="w-full">
                 <thead className="bg-slate-100 dark:bg-gray-700">
                   <tr>
-                    <SortableHeader label="검증 ID" sortKey="verificationId" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                    <SortableHeader label="국가" sortKey="issuingCountry" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                    <SortableHeader label="여권번호" sortKey="documentNumber" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                    <SortableHeader label="유형" sortKey="verificationType" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                    <SortableHeader label="결과" sortKey="status" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label={t('pa:history.verificationId')} sortKey="verificationId" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label={t('common:label.country')} sortKey="issuingCountry" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label={t('pa:result.documentNumber')} sortKey="documentNumber" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label={t('common:label.type')} sortKey="verificationType" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label={t('admin:operationAudit.result')} sortKey="status" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                     <SortableHeader label="검증 시각" sortKey="verificationTimestamp" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                    <SortableHeader label="요청자" sortKey="requestedBy" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                    <SortableHeader label={t('pa:history.requestedBy')} sortKey="requestedBy" sortConfig={historySortConfig} onSort={requestHistorySort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                     <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                      상세
+                      {t('upload.history.detail')}
                     </th>
                   </tr>
                 </thead>
@@ -576,7 +578,7 @@ export function PAHistory() {
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                             <ShieldCheck className="w-3 h-3" />
-                            전체
+                            {t('monitoring.pool.total')}
                           </span>
                         )}
                       </td>
@@ -626,7 +628,7 @@ export function PAHistory() {
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="이전 페이지"
+                  aria-label={t('common:button.prev_page')}
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -637,7 +639,7 @@ export function PAHistory() {
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
                   className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  aria-label="다음 페이지"
+                  aria-label={t('common:button.next_page')}
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -668,12 +670,12 @@ export function PAHistory() {
                 {selectedRecord.verificationType === 'LOOKUP' ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
                     <Search className="w-3 h-3" />
-                    간편 검증
+                    {t('pa.verify.quickLookup')}
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400">
                     <ShieldCheck className="w-3 h-3" />
-                    전체 검증
+                    {t('pa.dashboard.totalVerifications')}
                   </span>
                 )}
                 {getStatusBadge(selectedRecord.status)}
@@ -692,7 +694,7 @@ export function PAHistory() {
               {/* Section 1: 기본 정보 - inline row */}
               <div className="grid grid-cols-5 gap-2">
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">검증 ID</p>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('history.verificationId')}</p>
                   <p className="font-mono text-xs text-gray-900 dark:text-white truncate mt-0.5" title={selectedRecord.verificationId}>
                     {selectedRecord.verificationId.substring(0, 12)}...
                   </p>
@@ -704,7 +706,7 @@ export function PAHistory() {
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">발급 국가</p>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{ t('report:crl.totalCountries') }</p>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {selectedRecord.issuingCountry && getFlagSvgPath(selectedRecord.issuingCountry) && (
                       <img
@@ -720,13 +722,13 @@ export function PAHistory() {
                   </div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">여권 번호</p>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('common.label.passportNumber')}</p>
                   <p className="font-mono text-xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">
                     {selectedRecord.documentNumber || '-'}
                   </p>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg px-2.5 py-2">
-                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">요청자</p>
+                  <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{t('history.requestedBy')}</p>
                   {selectedRecord.requestedBy ? (
                     <p className="text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">
                       {selectedRecord.requestedBy}
@@ -753,7 +755,7 @@ export function PAHistory() {
               <div>
                 <div className="flex items-center gap-1.5 mb-2">
                   <div className="w-1 h-3.5 rounded-full bg-green-500" />
-                  <h3 className="text-xs font-bold text-gray-800 dark:text-gray-200">검증 결과</h3>
+                  <h3 className="text-xs font-bold text-gray-800 dark:text-gray-200">{ t('upload:detail.validationResults') }</h3>
                 </div>
 
                 <div className={cn('grid gap-2', selectedRecord.verificationType === 'LOOKUP' ? 'grid-cols-1' : 'grid-cols-3')}>
@@ -765,7 +767,7 @@ export function PAHistory() {
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                         : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                     )}>
-                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">SOD 서명 검증</p>
+                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{ t('pa:steps.step3') }</p>
                       <div className="flex items-center gap-1.5">
                         {selectedRecord.sodSignatureValid ? (
                           <CheckCircle className="w-4 h-4 text-green-500" />
@@ -791,7 +793,7 @@ export function PAHistory() {
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                       : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                   )}>
-                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">인증서 체인 검증</p>
+                    <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{t('common.label.certChainVerification')}</p>
                     <div className="flex items-center gap-1.5">
                       {selectedRecord.trustChainValid ? (
                         <CheckCircle className="w-4 h-4 text-green-500" />
@@ -822,7 +824,7 @@ export function PAHistory() {
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-500'
                         : 'bg-red-50 dark:bg-red-900/20 border-red-500'
                     )}>
-                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">DG 해시 검증</p>
+                      <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 mb-1">{ t('pa:steps.step2') }</p>
                       <div className="flex items-center gap-1.5">
                         {selectedRecord.dgHashesValid ? (
                           <CheckCircle className="w-4 h-4 text-green-500" />
@@ -906,7 +908,7 @@ export function PAHistory() {
                   {dgLoading ? (
                     <div className="flex items-center justify-center py-6 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
                       <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                      <span className="ml-2 text-xs text-gray-500">로딩 중...</span>
+                      <span className="ml-2 text-xs text-gray-500">{t('common:button.loading')}</span>
                     </div>
                   ) : dgError ? (
                     <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg px-3 py-2 flex items-center gap-2">
@@ -928,25 +930,25 @@ export function PAHistory() {
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">{dgData.dg1.surname || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5 col-span-2">
-                              <p className="text-[10px] text-gray-400 leading-none">이름</p>
+                              <p className="text-[10px] text-gray-400 leading-none">{ t('admin:userManagement.fullName') }</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white truncate mt-0.5">{dgData.dg1.givenNames || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">성별</p>
+                              <p className="text-[10px] text-gray-400 leading-none">{t('common.label.gender')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white mt-0.5">
-                                {dgData.dg1.sex === 'M' ? '남성' : dgData.dg1.sex === 'F' ? '여성' : dgData.dg1.sex || '-'}
+                                {dgData.dg1.sex === 'M' ? t('pa.result.male') : dgData.dg1.sex === 'F' ? t('pa.result.female') : dgData.dg1.sex || '-'}
                               </p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5 col-span-2">
-                              <p className="text-[10px] text-gray-400 leading-none">여권번호</p>
+                              <p className="text-[10px] text-gray-400 leading-none">{ t('pa:result.documentNumber') }</p>
                               <p className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">{dgData.dg1.documentNumber || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">국적</p>
+                              <p className="text-[10px] text-gray-400 leading-none">{t('common.label.nationality')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white mt-0.5">{dgData.dg1.nationality || '-'}</p>
                             </div>
                             <div className="bg-white dark:bg-gray-800 rounded px-2 py-1.5">
-                              <p className="text-[10px] text-gray-400 leading-none">생년월일</p>
+                              <p className="text-[10px] text-gray-400 leading-none">{t('common.label.dateOfBirth')}</p>
                               <p className="font-mono text-xs font-medium text-gray-900 dark:text-white mt-0.5">{dgData.dg1.dateOfBirth || '-'}</p>
                             </div>
                           </div>
@@ -977,7 +979,7 @@ export function PAHistory() {
                         ) : (
                           <div className="flex flex-col items-center justify-center h-28 text-xs text-gray-500 dark:text-gray-400">
                             <User className="w-6 h-6 text-gray-300 dark:text-gray-600 mb-1" />
-                            없음
+                            {t('common.label.none')}
                           </div>
                         )}
                       </div>
@@ -993,7 +995,7 @@ export function PAHistory() {
                 onClick={closeDetailModal}
                 className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
               >
-                닫기
+                {t('icao.banner.dismiss')}
               </button>
             </div>
           </div>

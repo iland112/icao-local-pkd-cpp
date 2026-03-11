@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSortableTable } from '@/hooks/useSortableTable';
@@ -40,35 +41,35 @@ import {
 import { cn } from '@/utils/cn';
 import { formatDateTime } from '@/utils/dateFormat';
 
-// Operation type labels
-const OPERATION_TYPE_LABELS: Record<OperationType, string> = {
-  FILE_UPLOAD: '파일 업로드',
-  CERT_UPLOAD: '인증서 업로드',
-  CERT_EXPORT: '인증서 내보내기',
-  UPLOAD_DELETE: '업로드 삭제',
-  UPLOAD_RETRY: '업로드 재시도',
-  PA_VERIFY: 'PA 검증',
-  PA_PARSE_SOD: 'SOD 파싱',
-  PA_PARSE_DG1: 'DG1 파싱',
-  PA_PARSE_DG2: 'DG2 파싱',
-  API_CLIENT_CREATE: 'API 클라이언트 생성',
-  API_CLIENT_UPDATE: 'API 클라이언트 수정',
-  API_CLIENT_DELETE: 'API 클라이언트 삭제',
-  API_CLIENT_KEY_REGEN: 'API 키 재발급',
-  CODE_MASTER_CREATE: '코드 마스터 생성',
-  CODE_MASTER_UPDATE: '코드 마스터 수정',
-  CODE_MASTER_DELETE: '코드 마스터 삭제',
-  USER_CREATE: '사용자 생성',
-  USER_UPDATE: '사용자 수정',
-  USER_DELETE: '사용자 삭제',
-  PASSWORD_CHANGE: '비밀번호 변경',
-  ICAO_CHECK: 'ICAO 버전 확인',
-  SYNC_TRIGGER: '동기화 트리거',
-  SYNC_CHECK: '동기화 체크',
-  RECONCILE: '재조정',
-  REVALIDATE: '재검증',
-  TRIGGER_DAILY_SYNC: '일일 동기화',
-  CONFIG_UPDATE: '설정 변경',
+// Operation type label keys for i18n
+const OPERATION_TYPE_LABEL_KEYS: Record<OperationType, string> = {
+  FILE_UPLOAD: 'admin:operationAudit.types.fileUpload',
+  CERT_UPLOAD: 'admin:operationAudit.types.certUpload',
+  CERT_EXPORT: 'admin:operationAudit.types.certExport',
+  UPLOAD_DELETE: 'admin:operationAudit.types.uploadDelete',
+  UPLOAD_RETRY: 'admin:operationAudit.types.uploadRetry',
+  PA_VERIFY: 'admin:operationAudit.types.paVerify',
+  PA_PARSE_SOD: 'admin:operationAudit.types.parseSod',
+  PA_PARSE_DG1: 'admin:operationAudit.types.parseDg1',
+  PA_PARSE_DG2: 'admin:operationAudit.types.parseDg2',
+  API_CLIENT_CREATE: 'admin:operationAudit.types.apiClientCreate',
+  API_CLIENT_UPDATE: 'admin:operationAudit.types.apiClientUpdate',
+  API_CLIENT_DELETE: 'admin:operationAudit.types.apiClientDelete',
+  API_CLIENT_KEY_REGEN: 'admin:operationAudit.types.apiKeyRegen',
+  CODE_MASTER_CREATE: 'admin:operationAudit.types.codeMasterCreate',
+  CODE_MASTER_UPDATE: 'admin:operationAudit.types.codeMasterUpdate',
+  CODE_MASTER_DELETE: 'admin:operationAudit.types.codeMasterDelete',
+  USER_CREATE: 'admin:operationAudit.types.userCreate',
+  USER_UPDATE: 'admin:operationAudit.types.userUpdate',
+  USER_DELETE: 'admin:operationAudit.types.userDelete',
+  PASSWORD_CHANGE: 'admin:operationAudit.types.passwordChange',
+  ICAO_CHECK: 'admin:operationAudit.types.icaoCheck',
+  SYNC_TRIGGER: 'admin:operationAudit.types.syncTrigger',
+  SYNC_CHECK: 'admin:operationAudit.types.syncCheck',
+  RECONCILE: 'admin:operationAudit.types.reconcile',
+  REVALIDATE: 'admin:operationAudit.types.revalidate',
+  TRIGGER_DAILY_SYNC: 'admin:operationAudit.types.triggerDailySync',
+  CONFIG_UPDATE: 'admin:operationAudit.types.configUpdate',
 };
 
 // Operation type icons
@@ -103,6 +104,7 @@ const OPERATION_TYPE_ICONS: Record<OperationType, React.ReactNode> = {
 };
 
 export function OperationAuditLog() {
+  const { t } = useTranslation(['admin', 'common']);
   // Data state
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -216,7 +218,7 @@ export function OperationAuditLog() {
               <ShieldCheck className="w-7 h-7 text-white" />
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">운영 감사 로그</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('operationAudit.title')}</h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">시스템 작업 추적 및 모니터링</p>
             </div>
           </div>
@@ -241,7 +243,7 @@ export function OperationAuditLog() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">성공</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('common:toast.success')}</p>
                 <p className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
                   {(statistics.successfulOperations ?? 0).toLocaleString()}
                 </p>
@@ -254,7 +256,7 @@ export function OperationAuditLog() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">실패</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('common:status.failed')}</p>
                 <p className="text-2xl font-bold text-red-600 dark:text-red-400 mt-1">
                   {(statistics.failedOperations ?? 0).toLocaleString()}
                 </p>
@@ -267,7 +269,7 @@ export function OperationAuditLog() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">활성 사용자</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{ t('admin:userManagement.activeUsers') }</p>
                 <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
                   {statistics.topUsers?.length ?? 0}
                 </p>
@@ -281,14 +283,14 @@ export function OperationAuditLog() {
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-5 border border-gray-200 dark:border-gray-700">
           <div className="flex items-center space-x-2 mb-4">
             <Filter className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">필터</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{ t('common:label.filter') }</h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
             {/* Operation Type Filter */}
             <div>
               <label htmlFor="op-audit-type" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                작업 유형
+                {t('admin.operationAudit.operationType')}
               </label>
               <select
                 id="op-audit-type"
@@ -297,7 +299,7 @@ export function OperationAuditLog() {
                 onChange={(e) => setOperationTypeFilter(e.target.value as OperationType | '')}
                 className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
               >
-                <option value="">전체</option>
+                <option value="">{ t('monitoring:pool.total') }</option>
                 {Object.entries(OPERATION_TYPE_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>
                     {label}
@@ -309,7 +311,7 @@ export function OperationAuditLog() {
             {/* Username Filter */}
             <div>
               <label htmlFor="op-audit-user" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                사용자
+                {t('common.label.user')}
               </label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -328,7 +330,7 @@ export function OperationAuditLog() {
             {/* Success Filter */}
             <div>
               <label htmlFor="op-audit-result" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                결과
+                {t('pa.history.status')}
               </label>
               <select
                 id="op-audit-result"
@@ -337,9 +339,9 @@ export function OperationAuditLog() {
                 onChange={(e) => setSuccessFilter(e.target.value as 'all' | 'success' | 'failure')}
                 className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">전체</option>
-                <option value="success">성공</option>
-                <option value="failure">실패</option>
+                <option value="all">{ t('monitoring:pool.total') }</option>
+                <option value="success">{t('common:toast.success')}</option>
+                <option value="failure">{t('common:status.failed')}</option>
               </select>
             </div>
 
@@ -381,14 +383,14 @@ export function OperationAuditLog() {
             <table className="w-full">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <SortableHeader label="시간" sortKey="createdAt" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="사용자" sortKey="username" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="작업 유형" sortKey="operationType" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('admin:operationAudit.timestamp')} sortKey="createdAt" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('common:label.user')} sortKey="username" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('admin:operationAudit.operationType')} sortKey="operationType" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                   <SortableHeader label="리소스" sortKey="resourceType" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="IP 주소" sortKey="ipAddress" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="결과" sortKey="success" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('admin:operationAudit.ipAddress')} sortKey="ipAddress" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('admin:operationAudit.result')} sortKey="success" sortConfig={auditSortConfig} onSort={requestAuditSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                   <th className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    상세
+                    {t('upload.history.detail')}
                   </th>
                 </tr>
               </thead>
@@ -398,7 +400,7 @@ export function OperationAuditLog() {
                     <td colSpan={7} className="px-3 py-8 text-center">
                       <div className="flex items-center justify-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
                         <Clock className="w-4 h-4 animate-spin" />
-                        <span>로딩 중...</span>
+                        <span>{t('common:button.loading')}</span>
                       </div>
                     </td>
                   </tr>
@@ -418,7 +420,7 @@ export function OperationAuditLog() {
                         <div className="flex items-center space-x-1.5">
                           <User className="w-3.5 h-3.5 text-gray-400" />
                           <span className="text-gray-900 dark:text-gray-100">
-                            {log.username || '익명'}
+                            {log.username || t('pa.history.anonymous')}
                           </span>
                         </div>
                       </td>
@@ -426,7 +428,7 @@ export function OperationAuditLog() {
                         <div className="flex items-center space-x-1.5">
                           {OPERATION_TYPE_ICONS[log.operationType] || <Activity className="w-3.5 h-3.5" />}
                           <span className="text-gray-900 dark:text-gray-100">
-                            {OPERATION_TYPE_LABELS[log.operationType] || log.operationType}
+                            {OPERATION_TYPE_LABEL_KEYS[log.operationType] ? t(OPERATION_TYPE_LABEL_KEYS[log.operationType]) : log.operationType}
                           </span>
                         </div>
                       </td>
@@ -440,12 +442,12 @@ export function OperationAuditLog() {
                         {log.success ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
                             <CheckCircle className="w-3 h-3 mr-1" />
-                            성공
+                            {t('sync.reconciliation.successCount')}
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400">
                             <XCircle className="w-3 h-3 mr-1" />
-                            실패
+                            {t('upload.statistics.totalFailed')}
                           </span>
                         )}
                       </td>
@@ -542,18 +544,18 @@ export function OperationAuditLog() {
                 {/* Row 1: Basic + Operation */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">시간</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('admin:operationAudit.timestamp') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{formatDateTime(selectedLog.createdAt)}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">사용자</dt>
-                    <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.username || '익명'}</dd>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('common:label.user') }</dt>
+                    <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.username || t('pa.history.anonymous')}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">작업 유형</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('operationAudit.operationType')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5 flex items-center gap-1">
                       {OPERATION_TYPE_ICONS[selectedLog.operationType]}
-                      <span>{OPERATION_TYPE_LABELS[selectedLog.operationType]}</span>
+                      <span>{t(OPERATION_TYPE_LABEL_KEYS[selectedLog.operationType])}</span>
                     </dd>
                   </div>
                   <div>
@@ -567,7 +569,7 @@ export function OperationAuditLog() {
                 {/* Row 2: IDs */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div className="col-span-2">
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">로그 ID</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common.label.logId')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={String(selectedLog.id)}>{selectedLog.id}</dd>
                   </div>
                   <div>
@@ -575,7 +577,7 @@ export function OperationAuditLog() {
                     <dd className="text-xs text-gray-900 dark:text-gray-100 mt-0.5">{selectedLog.resourceType || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">사용자 ID</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('common.label.userId')}</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5 truncate" title={selectedLog.userId || '-'}>{selectedLog.userId || '-'}</dd>
                   </div>
                   {selectedLog.resourceId && (
@@ -591,7 +593,7 @@ export function OperationAuditLog() {
                 {/* Row 3: Request */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-2">
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">IP 주소</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('admin:operationAudit.ipAddress') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.ipAddress || '-'}</dd>
                   </div>
                   <div>
@@ -603,7 +605,7 @@ export function OperationAuditLog() {
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{selectedLog.statusCode || '-'}</dd>
                   </div>
                   <div>
-                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">소요 시간</dt>
+                    <dt className="text-[11px] text-gray-500 dark:text-gray-400">{ t('sync:reconciliation.duration') }</dt>
                     <dd className="text-xs text-gray-900 dark:text-gray-100 font-mono mt-0.5">{formatDuration(selectedLog.durationMs)}</dd>
                   </div>
                   {selectedLog.requestPath && (
@@ -625,7 +627,7 @@ export function OperationAuditLog() {
                   <>
                     <hr className="border-gray-200 dark:border-gray-700" />
                     <div>
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400">오류 메시지</dt>
+                      <dt className="text-[11px] text-gray-500 dark:text-gray-400">{t('upload.detail.errorMessage')}</dt>
                       <dd className="text-xs text-red-600 dark:text-red-400 mt-0.5 break-all">{selectedLog.errorMessage}</dd>
                     </div>
                   </>
@@ -636,7 +638,7 @@ export function OperationAuditLog() {
                   <>
                     <hr className="border-gray-200 dark:border-gray-700" />
                     <div>
-                      <dt className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">메타데이터</dt>
+                      <dt className="text-[11px] text-gray-500 dark:text-gray-400 mb-1">{t('operationAudit.metadata')}</dt>
                       <div className="bg-gray-50 dark:bg-gray-900 rounded-md px-3 py-2 overflow-x-auto">
                         <pre className="text-[11px] text-gray-900 dark:text-gray-100 font-mono">
                           {JSON.stringify(selectedLog.metadata, null, 2)}
@@ -653,7 +655,7 @@ export function OperationAuditLog() {
                   onClick={() => setDialogOpen(false)}
                   className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-600"
                 >
-                  닫기
+                  {t('icao.banner.dismiss')}
                 </button>
               </div>
             </div>

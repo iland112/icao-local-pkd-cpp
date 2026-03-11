@@ -1,0 +1,64 @@
+{
+  "home": "Home",
+  "sections": {
+    "certManagement": "Certificate Management",
+    "forgeryDetection": "Forgery Detection",
+    "reportsAnalysis": "Reports & Analysis",
+    "systemAdmin": "System Administration"
+  },
+  "menu": {
+    "icaoVersion": "ICAO Version Status",
+    "fileUpload": "File Upload",
+    "certUpload": "Certificate Upload",
+    "certSearch": "Certificate Search",
+    "uploadHistory": "Upload History",
+    "pendingDsc": "DSC Registration Approval",
+    "syncStatus": "Sync Status",
+    "paVerify": "PA Verification",
+    "verifyHistory": "Verification History",
+    "certReports": "Certificate Reports",
+    "certStats": "Certificate Statistics",
+    "dscTrustChain": "DSC Trust Chain",
+    "crlReport": "CRL Report",
+    "nonConformantDsc": "Non-Conformant DSC",
+    "paStats": "PA Verification Statistics",
+    "aiAnalysis": "AI Certificate Analysis",
+    "systemMonitoring": "System Monitoring",
+    "userManagement": "User Management",
+    "apiClients": "API Clients",
+    "operationAudit": "Operation Audit Log",
+    "authAudit": "Auth Audit Log",
+    "apiDocs": "API Docs"
+  },
+  "breadcrumb": {
+    "detail": "Detail",
+    "profile": "Profile"
+  },
+  "sidebar": {
+    "collapse": "Collapse Sidebar",
+    "expand": "Expand Sidebar"
+  },
+  "header": {
+    "openMenu": "Open Menu",
+    "notifications": "Notifications",
+    "noNotifications": "No notifications",
+    "markAllRead": "Mark All Read",
+    "clearAll": "Clear All",
+    "darkMode": "Switch to Dark Mode",
+    "lightMode": "Switch to Light Mode",
+    "userMenu": "User Menu",
+    "profile": "Profile",
+    "userManagement": "User Management",
+    "loginHistory": "Login History",
+    "about": "About",
+    "logout": "Logout"
+  },
+  "about": {
+    "title": "About",
+    "subtitle": "SmartCore PKD — ePassport Forgery Detection System",
+    "subtitleEn": "ePassport Public Key Directory Management & Passive Authentication System",
+    "supportedStandards": "Supported Standards:",
+    "openSourceLicenses": "Open Source Licenses",
+    "copyright": "Copyright (c) SMARTCORE Inc. All rights reserved."
+  }
+}

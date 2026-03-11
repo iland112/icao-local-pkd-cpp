@@ -1,0 +1,69 @@
+{
+  "title": "시스템 모니터링",
+  "serviceStatus": "서비스 상태",
+  "systemMetrics": "시스템 메트릭",
+  "connectionPool": "연결 풀",
+  "activeConnections": "접속 현황",
+  "uniqueVisitors": "고유 접속자",
+  "connectedNow": "{{count}}명 접속 중",
+  "tcpConnections": "TCP 연결",
+  "services": {
+    "pkdManagement": "PKD Management",
+    "paService": "PA Service",
+    "pkdRelay": "PKD Relay",
+    "monitoring": "Monitoring",
+    "aiAnalysis": "AI Analysis",
+    "apiGateway": "API Gateway",
+    "postgres": "PostgreSQL",
+    "oracle": "Oracle",
+    "openldap": "OpenLDAP"
+  },
+  "status": {
+    "healthy": "정상",
+    "unhealthy": "비정상",
+    "unknown": "알 수 없음"
+  },
+  "metrics": {
+    "cpuUsage": "CPU 사용률",
+    "memoryUsage": "메모리 사용률",
+    "diskUsage": "디스크 사용률",
+    "uptime": "운영 시간",
+    "requestRate": "요청 비율",
+    "latency": "응답 시간",
+    "errorRate": "오류율"
+  },
+  "pool": {
+    "active": "활성",
+    "idle": "대기",
+    "total": "전체",
+    "maxSize": "최대"
+  },
+  "noData": "모니터링 데이터가 없습니다",
+  "dashboard": {
+    "systemMetrics": "시스템 메트릭",
+    "serviceHealth": "서비스 상태",
+    "connectionPool": "커넥션 풀",
+    "activeConnections": "활성 연결",
+    "uniqueVisitors": "고유 접속자",
+    "connected": "접속 중",
+    "latencyTrend": "응답 시간 추이",
+    "requestRate": "요청 비율",
+    "cpuUsage": "CPU 사용률",
+    "memoryUsage": "메모리 사용률",
+    "diskUsage": "디스크 사용률",
+    "uptime": "가동 시간",
+    "dbConnections": "DB 연결",
+    "ldapConnections": "LDAP 연결",
+    "dbPool": "DB 풀",
+    "ldapPool": "LDAP 풀",
+    "usedConnections": "사용 연결",
+    "availableConnections": "가용 연결",
+    "maxConnections": "최대 연결",
+    "connectionRate": "연결 비율",
+    "requestsPerMin": "요청/분",
+    "avgLatency": "평균 지연",
+    "peakLatency": "최대 지연",
+    "tcpConnections": "TCP 연결",
+    "activeNow": "명 접속 중"
+  }
+}

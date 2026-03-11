@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 /**
  * Pending DSC Registration Approval Page
  * Admin reviews and approves/rejects DSC certificates extracted from PA verification
@@ -12,6 +13,7 @@ import { formatDate } from '@/utils/dateFormat';
 type StatusFilter = '' | 'PENDING' | 'APPROVED' | 'REJECTED';
 
 export default function PendingDscApproval() {
+  const { t } = useTranslation(['admin', 'common']);
   const [items, setItems] = useState<PendingDsc[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -66,16 +68,16 @@ export default function PendingDscApproval() {
     try {
       const res = await pendingDscApi.approve(approveTarget.id, comment || undefined);
       if (res.data?.success) {
-        toast.success('승인 완료', `DSC 인증서가 등록되었습니다.${res.data.ldapStored ? ' (LDAP 저장 완료)' : ''}`);
+        toast.success('승인 완료', `DSC 인증서가 등록되었습니다.${res.data.ldapStored ? t('admin.pendingDsc.ldapSaved') : ''}`);
         setApproveTarget(null);
         setComment('');
         fetchList();
         fetchStats();
       } else {
-        toast.error('승인 실패', res.data?.message || '알 수 없는 오류');
+        toast.error('승인 실패', res.data?.message || t('common.error.unknownError_short'));
       }
     } catch (e) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || '승인 처리 중 오류가 발생했습니다.';
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error || t('admin.apiClient.approveError');
       toast.error('승인 실패', msg);
     } finally {
       setActionLoading(false);
@@ -94,7 +96,7 @@ export default function PendingDscApproval() {
         fetchList();
         fetchStats();
       } else {
-        toast.error('거부 실패', res.data?.message || '알 수 없는 오류');
+        toast.error('거부 실패', res.data?.message || t('common.error.unknownError_short'));
       }
     } catch {
       toast.error('거부 실패', '거부 처리 중 오류가 발생했습니다.');
@@ -107,9 +109,9 @@ export default function PendingDscApproval() {
 
   const statusBadge = (s: string) => {
     switch (s) {
-      case 'PENDING': return <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 font-medium">대기</span>;
-      case 'APPROVED': return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 font-medium">승인</span>;
-      case 'REJECTED': return <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 font-medium">거부</span>;
+      case 'PENDING': return <span className="px-2 py-0.5 text-xs rounded-full bg-amber-100 text-amber-700 font-medium">{ t('monitoring:pool.idle') }</span>;
+      case 'APPROVED': return <span className="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700 font-medium">{t('common:button.approve')}</span>;
+      case 'REJECTED': return <span className="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700 font-medium">{t('common:button.reject')}</span>;
       default: return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600">{s}</span>;
     }
   };
@@ -128,21 +130,21 @@ export default function PendingDscApproval() {
             <ShieldCheck className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">DSC 등록 승인</h1>
+            <h1 className="text-2xl font-bold text-gray-900">{t('pendingDsc.title')}</h1>
             <p className="text-sm text-gray-500">PA 검증에서 추출된 DSC 인증서의 등록을 관리합니다.</p>
           </div>
         </div>
         <button onClick={() => { fetchList(); fetchStats(); }} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-          <RefreshCw className="w-4 h-4" /> 새로고침
+          <RefreshCw className="w-4 h-4" /> {t('common.button.refresh')}
         </button>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} label="대기" value={stats.pending} color="amber" />
-        <StatCard icon={<CheckCircle className="w-5 h-5 text-green-600" />} label="승인" value={stats.approved} color="green" />
-        <StatCard icon={<XCircle className="w-5 h-5 text-red-600" />} label="거부" value={stats.rejected} color="red" />
-        <StatCard icon={<ShieldCheck className="w-5 h-5 text-blue-600" />} label="전체" value={stats.total} color="blue" />
+        <StatCard icon={<Clock className="w-5 h-5 text-amber-600" />} label={t('monitoring:pool.idle')} value={stats.pending} color="amber" />
+        <StatCard icon={<CheckCircle className="w-5 h-5 text-green-600" />} label={t('common:button.approve')} value={stats.approved} color="green" />
+        <StatCard icon={<XCircle className="w-5 h-5 text-red-600" />} label={t('common:button.reject')} value={stats.rejected} color="red" />
+        <StatCard icon={<ShieldCheck className="w-5 h-5 text-blue-600" />} label={t('common:label.all')} value={stats.total} color="blue" />
       </div>
 
       {/* Filters */}
@@ -154,10 +156,10 @@ export default function PendingDscApproval() {
           onChange={(e) => { setStatusFilter(e.target.value as StatusFilter); setPage(1); }}
           className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
-          <option value="">전체 상태</option>
-          <option value="PENDING">대기</option>
-          <option value="APPROVED">승인</option>
-          <option value="REJECTED">거부</option>
+          <option value="">{ t('report:crl.allStatuses') }</option>
+          <option value="PENDING">{ t('monitoring:pool.idle') }</option>
+          <option value="APPROVED">{t('common:button.approve')}</option>
+          <option value="REJECTED">{t('common:button.reject')}</option>
         </select>
         <input
           id="pendingDscCountryFilter"
@@ -178,21 +180,21 @@ export default function PendingDscApproval() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">국가</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{ t('ai:dashboard.filterCountry') }</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Subject DN</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">알고리즘</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">유효 기간</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{ t('ai:forensic.categories.algorithm') }</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{ t('common:label.validPeriod') }</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">PA 결과</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">상태</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{ t('admin:apiClient.status') }</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">등록일</th>
-                <th className="text-center px-4 py-3 font-medium text-gray-600">작업</th>
+                <th className="text-center px-4 py-3 font-medium text-gray-600">{ t('certificate:search.action') }</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">불러오는 중...</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">데이터가 없습니다.</td></tr>
+                <tr><td colSpan={8} className="px-4 py-12 text-center text-gray-400">{ t('common:table.noData') }</td></tr>
               ) : items.map((item) => (
                 <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3 font-medium">{item.country_code}</td>
@@ -223,13 +225,13 @@ export default function PendingDscApproval() {
                           onClick={() => { setApproveTarget(item); setComment(''); }}
                           className="px-2.5 py-1 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors"
                         >
-                          승인
+                          {t('common.button.approve')}
                         </button>
                         <button
                           onClick={() => { setRejectTarget(item); setComment(''); }}
                           className="px-2.5 py-1 text-xs font-medium text-white bg-red-500 hover:bg-red-600 rounded-md transition-colors"
                         >
-                          거부
+                          {t('common.button.reject')}
                         </button>
                       </div>
                     ) : (
@@ -282,11 +284,11 @@ export default function PendingDscApproval() {
               <div className="px-6 py-4 space-y-3">
                 <p className="text-sm text-gray-600">이 DSC 인증서를 Local PKD에 등록하시겠습니까?</p>
                 <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1">
-                  <InfoRow label="국가" value={approveTarget.country_code} />
+                  <InfoRow label={t('common:label.country')} value={approveTarget.country_code} />
                   <InfoRow label="Subject" value={approveTarget.subject_dn} />
                   <InfoRow label="Fingerprint" value={approveTarget.fingerprint_sha256} mono />
-                  <InfoRow label="알고리즘" value={`${approveTarget.signature_algorithm} / ${approveTarget.public_key_algorithm} ${approveTarget.public_key_size}bit`} />
-                  <InfoRow label="유효 기간" value={`${formatDate(approveTarget.not_before)} ~ ${formatDate(approveTarget.not_after)}`} />
+                  <InfoRow label={t('ai:forensic.categories.algorithm')} value={`${approveTarget.signature_algorithm} / ${approveTarget.public_key_algorithm} ${approveTarget.public_key_size}bit`} />
+                  <InfoRow label={t('common:label.validPeriod')} value={`${formatDate(approveTarget.not_before)} ~ ${formatDate(approveTarget.not_after)}`} />
                   <InfoRow label="PA 결과" value={approveTarget.verification_status} />
                 </div>
                 <div>
@@ -295,8 +297,8 @@ export default function PendingDscApproval() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
-                <button onClick={() => setApproveTarget(null)} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">취소</button>
-                <button onClick={handleApprove} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50">{actionLoading ? '처리 중...' : '승인'}</button>
+                <button onClick={() => setApproveTarget(null)} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">{t('common:button.cancel')}</button>
+                <button onClick={handleApprove} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50">{actionLoading ? t('upload.fileUpload.processing') : t('common:button.approve')}</button>
               </div>
             </div>
           </div>
@@ -314,7 +316,7 @@ export default function PendingDscApproval() {
               <div className="px-6 py-4 space-y-3">
                 <p className="text-sm text-gray-600">이 DSC 인증서 등록을 거부하시겠습니까?</p>
                 <div className="p-3 bg-gray-50 rounded-lg text-xs space-y-1">
-                  <InfoRow label="국가" value={rejectTarget.country_code} />
+                  <InfoRow label={t('common:label.country')} value={rejectTarget.country_code} />
                   <InfoRow label="Subject" value={rejectTarget.subject_dn} />
                   <InfoRow label="Fingerprint" value={rejectTarget.fingerprint_sha256} mono />
                 </div>
@@ -324,8 +326,8 @@ export default function PendingDscApproval() {
                 </div>
               </div>
               <div className="flex justify-end gap-2 px-6 py-4 border-t border-gray-200">
-                <button onClick={() => setRejectTarget(null)} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">취소</button>
-                <button onClick={handleReject} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50">{actionLoading ? '처리 중...' : '거부'}</button>
+                <button onClick={() => setRejectTarget(null)} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">{t('common:button.cancel')}</button>
+                <button onClick={handleReject} disabled={actionLoading} className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50">{actionLoading ? t('upload.fileUpload.processing') : t('common:button.reject')}</button>
               </div>
             </div>
           </div>
@@ -344,24 +346,24 @@ export default function PendingDscApproval() {
             </div>
             <div className="px-6 py-4 space-y-2 text-sm max-h-[60vh] overflow-y-auto">
               <InfoRow label="ID" value={detailTarget.id} mono />
-              <InfoRow label="상태" value={detailTarget.status} />
-              <InfoRow label="국가" value={detailTarget.country_code} />
+              <InfoRow label={t('common:label.status')} value={detailTarget.status} />
+              <InfoRow label={t('common:label.country')} value={detailTarget.country_code} />
               <InfoRow label="Subject DN" value={detailTarget.subject_dn} />
               <InfoRow label="Issuer DN" value={detailTarget.issuer_dn} />
               <InfoRow label="Serial Number" value={detailTarget.serial_number} mono />
               <InfoRow label="Fingerprint" value={detailTarget.fingerprint_sha256} mono />
-              <InfoRow label="서명 알고리즘" value={detailTarget.signature_algorithm} />
-              <InfoRow label="공개키 알고리즘" value={`${detailTarget.public_key_algorithm} ${detailTarget.public_key_size}bit`} />
-              <InfoRow label="유효 시작" value={formatDate(detailTarget.not_before)} />
-              <InfoRow label="유효 종료" value={formatDate(detailTarget.not_after)} />
+              <InfoRow label={t('certificate:detail.signatureAlgorithm')} value={detailTarget.signature_algorithm} />
+              <InfoRow label={t('certificate:detail.publicKeyAlgorithm')} value={`${detailTarget.public_key_algorithm} ${detailTarget.public_key_size}bit`} />
+              <InfoRow label={t('certificate:metadata.notBefore')} value={formatDate(detailTarget.not_before)} />
+              <InfoRow label={t('certificate:metadata.notAfter')} value={formatDate(detailTarget.not_after)} />
               <InfoRow label="인증서 상태" value={detailTarget.validation_status} />
               <InfoRow label="PA 검증 결과" value={detailTarget.verification_status} />
               <InfoRow label="PA 검증 ID" value={detailTarget.pa_verification_id} mono />
-              <InfoRow label="Self-Signed" value={detailTarget.is_self_signed ? '예' : '아니오'} />
+              <InfoRow label="Self-Signed" value={detailTarget.is_self_signed ? t('common.label.yes') : t('common.label.no')} />
               <InfoRow label="등록 요청일" value={formatDate(detailTarget.created_at)} />
-              {detailTarget.reviewed_by && <InfoRow label="검토자" value={detailTarget.reviewed_by} />}
-              {detailTarget.reviewed_at && <InfoRow label="검토일" value={formatDate(detailTarget.reviewed_at)} />}
-              {detailTarget.review_comment && <InfoRow label="코멘트" value={detailTarget.review_comment} />}
+              {detailTarget.reviewed_by && <InfoRow label={t('admin:pendingDsc.reviewedBy')} value={detailTarget.reviewed_by} />}
+              {detailTarget.reviewed_at && <InfoRow label={t('admin:pendingDsc.reviewedAt')} value={formatDate(detailTarget.reviewed_at)} />}
+              {detailTarget.review_comment && <InfoRow label={t('admin.apiClient.comment')} value={detailTarget.review_comment} />}
             </div>
             <div className="flex justify-end px-6 py-3 border-t border-gray-200 gap-2">
               {detailTarget.status === 'PENDING' && (
@@ -370,13 +372,13 @@ export default function PendingDscApproval() {
                     onClick={() => { setDetailTarget(null); setApproveTarget(detailTarget); setComment(''); }}
                     className="px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
                   >
-                    승인
+                    {t('common.button.approve')}
                   </button>
                   <button
                     onClick={() => { setDetailTarget(null); setRejectTarget(detailTarget); setComment(''); }}
                     className="px-4 py-2 text-sm font-medium text-white bg-red-500 hover:bg-red-600 rounded-lg transition-colors"
                   >
-                    거부
+                    {t('common.button.reject')}
                   </button>
                 </>
               )}
@@ -384,7 +386,7 @@ export default function PendingDscApproval() {
                 onClick={() => setDetailTarget(null)}
                 className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
               >
-                닫기
+                {t('icao.banner.dismiss')}
               </button>
             </div>
           </div>

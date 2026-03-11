@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { DEFAULT_PAGE_SIZE } from '@/config/pagination';
 import { useSearchParams } from 'react-router-dom';
 import { useSortableTable } from '@/hooks/useSortableTable';
@@ -25,6 +26,7 @@ import CertificateSearchFilters from '@/components/CertificateSearchFilters';
 import type { SearchCriteria } from '@/components/CertificateSearchFilters';
 
 const CertificateSearch: React.FC = () => {
+  const { t } = useTranslation(['certificate', 'common']);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -220,10 +222,10 @@ const CertificateSearch: React.FC = () => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       } else {
-        toast.error('내보내기 실패', '인증서 내보내기에 실패했습니다.');
+        toast.error(t('search.exportFailed'), t('search.exportError'));
       }
     } catch (err) {
-      toast.error('내보내기 실패', err instanceof Error ? err.message : '알 수 없는 오류');
+      toast.error(t('search.exportFailed'), err instanceof Error ? err.message : t('common:error.unknownError'));
     }
   };
 
@@ -247,10 +249,10 @@ const CertificateSearch: React.FC = () => {
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
       } else {
-        toast.error('내보내기 실패', '인증서 내보내기에 실패했습니다.');
+        toast.error(t('search.exportFailed'), t('search.exportError'));
       }
     } catch (err) {
-      toast.error('내보내기 실패', err instanceof Error ? err.message : '알 수 없는 오류');
+      toast.error(t('search.exportFailed'), err instanceof Error ? err.message : t('common:error.unknownError'));
     }
   };
 
@@ -276,10 +278,10 @@ const CertificateSearch: React.FC = () => {
         document.body.removeChild(a);
       } else {
         const errorData = await response.json().catch(() => null);
-        toast.error('내보내기 실패', errorData?.error || response.statusText);
+        toast.error(t('certificate.search.exportFailed'), errorData?.error || response.statusText);
       }
     } catch (err) {
-      toast.error('내보내기 실패', err instanceof Error ? err.message : '알 수 없는 오류');
+      toast.error(t('search.exportFailed'), err instanceof Error ? err.message : t('common:error.unknownError'));
     } finally {
       setExportAllLoading(false);
     }
@@ -360,12 +362,12 @@ const CertificateSearch: React.FC = () => {
   // Get validity badge
   const getValidityBadge = (validity: string) => {
     const configs: Record<string, { icon: React.ReactNode; label: string; colors: string }> = {
-      'VALID': { icon: <CheckCircle className="w-3 h-3" />, label: '유효', colors: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
-      'EXPIRED_VALID': { icon: <CheckCircle className="w-3 h-3" />, label: '만료-유효', colors: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
-      'EXPIRED': { icon: <XCircle className="w-3 h-3" />, label: '만료', colors: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
-      'NOT_YET_VALID': { icon: <Clock className="w-3 h-3" />, label: '유효 전', colors: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
+      'VALID': { icon: <CheckCircle className="w-3 h-3" />, label: t('search.validity.valid'), colors: 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' },
+      'EXPIRED_VALID': { icon: <CheckCircle className="w-3 h-3" />, label: t('search.validity.expiredValid'), colors: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400' },
+      'EXPIRED': { icon: <XCircle className="w-3 h-3" />, label: t('search.validity.expired'), colors: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
+      'NOT_YET_VALID': { icon: <Clock className="w-3 h-3" />, label: t('search.validity.notYetValid'), colors: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400' },
     };
-    const config = configs[validity] || { icon: null, label: '알 수 없음', colors: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400' };
+    const config = configs[validity] || { icon: null, label: t('search.validity.unknown'), colors: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-400' };
     return (
       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config.colors}`}>
         {config.icon}
@@ -383,9 +385,9 @@ const CertificateSearch: React.FC = () => {
             <Shield className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">인증서 조회</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t('search.title')}</h1>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              LDAP에 저장된 PKD 인증서를 검색하고 내보내기
+              {t('search.subtitle')}
             </p>
           </div>
           <button
@@ -394,7 +396,7 @@ const CertificateSearch: React.FC = () => {
             }}
             disabled={loading}
             className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-            aria-label="새로고침"
+            aria-label={t('common:button.refresh')}
           >
             <RefreshCw className={cn('w-4 h-4', loading && 'animate-spin')} />
           </button>
@@ -437,7 +439,7 @@ const CertificateSearch: React.FC = () => {
                   />
                 )}
                 <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                  {criteria.country ? `${criteria.country} 총 인증서` : '총 인증서'}
+                  {criteria.country ? t('search.countryTotalCerts', { country: criteria.country }) : t('search.totalCerts')}
                 </p>
               </div>
               <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.total.toLocaleString()}</p>
@@ -450,7 +452,7 @@ const CertificateSearch: React.FC = () => {
             <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-3 border border-green-200 dark:border-green-700">
               <div className="flex items-center gap-2 mb-1">
                 <CheckCircle className="w-4 h-4 text-green-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">유효</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t('search.validity.valid')}</p>
               </div>
               <p className="text-lg font-bold text-green-600 dark:text-green-400">{stats.valid.toLocaleString()}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{stats.validPercent}%</p>
@@ -460,7 +462,7 @@ const CertificateSearch: React.FC = () => {
             <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3 border border-red-200 dark:border-red-700">
               <div className="flex items-center gap-2 mb-1">
                 <XCircle className="w-4 h-4 text-red-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">만료</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t('search.validity.expired')}</p>
               </div>
               <p className="text-lg font-bold text-red-600 dark:text-red-400">{stats.expired.toLocaleString()}</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">{stats.expiredPercent}%</p>
@@ -470,7 +472,7 @@ const CertificateSearch: React.FC = () => {
             <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-3 border border-yellow-200 dark:border-yellow-700">
               <div className="flex items-center gap-2 mb-1">
                 <Clock className="w-4 h-4 text-yellow-500" />
-                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">유효 전</p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{t('search.validity.notYetValid')}</p>
               </div>
               <p className="text-lg font-bold text-yellow-600 dark:text-yellow-400">{stats.notYetValid.toLocaleString()}</p>
             </div>
@@ -484,9 +486,9 @@ const CertificateSearch: React.FC = () => {
         <div className="px-5 py-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-blue-500" />
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">검색 결과</h3>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">{t('search.searchResults')}</h3>
             <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-              {certificates.length}건
+              {t('search.resultCount', { count: certificates.length })}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -494,7 +496,7 @@ const CertificateSearch: React.FC = () => {
               onClick={handlePrevPage}
               disabled={criteria.offset === 0}
               className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="이전 페이지"
+              aria-label={t('common:pagination.prev')}
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -505,7 +507,7 @@ const CertificateSearch: React.FC = () => {
               onClick={handleNextPage}
               disabled={criteria.offset + criteria.limit >= total}
               className="p-1.5 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              aria-label="다음 페이지"
+              aria-label={t('common:pagination.next')}
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -516,7 +518,7 @@ const CertificateSearch: React.FC = () => {
         {loading && (
           <div className="flex items-center justify-center py-20" aria-live="polite">
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-            <p className="ml-3 text-gray-600 dark:text-gray-400">검색 중...</p>
+            <p className="ml-3 text-gray-600 dark:text-gray-400">{t('search.searching')}</p>
           </div>
         )}
 
@@ -533,15 +535,15 @@ const CertificateSearch: React.FC = () => {
             <table className="w-full">
               <thead className="bg-slate-100 dark:bg-gray-700">
                 <tr>
-                  <SortableHeader label="국가" sortKey="country" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="종류" sortKey="certType" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="발급 기관" sortKey="issuerDn" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider" />
-                  <SortableHeader label="버전" sortKey="version" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="서명 알고리즘" sortKey="signatureAlgorithm" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="유효기간" sortKey="validFrom" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
-                  <SortableHeader label="상태" sortKey="validity" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('search.country')} sortKey="country" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('search.certType')} sortKey="certType" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('search.issuer')} sortKey="issuerDn" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider" />
+                  <SortableHeader label={t('search.version')} sortKey="version" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('search.signatureAlgorithm')} sortKey="signatureAlgorithm" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-left text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('search.validPeriod')} sortKey="validFrom" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
+                  <SortableHeader label={t('common:label.status')} sortKey="validity" sortConfig={certSortConfig} onSort={requestCertSort} className="px-3 py-2.5 text-center text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap" />
                   <th className="px-3 py-2.5 text-right text-xs font-semibold text-slate-700 dark:text-gray-200 uppercase tracking-wider whitespace-nowrap">
-                    작업
+                    {t('search.action')}
                   </th>
                 </tr>
               </thead>
@@ -602,15 +604,15 @@ const CertificateSearch: React.FC = () => {
                         <button
                           onClick={() => viewDetails(cert)}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                          title="상세보기"
+                          title={t('search.viewDetail')}
                         >
                           <Eye className="w-3.5 h-3.5" />
-                          상세
+                          {t('search.detail')}
                         </button>
                         <button
                           onClick={() => exportCertificate(cert.dn, 'pem')}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-green-600 dark:text-green-400 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
-                          title="PEM 내보내기"
+                          title={t('search.exportPem')}
                         >
                           <Download className="w-3.5 h-3.5" />
                           PEM
@@ -628,8 +630,8 @@ const CertificateSearch: React.FC = () => {
         {!loading && !error && certificates.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-gray-500 dark:text-gray-400">
             <Shield className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">검색 결과가 없습니다.</p>
-            <p className="text-sm">필터를 조정하여 다시 검색하세요.</p>
+            <p className="text-lg font-medium">{t('search.noResults')}</p>
+            <p className="text-sm">{t('search.noResultsHint')}</p>
           </div>
         )}
       </div>
